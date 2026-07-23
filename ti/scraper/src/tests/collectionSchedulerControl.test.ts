@@ -12,7 +12,7 @@ describe("collection scheduler control", () => {
     ];
     options.frontier.deadLetterSnapshot = () => [{ taskId: "task_dead", task: { sourceId: "src_retry" }, reason: "parser_timeout" }];
 
-    const body = await json(collectionSchedulerStatus(options as any));
+    const body = await json(await collectionSchedulerStatus(options as any));
 
     expect(body.decision).not.toBe("operational");
     expect(body.operatorActions).toEqual(expect.arrayContaining([

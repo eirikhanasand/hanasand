@@ -7,9 +7,13 @@ import { isExecutableSource } from "../policy/collectionPolicy.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
 import { inTenantScope } from "./tenantScope.ts";
 import { qualifySourcePortfolio, SOURCE_PORTFOLIO_BASELINE } from "../ops/sourcePortfolioQualification.ts";
+import { buildSourceOperationsSnapshot } from "./sourceOperations.ts";
 
-export function collectionSchedulerStatus(options: ApiServerOptions, lastControlAction?: Record<string, unknown>, tenantId?: string, page: { limit?: number; cursor?: number } = {}) {
+export async function collectionSchedulerStatus(options: ApiServerOptions, lastControlAction?: Record<string, unknown>, tenantId?: string, page: { limit?: number; cursor?: number } = {}) {
   const generatedAt = nowIso();
+  if (typeof (options.store as any).querySourceOperationalPage === "function") {
+    return boundedCollectionSchedulerStatus(options, lastControlAction, tenantId, page, generatedAt);
+  }
   const inScope = (record: any) => inTenantScope(record, tenantId);
   const sources = options.store.listSources().filter(inScope);
   const sourceIds = new Set(sources.map((source: any) => source.id));
@@ -159,6 +163,163 @@ export function collectionSchedulerStatus(options: ApiServerOptions, lastControl
       reason: item.reason
     })),
     sources: sourcePage
+  });
+}
+
+async function boundedCollectionSchedulerStatus(
+  options: ApiServerOptions,
+  lastControlAction: Record<string, unknown> | undefined,
+  tenantId: string | undefined,
+  page: { limit?: number; cursor?: number },
+  generatedAt: string
+) {
+  const operations = await buildSourceOperationsSnapshot(options.store, {
+    tenantId,
+    generatedAt,
+    limit: page.limit,
+    cursor: page.cursor,
+    executableOnly: true
+  }) as any;
+  const totals = operations.summary;
+  const operationalTotals = operations.operationalTotals ?? {};
+  const qualification = operations.qualification;
+  const canaryLoop = schedulerLoop(options, tenantId);
+  const canaryState = readCanaryState(canaryLoop);
+  const schedulerEnabled = Boolean(canaryLoop) && (canaryState?.enabled ?? Bun.env.TI_CANARY_ENABLED !== "false");
+  const intervalSeconds = canaryState?.intervalSeconds ?? Number(Bun.env.TI_CANARY_INTERVAL_SECONDS ?? "300");
+  const queue = typeof (options.frontier as any).scopedStatus === "function"
+    ? (options.frontier as any).scopedStatus(tenantId, 50)
+    : { queued: 0, leased: 0, deadLetterCount: 0, failures: [] };
+  const queueLimit = canaryState?.queueLimit ?? Number(Bun.env.TI_CANARY_MAX_QUEUE_SIZE ?? "500");
+  const maxTasks = canaryState?.maxTasks ?? Number(Bun.env.TI_CANARY_MAX_TASKS ?? "25");
+  const maxSources = canaryState?.maxSources ?? Number(Bun.env.TI_CANARY_MAX_SOURCES ?? "50");
+  const scheduledCheckCapacityPerDay = Math.floor(86_400 / Math.max(5, intervalSeconds)) * Math.min(maxTasks, maxSources);
+  const requiredChecksPerDay = Number(operationalTotals.requiredChecksPerDay ?? 0);
+  const activeSourceCount = Number(totals.activeSourceCount ?? 0);
+  const dailySourceCount = Number(operationalTotals.dailySourceCount ?? 0);
+  const dailyAttemptedCount = Number(operationalTotals.dailyAttemptedCount ?? 0);
+  const dailyCoveredCount = Number(operationalTotals.dailyCoveredCount ?? 0);
+  const latestRun = operationalTotals.latestRun;
+  const lastSuccessfulRun = operationalTotals.lastSuccessfulRun;
+  const blockers = schedulerBlockers({
+    activeSourceCount,
+    lastSuccessfulRun,
+    dailySourceCount,
+    dailyCoverageRatio: dailySourceCount ? dailyCoveredCount / dailySourceCount : 0,
+    deadLetterCount: queue.deadLetterCount,
+    aiEndpointConfigured: Boolean(Bun.env.HANASAND_AI_API_BASE),
+    canaryLoop
+  });
+  const sourceRows = operations.sources.map((source: any) => ({
+    sourceId: source.id,
+    name: source.name,
+    type: source.type,
+    status: source.lifecycleStatus,
+    healthState: source.health.state,
+    crawlFrequencySeconds: source.collection?.cadenceSeconds,
+    parserStatus: source.parser.status,
+    lastCheckedAt: source.health.lastAttemptAt,
+    lastSuccessAt: source.health.lastSuccessAt,
+    lastUsefulAt: source.health.lastUsefulItemAt,
+    captureCount: source.coverage.captureCount,
+    lastContentAt: source.coverage.lastContentAt,
+    usefulCheckCount: source.coverage.usefulCheckCount,
+    qualifiesForBaseline: source.qualification.qualifies,
+    qualificationReasons: source.qualification.reasons,
+    baselineFamily: source.qualification.family,
+    nextEligibleAt: source.nextRunAt,
+    backoffUntil: source.qualification.backoffUntil,
+    retryCount: 0,
+    nextAction: source.health.state === "failed" ? "retry_after_backoff" : "collect_when_due",
+    dailyCovered: withinDailyWindow(source.health.lastSuccessAt, generatedAt),
+    dailyAttempted: withinDailyWindow(source.health.lastAttemptAt, generatedAt)
+  }));
+  const controls = schedulerControls({ schedulerEnabled, canaryLoop, activeSourceCount, tenantId });
+
+  return json({
+    schemaVersion: "ti.collection_scheduler_status.v1",
+    generatedAt,
+    tenantId: tenantId ?? "global",
+    total: operations.total,
+    nextCursor: operations.nextCursor,
+    decision: blockers.some((blocker) => blocker.severity === "blocker") ? "not_operational" : blockers.length ? "degraded" : "operational",
+    operationalBlockers: blockers,
+    lastControlAction,
+    sourceBootstrap: options.sourceBootstrap,
+    sourceCoverage: {
+      totalSourceCount: Number(totals.sourceCount ?? 0),
+      retainedSourceCount: activeSourceCount,
+      inactiveSourceCount: Number(totals.inactiveSourceCount ?? 0),
+      unscheduledExecutableSourceCount: canaryLoop ? 0 : activeSourceCount,
+      retiredSourceCount: Number(totals.retiredSourceCount ?? 0),
+      activeSourceCount: canaryLoop ? activeSourceCount : 0,
+      checkedSourceCount: Number(totals.checkedSourceCount ?? 0),
+      successfulSourceCount: Number(totals.successfulSourceCount ?? 0),
+      usefulSourceCount: Number(totals.usefulSourceCount ?? 0),
+      latestUsefulSourceCount: Number(totals.latestUsefulSourceCount ?? totals.usefulSourceCount ?? 0),
+      sustainedUsefulSourceCount: Number(totals.sustainedUsefulSourceCount ?? 0),
+      captureProducingSourceCount: Number(totals.captureProducingSourceCount ?? 0),
+      recentlySeenSourceCount: Number(totals.recentlySeenSourceCount ?? 0),
+      backoffSourceCount: Number(totals.backoffSourceCount ?? 0),
+      neverObservedSourceCount: Number(totals.neverObservedSourceCount ?? 0),
+      dailySourceCount,
+      dailyAttemptedCount,
+      dailyAttemptCoverageRatio: dailySourceCount ? dailyAttemptedCount / dailySourceCount : 0,
+      dailyCoveredCount,
+      dailyCoverageRatio: dailySourceCount ? dailyCoveredCount / dailySourceCount : 0,
+      qualifyingSourceCount: qualification.counts.total,
+      qualifyingClearWebSourceCount: qualification.counts.clearWeb,
+      qualifyingLawfulDarkWebSourceCount: qualification.counts.lawfulDarkWeb,
+      qualifyingPublicTelegramSourceCount: qualification.counts.publicTelegram
+    },
+    sourceQualification: qualification,
+    scheduler: {
+      enabled: schedulerEnabled,
+      running: canaryState?.running ?? false,
+      intervalSeconds,
+      maxSources,
+      maxTasks,
+      maxConcurrentTasks: canaryState?.maxConcurrentTasks ?? Number(Bun.env.TI_CANARY_MAX_CONCURRENT_TASKS ?? "16"),
+      maxItemsPerTask: canaryState?.maxItemsPerTask ?? Number(Bun.env.TI_CANARY_MAX_ITEMS_PER_TASK ?? "4"),
+      timeoutMs: canaryState?.timeoutMs ?? Number(Bun.env.TI_CANARY_TIMEOUT_MS ?? Bun.env.SCRAPER_DEFAULT_TIMEOUT_MS ?? "12000"),
+      lastRun: latestRun,
+      lastSuccessfulRun,
+      nextRunAt: nextSchedulerRunAt({ generatedAt, enabled: schedulerEnabled, intervalSeconds, canaryNextCycleAt: canaryState?.nextCycleAt, nextEligibleAt: operationalTotals.nextEligibleAt }),
+      queue: {
+        queued: queue.queued,
+        leased: queue.leased,
+        deadLetterCount: queue.deadLetterCount,
+        limit: queueLimit,
+        utilization: queueLimit ? Math.round(queue.queued / queueLimit * 10_000) / 10_000 : 0,
+        backpressureState: queueLimit && queue.queued / queueLimit >= 0.8 ? "throttled" : "accepting"
+      },
+      capacity: {
+        scheduledCheckCapacityPerDay,
+        requiredChecksPerDay,
+        baselineMinimumChecksPerDay: SOURCE_PORTFOLIO_BASELINE.total,
+        headroomChecksPerDay: scheduledCheckCapacityPerDay - requiredChecksPerDay,
+        sufficientForCurrentFleet: scheduledCheckCapacityPerDay >= requiredChecksPerDay,
+        sufficientForMinimumBaseline: scheduledCheckCapacityPerDay >= SOURCE_PORTFOLIO_BASELINE.total
+      }
+    },
+    operatorActions: controls.actions,
+    sourceHealth: {
+      healthy: Number(totals.healthySourceCount ?? 0),
+      stale: Number(totals.degradedSourceCount ?? 0),
+      retrying: Number(totals.failedSourceCount ?? 0),
+      blocked: 0,
+      idle: Number(totals.neverObservedSourceCount ?? 0)
+    },
+    parser: {
+      aiEndpointConfigured: Boolean(Bun.env.HANASAND_AI_API_BASE),
+      endpoint: Bun.env.HANASAND_AI_API_BASE ? new URL(Bun.env.HANASAND_AI_EXPOSURE_PARSE_PATH || "/v1/parse/exposure-claim", Bun.env.HANASAND_AI_API_BASE).toString() : undefined,
+      parsedExposureCount: 0,
+      acceptedExposureCount: 0,
+      reviewExposureCount: 0,
+      boundedAggregateOnly: true
+    },
+    failures: queue.failures,
+    sources: sourceRows
   });
 }
 

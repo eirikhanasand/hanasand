@@ -1,13 +1,24 @@
 import { nowIso } from "../utils.ts";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
-import { qualifySourcePortfolio } from "../ops/sourcePortfolioQualification.ts";
+import { qualifySourcePortfolio, SOURCE_PORTFOLIO_BASELINE } from "../ops/sourcePortfolioQualification.ts";
 import { toSafeSourceDto } from "./sourceRoutes.ts";
 import { inTenantScope } from "./tenantScope.ts";
 
-export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: string; generatedAt?: string; limit?: number; cursor?: number } = {}) {
+export async function buildSourceOperationsSnapshot(store: any, input: { tenantId?: string; generatedAt?: string; limit?: number; cursor?: number; sourceId?: string; executableOnly?: boolean } = {}) {
   const generatedAt = input.generatedAt ?? nowIso();
+  if (typeof store?.querySourceOperationalPage === "function") {
+    const result = await store.querySourceOperationalPage({
+      tenantId: input.tenantId,
+      generatedAt,
+      limit: input.limit,
+      offset: input.cursor,
+      sourceId: input.sourceId,
+      executableOnly: input.executableOnly
+    });
+    return operationalQuerySnapshot(result, input, generatedAt);
+  }
   const inTenant = (record: any) => inTenantScope(record, input.tenantId);
-  const sources = records(store, "listSources").filter(inTenant);
+  const sources = records(store, "listSources").filter(inTenant).filter((source) => !input.sourceId || source.id === input.sourceId);
   const observations = records(store, "listSourceHealthObservations").filter(inTenant);
   const captures = records(store, "listCaptures").filter(inTenant);
   const entities = records(store, "listExtractedEntities").filter(inTenant);
@@ -167,6 +178,180 @@ export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: st
   };
 }
 
+function operationalQuerySnapshot(result: any, input: any, generatedAt: string) {
+  const totals = result.totals ?? {};
+  const sources = (result.rows ?? []).map((row: any) => operationalQueryRow(row, generatedAt));
+  const clearWeb = Number(totals.qualifyingClearWebSourceCount ?? 0);
+  const lawfulDarkWeb = Number(totals.qualifyingLawfulDarkWebSourceCount ?? 0);
+  const publicTelegram = Number(totals.qualifyingPublicTelegramSourceCount ?? 0);
+  const totalQualifying = clearWeb + lawfulDarkWeb + publicTelegram;
+  const counts = { clearWeb, lawfulDarkWeb, publicTelegram, total: totalQualifying };
+  return {
+    schemaVersion: "ti.source_operations.v1",
+    generatedAt,
+    tenantId: input.tenantId ?? "global",
+    total: Number(result.total ?? 0),
+    nextCursor: result.nextCursor,
+    summary: {
+      sourceCount: Number(totals.sourceCount ?? 0),
+      retainedSourceCount: Number(totals.retainedSourceCount ?? 0),
+      inactiveSourceCount: Number(totals.inactiveSourceCount ?? 0),
+      retiredSourceCount: Number(totals.retiredSourceCount ?? 0),
+      activeSourceCount: Number(totals.activeSourceCount ?? 0),
+      observedSourceCount: Number(totals.observedSourceCount ?? 0),
+      checkedSourceCount: Number(totals.checkedSourceCount ?? 0),
+      successfulSourceCount: Number(totals.successfulSourceCount ?? 0),
+      usefulSourceCount: Number(totals.usefulSourceCount ?? 0),
+      latestUsefulSourceCount: Number(totals.usefulSourceCount ?? 0),
+      sustainedUsefulSourceCount: Number(totals.sustainedUsefulSourceCount ?? 0),
+      checkedWithin24hSourceCount: Number(totals.checkedWithin24hSourceCount ?? 0),
+      successfulWithin24hSourceCount: Number(totals.successfulWithin24hSourceCount ?? 0),
+      usefulWithin24hSourceCount: Number(totals.usefulWithin24hSourceCount ?? 0),
+      captureProducingSourceCount: Number(totals.captureProducingSourceCount ?? 0),
+      recentlySeenSourceCount: Number(totals.recentlySeenSourceCount ?? 0),
+      backoffSourceCount: Number(totals.backoffSourceCount ?? 0),
+      neverObservedSourceCount: Number(totals.neverObservedSourceCount ?? 0),
+      healthySourceCount: Number(totals.healthySourceCount ?? 0),
+      degradedSourceCount: Number(totals.degradedSourceCount ?? 0),
+      failedSourceCount: Number(totals.failedSourceCount ?? 0),
+      unobservedSourceCount: Number(totals.neverObservedSourceCount ?? 0),
+      falsePositiveMeasuredSourceCount: Number(totals.falsePositiveMeasuredSourceCount ?? 0)
+    },
+    qualification: {
+      schemaVersion: "ti.source_portfolio_qualification.v1",
+      baseline: SOURCE_PORTFOLIO_BASELINE,
+      counts,
+      gaps: {
+        clearWeb: Math.max(0, SOURCE_PORTFOLIO_BASELINE.clearWeb - clearWeb),
+        lawfulDarkWeb: Math.max(0, SOURCE_PORTFOLIO_BASELINE.lawfulDarkWeb - lawfulDarkWeb),
+        publicTelegram: Math.max(0, SOURCE_PORTFOLIO_BASELINE.publicTelegram - publicTelegram),
+        total: Math.max(0, SOURCE_PORTFOLIO_BASELINE.total - totalQualifying)
+      },
+      baselineMet: clearWeb >= SOURCE_PORTFOLIO_BASELINE.clearWeb
+        && lawfulDarkWeb >= SOURCE_PORTFOLIO_BASELINE.lawfulDarkWeb
+        && publicTelegram >= SOURCE_PORTFOLIO_BASELINE.publicTelegram
+        && totalQualifying >= SOURCE_PORTFOLIO_BASELINE.total
+    },
+    operationalTotals: {
+      dailySourceCount: Number(totals.dailySourceCount ?? 0),
+      dailyAttemptedCount: Number(totals.dailyAttemptedCount ?? 0),
+      dailyCoveredCount: Number(totals.dailyCoveredCount ?? 0),
+      requiredChecksPerDay: Number(totals.requiredChecksPerDay ?? 0),
+      nextEligibleAt: timeOf(totals, "nextEligibleAt"),
+      latestRun: totals.latestRun,
+      lastSuccessfulRun: totals.lastSuccessfulRun
+    },
+    sources,
+    safeOutput: { sourceUrlsExposed: false, rawCapturesExposed: false, restrictedPayloadsExposed: false }
+  };
+}
+
+function operationalQueryRow(row: any, generatedAt: string) {
+  const source = row.record ?? {};
+  const health = row.health_stats ?? {};
+  const capture = row.capture_stats ?? {};
+  const actors = row.actor_stats ?? {};
+  const labels = row.label_stats ?? {};
+  const latest = health.latest ?? {};
+  const lastFailure = health.lastFailure ?? {};
+  const observationCount = Number(health.observationCount ?? 0);
+  const successCount = Number(health.successCount ?? 0);
+  const usefulCheckCount = Number(health.usefulCycleCount ?? 0);
+  const successfulCheckCount = Number(health.successfulCycleCount ?? 0);
+  const captureCount = Number(capture.captureCount ?? 0);
+  const lastSuccessAt = timeOf(health, "lastSuccessAt");
+  const stale = lastSuccessAt ? Date.parse(generatedAt) - Date.parse(lastSuccessAt) > freshnessTargetSeconds(source) * 1_000 : false;
+  const falsePositiveSampleSize = Number(labels.classified ?? 0);
+  const observedFalsePositiveRate = finiteRate(health.observedFalsePositiveRate);
+  const falsePositiveRate = falsePositiveSampleSize
+    ? ratio(Number(labels.falsePositive ?? 0), falsePositiveSampleSize)
+    : observedFalsePositiveRate ?? null;
+  const duplicateCount = Number(health.duplicateCount ?? 0);
+  const qualification = {
+    sourceId: source.id,
+    family: baselineFamily(source),
+    qualifies: row.collection_executable === true && usefulCheckCount >= 2 && successfulCheckCount >= 2 && captureCount > 0,
+    reasons: [],
+    scheduledCheckCount: observationCount,
+    successfulCheckCount,
+    usefulCheckCount,
+    productiveCheckCount: usefulCheckCount,
+    retainedCaptureCount: captureCount,
+    latestCheckUseful: Number(latest.captureCount ?? 0) > 0,
+    lastCheckedAt: timeOf(latest, "checkedAt"),
+    lastSuccessAt,
+    lastContentAt: timeOf(capture, "lastContentAt"),
+    lastUsefulAt: timeOf(health, "lastUsefulAt"),
+    backoffUntil: timeOf(source.crawlState, "backoffUntil")
+  };
+  const safeSource = toSafeSourceDto(source);
+  return {
+    ...safeSource,
+    id: source.id,
+    name: source.name,
+    type: source.type,
+    family: sourceFamily(source),
+    lifecycleStatus: source.status,
+    executable: row.collection_executable === true,
+    operatingMode: {
+      ...(safeSource as any).operatingMode,
+      accessMethod: source.accessMethod,
+      legalMode: source.governance?.metadataOnly || source.metadata?.captureMode === "metadata_only" ? "metadata_only" : "public_content",
+      approvalState: source.governance?.approvalState ?? (source.approvedAt ? "approved" : "not_recorded"),
+      policyVersion: source.governance?.policyVersion,
+      risk: source.risk ?? "not_recorded"
+    },
+    health: {
+      state: healthState(latest, stale),
+      observationCount,
+      invalidTimestampCount: 0,
+      lastAttemptAt: qualification.lastCheckedAt,
+      lastSuccessAt,
+      lastUsefulItemAt: qualification.lastUsefulAt,
+      lastFailureAt: timeOf(lastFailure, "checkedAt"),
+      lastFailureCategory: lastFailure.adapterFailureCategory,
+      lastFailureReason: safeFailureReason(lastFailure.failureReason),
+      consecutiveFailures: latest.success === false ? 1 : 0,
+      collectionSuccessRate: ratio(successCount, observationCount),
+      usefulYieldRate: ratio(usefulCheckCount, successCount),
+      freshnessLagSeconds: finiteNumber(latest.freshnessLagSeconds),
+      staleAfterSeconds: freshnessTargetSeconds(source)
+    },
+    parser: {
+      status: !health.parserAttemptCount ? "not_measured" : Number(health.parserWarningCount ?? 0) ? "warnings" : "healthy",
+      version: source.metadata?.parserVersion ?? capture.lastExtractorVersion,
+      attemptCount: Number(health.parserAttemptCount ?? 0),
+      successRate: ratio(Number(health.parserSuccessCount ?? 0), Number(health.parserAttemptCount ?? 0)),
+      warningCount: Number(health.parserWarningCount ?? 0)
+    },
+    quality: {
+      falsePositiveRate,
+      falsePositiveSampleSize: falsePositiveSampleSize || (observedFalsePositiveRate === undefined ? 0 : 1),
+      falsePositiveBasis: falsePositiveSampleSize ? "evaluation_labels" : observedFalsePositiveRate === undefined ? "not_measured" : "source_observations",
+      duplicateRate: ratio(duplicateCount, Number(health.reportedCaptureCount ?? 0) + duplicateCount)
+    },
+    coverage: {
+      observedActorCount: Number(actors.count ?? 0),
+      observedActors: Array.isArray(actors.values) ? actors.values.slice(0, 50) : [],
+      observedDomains: Array.isArray(capture.observedDomains) ? capture.observedDomains.slice(0, 50) : [],
+      resultTypes: Array.isArray(capture.resultTypes) ? capture.resultTypes.slice(0, 50) : [],
+      captureCount,
+      lastContentAt: qualification.lastContentAt,
+      usefulCheckCount,
+      sustainedProductive: usefulCheckCount >= 2 && captureCount > 0
+    },
+    verification: {
+      qualificationState: source.metadata?.sourcePortfolioQualificationState ?? source.metadata?.qualificationState,
+      countsAsCoverage: source.metadata?.countsAsCoverage === true,
+      authorityReportedItemCount: finiteNumber(source.metadata?.reportedVictimCount),
+      directlyParsedItemCount: finiteNumber(source.metadata?.observedParsedItemCount),
+      parserShape: source.metadata?.parserShape,
+      verifiedAt: timeOf(source.metadata?.sourcePortfolioVerification, "verifiedAt")
+    },
+    qualification
+  };
+}
+
 function recent(value: unknown, generatedAt: string) {
   const at = Date.parse(String(value ?? ""));
   return Number.isFinite(at) && Date.parse(generatedAt) - at <= 86_400_000;
@@ -204,6 +389,13 @@ function sourceFamily(source: any): string {
   if (["tor_metadata", "i2p_metadata"].includes(source.type)) return "darkweb_metadata";
   if (["static_web", "dynamic_web", "blog"].includes(source.type)) return "web";
   return String(source.type ?? "unknown");
+}
+
+function baselineFamily(source: any): "clear_web" | "lawful_dark_web" | "public_telegram" | undefined {
+  if (source.metadata?.transportCanary === true) return undefined;
+  if (source.type === "telegram_public") return "public_telegram";
+  if (["tor_metadata", "darkweb_metadata"].includes(source.type)) return "lawful_dark_web";
+  if (["rss", "api", "json_api", "blog"].includes(source.type)) return "clear_web";
 }
 
 function freshnessTargetSeconds(source: any): number {

@@ -22,6 +22,8 @@ import type {
 import { stableId } from "../utils.ts";
 import { InMemoryScraperStore, linkedAlertCaptureIds } from "./memoryStore.ts";
 import { persistActorIdentityCatalog } from "./postgresActorIdentityCatalog.ts";
+import { isExecutableSource } from "../policy/collectionPolicy.ts";
+import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 
 const DEFAULT_MIGRATIONS = [
   { version: "006_threat_intelligence_store", path: fileURLToPath(new URL("../../migrations/006_threat_intelligence_store.sql", import.meta.url)) },
@@ -50,7 +52,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "029_scope_capture_dedupe_by_tenant", path: fileURLToPath(new URL("../../migrations/029_scope_capture_dedupe_by_tenant.sql", import.meta.url)) },
   { version: "030_reconcile_actor_profiles", path: fileURLToPath(new URL("../../migrations/030_reconcile_actor_profiles.sql", import.meta.url)) },
   { version: "031_archive_inactive_actor_profiles", path: fileURLToPath(new URL("../../migrations/031_archive_inactive_actor_profiles.sql", import.meta.url)) },
-  { version: "032_reconcile_actor_profile_scope_lineage", path: fileURLToPath(new URL("../../migrations/032_reconcile_actor_profile_scope_lineage.sql", import.meta.url)) }
+  { version: "032_reconcile_actor_profile_scope_lineage", path: fileURLToPath(new URL("../../migrations/032_reconcile_actor_profile_scope_lineage.sql", import.meta.url)) },
+  { version: "033_bound_source_operations", path: fileURLToPath(new URL("../../migrations/033_bound_source_operations.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -88,6 +91,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       await sql.connect();
       await store.migrate();
       await store.hydrate();
+      await store.backfillSourceOperationalKeys();
       return store;
     } catch (error) {
       await sql.close({ timeout: 1 }).catch(() => undefined);
@@ -214,6 +218,222 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const total = Number(countRows[0]?.total ?? 0);
     const records = rows.map(readRecord);
     return { records, total, nextCursor: offset + records.length < total ? String(offset + records.length) : undefined };
+  }
+
+  async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; sourceId?: string; executableOnly?: boolean } ) {
+    const limit = Math.max(1, Math.min(500, Number(input.limit ?? 100)));
+    const offset = Math.max(0, Number(input.offset ?? 0));
+    const tenantId = input.tenantId ?? null;
+    const sourceId = input.sourceId?.trim() || null;
+    const executableOnly = input.executableOnly === true;
+    const [rows, totalRows] = await Promise.all([
+      this.sql.unsafe(`
+        WITH page AS (
+          SELECT source.*
+          FROM threat_intel.sources source
+          WHERE source.tenant_id IS NOT DISTINCT FROM $1::text
+            AND ($2::text IS NULL OR source.id = $2::text)
+            AND (NOT $3::boolean OR source.collection_executable)
+          ORDER BY lower(source.name), source.id
+          LIMIT $4 OFFSET $5
+        )
+        SELECT page.record,
+          page.collection_executable,
+          health.stats AS health_stats,
+          captures.stats AS capture_stats,
+          actors.stats AS actor_stats,
+          labels.stats AS label_stats
+        FROM page
+        LEFT JOIN LATERAL (
+          SELECT jsonb_build_object(
+            'observationCount', count(*),
+            'successCount', count(*) FILTER (WHERE h.success),
+            'usefulCycleCount', count(DISTINCT h.collection_run_id) FILTER (
+              WHERE h.collection_run_id IS NOT NULL AND h.capture_count > 0
+                AND h.checked_at >= $6::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((page.record->'metadata'->>'activityWindowSeconds')::int, 2592000)))
+                AND EXISTS (
+                  SELECT 1 FROM threat_intel.captures retained
+                  WHERE retained.source_id = page.id
+                    AND retained.tenant_id IS NOT DISTINCT FROM page.tenant_id
+                    AND retained.record->'metadata'->>'runId' = h.collection_run_id
+                )
+            ),
+            'successfulCycleCount', count(DISTINCT h.collection_run_id) FILTER (
+              WHERE h.collection_run_id IS NOT NULL AND h.success
+                AND h.checked_at >= $6::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((page.record->'metadata'->>'activityWindowSeconds')::int, 2592000)))
+            ),
+            'parserAttemptCount', count(*) FILTER (WHERE h.success),
+            'parserSuccessCount', count(*) FILTER (WHERE h.success AND h.parser_warning_count = 0),
+            'parserWarningCount', COALESCE(sum(h.parser_warning_count), 0),
+            'duplicateCount', COALESCE(sum(h.duplicate_count), 0),
+            'reportedCaptureCount', COALESCE(sum(h.capture_count), 0),
+            'observedFalsePositiveRate', avg(h.false_positive_rate),
+            'latest', (array_agg(h.record ORDER BY h.checked_at DESC))[1],
+            'lastSuccessAt', max(h.checked_at) FILTER (WHERE h.success),
+            'lastUsefulAt', max(h.checked_at) FILTER (WHERE h.collection_run_id IS NOT NULL AND h.capture_count > 0),
+            'lastFailure', (array_agg(h.record ORDER BY h.checked_at DESC) FILTER (WHERE NOT h.success))[1]
+          ) AS stats
+          FROM threat_intel.source_health h
+          WHERE h.source_id = page.id AND h.tenant_id IS NOT DISTINCT FROM page.tenant_id
+        ) health ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT jsonb_build_object(
+            'captureCount', count(*),
+            'lastContentAt', max(COALESCE(c.published_at, c.collected_at)),
+            'lastExtractorVersion', (array_agg(c.extractor_version ORDER BY c.collected_at DESC))[1],
+            'observedDomains', COALESCE(jsonb_agg(DISTINCT lower(c.record->'metadata'->>'domain')) FILTER (WHERE c.record->'metadata'->>'domain' IS NOT NULL), '[]'::jsonb),
+            'resultTypes', COALESCE(jsonb_agg(DISTINCT COALESCE(c.record->'metadata'->>'pageType', c.record->'metadata'->>'kind', c.media_type)), '[]'::jsonb)
+          ) AS stats
+          FROM threat_intel.captures c
+          WHERE c.source_id = page.id AND c.tenant_id IS NOT DISTINCT FROM page.tenant_id
+        ) captures ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT jsonb_build_object(
+            'count', count(DISTINCT e.normalized_value),
+            'values', COALESCE(jsonb_agg(DISTINCT e.normalized_value), '[]'::jsonb)
+          ) AS stats
+          FROM threat_intel.entities e
+          WHERE e.source_id = page.id AND e.tenant_id IS NOT DISTINCT FROM page.tenant_id
+            AND e.entity_type IN ('actor', 'ransomware_family')
+        ) actors ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT jsonb_build_object(
+            'classified', count(*) FILTER (WHERE l.outcome IN ('true_positive', 'false_positive')),
+            'falsePositive', count(*) FILTER (WHERE l.outcome = 'false_positive')
+          ) AS stats
+          FROM threat_intel.evaluation_labels l
+          LEFT JOIN threat_intel.captures lc ON lc.id = l.capture_id
+          LEFT JOIN threat_intel.entities le ON le.id = l.entity_id
+          LEFT JOIN threat_intel.indicators li ON li.id = l.indicator_id
+          LEFT JOIN threat_intel.incidents ln ON ln.id = l.incident_id
+          LEFT JOIN threat_intel.claim_evidence ce ON ce.claim_id = l.claim_id
+          LEFT JOIN threat_intel.captures cc ON cc.id = ce.capture_id
+          WHERE l.tenant_id IS NOT DISTINCT FROM page.tenant_id
+            AND COALESCE(lc.source_id, le.source_id, li.source_id, ln.source_id, cc.source_id) = page.id
+        ) labels ON TRUE
+        ORDER BY lower(page.name), page.id
+      `, [tenantId, sourceId, executableOnly, limit, offset, input.generatedAt]),
+      this.sql.unsafe(`
+        WITH scoped AS (
+          SELECT source.*
+          FROM threat_intel.sources source
+          WHERE source.tenant_id IS NOT DISTINCT FROM $1::text
+            AND ($2::text IS NULL OR source.id = $2::text)
+            AND (NOT $3::boolean OR source.collection_executable)
+        ), per_source AS (
+          SELECT source.id, source.status, source.source_type, source.collection_executable,
+            source.canonical_feed_key, source.record,
+            health.observation_count, health.last_checked_at, health.last_success_at,
+            health.last_useful_at, health.successful_cycles, health.useful_cycles,
+            health.latest_success, health.latest_status, health.latest_parser_warning_count,
+            captures.capture_count, captures.last_content_at
+          FROM scoped source
+          CROSS JOIN LATERAL (
+            SELECT count(*) AS observation_count,
+              max(checked_at) AS last_checked_at,
+              max(checked_at) FILTER (WHERE success) AS last_success_at,
+              max(checked_at) FILTER (
+                WHERE collection_run_id IS NOT NULL AND capture_count > 0
+                  AND EXISTS (
+                    SELECT 1 FROM threat_intel.captures retained
+                    WHERE retained.source_id = source.id
+                      AND retained.tenant_id IS NOT DISTINCT FROM source.tenant_id
+                      AND retained.record->'metadata'->>'runId' = source_health.collection_run_id
+                  )
+              ) AS last_useful_at,
+              (array_agg(success ORDER BY checked_at DESC))[1] AS latest_success,
+              (array_agg(status ORDER BY checked_at DESC))[1] AS latest_status,
+              (array_agg(parser_warning_count ORDER BY checked_at DESC))[1] AS latest_parser_warning_count,
+              count(DISTINCT collection_run_id) FILTER (
+                WHERE collection_run_id IS NOT NULL AND success
+                  AND checked_at >= $4::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((source.record->'metadata'->>'activityWindowSeconds')::int, 2592000)))
+              ) AS successful_cycles,
+              count(DISTINCT collection_run_id) FILTER (
+                WHERE collection_run_id IS NOT NULL AND capture_count > 0
+                  AND checked_at >= $4::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((source.record->'metadata'->>'activityWindowSeconds')::int, 2592000)))
+                  AND EXISTS (
+                    SELECT 1 FROM threat_intel.captures retained
+                    WHERE retained.source_id = source.id
+                      AND retained.tenant_id IS NOT DISTINCT FROM source.tenant_id
+                      AND retained.record->'metadata'->>'runId' = source_health.collection_run_id
+                  )
+              ) AS useful_cycles
+            FROM threat_intel.source_health
+            WHERE source_id = source.id AND tenant_id IS NOT DISTINCT FROM source.tenant_id
+          ) health
+          CROSS JOIN LATERAL (
+            SELECT count(*) AS capture_count,
+              max(COALESCE(published_at, collected_at)) AS last_content_at
+            FROM threat_intel.captures
+            WHERE source_id = source.id AND tenant_id IS NOT DISTINCT FROM source.tenant_id
+          ) captures
+        ), ranked AS (
+          SELECT per_source.*,
+            row_number() OVER (
+              PARTITION BY canonical_feed_key
+              ORDER BY capture_count DESC, COALESCE(record->>'createdAt', ''), id
+            ) AS canonical_rank,
+            collection_executable
+              AND btrim(COALESCE(record->>'legalNotes', '')) <> ''
+              AND successful_cycles >= 2
+              AND useful_cycles >= 2
+              AND capture_count > 0
+              AND last_checked_at >= $4::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((record->>'crawlFrequencySeconds')::int, 86400) * 3))
+              AND last_useful_at >= $4::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((record->'metadata'->>'activityWindowSeconds')::int, 2592000)))
+              AND last_content_at >= $4::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((record->'metadata'->>'activityWindowSeconds')::int, 2592000)))
+              AS runtime_qualifies
+          FROM per_source
+        ), latest_run AS (
+          SELECT record
+          FROM threat_intel.collection_runs
+          WHERE tenant_id IS NOT DISTINCT FROM $1::text AND request_id = 'req_public_canary'
+          ORDER BY updated_at DESC LIMIT 1
+        ), successful_run AS (
+          SELECT record
+          FROM threat_intel.collection_runs
+          WHERE tenant_id IS NOT DISTINCT FROM $1::text AND request_id = 'req_public_canary'
+            AND status IN ('completed', 'degraded')
+          ORDER BY updated_at DESC LIMIT 1
+        )
+        SELECT jsonb_build_object(
+          'sourceCount', count(*),
+          'retainedSourceCount', count(*) FILTER (WHERE collection_executable),
+          'inactiveSourceCount', count(*) FILTER (WHERE NOT collection_executable),
+          'retiredSourceCount', count(*) FILTER (WHERE status = 'retired'),
+          'activeSourceCount', count(*) FILTER (WHERE collection_executable),
+          'observedSourceCount', count(*) FILTER (WHERE collection_executable AND observation_count > 0),
+          'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND observation_count > 0),
+          'successfulSourceCount', count(*) FILTER (WHERE collection_executable AND last_success_at IS NOT NULL),
+          'usefulSourceCount', count(*) FILTER (WHERE collection_executable AND last_useful_at IS NOT NULL),
+          'sustainedUsefulSourceCount', count(*) FILTER (WHERE collection_executable AND useful_cycles >= 2 AND capture_count > 0),
+          'checkedWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND last_checked_at >= $4::timestamptz - interval '24 hours'),
+          'successfulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND last_success_at >= $4::timestamptz - interval '24 hours'),
+          'usefulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND last_useful_at >= $4::timestamptz - interval '24 hours'),
+          'captureProducingSourceCount', count(*) FILTER (WHERE collection_executable AND capture_count > 0),
+          'recentlySeenSourceCount', count(*) FILTER (WHERE collection_executable AND last_content_at >= $4::timestamptz - interval '24 hours'),
+          'backoffSourceCount', count(*) FILTER (WHERE collection_executable AND COALESCE(record->'crawlState'->>'backoffUntil', '') <> '' AND (record->'crawlState'->>'backoffUntil')::timestamptz > $4::timestamptz),
+          'neverObservedSourceCount', count(*) FILTER (WHERE collection_executable AND observation_count = 0),
+          'healthySourceCount', count(*) FILTER (WHERE collection_executable AND latest_success AND COALESCE(latest_parser_warning_count, 0) = 0),
+          'degradedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_success AND COALESCE(latest_parser_warning_count, 0) > 0),
+          'failedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_success = FALSE),
+          'falsePositiveMeasuredSourceCount', 0,
+          'dailySourceCount', count(*) FILTER (WHERE collection_executable AND COALESCE((record->>'crawlFrequencySeconds')::int, 86400) <= 86400),
+          'dailyAttemptedCount', count(*) FILTER (WHERE collection_executable AND COALESCE((record->>'crawlFrequencySeconds')::int, 86400) <= 86400 AND last_checked_at >= $4::timestamptz - interval '24 hours'),
+          'dailyCoveredCount', count(*) FILTER (WHERE collection_executable AND COALESCE((record->>'crawlFrequencySeconds')::int, 86400) <= 86400 AND last_success_at >= $4::timestamptz - interval '24 hours'),
+          'requiredChecksPerDay', COALESCE(sum(CASE WHEN collection_executable THEN GREATEST(1, ceil(86400.0 / GREATEST(300, COALESCE((record->>'crawlFrequencySeconds')::int, 86400)))) ELSE 0 END), 0),
+          'nextEligibleAt', min(NULLIF(record->'crawlState'->>'nextEligibleAt', '')::timestamptz) FILTER (WHERE collection_executable),
+          'qualifyingClearWebSourceCount', count(*) FILTER (WHERE runtime_qualifies AND canonical_rank = 1 AND source_type IN ('rss','api','json_api','blog')),
+          'qualifyingLawfulDarkWebSourceCount', count(*) FILTER (WHERE runtime_qualifies AND canonical_rank = 1 AND source_type IN ('tor_metadata','darkweb_metadata') AND COALESCE((record->'governance'->>'metadataOnly')::boolean, (record->'metadata'->>'captureMode') = 'metadata_only')),
+          'qualifyingPublicTelegramSourceCount', count(*) FILTER (WHERE runtime_qualifies AND canonical_rank = 1 AND source_type = 'telegram_public'),
+          'latestRun', (SELECT record FROM latest_run),
+          'lastSuccessfulRun', (SELECT record FROM successful_run)
+        ) AS totals
+        FROM ranked
+      `, [tenantId, sourceId, executableOnly, input.generatedAt])
+    ]);
+    const totals = totalRows[0]?.totals ?? {};
+    const total = Number(totals.sourceCount ?? 0);
+    return { rows, totals, total, nextCursor: offset + rows.length < total ? String(offset + rows.length) : undefined };
   }
 
   override async listActorProfilesForOwnership(): Promise<any[]> {
@@ -659,6 +879,19 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     });
   }
 
+  private async backfillSourceOperationalKeys(): Promise<void> {
+    for (const source of this.listSources()) {
+      const executable = isExecutableSource(source);
+      await this.sql`
+        UPDATE threat_intel.sources
+        SET canonical_feed_key = ${source.url ? canonicalFeedKey(source.url) : null},
+            collection_executable = ${executable}
+        WHERE id = ${source.id}
+          AND (canonical_feed_key IS NULL OR collection_executable IS DISTINCT FROM ${executable})
+      `;
+    }
+  }
+
   private hasStoredData(): boolean {
     return this.listSources().length > 0 || this.listCaptures().length > 0 || this.listIncidents().length > 0 || this.listActorIdentityCatalogs().length > 0 || this.listDwmAlerts().length > 0 || legacyWorkflowLoaders.some(([, , , list]) => list(this).length > 0);
   }
@@ -745,12 +978,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     await sql`
       INSERT INTO threat_intel.sources (
         id, tenant_id, name, source_type, url, access_method, status, risk,
-        trust_score, crawl_frequency_seconds, last_seen_at, created_at, updated_at, record
+        trust_score, crawl_frequency_seconds, last_seen_at, created_at, updated_at,
+        canonical_feed_key, collection_executable, record
       ) VALUES (
         ${source.id}, ${nullable(source.tenantId)}, ${source.name}, ${source.type}, ${source.url},
         ${source.accessMethod}, ${source.status}, ${source.risk}, ${score(source.trustScore)},
         ${Math.max(1, Number(source.crawlFrequencySeconds ?? 3600))}, ${nullable(source.lastSeenAt)},
-        ${createdAt}, ${updatedAt}, ${toJson(source)}::text::jsonb
+        ${createdAt}, ${updatedAt}, ${source.url ? canonicalFeedKey(source.url) : null},
+        ${isExecutableSource(source)}, ${toJson(source)}::text::jsonb
       )
       ON CONFLICT (id) DO UPDATE SET
         tenant_id = EXCLUDED.tenant_id,
@@ -764,6 +999,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         crawl_frequency_seconds = EXCLUDED.crawl_frequency_seconds,
         last_seen_at = EXCLUDED.last_seen_at,
         updated_at = EXCLUDED.updated_at,
+        canonical_feed_key = EXCLUDED.canonical_feed_key,
+        collection_executable = EXCLUDED.collection_executable,
         record = EXCLUDED.record
     `;
   }

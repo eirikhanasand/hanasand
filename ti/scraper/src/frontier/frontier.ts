@@ -49,6 +49,22 @@ export class FocusedFrontier {
   requeueExpiredLeases(now = this.o.now()) { const out: any[] = []; for (const [id, lease] of this.leased) if (lease.leasedUntil <= +now) { this.leased.delete(id); this.release(lease.item, false); this.queue.set(id, lease.item); out.push(lease.item); } return out; }
   snapshot() { return [...this.queue.values()]; } leasedSnapshot() { return [...this.leased.values()].map((l) => l.item.task ?? l.item); }
   deadLetterSnapshot() { return [...this.dead]; } size() { return this.queue.size; }
+  scopedStatus(tenantId?: string, failureLimit = 50) {
+    const matches = (item: any) => tenantId ? item.tenantId === tenantId : !item.tenantId;
+    const queued = [...this.queue.values()].filter((item) => matches(item.task ?? item));
+    const leased = [...this.leased.values()].map((lease) => lease.item.task ?? lease.item).filter(matches);
+    const dead = this.dead.filter((item) => matches(item.task ?? item));
+    return {
+      queued: queued.length,
+      leased: leased.length,
+      deadLetterCount: dead.length,
+      failures: dead.slice(-Math.max(0, failureLimit)).map((item) => ({
+        taskId: item.taskId,
+        sourceId: item.task?.sourceId,
+        reason: item.reason
+      }))
+    };
+  }
   metrics(now = this.o.now()) { return buildFrontierMetrics(this, now); } groupedSnapshot(now = this.o.now()) { return buildFrontierGroupedSnapshot(this, now); }
   private toTask(c: any, score: any) { return { id: stableId("task", `${c.source.id}:${c.url}:${c.discoveredAt}`), tenantId: c.tenantId, sourceId: c.source.id, sourceType: c.source.type, targetUrl: c.url, queuedAt: c.discoveredAt, availableAt: c.availableAt, deadlineAt: c.deadlineAt, priority: score.total, reason: score.reason, retryCount: 0, maxBytes: c.maxBytes, crawlBudgetKey: c.budgetKey, planning: c.planning, scoreBreakdown: score, fairnessKey: c.fairnessKey, intelRequestId: c.intelRequestId }; }
   private scoreObj(c: any, total: number, decision: string, reason: string, safetyPenalty = 0) { const classifier = classifierFor(c, this.o.strategy); return { total: clampScore(total), decision, reason, strategy: this.o.strategy, relevance: classifier.relevance, novelty: c.novelty ?? 0.5, freshness: c.freshness ?? 0.5, sourceTrust: c.source?.trustScore ?? 0.5, safetyPenalty, classifier }; }

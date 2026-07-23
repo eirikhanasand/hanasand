@@ -112,14 +112,16 @@ export type TiAdminOverview = {
 type ApiPayload = Record<string, unknown>
 const TI_ADMIN_FETCH_TIMEOUT_MS = 2_500
 
-export async function getTiAdminOverview(tenantId = 'default', page: { cursor?: number, limit?: number } = {}): Promise<TiAdminOverview> {
+export async function getTiAdminOverview(tenantId = 'default', page: { cursor?: number, limit?: number, sourceId?: string, includeSamples?: boolean } = {}): Promise<TiAdminOverview> {
     const base = tiScraperApiBase()
+    const sampleFilter = page.sourceId ? { query: page.sourceId } : {}
     const resources = await Promise.all([
-        fetchResource(base, '/v1/intel/captures', 'captures', tenantId),
-        fetchResource(base, '/v1/intel/collection-runs', 'collectionRuns', tenantId),
+        page.includeSamples === false ? emptyResource('captures') : fetchResource(base, '/v1/intel/captures', 'captures', tenantId, sampleFilter),
+        page.includeSamples === false ? emptyResource('collection-runs') : fetchResource(base, '/v1/intel/collection-runs', 'collectionRuns', tenantId, sampleFilter),
         fetchResource(base, '/v1/intel/source-operations', 'sources', tenantId, {
             cursor: Math.max(0, page.cursor || 0),
             limit: Math.max(1, Math.min(500, page.limit || 100)),
+            sourceId: page.sourceId,
         }),
     ])
     const [captureResult, runResult, operationsResult] = resources
@@ -151,7 +153,7 @@ export async function getTiAdminOverview(tenantId = 'default', page: { cursor?: 
 }
 
 export async function getTiAdminSource(id: string) {
-    return (await getTiAdminOverview()).sources.find(source => source.id === id) || null
+    return (await getTiAdminOverview('default', { sourceId: id })).sources[0] || null
 }
 
 export async function getTiAdminDomain(domain: string) {
@@ -190,13 +192,15 @@ export function ageDays(since: string) {
     return Number.isFinite(diff) ? Math.max(1, Math.round(diff / 86400000)) : 0
 }
 
-async function fetchResource(base: string, path: string, key: string, tenantId: string, page: { cursor?: number, limit?: number } = {}) {
+async function fetchResource(base: string, path: string, key: string, tenantId: string, page: { cursor?: number, limit?: number, sourceId?: string, query?: string } = {}) {
     const resource = path.split('/').at(-1) || key
     try {
         const target = new URL(path, base)
         target.searchParams.set('tenantId', tenantId)
         target.searchParams.set('limit', String(page.limit || 500))
         if (page.cursor) target.searchParams.set('cursor', String(page.cursor))
+        if (page.sourceId) target.searchParams.set('sourceId', page.sourceId)
+        if (page.query) target.searchParams.set('q', page.query)
         const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
         const response = await fetch(target, {
             cache: 'no-store',
@@ -217,6 +221,10 @@ async function fetchResource(base: string, path: string, key: string, tenantId: 
     } catch {
         return { resource, ok: false, records: [] as ApiPayload[], total: 0, nextCursor: undefined, payload: {} as ApiPayload }
     }
+}
+
+function emptyResource(resource: string) {
+    return { resource, ok: true, records: [] as ApiPayload[], total: 0, nextCursor: undefined, payload: {} as ApiPayload }
 }
 
 function sourceTotals(payload: ApiPayload): TiAdminOverview['sourceTotals'] {
@@ -244,6 +252,7 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
     const lastRunAt = isoValue(health.lastAttemptAt, health.lastSuccessAt)
     const nextRunAt = isoValue(record.nextRunAt) || (lastRunAt ? new Date(Date.parse(lastRunAt) + cadenceMinutes * 60_000).toISOString() : '')
     const sourceCaptures = captures.filter(capture => capture.sourceId === id)
+    const retainedEvidenceCount = numberValue(coverage.captureCount, sourceCaptures.length)
     const url = stringValue(record.url)
 
     return {
@@ -261,8 +270,8 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
         nextRunAt,
         monitoredSince,
         cadenceMinutes,
-        usefulRows: numberValue(coverage.captureCount, sourceCaptures.length),
-        retainedEvidenceCount: numberValue(coverage.captureCount, sourceCaptures.length),
+        usefulRows: retainedEvidenceCount,
+        retainedEvidenceCount,
         productiveCycleCount: numberValue(qualification.productiveCheckCount, qualification.usefulCheckCount),
         qualifiesForBaseline: qualification.qualifies === true,
         qualificationReasons: listValue(qualification.reasons).map(stringValue).filter(Boolean),
@@ -272,9 +281,9 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
         lastContentAt: isoValue(qualification.lastContentAt),
         lastUsefulAt: isoValue(qualification.lastUsefulAt),
         backoffUntil: optionalIso(qualification.backoffUntil),
-        domains: unique(sourceCaptures.map(capture => capture.domain).filter(domain => domain !== 'unresolved')),
-        resultTypes: unique(sourceCaptures.map(capture => capture.pageType).filter(Boolean)),
-        buyerValue: sourceCaptures.length ? `${sourceCaptures.length} stored capture${sourceCaptures.length === 1 ? '' : 's'} available for evidence review.` : 'No accepted captures are stored for this source.',
+        domains: unique([...listValue(coverage.observedDomains).map(stringValue), ...sourceCaptures.map(capture => capture.domain)].filter(domain => domain && domain !== 'unresolved')),
+        resultTypes: unique([...listValue(coverage.resultTypes).map(stringValue), ...sourceCaptures.map(capture => capture.pageType)].filter(Boolean)),
+        buyerValue: retainedEvidenceCount ? `${retainedEvidenceCount} retained evidence capture${retainedEvidenceCount === 1 ? '' : 's'} recorded; this page shows a bounded recent sample.` : 'No accepted captures are stored for this source.',
         legalNotes: `${textValue(operatingMode.legalMode, 'operating mode not recorded')} · approval ${textValue(operatingMode.approvalState, 'not recorded')}`,
         screenshotIds: sourceCaptures.filter(capture => capture.screenshotLabel !== 'not captured').map(capture => capture.id),
     }

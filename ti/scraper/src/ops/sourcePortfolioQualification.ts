@@ -33,12 +33,13 @@ export function qualifySourcePortfolio(input: {
     const checkWindowSeconds = Math.max(86_400, cadenceSeconds * 3);
     const activityWindowSeconds = Math.max(checkWindowSeconds, positiveNumber(source.metadata?.activityWindowSeconds, 30 * 86_400));
     const scheduled = observations.filter((row) => typeof row.collectionRunId === "string" && row.collectionRunId.trim());
+    const retainedCaptureRunIds = new Set(captures.map((capture) => capture.metadata?.runId).filter((runId): runId is string => typeof runId === "string" && runId.trim().length > 0));
     const currentScheduled = summarizeScheduledCycles(
       scheduled.filter((row) => recent(validTime(row.checkedAt), input.generatedAt, activityWindowSeconds))
     );
     const latest = scheduled.at(-1);
     const successes = currentScheduled.filter((row) => row.success === true);
-    const productive = currentScheduled.filter((row) => Number(row.captureCount ?? 0) > 0);
+    const productive = currentScheduled.filter((row) => Number(row.captureCount ?? 0) > 0 && retainedCaptureRunIds.has(String(row.collectionRunId)));
     const latestCapture = captures.at(-1);
     const family = baselineFamily(source);
     const lastCheckedAt = validTime(latest?.checkedAt);

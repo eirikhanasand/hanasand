@@ -61,6 +61,36 @@ describe("source operations", () => {
     expect(new Set([...first.sources, ...second.sources].map((row: any) => row.id)).size).toBe(200);
   });
 
+  test("uses one bounded operational query for exact sources beyond page one", async () => {
+    const calls: any[] = [];
+    const store = {
+      querySourceOperationalPage: async (input: any) => {
+        calls.push(input);
+        return {
+          rows: [{
+            record: source({ id: "src_scale_06100", name: "Scale 06100" }),
+            collection_executable: true,
+            health_stats: { observationCount: 2, successCount: 2, usefulCycleCount: 2, successfulCycleCount: 2 },
+            capture_stats: { captureCount: 4, observedDomains: [], resultTypes: [] },
+            actor_stats: { count: 0, values: [] },
+            label_stats: { classified: 0, falsePositive: 0 }
+          }],
+          totals: { sourceCount: 1, activeSourceCount: 1, retainedSourceCount: 1, sustainedUsefulSourceCount: 1 },
+          total: 1
+        };
+      },
+      listSources: () => { throw new Error("unbounded source read"); },
+      listCaptures: () => { throw new Error("unbounded capture read"); }
+    };
+    const options = { store, frontier: new FocusedFrontier(), serviceToken: "source-ops-test" } as any;
+    const payload = await (await handleApiRequest(authenticatedApi("/v1/intel/source-operations?sourceId=src_scale_06100"), options)).json() as any;
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ sourceId: "src_scale_06100", limit: undefined, offset: undefined });
+    expect(payload.sources).toHaveLength(1);
+    expect(payload.sources[0]).toMatchObject({ id: "src_scale_06100", coverage: { captureCount: 4 } });
+  });
+
   test("requires a source operator globally and exact admin membership for tenant operations", async () => {
     const store = new InMemoryScraperStore();
     store.saveOrganization({ id: "org_a", tenantId: "tenant_a", name: "A", status: "active" } as any);
@@ -76,10 +106,10 @@ describe("source operations", () => {
       }
     };
 
-    expect((await handleApiRequest(sessionApi("/v1/intel/source-operations", "viewer"), options)).status).toBe(403);
-    expect((await handleApiRequest(sessionApi("/v1/intel/source-operations", "source-operator"), options)).status).toBe(200);
-    expect((await handleApiRequest(sessionApi("/v1/intel/source-operations?tenantId=tenant_a", "admin-a", "tenant_a"), options)).status).toBe(200);
-    expect((await handleApiRequest(sessionApi("/v1/intel/source-operations?tenantId=tenant_b", "admin-a", "tenant_b"), options)).status).toBe(403);
+    expect((await handleApiRequest(sessionApi("/v1/intel/source-operations", "viewer"), options as any)).status).toBe(403);
+    expect((await handleApiRequest(sessionApi("/v1/intel/source-operations", "source-operator"), options as any)).status).toBe(200);
+    expect((await handleApiRequest(sessionApi("/v1/intel/source-operations?tenantId=tenant_a", "admin-a", "tenant_a"), options as any)).status).toBe(200);
+    expect((await handleApiRequest(sessionApi("/v1/intel/source-operations?tenantId=tenant_b", "admin-a", "tenant_b"), options as any)).status).toBe(403);
   });
 });
 

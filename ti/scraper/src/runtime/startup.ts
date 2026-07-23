@@ -70,7 +70,7 @@ export function createScraperRuntimeStop(options: {
   scheduledRuns: { beginStopping: () => void; drain: () => Promise<void> };
   server: Stoppable;
   canary: Stoppable;
-  defaultCanary: Stoppable;
+  defaultCanary?: Stoppable;
   restrictedMetadata: Stoppable;
   evaluation: Stoppable;
   automaticReview: Stoppable;
@@ -82,7 +82,7 @@ export function createScraperRuntimeStop(options: {
     await options.server.stop();
     await Promise.all([
       options.canary.stop(),
-      options.defaultCanary.stop(),
+      options.defaultCanary?.stop(),
       options.restrictedMetadata.stop(),
       options.evaluation.stop(),
       options.automaticReview.stop(),

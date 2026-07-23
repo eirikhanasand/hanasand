@@ -2661,6 +2661,110 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await restarted.close();
     expect(await admin`SELECT status, last_seen_at, updated_at, record FROM threat_intel.sources ORDER BY id`).toEqual(snapshot);
   });
+
+  test("bounds operational reads with exact totals and page-scoped evidence beyond source 6,100", async () => {
+    const store = await PostgresScraperStore.create({ databaseUrl });
+    await admin.unsafe(`
+      INSERT INTO threat_intel.sources (
+        id, tenant_id, name, source_type, url, access_method, status, risk,
+        trust_score, crawl_frequency_seconds, created_at, updated_at,
+        canonical_feed_key, collection_executable, record
+      )
+      SELECT
+        'src_bound_' || lpad(series::text, 5, '0'), 'tenant_bound',
+        'Bound ' || lpad(series::text, 5, '0'), 'rss',
+        'https://bounded.example/' || series || '.xml', 'public_http', 'active', 'low',
+        0.8, 3600, '2026-07-01T00:00:00Z', '2026-07-01T00:00:00Z',
+        'https://bounded.example/' || series || '.xml', TRUE,
+        jsonb_build_object(
+          'id', 'src_bound_' || lpad(series::text, 5, '0'),
+          'tenantId', 'tenant_bound',
+          'name', 'Bound ' || lpad(series::text, 5, '0'),
+          'type', 'rss',
+          'url', 'https://bounded.example/' || series || '.xml',
+          'accessMethod', 'public_http',
+          'status', 'active',
+          'risk', 'low',
+          'trustScore', 0.8,
+          'crawlFrequencySeconds', 3600,
+          'legalNotes', 'Public publisher feed.',
+          'createdAt', '2026-07-01T00:00:00.000Z',
+          'updatedAt', '2026-07-01T00:00:00.000Z',
+          'metadata', jsonb_build_object('productionCollection', true, 'activityWindowSeconds', 2592000)
+        )
+      FROM generate_series(0, 6099) series
+    `);
+    const sourceId = "src_bound_06100";
+    store.saveSource(source({
+      id: sourceId,
+      tenantId: "tenant_bound",
+      name: "Bound 06100",
+      url: "https://bounded.example/6100.xml",
+      metadata: { productionCollection: true, activityWindowSeconds: 2592000 }
+    }));
+    for (const [index, checkedAt] of ["2026-07-22T12:00:00.000Z", "2026-07-23T12:00:00.000Z"].entries()) {
+      const runId = `run_bound_${index + 1}`;
+      store.saveRun({ id: runId, tenantId: "tenant_bound", requestId: "req_public_canary", status: "completed", startedAt: checkedAt, completedAt: checkedAt, updatedAt: checkedAt } as any);
+      store.saveCapture(fixtureCapture({
+        id: `capture_bound_${index + 1}`,
+        tenantId: "tenant_bound",
+        sourceId,
+        url: `https://bounded.example/items/${index + 1}`,
+        collectedAt: checkedAt,
+        publishedAt: checkedAt,
+        metadata: { runId, domain: "victim.example", pageType: "advisory" }
+      }));
+      store.saveSourceHealthObservation({
+        id: `health_bound_${index + 1}`,
+        tenantId: "tenant_bound",
+        sourceId,
+        collectionRunId: runId,
+        checkedAt,
+        status: "healthy",
+        success: true,
+        useful: true,
+        captureCount: 1,
+        legalMode: "public_content"
+      });
+    }
+    store.saveExtractedEntity({ id: "entity_bound", tenantId: "tenant_bound", sourceId, captureId: "capture_bound_2", type: "actor", value: "APT29", normalizedValue: "apt29" });
+    store.saveEvaluationLabel({
+      id: "label_bound",
+      tenantId: "tenant_bound",
+      entityId: "entity_bound",
+      labelType: "actor_extraction",
+      outcome: "true_positive",
+      labeledBy: "source-operations-test",
+      labeledAt: "2026-07-23T12:30:00.000Z"
+    });
+    await store.flush();
+
+    const page = await store.querySourceOperationalPage({
+      tenantId: "tenant_bound",
+      generatedAt: "2026-07-23T13:00:00.000Z",
+      limit: 1,
+      offset: 6_100
+    });
+    const direct = await store.querySourceOperationalPage({
+      tenantId: "tenant_bound",
+      generatedAt: "2026-07-23T13:00:00.000Z",
+      sourceId
+    });
+
+    expect(page).toMatchObject({ total: 6_101, nextCursor: undefined });
+    expect(page.rows[0]).toMatchObject({
+      record: { id: sourceId },
+      health_stats: { usefulCycleCount: 2 },
+      capture_stats: { captureCount: 2 },
+      actor_stats: { count: 1 },
+      label_stats: { classified: 1 }
+    });
+    expect(direct).toMatchObject({
+      total: 1,
+      totals: { qualifyingClearWebSourceCount: 1 }
+    });
+    await store.close();
+  });
 });
 
 function pipeline(sourceId: string, tenantId?: string, suffix = "") {

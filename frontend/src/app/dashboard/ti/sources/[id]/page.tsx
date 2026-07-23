@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic'
 
 export default async function TiSourceDetailPage(props: { params: Promise<{ id: string }> }) {
     const params = await props.params
-    const overview = await getTiAdminOverview()
-    const source = overview.sources.find(item => item.id === params.id)
+    const overview = await getTiAdminOverview('default', { sourceId: params.id })
+    const source = overview.sources[0]
 
     if (!source && overview.availability.state === 'live') return notFound()
     if (!source) return (

@@ -51,10 +51,11 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
     if (scope.error) return scope.error;
     const accessError = authorizeOperatorScope(authentication.identity, options, scope.tenantId);
     if (accessError) return accessError;
-    return json(buildSourceOperationsSnapshot(options.store, {
+    return json(await buildSourceOperationsSnapshot(options.store, {
       tenantId: scope.tenantId,
       limit: numberQuery(url.searchParams.get("limit")),
-      cursor: numberQuery(url.searchParams.get("cursor"))
+      cursor: numberQuery(url.searchParams.get("cursor")),
+      sourceId: url.searchParams.get("sourceId")?.trim() || undefined
     }));
   }
   if (url.pathname === "/v1/intel/actor-identity-coverage" && request.method === "GET") {

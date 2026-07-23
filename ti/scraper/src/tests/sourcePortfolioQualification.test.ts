@@ -24,8 +24,8 @@ describe("source portfolio qualification", () => {
       observation(sourceId, "2026-07-23T11:00:00.000Z", 1)
     ]);
     const captures = ["clear", "duplicate", "telegram", "tor", "static"].flatMap((sourceId) => [
-      capture(sourceId, `${sourceId}-1`, "2026-07-22T11:00:00.000Z"),
-      capture(sourceId, `${sourceId}-2`, "2026-07-23T10:00:00.000Z")
+      capture(sourceId, `${sourceId}-1`, "2026-07-22T11:00:00.000Z", "run-2026-07-22T12:00:00.000Z"),
+      capture(sourceId, `${sourceId}-2`, "2026-07-23T10:00:00.000Z", "run-2026-07-23T11:00:00.000Z")
     ]);
 
     const result = qualifySourcePortfolio({ sources, observations, captures, generatedAt });
@@ -66,8 +66,8 @@ describe("source portfolio qualification", () => {
         observation("windowed", "2026-07-23T11:00:00.000Z", 1)
       ],
       captures: [
-        capture("windowed", "old", "2020-07-23T10:00:00.000Z"),
-        capture("windowed", "current", "2026-07-23T10:00:00.000Z")
+        capture("windowed", "old", "2020-07-23T10:00:00.000Z", "run-2020-07-23T11:00:00.000Z"),
+        capture("windowed", "current", "2026-07-23T10:00:00.000Z", "run-2026-07-23T11:00:00.000Z")
       ],
       generatedAt
     });
@@ -142,6 +142,6 @@ function observation(sourceId: string, checkedAt: string, captureCount: number) 
   return { id: `${sourceId}-${checkedAt}`, sourceId, collectionRunId: `run-${checkedAt}`, checkedAt, status: "healthy", success: true, useful: captureCount > 0, captureCount };
 }
 
-function capture(sourceId: string, id: string, publishedAt: string) {
-  return { id, sourceId, publishedAt, collectedAt: publishedAt };
+function capture(sourceId: string, id: string, publishedAt: string, runId?: string) {
+  return { id, sourceId, publishedAt, collectedAt: publishedAt, metadata: runId ? { runId } : undefined };
 }

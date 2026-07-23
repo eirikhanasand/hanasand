@@ -204,7 +204,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                     <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
                         <span className='inline-flex items-center gap-2'><Camera className='h-4 w-4 text-ui-primary' /> Capture coverage</span>
                         <span className='inline-flex items-center gap-2 text-xs font-medium text-ui-muted'>
-                            {captures.length} recent captures across {overview.sourcePage.total} sources
+                            Bounded recent sample · {overview.sourceTotals.active} active sources
                             <ChevronDown className='h-4 w-4 transition group-open:rotate-180' />
                         </span>
                     </summary>
@@ -213,10 +213,10 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                             <div key={row.source.id} className='rounded-md border border-ui-border bg-ui-canvas p-3'>
                                 <div className='flex items-center justify-between gap-3'>
                                     <p className='truncate text-sm font-semibold text-ui-text'>{row.source.name}</p>
-                                    <span className='text-sm font-semibold text-ui-primary'>{row.sourceCaptures.length}</span>
+                                    <span className='text-sm font-semibold text-ui-primary'>{row.source.retainedEvidenceCount}</span>
                                 </div>
                                 <div className='mt-3 h-2 overflow-hidden rounded-full bg-ui-raised'>
-                                    <div className='h-full rounded-full bg-ui-primary' style={{ width: `${Math.min(100, Math.max(row.sourceCaptures.length ? 8 : 0, row.sourceCaptures.length * 18))}%` }} />
+                                    <div className='h-full rounded-full bg-ui-primary' style={{ width: `${Math.min(100, Math.max(row.source.retainedEvidenceCount ? 8 : 0, row.source.retainedEvidenceCount * 18))}%` }} />
                                 </div>
                             </div>
                         ))}
