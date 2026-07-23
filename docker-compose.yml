@@ -373,7 +373,7 @@ services:
     expose:
       - "8097"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8097/v1/health"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8097/v1/health"]
       start_period: 90s
       interval: 5s
       retries: 5
