@@ -26,6 +26,7 @@ describe("structured threat-intelligence storage contract", () => {
 
   test("materializes pipeline entities, actor profiles, and evidence lineage", () => {
     const store = new InMemoryScraperStore();
+    installApt29Catalog(store);
     store.saveSource(source({ id: "src_structured" }));
     const result = store.savePipelineResult(pipeline("src_structured"));
 
@@ -55,6 +56,7 @@ describe("structured threat-intelligence storage contract", () => {
 
   test("exposes validation and evaluation records through the JSON API", async () => {
     const store = new InMemoryScraperStore();
+    installApt29Catalog(store);
     store.saveSource(source({ id: "src_research" }));
     const result = store.savePipelineResult(pipeline("src_research"));
     const options = {
@@ -156,6 +158,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
   beforeEach(async () => {
     await admin.unsafe(`
       TRUNCATE TABLE
+        threat_intel.actor_profile_identity_history,
         threat_intel.actor_identity_aliases,
         threat_intel.actor_identities,
         threat_intel.actor_identity_catalog_versions,
@@ -438,8 +441,292 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await third.close();
   });
 
+  test("reconciles canonical actor profiles per tenant and archives unresolved identities idempotently", async () => {
+    const seed = await PostgresScraperStore.create({ databaseUrl });
+    const sourceScopes = [
+      ["src_actor_catalog", undefined],
+      ["src_global_one", undefined], ["src_global_two", undefined],
+      ["src_tenant_a_one", "tenant_a"], ["src_tenant_a_two", "tenant_a"],
+      ["src_tenant_b_one", "tenant_b"], ["src_tenant_b_two", "tenant_b"]
+    ] as const;
+    for (const [id, tenantId] of sourceScopes) seed.saveSource(source({ id, tenantId, url: `https://example.test/${id}` }));
+    const captureScopes = [
+      ["cap_global_one", "src_global_one", undefined], ["cap_global_two", "src_global_two", undefined],
+      ["cap_tenant_a_one", "src_tenant_a_one", "tenant_a"], ["cap_tenant_a_two", "src_tenant_a_two", "tenant_a"],
+      ["cap_tenant_b_one", "src_tenant_b_one", "tenant_b"], ["cap_tenant_b_two", "src_tenant_b_two", "tenant_b"]
+    ] as const;
+    seed.saveCapture(catalogCapture("cap_actor_catalog_reconcile", "catalog-reconcile"));
+    for (const [id, sourceId, tenantId] of captureScopes) seed.saveCapture(actorProfileCapture(id, sourceId, tenantId));
+    const currentRansomwareMagicHound = {
+      ...actorIdentity("magic-hound", "Magic Hound", []),
+      id: "ransomware-live-current-operations:magic-hound",
+      catalogId: "ransomware-live-current-operations",
+      externalId: "magic-hound"
+    };
+    seed.replaceActorIdentityCatalog(actorCatalog([
+      actorIdentity("G0059", "Magic Hound", ["Charming Kitten", "APT35"]),
+      actorIdentity("G0030", "Lotus Blossom", ["Thrip"]),
+      actorIdentity("G0076", "Thrip", []),
+      { ...actorIdentity("G0046", "FIN7", ["Carbon Spider"]), status: "revoked" as const }
+    ], "catalog-reconcile"), { sourceId: "src_actor_catalog", captureId: "cap_actor_catalog_reconcile", importedAt: collectedAt });
+    seed.replaceActorIdentityCatalog({
+      ...actorCatalog([currentRansomwareMagicHound], "ransomware-catalog-reconcile"),
+      catalogId: "ransomware-live-current-operations",
+      catalogName: "Ransomware.live current operations"
+    }, { sourceId: "src_actor_catalog", captureId: "cap_actor_catalog_reconcile", importedAt: collectedAt });
+    await seed.close();
+
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '030_reconcile_actor_profiles'`;
+    await admin.unsafe("DROP INDEX IF EXISTS threat_intel.threat_intel_actor_profiles_name_uq");
+
+    const profiles = [
+      legacyActorProfile("actor_global_alias", undefined, "Charming Kitten", [], ["src_global_one"], ["cap_global_one"], {
+        ttps: [actorObservation("Phishing", "ttp", "entity_global_one", "src_global_one", "cap_global_one", 0.7)]
+      }),
+      legacyActorProfile("actor_global_canonical", "default", "Magic Hound", ["mitre-attack-enterprise:G0059"], ["src_global_two"], ["cap_global_two"], {
+        ttps: [actorObservation("Phishing", "ttp", "entity_global_two", "src_global_two", "cap_global_two", 0.9)],
+        malware: [actorObservation("Custom Loader", "malware", "entity_global_malware", "src_global_two", "cap_global_two", 0.8)]
+      }),
+      legacyActorProfile("actor_global_cross_catalog", "default", "Magic Hound", ["mitre-attack-enterprise:G0059", currentRansomwareMagicHound.id], ["src_global_two"], ["cap_global_two"]),
+      legacyActorProfile("actor_tenant_a_alias", "tenant_a", "APT35", [], ["src_tenant_a_one"], ["cap_tenant_a_one"]),
+      legacyActorProfile("actor_tenant_a_canonical", "tenant_a", "Magic Hound", ["mitre-attack-enterprise:G0059"], ["src_tenant_a_two"], ["cap_tenant_a_two"]),
+      legacyActorProfile("actor_tenant_b_alias", "tenant_b", "Charming Kitten", [], ["src_tenant_b_one"], ["cap_tenant_b_one"]),
+      legacyActorProfile("actor_tenant_b_canonical", "tenant_b", "Magic Hound", ["mitre-attack-enterprise:G0059"], ["src_tenant_b_two"], ["cap_tenant_b_two"]),
+      legacyActorProfile("actor_global_unresolved", undefined, "Unregistered Group", [], ["src_global_one"], ["cap_global_one"]),
+      legacyActorProfile("actor_global_ambiguous", undefined, "Thrip", [], ["src_global_one"], ["cap_global_one"]),
+      legacyActorProfile("actor_global_revoked", undefined, "FIN7", ["mitre-attack-enterprise:G0046"], ["src_global_one"], ["cap_global_one"]),
+      legacyActorProfile("actor_global_unknown_explicit", undefined, "Catalog Pending Group", ["future-catalog:pending"], ["src_global_one"], ["cap_global_one"]),
+      legacyActorProfile("actor_tenant_a_unresolved", "tenant_a", "Tenant A Unknown", [], ["src_tenant_a_one"], ["cap_tenant_a_one"]),
+      legacyActorProfile("actor_tenant_a_ambiguous", "tenant_a", "Thrip", [], ["src_tenant_a_one"], ["cap_tenant_a_one"]),
+      legacyActorProfile("actor_tenant_b_unresolved", "tenant_b", "Tenant B Unknown", [], ["src_tenant_b_one"], ["cap_tenant_b_one"]),
+      legacyActorProfile("actor_tenant_b_ambiguous", "tenant_b", "Thrip", [], ["src_tenant_b_one"], ["cap_tenant_b_one"])
+    ];
+    for (const profile of profiles) {
+      await admin`
+        INSERT INTO threat_intel.actor_profiles (
+          id, tenant_id, canonical_name, normalized_name, actor_type, confidence,
+          first_seen_at, last_seen_at, evidence_count, updated_at, record
+        ) VALUES (
+          ${profile.id}, ${profile.tenantId ?? null}, ${profile.canonicalName}, ${profile.normalizedName}, ${profile.actorType},
+          ${profile.confidence}, ${profile.firstSeenAt}, ${profile.lastSeenAt}, ${profile.evidenceCount}, ${profile.updatedAt},
+          ${JSON.stringify(profile)}::text::jsonb
+        )
+      `;
+      for (const [index, alias] of profile.aliases.entries()) {
+        const normalizedAlias = alias.toLowerCase();
+        const aliasRecord = { id: `${profile.id}:alias:${index}`, tenantId: profile.tenantId, actorProfileId: profile.id, alias, normalizedAlias, confidence: profile.confidence, firstSeenAt: profile.firstSeenAt, lastSeenAt: profile.lastSeenAt, evidenceCount: profile.evidenceCount, sourceIds: profile.sourceIds, captureIds: profile.captureIds, updatedAt: profile.updatedAt };
+        await admin`
+          INSERT INTO threat_intel.actor_aliases (
+            id, tenant_id, actor_profile_id, alias, normalized_alias, confidence,
+            first_seen_at, last_seen_at, evidence_count, updated_at, record
+          ) VALUES (
+            ${aliasRecord.id}, ${aliasRecord.tenantId ?? null}, ${aliasRecord.actorProfileId}, ${aliasRecord.alias}, ${aliasRecord.normalizedAlias},
+            ${aliasRecord.confidence}, ${aliasRecord.firstSeenAt}, ${aliasRecord.lastSeenAt}, ${aliasRecord.evidenceCount}, ${aliasRecord.updatedAt},
+            ${JSON.stringify(aliasRecord)}::text::jsonb
+          )
+        `;
+      }
+    }
+
+    const referenceScopes = [
+      { tenantId: undefined, loserId: "actor_global_canonical", winnerId: "actor_global_alias", sourceId: "src_global_two", captureId: "cap_global_two" },
+      { tenantId: "tenant_a", loserId: "actor_tenant_a_alias", winnerId: "actor_tenant_a_canonical", sourceId: "src_tenant_a_one", captureId: "cap_tenant_a_one" },
+      { tenantId: "tenant_b", loserId: "actor_tenant_b_alias", winnerId: "actor_tenant_b_canonical", sourceId: "src_tenant_b_one", captureId: "cap_tenant_b_one" }
+    ];
+    await insertActorProfileEvidenceLink(admin, { id: "link_global_winner", captureId: "cap_global_one", subjectId: "actor_global_alias", tenantId: undefined });
+    await insertActorProfileEvidenceLink(admin, { id: "link_global_loser_duplicate", captureId: "cap_global_one", subjectId: "actor_global_canonical", tenantId: undefined });
+    for (const reference of referenceScopes) {
+      await insertActorProfileEvidenceLink(admin, { id: `link_${reference.loserId}`, captureId: reference.captureId, subjectId: reference.loserId, tenantId: reference.tenantId });
+      const claimId = `claim_${reference.loserId}`;
+      const claimRecord = { id: claimId, tenantId: reference.tenantId, claimType: "actor", subjectType: "actor_profile", subjectId: reference.loserId, claimValue: { value: "Magic Hound" }, summary: "Evidence-backed actor profile", confidence: 0.8, evidenceStage: "extracted", extractionMethod: "source_specific", extractorVersion: "test", reviewState: "confirmed", corroborationState: "single_source", sourceCount: 1, evidenceCount: 1, firstSeenAt: collectedAt, lastSeenAt: collectedAt, sourceIds: [reference.sourceId], captureIds: [reference.captureId], reviewedBy: "reviewer_test", reviewedAt: collectedAt, retentionClass: "standard" };
+      await admin`
+        INSERT INTO threat_intel.intelligence_claims (
+          id, tenant_id, claim_type, subject_type, subject_id, claim_value, summary, confidence,
+          evidence_stage, extraction_method, extractor_version, review_state, corroboration_state,
+          source_count, evidence_count, first_seen_at, last_seen_at, reviewed_by, reviewed_at, record
+        ) VALUES (
+          ${claimId}, ${reference.tenantId ?? null}, 'actor', 'actor_profile', ${reference.loserId}, ${JSON.stringify(claimRecord.claimValue)}::text::jsonb,
+          ${claimRecord.summary}, 0.8, 'extracted', 'source_specific', 'test', 'confirmed', 'single_source', 1, 1,
+          ${collectedAt}, ${collectedAt}, 'reviewer_test', ${collectedAt}, ${JSON.stringify(claimRecord)}::text::jsonb
+        )
+      `;
+      const claimEvidenceRecord = { id: `evidence_${claimId}`, tenantId: reference.tenantId, claimId, captureId: reference.captureId, sourceId: reference.sourceId, subjectType: "actor_profile", subjectId: reference.loserId, relationship: "supports", evidenceStage: "extracted", confidence: 0.8, extractorVersion: "test", provenance: { sourceId: reference.sourceId, captureId: reference.captureId } };
+      await admin`
+        INSERT INTO threat_intel.claim_evidence (
+          id, tenant_id, claim_id, capture_id, source_id, subject_type, subject_id,
+          relationship, evidence_stage, confidence, extractor_version, provenance, record
+        ) VALUES (
+          ${claimEvidenceRecord.id}, ${reference.tenantId ?? null}, ${claimId}, ${reference.captureId}, ${reference.sourceId},
+          'actor_profile', ${reference.loserId}, 'supports', 'extracted', 0.8, 'test', ${JSON.stringify(claimEvidenceRecord.provenance)}::text::jsonb,
+          ${JSON.stringify(claimEvidenceRecord)}::text::jsonb
+        )
+      `;
+      const reviewRecord = { id: `review_${claimId}`, tenantId: reference.tenantId, claimId, action: "confirm", previousState: "unreviewed", nextState: "confirmed", reviewerId: "reviewer_test", reason: "Confirmed against retained public evidence.", reviewedAt: collectedAt };
+      await admin`
+        INSERT INTO threat_intel.claim_reviews (
+          id, tenant_id, claim_id, action, previous_state, next_state, reviewer_id, reason, reviewed_at, record
+        ) VALUES (
+          ${reviewRecord.id}, ${reference.tenantId ?? null}, ${claimId}, 'confirm', 'unreviewed', 'confirmed', 'reviewer_test',
+          ${reviewRecord.reason}, ${collectedAt}, ${JSON.stringify(reviewRecord)}::text::jsonb
+        )
+      `;
+      const workflowRecord = { id: `workflow_${reference.loserId}`, tenantId: reference.tenantId, kind: "updated", subjectType: "actor_profile", subjectId: reference.loserId, observedAt: collectedAt, sourceId: reference.sourceId, captureIds: [reference.captureId], discoveryEvidenceIds: [], incidentIds: [], relationshipIds: [], policyEventIds: [], retentionClass: "standard", metadata: {} };
+      await admin`
+        INSERT INTO threat_intel.workflow_records (record_type, id, tenant_id, created_at, updated_at, record)
+        VALUES ('evidence_delta', ${workflowRecord.id}, ${reference.tenantId ?? null}, ${collectedAt}, ${collectedAt}, ${JSON.stringify(workflowRecord)}::text::jsonb)
+      `;
+    }
+
+    const beforeProfiles = await admin<{ id: string; record_hash: string }[]>`
+      SELECT id, md5(record::text) AS record_hash FROM threat_intel.actor_profiles ORDER BY id
+    `;
+    const migrated = await PostgresScraperStore.create({ databaseUrl });
+    expect(migrated.listActorProfiles()).toHaveLength(3);
+    expect(migrated.listActorProfiles()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "actor_global_alias", tenantId: null, canonicalName: "Magic Hound", actorIdentityIds: ["mitre-attack-enterprise:G0059"], identityResolutionState: "canonical", captureIds: ["cap_global_one", "cap_global_two"] }),
+      expect.objectContaining({ id: "actor_tenant_a_canonical", tenantId: "tenant_a", canonicalName: "Magic Hound", actorIdentityIds: ["mitre-attack-enterprise:G0059"], captureIds: ["cap_tenant_a_one", "cap_tenant_a_two"] }),
+      expect.objectContaining({ id: "actor_tenant_b_canonical", tenantId: "tenant_b", canonicalName: "Magic Hound", actorIdentityIds: ["mitre-attack-enterprise:G0059"], captureIds: ["cap_tenant_b_one", "cap_tenant_b_two"] })
+    ]));
+    expect(migrated.listActorProfiles().find((profile: any) => profile.id === "actor_global_alias")?.characterization).toMatchObject({
+      ttps: [expect.objectContaining({ normalizedValue: "phishing", confidence: 0.9, entityIds: ["entity_global_one", "entity_global_two"], sourceIds: ["src_global_one", "src_global_two"], captureIds: ["cap_global_one", "cap_global_two"] })],
+      malware: [expect.objectContaining({ value: "Custom Loader" })]
+    });
+    expect(await migrated.queryStructuredRecords("actorProfiles", { limit: 50 })).toMatchObject({ total: 1 });
+    expect(await migrated.queryStructuredRecords("actorProfiles", { tenantId: "tenant_a", limit: 50 })).toMatchObject({ total: 1 });
+    expect(await migrated.queryStructuredRecords("actorProfiles", { tenantId: "tenant_b", limit: 50 })).toMatchObject({ total: 1 });
+    expect((await migrated.queryStructuredRecords("actorAliases", { limit: 50 })).records.every((alias: any) => migrated.listActorProfiles().some((profile: any) => profile.id === alias.actorProfileId))).toBe(true);
+    expect(await migrated.listActorProfilesForOwnership()).toHaveLength(11);
+    expect(await migrated.listActorAliasesForOwnership()).toContainEqual(expect.objectContaining({ actorProfileId: "actor_global_unresolved", normalizedAlias: "unregistered group" }));
+    expect(await migrated.listActorProfileIdentityHistoryForOwnership()).toHaveLength(profiles.length);
+    await migrated.close();
+
+    const archived = await admin<{ id: string; tenant_id: string | null; reason: string; normalized_name: string }[]>`
+      SELECT id, tenant_id, record->>'identityResolutionReason' AS reason, normalized_name
+      FROM threat_intel.actor_profiles
+      WHERE record->>'identityResolutionState' = 'archived'
+      ORDER BY id
+    `;
+    expect(archived).toHaveLength(8);
+    expect(archived.every((profile) => profile.normalized_name === `archived:${profile.id}`)).toBe(true);
+    expect(archived.map((profile) => [profile.tenant_id, profile.reason])).toEqual(expect.arrayContaining([
+      [null, "unresolved"], [null, "ambiguous"], [null, "inactive_identity"],
+      ["tenant_a", "unresolved"], ["tenant_a", "ambiguous"],
+      ["tenant_b", "unresolved"], ["tenant_b", "ambiguous"]
+    ]));
+
+    const histories = await admin<{ actor_profile_id: string; canonical_actor_profile_id: string | null; resolution_status: string; original_hash: string }[]>`
+      SELECT actor_profile_id, canonical_actor_profile_id, resolution_status, md5(original_record::text) AS original_hash
+      FROM threat_intel.actor_profile_identity_history ORDER BY actor_profile_id
+    `;
+    expect(histories).toHaveLength(profiles.length);
+    const beforeHashes = new Map(beforeProfiles.map((profile) => [profile.id, profile.record_hash]));
+    expect(histories.every((history) => beforeHashes.get(history.actor_profile_id) === history.original_hash)).toBe(true);
+    expect(histories.filter((history) => history.resolution_status === "merged").map((history) => [history.actor_profile_id, history.canonical_actor_profile_id])).toEqual(expect.arrayContaining([
+      ["actor_global_canonical", "actor_global_alias"],
+      ["actor_tenant_a_alias", "actor_tenant_a_canonical"],
+      ["actor_tenant_b_alias", "actor_tenant_b_canonical"]
+    ]));
+
+    for (const reference of referenceScopes) {
+      expect(await admin`SELECT id FROM threat_intel.evidence_links WHERE subject_type = 'actor_profile' AND subject_id = ${reference.winnerId} AND tenant_id IS NOT DISTINCT FROM ${reference.tenantId ?? null}`).not.toHaveLength(0);
+      expect((await admin`SELECT subject_id FROM threat_intel.intelligence_claims WHERE id = ${`claim_${reference.loserId}`}`)[0]?.subject_id).toBe(reference.winnerId);
+      expect((await admin`SELECT subject_id FROM threat_intel.claim_evidence WHERE id = ${`evidence_claim_${reference.loserId}`}`)[0]?.subject_id).toBe(reference.winnerId);
+      expect((await admin`SELECT record->>'subjectId' AS subject_id FROM threat_intel.workflow_records WHERE id = ${`workflow_${reference.loserId}`}`)[0]?.subject_id).toBe(reference.winnerId);
+      expect(await admin`SELECT id FROM threat_intel.claim_reviews WHERE claim_id = ${`claim_${reference.loserId}`}`).toHaveLength(1);
+    }
+    const [orphanCounts] = await admin<{ evidence_links: number; claims: number; claim_evidence: number; workflows: number }[]>`
+      SELECT
+        (SELECT count(*)::int FROM threat_intel.evidence_links link WHERE link.subject_type = 'actor_profile' AND NOT EXISTS (SELECT 1 FROM threat_intel.actor_profiles profile WHERE profile.id = link.subject_id)) AS evidence_links,
+        (SELECT count(*)::int FROM threat_intel.intelligence_claims claim WHERE claim.subject_type = 'actor_profile' AND NOT EXISTS (SELECT 1 FROM threat_intel.actor_profiles profile WHERE profile.id = claim.subject_id)) AS claims,
+        (SELECT count(*)::int FROM threat_intel.claim_evidence evidence WHERE evidence.subject_type = 'actor_profile' AND NOT EXISTS (SELECT 1 FROM threat_intel.actor_profiles profile WHERE profile.id = evidence.subject_id)) AS claim_evidence,
+        (SELECT count(*)::int FROM threat_intel.workflow_records workflow WHERE workflow.record->>'subjectType' = 'actor_profile' AND NOT EXISTS (SELECT 1 FROM threat_intel.actor_profiles profile WHERE profile.id = workflow.record->>'subjectId')) AS workflows
+    `;
+    expect(orphanCounts).toEqual({ evidence_links: 0, claims: 0, claim_evidence: 0, workflows: 0 });
+    const originalReferences = (await admin<{ reference_snapshot: any }[]>`SELECT reference_snapshot FROM threat_intel.actor_profile_identity_history WHERE actor_profile_id = 'actor_global_canonical'`)[0].reference_snapshot;
+    expect(originalReferences.aliases).toHaveLength(1);
+    expect(originalReferences.evidenceLinks).toHaveLength(2);
+    expect(originalReferences.claims).toHaveLength(1);
+    expect(originalReferences.claimEvidence).toHaveLength(1);
+    expect(originalReferences.claimReviews).toHaveLength(1);
+    expect(originalReferences.workflows).toHaveLength(1);
+    expect(originalReferences.aliases[0]).toMatchObject({ actor_profile_id: "actor_global_canonical", alias: "Magic Hound" });
+
+    const stableSnapshot = async () => Promise.all([
+      admin`SELECT id, tenant_id, canonical_name, normalized_name, actor_type, confidence, first_seen_at, last_seen_at, evidence_count, created_at, updated_at, record FROM threat_intel.actor_profiles ORDER BY id`,
+      admin`SELECT * FROM threat_intel.actor_profile_identity_history ORDER BY actor_profile_id`,
+      admin`SELECT * FROM threat_intel.actor_aliases ORDER BY actor_profile_id, normalized_alias`,
+      admin`SELECT id, tenant_id, capture_id, subject_type, subject_id, relationship, confidence, extractor_version, created_at, record FROM threat_intel.evidence_links WHERE subject_type = 'actor_profile' ORDER BY id`,
+      admin`SELECT id, tenant_id, claim_type, subject_type, subject_id, claim_value, summary, confidence, evidence_stage, extraction_method, extractor_version, review_state, corroboration_state, source_count, evidence_count, first_seen_at, last_seen_at, reviewed_by, reviewed_at, created_at, updated_at, record FROM threat_intel.intelligence_claims WHERE subject_type = 'actor_profile' ORDER BY id`,
+      admin`SELECT * FROM threat_intel.claim_evidence WHERE subject_type = 'actor_profile' ORDER BY id`,
+      admin`SELECT * FROM threat_intel.claim_reviews ORDER BY id`,
+      admin`SELECT * FROM threat_intel.workflow_records WHERE record->>'subjectType' = 'actor_profile' ORDER BY record_type, id`
+    ]);
+    const afterMigration = await stableSnapshot();
+    const restarted = await PostgresScraperStore.create({ databaseUrl });
+    expect(restarted.listActorProfiles()).toHaveLength(3);
+    await restarted.close();
+    expect(await stableSnapshot()).toEqual(afterMigration);
+
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '030_reconcile_actor_profiles'`;
+    const rerun = await PostgresScraperStore.create({ databaseUrl });
+    expect(rerun.listActorProfiles()).toHaveLength(3);
+    await rerun.close();
+    expect(await stableSnapshot()).toEqual(afterMigration);
+
+    const retention = await PostgresScraperStore.create({ databaseUrl });
+    const ownershipHistory = await retention.listActorProfileIdentityHistoryForOwnership();
+    const historyToRedact = ownershipHistory.find((record: any) => record.actorProfileId === "actor_tenant_a_unresolved");
+    const immutableHistoryBefore = await admin`
+      SELECT id, actor_profile_id, canonical_actor_profile_id, reconciliation_key, resolution_status, reconciled_at
+      FROM threat_intel.actor_profile_identity_history WHERE id = ${historyToRedact.id}
+    `;
+    const privacyRedactedAt = "2026-07-22T00:30:00.000Z";
+    expect(await retention.replaceActorProfileIdentityHistoryForRetention({
+      ...historyToRedact,
+      originalTenantId: "privacy:deleted",
+      originalRecord: { id: historyToRedact.actorProfileId, privacyAction: "redact", privacyRedactedAt },
+      referenceSnapshot: { aliases: [], evidenceLinks: [], claims: [], claimEvidence: [], claimReviews: [], workflows: [], privacyRedactedAt }
+    })).toMatchObject({
+      id: historyToRedact.id,
+      actorProfileId: historyToRedact.actorProfileId,
+      resolutionStatus: historyToRedact.resolutionStatus,
+      originalTenantId: "privacy:deleted",
+      originalRecord: { privacyAction: "redact", privacyRedactedAt }
+    });
+    expect(await admin`
+      SELECT id, actor_profile_id, canonical_actor_profile_id, reconciliation_key, resolution_status, reconciled_at
+      FROM threat_intel.actor_profile_identity_history WHERE id = ${historyToRedact.id}
+    `).toEqual(immutableHistoryBefore);
+    await retention.close();
+
+    const reactivation = await PostgresScraperStore.create({ databaseUrl });
+    reactivation.saveCapture(catalogCapture("cap_actor_catalog_reconcile_v2", "catalog-reconcile-v2"));
+    reactivation.replaceActorIdentityCatalog(actorCatalog([
+      actorIdentity("G0059", "Magic Hound", ["Charming Kitten", "APT35"]),
+      actorIdentity("G0030", "Lotus Blossom", ["Thrip"]),
+      actorIdentity("G0076", "Thrip", []),
+      { ...actorIdentity("G0046", "FIN7", ["Carbon Spider"]), status: "revoked" as const },
+      actorIdentity("G9999", "Unregistered Group", [])
+    ], "catalog-reconcile-v2"), { sourceId: "src_actor_catalog", captureId: "cap_actor_catalog_reconcile_v2", importedAt: "2026-07-22T00:00:00.000Z" });
+    const reactivatedItem = processCollectedItem({
+      sourceId: "src_global_one", url: "https://example.test/reactivated-actor", collectedAt: "2026-07-22T01:00:00.000Z",
+      rawText: "Unregistered Group was named in a current public report.", contentHash: hashContent("reactivated-actor"), links: [], metadata: {}, sensitive: false
+    }, { actorIdentities: reactivation.listActorIdentities() });
+    reactivation.savePipelineResult(reactivatedItem);
+    await reactivation.close();
+
+    const afterReactivation = await PostgresScraperStore.create({ databaseUrl });
+    expect(afterReactivation.listActorProfiles()).toContainEqual(expect.objectContaining({
+      id: "actor_global_unresolved", canonicalName: "Unregistered Group", actorIdentityIds: ["mitre-attack-enterprise:G9999"],
+      identityResolutionState: "canonical", evidenceCount: 2
+    }));
+    expect(afterReactivation.getActorProfile("actor_global_unresolved")).not.toHaveProperty("identityResolutionReason");
+    await afterReactivation.close();
+  });
+
   test("persists and rehydrates the complete monitoring record across restart", async () => {
     const first = await PostgresScraperStore.create({ databaseUrl });
+    installApt29Catalog(first);
     first.saveSource(source({ id: "src_postgres", tenantId: "tenant_postgres" }));
     const result = first.savePipelineResult(pipeline("src_postgres", "tenant_postgres"));
     first.replaceCaptureForRetention({ ...result.capture, retentionClass: "public_report", metadata: { ...result.capture.metadata, retentionPolicy: { class: "public_report" } } });
@@ -503,8 +790,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     const second = await PostgresScraperStore.create({ databaseUrl });
     expect(await second.databaseHealth()).toMatchObject({ ok: true, backend: "postgresql", schema: "threat_intel" });
     expect(second.listSources().map((record: any) => record.id)).toContain("src_postgres");
-    expect(second.listCaptures()).toHaveLength(1);
-    expect(second.listCaptures()[0]).toMatchObject({ retentionClass: "public_report", metadata: { retentionPolicy: { class: "public_report" } } });
+    expect(second.listCaptures().find((record: any) => record.id === result.capture.id)).toMatchObject({ retentionClass: "public_report", metadata: { retentionPolicy: { class: "public_report" } } });
     expect(second.listIncidents()).toHaveLength(1);
     expect(second.listExtractedEntities().length).toBeGreaterThan(1);
     expect(second.listIndicators()).toHaveLength(1);
@@ -549,7 +835,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
           WHERE table_schema = 'public'
             AND table_name IN ('sources', 'captures', 'entities', 'indicators', 'actor_profiles', 'incidents', 'evidence_links', 'validation_records', 'alerts', 'evaluation_labels')) AS public_core_tables
     `;
-    expect(counts).toMatchObject({ sources: 1, captures: 1, incidents: 1, claim_reviews: 1, validations: 1, alerts: 1, labels: 1, runs: 1, health: 1, timeliness: 1, legacy_runs: 0, legacy_claims: 0, public_core_tables: 0 });
+    expect(counts).toMatchObject({ sources: 2, captures: 2, incidents: 1, claim_reviews: 1, validations: 1, alerts: 1, labels: 1, runs: 1, health: 1, timeliness: 1, legacy_runs: 0, legacy_claims: 0, public_core_tables: 0 });
     expect(counts.entities).toBeGreaterThan(1);
     expect(counts.profiles).toBeGreaterThan(0);
     expect(counts.aliases).toBeGreaterThan(0);
@@ -1133,6 +1419,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
 
   test("removes generic business labels without deleting reviewed evidence", async () => {
     const first = await PostgresScraperStore.create({ databaseUrl });
+    installApt29Catalog(first);
     first.saveSource(source({ id: "src_business_label_cleanup" }));
     const result = first.savePipelineResult(pipeline("src_business_label_cleanup"));
     const profile = first.listActorProfiles().find((record: any) => record.canonicalName === "APT29");
@@ -1322,6 +1609,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     const snapshotPath = join(directory, "scraper-store.json");
     try {
       const legacy = new FileBackedScraperStore({ snapshotPath });
+      installApt29Catalog(legacy);
       legacy.saveSource(source({ id: "src_legacy", tenantId: "tenant_legacy" }));
       const result = legacy.savePipelineResult(pipeline("src_legacy", "tenant_legacy"));
       legacy.saveDwmAlert({
@@ -1343,8 +1631,8 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       await first.close();
 
       const second = await PostgresScraperStore.create({ databaseUrl });
-      expect(second.listSources().map((record: any) => record.id)).toEqual(["src_legacy"]);
-      expect(second.listCaptures()).toHaveLength(1);
+      expect(second.listSources().map((record: any) => record.id)).toEqual(["src_actor_catalog", "src_legacy"]);
+      expect(second.listCaptures().map((record: any) => record.id)).toContain(result.capture.id);
       expect(second.listActorProfiles().some((profile: any) => profile.canonicalName === "APT29")).toBe(true);
       expect(second.listDwmAlerts().map((record: any) => record.id)).toEqual(["alert_legacy"]);
       expect(await second.importLegacySnapshot(snapshotPath)).toMatchObject({ imported: false, reason: "database_not_empty" });
@@ -1453,6 +1741,16 @@ function catalogCapture(id: string, contentHash: string) {
   } as any;
 }
 
+function installApt29Catalog(store: any) {
+  store.saveSource(source({ id: "src_actor_catalog", name: "Authoritative actor catalog", url: "https://catalog.example/enterprise-attack.json" }));
+  store.saveCapture(catalogCapture("cap_actor_catalog_apt29", "catalog-apt29-v1"));
+  store.replaceActorIdentityCatalog(actorCatalog([actorIdentity("G0016", "APT29", ["Cozy Bear"])]), {
+    sourceId: "src_actor_catalog",
+    captureId: "cap_actor_catalog_apt29",
+    importedAt: collectedAt
+  });
+}
+
 function actorCatalog(identities: any[], bundleSha256 = "catalog-v1") {
   return {
     schemaVersion: "ti.actor_identity_catalog.v1",
@@ -1502,4 +1800,42 @@ function actorIdentity(externalId: string, canonicalName: string, associatedName
     bundleSha256: "identity-bundle",
     retrievedAt: collectedAt
   };
+}
+
+function actorProfileCapture(id: string, sourceId: string, tenantId?: string) {
+  return {
+    id, tenantId, sourceId, url: `https://example.test/${id}`, collectedAt,
+    mediaType: "text/html", storageKind: "metadata_only", contentHash: hashContent(id),
+    sensitive: false, metadata: { retentionPolicy: { class: "public_report" } }
+  } as any;
+}
+
+function actorObservation(value: string, entityType: string, entityId: string, sourceId: string, captureId: string, confidence: number) {
+  return {
+    value, normalizedValue: value.toLowerCase(), entityType, confidence, assertionKind: "extracted",
+    reviewReasons: [], firstSeenAt: collectedAt, lastSeenAt: collectedAt,
+    entityIds: [entityId], sourceIds: [sourceId], captureIds: [captureId]
+  };
+}
+
+function legacyActorProfile(id: string, tenantId: string | undefined, canonicalName: string, actorIdentityIds: string[], sourceIds: string[], captureIds: string[], characterization: Record<string, any[]> = {}) {
+  return {
+    id, tenantId, canonicalName, normalizedName: canonicalName.toLowerCase(), actorType: "apt",
+    aliases: [canonicalName], actorIdentityIds, confidence: 0.8,
+    firstSeenAt: "2026-07-18T00:00:00.000Z", lastSeenAt: "2026-07-20T00:00:00.000Z",
+    evidenceCount: captureIds.length, sourceIds, captureIds, characterization, updatedAt: "2026-07-21T00:00:00.000Z"
+  };
+}
+
+async function insertActorProfileEvidenceLink(admin: SQL, input: { id: string; tenantId?: string; captureId: string; subjectId: string }) {
+  const record = { ...input, subjectType: "actor_profile", relationship: "characterizes", confidence: 0.8, extractorVersion: "test", createdAt: collectedAt };
+  await admin`
+    INSERT INTO threat_intel.evidence_links (
+      id, tenant_id, capture_id, subject_type, subject_id, relationship,
+      confidence, extractor_version, created_at, record
+    ) VALUES (
+      ${input.id}, ${input.tenantId ?? null}, ${input.captureId}, 'actor_profile', ${input.subjectId},
+      'characterizes', 0.8, 'test', ${collectedAt}, ${JSON.stringify(record)}::text::jsonb
+    )
+  `;
 }

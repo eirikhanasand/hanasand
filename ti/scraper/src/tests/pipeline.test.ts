@@ -71,7 +71,8 @@ describe("compact pipeline value path", () => {
     const store = new InMemoryScraperStore();
     store.savePipelineResult(darknet);
     expect(store.listExtractedEntities().find((entity: any) => entity.type === "victim")?.extractorVersion).toBe(SOURCE_SPECIFIC_EXTRACTOR_VERSION);
-    expect(store.listActorProfiles()).toContainEqual(expect.objectContaining({ canonicalName: "Blackout", actorType: "ransomware" }));
+    expect(store.listExtractedEntities()).toContainEqual(expect.objectContaining({ type: "ransomware_family", value: "Blackout" }));
+    expect(store.listActorProfiles()).toEqual([]);
   });
 
   test("keeps actor aliases distinct and matches short names on token boundaries", () => {
@@ -82,25 +83,24 @@ describe("compact pipeline value path", () => {
     expect(item("The Play ransomware group claimed a new victim.").entities).toContainEqual(expect.objectContaining({ type: "ransomware_family", value: "Play" }));
   });
 
-  test("keeps one canonical profile when actor classification strengthens", () => {
+  test("does not promote actor classifications without a current catalog identity", () => {
     const item = (rawText: string, id: string) => processCollectedItem({ sourceId: `src_${id}`, url: `https://example.test/${id}`, collectedAt: "2026-07-20T00:00:00.000Z", rawText, contentHash: hashContent(rawText), links: [], metadata: {}, sensitive: false });
     const store = new InMemoryScraperStore();
 
     store.savePipelineResult(item("The Akira ransomware group claimed a new victim.", "ransomware"));
     store.savePipelineResult(item("Akira was referenced in a later public report.", "generic"));
 
-    expect(store.listActorProfiles()).toEqual([
-      expect.objectContaining({ canonicalName: "Akira", normalizedName: "akira", actorType: "ransomware", aliases: ["Akira"], evidenceCount: 2 })
-    ]);
+    expect(store.listActorProfiles()).toEqual([]);
+    expect(store.listExtractedEntities().filter((entity: any) => entity.value === "Akira").map((entity: any) => entity.type)).toEqual(expect.arrayContaining(["actor", "ransomware_family"]));
   });
 
-  test("reuses a migrated global profile whose tenant is stored as null", () => {
+  test("does not attach unresolved evidence to a migrated global profile", () => {
     const store = new InMemoryScraperStore();
     store.saveActorProfile({ id: "actor_legacy_akira", tenantId: null, canonicalName: "Akira", normalizedName: "akira", actorType: "ransomware", confidence: 0.8, aliases: ["Akira"], sourceIds: ["src_legacy"], captureIds: ["cap_legacy"], evidenceCount: 1 });
     store.savePipelineResult(processCollectedItem({ sourceId: "src_current", url: "https://example.test/current", collectedAt: "2026-07-21T00:00:00.000Z", rawText: "Akira was referenced in a public report.", contentHash: hashContent("current"), links: [], metadata: {}, sensitive: false }));
 
     expect(store.listActorProfiles()).toEqual([
-      expect.objectContaining({ id: "actor_legacy_akira", actorType: "ransomware", evidenceCount: 2, captureIds: ["cap_legacy", expect.stringMatching(/^cap_/)] })
+      expect.objectContaining({ id: "actor_legacy_akira", actorType: "ransomware", evidenceCount: 1, captureIds: ["cap_legacy"] })
     ]);
   });
 });

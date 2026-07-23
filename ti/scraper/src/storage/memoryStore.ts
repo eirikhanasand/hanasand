@@ -8,7 +8,7 @@ import { InMemoryObjectEvidenceStore } from "./memoryObjectEvidenceStore.ts";
 import { installMemoryStoreReplayMethods } from "./memoryStoreReplayMethods.ts";
 import { canonicalizeUrl, captureDedupeKey, dedupeIndexKeys, enforceSensitiveMetadataOnly, prepareCapture } from "./memoryStoreHelpers.ts";
 import { nowIso, stableId } from "../utils.ts";
-import type { MitreActorCatalogSnapshot, MitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
+import { canonicalActorIdentity, resolveMitreActorIdentity, type ActorIdentityRecord, type MitreActorCatalogSnapshot, type MitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
 export interface RawEvidenceStore extends CaptureMetadataStore {} export interface ScraperStore extends CaptureMetadataStore {}
 const mapValues = <T>(map: Map<string, T>) => [...map.values()];
 const put = <T extends { id: string }>(map: Map<string, T>, item: T) => (map.set(item.id, item), item);
@@ -79,9 +79,10 @@ export class InMemoryScraperStore implements ScraperStore {
     for (const entity of entities) {
       this.saveEvidenceLink(link(capture, "entity", entity.id, "mentions", entity.confidence, extractorVersion));
       if (entity.type === "actor" || entity.type === "ransomware_family") {
-        const profileId = actorProfileId(capture, entity);
-        const previous = this.getActorProfile(profileId) ?? this.listActorProfiles().find((profile: any) => (profile.tenantId ?? null) === (capture.tenantId ?? null) && profile.normalizedName === normalized(entity));
-        const profile = mergeActorProfile(previous, capture, entity, characterize ? entities : []);
+        const resolution = actorProfileResolution(this, capture, entity);
+        if (!resolution) continue;
+        const previous = this.getActorProfile(resolution.profileId) ?? mapValues(this.actorProfiles).find((profile: any) => actorProfileMatches(this, profile, resolution));
+        const profile = mergeActorProfile(previous, capture, entity, characterize ? entities : [], resolution);
         this.saveActorProfile(profile);
         this.saveEvidenceLink(link(capture, "actor_profile", profile.id, "characterizes", entity.confidence, extractorVersion));
         recordActorProfileDelta(this, previous, profile, capture, incident);
@@ -143,8 +144,15 @@ export class InMemoryScraperStore implements ScraperStore {
     }
     return stored;
   }
-  getActorProfile(id: string) { return this.actorProfiles.get(id); } listActorProfiles() { return mapValues(this.actorProfiles); }
-  getActorAlias(id: string) { return this.actorAliases.get(id); } listActorAliases() { return mapValues(this.actorAliases); }
+  getActorProfile(id: string) { return this.actorProfiles.get(id); } listActorProfiles() { return mapValues(this.actorProfiles).filter(activeActorProfile); }
+  getActorAlias(id: string) { return this.actorAliases.get(id); } listActorAliases() { return mapValues(this.actorAliases).filter((alias: any) => activeActorProfile(this.actorProfiles.get(alias.actorProfileId))); }
+  protected actorProfilesForPersistence() { return mapValues(this.actorProfiles); }
+  protected actorAliasesForPersistence() { return mapValues(this.actorAliases); }
+  protected hydrateActorAliasSnapshot(alias: any) { return put(this.actorAliases, alias); }
+  async listActorProfilesForOwnership() { return this.actorProfilesForPersistence(); }
+  async listActorAliasesForOwnership() { return this.actorAliasesForPersistence(); }
+  async listActorProfileIdentityHistoryForOwnership(): Promise<any[]> { return []; }
+  async replaceActorProfileIdentityHistoryForRetention(_record: any): Promise<any | undefined> { return undefined; }
   replaceActorIdentityCatalog(snapshot: MitreActorCatalogSnapshot, provenance: { sourceId: string; captureId: string; importedAt?: string }) {
     const incomingIds = new Set(snapshot.identities.map((identity) => identity.id));
     if (incomingIds.size !== snapshot.identities.length || snapshot.counts.totalIdentityCount !== snapshot.identities.length) throw new Error("Actor identity catalog count mismatch.");
@@ -279,23 +287,76 @@ installMemoryStoreReplayMethods(InMemoryScraperStore); installMemoryStoreDiscove
 export { canonicalizeUrl, captureDedupeKey, InMemoryObjectEvidenceStore };
 
 function normalized(record: any): string { return String(record.normalizedValue ?? record.value ?? "").trim().toLowerCase(); }
-function actorProfileId(capture: any, entity: any): string { return stableId("actor", `${capture.tenantId ?? "global"}:${normalized(entity)}`); }
+function activeActorProfile(profile: any): boolean { return Boolean(profile && profile.identityResolutionState !== "archived"); }
+type ActorProfileResolution = { profileId: string; tenantId?: string; canonicalName: string; normalizedName: string; aliases: string[]; actorIdentityIds: string[] };
+function actorProfileResolution(store: any, capture: any, entity: any): ActorProfileResolution | undefined {
+  const identities = (store.listActorIdentities?.() ?? []) as ActorIdentityRecord[];
+  const current = identities.filter((identity) => identity.status === "current");
+  const explicitIds = unique(entity.actorIdentityIds ?? []);
+  let identity: ActorIdentityRecord | undefined;
+  if (explicitIds.length) {
+    const explicit = explicitIds.map((id) => identities.find((candidate) => candidate.id === id));
+    if (explicit.some((candidate) => !candidate || candidate.status !== "current")) return undefined;
+    const canonical = uniqueObjects(explicit.map((candidate) => canonicalActorIdentity(candidate!, current)), (candidate) => candidate.id);
+    identity = canonical.length === 1 ? canonical[0] : undefined;
+  } else {
+    const resolved = resolveMitreActorIdentity(String(entity.value ?? ""), identities);
+    if (resolved.ambiguous) return undefined;
+    identity = resolved.candidates.length === 1 ? resolved.candidates[0].identity : undefined;
+  }
+  const tenantId = publicActorTenant(capture.tenantId);
+  const scope = tenantId ?? "global";
+  if (!identity) return undefined;
+  const observedAliases = [entity.rawValue, entity.value, ...(entity.aliases ?? [])].filter((label) => actorLabelBelongsTo(label, identity!, identities));
+  return {
+    profileId: stableId("actor", `${scope}:${identity.id}`),
+    tenantId,
+    canonicalName: identity.canonicalName,
+    normalizedName: identity.normalizedCanonicalName,
+    aliases: uniqueActorAliases([identity.canonicalName, ...identity.associatedNames, ...observedAliases]),
+    actorIdentityIds: [identity.id]
+  };
+}
+function publicActorTenant(tenantId: unknown): string | undefined { return !tenantId || tenantId === "default" ? undefined : String(tenantId); }
+function actorProfileMatches(store: any, profile: any, resolution: ActorProfileResolution): boolean {
+  if (publicActorTenant(profile.tenantId) !== resolution.tenantId) return false;
+  const identities = (store.listActorIdentities?.() ?? []) as ActorIdentityRecord[];
+  const current = identities.filter((identity) => identity.status === "current");
+  const explicit = uniqueObjects((profile.actorIdentityIds ?? []).map((id: string) => identities.find((identity) => identity.id === id)).filter((identity: any) => identity?.status === "current").map((identity: any) => canonicalActorIdentity(identity, current)), (identity: any) => identity.id);
+  if (explicit.length) return explicit.length === 1 && explicit[0].id === resolution.actorIdentityIds[0];
+  if ((profile.actorIdentityIds ?? []).includes(resolution.actorIdentityIds[0])) return true;
+  const candidates = uniqueObjects([profile.canonicalName, ...(profile.aliases ?? [])].flatMap((label: string) => {
+    const match = resolveMitreActorIdentity(label, identities);
+    return match.ambiguous ? [] : match.candidates.map((candidate) => candidate.identity);
+  }), (identity: any) => identity.id);
+  return candidates.length === 1 && candidates[0].id === resolution.actorIdentityIds[0];
+}
+function actorLabelBelongsTo(label: unknown, identity: ActorIdentityRecord, identities: ActorIdentityRecord[]): boolean {
+  if (typeof label !== "string" || !label.trim()) return false;
+  const resolution = resolveMitreActorIdentity(label, identities);
+  return !resolution.ambiguous && resolution.candidates.length === 1 && resolution.candidates[0].identity.id === identity.id;
+}
 function actorType(entity: any): string { return entity.type === "ransomware_family" ? "ransomware" : /^apt\d+$/i.test(String(entity.value)) ? "apt" : "threat_actor"; }
-function mergeActorProfile(previous: any, capture: any, entity: any, entities: any[]): any {
+function mergeActorProfile(previous: any, capture: any, entity: any, entities: any[], resolution: ActorProfileResolution): any {
   const observedAt = capture.publishedAt ?? capture.collectedAt;
   const captureIds = unique([...(previous?.captureIds ?? []), capture.id]);
   const incomingType = actorType(entity);
   const keepPreviousIdentity = actorTypeRank(previous?.actorType) >= actorTypeRank(incomingType);
-  const canonicalName = keepPreviousIdentity ? previous.canonicalName : entity.value;
+  const canonicalName = resolution.canonicalName;
+  const aliases = resolution.aliases;
+  const retiredAliases = uniqueActorAliases([...(previous?.retiredAliases ?? []), ...(previous?.aliases ?? []).filter((alias: string) => !aliases.some((active) => active.toLowerCase() === alias.toLowerCase()))]);
+  const { identityResolutionReason: _archivedReason, ...preserved } = previous ?? {};
   return {
-    ...(previous ?? {}),
-    id: previous?.id ?? actorProfileId(capture, entity),
-    tenantId: capture.tenantId,
+    ...preserved,
+    id: previous?.id ?? resolution.profileId,
+    tenantId: resolution.tenantId,
     canonicalName,
-    normalizedName: normalized(entity),
+    normalizedName: resolution.normalizedName,
     actorType: keepPreviousIdentity ? previous.actorType : incomingType,
-    aliases: uniqueActorAliases([canonicalName, ...(previous?.aliases ?? []), ...(entity.aliases ?? []), entity.rawValue, entity.value]),
-    actorIdentityIds: unique([...(previous?.actorIdentityIds ?? []), ...(entity.actorIdentityIds ?? [])]),
+    aliases,
+    actorIdentityIds: resolution.actorIdentityIds,
+    identityResolutionState: "canonical",
+    ...(retiredAliases?.length ? { retiredAliases } : {}),
     confidence: Math.max(previous?.confidence ?? 0, entity.confidence ?? 0),
     firstSeenAt: earlier(previous?.firstSeenAt, observedAt),
     lastSeenAt: later(previous?.lastSeenAt, observedAt),

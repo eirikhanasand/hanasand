@@ -47,7 +47,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "026_align_timeliness_capture_record", path: fileURLToPath(new URL("../../migrations/026_align_timeliness_capture_record.sql", import.meta.url)) },
   { version: "027_reconcile_delivery_latencies", path: fileURLToPath(new URL("../../migrations/027_reconcile_delivery_latencies.sql", import.meta.url)) },
   { version: "028_remove_generic_business_labels", path: fileURLToPath(new URL("../../migrations/028_remove_generic_business_labels.sql", import.meta.url)) },
-  { version: "029_scope_capture_dedupe_by_tenant", path: fileURLToPath(new URL("../../migrations/029_scope_capture_dedupe_by_tenant.sql", import.meta.url)) }
+  { version: "029_scope_capture_dedupe_by_tenant", path: fileURLToPath(new URL("../../migrations/029_scope_capture_dedupe_by_tenant.sql", import.meta.url)) },
+  { version: "030_reconcile_actor_profiles", path: fileURLToPath(new URL("../../migrations/030_reconcile_actor_profiles.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -156,7 +157,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const tenantWhere = "includeGlobal" in table && table.includeGlobal
       ? `($1::text IS NULL AND tenant_id IS NULL OR $1::text IS NOT NULL AND (tenant_id IS NULL OR tenant_id IS NOT DISTINCT FROM $1::text))`
       : `(tenant_id IS NOT DISTINCT FROM $1::text)`;
-    const where = `${tenantWhere} AND ($2::text IS NULL OR position($2 in lower(${searchBy})) > 0)`;
+    const collectionWhere = "where" in table ? table.where : "TRUE";
+    const where = `${tenantWhere} AND (${collectionWhere}) AND ($2::text IS NULL OR position($2 in lower(${searchBy})) > 0)`;
     const [rows, countRows] = await Promise.all([
       this.sql.unsafe(`SELECT record FROM threat_intel.${table.name} WHERE ${where} ORDER BY ${table.orderBy} DESC LIMIT $3 OFFSET $4`, [...parameters, limit, offset]),
       this.sql.unsafe(`SELECT count(*)::int AS total FROM threat_intel.${table.name} WHERE ${where}`, parameters)
@@ -164,6 +166,59 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const total = Number(countRows[0]?.total ?? 0);
     const records = rows.map(readRecord);
     return { records, total, nextCursor: offset + records.length < total ? String(offset + records.length) : undefined };
+  }
+
+  override async listActorProfilesForOwnership(): Promise<any[]> {
+    return (await this.sql`SELECT record FROM threat_intel.actor_profiles ORDER BY first_seen_at, id`).map(readRecord);
+  }
+
+  override async listActorAliasesForOwnership(): Promise<any[]> {
+    return (await this.sql`SELECT record FROM threat_intel.actor_aliases ORDER BY first_seen_at, id`).map(readRecord);
+  }
+
+  override async listActorProfileIdentityHistoryForOwnership(): Promise<any[]> {
+    return (await this.sql`
+      SELECT jsonb_build_object(
+        'id', id,
+        'actorProfileId', actor_profile_id,
+        'canonicalActorProfileId', canonical_actor_profile_id,
+        'reconciliationKey', reconciliation_key,
+        'resolutionStatus', resolution_status,
+        'originalTenantId', original_tenant_id,
+        'originalRecord', original_record,
+        'referenceSnapshot', reference_snapshot,
+        'reconciledAt', reconciled_at
+      ) AS record
+      FROM threat_intel.actor_profile_identity_history
+      ORDER BY reconciled_at, actor_profile_id
+    `).map(readRecord);
+  }
+
+  override async replaceActorProfileIdentityHistoryForRetention(record: any): Promise<any> {
+    if (!record?.id || !record.actorProfileId || !record.originalRecord || !record.referenceSnapshot) {
+      throw new Error("Actor profile identity history retention replacement requires identity and retained audit payloads.");
+    }
+    const [updated] = await this.sql`
+      UPDATE threat_intel.actor_profile_identity_history
+      SET
+        original_tenant_id = ${nullable(record.originalTenantId)},
+        original_record = ${toJson(record.originalRecord)}::text::jsonb,
+        reference_snapshot = ${toJson(record.referenceSnapshot)}::text::jsonb
+      WHERE id = ${record.id} AND actor_profile_id = ${record.actorProfileId}
+      RETURNING jsonb_build_object(
+        'id', id,
+        'actorProfileId', actor_profile_id,
+        'canonicalActorProfileId', canonical_actor_profile_id,
+        'reconciliationKey', reconciliation_key,
+        'resolutionStatus', resolution_status,
+        'originalTenantId', original_tenant_id,
+        'originalRecord', original_record,
+        'referenceSnapshot', reference_snapshot,
+        'reconciledAt', reconciled_at
+      ) AS record
+    `;
+    if (!updated) throw new Error(`Unknown actor profile identity history: ${record.id}`);
+    return readRecord(updated);
   }
 
   async importLegacySnapshot(snapshotPath: string) {
@@ -756,7 +811,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         ${Math.max(1, Number(profile.evidenceCount ?? 1))}, ${profile.updatedAt ?? lastSeenAt}, ${toJson(profile)}::text::jsonb
       )
       ON CONFLICT (id) DO UPDATE SET
+        tenant_id = EXCLUDED.tenant_id,
         canonical_name = EXCLUDED.canonical_name,
+        normalized_name = EXCLUDED.normalized_name,
+        actor_type = EXCLUDED.actor_type,
         confidence = EXCLUDED.confidence,
         first_seen_at = LEAST(threat_intel.actor_profiles.first_seen_at, EXCLUDED.first_seen_at),
         last_seen_at = GREATEST(threat_intel.actor_profiles.last_seen_at, EXCLUDED.last_seen_at),
@@ -1214,8 +1272,8 @@ const structuredTables = {
   entities: { name: "entities", orderBy: "created_at" },
   indicators: { name: "indicators", orderBy: "created_at" },
   incidents: { name: "incidents", orderBy: "first_seen_at" },
-  actorProfiles: { name: "actor_profiles", orderBy: "last_seen_at" },
-  actorAliases: { name: "actor_aliases", orderBy: "last_seen_at" },
+  actorProfiles: { name: "actor_profiles", orderBy: "last_seen_at", where: "COALESCE(record->>'identityResolutionState', 'active') <> 'archived'" },
+  actorAliases: { name: "actor_aliases", orderBy: "last_seen_at", where: "EXISTS (SELECT 1 FROM threat_intel.actor_profiles profile WHERE profile.id = actor_profile_id AND COALESCE(profile.record->>'identityResolutionState', 'active') <> 'archived')" },
   actorIdentityCatalogs: { name: "actor_identity_catalogs", orderBy: "retrieved_at", includeGlobal: true },
   actorIdentities: { name: "actor_identities", orderBy: "updated_at", includeGlobal: true },
   evidenceLinks: { name: "evidence_links", orderBy: "created_at" },

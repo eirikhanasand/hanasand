@@ -197,7 +197,7 @@ export function resolveMitreActorIdentity(query: string, identities: readonly Ac
     }];
   });
   const candidates = [...matched.reduce((groups, candidate) => {
-    const identity = canonicalIdentity(candidate.identity, current);
+    const identity = canonicalActorIdentity(candidate.identity, current);
     const existing = groups.get(identity.id);
     groups.set(identity.id, existing ? {
       identity,
@@ -211,7 +211,7 @@ export function resolveMitreActorIdentity(query: string, identities: readonly Ac
 
 export function reconcileActorIdentityCoverage(identities: readonly ActorIdentityRecord[]) {
   const current = identities.filter((identity) => identity.status === "current");
-  const canonicalIds = new Set(current.map((identity) => canonicalIdentity(identity, current).id));
+  const canonicalIds = new Set(current.map((identity) => canonicalActorIdentity(identity, current).id));
   const aliases = current.flatMap((identity) => identity.associatedNames);
   return {
     currentCatalogRecordCount: current.length,
@@ -249,7 +249,7 @@ function hasAptNumberDesignation(value: string): boolean {
   return /^apt[- ]?\d+$/i.test(value.trim());
 }
 
-function canonicalIdentity(identity: ActorIdentityRecord, current: readonly ActorIdentityRecord[]): ActorIdentityRecord {
+export function canonicalActorIdentity(identity: ActorIdentityRecord, current: readonly ActorIdentityRecord[]): ActorIdentityRecord {
   if (identity.catalogId === "mitre-attack-enterprise") return identity;
   const name = normalizeActorLabel(identity.canonicalName);
   const mitreMatches = current.filter((candidate) => candidate.catalogId === "mitre-attack-enterprise" && normalizeActorLabel(candidate.canonicalName) === name);

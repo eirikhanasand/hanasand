@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { parseMitreActorCatalog, reconcileActorIdentityCoverage, resolveMitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { createLiveSearchPlan } from "../planner/intelligencePlanner.ts";
 import { hashContent } from "../utils.ts";
 import { source } from "./helpers/plannerFixtures.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
+import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 
@@ -81,7 +85,70 @@ describe("MITRE actor identity catalog", () => {
     expect(context("Thrip was named in the report.").entities).toContainEqual(expect.objectContaining({ type: "actor", value: "Thrip", actorIdentityIds: ["mitre-attack-enterprise:G0030", "mitre-attack-enterprise:G0076"] }));
     const activityStore = new InMemoryScraperStore();
     activityStore.savePipelineResult(context("Charming Kitten was named in the report."));
-    expect(activityStore.listActorProfiles()).toContainEqual(expect.objectContaining({ canonicalName: "Charming Kitten", actorIdentityIds: ["mitre-attack-enterprise:G0059"], evidenceCount: 1 }));
+    expect(activityStore.listActorProfiles()).toEqual([]);
+
+    activityStore.replaceActorIdentityCatalog(catalog, { sourceId: "src_mitre_enterprise_stix", captureId: "cap_mitre_enterprise_v19_1" });
+    activityStore.savePipelineResult(context("Magic Hound was named in a second report."));
+    activityStore.savePipelineResult({ ...context("Charming Kitten was named in a third report."), capture: { ...context("Charming Kitten was named in a third report.").capture, tenantId: "default" } });
+    expect(activityStore.listActorProfiles()).toEqual([
+      expect.objectContaining({ tenantId: undefined, canonicalName: "Magic Hound", normalizedName: "magic hound", actorIdentityIds: ["mitre-attack-enterprise:G0059"], evidenceCount: 2 })
+    ]);
+
+    const customer = context("Charming Kitten was named in a customer report.");
+    activityStore.savePipelineResult({ ...customer, capture: { ...customer.capture, tenantId: "tenant_customer" } });
+    expect(activityStore.listActorProfiles()).toHaveLength(2);
+    expect(activityStore.listActorProfiles()).toContainEqual(expect.objectContaining({ tenantId: "tenant_customer", canonicalName: "Magic Hound", evidenceCount: 1 }));
+
+    const ambiguousStore = new InMemoryScraperStore();
+    ambiguousStore.replaceActorIdentityCatalog(catalog, { sourceId: "src_mitre_enterprise_stix", captureId: "cap_mitre_enterprise_v19_1" });
+    ambiguousStore.savePipelineResult(context("Thrip was named in the report."));
+    expect(ambiguousStore.listActorProfiles()).toEqual([]);
+
+    const revokedCatalog = { ...catalog, identities: catalog.identities.map((identity) => identity.externalId === "G0046" ? { ...identity, status: "revoked" as const } : identity) };
+    const revokedStore = new InMemoryScraperStore();
+    revokedStore.replaceActorIdentityCatalog(revokedCatalog, { sourceId: "src_mitre_enterprise_stix", captureId: "cap_mitre_enterprise_v19_1" });
+    revokedStore.savePipelineResult(context("FIN7 was named in the report."));
+    expect(revokedStore.listActorProfiles()).toEqual([]);
+
+    const unresolvedStore = new InMemoryScraperStore();
+    const unresolved = context("Magic Hound was named in an unresolved report.");
+    unresolvedStore.savePipelineResult({
+      ...unresolved,
+      entities: unresolved.entities.map((entity: any) => entity.type === "actor"
+        ? { ...entity, value: "Unregistered Group", normalizedValue: "unregistered group", actorIdentityIds: [] }
+        : entity)
+    });
+    expect(unresolvedStore.listActorProfiles()).toEqual([]);
+    expect(unresolvedStore.listExtractedEntities()).toContainEqual(expect.objectContaining({ type: "actor", value: "Unregistered Group" }));
+    expect(unresolvedStore.listEvidenceLinks()).toContainEqual(expect.objectContaining({ subjectType: "entity", relationship: "mentions" }));
+
+    const unknownExplicitStore = new InMemoryScraperStore();
+    unknownExplicitStore.savePipelineResult({
+      ...unresolved,
+      entities: unresolved.entities.map((entity: any) => entity.type === "actor"
+        ? { ...entity, value: "Catalog Pending Group", normalizedValue: "catalog pending group", actorIdentityIds: ["future-catalog:pending"] }
+        : entity)
+    });
+    expect(unknownExplicitStore.listActorProfiles()).toEqual([]);
+
+    const archivedStore = new InMemoryScraperStore();
+    archivedStore.saveActorProfile({
+      id: "actor_legacy_charming_kitten", canonicalName: "Charming Kitten", normalizedName: "charming kitten",
+      actorType: "apt", aliases: ["Charming Kitten"], actorIdentityIds: [], confidence: 0.7,
+      firstSeenAt: "2026-07-20T00:00:00.000Z", lastSeenAt: "2026-07-20T00:00:00.000Z", updatedAt: "2026-07-20T00:00:00.000Z",
+      sourceIds: ["src_legacy"], captureIds: ["cap_legacy"], evidenceCount: 1,
+      identityResolutionState: "archived", identityResolutionReason: "unresolved"
+    });
+    expect(archivedStore.listActorProfiles()).toEqual([]);
+    expect(archivedStore.listActorAliases()).toEqual([]);
+    expect(await archivedStore.listActorProfilesForOwnership()).toContainEqual(expect.objectContaining({ id: "actor_legacy_charming_kitten", identityResolutionState: "archived" }));
+    expect(await archivedStore.listActorAliasesForOwnership()).toContainEqual(expect.objectContaining({ actorProfileId: "actor_legacy_charming_kitten", normalizedAlias: "charming kitten" }));
+    archivedStore.replaceActorIdentityCatalog(catalog, { sourceId: "src_mitre_enterprise_stix", captureId: "cap_mitre_enterprise_v19_1" });
+    archivedStore.savePipelineResult(context("Magic Hound was named after catalog refresh."));
+    expect(archivedStore.listActorProfiles()).toEqual([
+      expect.objectContaining({ id: "actor_legacy_charming_kitten", canonicalName: "Magic Hound", actorIdentityIds: ["mitre-attack-enterprise:G0059"], identityResolutionState: "canonical", evidenceCount: 2 })
+    ]);
+    expect(archivedStore.listActorProfiles()[0]).not.toHaveProperty("identityResolutionReason");
 
     const structured = processCollectedItem({
       sourceId: "src_real_claim_feed", url: "https://example.test/claim", collectedAt: "2026-07-21T00:00:00.000Z",
@@ -104,11 +171,62 @@ describe("MITRE actor identity catalog", () => {
   test("merges only exact canonical names across catalogs", () => {
     const catalog = parseMitreActorCatalog(officialV191Excerpt, { retrievedAt: "2026-07-21T00:00:00.000Z", minimumCurrentIdentities: 6 });
     const supplemental = (canonicalName: string, externalId: string) => ({ ...catalog.identities[0], id: `actor_${externalId}`, catalogId: "ransomware-live-current-operations", externalId, canonicalName, normalizedCanonicalName: canonicalName.toLowerCase(), associatedNames: [] });
-    const coverage = reconcileActorIdentityCoverage([...catalog.identities, supplemental("Magic Hound", "magic-hound"), supplemental("Charming Kitten", "charming-kitten")]);
+    const magicHound = supplemental("Magic Hound", "magic-hound");
+    const identities = [...catalog.identities, magicHound, supplemental("Charming Kitten", "charming-kitten")];
+    const coverage = reconcileActorIdentityCoverage(identities);
 
     expect(coverage.currentCatalogRecordCount).toBe(8);
     expect(coverage.canonicalIdentityCount).toBe(7);
     expect(coverage.crossCatalogMergedIdentityCount).toBe(1);
+
+    const store = new InMemoryScraperStore();
+    store.replaceActorIdentityCatalog(catalog, { sourceId: "src_actor_catalog", captureId: "cap_actor_catalog" });
+    (store as any).replaceActorIdentityCatalog({
+      ...catalog,
+      catalogId: "ransomware-live-current-operations",
+      catalogName: "Ransomware.live current operations",
+      identities: [magicHound],
+      counts: { ...catalog.counts, totalIdentityCount: 1, currentIdentityCount: 1 }
+    }, { sourceId: "src_actor_catalog", captureId: "cap_actor_catalog" });
+    const item = processCollectedItem({
+      sourceId: "src_real_report", url: "https://example.test/converged-identities", collectedAt: "2026-07-21T00:00:00.000Z",
+      rawText: "Magic Hound was named in the report.", contentHash: hashContent("converged-identities"), links: [], metadata: {}, sensitive: false
+    }, { actorIdentities: identities });
+    store.savePipelineResult({
+      ...item,
+      entities: item.entities.map((entity: any) => entity.type === "actor"
+        ? { ...entity, actorIdentityIds: ["mitre-attack-enterprise:G0059", magicHound.id] }
+        : entity)
+    });
+    expect(store.listActorProfiles()).toEqual([
+      expect.objectContaining({ canonicalName: "Magic Hound", actorIdentityIds: ["mitre-attack-enterprise:G0059"] })
+    ]);
+  });
+
+  test("keeps archived actor ownership rows across file-backed restart without public exposure", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "actor-profile-archive-"));
+    try {
+      const snapshotPath = join(directory, "store.json");
+      const archived = {
+        id: "actor_archived_file", tenantId: "tenant_file", canonicalName: "Historical Name", normalizedName: "archived:actor_archived_file",
+        actorType: "threat_actor", aliases: ["Historical Name"], actorIdentityIds: [], confidence: 0.7,
+        firstSeenAt: "2026-07-20T00:00:00.000Z", lastSeenAt: "2026-07-20T00:00:00.000Z", updatedAt: "2026-07-20T00:00:00.000Z",
+        sourceIds: ["src_file"], captureIds: ["cap_file"], evidenceCount: 1,
+        identityResolutionState: "archived", identityResolutionReason: "unresolved"
+      };
+      const first = new FileBackedScraperStore({ snapshotPath });
+      first.saveActorProfile(archived);
+      expect(first.listActorProfiles()).toEqual([]);
+      expect(first.listActorAliases()).toEqual([]);
+
+      const restarted = new FileBackedScraperStore({ snapshotPath });
+      expect(restarted.listActorProfiles()).toEqual([]);
+      expect(restarted.listActorAliases()).toEqual([]);
+      expect(await restarted.listActorProfilesForOwnership()).toEqual([archived]);
+      expect(await restarted.listActorAliasesForOwnership()).toContainEqual(expect.objectContaining({ actorProfileId: archived.id, normalizedAlias: "historical name" }));
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });
 

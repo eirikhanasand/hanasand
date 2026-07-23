@@ -6,7 +6,7 @@ import { hashContent } from "../utils.ts";
 import { fixtureDiscovery, fixtureEvidenceDelta } from "./helpers/storageFixtures.ts";
 
 describe("storage evidence deltas", () => {
-  test("persists provenance-backed actor characterization changes over time", () => {
+  test("keeps unresolved actor mentions as entity evidence without profile deltas", () => {
     const store = new InMemoryScraperStore();
     const observation = (sourceId: string, collectedAt: string, victim: string, ttp: string) => {
       const rawText = `APT29 used ${ttp} against ${victim}.`;
@@ -18,15 +18,10 @@ describe("storage evidence deltas", () => {
     store.savePipelineResult(second);
     store.savePipelineResult(second);
 
-    const profile = store.listActorProfiles().find((row: any) => row.canonicalName === "APT29");
-    expect(profile).toMatchObject({ firstSeenAt: "2026-05-24T10:00:00.000Z", lastSeenAt: "2026-05-25T10:00:00.000Z", evidenceCount: 2 });
-    expect(profile.characterization.victims.map((row: any) => row.value)).toEqual(["Northwind Health", "Contoso Energy"]);
-    expect(profile.characterization.ttps.map((row: any) => row.value)).toEqual(["phishing", "credential dumping"]);
-
-    const deltas = store.listEvidenceDeltas().filter((row: any) => row.subjectType === "actor_profile");
-    expect(deltas).toHaveLength(2);
-    expect(deltas[1]).toMatchObject({ kind: "updated", captureIds: [second.capture.id], metadata: { rawContentExposed: false, characterization: { victims: [expect.objectContaining({ value: "Contoso Energy", sourceIds: ["src_history_b"] })], ttps: [expect.objectContaining({ value: "credential dumping", assertionKind: "extracted" })] } } });
-    expect(JSON.stringify(deltas)).not.toContain(second.capture.url);
+    expect(store.listActorProfiles()).toEqual([]);
+    expect(store.listExtractedEntities().filter((entity: any) => entity.type === "actor").map((entity: any) => entity.value)).toEqual(["APT29", "APT29"]);
+    expect(store.listEvidenceLinks().filter((link: any) => link.subjectType === "entity" && link.relationship === "mentions")).not.toHaveLength(0);
+    expect(store.listEvidenceDeltas().filter((row: any) => row.subjectType === "actor_profile")).toEqual([]);
   });
 
   test("reuses a duplicate capture's canonical incident after identity migration", () => {
@@ -57,7 +52,7 @@ describe("storage evidence deltas", () => {
     store.saveEvidenceDelta(fixtureEvidenceDelta({ id: "delta_relationship", query: "APT29", normalizedQuery: "apt29", runId: "run_cursor", kind: "added", subjectType: "relationship", subjectId: relationshipId, observedAt: "2026-05-24T16:02:10.000Z", discoveryEvidenceIds: [discovery.id], captureIds: [result.capture.id], incidentIds: result.incident ? [result.incident.id] : [], relationshipIds: [relationshipId] }));
     store.saveEvidenceDelta(fixtureEvidenceDelta({ id: "delta_stix", query: "APT29", normalizedQuery: "apt29", runId: "run_cursor", kind: "promoted", subjectType: "policy_event", subjectId: "stix_eligible", observedAt: "2026-05-24T16:02:20.000Z", captureIds: [result.capture.id], incidentIds: result.incident ? [result.incident.id] : [], relationshipIds: [relationshipId], policyEventIds: ["stix_eligible"] }));
 
-    expect(store.queries().getSearchDeltas("APT29", firstCursor, { tenantId: "tenant_live" }).map((delta) => delta.subjectType)).toEqual(["capture", "extraction", "actor_profile", "discovery_evidence", "relationship", "policy_event"]);
+    expect(store.queries().getSearchDeltas("APT29", firstCursor, { tenantId: "tenant_live" }).map((delta) => delta.subjectType)).toEqual(["capture", "extraction", "discovery_evidence", "relationship", "policy_event"]);
     const active = store.queries().getActiveRunEvidence("run_cursor", firstCursor, { tenantId: "tenant_live" });
     expect(active.captures.map((capture) => capture.id)).toEqual([result.capture.id]);
     expect(active.incidents.map((incident) => incident.id)).toEqual(result.incident ? [result.incident.id] : []);
