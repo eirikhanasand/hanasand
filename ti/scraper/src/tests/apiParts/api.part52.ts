@@ -1,9 +1,13 @@
-import { describe, expect, test, body, handleApiRequest, api, fixtureCapture, InMemoryScraperStore, FocusedFrontier, source } from "../apiTestHarness.ts";
+import { actorIdentity, describe, expect, test, body, handleApiRequest, api, fixtureCapture, InMemoryScraperStore, FocusedFrontier, seedActorIdentityCatalog, source } from "../apiTestHarness.ts";
+
+const apt29 = actorIdentity("G0016", "APT29", ["Nobelium", "Cozy Bear", "Midnight Blizzard"]);
 
 describe("api v1", () => {
   test("fuses compact actor profile into live search output", async () => {
+    const store = new InMemoryScraperStore();
+    seedActorIdentityCatalog(store, [apt29]);
     const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&entityType=actor"), {
-      store: new InMemoryScraperStore(),
+      store,
       frontier: new FocusedFrontier()
     })) as any;
     expect(response.query).toBe("APT29");
@@ -80,6 +84,7 @@ describe("api v1", () => {
 
   test("resolves actor aliases and only emits source-backed attribution", async () => {
     const store = new InMemoryScraperStore();
+    seedActorIdentityCatalog(store, [apt29]);
     store.saveSource(source({ id: "src_apt29_attribution", tenantId: "tenant_api", name: "Public attribution report" }));
     store.saveCapture(fixtureCapture({
       id: "cap_apt29_attribution",
@@ -110,6 +115,7 @@ describe("api v1", () => {
 
   test("requires complete actor alias phrases instead of matching common alias words", async () => {
     const store = new InMemoryScraperStore();
+    seedActorIdentityCatalog(store, [apt29]);
     store.saveSource(source({ id: "src_actor_noise", tenantId: "tenant_api", name: "Public Babuk feed", metadata: { queryClass: "threat-intel", queryTerm: "Babuk" } }));
     store.saveSource(source({ id: "src_actor_identity", tenantId: "tenant_api", name: "Public APT29 feed", metadata: { queryClass: "threat-intel", queryTerm: "APT29" } }));
     store.saveCapture(fixtureCapture({

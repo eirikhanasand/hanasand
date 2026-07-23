@@ -121,7 +121,7 @@ describe("scheduled API collection runs", () => {
       identities: [{
         id: "mitre-attack-enterprise:G0016", catalogId: "mitre-attack-enterprise", externalId: "G0016", stixId: "intrusion-set--899ce53f-13a0-479b-a0e4-67d46e241542",
         canonicalName: "APT29", normalizedCanonicalName: "apt29", associatedNames: ["IRON RITUAL", "IRON HEMLOCK", "NobleBaron", "Dark Halo", "NOBELIUM", "UNC2452", "YTTRIUM", "The Dukes", "Cozy Bear", "CozyDuke", "SolarStorm", "Blue Kitsune", "UNC3524", "Midnight Blizzard"],
-        status: "current", aptNumberDesignationPresent: true, createdAt: "2017-05-31T21:31:52.748Z", modifiedAt: "2026-01-20T16:22:04.140Z",
+        status: "current", lookupPolicy: "text_safe", aptNumberDesignationPresent: true, createdAt: "2017-05-31T21:31:52.748Z", modifiedAt: "2026-01-20T16:22:04.140Z",
         domains: ["enterprise-attack"], contributors: ["Daniyal Naeem, BT Security", "Matt Brenton, Zurich Insurance Group", "Katie Nickels, Red Canary", "Joe Gumke, U.S. Bank", "Liran Ravich, CardinalOps", "Vicky Ray, RayvenX"],
         sourceUrl: "https://attack.mitre.org/groups/G0016", referenceUrls: ["https://attack.mitre.org/groups/G0016"], catalogVersion: "19.1", catalogModifiedAt: "2026-05-12T14:00:00.188Z", bundleSha256: "bdf1ce86a4e604214c5076d37ae4dcb322678afc528df8492e6fdc1b554f5da3", retrievedAt: "2026-07-21T00:00:00.000Z"
       }],

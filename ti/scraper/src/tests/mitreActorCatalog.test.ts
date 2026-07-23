@@ -29,7 +29,7 @@ const officialV191Excerpt = JSON.stringify({
 
 describe("MITRE actor identity catalog", () => {
   test("keeps authoritative identities separate and preserves ambiguous associated names", () => {
-    expect(() => parseMitreActorCatalog(officialV191Excerpt, { retrievedAt: "2026-07-21T00:00:00.000Z" })).toThrow("expected at least 100");
+    expect(() => parseMitreActorCatalog(officialV191Excerpt, { retrievedAt: "2026-07-21T00:00:00.000Z" })).toThrow("does not match its authoritative manifest");
     const catalog = parseMitreActorCatalog(officialV191Excerpt, { retrievedAt: "2026-07-21T00:00:00.000Z", minimumCurrentIdentities: 6 });
 
     expect(ids(resolveMitreActorIdentity("APT42", catalog.identities))).toEqual(["G1044"]);
@@ -39,6 +39,127 @@ describe("MITRE actor identity catalog", () => {
     expect(resolveMitreActorIdentity("Thrip", catalog.identities)).toMatchObject({ ambiguous: true });
     expect(ids(resolveMitreActorIdentity("Thrip", catalog.identities))).toEqual(["G0030", "G0076"]);
     expect(resolveMitreActorIdentity("not a registered group", catalog.identities).candidates).toEqual([]);
+
+    const manifestStore = new InMemoryScraperStore();
+    const accepted = { ...catalog, authoritativeManifestValidated: true as const };
+    manifestStore.replaceActorIdentityCatalog(accepted, { sourceId: "src_mitre", captureId: "cap_mitre_v1" });
+    expect(() => manifestStore.replaceActorIdentityCatalog({
+      ...accepted,
+      identities: accepted.identities.slice(0, -1),
+      counts: {
+        ...accepted.counts,
+        totalIdentityCount: accepted.identities.length - 1,
+        currentIdentityCount: accepted.counts.currentIdentityCount - 1
+      }
+    }, { sourceId: "src_mitre", captureId: "cap_mitre_v2" })).toThrow("omitted 1 identities");
+  });
+
+  test("counts all current MITRE APT designation forms and keeps generic labels structured-only", () => {
+    const catalog = parseMitreActorCatalog(JSON.stringify({
+      type: "bundle",
+      id: "bundle--3036ce41-acde-4e7e-acde-30f0281775cb",
+      objects: [
+        { type: "x-mitre-collection", name: "Enterprise ATT&CK", modified: "2026-05-12T14:00:00.188Z", x_mitre_version: "19.1" },
+        group("intrusion-set--b8b24a3b-a8d2-4a52-9a66-c5c9a2c7b6de", "G0099", "APT-C-36", ["APT-C-36", "APT-Q-98"], "2020-01-01T00:00:00.000Z", "2026-05-12T15:12:00.732Z"),
+        group("intrusion-set--7a219c7f-4a6f-43e0-83b2-115b9af0aef1", "G0095", "Machete", ["Machete", "APT-C-43"], "2020-01-01T00:00:00.000Z", "2026-05-12T15:12:00.732Z"),
+        group("intrusion-set--a7f94322-9037-4d4e-a597-1e0a8a3e59a4", "G1028", "APT-C-23", ["APT-C-23"], "2020-01-01T00:00:00.000Z", "2026-05-12T15:12:00.732Z"),
+        group("intrusion-set--9b0702e0-e4fb-4f02-a4e0-02a05b458f0a", "G9999", "Play", ["Play"], "2020-01-01T00:00:00.000Z", "2026-05-12T15:12:00.732Z")
+      ]
+    }), { retrievedAt: "2026-07-21T00:00:00.000Z", minimumCurrentIdentities: 4 });
+
+    expect(catalog.counts.aptNumberDesignationPresentCount).toBe(3);
+    expect(catalog.identities.filter((identity) => identity.aptNumberDesignationPresent).map((identity) => identity.externalId)).toEqual(["G0095", "G0099", "G1028"]);
+    expect(resolveMitreActorIdentity("play", catalog.identities).candidates).toEqual([]);
+    expect(resolveMitreActorIdentity("play", catalog.identities, { allowStructuredOnly: true }).candidates).toEqual([
+      expect.objectContaining({ identity: expect.objectContaining({ externalId: "G9999", canonicalName: "Play" }) })
+    ]);
+  });
+
+  test("resolves authoritative renames while retaining unresolved retired identities as history", () => {
+    const old = {
+      ...group("intrusion-set--92d5b3fd-3b39-438e-af68-770e447beada", "G0118", "Charming Kitten", ["Charming Kitten"], "2024-01-01T00:00:00.000Z", "2026-05-12T15:12:00.732Z"),
+      revoked: true
+    };
+    const current = group("intrusion-set--f9d6633a-55e6-4adc-9263-6ae080421a13", "G0059", "Magic Hound", ["Magic Hound", "Charming Kitten"], "2018-01-16T16:13:52.465Z", "2026-05-12T15:12:00.732Z");
+    const catalog = parseMitreActorCatalog(JSON.stringify({
+      type: "bundle",
+      id: "bundle--8c1792e7-6d7a-47ec-b665-e2234631edc8",
+      objects: [
+        { type: "x-mitre-collection", name: "Enterprise ATT&CK", modified: "2026-05-12T14:00:00.188Z", x_mitre_version: "19.1" },
+        old,
+        current,
+        { type: "relationship", id: "relationship--f9f98126-0b17-4ac1-8e16-7f7cc257b3c5", relationship_type: "revoked-by", source_ref: old.id, target_ref: current.id }
+      ]
+    }), { retrievedAt: "2026-07-21T00:00:00.000Z", minimumCurrentIdentities: 1 });
+
+    expect(catalog.identities.find((identity) => identity.externalId === "G0118")).toMatchObject({ status: "revoked", revokedByExternalId: "G0059" });
+    expect(resolveMitreActorIdentity("Charming Kitten", catalog.identities)).toMatchObject({
+      ambiguous: false,
+      candidates: [{
+        identity: { externalId: "G0059", canonicalName: "Magic Hound", status: "current" },
+        matchedIdentityIds: ["mitre-attack-enterprise:G0059", "mitre-attack-enterprise:G0118"],
+        resolutionKinds: ["direct", "revoked_by"]
+      }]
+    });
+
+    const beforeRename = parseMitreActorCatalog(JSON.stringify({
+      type: "bundle",
+      id: "bundle--922dc4c9-967a-4eb4-b5c8-8da8f9605974",
+      objects: [
+        { type: "x-mitre-collection", name: "Enterprise ATT&CK", modified: "2026-01-01T00:00:00.000Z", x_mitre_version: "19.1" },
+        { ...old, revoked: false }
+      ]
+    }), { retrievedAt: "2026-01-02T00:00:00.000Z", minimumCurrentIdentities: 1 });
+    const directory = mkdtempSync(join(tmpdir(), "actor-profile-rename-"));
+    try {
+      const snapshotPath = join(directory, "store.json");
+      const renamedStore = new FileBackedScraperStore({ snapshotPath });
+      renamedStore.replaceActorIdentityCatalog(beforeRename, { sourceId: "src_mitre", captureId: "cap_mitre_before" });
+      const observation = processCollectedItem({
+        sourceId: "src_report", url: "https://publisher.example/rename", collectedAt: "2026-01-03T00:00:00.000Z",
+        rawText: "Charming Kitten claimed Example Systems.", contentHash: hashContent("rename-observation"), links: [], sensitive: false,
+        metadata: { extractionProfile: "ransomware_victim_blog", leakSite: { actorName: "Charming Kitten", victimName: "Example Systems" } }
+      }, { actorIdentities: renamedStore.listActorIdentities() });
+      renamedStore.savePipelineResult(observation);
+      const originalProfile = renamedStore.listActorProfiles()[0];
+      const refresh = renamedStore.replaceActorIdentityCatalog(catalog, { sourceId: "src_mitre", captureId: "cap_mitre_after" });
+      expect(refresh).toMatchObject({ archivedActorProfileIds: [], reboundActorProfileIds: [originalProfile.id] });
+      expect(renamedStore.listActorProfiles()).toEqual([
+        expect.objectContaining({
+          id: originalProfile.id,
+          canonicalName: "Magic Hound",
+          actorIdentityIds: ["mitre-attack-enterprise:G0059"],
+          captureIds: originalProfile.captureIds,
+          identityResolutionState: "canonical"
+        })
+      ]);
+
+      const restarted = new FileBackedScraperStore({ snapshotPath });
+      expect(restarted.listActorProfiles()).toEqual([
+        expect.objectContaining({
+          id: originalProfile.id,
+          canonicalName: "Magic Hound",
+          actorIdentityIds: ["mitre-attack-enterprise:G0059"],
+          captureIds: originalProfile.captureIds
+        })
+      ]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+
+    const retired = { ...catalog.identities.find((identity) => identity.externalId === "G0118")!, status: "retired" as const, revokedByExternalId: undefined };
+    expect(resolveMitreActorIdentity("Charming Kitten", [retired]).candidates).toEqual([
+      expect.objectContaining({ identity: expect.objectContaining({ externalId: "G0118", status: "retired" }), resolutionKinds: ["direct"] })
+    ]);
+    const store = new InMemoryScraperStore();
+    store.replaceActorIdentityCatalog({ ...catalog, identities: [retired], counts: { ...catalog.counts, totalIdentityCount: 1, currentIdentityCount: 0, revokedIdentityCount: 0 } }, { sourceId: "src_actor_catalog", captureId: "cap_actor_catalog" });
+    const observed = processCollectedItem({
+      sourceId: "src_report", url: "https://publisher.example/retired", collectedAt: "2026-07-21T00:00:00.000Z",
+      rawText: "Structured attribution.", contentHash: hashContent("retired"), links: [], sensitive: false,
+      metadata: { extractionProfile: "ransomware_group_metadata", ransomwareGroup: { actorName: "Charming Kitten" } }
+    }, { actorIdentities: [retired] });
+    store.savePipelineResult(observed);
+    expect(store.listActorProfiles()).toEqual([]);
   });
 
   test("registers and serves catalog identities without fabricating activity profiles", async () => {
@@ -76,6 +197,45 @@ describe("MITRE actor identity catalog", () => {
     expect(collision.actorProfile.actor).toBeUndefined();
   });
 
+  test("binds global catalog activity to its retained evidence captures in tenant coverage", async () => {
+    const mitre = parseMitreActorCatalog(officialV191Excerpt, { retrievedAt: "2026-07-21T00:00:00.000Z", minimumCurrentIdentities: 6 });
+    const capture = (id: string, contentHash: string, tenantId?: string) => ({
+      id, tenantId, sourceId: "src_catalog_evidence", url: `https://example.test/${id}`, collectedAt: "2026-07-21T00:00:00.000Z",
+      mediaType: "application/json", storageKind: "metadata_only", contentHash, sensitive: false, metadata: {}
+    } as any);
+    const store = new InMemoryScraperStore();
+    store.saveCapture(capture("cap_catalog", "catalog-hash"));
+    store.saveCapture(capture("cap_bound_global", "bound-evidence-hash"));
+    store.saveCapture(capture("cap_unbound_global", "unbound-evidence-hash"));
+    store.saveCapture(capture("cap_tenant_duplicate", "unbound-evidence-hash", "tenant_customer"));
+    const identity = (id: string, contentHash: string) => ({
+      ...mitre.identities[0],
+      id: `ransomware-live-current-operations:${id}`,
+      catalogId: "ransomware-live-current-operations",
+      externalId: `ransomwarelive:${id}`,
+      canonicalName: id,
+      normalizedCanonicalName: id,
+      associatedNames: [],
+      activityEvidence: [{ kind: "recent_public_claim", observedAt: "2026-07-21T00:00:00.000Z", count: 1, contentHash }]
+    });
+    store.replaceActorIdentityCatalog({
+      ...mitre,
+      catalogId: "ransomware-live-current-operations",
+      catalogName: "Ransomware.live community group catalog",
+      evidenceCaptureIds: ["cap_bound_global"],
+      identities: [identity("bound", "bound-evidence-hash"), identity("unbound", "unbound-evidence-hash")],
+      counts: { ...mitre.counts, totalIdentityCount: 2, currentIdentityCount: 2 }
+    } as any, { sourceId: "src_catalog_evidence", captureId: "cap_catalog" });
+
+    const response = await handleApiRequest(new Request("http://localhost/v1/intel/actor-identity-coverage", {
+      headers: { "x-tenant-id": "tenant_customer" }
+    }), { store, frontier: new FocusedFrontier() } as any);
+    expect(await response.json()).toMatchObject({
+      catalogCoverage: { ransomwareCurrentOperationCount: 2 },
+      activityCoverage: { catalogActivityIdentityCount: 1, recentCatalogActivityIdentityCount: 1 }
+    });
+  });
+
   test("uses canonical catalog identities without conflating associated designations", async () => {
     const catalog = parseMitreActorCatalog(officialV191Excerpt, { retrievedAt: "2026-07-21T00:00:00.000Z", minimumCurrentIdentities: 6 });
     const context = (rawText: string) => processCollectedItem({ sourceId: "src_real_report", url: "https://example.test/report", collectedAt: "2026-07-21T00:00:00.000Z", rawText, contentHash: hashContent(rawText), links: [], metadata: {}, sensitive: false }, { actorIdentities: catalog.identities });
@@ -88,14 +248,36 @@ describe("MITRE actor identity catalog", () => {
     expect(activityStore.listActorProfiles()).toEqual([]);
 
     activityStore.replaceActorIdentityCatalog(catalog, { sourceId: "src_mitre_enterprise_stix", captureId: "cap_mitre_enterprise_v19_1" });
-    activityStore.savePipelineResult(context("Magic Hound was named in a second report."));
-    activityStore.savePipelineResult({ ...context("Charming Kitten was named in a third report."), capture: { ...context("Charming Kitten was named in a third report.").capture, tenantId: "default" } });
+    const genericMention = context("Magic Hound was named in a second report.");
+    const negatedMention = context("There is no evidence that Charming Kitten was involved.");
+    const mentionStore = new InMemoryScraperStore();
+    mentionStore.replaceActorIdentityCatalog(catalog, { sourceId: "src_mitre_enterprise_stix", captureId: "cap_mitre_enterprise_v19_1" });
+    mentionStore.savePipelineResult(genericMention);
+    mentionStore.savePipelineResult({ ...negatedMention, capture: { ...negatedMention.capture, tenantId: "default" } });
+    expect(mentionStore.listActorProfiles()).toEqual([]);
+    expect(mentionStore.listExtractedEntities().filter((entity: any) => entity.type === "actor")).toHaveLength(2);
+    expect(mentionStore.listEvidenceLinks().filter((link: any) => link.subjectType === "entity" && link.relationship === "mentions")).toHaveLength(2);
+
+    const governed = (sourceId: string, tenantId?: string) => {
+      const result = processCollectedItem({
+        sourceId,
+        url: `https://example.test/${sourceId}`,
+        collectedAt: "2026-07-21T00:00:00.000Z",
+        rawText: "Charming Kitten claimed Example Systems.",
+        contentHash: hashContent(sourceId),
+        links: [],
+        sensitive: false,
+        metadata: { extractionProfile: "ransomware_victim_blog", leakSite: { actorName: "Charming Kitten", victimName: "Example Systems" } }
+      }, { actorIdentities: catalog.identities });
+      return tenantId ? { ...result, capture: { ...result.capture, tenantId } } : result;
+    };
+    activityStore.savePipelineResult(governed("src_governed_global"));
+    activityStore.savePipelineResult(governed("src_governed_default", "default"));
     expect(activityStore.listActorProfiles()).toEqual([
       expect.objectContaining({ tenantId: undefined, canonicalName: "Magic Hound", normalizedName: "magic hound", actorIdentityIds: ["mitre-attack-enterprise:G0059"], evidenceCount: 2 })
     ]);
 
-    const customer = context("Charming Kitten was named in a customer report.");
-    activityStore.savePipelineResult({ ...customer, capture: { ...customer.capture, tenantId: "tenant_customer" } });
+    activityStore.savePipelineResult(governed("src_governed_customer", "tenant_customer"));
     expect(activityStore.listActorProfiles()).toHaveLength(2);
     expect(activityStore.listActorProfiles()).toContainEqual(expect.objectContaining({ tenantId: "tenant_customer", canonicalName: "Magic Hound", evidenceCount: 1 }));
 
@@ -142,9 +324,9 @@ describe("MITRE actor identity catalog", () => {
     expect(archivedStore.listActorProfiles()).toEqual([]);
     expect(archivedStore.listActorAliases()).toEqual([]);
     expect(await archivedStore.listActorProfilesForOwnership()).toContainEqual(expect.objectContaining({ id: "actor_legacy_charming_kitten", identityResolutionState: "archived" }));
-    expect(await archivedStore.listActorAliasesForOwnership()).toContainEqual(expect.objectContaining({ actorProfileId: "actor_legacy_charming_kitten", normalizedAlias: "charming kitten" }));
+    expect(await archivedStore.listActorAliasesForOwnership()).toEqual([]);
     archivedStore.replaceActorIdentityCatalog(catalog, { sourceId: "src_mitre_enterprise_stix", captureId: "cap_mitre_enterprise_v19_1" });
-    archivedStore.savePipelineResult(context("Magic Hound was named after catalog refresh."));
+    archivedStore.savePipelineResult(governed("src_governed_reactivation"));
     expect(archivedStore.listActorProfiles()).toEqual([
       expect.objectContaining({ id: "actor_legacy_charming_kitten", canonicalName: "Magic Hound", actorIdentityIds: ["mitre-attack-enterprise:G0059"], identityResolutionState: "canonical", evidenceCount: 2 })
     ]);
@@ -170,29 +352,45 @@ describe("MITRE actor identity catalog", () => {
     expect(await beforeRefreshResponse.json()).toMatchObject({ status: "searching", actorIdentity: { catalogMatched: false, candidates: [] } });
   });
 
-  test("merges only exact canonical names across catalogs", () => {
+  test("merges exact canonical names across catalogs without treating associated names as identity equality", () => {
     const catalog = parseMitreActorCatalog(officialV191Excerpt, { retrievedAt: "2026-07-21T00:00:00.000Z", minimumCurrentIdentities: 6 });
     const supplemental = (canonicalName: string, externalId: string) => ({ ...catalog.identities[0], id: `actor_${externalId}`, catalogId: "ransomware-live-current-operations", externalId, canonicalName, normalizedCanonicalName: canonicalName.toLowerCase(), associatedNames: [] });
     const magicHound = supplemental("Magic Hound", "magic-hound");
-    const identities = [...catalog.identities, magicHound, supplemental("Charming Kitten", "charming-kitten")];
-    const coverage = reconcileActorIdentityCoverage(identities);
-
-    expect(coverage.currentCatalogRecordCount).toBe(8);
-    expect(coverage.canonicalIdentityCount).toBe(7);
-    expect(coverage.crossCatalogMergedIdentityCount).toBe(1);
-
-    const store = new InMemoryScraperStore();
-    store.replaceActorIdentityCatalog(catalog, { sourceId: "src_actor_catalog", captureId: "cap_actor_catalog" });
-    (store as any).replaceActorIdentityCatalog({
+    const ransomware = {
       ...catalog,
       catalogId: "ransomware-live-current-operations",
-      catalogName: "Ransomware.live current operations",
-      identities: [magicHound],
-      counts: { ...catalog.counts, totalIdentityCount: 1, currentIdentityCount: 1 }
-    }, { sourceId: "src_actor_catalog", captureId: "cap_actor_catalog" });
+      catalogName: "Ransomware.live community group catalog",
+      identities: [magicHound, supplemental("Charming Kitten", "charming-kitten"), supplemental("Thrip", "thrip")],
+      counts: { ...catalog.counts, totalIdentityCount: 3, currentIdentityCount: 3 }
+    } as any;
+    const store = new InMemoryScraperStore();
+    store.replaceActorIdentityCatalog(catalog, { sourceId: "src_mitre", captureId: "cap_mitre" });
+    store.replaceActorIdentityCatalog(ransomware, { sourceId: "src_ransomware", captureId: "cap_ransomware" });
+    const identities = store.listActorIdentities();
+    const coverage = reconcileActorIdentityCoverage(identities);
+
+    expect(coverage.currentCatalogRecordCount).toBe(9);
+    expect(coverage.canonicalIdentityCount).toBe(8);
+    expect(coverage.crossCatalogMergedIdentityCount).toBe(1);
+    expect(identities.find((identity: any) => identity.id === magicHound.id)).toMatchObject({
+      canonicalIdentityId: "mitre-attack-enterprise:G0059",
+      canonicalIdentityEvidence: {
+        matchedLabel: "Magic Hound",
+        sourceCatalogVersion: ransomware.catalogVersion,
+        sourceCaptureId: "cap_ransomware",
+        targetCatalogVersion: catalog.catalogVersion,
+        targetCaptureId: "cap_mitre"
+      }
+    });
+    expect(identities.find((identity: any) => identity.externalId === "thrip" && identity.catalogId === ransomware.catalogId)).not.toHaveProperty("canonicalIdentityId");
+    expect(resolveMitreActorIdentity("Charming Kitten", identities)).toMatchObject({ ambiguous: true });
+    expect(resolveMitreActorIdentity("Charming Kitten", identities).candidates.map((candidate) => candidate.identity.externalId).sort()).toEqual(["G0059", "charming-kitten"]);
+    expect(resolveMitreActorIdentity("Thrip", identities)).toMatchObject({ ambiguous: true });
+
     const item = processCollectedItem({
       sourceId: "src_real_report", url: "https://example.test/converged-identities", collectedAt: "2026-07-21T00:00:00.000Z",
-      rawText: "Magic Hound was named in the report.", contentHash: hashContent("converged-identities"), links: [], metadata: {}, sensitive: false
+      rawText: "Magic Hound claimed Example Systems.", contentHash: hashContent("converged-identities"), links: [],
+      metadata: { extractionProfile: "ransomware_victim_blog", leakSite: { actorName: "Magic Hound", victimName: "Example Systems" } }, sensitive: false
     }, { actorIdentities: identities });
     store.savePipelineResult({
       ...item,
@@ -225,7 +423,7 @@ describe("MITRE actor identity catalog", () => {
       expect(restarted.listActorProfiles()).toEqual([]);
       expect(restarted.listActorAliases()).toEqual([]);
       expect(await restarted.listActorProfilesForOwnership()).toEqual([archived]);
-      expect(await restarted.listActorAliasesForOwnership()).toContainEqual(expect.objectContaining({ actorProfileId: archived.id, normalizedAlias: "historical name" }));
+      expect(await restarted.listActorAliasesForOwnership()).toEqual([]);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

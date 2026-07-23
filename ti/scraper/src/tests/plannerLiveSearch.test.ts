@@ -3,6 +3,16 @@ import { createCollectionPlan, createLiveSearchPlan } from "../planner/intellige
 import type { CollectionRun } from "../types.ts";
 import { source } from "./helpers/plannerFixtures.ts";
 
+const actorIdentities = [{
+  id: "mitre-attack-enterprise:G0016",
+  catalogId: "mitre-attack-enterprise",
+  externalId: "G0016",
+  canonicalName: "APT29",
+  normalizedCanonicalName: "apt29",
+  associatedNames: ["Nobelium", "Cozy Bear", "Midnight Blizzard"],
+  status: "current"
+}] as any[];
+
 describe("live search planner", () => {
   test("plans random actor queries and returns DTO fields", () => {
     for (const query of ["Scattered Spider", "Akira", "Volt Typhoon", "Turla"]) {
@@ -39,14 +49,14 @@ describe("live search planner", () => {
 
   test("reuse keys normalize aliases, tenant, source scope, risk scope, and freshness window", () => {
     const sources = [source({ id: "rss", type: "rss", risk: "low" }), source({ id: "telegram", type: "telegram_public", risk: "medium" })];
-    const apt29 = createLiveSearchPlan({ request: { query: "APT29", entityType: "actor", tenantId: "tenant_live", includeTelegram: true, createdAt: "2026-05-24T00:05:00.000Z" }, sources });
-    const nobelium = createLiveSearchPlan({ request: { query: "Nobelium", entityType: "actor", tenantId: "tenant_live", includeTelegram: true, createdAt: "2026-05-24T00:55:00.000Z" }, sources });
-    const nextWindow = createLiveSearchPlan({ request: { query: "Nobelium", entityType: "actor", tenantId: "tenant_live", includeTelegram: true, createdAt: "2026-05-24T01:00:00.000Z" }, sources });
+    const apt29 = createLiveSearchPlan({ request: { query: "APT29", entityType: "actor", tenantId: "tenant_live", includeTelegram: true, createdAt: "2026-05-24T00:05:00.000Z" }, actorIdentities, sources });
+    const nobelium = createLiveSearchPlan({ request: { query: "Nobelium", entityType: "actor", tenantId: "tenant_live", includeTelegram: true, createdAt: "2026-05-24T00:55:00.000Z" }, actorIdentities, sources });
+    const nextWindow = createLiveSearchPlan({ request: { query: "Nobelium", entityType: "actor", tenantId: "tenant_live", includeTelegram: true, createdAt: "2026-05-24T01:00:00.000Z" }, actorIdentities, sources });
     expect(apt29.dto.reuseKey).toBe(nobelium.dto.reuseKey);
     expect(nextWindow.dto.reuseKey).not.toBe(apt29.dto.reuseKey);
 
     const activeRun: CollectionRun = { id: "run_reuse", tenantId: "tenant_live", planId: apt29.plan.id, requestId: "different_request_id", requestHash: apt29.dto.reuseKey, status: "running", createdAt: "2026-05-24T00:05:00.000Z", updatedAt: "2026-05-24T00:05:00.000Z", taskCount: apt29.plan.tasks.length, reviewTaskCount: apt29.plan.reviewRequired.length, rejectedSourceCount: apt29.plan.rejected.length, captureCount: 0, incidentCount: 0 };
-    const attached = createLiveSearchPlan({ request: { query: "Nobelium", entityType: "actor", tenantId: "tenant_live", includeTelegram: true, createdAt: "2026-05-24T00:12:00.000Z" }, sources, activeRuns: [activeRun] });
+    const attached = createLiveSearchPlan({ request: { query: "Nobelium", entityType: "actor", tenantId: "tenant_live", includeTelegram: true, createdAt: "2026-05-24T00:12:00.000Z" }, actorIdentities, sources, activeRuns: [activeRun] });
     expect(attached.dto.activeRunId).toBe("run_reuse");
     expect(attached.dto.backpressureState).toBe("attached_to_active_run");
   });

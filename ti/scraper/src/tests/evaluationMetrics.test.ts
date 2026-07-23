@@ -5,13 +5,16 @@ import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { buildEvaluationMetrics } from "../pipeline/evaluationMetrics.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { hashContent } from "../utils.ts";
+import { actorIdentity } from "./apiTestHarness.ts";
 
 describe("durable evaluation metrics", () => {
   test("reports tenant-scoped precision, recall, timeliness, coverage, and immutable labels", async () => {
     const store = new InMemoryScraperStore();
     const at = "2026-07-20T00:00:00.000Z";
     store.saveSource({ id: "src_eval", tenantId: "tenant_eval", name: "Evaluation feed", type: "rss", url: "https://example.test/feed", accessMethod: "public_http", status: "active", risk: "low", trustScore: 0.8, crawlFrequencySeconds: 3600, legalNotes: "Public evaluation source.", metadata: { sourceFamily: "government_advisory" }, createdAt: at, updatedAt: at });
-    const saved = store.savePipelineResult(processCollectedItem({ tenantId: "tenant_eval", sourceId: "src_eval", url: "https://example.test/report", collectedAt: at, publishedAt: "2026-07-19T23:58:00.000Z", rawText: "APT29 used phishing against Northwind Health.", contentHash: hashContent("evaluation"), links: [], metadata: {}, sensitive: false }));
+    const saved = store.savePipelineResult(processCollectedItem({ tenantId: "tenant_eval", sourceId: "src_eval", url: "https://example.test/report", collectedAt: at, publishedAt: "2026-07-19T23:58:00.000Z", rawText: "APT29 used phishing against Northwind Health.", contentHash: hashContent("evaluation"), links: [], metadata: {}, sensitive: false }, {
+      actorIdentities: [actorIdentity("G0016", "APT29", ["Nobelium", "Cozy Bear", "Midnight Blizzard"])]
+    }));
     const actor = store.listExtractedEntities().find((entity: any) => entity.type === "actor");
     const falsePositive = store.saveExtractedEntity({ id: "entity_false_positive", tenantId: "tenant_eval", sourceId: "src_eval", captureId: saved.capture.id, type: "ttp", value: "password spraying", extractorVersion: "test-parser", confidence: 0.6 });
     const labels = [

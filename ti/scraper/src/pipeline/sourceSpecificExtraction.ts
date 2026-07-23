@@ -18,7 +18,7 @@ export function extractSourceSpecificEntities(item: CollectedItem, context: Extr
 
 function resolveActorEntity(entity: ExtractedEntity, identities: ActorIdentityRecord[]): ExtractedEntity {
   if (entity.type !== "actor" && entity.type !== "ransomware_family") return entity;
-  const resolution = resolveMitreActorIdentity(entity.value, identities);
+  const resolution = resolveMitreActorIdentity(entity.value, identities, { allowStructuredOnly: true });
   if (!resolution.candidates.length) return entity;
   const exact = !resolution.ambiguous && resolution.candidates.length === 1 && resolution.candidates[0].matchKinds.includes("canonical");
   const identity = resolution.candidates[0].identity;

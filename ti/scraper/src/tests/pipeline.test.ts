@@ -4,10 +4,17 @@ import { SOURCE_SPECIFIC_EXTRACTOR_VERSION } from "../pipeline/sourceSpecificExt
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { hashContent } from "../utils.ts";
 
+const actorIdentities = [
+  { id: "mitre:G0016", catalogId: "mitre", externalId: "G0016", canonicalName: "APT29", normalizedCanonicalName: "apt29", associatedNames: ["Nobelium", "Cozy Bear", "Midnight Blizzard"], status: "current" as const, lookupPolicy: "text_safe" as const, aptNumberDesignationPresent: true, sourceUrl: "https://attack.mitre.org/groups/G0016/", catalogVersion: "19.1", bundleSha256: "catalog", retrievedAt: "2026-07-20T00:00:00.000Z" },
+  { id: "catalog:shinyhunters", catalogId: "catalog", externalId: "shinyhunters", canonicalName: "ShinyHunters", normalizedCanonicalName: "shinyhunters", associatedNames: [], status: "current" as const, lookupPolicy: "text_safe" as const, aptNumberDesignationPresent: false, sourceUrl: "https://example.test/catalog/shinyhunters", catalogVersion: "1", bundleSha256: "catalog", retrievedAt: "2026-07-20T00:00:00.000Z" },
+  { id: "mitre:G1015", catalogId: "mitre", externalId: "G1015", canonicalName: "Scattered Spider", normalizedCanonicalName: "scattered spider", associatedNames: [], status: "current" as const, lookupPolicy: "text_safe" as const, aptNumberDesignationPresent: false, sourceUrl: "https://attack.mitre.org/groups/G1015/", catalogVersion: "19.1", bundleSha256: "catalog", retrievedAt: "2026-07-20T00:00:00.000Z" },
+  { id: "ransomware-live:akira", catalogId: "ransomware-live", externalId: "akira", canonicalName: "Akira", normalizedCanonicalName: "akira", associatedNames: [], status: "current" as const, lookupPolicy: "text_safe" as const, aptNumberDesignationPresent: false, sourceUrl: "https://www.ransomware.live/", catalogVersion: "2026-07-20", bundleSha256: "catalog", retrievedAt: "2026-07-20T00:00:00.000Z" },
+];
+
 describe("compact pipeline value path", () => {
   test("extracts actor, victim, CVE and provenance from public text", () => {
     const rawText = "APT29 used phishing against Northwind Health with CVE-2026-1234.";
-    const result = processCollectedItem({ sourceId: "src_public", url: "https://example.test/report", title: "APT29 report", collectedAt: "2026-06-21T00:00:00.000Z", rawText, contentHash: hashContent(rawText), links: [], metadata: {}, sensitive: false });
+    const result = processCollectedItem({ sourceId: "src_public", url: "https://example.test/report", title: "APT29 report", collectedAt: "2026-06-21T00:00:00.000Z", rawText, contentHash: hashContent(rawText), links: [], metadata: {}, sensitive: false }, { actorIdentities });
     expect(result.entities.some((entity: any) => entity.type === "actor")).toBe(true);
     expect(result.entities.some((entity: any) => entity.type === "victim")).toBe(true);
     expect(result.indicators.some((indicator: any) => indicator.type === "cve")).toBe(true);
@@ -76,7 +83,7 @@ describe("compact pipeline value path", () => {
   });
 
   test("keeps actor aliases distinct and matches short names on token boundaries", () => {
-    const item = (rawText: string) => processCollectedItem({ sourceId: "src_alias", url: "https://example.test/alias", collectedAt: "2026-07-20T00:00:00.000Z", rawText, contentHash: hashContent(rawText), links: [], metadata: {}, sensitive: false });
+    const item = (rawText: string) => processCollectedItem({ sourceId: "src_alias", url: "https://example.test/alias", collectedAt: "2026-07-20T00:00:00.000Z", rawText, contentHash: hashContent(rawText), links: [], metadata: {}, sensitive: false }, { actorIdentities });
     const actors = item("ShinyHunters was mentioned alongside Scattered Spider.").entities.filter((entity: any) => entity.type === "actor").map((entity: any) => entity.value);
     expect(actors).toEqual(expect.arrayContaining(["ShinyHunters", "Scattered Spider"]));
     expect(item("A malware report says ransomware activity increased. Google Play Protect blocked the unrelated Android app.").entities.some((entity: any) => entity.type === "ransomware_family" && entity.value === "Play")).toBe(false);
@@ -84,7 +91,7 @@ describe("compact pipeline value path", () => {
   });
 
   test("does not promote actor classifications without a current catalog identity", () => {
-    const item = (rawText: string, id: string) => processCollectedItem({ sourceId: `src_${id}`, url: `https://example.test/${id}`, collectedAt: "2026-07-20T00:00:00.000Z", rawText, contentHash: hashContent(rawText), links: [], metadata: {}, sensitive: false });
+    const item = (rawText: string, id: string) => processCollectedItem({ sourceId: `src_${id}`, url: `https://example.test/${id}`, collectedAt: "2026-07-20T00:00:00.000Z", rawText, contentHash: hashContent(rawText), links: [], metadata: {}, sensitive: false }, { actorIdentities });
     const store = new InMemoryScraperStore();
 
     store.savePipelineResult(item("The Akira ransomware group claimed a new victim.", "ransomware"));

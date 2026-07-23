@@ -8,8 +8,11 @@ import { InMemoryObjectEvidenceStore } from "./memoryObjectEvidenceStore.ts";
 import { installMemoryStoreReplayMethods } from "./memoryStoreReplayMethods.ts";
 import { canonicalizeUrl, captureDedupeKey, dedupeIndexKeys, enforceSensitiveMetadataOnly, prepareCapture } from "./memoryStoreHelpers.ts";
 import { nowIso, stableId } from "../utils.ts";
-import { canonicalActorIdentity, resolveMitreActorIdentity, type ActorIdentityRecord, type MitreActorCatalogSnapshot, type MitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
+import { canonicalActorIdentity, normalizeActorLabel, resolveMitreActorIdentity, type ActorIdentityRecord, type MitreActorCatalogSnapshot } from "../pipeline/mitreActorCatalog.ts";
+import type { RansomwareOperationCatalogSnapshot } from "../pipeline/ransomwareOperationCatalog.ts";
 export interface RawEvidenceStore extends CaptureMetadataStore {} export interface ScraperStore extends CaptureMetadataStore {}
+export type ActorIdentityCatalogSnapshot = MitreActorCatalogSnapshot | RansomwareOperationCatalogSnapshot;
+export type ActorIdentityCatalogProvenance = { sourceId: string; captureId: string; importedAt?: string };
 const mapValues = <T>(map: Map<string, T>) => [...map.values()];
 const put = <T extends { id: string }>(map: Map<string, T>, item: T) => (map.set(item.id, item), item);
 export class InMemoryScraperStore implements ScraperStore {
@@ -132,7 +135,7 @@ export class InMemoryScraperStore implements ScraperStore {
   saveIndicator(indicator: any) { return this.putScoped(this.indicators, indicator); } getIndicator(id: string) { return this.indicators.get(id); } listIndicators() { return mapValues(this.indicators); }
   saveActorProfile(profile: any) {
     const stored = this.putScoped(this.actorProfiles, profile);
-    const aliases = unique([...(profile.aliases ?? []), profile.canonicalName]);
+    const aliases = activeActorProfile(profile) ? unique([...(profile.aliases ?? []), profile.canonicalName]) : [];
     const active = new Set(aliases.map((alias) => alias.toLowerCase()));
     for (const [id, record] of this.actorAliases) if (record.actorProfileId === profile.id && !active.has(record.normalizedAlias)) this.actorAliases.delete(id);
     for (const alias of aliases) {
@@ -162,8 +165,13 @@ export class InMemoryScraperStore implements ScraperStore {
     }
     return stored;
   }
-  getActorProfile(id: string) { return this.actorProfiles.get(id); } listActorProfiles() { return mapValues(this.actorProfiles).filter(activeActorProfile); }
-  getActorAlias(id: string) { return this.actorAliases.get(id); } listActorAliases() { return mapValues(this.actorAliases).filter((alias: any) => activeActorProfile(this.actorProfiles.get(alias.actorProfileId))); }
+  getActorProfile(id: string) { return this.actorProfiles.get(id); }
+  listActorProfiles() { return mapValues(this.actorProfiles).filter((profile: any) => activeActorProfile(profile) && this.actorProfileIdentityIsCurrent(profile)); }
+  getActorAlias(id: string) { return this.actorAliases.get(id); }
+  listActorAliases() { return mapValues(this.actorAliases).filter((alias: any) => {
+    const profile = this.actorProfiles.get(alias.actorProfileId);
+    return activeActorProfile(profile) && this.actorProfileIdentityIsCurrent(profile);
+  }); }
   protected actorProfilesForPersistence() { return mapValues(this.actorProfiles); }
   protected actorAliasesForPersistence() { return mapValues(this.actorAliases); }
   protected hydrateActorAliasSnapshot(alias: any) { return put(this.actorAliases, alias); }
@@ -171,14 +179,65 @@ export class InMemoryScraperStore implements ScraperStore {
   async listActorAliasesForOwnership() { return this.actorAliasesForPersistence(); }
   async listActorProfileIdentityHistoryForOwnership(): Promise<any[]> { return []; }
   async replaceActorProfileIdentityHistoryForRetention(_record: any): Promise<any | undefined> { return undefined; }
-  replaceActorIdentityCatalog(snapshot: MitreActorCatalogSnapshot, provenance: { sourceId: string; captureId: string; importedAt?: string }) {
+  protected reconcileActorProfilesForCatalog(at: string, catalogId?: string) {
+    const archivedActorProfileIds: string[] = [];
+    const reboundActorProfileIds: string[] = [];
+    for (const profile of this.actorProfilesForPersistence()) {
+      if (!activeActorProfile(profile)) continue;
+      const identityIds = unique(profile.actorIdentityIds ?? []);
+      if (!this.actorIdentities.size && !identityIds.length) continue;
+      const relevant = !catalogId || !identityIds.length || identityIds.some((id) => id.startsWith(`${catalogId}:`) || this.actorIdentities.get(id)?.catalogId === catalogId);
+      if (!relevant) continue;
+      const identity = currentActorProfileIdentity(profile, this.listActorIdentities());
+      if (identity) {
+        if (identityIds.length !== 1 || identityIds[0] !== identity.id || profile.canonicalName !== identity.canonicalName || profile.normalizedName !== identity.normalizedCanonicalName) {
+          const activeAliases = uniqueActorAliases([identity.canonicalName, ...identity.associatedNames]);
+          const { identityResolutionReason: _archivedReason, ...preserved } = profile;
+          this.saveActorProfile({
+            ...preserved,
+            canonicalName: identity.canonicalName,
+            normalizedName: identity.normalizedCanonicalName,
+            aliases: activeAliases,
+            retiredAliases: uniqueActorAliases([
+              ...(profile.retiredAliases ?? []),
+              ...[profile.canonicalName, ...(profile.aliases ?? [])].filter((alias) => !activeAliases.some((active) => active.toLowerCase() === String(alias).toLowerCase()))
+            ]),
+            actorIdentityIds: [identity.id],
+            identityResolutionState: "canonical",
+            updatedAt: at
+          });
+          reboundActorProfileIds.push(profile.id);
+        }
+        continue;
+      }
+      archivedActorProfileIds.push(this.saveActorProfile({
+        ...profile,
+        normalizedName: `archived:${profile.id}`,
+        aliases: [],
+        identityResolutionState: "archived",
+        identityResolutionReason: "inactive_identity",
+        updatedAt: at
+      }).id);
+    }
+    return { archivedActorProfileIds, reboundActorProfileIds };
+  }
+  private actorProfileIdentityIsCurrent(profile: any): boolean {
+    const identityIds = unique(profile?.actorIdentityIds ?? []);
+    if (!this.actorIdentities.size) return identityIds.length === 0;
+    return Boolean(currentActorProfileIdentity(profile, this.listActorIdentities()));
+  }
+  replaceActorIdentityCatalog(snapshot: ActorIdentityCatalogSnapshot, provenance: ActorIdentityCatalogProvenance) {
     this.assertOrganizationWritable(snapshot);
     const incomingIds = new Set(snapshot.identities.map((identity) => identity.id));
     if (incomingIds.size !== snapshot.identities.length || snapshot.counts.totalIdentityCount !== snapshot.identities.length) throw new Error("Actor identity catalog count mismatch.");
     const importedAt = provenance.importedAt ?? snapshot.retrievedAt;
     const previous = this.actorIdentityCatalogs.get(snapshot.catalogId);
-    const retired = this.listActorIdentities().filter((identity: any) => identity.catalogId === snapshot.catalogId && !incomingIds.has(identity.id)).map((identity: any) => ({ ...identity, status: "retired", retiredAt: importedAt, updatedAt: importedAt }));
-    const identities = snapshot.identities.map((identity: MitreActorIdentity) => ({ ...identity, sourceId: provenance.sourceId, captureId: provenance.captureId, importedAt, updatedAt: importedAt }));
+    if (previous?.authoritativeManifestValidated && snapshot.authoritativeManifestValidated) {
+      const missingIds = (previous.identityIds ?? []).filter((id: string) => !incomingIds.has(id));
+      if (missingIds.length) throw new Error(`Actor identity catalog ${snapshot.catalogId} omitted ${missingIds.length} identities from the last accepted authoritative manifest.`);
+    }
+    const retired = this.listActorIdentities().filter((identity: any) => identity.catalogId === snapshot.catalogId && !incomingIds.has(identity.id)).map((identity: any) => ({ ...identity, status: "retired", retiredAt: identity.retiredAt ?? importedAt, updatedAt: importedAt }));
+    const identities = snapshot.identities.map((identity: ActorIdentityRecord) => ({ ...identity, sourceId: provenance.sourceId, captureId: provenance.captureId, importedAt, updatedAt: importedAt }));
     const { identities: _omitted, ...catalog } = snapshot;
     put(this.actorIdentityCatalogs, {
       ...catalog,
@@ -191,20 +250,9 @@ export class InMemoryScraperStore implements ScraperStore {
       identityIds: identities.map((identity) => identity.id)
     });
     for (const identity of [...identities, ...retired]) put(this.actorIdentities, identity);
-    const archivedActorProfileIds = this.listActorProfiles()
-      .filter((profile: any) => {
-        const identityIds = unique(profile.actorIdentityIds ?? []);
-        return !identityIds.length || identityIds.some((id) => this.actorIdentities.get(id)?.status !== "current");
-      })
-      .map((profile: any) => this.saveActorProfile({
-        ...profile,
-        normalizedName: `archived:${profile.id}`,
-        aliases: [],
-        identityResolutionState: "archived",
-        identityResolutionReason: "inactive_identity",
-        updatedAt: importedAt
-      }).id);
-    return { catalogId: snapshot.catalogId, currentIdentityCount: snapshot.counts.currentIdentityCount, retainedHistoricalIdentityCount: retired.length, archivedActorProfileIds, bundleSha256: snapshot.bundleSha256 };
+    for (const identity of reconcileCrossCatalogActorIdentities(this.listActorIdentities())) put(this.actorIdentities, identity);
+    const { archivedActorProfileIds, reboundActorProfileIds } = this.reconcileActorProfilesForCatalog(importedAt, snapshot.catalogId);
+    return { catalogId: snapshot.catalogId, currentIdentityCount: snapshot.counts.currentIdentityCount, retainedHistoricalIdentityCount: retired.length, archivedActorProfileIds, reboundActorProfileIds, bundleSha256: snapshot.bundleSha256 };
   }
   protected hydrateActorIdentityCatalogSnapshot(catalog: any) { return put(this.actorIdentityCatalogs, catalog); }
   protected hydrateActorIdentitySnapshot(identity: any) { return put(this.actorIdentities, identity); }
@@ -387,15 +435,15 @@ function normalized(record: any): string { return String(record.normalizedValue 
 function activeActorProfile(profile: any): boolean { return Boolean(profile && profile.identityResolutionState !== "archived"); }
 type ActorProfileResolution = { profileId: string; tenantId?: string; canonicalName: string; normalizedName: string; aliases: string[]; actorIdentityIds: string[] };
 function actorProfileResolution(store: any, capture: any, entity: any): ActorProfileResolution | undefined {
+  if (entity.assertionKind === "mention") return undefined;
   const identities = (store.listActorIdentities?.() ?? []) as ActorIdentityRecord[];
-  const current = identities.filter((identity) => identity.status === "current");
   const explicitIds = unique(entity.actorIdentityIds ?? []);
   let identity: ActorIdentityRecord | undefined;
   if (explicitIds.length) {
     const explicit = explicitIds.map((id) => identities.find((candidate) => candidate.id === id));
-    if (explicit.some((candidate) => !candidate || candidate.status !== "current")) return undefined;
-    const canonical = uniqueObjects(explicit.map((candidate) => canonicalActorIdentity(candidate!, current)), (candidate) => candidate.id);
-    identity = canonical.length === 1 ? canonical[0] : undefined;
+    if (explicit.some((candidate) => !candidate)) return undefined;
+    const canonical = uniqueObjects(explicit.map((candidate) => canonicalActorIdentity(candidate!, identities)), (candidate) => candidate.id);
+    identity = canonical.length === 1 && canonical[0].status === "current" ? canonical[0] : undefined;
   } else {
     const resolved = resolveMitreActorIdentity(String(entity.value ?? ""), identities);
     if (resolved.ambiguous) return undefined;
@@ -403,7 +451,7 @@ function actorProfileResolution(store: any, capture: any, entity: any): ActorPro
   }
   const tenantId = publicActorTenant(capture.tenantId);
   const scope = tenantId ?? "global";
-  if (!identity) return undefined;
+  if (!identity || identity.status !== "current") return undefined;
   const observedAliases = [entity.rawValue, entity.value, ...(entity.aliases ?? [])].filter((label) => actorLabelBelongsTo(label, identity!, identities));
   return {
     profileId: stableId("actor", `${scope}:${identity.id}`),
@@ -415,18 +463,52 @@ function actorProfileResolution(store: any, capture: any, entity: any): ActorPro
   };
 }
 function publicActorTenant(tenantId: unknown): string | undefined { return !tenantId || tenantId === "default" ? undefined : String(tenantId); }
+function reconcileCrossCatalogActorIdentities(identities: any[]): any[] {
+  const mitre = identities.filter((identity) => identity.catalogId === "mitre-attack-enterprise" && identity.status === "current");
+  return identities.filter((identity) => identity.catalogId === "ransomware-live-current-operations").map((identity) => {
+    const { canonicalIdentityId: _canonicalIdentityId, canonicalIdentityEvidence: _canonicalIdentityEvidence, ...unmapped } = identity;
+    const normalizedCanonicalName = normalizeActorLabel(identity.canonicalName);
+    const labelMatches = mitre.filter((candidate) => [candidate.canonicalName, ...(candidate.associatedNames ?? [])]
+      .some((label) => normalizeActorLabel(label) === normalizedCanonicalName));
+    const matches = labelMatches.length === 1 && normalizeActorLabel(labelMatches[0].canonicalName) === normalizedCanonicalName
+      ? [{ candidate: labelMatches[0], matchedLabel: identity.canonicalName }]
+      : [];
+    if (matches.length !== 1 || !identity.captureId || !matches[0].candidate.captureId) return unmapped;
+    const { candidate, matchedLabel } = matches[0];
+    return {
+      ...unmapped,
+      canonicalIdentityId: candidate.id,
+      canonicalIdentityEvidence: {
+        relationship: "same_as",
+        matchedLabel,
+        sourceCatalogId: identity.catalogId,
+        sourceCatalogVersion: identity.catalogVersion,
+        sourceCaptureId: identity.captureId,
+        targetCatalogId: candidate.catalogId,
+        targetCatalogVersion: candidate.catalogVersion,
+        targetCaptureId: candidate.captureId
+      }
+    };
+  });
+}
 function actorProfileMatches(store: any, profile: any, resolution: ActorProfileResolution): boolean {
   if (publicActorTenant(profile.tenantId) !== resolution.tenantId) return false;
   const identities = (store.listActorIdentities?.() ?? []) as ActorIdentityRecord[];
-  const current = identities.filter((identity) => identity.status === "current");
-  const explicit = uniqueObjects((profile.actorIdentityIds ?? []).map((id: string) => identities.find((identity) => identity.id === id)).filter((identity: any) => identity?.status === "current").map((identity: any) => canonicalActorIdentity(identity, current)), (identity: any) => identity.id);
-  if (explicit.length) return explicit.length === 1 && explicit[0].id === resolution.actorIdentityIds[0];
-  if ((profile.actorIdentityIds ?? []).includes(resolution.actorIdentityIds[0])) return true;
+  const identityIds = unique(profile.actorIdentityIds ?? []);
+  if (identityIds.length) return currentActorProfileIdentity(profile, identities)?.id === resolution.actorIdentityIds[0];
   const candidates = uniqueObjects([profile.canonicalName, ...(profile.aliases ?? [])].flatMap((label: string) => {
     const match = resolveMitreActorIdentity(label, identities);
     return match.ambiguous ? [] : match.candidates.map((candidate) => candidate.identity);
   }), (identity: any) => identity.id);
   return candidates.length === 1 && candidates[0].id === resolution.actorIdentityIds[0];
+}
+function currentActorProfileIdentity(profile: any, identities: ActorIdentityRecord[]): ActorIdentityRecord | undefined {
+  const identityIds = unique(profile?.actorIdentityIds ?? []);
+  if (!identityIds.length) return undefined;
+  const explicit = identityIds.map((id) => identities.find((identity) => identity.id === id));
+  if (explicit.some((identity) => !identity)) return undefined;
+  const canonical = uniqueObjects(explicit.map((identity) => canonicalActorIdentity(identity!, identities)), (identity) => identity.id);
+  return canonical.length === 1 && canonical[0].status === "current" ? canonical[0] : undefined;
 }
 function actorLabelBelongsTo(label: unknown, identity: ActorIdentityRecord, identities: ActorIdentityRecord[]): boolean {
   if (typeof label !== "string" || !label.trim()) return false;

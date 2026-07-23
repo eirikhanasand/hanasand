@@ -51,10 +51,30 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
     const scope = resolveTenantScope(request, url);
     if (scope.error) return scope.error;
     const identities = ((options.store as any).listActorIdentities?.() ?? []).filter((record: any) => !record.tenantId || inTenantScope(record, scope.tenantId));
-    const captures = new Set(((options.store as any).listCaptures?.() ?? []).filter((record: any) => inTenantScope(record, scope.tenantId)).map((record: any) => record.id));
+    const catalogs = ((options.store as any).listActorIdentityCatalogs?.() ?? []).filter((record: any) => !record.tenantId || inTenantScope(record, scope.tenantId));
+    const catalogEvidenceCaptureIds = new Set([
+      ...catalogs.flatMap((catalog: any) => [catalog.captureId, ...(catalog.evidenceCaptureIds ?? [])]),
+      ...identities.map((identity: any) => identity.captureId)
+    ].filter(Boolean));
+    const captureRows = ((options.store as any).listCaptures?.() ?? []).filter((record: any) =>
+      inTenantScope(record, scope.tenantId) || (!record.tenantId && catalogEvidenceCaptureIds.has(record.id)));
+    const captures = new Set(captureRows.map((record: any) => record.id));
+    const catalogEvidenceHashes = new Set(captureRows.filter((record: any) => catalogEvidenceCaptureIds.has(record.id)).map((record: any) => record.contentHash));
     const profiles = ((options.store as any).listActorProfiles?.() ?? []).filter((record: any) => inTenantScope(record, scope.tenantId));
+    const ownershipProfiles = typeof (options.store as any).listActorProfilesForOwnership === "function"
+      ? (await (options.store as any).listActorProfilesForOwnership()).filter((record: any) => inTenantScope(record, scope.tenantId))
+      : profiles;
     const evidenceBacked = profiles.filter((profile: any) => Array.isArray(profile.captureIds) && profile.captureIds.some((captureId: string) => captures.has(captureId)));
     const recentCutoff = Date.now() - 90 * 86_400_000;
+    const currentIdentityIds = new Set(identities.filter((identity: any) => identity.status === "current").map((identity: any) => identity.id));
+    const identityActivity = identities.flatMap((identity: any) => (identity.activityEvidence ?? []).map((activity: any) => ({ ...activity, actorIdentityId: identity.id })))
+      .filter((activity: any) => currentIdentityIds.has(activity.actorIdentityId)
+        && typeof activity.contentHash === "string"
+        && catalogEvidenceHashes.has(activity.contentHash));
+    const activityIdentityIds = new Set(identityActivity.map((activity: any) => activity.actorIdentityId));
+    const recentActivityIdentityIds = new Set(identityActivity
+      .filter((activity: any) => Number.isFinite(Date.parse(activity.observedAt)) && Date.parse(activity.observedAt) >= recentCutoff)
+      .map((activity: any) => activity.actorIdentityId));
     return json({
       schemaVersion: "ti.actor_identity_coverage.v1",
       generatedAt: nowIso(),
@@ -62,8 +82,14 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
       activityCoverage: {
         actorProfileCount: profiles.length,
         evidenceBackedProfileCount: evidenceBacked.length,
-        recentActivityProfileCount: evidenceBacked.filter((profile: any) => Number.isFinite(Date.parse(profile.lastSeenAt)) && Date.parse(profile.lastSeenAt) >= recentCutoff).length
-      }
+        recentActivityProfileCount: evidenceBacked.filter((profile: any) => Number.isFinite(Date.parse(profile.lastSeenAt)) && Date.parse(profile.lastSeenAt) >= recentCutoff).length,
+        catalogActivityIdentityCount: activityIdentityIds.size,
+        recentCatalogActivityIdentityCount: recentActivityIdentityIds.size,
+        invalidActiveProfileCount: ownershipProfiles.filter((profile: any) => profile.identityResolutionState !== "archived" && (!Array.isArray(profile.actorIdentityIds)
+          || profile.actorIdentityIds.length === 0
+          || profile.actorIdentityIds.some((id: string) => !currentIdentityIds.has(id)))).length
+      },
+      exclusions: catalogs.flatMap((catalog: any) => catalog.governance?.excludedDataClasses ?? []).filter((value: string, index: number, rows: string[]) => rows.indexOf(value) === index)
     });
   }
   if (url.pathname === "/v1/intel/evaluation" && request.method === "GET") {

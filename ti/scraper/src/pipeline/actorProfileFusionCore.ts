@@ -1,6 +1,5 @@
 // @ts-nocheck
 import { clampScore } from "../utils.ts";
-import { actorAliasesFor } from "./actorAliases.ts";
 import { buildLiveTiSearchSummary } from "./intelligenceProfiles.ts";
 import type { FuseActorProfileInput, FusedActorProfile } from "./actorProfileFusionTypes.ts";
 import { deltaSummary, latest, rowsFor, uncertainty, uniq } from "./actorProfileFusionUtils.ts";
@@ -10,7 +9,7 @@ export function fuseActorProfile(input: FuseActorProfileInput): FusedActorProfil
   const rows = rowsFor(input);
   const summary = rows.length ? buildLiveTiSearchSummary(input.query, input.evidence) : undefined;
   const actor = input.baseline?.actor ?? summary?.query ?? input.query;
-  const aliases = uniq([...(input.baseline?.aliases ?? []), ...actorAliasesFor(actor), ...actorAliasesFor(input.query), ...rows.flatMap((r) => r.result.entities.filter((e) => e.type === "actor").flatMap((e) => [e.value, ...(e.aliases ?? [])]))]);
+  const aliases = uniq([...(input.baseline?.aliases ?? []), ...rows.flatMap((r) => r.result.entities.filter((e) => e.type === "actor").flatMap((e) => [e.value, ...(e.aliases ?? [])]))]);
   const targets = {
     victims: uniq([...(input.baseline?.targets?.victims ?? []), ...rows.flatMap((r) => r.dto.targets?.victims ?? [])]),
     sectors: uniq([...(input.baseline?.targets?.sectors ?? []), ...rows.flatMap((r) => r.dto.targets?.sectors ?? [])]),

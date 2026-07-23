@@ -48,7 +48,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "027_reconcile_delivery_latencies", path: fileURLToPath(new URL("../../migrations/027_reconcile_delivery_latencies.sql", import.meta.url)) },
   { version: "028_remove_generic_business_labels", path: fileURLToPath(new URL("../../migrations/028_remove_generic_business_labels.sql", import.meta.url)) },
   { version: "029_scope_capture_dedupe_by_tenant", path: fileURLToPath(new URL("../../migrations/029_scope_capture_dedupe_by_tenant.sql", import.meta.url)) },
-  { version: "030_reconcile_actor_profiles", path: fileURLToPath(new URL("../../migrations/030_reconcile_actor_profiles.sql", import.meta.url)) }
+  { version: "030_reconcile_actor_profiles", path: fileURLToPath(new URL("../../migrations/030_reconcile_actor_profiles.sql", import.meta.url)) },
+  { version: "031_archive_inactive_actor_profiles", path: fileURLToPath(new URL("../../migrations/031_archive_inactive_actor_profiles.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -229,6 +230,15 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     await this.batch(() => {
       for (const source of snapshot.sources ?? []) this.saveSource(normalizeLegacySourceForImport(source));
       for (const capture of snapshot.captures ?? []) this.saveCapture(capture);
+      for (const identity of snapshot.actorIdentities ?? []) this.hydrateActorIdentitySnapshot(identity);
+      for (const catalog of snapshot.actorIdentityCatalogs ?? []) this.replaceActorIdentityCatalog({
+        ...catalog,
+        identities: (catalog.identityIds ?? []).map((id: string) => this.getActorIdentity(id)).filter(Boolean)
+      }, {
+        sourceId: catalog.sourceId,
+        captureId: catalog.captureId,
+        importedAt: catalog.importedAt ?? catalog.retrievedAt
+      });
       for (const incident of snapshot.incidents ?? []) {
         const capture = this.getCapture(incident.captureId);
         if (capture) this.savePipelineResult({ capture, incident, entities: incident.entities ?? [], indicators: incident.indicators ?? [] });
@@ -334,7 +344,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return stored;
   }
 
-  override replaceActorIdentityCatalog(snapshot: any, provenance: any): any {
+  override replaceActorIdentityCatalog(
+    snapshot: Parameters<InMemoryScraperStore["replaceActorIdentityCatalog"]>[0],
+    provenance: Parameters<InMemoryScraperStore["replaceActorIdentityCatalog"]>[1]
+  ) {
     this.pipelineDepth++;
     let result;
     try {
@@ -343,14 +356,19 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       this.pipelineDepth--;
     }
     const catalog = structuredClone(this.getActorIdentityCatalog(snapshot.catalogId));
-    const identities = structuredClone(this.listActorIdentities().filter((identity: any) => identity.catalogId === snapshot.catalogId));
-    const archivedProfiles = result.archivedActorProfileIds.map((id: string) => structuredClone(this.getActorProfile(id)));
+    const identities = structuredClone(this.listActorIdentities());
+    const archivedIds = new Set(result.archivedActorProfileIds);
+    const changedProfiles = [...result.archivedActorProfileIds, ...result.reboundActorProfileIds]
+      .map((id: string) => structuredClone(this.getActorProfile(id)));
     this.enqueue(`actor-identity-catalog:${catalog.id}`, () => persistActorIdentityCatalog(
       this.sql,
       catalog,
       identities,
       async (transaction) => {
-        for (const profile of archivedProfiles) await this.persistActorProfile(profile, transaction);
+        for (const profile of changedProfiles) {
+          if (archivedIds.has(profile.id)) await this.persistActorProfileArchiveHistory(profile.id, catalog.importedAt, transaction);
+          await this.persistActorProfile(profile, transaction);
+        }
       }
     ));
     return result;
@@ -575,6 +593,22 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     for (const row of claimEvidence) super.saveClaimEvidence(readRecord(row));
     for (const row of claimReviews) super.saveClaimReview(readRecord(row));
     for (const row of workflows) this.hydrateWorkflow(String(row.record_type), readRecord(row));
+    });
+    this.pipelineDepth++;
+    const reconciledAt = new Date().toISOString();
+    let reconciliation = { archivedActorProfileIds: [] as string[], reboundActorProfileIds: [] as string[] };
+    try {
+      reconciliation = this.reconcileActorProfilesForCatalog(reconciledAt);
+    } finally {
+      this.pipelineDepth--;
+    }
+    const archivedIds = new Set(reconciliation.archivedActorProfileIds);
+    const changedIds = [...reconciliation.archivedActorProfileIds, ...reconciliation.reboundActorProfileIds];
+    if (changedIds.length) await this.sql.begin(async (transaction) => {
+      for (const id of changedIds) {
+        if (archivedIds.has(id)) await this.persistActorProfileArchiveHistory(id, reconciledAt, transaction);
+        await this.persistActorProfile(this.getActorProfile(id), transaction);
+      }
     });
   }
 
@@ -871,6 +905,44 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         )
       `;
     }
+  }
+
+  private async persistActorProfileArchiveHistory(profileId: string, reconciledAt: string, sql: any): Promise<void> {
+    await sql`
+      INSERT INTO threat_intel.actor_profile_identity_history (
+        id, actor_profile_id, canonical_actor_profile_id, reconciliation_key,
+        resolution_status, original_tenant_id, original_record, reference_snapshot, reconciled_at
+      )
+      SELECT
+        'actor-profile-history-' || md5(profile.id),
+        profile.id,
+        NULL,
+        (CASE WHEN profile.tenant_id IS NULL OR profile.tenant_id = 'default' THEN '' ELSE profile.tenant_id END) || ':profile:' || profile.id,
+        'inactive_identity',
+        profile.tenant_id,
+        profile.record,
+        jsonb_build_object(
+          'aliases', COALESCE((SELECT jsonb_agg(to_jsonb(alias.*) ORDER BY alias.id) FROM threat_intel.actor_aliases alias WHERE alias.actor_profile_id = profile.id), '[]'::jsonb),
+          'evidenceLinks', COALESCE((SELECT jsonb_agg(to_jsonb(link) ORDER BY link.id) FROM threat_intel.evidence_links link WHERE link.subject_type = 'actor_profile' AND link.subject_id = profile.id), '[]'::jsonb),
+          'claims', COALESCE((SELECT jsonb_agg(to_jsonb(claim) ORDER BY claim.id) FROM threat_intel.intelligence_claims claim WHERE claim.subject_type = 'actor_profile' AND claim.subject_id = profile.id), '[]'::jsonb),
+          'claimEvidence', COALESCE((
+            SELECT jsonb_agg(to_jsonb(evidence) ORDER BY evidence.id)
+            FROM threat_intel.claim_evidence evidence
+            WHERE (evidence.subject_type = 'actor_profile' AND evidence.subject_id = profile.id)
+              OR evidence.claim_id IN (
+                SELECT claim.id
+                FROM threat_intel.intelligence_claims claim
+                WHERE claim.subject_type = 'actor_profile' AND claim.subject_id = profile.id
+              )
+          ), '[]'::jsonb),
+          'claimReviews', COALESCE((SELECT jsonb_agg(to_jsonb(review) ORDER BY review.id) FROM threat_intel.claim_reviews review JOIN threat_intel.intelligence_claims claim ON claim.id = review.claim_id WHERE claim.subject_type = 'actor_profile' AND claim.subject_id = profile.id), '[]'::jsonb),
+          'workflows', COALESCE((SELECT jsonb_agg(to_jsonb(workflow) ORDER BY workflow.record_type, workflow.id) FROM threat_intel.workflow_records workflow WHERE workflow.record->>'subjectType' = 'actor_profile' AND workflow.record->>'subjectId' = profile.id), '[]'::jsonb)
+        ),
+        ${reconciledAt}
+      FROM threat_intel.actor_profiles profile
+      WHERE profile.id = ${profileId}
+      ON CONFLICT (actor_profile_id) DO NOTHING
+    `;
   }
 
   private async persistCollectionRun(run: any, sql: any = this.sql): Promise<void> {
@@ -1392,6 +1464,7 @@ function count(value: unknown): number { const parsed = Number(value); return Nu
 function nullableNonNegative(value: unknown): number | null { const parsed = Number(value); return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : null; }
 function nullableScore(value: unknown): number | null { return value === undefined || value === null ? null : score(value); }
 function actorAliasRecords(profile: any, firstSeenAt: string, lastSeenAt: string): any[] {
+  if (profile.identityResolutionState === "archived") return [];
   const aliases = [...new Map(
     [...(profile.aliases ?? []), profile.canonicalName]
       .filter((value) => typeof value === "string" && value.trim())

@@ -4,6 +4,7 @@ import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { DEFAULT_RETENTION_POLICIES, defaultRetentionClassForCapture, enforceRetentionPolicy, normalizeDefaultRetentionClasses, simulateRetentionEnforcement } from "../storage/retention.ts";
 import { InMemoryObjectEvidenceStore } from "../storage/memoryObjectEvidenceStore.ts";
 import { hashContent } from "../utils.ts";
+import { actorIdentity } from "./apiTestHarness.ts";
 import { fixtureCapture } from "./helpers/storageFixtures.ts";
 
 describe("storage provenance replay and retention", () => {
@@ -22,7 +23,9 @@ describe("storage provenance replay and retention", () => {
   test("builds immutable provenance chains for APT29 claims", () => {
     const store = new InMemoryScraperStore();
     const rawText = "APT29 used phishing against Example Health with CVE-2026-1234.";
-    const result = processCollectedItem({ sourceId: "src_apt29", taskId: "task_apt29", url: "https://example.test/apt29", collectedAt: "2026-05-24T12:00:00.000Z", title: "APT29 report", rawText, contentHash: hashContent(rawText), links: [], metadata: { fixture: true }, sensitive: false });
+    const result = processCollectedItem({ sourceId: "src_apt29", taskId: "task_apt29", url: "https://example.test/apt29", collectedAt: "2026-05-24T12:00:00.000Z", title: "APT29 report", rawText, contentHash: hashContent(rawText), links: [], metadata: { fixture: true }, sensitive: false }, {
+      actorIdentities: [actorIdentity("G0016", "APT29", ["Nobelium", "Cozy Bear", "Midnight Blizzard"])]
+    });
     store.savePipelineResult(result);
     const chain = store.queries().provenanceForClaim({ actor: "APT29" })[0];
     expect(chain).toMatchObject({ sourceId: "src_apt29", taskId: "task_apt29", captureId: result.capture.id, incidentId: result.incident?.id, extractorVersion: result.incident?.extractorVersion, contentHash: result.capture.contentHash, confidence: result.incident?.confidence });

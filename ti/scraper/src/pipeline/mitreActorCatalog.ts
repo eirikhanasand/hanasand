@@ -1,31 +1,64 @@
 import { createHash } from "node:crypto";
 
 export const MITRE_ENTERPRISE_ACTOR_CATALOG_URL = "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/enterprise-attack/enterprise-attack.json";
+const MITRE_ENTERPRISE_CATALOG_MANIFESTS: Record<string, { total: number; current: number; deprecated: number; revoked: number }> = {
+  "19.1": { total: 189, current: 174, deprecated: 9, revoked: 6 }
+};
 
 export type MitreActorIdentityStatus = "current" | "deprecated" | "revoked" | "retired";
+export type ActorLookupPolicy = "text_safe" | "structured_only";
 
-export type MitreActorIdentity = {
+export type ActorIdentityRecord = {
   id: string;
-  catalogId: "mitre-attack-enterprise";
+  catalogId: string;
   externalId: string;
-  stixId: string;
   canonicalName: string;
   normalizedCanonicalName: string;
   associatedNames: string[];
   status: MitreActorIdentityStatus;
+  lookupPolicy?: ActorLookupPolicy;
   aptNumberDesignationPresent: boolean;
+  sourceUrl: string;
+  catalogVersion: string;
+  catalogModifiedAt?: string;
+  bundleSha256: string;
+  retrievedAt: string;
+  authoritativeManifestValidated?: true;
+  createdAt?: string;
+  modifiedAt?: string;
+  revokedByExternalId?: string;
+  relatedOperationNames?: string[];
+  lineageRelations?: Array<{ relationship: "evolved_from"; name: string; targetIdentityId?: string }>;
+  canonicalIdentityId?: string;
+  canonicalIdentityEvidence?: {
+    relationship: "same_as";
+    matchedLabel: string;
+    sourceCatalogId: string;
+    sourceCatalogVersion: string;
+    sourceCaptureId: string;
+    targetCatalogId: string;
+    targetCatalogVersion: string;
+    targetCaptureId: string;
+  };
+  activityEvidence?: Array<{
+    kind: "recent_public_claim" | "reachable_publication_location";
+    observedAt: string;
+    count: number;
+    contentHash: string;
+  }>;
+};
+
+export type MitreActorIdentity = ActorIdentityRecord & {
+  catalogId: "mitre-attack-enterprise";
+  stixId: string;
+  lookupPolicy: ActorLookupPolicy;
   createdAt: string;
   modifiedAt: string;
   description?: string;
   domains: string[];
   contributors: string[];
-  sourceUrl: string;
   referenceUrls: string[];
-  revokedByExternalId?: string;
-  catalogVersion: string;
   catalogModifiedAt: string;
-  bundleSha256: string;
-  retrievedAt: string;
 };
 
 export type MitreActorAliasCollision = {
@@ -66,24 +99,10 @@ export type MitreActorResolution = {
     identity: ActorIdentityRecord;
     matchKinds: Array<"canonical" | "associated">;
     matchedLabels: string[];
+    matchedIdentityIds: string[];
+    resolutionKinds: Array<"direct" | "revoked_by" | "cross_catalog_alias">;
   }>;
   ambiguous: boolean;
-};
-
-export type ActorIdentityRecord = {
-  id: string;
-  catalogId: string;
-  externalId: string;
-  canonicalName: string;
-  normalizedCanonicalName: string;
-  associatedNames: string[];
-  status: MitreActorIdentityStatus;
-  aptNumberDesignationPresent: boolean;
-  sourceUrl: string;
-  catalogVersion: string;
-  catalogModifiedAt: string;
-  bundleSha256: string;
-  retrievedAt: string;
 };
 
 type JsonObject = Record<string, unknown>;
@@ -135,6 +154,7 @@ export function parseMitreActorCatalog(
       normalizedCanonicalName: normalizeActorLabel(canonicalName),
       associatedNames,
       status,
+      lookupPolicy: actorLookupPolicy(canonicalName),
       aptNumberDesignationPresent: labels.some(hasAptNumberDesignation),
       createdAt: iso(group.created, `${externalId} created`),
       modifiedAt: iso(group.modified, `${externalId} modified`),
@@ -152,8 +172,21 @@ export function parseMitreActorCatalog(
   }).sort((left, right) => left.externalId.localeCompare(right.externalId));
 
   const current = identities.filter((identity) => identity.status === "current");
-  const minimum = input.minimumCurrentIdentities ?? 100;
-  if (current.length < minimum) throw new Error(`MITRE actor catalog is incomplete: ${current.length} current identities, expected at least ${minimum}.`);
+  const manifest = MITRE_ENTERPRISE_CATALOG_MANIFESTS[catalogVersion];
+  if (input.minimumCurrentIdentities === undefined) {
+    if (!manifest) throw new Error(`MITRE actor catalog version ${catalogVersion} has no reviewed identity manifest.`);
+    const actual = {
+      total: identities.length,
+      current: current.length,
+      deprecated: identities.filter((identity) => identity.status === "deprecated").length,
+      revoked: identities.filter((identity) => identity.status === "revoked").length
+    };
+    if (Object.entries(manifest).some(([field, count]) => actual[field as keyof typeof actual] !== count)) {
+      throw new Error(`MITRE actor catalog ${catalogVersion} does not match its authoritative manifest: expected ${manifest.total}/${manifest.current}/${manifest.deprecated}/${manifest.revoked}, received ${actual.total}/${actual.current}/${actual.deprecated}/${actual.revoked}.`);
+    }
+  } else if (current.length < input.minimumCurrentIdentities) {
+    throw new Error(`MITRE actor catalog is incomplete: ${current.length} current identities, expected at least ${input.minimumCurrentIdentities}.`);
+  }
   const aliasCollisions = collisions(current);
   const associatedNames = current.flatMap((identity) => identity.associatedNames);
   const lookupLabels = current.flatMap((identity) => [identity.canonicalName, ...identity.associatedNames]);
@@ -167,6 +200,7 @@ export function parseMitreActorCatalog(
     bundleId: requiredString(bundle.id, "bundle id"),
     bundleSha256,
     retrievedAt: iso(input.retrievedAt, "catalog retrieval time"),
+    ...(input.minimumCurrentIdentities === undefined ? { authoritativeManifestValidated: true as const } : {}),
     counts: {
       totalIdentityCount: identities.length,
       currentIdentityCount: current.length,
@@ -183,35 +217,48 @@ export function parseMitreActorCatalog(
   };
 }
 
-export function resolveMitreActorIdentity(query: string, identities: readonly ActorIdentityRecord[]): MitreActorResolution {
+export function resolveMitreActorIdentity(
+  query: string,
+  identities: readonly ActorIdentityRecord[],
+  options: { allowStructuredOnly?: boolean } = {}
+): MitreActorResolution {
   const normalizedQuery = normalizeActorLabel(query);
-  const current = identities.filter((identity) => identity.status === "current");
-  const matched = current.flatMap((identity) => {
-    const canonical = normalizeActorLabel(identity.canonicalName) === normalizedQuery ? [identity.canonicalName] : [];
-    const associated = identity.associatedNames.filter((label) => normalizeActorLabel(label) === normalizedQuery);
+  const matched = identities.flatMap((identity) => {
+    const allowed = (label: string) => options.allowStructuredOnly === true || actorLookupPolicy(label) !== "structured_only";
+    const canonical = normalizeActorLabel(identity.canonicalName) === normalizedQuery && allowed(identity.canonicalName) ? [identity.canonicalName] : [];
+    const associated = identity.associatedNames.filter((label) => normalizeActorLabel(label) === normalizedQuery && allowed(label));
     if (!canonical.length && !associated.length) return [];
     return [{
       identity,
       matchKinds: [...(canonical.length ? ["canonical" as const] : []), ...(associated.length ? ["associated" as const] : [])],
-      matchedLabels: [...canonical, ...associated]
+      matchedLabels: [...canonical, ...associated],
+      matchedIdentityIds: [identity.id],
+      resolutionKinds: ["direct" as const]
     }];
   });
   const candidates = [...matched.reduce((groups, candidate) => {
-    const identity = canonicalActorIdentity(candidate.identity, current);
+    const identity = canonicalActorIdentity(candidate.identity, identities);
+    const resolutionKind: MitreActorResolution["candidates"][number]["resolutionKinds"][number] = identity.id === candidate.identity.id
+      ? "direct"
+      : candidate.identity.catalogId === "mitre-attack-enterprise" && candidate.identity.revokedByExternalId
+        ? "revoked_by"
+        : "cross_catalog_alias";
     const existing = groups.get(identity.id);
     groups.set(identity.id, existing ? {
       identity,
       matchKinds: [...new Set([...existing.matchKinds, ...candidate.matchKinds])],
-      matchedLabels: unique([...existing.matchedLabels, ...candidate.matchedLabels])
-    } : { ...candidate, identity });
+      matchedLabels: unique([...existing.matchedLabels, ...candidate.matchedLabels]),
+      matchedIdentityIds: unique([...existing.matchedIdentityIds, candidate.identity.id]),
+      resolutionKinds: [...new Set([...existing.resolutionKinds, resolutionKind])]
+    } : { ...candidate, identity, resolutionKinds: [resolutionKind] });
     return groups;
-  }, new Map<string, { identity: ActorIdentityRecord; matchKinds: Array<"canonical" | "associated">; matchedLabels: string[] }>()).values()];
+  }, new Map<string, MitreActorResolution["candidates"][number]>()).values()];
   return { query, normalizedQuery, candidates, ambiguous: candidates.length > 1 };
 }
 
 export function reconcileActorIdentityCoverage(identities: readonly ActorIdentityRecord[]) {
   const current = identities.filter((identity) => identity.status === "current");
-  const canonicalIds = new Set(current.map((identity) => canonicalActorIdentity(identity, current).id));
+  const canonicalIds = new Set(current.map((identity) => canonicalActorIdentity(identity, identities).id));
   const aliases = current.flatMap((identity) => identity.associatedNames);
   return {
     currentCatalogRecordCount: current.length,
@@ -222,7 +269,15 @@ export function reconcileActorIdentityCoverage(identities: readonly ActorIdentit
     aptNumberDesignationPresentCount: current.filter((identity) => identity.catalogId === "mitre-attack-enterprise" && identity.aptNumberDesignationPresent).length,
     associatedNameOccurrenceCount: aliases.length,
     distinctAssociatedNameCount: new Set(aliases.map(normalizeActorLabel)).size,
-    distinctLookupLabelCount: new Set(current.flatMap((identity) => [identity.canonicalName, ...identity.associatedNames]).map(normalizeActorLabel)).size
+    distinctLookupLabelCount: new Set(current.flatMap((identity) => [identity.canonicalName, ...identity.associatedNames]).map(normalizeActorLabel)).size,
+    currentAliasRecordCount: current.reduce((count, identity) => count + 1 + identity.associatedNames.length, 0),
+    retainedAliasRecordCount: identities.reduce((count, identity) => count + 1 + identity.associatedNames.length, 0),
+    deprecatedIdentityCount: identities.filter((identity) => identity.status === "deprecated").length,
+    revokedIdentityCount: identities.filter((identity) => identity.status === "revoked").length,
+    retiredIdentityCount: identities.filter((identity) => identity.status === "retired").length,
+    renamedIdentityCount: identities.filter((identity) => identity.revokedByExternalId && canonicalActorIdentity(identity, identities).id !== identity.id).length,
+    lineageRelationshipCount: identities.reduce((count, identity) => count + (identity.lineageRelations?.length ?? 0), 0),
+    structuredOnlyLookupIdentityCount: current.filter((identity) => identity.lookupPolicy === "structured_only").length
   };
 }
 
@@ -246,14 +301,38 @@ function collisions(identities: MitreActorIdentity[]): MitreActorAliasCollision[
 }
 
 function hasAptNumberDesignation(value: string): boolean {
-  return /^apt[- ]?\d+$/i.test(value.trim());
+  return /^apt(?:[- ]?\d+|-[a-z]+-\d+)$/i.test(value.trim());
 }
 
-export function canonicalActorIdentity(identity: ActorIdentityRecord, current: readonly ActorIdentityRecord[]): ActorIdentityRecord {
-  if (identity.catalogId === "mitre-attack-enterprise") return identity;
-  const name = normalizeActorLabel(identity.canonicalName);
-  const mitreMatches = current.filter((candidate) => candidate.catalogId === "mitre-attack-enterprise" && normalizeActorLabel(candidate.canonicalName) === name);
-  return mitreMatches.length === 1 ? mitreMatches[0] : identity;
+export function canonicalActorIdentity(identity: ActorIdentityRecord, identities: readonly ActorIdentityRecord[]): ActorIdentityRecord {
+  const successor = successorIdentity(identity, identities);
+  if (successor.id !== identity.id) return successor;
+  const explicitlyMapped = identity.canonicalIdentityId && identities.find((candidate) => candidate.id === identity.canonicalIdentityId && candidate.status === "current");
+  if (explicitlyMapped) return explicitlyMapped;
+  if (identity.catalogId === "mitre-attack-enterprise" || identity.status !== "current") return identity;
+  return identity;
+}
+
+export function actorLookupPolicy(value: string): ActorLookupPolicy {
+  const normalized = normalizeActorLabel(value);
+  return normalized.length < 3 || STRUCTURED_ONLY_LABELS.has(normalized) ? "structured_only" : "text_safe";
+}
+
+const STRUCTURED_ONLY_LABELS = new Set([
+  "actor", "aware", "backdoor", "blackout", "exploit", "global", "group", "loader", "malware",
+  "payload", "play", "ransomware", "silent", "trojan", "unsafe", "victim"
+]);
+
+function successorIdentity(identity: ActorIdentityRecord, identities: readonly ActorIdentityRecord[]): ActorIdentityRecord {
+  let current = identity;
+  const seen = new Set([current.id]);
+  while (current.catalogId === "mitre-attack-enterprise" && current.revokedByExternalId) {
+    const successor = identities.find((candidate) => candidate.catalogId === current.catalogId && candidate.externalId === current.revokedByExternalId);
+    if (!successor || seen.has(successor.id)) break;
+    current = successor;
+    seen.add(current.id);
+  }
+  return current.status === "current" ? current : identity;
 }
 
 function mitreExternalId(group: JsonObject): string {

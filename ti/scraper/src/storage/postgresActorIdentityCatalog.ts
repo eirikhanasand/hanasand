@@ -39,7 +39,11 @@ export async function persistActorIdentityCatalog(sql: SQL, catalog: any, identi
       SET
         status = 'retired',
         updated_at = ${catalog.updatedAt},
-        record = record || jsonb_build_object('status', 'retired', 'retiredAt', ${catalog.updatedAt}::text, 'updatedAt', ${catalog.updatedAt}::text)
+        record = record || jsonb_build_object(
+          'status', 'retired',
+          'retiredAt', COALESCE(record->>'retiredAt', ${catalog.updatedAt}::text),
+          'updatedAt', ${catalog.updatedAt}::text
+        )
       WHERE catalog_id = ${catalog.id}
     `;
     for (const identity of identities) {
@@ -50,7 +54,7 @@ export async function persistActorIdentityCatalog(sql: SQL, catalog: any, identi
         ) VALUES (
           ${identity.id}, ${identity.tenantId ?? null}, ${identity.catalogId}, ${identity.sourceId}, ${identity.captureId},
           ${identity.externalId}, ${identity.canonicalName}, ${identity.normalizedCanonicalName}, ${identity.status},
-          ${identity.aptNumberDesignationPresent}, ${identity.catalogModifiedAt}, ${identity.modifiedAt}, ${identity.updatedAt}, ${json(identity)}::text::jsonb
+          ${identity.aptNumberDesignationPresent}, ${identity.catalogModifiedAt ?? null}, ${identity.modifiedAt ?? null}, ${identity.updatedAt}, ${json(identity)}::text::jsonb
         )
         ON CONFLICT (id) DO UPDATE SET
           source_id = EXCLUDED.source_id,

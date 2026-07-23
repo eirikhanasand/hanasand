@@ -3,14 +3,16 @@ import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import type { EvidenceDelta } from "../types.ts";
 import { hashContent } from "../utils.ts";
+import { actorIdentity } from "./apiTestHarness.ts";
 import { fixtureDiscovery, fixtureEvidenceDelta } from "./helpers/storageFixtures.ts";
 
 describe("storage evidence deltas", () => {
   test("keeps unresolved actor mentions as entity evidence without profile deltas", () => {
     const store = new InMemoryScraperStore();
+    const actorIdentities = [actorIdentity("G0016", "APT29", ["Nobelium", "Cozy Bear", "Midnight Blizzard"])];
     const observation = (sourceId: string, collectedAt: string, victim: string, ttp: string) => {
       const rawText = `APT29 used ${ttp} against ${victim}.`;
-      return processCollectedItem({ sourceId, url: `https://example.test/${sourceId}`, collectedAt, rawText, contentHash: hashContent(rawText), links: [], metadata: { query: "APT29", normalizedQuery: "apt29" }, sensitive: false });
+      return processCollectedItem({ sourceId, url: `https://example.test/${sourceId}`, collectedAt, rawText, contentHash: hashContent(rawText), links: [], metadata: { query: "APT29", normalizedQuery: "apt29" }, sensitive: false }, { actorIdentities });
     };
     const first = observation("src_history_a", "2026-05-24T10:00:00.000Z", "Northwind Health", "phishing");
     const second = observation("src_history_b", "2026-05-25T10:00:00.000Z", "Contoso Energy", "credential dumping");

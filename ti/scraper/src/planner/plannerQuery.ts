@@ -1,5 +1,4 @@
 // @ts-nocheck
-import { actorAliasesFor, ACTOR_ALIAS_RECORDS } from "../pipeline/actorAliases.ts";
 import { resolveMitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
 
 export function expandQueryTerms(query, entityType, actorIdentities) {
@@ -21,11 +20,8 @@ function actorTerms(query, actorIdentities) {
       const identity = resolution.candidates[0].identity;
       return [identity.canonicalName, ...identity.associatedNames];
     }
-    return [];
   }
-  const normalized = query.trim().toLowerCase();
-  const record = ACTOR_ALIAS_RECORDS.find((candidate) => candidate.canonical.toLowerCase() === normalized || candidate.aliases.includes(normalized));
-  return record ? [record.canonical, ...actorAliasesFor(record.canonical)] : [];
+  return [];
 }
 
 export function hour(at) {

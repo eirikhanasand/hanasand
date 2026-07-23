@@ -13,6 +13,65 @@ export { hashContent } from "../utils.ts";
 export type { AnalystClaimLedgerEntry, RawCapture, SourceRecord } from "../types.ts";
 export { api, apiRestrictedMetadataApplyPlanSources, body, fixtureCapture, fixtureDelta, restrictedMetadataApplyPlanSources, seedEvidenceReplayFixture, source, telegramCapture } from "./helpers/apiFixtures.ts";
 
+import type { ActorIdentityRecord, MitreActorCatalogSnapshot, MitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
+import type { InMemoryScraperStore } from "../storage/memoryStore.ts";
+
+const actorCatalogObservedAt = "2026-07-20T00:00:00.000Z";
+
+export function actorIdentity(externalId: string, canonicalName: string, associatedNames: string[] = []): ActorIdentityRecord {
+  return {
+    id: `mitre-attack-enterprise:${externalId}`,
+    catalogId: "mitre-attack-enterprise",
+    externalId,
+    canonicalName,
+    normalizedCanonicalName: canonicalName.toLowerCase(),
+    associatedNames,
+    status: "current",
+    lookupPolicy: "text_safe",
+    aptNumberDesignationPresent: /^apt(?:[- ]?\d+|-[a-z]+-\d+)$/i.test(canonicalName),
+    sourceUrl: `https://attack.mitre.org/groups/${externalId}/`,
+    catalogVersion: "19.1",
+    catalogModifiedAt: actorCatalogObservedAt,
+    bundleSha256: "test-catalog",
+    retrievedAt: actorCatalogObservedAt,
+    createdAt: actorCatalogObservedAt,
+    modifiedAt: actorCatalogObservedAt,
+  };
+}
+
+export function seedActorIdentityCatalog(store: InMemoryScraperStore, identities: ActorIdentityRecord[]) {
+  const distinctAssociatedNames = new Set(identities.flatMap((identity) => identity.associatedNames.map((name) => name.toLowerCase())));
+  const distinctLookupLabels = new Set(identities.flatMap((identity) => [identity.canonicalName, ...identity.associatedNames].map((name) => name.toLowerCase())));
+  store.replaceActorIdentityCatalog({
+    schemaVersion: "ti.actor_identity_catalog.v1",
+    catalogId: "mitre-attack-enterprise",
+    catalogName: "Enterprise ATT&CK",
+    catalogVersion: "19.1",
+    catalogModifiedAt: actorCatalogObservedAt,
+    sourceUrl: "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/enterprise-attack/enterprise-attack.json",
+    bundleId: "bundle--test-catalog",
+    bundleSha256: "test-catalog",
+    retrievedAt: actorCatalogObservedAt,
+    counts: {
+      totalIdentityCount: identities.length,
+      currentIdentityCount: identities.length,
+      deprecatedIdentityCount: 0,
+      revokedIdentityCount: 0,
+      aptNumberDesignationPresentCount: identities.filter((identity) => identity.aptNumberDesignationPresent).length,
+      associatedNameOccurrenceCount: identities.reduce((count, identity) => count + identity.associatedNames.length, 0),
+      distinctAssociatedNameCount: distinctAssociatedNames.size,
+      distinctLookupLabelCount: distinctLookupLabels.size,
+      aliasCollisionCount: 0,
+    },
+    identities: identities as MitreActorIdentity[],
+    aliasCollisions: [],
+  } satisfies MitreActorCatalogSnapshot, {
+    sourceId: "src_mitre_actor_catalog",
+    captureId: "cap_mitre_actor_catalog",
+    importedAt: actorCatalogObservedAt,
+  });
+}
+
 export type CanaryOperatorViewForTest = {
   activeSources: unknown[];
   latestRun?: { runId: string; status: string; taskCount: number; captureCount: number; incidentCount: number };

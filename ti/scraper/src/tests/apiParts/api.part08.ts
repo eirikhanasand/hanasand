@@ -1,5 +1,6 @@
 import {
   activatePublicCanarySources,
+  actorIdentity,
   api,
   apiRestrictedMetadataApplyPlanSources,
   body,
@@ -21,6 +22,7 @@ import {
   restrictedMetadataApplyPlanSources,
   rmSync,
   runCanaryCollectionCycle,
+  seedActorIdentityCatalog,
   seedEvidenceReplayFixture,
   source,
   startApiServer,
@@ -41,6 +43,10 @@ import type {
 describe("api v1", () => {
   test("promotes fresh multi-actor canary captures into public intel answers", async () => {
     const store = new InMemoryScraperStore();
+    seedActorIdentityCatalog(store, [
+      actorIdentity("G1001", "APT42"),
+      actorIdentity("G0010", "Turla"),
+    ]);
     const objectStore = new InMemoryObjectEvidenceStore();
     const frontier = new FocusedFrontier();
     const generatedAt = new Date().toISOString();

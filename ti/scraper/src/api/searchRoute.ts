@@ -8,7 +8,6 @@ import { sanitizeDwmApiPayload } from "../product/dwmCustomerDisplay.ts";
 import { createLiveSearchPlan } from "../planner/intelligencePlanner.ts";
 import { buildPublicChannelStatusRouteResponse } from "./publicChannelRoutes.ts";
 import { searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
-import { ACTOR_ALIAS_RECORDS } from "../pipeline/actorAliases.ts";
 import { termRegex } from "./searchTerm.ts";
 import { hasIncidentEvidence } from "../pipeline/incidentCandidate.ts";
 import { resolveMitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
@@ -706,8 +705,6 @@ function actorIdentity(store: any, tenantId: string | undefined, query: string) 
   const normalizedQuery = normalizeActorName(query);
   const registeredIdentities = store.listActorIdentities?.() ?? [];
   const catalogResolution = resolveMitreActorIdentity(query, registeredIdentities);
-  const catalogConfigured = (store.listSources?.() ?? []).some((source: any) => ["mitre_actor_catalog", "ransomware_operation_catalog"].includes(source.metadata?.extractionProfile));
-  const dictionary = registeredIdentities.length || catalogConfigured ? undefined : ACTOR_ALIAS_RECORDS.find((record) => [record.canonical, ...record.aliases].some((value) => normalizeActorName(value) === normalizedQuery));
   const profiles = (store.listActorProfiles?.() ?? []).filter((profile: any) => (profile.tenantId || undefined) === tenantId);
   const aliases = (store.listActorAliases?.() ?? []).filter((alias: any) => (alias.tenantId || undefined) === tenantId);
   const matchedProfileIds = new Set([
@@ -717,8 +714,6 @@ function actorIdentity(store: any, tenantId: string | undefined, query: string) 
   const matchedProfiles = profiles.filter((profile: any) => matchedProfileIds.has(profile.id));
   const terms = unique([
     query,
-    dictionary?.canonical,
-    ...(dictionary?.aliases ?? []),
     ...(catalogResolution.ambiguous ? [] : catalogResolution.candidates.flatMap((candidate) => [candidate.identity.canonicalName, ...candidate.identity.associatedNames])),
     ...matchedProfiles.flatMap((profile: any) => [profile.canonicalName, ...(profile.aliases ?? [])]),
     ...aliases.filter((alias: any) => matchedProfileIds.has(alias.actorProfileId)).map((alias: any) => alias.alias)
@@ -736,7 +731,7 @@ function actorIdentity(store: any, tenantId: string | undefined, query: string) 
     catalogModifiedAt: candidate.identity.catalogModifiedAt,
     captureId: (candidate.identity as any).captureId
   }));
-  return { matched: Boolean(catalogCandidates.length || dictionary || matchedProfiles.length), terms, normalizedTerms: new Set(terms.map(normalizeActorName)), catalogCandidates, catalogAmbiguous: catalogResolution.ambiguous };
+  return { matched: Boolean(catalogCandidates.length || matchedProfiles.length), terms, normalizedTerms: new Set(terms.map(normalizeActorName)), catalogCandidates, catalogAmbiguous: catalogResolution.ambiguous };
 }
 
 function actorCaptureMatches(capture: any, entities: any[], normalizedTerms: Set<string>) {
