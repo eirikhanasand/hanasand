@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { rowFromCapture } from "../api/searchRows.ts";
+import { cleanSearchText, rowFromCapture } from "../api/searchRows.ts";
 
 describe("search row semantics", () => {
   test("removes repeated titles and navigation tails from persisted public captures", () => {
@@ -29,5 +29,10 @@ describe("search row semantics", () => {
 
     expect(row.summary).toBe("Captured source record from Google News threat RSS: APT29.");
     expect(row.url).toBeUndefined();
+  });
+
+  test("removes bare Telegram contacts before public serialization", () => {
+    const text = cleanSearchText("Contact t.me/private_channel, telegram.me/other_channel, tg://resolve?domain=third_channel, or analyst@example.com.");
+    expect(text).not.toMatch(/private_channel|other_channel|third_channel|analyst@example\.com/);
   });
 });

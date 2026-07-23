@@ -2,7 +2,7 @@ import type { ApiServerOptions } from "./serverTypes.ts";
 import { error, json, numberQuery, readJson } from "./http.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { findActorSearchCaptures, findSearchCaptures } from "./searchCaptureIndex.ts";
-import { cleanSearchText, isMetadataOnlyCapture, rowFromCapture, safePublicUrl } from "./searchRows.ts";
+import { cleanSearchText, isMetadataOnlyCapture, rowFromCapture, safePublicSearchUrl } from "./searchRows.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
 import { sanitizeDwmApiPayload } from "../product/dwmCustomerDisplay.ts";
 import { createLiveSearchPlan } from "../planner/intelligencePlanner.ts";
@@ -124,7 +124,9 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     }))
   ], (candidate) => `${candidate.kind}:${candidate.value.toLowerCase()}`);
   const missing = missingFields({ query, entityType, actor, victims, sectors, countries, ttps, records, generatedAt });
-  const businessModel = actorQuery ? businessModelAssessment(records.businessEntities, records.businessClaims, records.businessClaimEvidence) : undefined;
+  const actorBusinessEvidence = actorQuery ? actorBusinessEvidenceCatalog(options.store, scope.tenantId, query, generatedAt) : undefined;
+  const businessModel = actorQuery ? businessModelAssessment(options.store, actorBusinessEvidence?.reviewedFindings ?? [], actorBusinessEvidence?.pendingFindings ?? []) : undefined;
+  const actorCaseStudies = actorBusinessEvidence?.catalog;
   const attributionEvidence = actor ? actorAttribution(rows, unique([actor, ...aliases, ...identity.terms])) : undefined;
   const attribution = attributionEvidence?.statement;
   const actorIntelligence = actorQuery ? {
@@ -221,6 +223,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
       activityEvidenceAvailable: rows.length > 0
     } : undefined,
     actorIntelligence,
+    actorCaseStudies,
     actionability: {
       schemaVersion: "ti.query.actionability.v1",
       alertDisposition: watchlistCandidates.length ? "watchlist_required" : "needs_enrichment",
@@ -368,7 +371,7 @@ function searchRecords(store: any, tenantId: string | undefined, captureIds: Set
 
 const SOURCE_BACKED_BUSINESS_TYPES = new Set([
   "extortion_model", "extortion_type", "advertised_product", "advertised_data", "dataset",
-  "pricing_claim", "payment_claim", "revenue_claim", "revenue_share_claim", "publication_strategy", "publicity_tactic",
+  "pricing_claim", "negotiation_claim", "payment_claim", "revenue_claim", "revenue_share_claim", "publication_strategy", "publicity_tactic",
   "publicity_event", "victim_pressure_tactic", "communication_channel", "buyer_seller_communication",
   "intermediary_communication", "monetization_path", "profitability_signal",
 ]);
@@ -382,86 +385,17 @@ function isSafeBusinessMechanism(entity: any) {
   });
 }
 
-function businessModelAssessment(entities: any[], claims: any[], claimEvidence: any[]) {
-  const claimsById = new Map(claims.map((claim: any) => [claim.id, claim]));
-  const observations = entities.reduce((items: any[], entity) => {
-    const value = safeText(entity.value, 160);
-    if (!value) return items;
-    const evidenceLinks = claimEvidence.filter((record: any) => record.subjectId === entity.id && record.captureId === entity.captureId);
-    const linkedClaims = evidenceLinks.map((record: any) => claimsById.get(record.claimId)).filter(Boolean) as any[];
-    const claim = linkedClaims[0];
-    const provenance = (Array.isArray(entity.provenance) ? entity.provenance : []).map((record: any) => ({
-      sourceId: safeText(record.sourceId ?? entity.sourceId, 160),
-      captureId: safeText(record.captureId ?? entity.captureId, 160),
-      url: safeUrl(record.url),
-      collectedAt: validIso(record.collectedAt),
-      excerpt: safeText(record.evidenceText, 240),
-    })).filter((record: any) => record.sourceId && record.captureId && record.excerpt);
-    const reviewReasons = unique([
-      ...(entity.reviewReasons ?? []).map((reason: unknown) => safeText(reason, 200)),
-      ...(claim?.uncertaintyReasons ?? []).map((reason: unknown) => safeText(reason, 200)),
-    ].filter(Boolean));
-    const sourceIds = unique([
-      ...provenance.map((record: any) => record.sourceId),
-      ...evidenceLinks.map((record: any) => record.sourceId),
-      entity.sourceId,
-    ].filter(Boolean));
-    const captureIds = unique([
-      ...provenance.map((record: any) => record.captureId),
-      ...evidenceLinks.map((record: any) => record.captureId),
-      entity.captureId,
-    ].filter(Boolean));
-    const observedAt = unique([
-      ...provenance.map((record: any) => record.collectedAt),
-      ...evidenceLinks.map((record: any) => validIso(record.createdAt)),
-    ].filter(Boolean));
-    const reviewState = claim?.reviewState ?? (reviewReasons.length ? "needs_review" : "unreviewed");
-    const observation = {
-      type: entity.type,
-      value,
-      assertionKind: entity.assertionKind ?? "observed",
-      evidenceKind: evidenceKind(entity.assertionKind),
-      confidence: confidence(claim?.confidence ?? entity.confidence),
-      sourceIds: claim?.sourceIds ?? sourceIds,
-      captureIds: claim?.captureIds ?? captureIds,
-      sourceCount: claim?.sourceCount ?? sourceIds.length,
-      evidenceCount: claim?.evidenceCount ?? provenance.length,
-      claimIds: claim ? [claim.id] : unique(evidenceLinks.map((record: any) => record.claimId).filter(Boolean)),
-      reviewState,
-      reviewReasons,
-      corroborationState: claim?.corroborationState ?? (sourceIds.length > 1 ? "corroborated" : "single_source"),
-      firstSeenAt: claim?.firstSeenAt ?? earliest(observedAt),
-      lastSeenAt: claim?.lastSeenAt ?? latest(observedAt),
-      evidenceStages: unique(evidenceLinks.map((record: any) => record.evidenceStage ?? claim?.evidenceStage).filter(Boolean)),
-      extractionMethods: unique([entity.extractionMethod, claim?.extractionMethod].filter(Boolean)),
-      extractorVersions: unique([entity.extractorVersion, ...evidenceLinks.map((record: any) => record.extractorVersion)].filter(Boolean)),
-      evidence: provenance,
-    };
-    const existing = items.find((item) => item.type === entity.type && item.value.toLowerCase() === value.toLowerCase());
-    if (existing) {
-      existing.sourceIds = unique([...existing.sourceIds, ...observation.sourceIds]);
-      existing.captureIds = unique([...existing.captureIds, ...observation.captureIds]);
-      existing.claimIds = unique([...existing.claimIds, ...observation.claimIds]);
-      existing.confidence = Math.max(existing.confidence, observation.confidence);
-      existing.reviewReasons = unique([...existing.reviewReasons, ...observation.reviewReasons]);
-      existing.sourceCount = Math.max(existing.sourceCount, observation.sourceCount);
-      existing.evidenceCount = Math.max(existing.evidenceCount, observation.evidenceCount);
-      existing.firstSeenAt = earliest([existing.firstSeenAt, observation.firstSeenAt]);
-      existing.lastSeenAt = latest([existing.lastSeenAt, observation.lastSeenAt]);
-      existing.evidenceStages = unique([...existing.evidenceStages, ...observation.evidenceStages]);
-      existing.extractionMethods = unique([...existing.extractionMethods, ...observation.extractionMethods]);
-      existing.extractorVersions = unique([...existing.extractorVersions, ...observation.extractorVersions]);
-      existing.evidence = uniqueBy([...existing.evidence, ...observation.evidence], (record: any) => `${record.sourceId}:${record.captureId}:${record.excerpt}`);
-      return items;
-    }
-    items.push(observation);
-    return items;
-  }, []);
+function businessModelAssessment(store: any, reviewedFindings: any[], pendingFindings: any[]) {
+  const observations = businessObservations(store, reviewedFindings, true);
+  const pending = businessObservations(store, pendingFindings, false);
   const byType = (...types: string[]) => observations.filter((item) => types.includes(item.type)).map(({ type: _type, ...item }) => item);
   const extortionModels = byType("extortion_model", "extortion_type");
   const advertisedProducts = byType("advertised_product");
   const advertisedData = byType("advertised_data", "dataset");
   const pricingClaims = byType("pricing_claim");
+  const negotiationClaims = observations
+    .filter((item) => item.type === "negotiation_claim" || (item.type === "communication_channel" && /\bnegotiat/i.test(item.value)))
+    .map(({ type: _type, ...item }) => item);
   const paymentClaims = byType("payment_claim");
   const revenueClaims = byType("revenue_claim");
   const revenueShareClaims = byType("revenue_share_claim");
@@ -469,18 +403,21 @@ function businessModelAssessment(entities: any[], claims: any[], claimEvidence: 
   const publicityTactics = byType("publicity_tactic");
   const publicityEvents = byType("publicity_event");
   const pressureTactics = byType("victim_pressure_tactic");
-  const communicationChannels = byType("communication_channel");
+  const communicationChannels = observations
+    .filter((item) => item.type === "communication_channel" && !/\bnegotiat/i.test(item.value))
+    .map(({ type: _type, ...item }) => item);
   const buyerSellerCommunications = byType("buyer_seller_communication");
   const intermediaryCommunications = byType("intermediary_communication");
   const monetizationPaths = byType("monetization_path");
   const profitabilitySignals = byType("profitability_signal");
   return {
-    schemaVersion: "ti.actor.business_model.v2",
-    evidenceState: observations.length ? "observed_mechanisms" : "not_observed",
+    schemaVersion: "ti.actor.business_model.v3",
+    evidenceState: observations.length ? "reviewed_mechanisms" : pending.length ? "pending_review" : "not_observed",
     extortionModels,
     advertisedProducts,
     advertisedData,
     pricingClaims,
+    negotiationClaims,
     paymentClaims,
     revenueClaims,
     revenueShareClaims,
@@ -493,6 +430,7 @@ function businessModelAssessment(entities: any[], claims: any[], claimEvidence: 
     intermediaryCommunications,
     monetizationPaths,
     profitabilitySignals,
+    pendingFindings: pending,
     profitabilityConclusion: {
       status: profitabilitySignals.length ? "profitability_reported" : revenueClaims.length ? "revenue_reported" : "unknown",
       summary: profitabilitySignals.length
@@ -507,13 +445,329 @@ function businessModelAssessment(entities: any[], claims: any[], claimEvidence: 
     missingEvidence: [
       ...(!buyerSellerCommunications.length ? ["buyer and seller conversations"] : []),
       ...(!intermediaryCommunications.length ? ["intermediary conversations"] : []),
-      ...(!pricingClaims.length ? ["pricing or ransom demands"] : []),
-      ...(!paymentClaims.length ? ["payment demands or methods"] : []),
+      ...(!pricingClaims.length ? ["reviewed pricing or ransom demands"] : []),
+      ...(!negotiationClaims.length ? ["negotiation process or channel"] : []),
+      ...(!paymentClaims.length ? ["reviewed payment demands or methods"] : []),
       "independently verified revenue",
       "independently verified profitability",
     ],
-    evidenceBoundary: "Public observations and reports can describe operating mechanisms, demands, or communication channels. They do not prove private conversations, completed payments, conversion, revenue, or profit.",
+    evidenceBoundary: "Positive findings require a current confirmed review over an exact retained claim, evidence, entity, capture, and active-source chain. Pending findings are not case-study evidence. Public reporting does not prove private conversations, completed payments, conversion, revenue, or profit.",
   };
+}
+
+function businessObservations(store: any, findings: any[], reviewed: boolean) {
+  const grouped = new Map<string, any[]>();
+  for (const finding of findings) {
+    const key = `${finding.type}:${finding.value.toLowerCase()}`;
+    grouped.set(key, [...(grouped.get(key) ?? []), finding]);
+  }
+  return [...grouped.values()].map((rows) => {
+    const sourceIds = unique(rows.map((row) => row.sourceId));
+    const captureIds = unique(rows.map((row) => row.captureId));
+    const independence = reviewed ? evidenceIndependence(store, captureIds) : undefined;
+    return {
+      type: rows[0].type,
+      value: rows[0].value,
+      assertionKind: rows[0].assertionKind,
+      evidenceKind: evidenceKind(rows[0].assertionKind),
+      confidence: Math.max(...rows.map((row) => row.confidence)),
+      sourceIds,
+      captureIds,
+      claimIds: unique(rows.map((row) => row.claimId)),
+      claimEvidenceIds: unique(rows.map((row) => row.claimEvidenceId)),
+      entityIds: unique(rows.map((row) => row.entityId)),
+      reviewState: reviewed ? "confirmed" : rows[0].reviewState,
+      reviewReasons: unique(rows.flatMap((row) => row.reviewReasons ?? [])),
+      corroborationState: reviewed && independence && independence.groupCount > 1 ? "corroborated" : "single_source",
+      ...(reviewed ? { sourceCount: independence?.groupCount } : {}),
+      evidenceCount: rows.length,
+      firstPublishedAt: earliest(rows.map((row) => row.publishedAt)),
+      lastPublishedAt: latest(rows.map((row) => row.publishedAt)),
+      firstCollectedAt: earliest(rows.map((row) => row.collectedAt)),
+      lastCollectedAt: latest(rows.map((row) => row.collectedAt)),
+      evidenceStages: unique(rows.map((row) => row.evidenceStage)),
+      extractionMethods: unique(rows.map((row) => row.extractionMethod)),
+      extractorVersions: unique(rows.map((row) => row.extractorVersion)),
+      evidence: rows.map((row) => ({
+        sourceId: row.sourceId,
+        captureId: row.captureId,
+        claimId: row.claimId,
+        claimEvidenceId: row.claimEvidenceId,
+        entityId: row.entityId,
+        contentHash: row.contentHash,
+        url: row.url,
+        publishedAt: row.publishedAt,
+        collectedAt: row.collectedAt,
+        excerpt: row.excerpt,
+      })),
+    };
+  });
+}
+
+function actorBusinessEvidenceCatalog(store: any, tenantId: string | undefined, query: string, generatedAt: string) {
+  const inScope = (record: any) => Boolean(record) && (!record.tenantId || (record.tenantId || undefined) === tenantId);
+  const sourceById = uniqueMap((store.listSources?.() ?? []).filter((source: any) => inScope(source) && source.status === "active"));
+  const captureById = uniqueMap((store.listCaptures?.() ?? []).filter(inScope));
+  const entities = (store.listExtractedEntities?.() ?? []).filter(inScope);
+  const entityById = uniqueMap(entities);
+  const actorEntitiesByCapture = new Map<string, any[]>();
+  for (const entity of entities) {
+    if (!["actor", "ransomware_family"].includes(entity.type) || ["mention", "inferred"].includes(entity.assertionKind)) continue;
+    actorEntitiesByCapture.set(entity.captureId, [...(actorEntitiesByCapture.get(entity.captureId) ?? []), entity]);
+  }
+  const claimEvidence = (store.listClaimEvidence?.() ?? []).filter(inScope);
+  const claimsById = uniqueMap((store.listIntelligenceClaims?.() ?? []).filter(inScope));
+  const reviewsByClaim = new Map<string, any[]>();
+  for (const review of (store.listClaimReviews?.() ?? []).filter(inScope)) {
+    reviewsByClaim.set(review.claimId, [...(reviewsByClaim.get(review.claimId) ?? []), review]);
+  }
+  const identities = (store.listActorIdentities?.() ?? []).filter((identity: any) => identity.status === "current");
+  const identityById = uniqueMap(identities);
+  const profiles = (store.listActorProfiles?.() ?? []).filter(inScope);
+  const aliases = (store.listActorAliases?.() ?? []).filter(inScope);
+  const findings: any[] = [];
+
+  for (const evidence of claimEvidence) {
+    const entity: any = entityById.get(evidence.subjectId);
+    const claim: any = claimsById.get(evidence.claimId);
+    const capture: any = captureById.get(evidence.captureId);
+    const source: any = sourceById.get(evidence.sourceId);
+    if (!exactBusinessEvidenceChain({ entity, claim, evidence, capture, source, sourceById, captureById })) continue;
+    const sourceActor = explicitBusinessActor(capture, actorEntitiesByCapture.get(entity.captureId) ?? []);
+    if (!sourceActor) continue;
+    const actorIdentity = resolveBusinessActor(sourceActor, identities, identityById, profiles, aliases);
+    if (!actorIdentity) continue;
+    const currentReview = currentClaimReview(reviewsByClaim.get(claim.id) ?? []);
+    const disposition = claimReviewDisposition(claim, currentReview, generatedAt);
+    if (disposition === "excluded") continue;
+    const provenance = entity.provenance.find((record: any) => exactProvenance(record, source.id, capture.id, capture.contentHash));
+    const actor = safeText(actorIdentity.identity.canonicalName, 120);
+    const value = safeText(entity.value, 160);
+    const excerpt = cleanSearchText(provenance?.evidenceText, 240);
+    if (!actor || !value || !excerpt) continue;
+    findings.push({
+      actorId: actorIdentity.identity.id,
+      actor,
+      actorClass: capture.metadata?.ransomwareGroup?.actorName || capture.metadata?.leakSite?.actorName || actorIdentity.profile?.actorType === "ransomware"
+        ? "ransomware_or_extortion"
+        : actorIdentity.identity.catalogId === "mitre-attack-enterprise" || actorIdentity.profile?.actorType === "apt" ? "apt_or_intrusion_set" : "threat_actor",
+      category: actorBusinessCategory(entity),
+      type: entity.type,
+      value,
+      assertionKind: entity.assertionKind ?? "observed",
+      confidence: confidence(claim.confidence ?? entity.confidence),
+      claimId: claim.id,
+      claimEvidenceId: evidence.id,
+      entityId: entity.id,
+      captureId: capture.id,
+      sourceId: source.id,
+      relationship: evidence.relationship,
+      evidenceStage: evidence.evidenceStage,
+      reviewState: claim.reviewState,
+      reviewedAt: disposition === "reviewed" ? validIso(currentReview?.reviewedAt) : undefined,
+      reviewedBy: disposition === "reviewed" ? safeText(currentReview?.reviewerId, 160) : undefined,
+      reviewReasons: unique([...(claim.uncertaintyReasons ?? []), ...(entity.reviewReasons ?? [])].map((reason: unknown) => safeText(reason, 200)).filter(Boolean)),
+      extractionMethod: entity.extractionMethod,
+      extractorVersion: evidence.extractorVersion ?? entity.extractorVersion,
+      contentHash: capture.contentHash,
+      publishedAt: validIso(capture.publishedAt),
+      collectedAt: validIso(capture.collectedAt),
+      url: safePublicSearchUrl(capture.url, capture.metadata),
+      excerpt,
+      disposition,
+    });
+  }
+
+  const reviewed = findings.filter((finding) => finding.disposition === "reviewed");
+  const pending = findings.filter((finding) => finding.disposition === "pending");
+  const grouped = new Map<string, any[]>();
+  for (const finding of reviewed) grouped.set(finding.actorId, [...(grouped.get(finding.actorId) ?? []), finding]);
+  const supported = [...grouped.values()].map((actorFindings) => {
+    const first = actorFindings[0];
+    const categories = unique(actorFindings.map((finding) => finding.category)).sort();
+    const captureIds = unique(actorFindings.map((finding) => finding.captureId));
+    const independence = evidenceIndependence(store, captureIds);
+    return {
+      actorId: first.actorId,
+      actor: first.actor,
+      actorClass: first.actorClass,
+      categories,
+      findingCount: new Set(actorFindings.map((finding) => `${finding.type}:${finding.value.toLowerCase()}`)).size,
+      evidenceCount: actorFindings.length,
+      captureCount: captureIds.length,
+      sourceCount: independence.groupCount,
+      firstPublishedAt: earliest(actorFindings.map((finding) => finding.publishedAt)),
+      lastPublishedAt: latest(actorFindings.map((finding) => finding.publishedAt)),
+      firstCollectedAt: earliest(actorFindings.map((finding) => finding.collectedAt)),
+      lastCollectedAt: latest(actorFindings.map((finding) => finding.collectedAt)),
+      reviewStates: ["confirmed"],
+      findings: actorFindings.map(withoutDisposition),
+    };
+  });
+  const categoryCounts = Object.fromEntries([...new Set(supported.flatMap((entry) => entry.categories))].sort().map((category) => [
+    category,
+    supported.filter((entry) => entry.categories.includes(category)).length,
+  ]));
+  const allCases = rankBusinessCases(supported.filter((entry) => entry.categories.length >= 2));
+  const ransomwareOrExtortionCount = supported.filter((entry) => entry.actorClass === "ransomware_or_extortion").length;
+  const aptOrIntrusionSetCount = supported.filter((entry) => entry.actorClass === "apt_or_intrusion_set").length;
+  const queryIdentity = resolveBusinessActor(query, identities, identityById, profiles, aliases)?.identity.id;
+  const queryReviewed = queryIdentity ? reviewed.filter((finding) => finding.actorId === queryIdentity).map(withoutDisposition) : [];
+  const queryPending = queryIdentity ? pending.filter((finding) => finding.actorId === queryIdentity).map(withoutDisposition) : [];
+  return {
+    reviewedFindings: queryReviewed,
+    pendingFindings: queryPending,
+    catalog: {
+      schemaVersion: "ti.actor.case_studies.v2",
+      supportedActorCount: supported.length,
+      caseStudyCount: allCases.length,
+      pendingActorCount: new Set(pending.map((finding) => finding.actorId)).size,
+      pendingFindingCount: pending.length,
+      qualification: "A reviewed case requires current confirmed review authority and an exact retained claim, claim-evidence, entity, capture, and active-source chain in at least two separately represented categories.",
+      actorClassCounts: {
+        ransomwareOrExtortion: ransomwareOrExtortionCount,
+        aptOrIntrusionSet: aptOrIntrusionSetCount,
+        otherThreatActor: supported.length - ransomwareOrExtortionCount - aptOrIntrusionSetCount,
+      },
+      categoryCounts,
+      cases: queryIdentity ? allCases.filter((entry) => entry.actorId === queryIdentity) : [],
+      reviewedFindings: queryReviewed,
+      pendingFindings: queryPending,
+      missingContexts: aptOrIntrusionSetCount ? [] : ["reviewed state/APT business-model evidence"],
+    },
+  };
+}
+
+function exactBusinessEvidenceChain({ entity, claim, evidence, capture, source, sourceById, captureById }: any) {
+  if (!entity || !claim || !capture || !source || !isSafeBusinessMechanism(entity)) return false;
+  if (evidence.subjectType !== "entity" || evidence.relationship !== "supports") return false;
+  if (!["captured_page", "metadata_only_claim", "reviewed_promoted"].includes(evidence.evidenceStage)) return false;
+  if (capture.sourceId !== entity.sourceId || entity.sourceId !== evidence.sourceId) return false;
+  if (capture.id !== entity.captureId || entity.captureId !== evidence.captureId) return false;
+  if (claim.subjectType !== "entity" || claim.subjectId !== entity.id || evidence.claimId !== claim.id) return false;
+  if (claim.claimType !== entity.type || normalizeActorName(claim.value?.value) !== normalizeActorName(entity.value)) return false;
+  if (claim.evidenceStage !== evidence.evidenceStage) return false;
+  if (!capture.contentHash || !exactProvenance(capture.provenance, source.id, capture.id, capture.contentHash)) return false;
+  if (!Array.isArray(entity.provenance) || !entity.provenance.some((record: any) => exactProvenance(record, source.id, capture.id, capture.contentHash))) return false;
+  if (!exactProvenance(evidence.provenance, source.id, capture.id, capture.contentHash)) return false;
+  const sourceIds = unique([...(claim.sourceIds ?? []), claim.sourceId].filter(Boolean));
+  const captureIds = unique([...(claim.captureIds ?? []), claim.captureId].filter(Boolean));
+  return sourceIds.length > 0 && captureIds.length > 0
+    && sourceIds.includes(evidence.sourceId)
+    && captureIds.includes(evidence.captureId)
+    && sourceIds.every((id) => sourceById.has(id))
+    && captureIds.every((id) => {
+      const linkedCapture: any = captureById.get(id);
+      return linkedCapture && sourceById.has(linkedCapture.sourceId) && linkedCapture.contentHash && exactProvenance(linkedCapture.provenance, linkedCapture.sourceId, linkedCapture.id, linkedCapture.contentHash);
+    });
+}
+
+function exactProvenance(record: any, sourceId: string, captureId: string, contentHash: string) {
+  if (Array.isArray(record)) return record.some((item) => exactProvenance(item, sourceId, captureId, contentHash));
+  return Boolean(record && record.sourceId === sourceId && record.captureId === captureId && record.contentHash === contentHash);
+}
+
+function currentClaimReview(reviews: any[]) {
+  const stateActions = new Set(["confirm", "reject", "correct", "mark_needs_review", "mark_contradicted", "reset"]);
+  const candidates = reviews.flatMap((review) => {
+    const reviewedAt = validIso(review.reviewedAt);
+    return stateActions.has(review.action) && reviewedAt ? [{ ...review, reviewedAt }] : [];
+  });
+  const latestAt = latest(candidates.map((review) => review.reviewedAt));
+  const latestReviews = candidates.filter((review) => review.reviewedAt === latestAt);
+  return latestReviews.length === 1 ? latestReviews[0] : latestReviews.length > 1 ? { ambiguous: true } : undefined;
+}
+
+function claimReviewDisposition(claim: any, current: any, generatedAt: string): "reviewed" | "pending" | "excluded" {
+  if (claim.legalHold || staleAt(claim, generatedAt) || claim.reviewState === "rejected" || claim.reviewState === "contradicted" || claim.corroborationState === "contradicted") return "excluded";
+  if (current?.ambiguous) return "excluded";
+  if (claim.reviewState === "confirmed") {
+    if (!current || current.action !== "confirm") return "excluded";
+    if (String(current.reviewerId ?? "").startsWith("hanasand-ai:") && current.automaticDecision?.claimValidity !== "supported") return "excluded";
+    return "reviewed";
+  }
+  if (!["unreviewed", "needs_review"].includes(claim.reviewState)) return "excluded";
+  if (current && !["mark_needs_review", "reset"].includes(current.action)) return "excluded";
+  return "pending";
+}
+
+function resolveBusinessActor(sourceActor: string, identities: any[], identityById: Map<string, any>, profiles: any[], aliases: any[]) {
+  const direct = resolveMitreActorIdentity(sourceActor, identities);
+  if (direct.ambiguous || direct.candidates.length > 1) return undefined;
+  if (direct.candidates.length === 1) return { identity: direct.candidates[0].identity };
+  const normalized = normalizeActorName(sourceActor);
+  const aliasProfileIds = new Set(aliases.filter((alias: any) => normalizeActorName(alias.normalizedAlias ?? alias.alias) === normalized).map((alias: any) => alias.actorProfileId));
+  const matchingProfiles = profiles.filter((profile: any) => {
+    if (profile.identityResolutionState !== "canonical") return false;
+    const labels = [profile.canonicalName, ...(profile.aliases ?? [])].map(normalizeActorName);
+    return labels.includes(normalized) || aliasProfileIds.has(profile.id);
+  });
+  if (matchingProfiles.length !== 1) return undefined;
+  const profile = matchingProfiles[0];
+  const identityIds = unique(profile.actorIdentityIds ?? []);
+  if (identityIds.length !== 1) return undefined;
+  const identity = identityById.get(identityIds[0]);
+  return identity ? { identity, profile } : undefined;
+}
+
+function uniqueMap(records: any[]) {
+  const map = new Map<string, any>();
+  const duplicates = new Set<string>();
+  for (const record of records) {
+    if (!record?.id || map.has(record.id)) duplicates.add(record?.id);
+    else map.set(record.id, record);
+  }
+  for (const id of duplicates) map.delete(id);
+  return map;
+}
+
+function withoutDisposition({ disposition: _disposition, ...finding }: any) {
+  return finding;
+}
+
+function explicitBusinessActor(capture: any, actorEntities: any[]) {
+  const metadataActor = [
+    capture.metadata?.ransomwareGroup?.actorName,
+    capture.metadata?.leakSite?.actorName,
+    capture.metadata?.actorName,
+    capture.metadata?.actor,
+  ].map((value) => safeText(value, 120)).find(Boolean);
+  if (metadataActor) return metadataActor;
+  const asserted = unique(actorEntities.map((entity) => safeText(entity.value, 120)).filter(Boolean));
+  return asserted.length === 1 ? asserted[0] : undefined;
+}
+
+function actorBusinessCategory(entity: any) {
+  if (entity.type === "pricing_claim") return "pricing";
+  if (entity.type === "negotiation_claim" || (entity.type === "communication_channel" && /\bnegotiat/i.test(entity.value))) return "negotiation";
+  if (entity.type === "payment_claim") return "payment";
+  if (["revenue_claim", "profitability_signal"].includes(entity.type)) return "economic_outcome";
+  if (["publication_strategy", "publicity_tactic", "publicity_event", "victim_pressure_tactic"].includes(entity.type)) return "publicity";
+  if (entity.type === "buyer_seller_communication") return "buyer_victim_communication";
+  if (entity.type === "intermediary_communication") return "intermediary_communication";
+  if (entity.type === "communication_channel") return "communication_channel";
+  if (["advertised_product", "advertised_data", "dataset"].includes(entity.type)) return "advertised_offering";
+  return "operating_model";
+}
+
+function rankBusinessCases(cases: any[]) {
+  const remaining = [...cases];
+  const uncovered = new Set(remaining.flatMap((entry) => entry.categories));
+  const ranked: any[] = [];
+  while (remaining.length) {
+    remaining.sort((left, right) => {
+      const uncoveredDifference = right.categories.filter((category: string) => uncovered.has(category)).length
+        - left.categories.filter((category: string) => uncovered.has(category)).length;
+      return uncoveredDifference
+        || right.categories.length - left.categories.length
+        || right.findingCount - left.findingCount
+        || left.actor.localeCompare(right.actor);
+    });
+    const selected = remaining.shift();
+    ranked.push(selected);
+    for (const category of selected.categories) uncovered.delete(category);
+  }
+  return ranked;
 }
 
 function evidenceKind(assertionKind: unknown) {
@@ -526,16 +780,6 @@ function evidenceKind(assertionKind: unknown) {
 function validIso(value: unknown): string | undefined {
   const time = Date.parse(String(value ?? ""));
   return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
-}
-
-function safeUrl(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  try {
-    const parsed = new URL(value);
-    return ["http:", "https:"].includes(parsed.protocol) ? parsed.toString() : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function assess(rows: any[], records: ReturnType<typeof searchRecords>, generatedAt: string) {
@@ -707,6 +951,13 @@ function actorIdentity(store: any, tenantId: string | undefined, query: string) 
   const catalogResolution = resolveMitreActorIdentity(query, registeredIdentities);
   const profiles = (store.listActorProfiles?.() ?? []).filter((profile: any) => (profile.tenantId || undefined) === tenantId);
   const aliases = (store.listActorAliases?.() ?? []).filter((alias: any) => (alias.tenantId || undefined) === tenantId);
+  const observedActorMatched = (store.listExtractedEntities?.() ?? []).some((entity: any) =>
+    (entity.tenantId || undefined) === tenantId
+    && ["actor", "ransomware_family"].includes(entity.type)
+    && !["mention", "inferred"].includes(entity.assertionKind)
+    && entity.extractionMethod === "source_specific"
+    && normalizeActorName(entity.value) === normalizedQuery
+  );
   const matchedProfileIds = new Set([
     ...profiles.filter((profile: any) => [profile.canonicalName, ...(profile.aliases ?? [])].some((value) => normalizeActorName(value) === normalizedQuery)).map((profile: any) => profile.id),
     ...aliases.filter((alias: any) => normalizeActorName(alias.normalizedAlias ?? alias.alias) === normalizedQuery).map((alias: any) => alias.actorProfileId)
@@ -731,7 +982,7 @@ function actorIdentity(store: any, tenantId: string | undefined, query: string) 
     catalogModifiedAt: candidate.identity.catalogModifiedAt,
     captureId: (candidate.identity as any).captureId
   }));
-  return { matched: Boolean(catalogCandidates.length || matchedProfiles.length), terms, normalizedTerms: new Set(terms.map(normalizeActorName)), catalogCandidates, catalogAmbiguous: catalogResolution.ambiguous };
+  return { matched: Boolean(catalogCandidates.length || matchedProfiles.length || observedActorMatched), terms, normalizedTerms: new Set(terms.map(normalizeActorName)), catalogCandidates, catalogAmbiguous: catalogResolution.ambiguous };
 }
 
 function actorCaptureMatches(capture: any, entities: any[], normalizedTerms: Set<string>) {
@@ -841,7 +1092,7 @@ function staleAt(claim: any, generatedAt: string) {
 function safeIndicators(indicators: any[]) {
   return unique(indicators
     .filter((indicator) => !indicator.reviewReasons?.length && !/\.onion\b|\[restricted/i.test(String(indicator.value)))
-    .map((indicator) => indicator.type === "url" ? safePublicUrl(indicator.value, {}) : safeText(indicator.value, 240))
+    .map((indicator) => indicator.type === "url" ? safePublicSearchUrl(indicator.value) : safeText(indicator.value, 240))
     .filter(Boolean));
 }
 
