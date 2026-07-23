@@ -182,7 +182,7 @@ function publicSearchResult(result: TiSearchResponse) {
         notes: strings(result.notes),
         actorIntelligence: actorIntelligence ? compact({
             actorClass: text(actorIntelligence.actorClass), attribution: text(actorIntelligence.attribution), firstSeen: iso(actorIntelligence.firstSeen), lastSeen: iso(actorIntelligence.lastSeen),
-            motivation: strings(actorIntelligence.motivation), malwareTools: strings(actorIntelligence.malwareTools), campaigns: strings(actorIntelligence.campaigns), infrastructure: strings(actorIntelligence.infrastructure),
+            motivation: strings(actorIntelligence.motivation), malwareTools: strings(actorIntelligence.malwareTools), campaigns: strings(actorIntelligence.campaigns), infrastructure: publicIndicators(actorIntelligence.infrastructure),
             targetSectors: strings(actorIntelligence.targetSectors), geographies: strings(actorIntelligence.geographies), confidence: confidence(actorIntelligence.confidence), confidenceReasoning: strings(actorIntelligence.confidenceReasoning), sourceProvenance: strings(actorIntelligence.sourceProvenance),
         }) : undefined,
         actionability: actionability ? compact({
@@ -224,10 +224,11 @@ function record(value: unknown): Record<string, any> { return value && typeof va
 function array<T>(value: T[] | undefined): T[] { return Array.isArray(value) ? value : [] }
 function text(value: unknown) { return typeof value === 'string' && value.length ? value : undefined }
 function strings(value: unknown) { return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [] }
+function publicIndicators(value: unknown) { return strings(value).filter(item => !/^https?:\/\//i.test(item) || httpUrl(item)) }
 function boolean(value: unknown) { return typeof value === 'boolean' ? value : undefined }
 function scalar(value: unknown) { return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null ? value : undefined }
 function finiteNumber(value: unknown) { const number = Number(value); return Number.isFinite(number) ? number : undefined }
 function nonNegativeInteger(value: unknown) { const number = Number(value); return Number.isInteger(number) && number >= 0 ? number : undefined }
 function confidence(value: unknown) { const number = finiteNumber(value); return number === undefined ? undefined : Math.max(0, Math.min(1, number > 1 ? number / 100 : number)) }
 function iso(value: unknown) { const string = text(value); return string && !Number.isNaN(Date.parse(string)) ? string : undefined }
-function httpUrl(value: unknown) { const string = text(value); if (!string) return undefined; try { const parsed = new URL(string); return ['http:', 'https:'].includes(parsed.protocol) ? parsed.toString() : undefined } catch { return undefined } }
+function httpUrl(value: unknown) { const string = text(value); if (!string) return undefined; try { const parsed = new URL(string); return ['http:', 'https:'].includes(parsed.protocol) && !(parsed.hostname === 'news.google.com' && /^\/(?:rss\/)?articles\//.test(parsed.pathname)) ? parsed.toString() : undefined } catch { return undefined } }

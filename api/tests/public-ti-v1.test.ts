@@ -9,6 +9,7 @@ const apps: FastifyInstance[] = []
 const searchResult = {
     query: 'APT29', generatedAt: '2026-07-22T10:00:00.000Z', mode: 'scraper' as const, status: 'ready' as const, summary: 'Current public evidence for APT29.', confidence: 0.9, lastSeen: '2026-07-22T09:00:00.000Z', aliases: ['Cozy Bear'],
     recentActivity: [], targets: [], ttps: [{ name: 'Spearphishing Attachment', tactic: 'Initial Access', detail: 'Source-specific extraction.', confidence: 0.9, extractionMethod: 'source_specific', extractorVersion: 'vendor-parser-v1' }], datasets: [], sources: [{ id: 'src-1', name: 'Public report', type: 'rss', provenance: 'publisher', url: 'https://example.test/report' }], notes: [],
+    actorIntelligence: { infrastructure: ['https://news.google.com/rss/articles/opaque-aggregator-id?oc=5', '203.0.113.10', 'https://infra.example.test/path'] },
 }
 
 afterEach(async () => Promise.all(apps.splice(0).map(app => app.close())))
@@ -34,6 +35,8 @@ describe('public TI v1', () => {
         expect(success.statusCode).toBe(200)
         expect(success.json().query).toBe('APT29')
         expect(success.json().ttps).toEqual([expect.objectContaining({ extractionMethod: 'source_specific', extractorVersion: 'vendor-parser-v1' })])
+        expect(success.json().actorIntelligence.infrastructure).toEqual(['203.0.113.10', 'https://infra.example.test/path'])
+        expect(success.body).not.toContain('news.google.com/rss/articles')
         expect(success.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/)
 
         const invalid = await app.inject({ method: 'POST', url: '/api/v1/ti/search', payload: { query: 'x', tenantId: 'forbidden' } })

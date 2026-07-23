@@ -148,17 +148,22 @@ describe("api v1", () => {
     store.saveCapture(fixtureCapture({
       id: "cap_google_attribution",
       sourceId: "src_google_attribution",
+      url: "https://news.google.com/rss/articles/opaque-aggregator-id?oc=5",
       title: "Amazon stops attack attributed to Russia's APT29 - Recorded Future News",
       body: "Google News threat RSS: APT29 Amazon stops attack attributed to Russia's APT29 - Recorded Future News Amazon stops attack attributed to Russia's APT29 Recorded Future News",
       publishedAt: "2025-09-02T07:00:00.000Z"
     }));
     store.saveExtractedEntity({ id: "actor_google_attribution", tenantId: "tenant_api", captureId: "cap_google_attribution", sourceId: "src_google_attribution", type: "actor", value: "APT29", normalizedValue: "apt29", confidence: 0.9 });
+    store.saveIndicator({ id: "indicator_google_wrapper", tenantId: "tenant_api", captureId: "cap_google_attribution", sourceId: "src_google_attribution", type: "url", value: "https://news.google.com/rss/articles/opaque-aggregator-id?oc=5", normalizedValue: "https://news.google.com/rss/articles/opaque-aggregator-id?oc=5", confidence: 0.9 });
+    store.saveIndicator({ id: "indicator_public_infrastructure", tenantId: "tenant_api", captureId: "cap_google_attribution", sourceId: "src_google_attribution", type: "url", value: "https://infra.example.test/path", normalizedValue: "https://infra.example.test/path", confidence: 0.9 });
 
     const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&entityType=actor&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
 
     expect(response.rows[0].summary).toBe("Captured source record from Google News threat RSS: APT29.");
     expect(response.actorIntelligence.attribution).toBe("Amazon stops attack attributed to Russia's APT29 - Recorded Future News");
     expect(response.actorIntelligence.attributionEvidence).toMatchObject({ sourceId: "src_google_attribution", reportDate: "2025-09-02T07:00:00.000Z", captureId: "cap_google_attribution" });
+    expect(response.actorIntelligence.infrastructure).toEqual(["https://infra.example.test/path"]);
+    expect(JSON.stringify(response)).not.toContain("news.google.com/rss/articles");
   });
 
   test("uses persisted incident headlines for legacy captures without trusting inferred actor titles", async () => {

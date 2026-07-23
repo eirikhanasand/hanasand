@@ -73,7 +73,7 @@ function safeMetadataText(metadata: any) {
   ].filter(Boolean).join(". ");
 }
 
-function safePublicUrl(url: unknown, metadata: any) {
+export function safePublicUrl(url: unknown, metadata: any) {
   const value = String(url ?? "");
   if (!/^https?:\/\//i.test(value) || /\.onion\b/i.test(value)) return undefined;
   if (metadata?.adapter === "darknet_metadata" || metadata?.captureMode === "metadata_only") return undefined;

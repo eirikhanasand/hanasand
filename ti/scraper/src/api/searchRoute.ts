@@ -2,7 +2,7 @@ import type { ApiServerOptions } from "./serverTypes.ts";
 import { error, json, numberQuery, readJson } from "./http.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { findActorSearchCaptures, findSearchCaptures } from "./searchCaptureIndex.ts";
-import { cleanSearchText, isMetadataOnlyCapture, rowFromCapture } from "./searchRows.ts";
+import { cleanSearchText, isMetadataOnlyCapture, rowFromCapture, safePublicUrl } from "./searchRows.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
 import { sanitizeDwmApiPayload } from "../product/dwmCustomerDisplay.ts";
 import { createLiveSearchPlan } from "../planner/intelligencePlanner.ts";
@@ -844,7 +844,10 @@ function staleAt(claim: any, generatedAt: string) {
 }
 
 function safeIndicators(indicators: any[]) {
-  return unique(indicators.filter((indicator) => !indicator.reviewReasons?.length && !/\.onion\b|\[restricted/i.test(String(indicator.value))).map((indicator) => safeText(indicator.value, 240)));
+  return unique(indicators
+    .filter((indicator) => !indicator.reviewReasons?.length && !/\.onion\b|\[restricted/i.test(String(indicator.value)))
+    .map((indicator) => indicator.type === "url" ? safePublicUrl(indicator.value, {}) : safeText(indicator.value, 240))
+    .filter(Boolean));
 }
 
 function hasParsedRecord(captureId: string, records: ReturnType<typeof searchRecords>) {
