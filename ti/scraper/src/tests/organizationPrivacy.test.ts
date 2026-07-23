@@ -111,22 +111,56 @@ describe("organization retention and privacy lifecycle", () => {
     }
   });
 
-  test("hydrates completed redactions and workflow deletions after restart", async () => {
+  test("persists paginated redactions, workflow deletion audit, and idempotent reconciliation across restarts", async () => {
     const directory = mkdtempSync(join(tmpdir(), "org-retention-restart-"));
     const snapshotPath = join(directory, "store.json");
     try {
       const store = new FileBackedScraperStore({ snapshotPath });
       store.saveOrganization({ id: "org_restart", tenantId: "org_restart", name: "Restart", status: "active" });
-      store.saveCapture(fixtureCapture({ id: "capture_restart", tenantId: "org_restart", collectedAt: "2020-01-01T00:00:00.000Z", body: "remove after restart" }));
+      store.saveCapture(fixtureCapture({ id: "capture_restart", tenantId: "org_restart", collectedAt: "2018-01-01T00:00:00.000Z", body: "remove after restart" }));
+      store.saveIncident({ id: "incident_restart", tenantId: "org_restart", sourceId: "source_restart", captureId: "capture_restart", title: "Sensitive incident", summary: "Remove after restart", firstSeenAt: "2019-01-01T00:00:00.000Z", confidence: 0.8 });
       store.saveDwmWatchlist({ id: "watchlist_restart", tenantId: "org_restart", organizationId: "org_restart", status: "archived", updatedAt: "2020-01-01T00:00:00.000Z" });
-      await purgeOrganizationPrivacyData({ store, frontier: new FocusedFrontier() } as any, {
-        organizationId: "org_restart", cutoffAt: "2025-01-01T00:00:00.000Z", mode: "scheduled", limit: 100, runId: "run_restart"
+      const input = { organizationId: "org_restart", cutoffAt: "2025-01-01T00:00:00.000Z", mode: "scheduled" as const, limit: 1, runId: "run_restart" };
+
+      await purgeOrganizationPrivacyData({ store, frontier: new FocusedFrontier() } as any, input);
+      const afterCapture = new FileBackedScraperStore({ snapshotPath });
+      expect(afterCapture.getCapture("capture_restart")?.body).toBeUndefined();
+      expect(afterCapture.getCapture("capture_restart")?.metadata?.retentionAudit).toEqual([expect.objectContaining({ runId: "run_restart" })]);
+
+      let afterIncident = afterCapture;
+      for (let page = 0; page < 5 && afterIncident.getIncident("incident_restart")?.title !== "Deleted incident"; page++) {
+        await purgeOrganizationPrivacyData({ store: afterIncident, frontier: new FocusedFrontier() } as any, input);
+        afterIncident = new FileBackedScraperStore({ snapshotPath });
+      }
+      expect(afterIncident.getIncident("incident_restart")).toMatchObject({
+        title: "Deleted incident",
+        summary: "",
+        privacyDeletionRunId: "run_restart"
       });
 
-      const hydrated = new FileBackedScraperStore({ snapshotPath });
-      expect(hydrated.getCapture("capture_restart")?.body).toBeUndefined();
-      expect(hydrated.getCapture("capture_restart")?.metadata?.retentionAudit).toEqual([expect.objectContaining({ runId: "run_restart" })]);
-      expect(hydrated.getDwmWatchlist("watchlist_restart")).toBeUndefined();
+      await purgeOrganizationPrivacyData({ store: afterIncident, frontier: new FocusedFrontier() } as any, input);
+      const afterWorkflow = new FileBackedScraperStore({ snapshotPath });
+      expect(afterWorkflow.getDwmWatchlist("watchlist_restart")).toBeUndefined();
+      expect(afterWorkflow.getOrganization("org_restart")?.privacyRetentionAudit).toEqual([
+        expect.objectContaining({ runId: "run_restart", recordType: "dwm_watchlist", recordId: "watchlist_restart", status: "deleted" })
+      ]);
+
+      const beforeRerun = {
+        incident: afterWorkflow.getIncident("incident_restart"),
+        audit: afterWorkflow.getOrganization("org_restart")?.privacyRetentionAudit
+      };
+      const rerun = await purgeOrganizationPrivacyData({ store: afterWorkflow, frontier: new FocusedFrontier() } as any, input);
+      expect(rerun.selected).toBe(0);
+      expect(rerun.completed).toEqual(expect.arrayContaining([
+        expect.objectContaining({ recordType: "capture", recordId: "capture_restart", status: "redacted" }),
+        expect.objectContaining({ recordType: "incident", recordId: "incident_restart", status: "redacted" }),
+        expect.objectContaining({ recordType: "dwm_watchlist", recordId: "watchlist_restart", status: "deleted" })
+      ]));
+
+      const afterRerun = new FileBackedScraperStore({ snapshotPath });
+      expect(afterRerun.getIncident("incident_restart")).toEqual(beforeRerun.incident);
+      expect(afterRerun.getOrganization("org_restart")?.privacyRetentionAudit).toEqual(beforeRerun.audit);
+      expect(afterRerun.getDwmWatchlist("watchlist_restart")).toBeUndefined();
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

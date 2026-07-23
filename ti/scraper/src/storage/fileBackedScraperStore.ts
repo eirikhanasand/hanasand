@@ -62,7 +62,8 @@ export class FileBackedScraperStore extends InMemoryScraperStore {
   override saveWebhookDestination(destination: any): any { return this.saved(() => super.saveWebhookDestination(destination)); }
   override saveCase(caseRecord: any): any { return this.saved(() => super.saveCase(caseRecord)); }
   override saveDwmWatchlist(watchlist: any): any { return this.saved(() => super.saveDwmWatchlist(watchlist)); }
-  override deleteWorkflowForRetention(recordType: string, id: string): boolean { return this.saved(() => super.deleteWorkflowForRetention(recordType, id)); }
+  override replaceRecordForRetention(recordType: string, record: any): any { return this.saved(() => super.replaceRecordForRetention(recordType, record)); }
+  override deleteWorkflowForRetention(recordType: string, id: string, audit?: { organizationId: string; runId: string; item: any }): boolean { return this.saved(() => super.deleteWorkflowForRetention(recordType, id, audit)); }
   override saveDwmAlert(alert: any): any { return this.saved(() => super.saveDwmAlert(alert)); }
   override saveDwmWebhookDelivery(delivery: any): any { return this.saved(() => super.saveDwmWebhookDelivery(delivery)); }
   override saveActorOrgRelevanceReview(review: any): any { return this.saved(() => super.saveActorOrgRelevanceReview(review)); }
