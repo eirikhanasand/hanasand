@@ -1,5 +1,5 @@
 import { describe, expect, fixtureCapture, FocusedFrontier, handleApiRequest, InMemoryScraperStore, source, test } from "./apiTestHarness.ts";
-import { pinnedPublicAdvisoryLookup, resolvePublicAdvisoryTarget, saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.ts";
+import { pinnedPublicAdvisoryLookup, publicAdvisorySourceIdentity, resolvePublicAdvisoryTarget, saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.ts";
 import { responseFixture } from "./helpers/adapterFixtureHelpers.ts";
 
 Bun.env.HANASAND_AI_API_BASE = "";
@@ -57,16 +57,36 @@ describe("DWM exposure queue pipeline", () => {
       body: JSON.stringify({
         tenantId: "org_ntnu_research",
         organizationId: "org_ntnu_research",
-        items: [{ tenantId: "org_ntnu_research", organizationId: "org_ntnu_research", company: "NTNU", sourceFamily: "public_advisory", url: pageUrl }]
+        items: [{ tenantId: "org_ntnu_research", organizationId: "org_ntnu_research", company: "NTNU", sourceFamily: "public_advisory", publishedAt: "1999-01-01T00:00:00.000Z", url: pageUrl }]
       })
     }), options);
     const ingestBody = await ingest.json() as any;
     expect(ingestBody.accepted).toBe(1);
-    expect(store.listSources()[0]).toMatchObject({ tenantId: "org_ntnu_research", type: "public_advisory", status: "active", accessMethod: "public_http", metadata: { canaryPortfolio: true, organizationId: "org_ntnu_research" } });
+    expect(store.listSources()[0]).toMatchObject({ id: publicAdvisorySourceIdentity(reportUrl).id, tenantId: undefined, type: "static_web", url: "https://news.example.test/", status: "candidate", accessMethod: "public_http", metadata: { sourceFamily: "public_advisory", productionCollection: false } });
+    expect(store.listSources()[0].metadata?.canaryPortfolio).toBeUndefined();
     expect(store.listCaptures()[0]).toMatchObject({ tenantId: "org_ntnu_research", url: reportUrl, title: "NTNU hit by cyberattack", publishedAt, sensitive: false, metadata: { adapter: "static_web", sourceFamily: "public_advisory", organizationId: "org_ntnu_research" } });
-    expect(store.listTimelinessRecords()[0]).toMatchObject({ captureId: store.listCaptures()[0].id, publishedAt, publisherReportedAt: publishedAt, reportTimestamps: [expect.objectContaining({ evidencePath: "page.metadata.datePublished", extractionMethod: "source_field" })] });
+    expect(store.listSources()[0]).toMatchObject({ lastSeenAt: store.listCaptures()[0].collectedAt, health: { checkedAt: store.listCaptures()[0].collectedAt, lastSuccessAt: store.listCaptures()[0].collectedAt, lastUsefulAt: store.listCaptures()[0].collectedAt } });
+    expect(store.listSourceHealthObservations()).toEqual([expect.objectContaining({ tenantId: "org_ntnu_research", sourceId: store.listCaptures()[0].sourceId, taskId: store.listCaptures()[0].taskId, captureId: store.listCaptures()[0].id, checkedAt: store.listCaptures()[0].collectedAt, success: true, useful: true, itemCount: 1, captureCount: 1, duplicateCount: 0, legalMode: "public_content" })]);
+    expect(store.listTimelinessRecords()[0]).toMatchObject({ captureId: store.listCaptures()[0].id, publishedAt, publisherReportedAt: publishedAt, reportTimestamps: [expect.objectContaining({ evidencePath: "page.publicationTimestamp", extractionMethod: "source_field" })] });
+    expect(JSON.stringify(store.listCaptures()[0])).not.toContain("1999-01-01T00:00:00.000Z");
     expect(store.listCaptures()[0].metadata?.leakSite).toBeUndefined();
     expect(JSON.stringify(store.listCaptures()[0])).not.toContain("has just published a new victim");
+
+    const firstCheckedAt = store.listSourceHealthObservations()[0].checkedAt;
+    await Bun.sleep(5);
+    const replay = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tenantId: "org_ntnu_research", organizationId: "org_ntnu_research", items: [{ company: "NTNU", sourceFamily: "public_advisory", url: pageUrl }] })
+    }), options);
+    expect(await replay.json()).toMatchObject({ accepted: 1, rejected: 0 });
+    expect(store.listCaptures()).toHaveLength(1);
+    const health = store.listSourceHealthObservations().sort((left: any, right: any) => left.checkedAt.localeCompare(right.checkedAt));
+    expect(health).toHaveLength(2);
+    expect(health[0]).toMatchObject({ checkedAt: firstCheckedAt, captureCount: 1, duplicateCount: 0 });
+    expect(health[1]).toMatchObject({ captureId: store.listCaptures()[0].id, captureCount: 0, duplicateCount: 1 });
+    expect(Date.parse(health[1].checkedAt)).toBeGreaterThan(Date.parse(firstCheckedAt));
+    expect(store.listSources()[0]).toMatchObject({ lastSeenAt: health[1].checkedAt, health: { checkedAt: health[1].checkedAt, lastSuccessAt: health[1].checkedAt, lastUsefulAt: health[1].checkedAt } });
 
     const rebuild = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/alerts/rebuild", {
       method: "POST",
@@ -77,6 +97,87 @@ describe("DWM exposure queue pipeline", () => {
     expect(rebuildBody.savedAlertCount).toBe(1);
     expect(rebuildBody.alerts[0]).toMatchObject({ tenantId: "org_ntnu_research", organizationId: "org_ntnu_research", sourceFamily: "public_advisory" });
     expect(rebuildBody.alerts[0].evidence.map((row: any) => row.provenance?.captureId)).toContain(store.listCaptures()[0].id);
+  });
+
+  test("rejects an undated public incident page without persisting the submitted time", async () => {
+    const store = new InMemoryScraperStore();
+    const url = "https://news.example.test/undated-ntnu-incident";
+    const ingest = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ items: [{ company: "NTNU", sourceFamily: "public_advisory", publishedAt: "2025-07-09T11:00:00.000Z", url }] })
+    }), testOptions(store, { fetch: async (input: string | URL | Request) => {
+      const target = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (target.endsWith("/robots.txt")) return responseFixture("", { status: 404 }, target);
+      return responseFixture("<html><head><title>NTNU cyberattack</title></head><body>NTNU reports a supplier cyberattack and data breach.</body></html>", { headers: { "content-type": "text/html" } }, url);
+    } }));
+
+    expect(await ingest.json()).toMatchObject({ accepted: 0, rejected: 1 });
+    expect(store.listSources()).toEqual([]);
+    expect(store.listCaptures()).toEqual([]);
+    expect(store.listTimelinessRecords()).toEqual([]);
+    expect(store.listSourceHealthObservations()).toEqual([]);
+  });
+
+  test("shares publisher identity without collapsing organization-scoped reports and alerts", async () => {
+    const store = new InMemoryScraperStore();
+    const rows = [
+      { organizationId: "org_alpha", company: "Alpha", url: "https://publisher.example/reports/alpha", publishedAt: "2026-07-20T10:00:00.000Z" },
+      { organizationId: "org_beta", company: "Beta", url: "https://publisher.example/reports/beta", publishedAt: "2026-07-20T11:00:00.000Z" },
+      { organizationId: "org_gamma", company: "Gamma", url: "https://publisher.example/reports/alpha", publishedAt: "2026-07-20T10:00:00.000Z" },
+      { organizationId: "org_delta", company: "Delta", url: "https://other-publisher.example/reports/delta", publishedAt: "2026-07-20T12:00:00.000Z" }
+    ];
+    for (const row of rows) {
+      store.saveOrganization({ id: row.organizationId, tenantId: "tenant_shared", name: row.company, status: "active" });
+      store.saveOrganizationMember({ id: `member_${row.company.toLowerCase()}`, userId: "analyst-test", organizationId: row.organizationId, role: "analyst", status: "active" });
+      store.saveDwmWatchlist({ id: `watch_${row.company.toLowerCase()}`, tenantId: "tenant_shared", organizationId: row.organizationId, name: row.company, terms: [{ id: `term_${row.company.toLowerCase()}`, value: row.company, kind: "company" }], status: "active", createdAt: "2026-07-20T00:00:00.000Z", updatedAt: "2026-07-20T00:00:00.000Z" });
+    }
+    const pages = new Map([
+      ["https://publisher.example/reports/alpha", { names: "Alpha and Gamma", publishedAt: rows[0].publishedAt }],
+      ["https://publisher.example/reports/beta", { names: "Beta", publishedAt: rows[1].publishedAt }],
+      ["https://other-publisher.example/reports/delta", { names: "Delta", publishedAt: rows[3].publishedAt }]
+    ]);
+    const options = testOptions(store, { fetch: async (input: string | URL | Request) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.endsWith("/robots.txt")) return responseFixture("", { status: 404 }, url);
+      const page = pages.get(url)!;
+      return responseFixture(`<!doctype html><html><head><title>${page.names} cyberattack</title><time datetime="${page.publishedAt}">Published</time></head><body>${page.names} report a supplier cyberattack and data breach affecting public records.</body></html>`, { headers: { "content-type": "text/html" } }, url);
+    } });
+
+    for (const row of rows) {
+      const response = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tenantId: "tenant_shared", organizationId: row.organizationId, items: [{ company: row.company, sourceFamily: "public_advisory", url: row.url }] })
+      }), options);
+      expect(await response.json()).toMatchObject({ accepted: 1, rejected: 0 });
+    }
+
+    const captures = new Map(store.listCaptures().map((capture) => [capture.metadata?.organizationId, capture]));
+    expect(store.listSources()).toHaveLength(2);
+    expect(captures.get("org_alpha")?.sourceId).toBe(captures.get("org_beta")?.sourceId);
+    expect(captures.get("org_alpha")?.sourceId).toBe(captures.get("org_gamma")?.sourceId);
+    expect(captures.get("org_delta")?.sourceId).not.toBe(captures.get("org_alpha")?.sourceId);
+    expect(captures.get("org_alpha")?.url).toBe(captures.get("org_gamma")?.url);
+    expect(captures.get("org_alpha")?.id).not.toBe(captures.get("org_gamma")?.id);
+
+    for (const row of rows) {
+      const response = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/alerts/rebuild", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tenantId: "tenant_shared", organizationId: row.organizationId })
+      }), options);
+      const payload = await response.json() as any;
+      expect(payload.savedAlertCount).toBe(1);
+      expect(payload.alerts[0]).toMatchObject({ tenantId: "tenant_shared", organizationId: row.organizationId });
+      expect(payload.alerts[0].evidence.map((evidence: any) => evidence.provenance?.captureId)).toEqual([captures.get(row.organizationId)?.id]);
+    }
+
+    const alphaList = await (await handleApiRequest(authenticatedRequest("http://local/v1/dwm/alerts?organizationId=org_alpha"), options)).json() as any;
+    expect(alphaList.alerts).toHaveLength(1);
+    expect(alphaList.alerts[0]).toMatchObject({ organizationId: "org_alpha" });
+    expect(JSON.stringify(alphaList)).not.toContain(captures.get("org_gamma")?.id);
+    expect(JSON.stringify(alphaList)).not.toContain("org_gamma");
   });
 
   test("rejects nonincidents, watch-term-absent pages, redirect downgrades, and private targets", async () => {
@@ -156,6 +257,34 @@ describe("DWM exposure queue pipeline", () => {
     const pinned = await new Promise<{ address: string; family: number }>((resolve, reject) => pinnedPublicAdvisoryLookup(validated.addresses)("news.example.com", { family: 0, hints: 0, all: false } as any, (cause, address, family) => cause ? reject(cause) : resolve({ address: String(address), family: Number(family) })));
     expect(pinned).toEqual(publicAddresses[0]);
     expect(resolutions).toBe(1);
+  });
+
+  test("reuses a deterministic executable publisher instead of retired origin duplicates", () => {
+    const sources = [
+      source({ id: "src_retired_first", url: "https://publisher.example/retired", status: "retired", metadata: { productionCollection: false, retiredReason: "replaced" } }),
+      source({ id: "src_active_z", url: "https://publisher.example/feed-z", status: "active", metadata: { productionCollection: true } }),
+      source({ id: "src_active_a", url: "https://publisher.example/feed-a", status: "active", metadata: { productionCollection: true } })
+    ];
+
+    expect(publicAdvisorySourceIdentity("https://publisher.example/reports/incident", sources)).toMatchObject({ id: "src_active_a", existing: { id: "src_active_a" }, url: "https://publisher.example/" });
+  });
+
+  test("builds candidate-publisher alerts only from retained matching evidence", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveOrganization({ id: "org_candidate", tenantId: "tenant_candidate", name: "Candidate monitor", status: "active" });
+    store.saveOrganizationMember({ id: "member_candidate", userId: "analyst-test", organizationId: "org_candidate", role: "analyst", status: "active" });
+    store.saveDwmWatchlist({ id: "watch_candidate", tenantId: "tenant_candidate", organizationId: "org_candidate", name: "Candidate", terms: [{ id: "term_candidate", value: "Candidate Corp", kind: "company" }], status: "active", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" });
+    store.saveSource(source({ id: "src_candidate_publisher", tenantId: undefined, name: "Public advisory publisher candidate.example", type: "static_web", url: "https://candidate.example/", status: "candidate", metadata: { sourceFamily: "public_advisory", collectionMode: "publisher_site", productionCollection: false } }));
+    const options = testOptions(store);
+    const rebuild = () => handleApiRequest(authenticatedRequest("http://local/v1/dwm/alerts/rebuild", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tenantId: "tenant_candidate", organizationId: "org_candidate" }) }), options);
+
+    expect(await (await rebuild()).json()).toMatchObject({ savedAlertCount: 0, alerts: [] });
+    store.saveCapture(fixtureCapture({ id: "cap_candidate_nonmatch", tenantId: "tenant_candidate", sourceId: "src_candidate_publisher", url: "https://candidate.example/nonmatch", body: "Unrelated retained public report.", collectedAt: "2025-01-02T00:00:00.000Z", publishedAt: "2025-01-01T00:00:00.000Z", metadata: { organizationId: "org_candidate", sourceFamily: "public_advisory" } }));
+    expect(await (await rebuild()).json()).toMatchObject({ savedAlertCount: 0, alerts: [] });
+    store.saveCapture(fixtureCapture({ id: "cap_candidate_match", tenantId: "tenant_candidate", sourceId: "src_candidate_publisher", url: "https://candidate.example/match", body: "Candidate Corp reports a supplier cyberattack and data breach.", collectedAt: "2025-02-02T00:00:00.000Z", publishedAt: "2025-02-01T00:00:00.000Z", metadata: { organizationId: "org_candidate", sourceFamily: "public_advisory" } }));
+    const retained = await (await rebuild()).json() as any;
+    expect(retained.savedAlertCount).toBe(1);
+    expect(retained.alerts[0]).toMatchObject({ organizationId: "org_candidate", sourceFamily: "public_advisory", firstSeenAt: "2025-02-02T00:00:00.000Z", evidence: [expect.objectContaining({ id: "cap_candidate_match", firstSeenAt: "2025-02-02T00:00:00.000Z" })] });
   });
 
   test("ingests parsed actor claims into the queue and shared TI search index", async () => {

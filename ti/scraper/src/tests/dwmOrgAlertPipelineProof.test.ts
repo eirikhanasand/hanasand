@@ -11,10 +11,13 @@ const source: SourceRecord = {
   url: "https://t.me/pipeline_public",
   accessMethod: "public_http",
   status: "active",
+  risk: "low",
   trustScore: 0.83,
   legalNotes: "Public channel preview only.",
   createdAt: "2026-06-28T16:00:00.000Z",
-  updatedAt: "2026-06-28T16:00:00.000Z"
+  updatedAt: "2026-06-28T16:00:00.000Z",
+  governance: { approvalRequired: false, approvalState: "approved", metadataOnly: false, approvedAt: "2026-06-28T15:00:00.000Z", approvedBy: "analyst_fixture" },
+  metadata: { productionCollection: true, collectionMode: "public_web_preview" }
 } as SourceRecord;
 
 const capture: RawCapture = {

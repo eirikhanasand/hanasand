@@ -6,6 +6,7 @@ import { pinnedPublicAdvisoryLookup, resolvePublicAdvisoryTarget } from "../api/
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { executeScheduledCollectionRun, recoverCollectionRuns } from "../ops/scheduledCollection.ts";
 import { scheduleWatchlistDiscoveryRuns } from "../ops/watchlistDiscovery.ts";
+import { handleApiRequest } from "../api/server.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
@@ -28,6 +29,7 @@ describe("scheduled organization watchlist discovery", () => {
       }
       if (url.endsWith("/robots.txt")) return response("", url, "text/plain", 404);
       if (url.endsWith("/ntnu")) return response(`<!doctype html><html><head><title>NTNU supplier cyberattack</title><meta property="article:published_time" content="${publishedAt}"></head><body><main><h1>NTNU supplier cyberattack</h1><p>NTNU reports that a supplier cyberattack compromised names and email addresses. The security incident was contained and public guidance was issued.</p></main></body></html>`, url, "text/html");
+      if (url.endsWith("/manual")) return response(`<!doctype html><html><head><title>Manual Corp cyberattack</title><time datetime="${publishedAt}">Published</time></head><body><main><h1>Manual Corp cyberattack</h1><p>Manual Corp reports that a supplier cyberattack caused a data breach affecting public records.</p></main></body></html>`, url, "text/html");
       return response("<html><head><title>Other dairy report</title></head><body>A supplier cyberattack affected another company, not the monitored organization.</body></html>", url, "text/html");
     };
     const runExecutor = (runId: string) => executeScheduledCollectionRun({ store, frontier, fetch: fetcher, maxConcurrentTasks: 1, maxItemsPerTask: 4 }, runId);
@@ -50,12 +52,28 @@ describe("scheduled organization watchlist discovery", () => {
     });
     expect(store.listCaptures()[0].sourceId).not.toBe("src_google_news_query");
     expect(JSON.stringify(store.listCaptures()[0])).not.toContain(" OR ");
-    expect(store.getSource(store.listCaptures()[0].sourceId)).toMatchObject({ tenantId: "tenant_ntnu", type: "static_web", metadata: { organizationId: "org_ntnu" } });
+    expect(store.getSource(store.listCaptures()[0].sourceId)).toMatchObject({ tenantId: undefined, type: "static_web", url: "https://reports.example.test/", status: "candidate", metadata: { sourceFamily: "public_advisory", productionCollection: false } });
+    expect(store.getSource(store.listCaptures()[0].sourceId)?.metadata?.organizationId).toBeUndefined();
     expect(store.listSourceHealthObservations()).toContainEqual(expect.objectContaining({ tenantId: "tenant_ntnu", sourceId: store.listCaptures()[0].sourceId, success: true, useful: true }));
     expect(store.listSourceHealthObservations()).toContainEqual(expect.objectContaining({ tenantId: "tenant_ntnu", sourceId: "src_google_news_query", success: true }));
     expect(store.listSourceHealthObservations()).toContainEqual(expect.objectContaining({ tenantId: "tenant_tine", sourceId: "src_google_news_query", success: true }));
     expect(store.listDwmAlerts()).toEqual([]);
     expect(store.listRuns().every((run) => (run.exposureClaimCount ?? 0) === 0)).toBe(true);
+
+    store.saveOrganization({ id: "org_manual", tenantId: "tenant_manual", name: "Manual monitor", status: "active" });
+    store.saveOrganizationMember({ id: "member_manual", userId: "analyst-test", organizationId: "org_manual", role: "analyst", status: "active" });
+    const scheduledCapture = store.listCaptures()[0];
+    const manual = await handleApiRequest(new Request("http://local/v1/dwm/exposure-claims/ingest", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer valid-test-session", id: "analyst-test" },
+      body: JSON.stringify({ tenantId: "tenant_manual", organizationId: "org_manual", items: [{ company: "Manual Corp", sourceFamily: "public_advisory", url: "https://reports.example.test/manual" }] })
+    }), { store, frontier, fetch: fetcher, authApiBase: "http://auth.test/api", authFetch: async () => Response.json({ id: "analyst-test", roles: [{ id: "analyst" }] }) } as any);
+    expect(await manual.json()).toMatchObject({ accepted: 1, rejected: 0 });
+    const manualCapture = store.listCaptures().find((capture) => capture.metadata?.organizationId === "org_manual")!;
+    expect(manualCapture).toMatchObject({ tenantId: "tenant_manual", url: "https://reports.example.test/manual" });
+    expect(manualCapture.sourceId).toBe(scheduledCapture.sourceId);
+    expect(manualCapture.id).not.toBe(scheduledCapture.id);
+    expect(store.listSources()).toHaveLength(2);
 
     const captureIds = store.listCaptures().map((capture) => capture.id);
     const second = await scheduleWatchlistDiscoveryRuns({ store, frontier, runExecutor, maxTasks: 5 }, generatedAt);

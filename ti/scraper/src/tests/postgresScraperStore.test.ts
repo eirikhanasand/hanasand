@@ -11,6 +11,7 @@ import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { PostgresScraperStore, normalizeLegacySourceForImport } from "../storage/postgresScraperStore.ts";
 import { hashContent } from "../utils.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
+import { fixtureCapture } from "./helpers/storageFixtures.ts";
 
 const collectedAt = "2026-07-19T12:00:00.000Z";
 
@@ -252,6 +253,145 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(await store.databaseHealth()).toMatchObject({ ok: true, pendingWrites: 0 });
     await store.close();
   });
+
+  test("migrates dirty null-timestamp capture history without losing scoped evidence", async () => {
+    const sourceId = "src_tenant_capture_dedupe";
+    const normalizedTextHash = "same-normalized-public-report";
+    const capture = (id: string, tenantId: string, url: string, contentHash: string, publishedAt?: string, organizationId?: string, textHash = normalizedTextHash) => fixtureCapture({
+      id,
+      tenantId,
+      sourceId,
+      url,
+      body: `Retained public incident evidence ${id}.`,
+      contentHash,
+      normalizedTextHash: textHash,
+      publishedAt,
+      metadata: { fixture: true, ...(organizationId ? { organizationId } : {}) }
+    });
+    const bootstrap = await PostgresScraperStore.create({ databaseUrl });
+    bootstrap.saveSource(source({ id: sourceId, tenantId: undefined, url: "https://publisher.example/" }));
+    await bootstrap.close();
+
+    await admin.unsafe(`
+      DROP TRIGGER IF EXISTS threat_intel_captures_reject_duplicate_text ON threat_intel.captures;
+      DROP TRIGGER IF EXISTS threat_intel_captures_reject_duplicate_identity ON threat_intel.captures;
+      DROP FUNCTION IF EXISTS threat_intel.reject_duplicate_capture_text();
+      DROP FUNCTION IF EXISTS threat_intel.reject_duplicate_capture_identity();
+      DROP INDEX IF EXISTS threat_intel.threat_intel_captures_source_text_published_uq;
+      DROP INDEX IF EXISTS threat_intel.threat_intel_captures_source_text_published_lookup_idx;
+      DROP INDEX IF EXISTS threat_intel.threat_intel_captures_source_content_published_uq;
+      DROP INDEX IF EXISTS threat_intel.threat_intel_captures_source_url_published_uq;
+      DELETE FROM threat_intel.schema_migrations WHERE version = '029_scope_capture_dedupe_by_tenant';
+      CREATE UNIQUE INDEX threat_intel_captures_source_text_published_uq
+        ON threat_intel.captures (source_id, normalized_text_hash, published_at)
+        WHERE normalized_text_hash IS NOT NULL;
+      CREATE UNIQUE INDEX threat_intel_captures_source_content_published_uq
+        ON threat_intel.captures (source_id, content_hash, published_at);
+    `);
+
+    const dirtyCaptures = [
+      capture("cap_dirty_null_a", "tenant_alpha", "https://publisher.example/dirty-a", "dirty-content-a"),
+      capture("cap_dirty_null_b", "tenant_alpha", "https://publisher.example/dirty-b", "dirty-content-b"),
+      capture("cap_dirty_null_url_a", "tenant_alpha", "https://publisher.example/versioned", "dirty-url-content-a", undefined, undefined, "dirty-url-text-a"),
+      capture("cap_dirty_null_url_b", "tenant_alpha", "https://publisher.example/versioned", "dirty-url-content-b", undefined, undefined, "dirty-url-text-b")
+    ];
+    for (const row of dirtyCaptures) {
+      await admin`
+        INSERT INTO threat_intel.captures (
+          id, tenant_id, source_id, url, canonical_url, collected_at, published_at,
+          processed_at, first_visible_at, content_hash, normalized_text_hash, media_type,
+          storage_kind, body, sensitive, retention_class, extractor_version, record
+        ) VALUES (
+          ${row.id}, ${row.tenantId}, ${row.sourceId}, ${row.url}, ${row.url}, ${row.collectedAt},
+          NULL, ${row.collectedAt}, ${row.collectedAt}, ${row.contentHash}, ${row.normalizedTextHash},
+          ${row.mediaType}, ${row.storageKind}, ${row.body}, ${row.sensitive}, ${row.retentionClass ?? "standard"},
+          ${row.provenance?.extractorVersion ?? "fixture:v1"}, ${JSON.stringify(row)}::text::jsonb
+        )
+      `;
+      await admin`
+        INSERT INTO threat_intel.evidence_links (
+          id, tenant_id, capture_id, subject_type, subject_id, relationship,
+          confidence, extractor_version, record
+        ) VALUES (
+          ${`link_${row.id}`}, ${row.tenantId}, ${row.id}, 'validation', ${`validation_${row.id}`},
+          'supports', 1, 'fixture:v1', ${JSON.stringify({ id: `link_${row.id}`, tenantId: row.tenantId, captureId: row.id, subjectType: "validation", subjectId: `validation_${row.id}`, relationship: "supports", confidence: 1, extractorVersion: "fixture:v1" })}::text::jsonb
+        )
+      `;
+    }
+
+    const dirtyBefore = {
+      captures: await admin`SELECT to_jsonb(capture) AS row FROM threat_intel.captures AS capture WHERE id IN ('cap_dirty_null_a', 'cap_dirty_null_b', 'cap_dirty_null_url_a', 'cap_dirty_null_url_b') ORDER BY id`,
+      links: await admin`SELECT to_jsonb(link) AS row FROM threat_intel.evidence_links AS link WHERE capture_id IN ('cap_dirty_null_a', 'cap_dirty_null_b', 'cap_dirty_null_url_a', 'cap_dirty_null_url_b') ORDER BY id`
+    };
+
+    const migrated = await PostgresScraperStore.create({ databaseUrl });
+    expect(await admin`SELECT to_jsonb(capture) AS row FROM threat_intel.captures AS capture WHERE id IN ('cap_dirty_null_a', 'cap_dirty_null_b', 'cap_dirty_null_url_a', 'cap_dirty_null_url_b') ORDER BY id`).toEqual(dirtyBefore.captures);
+    expect(await admin`SELECT to_jsonb(link) AS row FROM threat_intel.evidence_links AS link WHERE capture_id IN ('cap_dirty_null_a', 'cap_dirty_null_b', 'cap_dirty_null_url_a', 'cap_dirty_null_url_b') ORDER BY id`).toEqual(dirtyBefore.links);
+    await admin`UPDATE threat_intel.captures SET normalized_text_hash = normalized_text_hash WHERE id = 'cap_dirty_null_a'`;
+    expect(migrated.listCaptures().filter((row) => row.tenantId === "tenant_alpha")).toHaveLength(4);
+    expect(migrated.listEvidenceLinks().filter((row: any) => row.tenantId === "tenant_alpha")).toHaveLength(4);
+    const replay = capture("cap_dirty_null_replay", "tenant_alpha", "https://publisher.example/replay", "dirty-content-replay");
+    const foundReplay = migrated.findDuplicateCapture(replay);
+    expect(migrated.saveCaptureWithDedupe(replay)).toMatchObject({ status: "duplicate" });
+    expect(dirtyCaptures.map((row) => row.id)).toContain(foundReplay?.id);
+    expect(migrated.saveCaptureWithDedupe(capture("cap_changed_same_url", "tenant_alpha", "https://publisher.example/versioned", "changed-url-content", undefined, undefined, "changed-url-text")).status).toBe("inserted");
+
+    expect(migrated.saveCaptureWithDedupe(capture("cap_dirty_null_beta", "tenant_beta", "https://publisher.example/dirty-a", "dirty-content-beta")).status).toBe("inserted");
+    const publishedAt = "2026-07-20T10:00:00.000Z";
+    const published = capture("cap_published_alpha", "tenant_alpha", "https://publisher.example/published", "published-content-a", publishedAt);
+    expect(migrated.saveCaptureWithDedupe(published).status).toBe("inserted");
+    expect(migrated.saveCaptureWithDedupe(capture("cap_published_duplicate", "tenant_alpha", "https://publisher.example/published-copy", "published-content-b", publishedAt))).toMatchObject({ status: "duplicate", duplicateOf: published.id });
+    expect(migrated.saveCaptureWithDedupe(capture("cap_published_later", "tenant_alpha", "https://publisher.example/published-later", "published-content-c", "2026-07-20T11:00:00.000Z")).status).toBe("inserted");
+    const sharedArticle = "https://publisher.example/shared-tenant-report";
+    const sharedPublishedAt = "2026-07-20T12:00:00.000Z";
+    const sharedAlpha = capture("cap_shared_org_alpha", "tenant_shared", sharedArticle, "shared-content", sharedPublishedAt, "org_alpha");
+    const sharedBeta = capture("cap_shared_org_beta", "tenant_shared", sharedArticle, "shared-content", sharedPublishedAt, "org_beta");
+    expect(migrated.saveCaptureWithDedupe(sharedAlpha).status).toBe("inserted");
+    expect(migrated.saveCaptureWithDedupe(sharedBeta).status).toBe("inserted");
+    expect(migrated.saveCaptureWithDedupe({ ...sharedAlpha, id: "cap_shared_org_alpha_replay" })).toMatchObject({ status: "duplicate", duplicateOf: sharedAlpha.id });
+    await migrated.close();
+
+    await admin.unsafe(`
+      DO $$
+      BEGIN
+        BEGIN
+          INSERT INTO threat_intel.captures (
+            id, tenant_id, source_id, url, canonical_url, collected_at, published_at,
+            processed_at, first_visible_at, content_hash, normalized_text_hash, media_type,
+            storage_kind, body, sensitive, retention_class, extractor_version, record
+          )
+          SELECT
+            'cap_database_replay', tenant_id, source_id, 'https://publisher.example/database-replay',
+            'https://publisher.example/database-replay', collected_at, published_at, processed_at,
+            first_visible_at, content_hash, NULL, media_type,
+            storage_kind, body, sensitive, retention_class, extractor_version, record
+          FROM threat_intel.captures WHERE id = 'cap_dirty_null_a';
+          RAISE EXCEPTION 'expected duplicate capture rejection';
+        EXCEPTION WHEN unique_violation THEN
+          NULL;
+        END;
+      END
+      $$;
+    `);
+    expect(await admin`SELECT id FROM threat_intel.captures WHERE id = 'cap_database_replay'`).toHaveLength(0);
+
+    const beforeRestart = {
+      captures: await admin`SELECT id, tenant_id, content_hash FROM threat_intel.captures WHERE source_id = ${sourceId} ORDER BY id`,
+      links: await admin`SELECT id, capture_id FROM threat_intel.evidence_links WHERE capture_id IN ('cap_dirty_null_a', 'cap_dirty_null_b', 'cap_dirty_null_url_a', 'cap_dirty_null_url_b') ORDER BY id`
+    };
+    expect(beforeRestart.captures).toHaveLength(10);
+    expect(beforeRestart.links).toHaveLength(4);
+
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '029_scope_capture_dedupe_by_tenant'`;
+    const restarted = await PostgresScraperStore.create({ databaseUrl });
+    expect(restarted.saveCaptureWithDedupe(replay).status).toBe("duplicate");
+    await restarted.close();
+    expect(await admin`SELECT id, tenant_id, content_hash FROM threat_intel.captures WHERE source_id = ${sourceId} ORDER BY id`).toEqual(beforeRestart.captures);
+    expect(await admin`SELECT id, capture_id FROM threat_intel.evidence_links WHERE capture_id IN ('cap_dirty_null_a', 'cap_dirty_null_b', 'cap_dirty_null_url_a', 'cap_dirty_null_url_b') ORDER BY id`).toEqual(beforeRestart.links);
+    expect(await admin`SELECT to_jsonb(capture) AS row FROM threat_intel.captures AS capture WHERE id IN ('cap_dirty_null_a', 'cap_dirty_null_b', 'cap_dirty_null_url_a', 'cap_dirty_null_url_b') ORDER BY id`).toEqual(dirtyBefore.captures);
+    expect(await admin`SELECT to_jsonb(link) AS row FROM threat_intel.evidence_links AS link WHERE capture_id IN ('cap_dirty_null_a', 'cap_dirty_null_b', 'cap_dirty_null_url_a', 'cap_dirty_null_url_b') ORDER BY id`).toEqual(dirtyBefore.links);
+    expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '029_scope_capture_dedupe_by_tenant'`).toHaveLength(1);
+  }, 30_000);
 
   test("persists global actor identity catalogs across refresh and restart without fabricating activity", async () => {
     const first = await PostgresScraperStore.create({ databaseUrl });
@@ -791,12 +931,15 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         'capture_historical_publication_copy', tenant_id, source_id, task_id, url || '?historical=1', canonical_url || '?historical=1',
         collected_at + interval '20 minutes', collected_at + interval '20 minutes',
         processed_at + interval '20 minutes', first_visible_at + interval '20 minutes',
-        content_hash, normalized_text_hash, media_type, storage_kind, body, object_ref,
+        'historical-publication-content', 'historical-publication-text', media_type, storage_kind, body || ' Historical snapshot.', object_ref,
         sensitive, retention_class, extractor_version,
         record || jsonb_build_object(
           'id', 'capture_historical_publication_copy',
           'collectedAt', collected_at + interval '20 minutes',
-          'publishedAt', collected_at + interval '20 minutes'
+          'publishedAt', collected_at + interval '20 minutes',
+          'contentHash', 'historical-publication-content',
+          'normalizedTextHash', 'historical-publication-text',
+          'body', (record->>'body') || ' Historical snapshot.'
         )
       FROM threat_intel.captures
       WHERE id = ${savedVerified.capture.id}

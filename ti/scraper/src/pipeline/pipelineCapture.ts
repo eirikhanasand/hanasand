@@ -4,8 +4,11 @@ import { defaultRetentionClassForCapture } from "../storage/retention.ts";
 import { detectLanguageHooks, EXTRACTOR_VERSION } from "./extractors.ts";
 
 export function buildRawCapture(item: CollectedItem): RawCapture {
-  const captureId = stableId("cap", `${item.sourceId}:${item.url}:${item.contentHash}`);
   const contentHash = item.contentHash || hashContent(item.rawText);
+  const organizationId = typeof item.metadata?.organizationId === "string" ? item.metadata.organizationId : undefined;
+  const captureId = stableId("cap", item.tenantId
+    ? JSON.stringify([item.tenantId, organizationId ?? null, item.sourceId, item.url, contentHash])
+    : `${item.sourceId}:${item.url}:${item.contentHash}`);
   const sourceType = item.metadata?.sourceType ?? item.metadata?.adapter;
   const retentionClass = item.sensitive ? "restricted_metadata" : defaultRetentionClassForCapture({ sourceType, mediaType: item.html ? "text/html" : "text/plain" });
 

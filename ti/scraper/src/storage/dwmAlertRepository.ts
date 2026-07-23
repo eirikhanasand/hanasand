@@ -3,6 +3,7 @@ import { stableId, uniqueStrings } from "../utils.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 import type { TiSourceProvenancePublicTiSourceOpsProjection } from "../product/sourceProvenanceTiPageContract.ts";
 import type { RuntimeOrgMembershipContext, RuntimeOrgWatchlistTermContext } from "./dwmOrgWatchlistBridge.ts";
+import { isExecutableSource } from "../policy/collectionPolicy.ts";
 
 type DwmAlertVisibilityPolicy = "members" | "admins" | "owners";
 export type DwmDeliveryReadinessBlockerCode =
@@ -1519,7 +1520,6 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
   });
 
   const alerts = mergeSnapshotAlertsForGeneration(snapshot.alerts, generationPlan, input)
-    .filter((alert) => alertSourceFamilyActive(sources, alert.sourceFamily))
     .map((alert) => {
     const generationCandidate = findGenerationCandidate(generationPlan, alert);
     const scopedAlert = scopeAlertForGenerationCandidate(alert, generationCandidate, input);
@@ -4163,7 +4163,7 @@ function orgExportExpected(watchlists: RuntimeDwmWatchlist[]): boolean {
 function inactiveCandidateSourceFamilies(candidates: DwmAlertGenerationCandidate[], sources: SourceRecord[]): string[] {
   const activeFamilies = new Set(
     sources
-      .filter((source) => ["active", "approved", "canary"].includes(String((source as any).status ?? "").toLowerCase()))
+      .filter(isExecutableSource)
       .map((source) => sourceFamilyFor(source, {} as RawCapture))
   );
   const staleFamilies = new Set(
@@ -4183,10 +4183,6 @@ function staleCandidateSourceFamilies(candidates: DwmAlertGenerationCandidate[],
   );
   const candidateFamilies = uniqueStrings(candidates.flatMap((candidate) => candidate.captureRefs.map((ref) => ref.sourceFamily)));
   return candidateFamilies.filter((family) => staleFamilies.has(family));
-}
-
-function alertSourceFamilyActive(sources: SourceRecord[], sourceFamily: string): boolean {
-  return sources.some((source) => ["active", "approved", "canary"].includes(String((source as any).status ?? "").toLowerCase()) && sourceFamilyFor(source, {} as RawCapture) === sourceFamily);
 }
 
 function isStaleSourceStatus(status: unknown): boolean {

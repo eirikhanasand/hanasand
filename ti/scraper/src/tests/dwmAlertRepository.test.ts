@@ -13,10 +13,13 @@ const telegramSource: SourceRecord = {
   url: "https://t.me/repo_public",
   accessMethod: "public_http",
   status: "active",
+  risk: "low",
   trustScore: 0.82,
   legalNotes: "Public channel preview only.",
   createdAt: "2026-06-28T13:00:00.000Z",
-  updatedAt: "2026-06-28T13:00:00.000Z"
+  updatedAt: "2026-06-28T13:00:00.000Z",
+  governance: { approvalRequired: false, approvalState: "approved", metadataOnly: false, approvedAt: "2026-06-28T12:00:00.000Z", approvedBy: "analyst_fixture" },
+  metadata: { productionCollection: true, collectionMode: "public_web_preview" }
 } as SourceRecord;
 
 const darkwebSource: SourceRecord = {
@@ -26,10 +29,13 @@ const darkwebSource: SourceRecord = {
   url: "http://repo-example.onion",
   accessMethod: "approved_proxy",
   status: "active",
+  risk: "high",
   trustScore: 0.77,
   legalNotes: "Metadata-only collection.",
   createdAt: "2026-06-28T13:00:00.000Z",
-  updatedAt: "2026-06-28T13:00:00.000Z"
+  updatedAt: "2026-06-28T13:00:00.000Z",
+  governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-06-28T12:00:00.000Z", approvedBy: "analyst_fixture", riskJustification: "Metadata-only approved proxy fixture." },
+  metadata: { productionCollection: true }
 } as SourceRecord;
 
 const telegramCapture: RawCapture = {
@@ -152,10 +158,12 @@ const publicAdvisorySource: SourceRecord = {
   url: "https://cert.example/advisories/acme",
   accessMethod: "public_http",
   status: "active",
+  risk: "low",
   trustScore: 0.69,
   legalNotes: "Public TI advisory metadata.",
   createdAt: "2026-06-28T13:00:00.000Z",
-  updatedAt: "2026-06-28T13:00:00.000Z"
+  updatedAt: "2026-06-28T13:00:00.000Z",
+  metadata: { productionCollection: true }
 } as SourceRecord;
 
 const publicAdvisoryCapture: RawCapture = {
@@ -178,10 +186,12 @@ const clearWebSource: SourceRecord = {
   url: "https://research.example/reports",
   accessMethod: "public_http",
   status: "active",
+  risk: "low",
   trustScore: 0.66,
   legalNotes: "Public clear-web corroboration only.",
   createdAt: "2026-06-28T13:00:00.000Z",
-  updatedAt: "2026-06-28T13:00:00.000Z"
+  updatedAt: "2026-06-28T13:00:00.000Z",
+  metadata: { productionCollection: true }
 } as SourceRecord;
 
 const clearWebCapture: RawCapture = {
@@ -1636,7 +1646,7 @@ describe("dwm alert repository", () => {
     }).ready).toBe(true);
   });
 
-  test("matching probe reports blockers and preserves zero mutation for no match, inactive source, and entitlement denial", () => {
+  test("matching probe reports readiness blockers while retaining matched historical evidence", () => {
     const noMatchStore = new InMemoryScraperStore();
     noMatchStore.saveSource(telegramSource);
     noMatchStore.saveCapture(nonmatchCapture);
@@ -1784,8 +1794,8 @@ describe("dwm alert repository", () => {
       watchlistIds: ["watch_repo_inactive"]
     });
     const inactiveRebuild = rebuildDwmRuntimeAlerts({ store: inactiveStore as any, tenantId: "tenant_repo_inactive", organizationId: "org_repo_inactive" });
-    expect(inactiveRebuild.savedAlertCount).toBe(0);
-    expect((inactiveStore as any).listDwmAlerts()).toEqual([]);
+    expect(inactiveRebuild.savedAlertCount).toBe(1);
+    expect((inactiveStore as any).listDwmAlerts()).toEqual([expect.objectContaining({ sourceFamily: "telegram_public", firstSeenAt: telegramCapture.collectedAt })]);
 
     const staleStore = new InMemoryScraperStore();
     staleStore.saveSource({ ...telegramSource, id: "src_repo_tg_stale", status: "stale" } as SourceRecord);
@@ -1830,8 +1840,8 @@ describe("dwm alert repository", () => {
       sourceFamilies: ["telegram_public"]
     });
     const staleRebuild = rebuildDwmRuntimeAlerts({ store: staleStore as any, tenantId: "tenant_repo_stale", organizationId: "org_repo_stale" });
-    expect(staleRebuild.savedAlertCount).toBe(0);
-    expect((staleStore as any).listDwmAlerts()).toEqual([]);
+    expect(staleRebuild.savedAlertCount).toBe(1);
+    expect((staleStore as any).listDwmAlerts()).toEqual([expect.objectContaining({ sourceFamily: "telegram_public", firstSeenAt: telegramCapture.collectedAt })]);
 
     const staleEvidenceStore = new InMemoryScraperStore();
     staleEvidenceStore.saveSource(telegramSource);

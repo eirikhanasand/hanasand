@@ -46,7 +46,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const [webhookUrl, setWebhookUrl] = useState('')
     const [sourceTarget, setSourceTarget] = useState('')
     const [claimCompany, setClaimCompany] = useState('')
-    const [claimPublishedAt, setClaimPublishedAt] = useState('')
     const [claimUrl, setClaimUrl] = useState('')
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [result, setResult] = useState<WorkflowResult | null>(null)
@@ -107,21 +106,20 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         setResult(null)
 
         const company = claimCompany.trim()
-        const publishedAt = evidencePublishedAt(claimPublishedAt)
         const url = claimUrl.trim()
         const nextTerms = ensureTerm(terms, company)
 
-        if (!company || !publishedAt || !validEvidenceUrl(url)) {
-            setResult({ ok: false, message: 'Subject, original publication time, and an HTTPS source URL are required.' })
+        if (!company || !validEvidenceUrl(url)) {
+            setResult({ ok: false, message: 'Subject and an HTTPS source URL are required.' })
             setBusyAction(null)
             return
         }
 
         try {
-            const ingest = await ingestPublicEvidence({ company, publishedAt, url }, scope)
+            const ingest = await ingestPublicEvidence({ company, url }, scope)
             if (!ingest.ok) throw new Error(ingest.message)
             const accepted = typeof ingest.accepted === 'number' ? ingest.accepted : 0
-            if (!accepted) throw new Error('The source was not accepted. It must name the subject, describe a cyber incident, and provide an original publication time.')
+            if (!accepted) throw new Error('The source was not accepted. It must name the subject, describe a cyber incident, and publish a supported original timestamp.')
 
             const watchlist = await saveWatchlistTerms(nextTerms)
             if (!watchlist.ok) throw new Error(watchlist.message)
@@ -129,7 +127,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const rebuild = await alertRebuildFromWatchlistOrRequest(watchlist, scope)
             const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
             setTerms(nextTerms)
-            setClaimPublishedAt('')
             setClaimUrl('')
             setResult({ ok: rebuild.ok, message: rebuild.ok ? `Collected ${accepted} public incident report${accepted === 1 ? '' : 's'}. Matched ${savedAlertCount} alert${savedAlertCount === 1 ? '' : 's'}.` : rebuild.message })
             setLastRoute({
@@ -151,20 +148,19 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         setResult(null)
 
         const company = claimCompany.trim()
-        const publishedAt = evidencePublishedAt(claimPublishedAt)
         const url = claimUrl.trim()
         const nextTerms = ensureTerm(terms, company)
 
-        if (!company || !publishedAt || !validEvidenceUrl(url)) {
-            setResult({ ok: false, message: 'Subject, original publication time, and an HTTPS source URL are required.' })
+        if (!company || !validEvidenceUrl(url)) {
+            setResult({ ok: false, message: 'Subject and an HTTPS source URL are required.' })
             setBusyAction(null)
             return
         }
 
         try {
-            const ingest = await ingestPublicEvidence({ company, publishedAt, url }, scope)
+            const ingest = await ingestPublicEvidence({ company, url }, scope)
             const accepted = typeof ingest.accepted === 'number' ? ingest.accepted : 0
-            if (!accepted) throw new Error('The source was not accepted. It must name the subject, describe a cyber incident, and provide an original publication time.')
+            if (!accepted) throw new Error('The source was not accepted. It must name the subject, describe a cyber incident, and publish a supported original timestamp.')
 
             const watchlist = await saveWatchlistTerms(nextTerms)
             if (!watchlist.ok) throw new Error(watchlist.message)
@@ -203,7 +199,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             }
 
             setTerms(nextTerms)
-            setClaimPublishedAt('')
             setClaimUrl('')
             setLastRoute({
                 label: 'Public advisory case',
@@ -372,7 +367,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const effectiveTermCount = countTerms(workflowTerms(terms))
     const webhookConfigured = /^https?:\/\//i.test(webhookUrl.trim())
     const sourceReady = sourceTarget.trim().length > 0
-    const claimReady = claimCompany.trim().length > 0 && Boolean(evidencePublishedAt(claimPublishedAt)) && validEvidenceUrl(claimUrl)
+    const claimReady = claimCompany.trim().length > 0 && validEvidenceUrl(claimUrl)
     const busy = busyAction !== null
     const sourceCount = telemetry?.sourceCount ?? 0
     const activeSourceCount = telemetry?.activeSourceCount ?? 0
@@ -383,7 +378,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const latestRunCaptureCount = telemetry?.latestRunCaptureCount ?? 0
     const watchlistDisabledReason = termCount ? '' : 'Add at least one customer-owned watchlist term.'
     const sourceDisabledReason = sourceReady ? '' : 'Add a public Telegram handle or t.me URL first.'
-    const claimDisabledReason = claimReady ? '' : 'Add the affected subject, original publication time, and an HTTPS source URL.'
+    const claimDisabledReason = claimReady ? '' : 'Add the affected subject and an HTTPS source URL.'
     const webhookTestDisabledReason = webhookConfigured ? '' : 'Enter an HTTPS webhook URL before testing delivery.'
     const webhookSendDisabledReason = webhookConfigured || organizationId ? '' : 'Enter an HTTPS webhook URL or open an organization with a saved delivery destination before sending queued alerts.'
     const routeQueue = [
@@ -528,23 +523,16 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     <div className='flex items-start justify-between gap-3'>
                         <div>
                             <h2 className='text-base font-semibold text-ui-text'>Public incident evidence</h2>
-                            <p className='mt-1 text-sm leading-6 text-ui-subtle'>Fetch a public incident report, retain its original timestamp, and rebuild matching alerts.</p>
+                            <p className='mt-1 text-sm leading-6 text-ui-subtle'>Fetch a public incident report, retain its publisher timestamp, and rebuild matching alerts.</p>
                         </div>
                         <ShieldCheck className='h-5 w-5 text-ui-primary' />
                     </div>
-                    <div className='mt-4 grid gap-3 sm:grid-cols-2'>
+                    <div className='mt-4'>
                         <input
                             value={claimCompany}
                             onChange={event => setClaimCompany(event.target.value)}
                             placeholder='Affected organization or domain'
                             className='h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
-                        />
-                        <input
-                            type='datetime-local'
-                            value={claimPublishedAt}
-                            onChange={event => setClaimPublishedAt(event.target.value)}
-                            aria-label='Original publication time'
-                            className='h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                         />
                     </div>
                     <input
@@ -590,21 +578,15 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     )
 }
 
-async function ingestPublicEvidence(input: { company: string, publishedAt: string, url: string }, scope: { tenantId: string, organizationId?: string }) {
+async function ingestPublicEvidence(input: { company: string, url: string }, scope: { tenantId: string, organizationId?: string }) {
     return postJson('/api/dwm/exposure-claims/ingest', {
         items: [{
             ...scope,
             company: input.company,
-            publishedAt: input.publishedAt,
             sourceFamily: 'public_advisory',
             url: input.url,
         }],
     })
-}
-
-function evidencePublishedAt(value: string) {
-    const time = Date.parse(value)
-    return Number.isFinite(time) && time <= Date.now() ? new Date(time).toISOString() : ''
 }
 
 function selectRebuiltAlert(payload: Record<string, unknown>, company: string, terms: string) {

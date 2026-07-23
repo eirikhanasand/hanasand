@@ -46,7 +46,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "025_reconcile_timeliness_capture", path: fileURLToPath(new URL("../../migrations/025_reconcile_timeliness_capture.sql", import.meta.url)) },
   { version: "026_align_timeliness_capture_record", path: fileURLToPath(new URL("../../migrations/026_align_timeliness_capture_record.sql", import.meta.url)) },
   { version: "027_reconcile_delivery_latencies", path: fileURLToPath(new URL("../../migrations/027_reconcile_delivery_latencies.sql", import.meta.url)) },
-  { version: "028_remove_generic_business_labels", path: fileURLToPath(new URL("../../migrations/028_remove_generic_business_labels.sql", import.meta.url)) }
+  { version: "028_remove_generic_business_labels", path: fileURLToPath(new URL("../../migrations/028_remove_generic_business_labels.sql", import.meta.url)) },
+  { version: "029_scope_capture_dedupe_by_tenant", path: fileURLToPath(new URL("../../migrations/029_scope_capture_dedupe_by_tenant.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 

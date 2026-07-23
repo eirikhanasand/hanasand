@@ -1,5 +1,5 @@
 import { StaticWebAdapter } from "../adapters/staticWeb.ts";
-import { publicAdvisoryFetcher } from "../api/exposureQueueRoutes.ts";
+import { publicAdvisoryFetcher, publicAdvisorySourceIdentity } from "../api/exposureQueueRoutes.ts";
 import { createCollectionPlan } from "../planner/intelligencePlanner.ts";
 import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
@@ -114,7 +114,7 @@ export async function collectWatchlistDiscoveryEvidence(input: {
     if (!matched.length || !cyberIncidentText(candidateText)) continue;
     const requestedUrl = httpsUrl(candidate.url);
     if (!requestedUrl) continue;
-    const candidateSourceId = stableId("src_watchlist_public", `${input.task.tenantId}:${context.organizationId}:${requestedUrl}`);
+    const candidateSourceId = publicAdvisorySourceIdentity(requestedUrl, input.store.listSources?.()).id;
     const publicSource = {
       id: candidateSourceId,
       tenantId: input.task.tenantId,
@@ -125,17 +125,14 @@ export async function collectWatchlistDiscoveryEvidence(input: {
       status: "active",
       risk: "low",
       trustScore: 0.7,
-      crawlFrequencySeconds: 86_400,
+      crawlFrequencySeconds: 3600,
       legalNotes: "Public incident reporting collected without credentials, form submission, downloads, or access-control bypass.",
       createdAt: input.generatedAt,
       updatedAt: input.generatedAt,
       metadata: {
-        tenantId: input.task.tenantId,
-        organizationId: context.organizationId,
         sourceFamily: "public_advisory",
-        collectionMode: "scheduled_public_web_page",
-        productionCollection: true,
-        discoveryProviderSourceId: input.source.id
+        collectionMode: "public_web_page",
+        productionCollection: false
       }
     };
     const adapter = new StaticWebAdapter({
@@ -169,9 +166,9 @@ export async function collectWatchlistDiscoveryEvidence(input: {
     const canonicalUrl = httpsUrl(page.url);
     if (!canonicalUrl) continue;
 
-    const sourceId = stableId("src_watchlist_public", `${input.task.tenantId}:${context.organizationId}:${canonicalUrl}`);
-    const existingSource = input.store.getSource?.(sourceId);
-    input.store.saveSource({ ...publicSource, id: sourceId, name: `Public incident report ${new URL(canonicalUrl).hostname}`, url: canonicalUrl, createdAt: existingSource?.createdAt ?? input.generatedAt });
+    const publisher = publicAdvisorySourceIdentity(canonicalUrl, input.store.listSources?.());
+    const sourceId = publisher.id;
+    if (!publisher.existing) input.store.saveSource({ ...publicSource, id: sourceId, tenantId: undefined, name: `Public advisory publisher ${new URL(publisher.url).hostname}`, url: publisher.url, status: "candidate", createdAt: input.generatedAt, updatedAt: input.generatedAt, metadata: { sourceFamily: "public_advisory", collectionMode: "publisher_site", productionCollection: false } });
     const { html: _html, ...safePage } = page as any;
     collected.push({
       ...safePage,

@@ -167,6 +167,7 @@ for (const blockedCopy of [
 }
 
 assert.ok(workflowSource.includes('sourceFamily: \'public_advisory\''), 'DWM public evidence intake must retain its actual source family.')
-assert.ok(workflowSource.includes('publishedAt: input.publishedAt'), 'DWM public evidence intake must preserve the submitted original publication time.')
+assert.ok(!workflowSource.includes('publishedAt: input.publishedAt'), 'DWM public evidence intake must not accept submitted publisher provenance.')
+assert.ok(!workflowSource.includes('type=\'datetime-local\''), 'DWM public evidence intake must not render a publication-time input.')
 
 console.log('dwm analyst brief ok')

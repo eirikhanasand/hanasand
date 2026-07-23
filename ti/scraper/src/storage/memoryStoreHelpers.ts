@@ -4,7 +4,7 @@ import { hashContent, normalizeWhitespace, stableId } from "../utils.ts";
 
 export function captureDedupeKey(capture: RawCapture): CaptureDedupeKey {
   const p = prepareCapture(capture);
-  return { sourceId: p.sourceId, canonicalUrl: p.canonicalUrl ?? canonicalizeUrl(p.url), normalizedTextHash: p.normalizedTextHash, publishedAt: p.publishedAt };
+  return { tenantId: p.tenantId, organizationId: p.metadata?.organizationId, sourceId: p.sourceId, canonicalUrl: p.canonicalUrl ?? canonicalizeUrl(p.url), normalizedTextHash: p.normalizedTextHash, publishedAt: p.publishedAt };
 }
 
 export function canonicalizeUrl(value: string): string {
@@ -25,7 +25,10 @@ export function enforceSensitiveMetadataOnly(capture: RawCapture) {
 
 export function dedupeIndexKeys(capture: RawCapture) {
   const key = captureDedupeKey(capture), published = key.publishedAt ?? "", normalized = key.normalizedTextHash ?? "";
-  return [`source-text-published:${key.sourceId}:${normalized}:${published}`, `source-content-published:${capture.sourceId}:${capture.contentHash}:${published}`].filter((v) => !v.includes("::"));
+  return [
+    normalized ? JSON.stringify(["source-text-published", key.tenantId ?? null, key.organizationId ?? null, key.sourceId, normalized, published]) : undefined,
+    JSON.stringify(["source-content-published", key.tenantId ?? null, key.organizationId ?? null, capture.sourceId, capture.contentHash, published])
+  ].filter((value): value is string => Boolean(value));
 }
 
 export function deltaForSnapshot(kind: EvidenceDeltaKind, s: LiveSearchSnapshot): EvidenceDelta {
