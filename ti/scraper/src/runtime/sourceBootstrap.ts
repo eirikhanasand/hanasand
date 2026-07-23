@@ -174,6 +174,7 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
   };
   if (existing.metadata?.sourcePortfolioQualificationState === "sustained_productive" && runtimeAdmission) {
     reconciled.status = existing.status;
+    reconciled.countsAsCoverage = existing.countsAsCoverage === true;
     reconciled.metadata.productionCollection = existing.metadata?.productionCollection === true;
     reconciled.metadata.countsAsCoverage = existing.metadata?.countsAsCoverage === true;
     reconciled.metadata.sourcePortfolioQualificationState = "sustained_productive";
@@ -182,10 +183,12 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
     if (restricted) delete reconciled.metadata.restrictedMetadataCandidate;
   } else if (runtimeAdmission) {
     reconciled.status = existing.status;
+    reconciled.countsAsCoverage = existing.countsAsCoverage === true;
     reconciled.metadata.productionCollection = existing.metadata?.productionCollection !== false;
     if (reconciled.metadata.sourcePortfolioStatus === "verification_expired") delete reconciled.metadata.sourcePortfolioStatus;
   } else if (expiredPortfolio) {
     reconciled.status = "candidate";
+    reconciled.countsAsCoverage = false;
     reconciled.metadata.productionCollection = false;
     reconciled.metadata.sourcePortfolioStatus = "verification_expired";
   }
@@ -274,7 +277,7 @@ function shouldImportSource(source: SourceRecord) {
   return true;
 }
 
-function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedAt: string, restricted = false): SourceRecord {
+export function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedAt: string, restricted = false): SourceRecord {
   const portfolioCandidate = Boolean(source.metadata?.sourcePortfolioVerification);
   const clearWebPortfolio = portfolioCandidate && ["rss", "api", "json_api", "blog"].includes(source.type);
   const portfolioVerified = !source.metadata?.sourcePortfolioVerification || isCurrentSourcePortfolioVerification(source, generatedAt);
@@ -283,6 +286,7 @@ function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedA
   return {
     ...source,
     status: transportCanary ? "active" : restricted || portfolioCandidate ? "candidate" : activate ? "active" : source.status ?? "candidate",
+    countsAsCoverage: portfolioCandidate ? false : source.countsAsCoverage,
     createdAt: source.createdAt ?? generatedAt,
     updatedAt: generatedAt,
     metadata: {

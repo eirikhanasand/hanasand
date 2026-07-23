@@ -11,6 +11,7 @@ import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { buildRawCapture } from "../pipeline/pipelineCapture.ts";
 import { activeWatchlistDiscoveryTerms, collectWatchlistDiscoveryEvidence, scheduleWatchlistDiscoveryRuns } from "./watchlistDiscovery.ts";
 import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
+import { runSourceFeedDiscoveryCycle } from "./sourceFeedDiscovery.ts";
 export { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts"; export { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanaryReadinessPacket, buildCanarySoakReport } from "./canaryReports.ts";
 export type * from "./canaryCollectionTypes.ts";
@@ -80,10 +81,12 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
     state.running = true; state.lastCycleAt = nowIso();
     active = (async () => {
       try {
+        const sourceFeedDiscovery = await runSourceFeedDiscoveryCycle(options, options.now?.() ?? nowIso());
         const watchlistDiscovery = options.scheduleWatchlistDiscovery === false
           ? { scheduledRunCount: 0, skippedRunCount: 0, reason: "disabled_for_scheduler_lane" }
           : await scheduleWatchlistDiscoveryRuns(options, options.now?.() ?? nowIso());
         const result = await runCanaryCollectionCycle(options);
+        result.sourceFeedDiscovery = sourceFeedDiscovery;
         result.watchlistDiscovery = watchlistDiscovery;
         state.latestResult = result;
         if (["completed", "degraded"].includes(result.status)) {
@@ -302,10 +305,15 @@ function governedPortfolioCandidate(source: any, generatedAt: string) {
 function currentProductiveCycles(store: any, source: any, generatedAt: string) {
   const now = Date.parse(generatedAt);
   const windowSeconds = sourceMonitoringWindowSeconds(source);
+  const retainedRunIds = new Set((store.listCaptures?.() ?? [])
+    .filter((capture: any) => capture.sourceId === source.id && capture.tenantId === source.tenantId)
+    .map((capture: any) => String(capture.metadata?.runId ?? ""))
+    .filter(Boolean));
   const byRun = new Map<string, any>();
   for (const row of store.listSourceHealthObservations?.() ?? []) {
     const checkedAt = Date.parse(row.checkedAt), runId = String(row.collectionRunId ?? "");
-    if (row.sourceId !== source.id || row.tenantId !== source.tenantId || !runId || Number(row.captureCount ?? 0) < 1
+    if (row.sourceId !== source.id || row.tenantId !== source.tenantId || !runId || row.useful !== true
+      || Number(row.captureCount ?? 0) < 1 || !retainedRunIds.has(runId)
       || !Number.isFinite(checkedAt) || checkedAt > now || now - checkedAt > windowSeconds * 1_000) continue;
     if (!byRun.has(runId) || checkedAt > Date.parse(byRun.get(runId).checkedAt)) byRun.set(runId, row);
   }

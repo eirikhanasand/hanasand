@@ -18,9 +18,10 @@ export function reconcilePublicSourceProductivity(input: any) {
   const retired: Array<{ sourceId: string; attemptCount: number; productiveCheckCount: number }> = [];
 
   for (const source of input.store.listSources()) {
-    if (!["active", "canary", "probation", "degraded"].includes(source.status)
+    const portfolioCandidate = governedPortfolioCandidate(source);
+    if ((!["active", "canary", "probation", "degraded"].includes(source.status) && !portfolioCandidate)
       || !inProductivityScope(source, input.tenantId, input.includeSharedSources)
-      || !isExecutableSource(source)
+      || (!isExecutableSource(source) && !portfolioCandidate)
       || source.metadata?.transportCanary === true
       || CATALOG_PROFILES.has(source.metadata?.extractionProfile)) continue;
     const monitoringWindowSeconds = Math.max(
@@ -65,6 +66,17 @@ export function reconcilePublicSourceProductivity(input: any) {
     retired.push({ sourceId: source.id, attemptCount: history.length, productiveCheckCount });
   }
   return { generatedAt, retired };
+}
+
+function governedPortfolioCandidate(source: any) {
+  return source.status === "candidate"
+    && source.metadata?.productionCollection === false
+    && source.metadata?.sourcePortfolioExcluded !== true
+    && source.metadata?.sourcePortfolioVerification?.outcome === "content_parsed"
+    && source.accessMethod === "public_http"
+    && source.risk === "low"
+    && source.governance?.approvalState === "approved"
+    && ["rss", "api", "json_api", "telegram_public"].includes(source.type);
 }
 
 function inProductivityScope(source: any, tenantId?: string, includeSharedSources = true) {

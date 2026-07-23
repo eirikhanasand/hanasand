@@ -352,8 +352,8 @@ describe("public collection boundary", () => {
     };
     const start = (store: FileBackedScraperStore, at: string) => {
       const frontier = new FocusedFrontier({ maxQueueSize: 4 });
-      const global = startCanaryCollectionLoop({ store, frontier, enabled: false, maxSources: 1, maxTasks: 1, maxConcurrentTasks: 1, queueLimit: 4, now: () => at, fetch: fetcher });
-      const exactDefault = startCanaryCollectionLoop({ store, frontier, enabled: false, tenantId: "default", includeSharedSources: false, scheduleWatchlistDiscovery: false, maxSources: 1, maxTasks: 1, maxConcurrentTasks: 1, queueLimit: 4, now: () => at, fetch: fetcher });
+      const global = startCanaryCollectionLoop({ store, frontier, enabled: false, scheduleSourceFeedDiscovery: false, maxSources: 1, maxTasks: 1, maxConcurrentTasks: 1, queueLimit: 4, now: () => at, fetch: fetcher });
+      const exactDefault = startCanaryCollectionLoop({ store, frontier, enabled: false, tenantId: "default", includeSharedSources: false, scheduleWatchlistDiscovery: false, scheduleSourceFeedDiscovery: false, maxSources: 1, maxTasks: 1, maxConcurrentTasks: 1, queueLimit: 4, now: () => at, fetch: fetcher });
       global.setEnabled(true);
       exactDefault.setEnabled(true);
       return { global, exactDefault };
