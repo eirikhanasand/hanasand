@@ -2,8 +2,8 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "clear_web",
   "version": 1,
-  "name": "clear-web-production-portfolio-batch-001",
-  "generatedAt": "2026-07-23T09:56:30Z",
+  "name": "clear-web-production-portfolio-batch-002",
+  "generatedAt": "2026-07-23T10:17:46Z",
   "sources": [
     {
       "id": "src_portfolio_cw_0977a279a68272bf9d63",
@@ -1152,6 +1152,974 @@
         ],
         "rollback": {}
       }
+    },
+    {
+      "id": "src_portfolio_cw_965efb0bd3ca1d37c864",
+      "name": "HKCERT Security Bulletins and Blog",
+      "type": "rss",
+      "url": "https://www.hkcert.org/getrss/security-bulletin",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.95,
+      "language": "en",
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Public unauthenticated HKCERT Security Bulletins and Blog feed; retain publisher-authored defensive vulnerability, incident, and threat-analysis metadata and bounded safe excerpts under the publisher's public site terms.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvalScope": "safe_public_auto",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:17:46Z",
+        "approvedBy": "source-portfolio-clear-web-verifier",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "clear_web",
+        "activityWindowSeconds": 2592000,
+        "maxItemsPerFetch": 40,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:17:46Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "httpStatus": 200,
+          "contentType": "application/rss+xml;charset=utf-8;",
+          "adapter": "rss",
+          "publisherReference": "https://www.hkcert.org/getrss",
+          "legalBasisVerifiedAt": "2026-07-23T10:17:46Z",
+          "latestPublishedAt": "2026-07-23T03:00:00.000Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "clear-web:www.hkcert.org:1d37c86403dc",
+        "publisher": {
+          "name": "Hong Kong Computer Emergency Response Team Coordination Centre",
+          "country": "HK",
+          "homepage": "https://www.hkcert.org/",
+          "trustBasis": "cert"
+        },
+        "tier": "tier_1",
+        "approvalScope": "safe_public_auto",
+        "license": "Public publisher feed metadata and bounded safe excerpts; publisher site terms apply.",
+        "legalBasis": "Public unauthenticated HKCERT Security Bulletins and Blog feed; retain publisher-authored defensive vulnerability, incident, and threat-analysis metadata and bounded safe excerpts under the publisher's public site terms.",
+        "reliability": 0.95,
+        "intelligenceValue": 0.9299999999999999,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "security bulletin",
+            "vulnerability",
+            "incident campaign",
+            "threat analysis"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Hong Kong",
+            "global"
+          ],
+          "countries": [
+            "HK"
+          ],
+          "languages": [
+            "en"
+          ],
+          "queryPatterns": [
+            "security bulletin",
+            "vulnerability",
+            "incident campaign",
+            "threat analysis"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 3600,
+          "budgetClass": "high",
+          "crawlCadenceSeconds": 3600
+        },
+        "adapterCompatibility": [
+          "rss"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_cw_e70513233da23a211bb1",
+      "name": "openSUSE Security Announcement Archive",
+      "type": "rss",
+      "url": "https://lists.opensuse.org/archives/list/security-announce@lists.opensuse.org/feed/",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.9,
+      "language": "en",
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Public unauthenticated openSUSE Security Announcement Archive feed; retain publisher-authored defensive package advisory metadata and bounded safe excerpts under the publisher's public site terms.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvalScope": "safe_public_auto",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:17:46Z",
+        "approvedBy": "source-portfolio-clear-web-verifier",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "clear_web",
+        "activityWindowSeconds": 2592000,
+        "maxItemsPerFetch": 40,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:17:46Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 30,
+          "httpStatus": 200,
+          "contentType": "application/rss+xml; charset=utf-8",
+          "adapter": "rss",
+          "publisherReference": "https://lists.opensuse.org/archives/list/security-announce@lists.opensuse.org/",
+          "legalBasisVerifiedAt": "2026-07-23T10:17:46Z",
+          "latestPublishedAt": "2026-07-23T08:39:08.000Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "clear-web:lists.opensuse.org:3a211bb17770",
+        "publisher": {
+          "name": "openSUSE Project",
+          "country": "DE",
+          "homepage": "https://www.opensuse.org/",
+          "trustBasis": "vendor"
+        },
+        "tier": "tier_1",
+        "approvalScope": "safe_public_auto",
+        "license": "Public publisher feed metadata and bounded safe excerpts; publisher site terms apply.",
+        "legalBasis": "Public unauthenticated openSUSE Security Announcement Archive feed; retain publisher-authored defensive package advisory metadata and bounded safe excerpts under the publisher's public site terms.",
+        "reliability": 0.9,
+        "intelligenceValue": 0.88,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "Linux security update",
+            "package vulnerability",
+            "CVE",
+            "remediation"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology"
+          ],
+          "regions": [
+            "global"
+          ],
+          "countries": [
+            "DE"
+          ],
+          "languages": [
+            "en"
+          ],
+          "queryPatterns": [
+            "Linux security update",
+            "package vulnerability",
+            "CVE",
+            "remediation"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 3600,
+          "budgetClass": "high",
+          "crawlCadenceSeconds": 3600
+        },
+        "adapterCompatibility": [
+          "rss"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_cw_68f8a37cd97a399919bd",
+      "name": "CERT-FR Immediate Security Alerts",
+      "type": "rss",
+      "url": "https://www.cert.ssi.gouv.fr/alerte/feed/",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.98,
+      "language": "fr",
+      "crawlFrequencySeconds": 21600,
+      "legalNotes": "Public unauthenticated CERT-FR Immediate Security Alerts feed; retain publisher-authored defensive warning metadata and bounded safe excerpts under the publisher's public site terms.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvalScope": "safe_public_auto",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:17:46Z",
+        "approvedBy": "source-portfolio-clear-web-verifier",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "clear_web",
+        "activityWindowSeconds": 31536000,
+        "maxItemsPerFetch": 40,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:17:46Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 40,
+          "httpStatus": 200,
+          "contentType": "application/xml",
+          "adapter": "rss",
+          "publisherReference": "https://www.cert.ssi.gouv.fr/alerte/",
+          "legalBasisVerifiedAt": "2026-07-23T10:17:46Z",
+          "latestPublishedAt": "2026-07-22T00:00:00.000Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "clear-web:www.cert.ssi.gouv.fr:399919bdeb75",
+        "publisher": {
+          "name": "CERT-FR / ANSSI",
+          "country": "FR",
+          "homepage": "https://www.cert.ssi.gouv.fr/",
+          "trustBasis": "government"
+        },
+        "tier": "tier_1",
+        "approvalScope": "safe_public_auto",
+        "license": "Public publisher feed metadata and bounded safe excerpts; publisher site terms apply.",
+        "legalBasis": "Public unauthenticated CERT-FR Immediate Security Alerts feed; retain publisher-authored defensive warning metadata and bounded safe excerpts under the publisher's public site terms.",
+        "reliability": 0.98,
+        "intelligenceValue": 0.96,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "immediate security alert",
+            "actively exploited vulnerability",
+            "incident warning",
+            "remediation"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "critical infrastructure",
+            "technology"
+          ],
+          "regions": [
+            "France",
+            "global"
+          ],
+          "countries": [
+            "FR"
+          ],
+          "languages": [
+            "fr"
+          ],
+          "queryPatterns": [
+            "immediate security alert",
+            "actively exploited vulnerability",
+            "incident warning",
+            "remediation"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 21600,
+          "collectionSlaSeconds": 21600,
+          "budgetClass": "high",
+          "crawlCadenceSeconds": 21600
+        },
+        "adapterCompatibility": [
+          "rss"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_cw_434031bb82ed6ccb6e74",
+      "name": "CERT-FR Threat and Incident Reports",
+      "type": "rss",
+      "url": "https://www.cert.ssi.gouv.fr/cti/feed/",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.98,
+      "language": "fr",
+      "crawlFrequencySeconds": 86400,
+      "legalNotes": "Public unauthenticated CERT-FR Threat and Incident Reports feed; retain publisher-authored defensive CTI and incident-analysis metadata and bounded safe excerpts under the publisher's public site terms.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvalScope": "safe_public_auto",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:17:46Z",
+        "approvedBy": "source-portfolio-clear-web-verifier",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "clear_web",
+        "activityWindowSeconds": 31536000,
+        "maxItemsPerFetch": 40,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:17:46Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 40,
+          "httpStatus": 200,
+          "contentType": "application/xml",
+          "adapter": "rss",
+          "publisherReference": "https://www.cert.ssi.gouv.fr/cti/",
+          "legalBasisVerifiedAt": "2026-07-23T10:17:46Z",
+          "latestPublishedAt": "2026-07-13T00:00:00.000Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "clear-web:www.cert.ssi.gouv.fr:6ccb6e748c97",
+        "publisher": {
+          "name": "CERT-FR / ANSSI",
+          "country": "FR",
+          "homepage": "https://www.cert.ssi.gouv.fr/",
+          "trustBasis": "government"
+        },
+        "tier": "tier_1",
+        "approvalScope": "safe_public_auto",
+        "license": "Public publisher feed metadata and bounded safe excerpts; publisher site terms apply.",
+        "legalBasis": "Public unauthenticated CERT-FR Threat and Incident Reports feed; retain publisher-authored defensive CTI and incident-analysis metadata and bounded safe excerpts under the publisher's public site terms.",
+        "reliability": 0.98,
+        "intelligenceValue": 0.96,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "threat actor",
+            "intrusion set",
+            "incident analysis",
+            "campaign"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "critical infrastructure",
+            "enterprise"
+          ],
+          "regions": [
+            "France",
+            "Europe",
+            "global"
+          ],
+          "countries": [
+            "FR"
+          ],
+          "languages": [
+            "fr"
+          ],
+          "queryPatterns": [
+            "threat actor",
+            "intrusion set",
+            "incident analysis",
+            "campaign"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 86400,
+          "collectionSlaSeconds": 86400,
+          "budgetClass": "standard",
+          "crawlCadenceSeconds": 86400
+        },
+        "adapterCompatibility": [
+          "rss"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_cw_253c925ce240f8e67f81",
+      "name": "CERT-FR Published Security Advisories",
+      "type": "rss",
+      "url": "https://www.cert.ssi.gouv.fr/avis/feed/",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.98,
+      "language": "fr",
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Public unauthenticated CERT-FR Published Security Advisories feed; retain publisher-authored vulnerability and remediation metadata and bounded safe excerpts under the publisher's public site terms.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvalScope": "safe_public_auto",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:17:46Z",
+        "approvedBy": "source-portfolio-clear-web-verifier",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "clear_web",
+        "activityWindowSeconds": 2592000,
+        "maxItemsPerFetch": 40,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:17:46Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 40,
+          "httpStatus": 200,
+          "contentType": "application/xml",
+          "adapter": "rss",
+          "publisherReference": "https://www.cert.ssi.gouv.fr/avis/",
+          "legalBasisVerifiedAt": "2026-07-23T10:17:46Z",
+          "latestPublishedAt": "2026-07-22T00:00:00.000Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "clear-web:www.cert.ssi.gouv.fr:f8e67f81e700",
+        "publisher": {
+          "name": "CERT-FR / ANSSI",
+          "country": "FR",
+          "homepage": "https://www.cert.ssi.gouv.fr/",
+          "trustBasis": "government"
+        },
+        "tier": "tier_1",
+        "approvalScope": "safe_public_auto",
+        "license": "Public publisher feed metadata and bounded safe excerpts; publisher site terms apply.",
+        "legalBasis": "Public unauthenticated CERT-FR Published Security Advisories feed; retain publisher-authored vulnerability and remediation metadata and bounded safe excerpts under the publisher's public site terms.",
+        "reliability": 0.98,
+        "intelligenceValue": 0.96,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "security advisory",
+            "vulnerability",
+            "CVE",
+            "remediation"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "critical infrastructure",
+            "technology"
+          ],
+          "regions": [
+            "France",
+            "global"
+          ],
+          "countries": [
+            "FR"
+          ],
+          "languages": [
+            "fr"
+          ],
+          "queryPatterns": [
+            "security advisory",
+            "vulnerability",
+            "CVE",
+            "remediation"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 3600,
+          "budgetClass": "high",
+          "crawlCadenceSeconds": 3600
+        },
+        "adapterCompatibility": [
+          "rss"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_cw_f8480044eb75b92c5dae",
+      "name": "CERT-FR Current Affairs Bulletins",
+      "type": "rss",
+      "url": "https://www.cert.ssi.gouv.fr/actualite/feed/",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.94,
+      "language": "fr",
+      "crawlFrequencySeconds": 21600,
+      "legalNotes": "Public unauthenticated CERT-FR Current Affairs Bulletins feed; retain publisher-authored defensive situation-awareness and mitigation metadata and bounded safe excerpts under the publisher's public site terms.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvalScope": "safe_public_auto",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:17:46Z",
+        "approvedBy": "source-portfolio-clear-web-verifier",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "clear_web",
+        "activityWindowSeconds": 7776000,
+        "maxItemsPerFetch": 40,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:17:46Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 40,
+          "httpStatus": 200,
+          "contentType": "application/xml",
+          "adapter": "rss",
+          "publisherReference": "https://www.cert.ssi.gouv.fr/actualite/",
+          "legalBasisVerifiedAt": "2026-07-23T10:17:46Z",
+          "latestPublishedAt": "2026-07-20T00:00:00.000Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "clear-web:www.cert.ssi.gouv.fr:b92c5dae2c2e",
+        "publisher": {
+          "name": "CERT-FR / ANSSI",
+          "country": "FR",
+          "homepage": "https://www.cert.ssi.gouv.fr/",
+          "trustBasis": "government"
+        },
+        "tier": "tier_1",
+        "approvalScope": "safe_public_auto",
+        "license": "Public publisher feed metadata and bounded safe excerpts; publisher site terms apply.",
+        "legalBasis": "Public unauthenticated CERT-FR Current Affairs Bulletins feed; retain publisher-authored defensive situation-awareness and mitigation metadata and bounded safe excerpts under the publisher's public site terms.",
+        "reliability": 0.94,
+        "intelligenceValue": 0.9199999999999999,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "situation awareness",
+            "current vulnerability",
+            "incident trend",
+            "mitigation"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "critical infrastructure",
+            "enterprise"
+          ],
+          "regions": [
+            "France",
+            "Europe",
+            "global"
+          ],
+          "countries": [
+            "FR"
+          ],
+          "languages": [
+            "fr"
+          ],
+          "queryPatterns": [
+            "situation awareness",
+            "current vulnerability",
+            "incident trend",
+            "mitigation"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 21600,
+          "collectionSlaSeconds": 21600,
+          "budgetClass": "high",
+          "crawlCadenceSeconds": 21600
+        },
+        "adapterCompatibility": [
+          "rss"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_cw_4c4bcd15884bdb35ce63",
+      "name": "NCSC-FI Finnish Vulnerability Notices",
+      "type": "rss",
+      "url": "https://www.kyberturvallisuuskeskus.fi/feed/rss/fi/400",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.95,
+      "language": "fi",
+      "crawlFrequencySeconds": 21600,
+      "legalNotes": "Public unauthenticated NCSC-FI Finnish Vulnerability Notices feed; retain publisher-authored defensive vulnerability and remediation metadata and bounded safe excerpts under the publisher's public site terms.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvalScope": "safe_public_auto",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:17:46Z",
+        "approvedBy": "source-portfolio-clear-web-verifier",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "clear_web",
+        "activityWindowSeconds": 7776000,
+        "maxItemsPerFetch": 40,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:17:46Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 259,
+          "httpStatus": 200,
+          "contentType": "application/rss+xml; charset=utf-8",
+          "adapter": "rss",
+          "publisherReference": "https://kyberturvallisuuskeskus.fi/en/ncsc-news/rss-feeds",
+          "legalBasisVerifiedAt": "2026-07-23T10:17:46Z",
+          "latestPublishedAt": "2026-07-19T12:27:11.000Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "clear-web:www.kyberturvallisuuskeskus.fi:db35ce6396fa",
+        "publisher": {
+          "name": "National Cyber Security Centre Finland / Traficom",
+          "country": "FI",
+          "homepage": "https://www.kyberturvallisuuskeskus.fi/en",
+          "trustBasis": "government"
+        },
+        "tier": "tier_1",
+        "approvalScope": "safe_public_auto",
+        "license": "Public publisher feed metadata and bounded safe excerpts; publisher site terms apply.",
+        "legalBasis": "Public unauthenticated NCSC-FI Finnish Vulnerability Notices feed; retain publisher-authored defensive vulnerability and remediation metadata and bounded safe excerpts under the publisher's public site terms.",
+        "reliability": 0.95,
+        "intelligenceValue": 0.9299999999999999,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "vulnerability notice",
+            "critical vulnerability",
+            "CVE",
+            "remediation"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "critical infrastructure",
+            "technology"
+          ],
+          "regions": [
+            "Finland",
+            "Europe"
+          ],
+          "countries": [
+            "FI"
+          ],
+          "languages": [
+            "fi"
+          ],
+          "queryPatterns": [
+            "vulnerability notice",
+            "critical vulnerability",
+            "CVE",
+            "remediation"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 21600,
+          "collectionSlaSeconds": 21600,
+          "budgetClass": "high",
+          "crawlCadenceSeconds": 21600
+        },
+        "adapterCompatibility": [
+          "rss"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_cw_7a0fb4dbc23b3a52c521",
+      "name": "NCSC-FI Information Security Now",
+      "type": "rss",
+      "url": "https://www.kyberturvallisuuskeskus.fi/feed/rss/fi/399",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.95,
+      "language": "fi",
+      "crawlFrequencySeconds": 21600,
+      "legalNotes": "Public unauthenticated NCSC-FI Information Security Now feed; retain publisher-authored defensive situation-awareness and threat-analysis metadata and bounded safe excerpts under the publisher's public site terms.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvalScope": "safe_public_auto",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:17:46Z",
+        "approvedBy": "source-portfolio-clear-web-verifier",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "clear_web",
+        "activityWindowSeconds": 7776000,
+        "maxItemsPerFetch": 40,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:17:46Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 189,
+          "httpStatus": 200,
+          "contentType": "application/rss+xml; charset=utf-8",
+          "adapter": "rss",
+          "publisherReference": "https://kyberturvallisuuskeskus.fi/en/ncsc-news/rss-feeds",
+          "legalBasisVerifiedAt": "2026-07-23T10:17:46Z",
+          "latestPublishedAt": "2026-07-15T07:51:30.000Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "clear-web:www.kyberturvallisuuskeskus.fi:3a52c521f30c",
+        "publisher": {
+          "name": "National Cyber Security Centre Finland / Traficom",
+          "country": "FI",
+          "homepage": "https://www.kyberturvallisuuskeskus.fi/en",
+          "trustBasis": "government"
+        },
+        "tier": "tier_1",
+        "approvalScope": "safe_public_auto",
+        "license": "Public publisher feed metadata and bounded safe excerpts; publisher site terms apply.",
+        "legalBasis": "Public unauthenticated NCSC-FI Information Security Now feed; retain publisher-authored defensive situation-awareness and threat-analysis metadata and bounded safe excerpts under the publisher's public site terms.",
+        "reliability": 0.95,
+        "intelligenceValue": 0.9299999999999999,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "situation awareness",
+            "cyber incident",
+            "threat trend",
+            "defensive guidance"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "critical infrastructure",
+            "enterprise"
+          ],
+          "regions": [
+            "Finland",
+            "Europe"
+          ],
+          "countries": [
+            "FI"
+          ],
+          "languages": [
+            "fi"
+          ],
+          "queryPatterns": [
+            "situation awareness",
+            "cyber incident",
+            "threat trend",
+            "defensive guidance"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 21600,
+          "collectionSlaSeconds": 21600,
+          "budgetClass": "high",
+          "crawlCadenceSeconds": 21600
+        },
+        "adapterCompatibility": [
+          "rss"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_cw_ec2a2bda2f698c472c60",
+      "name": "CERT-SE National Cybersecurity Articles",
+      "type": "rss",
+      "url": "https://www.cert.se/feed/atom.xml",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.95,
+      "language": "sv",
+      "crawlFrequencySeconds": 21600,
+      "legalNotes": "Public unauthenticated CERT-SE National Cybersecurity Articles feed; retain publisher-authored defensive vulnerability, campaign, and incident metadata and bounded safe excerpts under the publisher's public site terms.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvalScope": "safe_public_auto",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:17:46Z",
+        "approvedBy": "source-portfolio-clear-web-verifier",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "clear_web",
+        "activityWindowSeconds": 7776000,
+        "maxItemsPerFetch": 40,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:17:46Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "httpStatus": 200,
+          "contentType": "application/atom+xml",
+          "adapter": "rss",
+          "publisherReference": "https://www.cert.se/prenumerera/",
+          "legalBasisVerifiedAt": "2026-07-23T10:17:46Z",
+          "latestPublishedAt": "2026-07-15T11:30:00.000Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "clear-web:www.cert.se:8c472c608a16",
+        "publisher": {
+          "name": "CERT-SE",
+          "country": "SE",
+          "homepage": "https://www.cert.se/",
+          "trustBasis": "cert"
+        },
+        "tier": "tier_1",
+        "approvalScope": "safe_public_auto",
+        "license": "Public publisher feed metadata and bounded safe excerpts; publisher site terms apply.",
+        "legalBasis": "Public unauthenticated CERT-SE National Cybersecurity Articles feed; retain publisher-authored defensive vulnerability, campaign, and incident metadata and bounded safe excerpts under the publisher's public site terms.",
+        "reliability": 0.95,
+        "intelligenceValue": 0.9299999999999999,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "vulnerability warning",
+            "malware campaign",
+            "incident",
+            "patch guidance"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "critical infrastructure",
+            "enterprise"
+          ],
+          "regions": [
+            "Sweden",
+            "Europe"
+          ],
+          "countries": [
+            "SE"
+          ],
+          "languages": [
+            "sv"
+          ],
+          "queryPatterns": [
+            "vulnerability warning",
+            "malware campaign",
+            "incident",
+            "patch guidance"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 21600,
+          "collectionSlaSeconds": 21600,
+          "budgetClass": "high",
+          "crawlCadenceSeconds": 21600
+        },
+        "adapterCompatibility": [
+          "rss"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_cw_028fa366d132a861e221",
+      "name": "CERT Polska Public Security Advisories",
+      "type": "rss",
+      "url": "https://moje.cert.pl/advisory_feed/advisory/feed/",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.95,
+      "language": "pl",
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Public unauthenticated CERT Polska Public Security Advisories feed; retain publisher-authored defensive campaign, vulnerability, and remediation metadata and bounded safe excerpts under the publisher's public site terms.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvalScope": "safe_public_auto",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:17:46Z",
+        "approvedBy": "source-portfolio-clear-web-verifier",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "clear_web",
+        "activityWindowSeconds": 2592000,
+        "maxItemsPerFetch": 40,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:17:46Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 10,
+          "httpStatus": 200,
+          "contentType": "application/xml",
+          "adapter": "rss",
+          "publisherReference": "https://moje.cert.pl/komunikaty/",
+          "legalBasisVerifiedAt": "2026-07-23T10:17:46Z",
+          "latestPublishedAt": "2026-07-23T07:23:05.000Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "clear-web:moje.cert.pl:a861e22140a2",
+        "publisher": {
+          "name": "CERT Polska / NASK",
+          "country": "PL",
+          "homepage": "https://cert.pl/",
+          "trustBasis": "cert"
+        },
+        "tier": "tier_1",
+        "approvalScope": "safe_public_auto",
+        "license": "Public publisher feed metadata and bounded safe excerpts; publisher site terms apply.",
+        "legalBasis": "Public unauthenticated CERT Polska Public Security Advisories feed; retain publisher-authored defensive campaign, vulnerability, and remediation metadata and bounded safe excerpts under the publisher's public site terms.",
+        "reliability": 0.95,
+        "intelligenceValue": 0.9299999999999999,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "phishing campaign",
+            "critical vulnerability",
+            "malware campaign",
+            "remediation"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "critical infrastructure",
+            "enterprise"
+          ],
+          "regions": [
+            "Poland",
+            "Europe"
+          ],
+          "countries": [
+            "PL"
+          ],
+          "languages": [
+            "pl"
+          ],
+          "queryPatterns": [
+            "phishing campaign",
+            "critical vulnerability",
+            "malware campaign",
+            "remediation"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 3600,
+          "budgetClass": "high",
+          "crawlCadenceSeconds": 3600
+        },
+        "adapterCompatibility": [
+          "rss"
+        ],
+        "rollback": {}
+      }
     }
   ],
   "exclusions": [
@@ -1284,6 +2252,61 @@
       "idOrUrlHash": "cc051f2b02598ba6c870c3df",
       "reason": "http_404",
       "verifiedAt": "2026-07-23T09:56:30Z"
+    },
+    {
+      "idOrUrlHash": "8de8b5d1418aa1ca5eafada2",
+      "reason": "copied_news_aggregator",
+      "verifiedAt": "2026-07-23T10:17:46Z"
+    },
+    {
+      "idOrUrlHash": "5248bf40f120e7bd4496971d",
+      "reason": "http_404",
+      "verifiedAt": "2026-07-23T10:17:46Z"
+    },
+    {
+      "idOrUrlHash": "0b38e1e5c7b6727b63c4e5e0",
+      "reason": "http_404",
+      "verifiedAt": "2026-07-23T10:17:46Z"
+    },
+    {
+      "idOrUrlHash": "5d2bb24aeed4078d43474c63",
+      "reason": "http_404",
+      "verifiedAt": "2026-07-23T10:17:46Z"
+    },
+    {
+      "idOrUrlHash": "1aebaa68b3417bf4c0676476",
+      "reason": "http_404",
+      "verifiedAt": "2026-07-23T10:17:46Z"
+    },
+    {
+      "idOrUrlHash": "c5e8f7c01dacce0f332521ef",
+      "reason": "parser_unsupported_record_container",
+      "verifiedAt": "2026-07-23T10:17:46Z"
+    },
+    {
+      "idOrUrlHash": "bb9aae5bd3925e1fcf8bb5f0",
+      "reason": "inactive_latest_item_outside_activity_window",
+      "verifiedAt": "2026-07-23T10:17:46Z"
+    },
+    {
+      "idOrUrlHash": "990e15a517e6ac326c915c3b",
+      "reason": "inactive_sparse_publication_cadence",
+      "verifiedAt": "2026-07-23T10:17:46Z"
+    },
+    {
+      "idOrUrlHash": "17a1235448911e838f4fed9e",
+      "reason": "inactive_latest_item_outside_activity_window",
+      "verifiedAt": "2026-07-23T10:17:46Z"
+    },
+    {
+      "idOrUrlHash": "336f50ec19bcfbbeacf6ef72",
+      "reason": "copied_news_aggregator",
+      "verifiedAt": "2026-07-23T10:17:46Z"
+    },
+    {
+      "idOrUrlHash": "9b0db2af554f0bae0c675799",
+      "reason": "copied_vulnerability_aggregator",
+      "verifiedAt": "2026-07-23T10:17:46Z"
     }
   ]
 }
