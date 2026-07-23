@@ -175,7 +175,7 @@ export default function TimelinessClient() {
             <div className='grid min-h-[42rem] gap-3 xl:grid-cols-[22rem_minmax(0,1fr)]'>
                 <DashboardPanel className='min-h-0 overflow-hidden border-ui-border bg-ui-panel p-0'>
                     <div className='flex items-center justify-between border-b border-ui-border bg-ui-raised px-3 py-2 text-xs'>
-                        <span className='font-semibold text-ui-text'>Evidence queue</span>
+                        <span className='font-semibold text-ui-text'>Retained evidence</span>
                         <span className='text-ui-muted'>{snapshot?.page.total ?? 0} matching</span>
                     </div>
                     <div className='max-h-[calc(100vh-13rem)] min-h-72 overflow-auto'>
