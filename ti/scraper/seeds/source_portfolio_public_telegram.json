@@ -2042,7 +2042,10 @@
         "policyVersion": "collection-policy:v1"
       },
       "metadata": {
-        "productionCollection": true,
+        "productionCollection": false,
+        "sourcePortfolioExcluded": true,
+        "sourcePortfolioQualificationState": "rejected_zero_useful_production_items",
+        "countsAsCoverage": false,
         "sourceFamily": "telegram_public",
         "sourceFamilies": [
           "vendor_research",
@@ -2360,7 +2363,10 @@
         "policyVersion": "collection-policy:v1"
       },
       "metadata": {
-        "productionCollection": true,
+        "productionCollection": false,
+        "sourcePortfolioExcluded": true,
+        "sourcePortfolioQualificationState": "rejected_zero_useful_production_items",
+        "countsAsCoverage": false,
         "sourceFamily": "telegram_public",
         "sourceFamilies": [
           "incident_response",

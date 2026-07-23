@@ -18,14 +18,23 @@ describe("independently verified public Telegram source portfolio", () => {
       version: 1,
       disabledByDefault: false
     });
-    expect(bundle.sources.length).toBeGreaterThan(0);
-    expect(report).toMatchObject({ valid: true, errors: [], duplicates: [] });
+    expect(bundle.sources.length).toBe(24);
+    expect(report).toMatchObject({
+      valid: true,
+      errors: [],
+      duplicates: [],
+      activation: { approved: 22 },
+      excluded: [
+        { sourceId: "src_portfolio_tg_antph", reason: "rejected_zero_useful_production_items" },
+        { sourceId: "src_portfolio_tg_it_law_security", reason: "rejected_zero_useful_production_items" }
+      ]
+    });
     expect(new Set(portfolioKeys).size).toBe(portfolioKeys.length);
     expect(portfolioKeys.filter((key: string) => reservedKeys.has(key))).toEqual([]);
     expect(canonicalFeedKey("https://telegram.me/S/CISOCLUB/")).toBe(canonicalFeedKey("https://t.me/cisoclub"));
     expect(canonicalFeedKey("https://t.me/s/CisoClub?utm_source=copy&before=42")).toBe(canonicalFeedKey("https://t.me/cisoclub"));
 
-    for (const [index, source] of bundle.sources.entries()) {
+    for (const [index, source] of report.accepted.entries()) {
       const handle = new URL(source.url).pathname.slice(1);
       const verification = source.metadata.sourcePortfolioVerification;
 

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { bootstrapRuntimeSources } from "../runtime/sourceBootstrap.ts";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isExecutableSource } from "../policy/collectionPolicy.ts";
 
 describe("runtime source bootstrap and scheduler monitoring", () => {
   test("keeps dry-run source-atlas candidates out of automatic production bootstrap", () => {
@@ -202,9 +203,15 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       expect(first.seedPaths.filter((path) => path.endsWith("source_portfolio_lawful_dark_web.json"))).toHaveLength(1);
       expect(first.seedPaths.filter((path) => path.endsWith("source_portfolio_public_telegram.json"))).toHaveLength(1);
       expect(first.errors.filter((error) => error.path.includes("source_portfolio_"))).toEqual([]);
-      expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "clear_web" && source.metadata?.sourcePortfolioVerification)).toHaveLength(9);
+      expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "clear_web" && source.metadata?.sourcePortfolioVerification)).toHaveLength(22);
       expect(store.listSources().filter((source: any) => source.type === "tor_metadata" && source.metadata?.sourcePortfolioVerification)).toHaveLength(1);
-      expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "telegram_public" && source.metadata?.sourcePortfolioVerification)).toHaveLength(24);
+      expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "telegram_public" && source.metadata?.sourcePortfolioVerification)).toHaveLength(22);
+      const importedPortfolio = store.listSources().filter((source: any) => source.metadata?.sourcePortfolioVerification);
+      expect(importedPortfolio.every((source: any) => source.status === "candidate"
+        && source.metadata.productionCollection === false
+        && source.metadata.countsAsCoverage === false
+        && source.metadata.sourcePortfolioQualificationState === "pending_sustained_productivity")).toBe(true);
+      expect(importedPortfolio.filter(isExecutableSource)).toEqual([]);
       expect(restarted).toMatchObject({ importedSourceCount: 0, totalSourceCount: first.totalSourceCount });
     } finally {
       if (previous === undefined) delete Bun.env.TI_SOURCE_SEED_PATHS;

@@ -257,6 +257,7 @@ function isProductionCollectionSource(source: any, generatedAt: string) {
 function governedPortfolioCandidate(source: any, generatedAt: string) {
   return source.status === "candidate"
     && source.metadata?.productionCollection === false
+    && source.metadata?.sourcePortfolioExcluded !== true
     && isCurrentSourcePortfolioVerification(source, generatedAt)
     && source.accessMethod === "public_http"
     && source.risk === "low"

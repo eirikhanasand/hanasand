@@ -36,18 +36,22 @@ export function explainSourceForQuery(source: SourceRecord, query: string): any 
 
 function buildSeedImportReport(bundle: any, options: any) {
   const importedAt = options.importedAt ?? nowIso(), seen = new Map<string, any>();
-  const duplicates: any[] = [], errors: any[] = [], accepted: SourceRecord[] = [];
+  const duplicates: any[] = [], errors: any[] = [], excluded: any[] = [], accepted: SourceRecord[] = [];
   for (const rawSource of bundle.sources ?? []) {
     const source = normalizeSeedSource(rawSource, bundle);
     const key = seedDuplicateKey(source);
     if (seen.has(key)) duplicates.push({ key, sourceId: source.id, existingSourceId: seen.get(key)?.id });
     seen.set(key, source);
+    if (source.metadata?.sourcePortfolioExcluded === true) {
+      excluded.push({ sourceId: source.id, reason: source.metadata?.sourcePortfolioQualificationState ?? "portfolio_excluded" });
+      continue;
+    }
     if (!SAFE_TYPES.has(source.type) || !SAFE_ACCESS.has(source.accessMethod) || source.risk === "high") errors.push({ sourceId: source.id, message: "source must be safe public CTI" });
     if (!source.legalNotes) errors.push({ sourceId: source.id, message: "legal notes are required" });
     accepted.push(toSourceRecord(source, importedAt));
   }
   for (const existing of options.existingSources ?? []) if ((bundle.sources ?? []).some((source) => seedDuplicateKey(source) === seedDuplicateKey(existing))) duplicates.push({ key: seedDuplicateKey(existing), existingSourceId: existing.id });
-  return { dryRun: options.dryRun ?? false, valid: errors.length === 0 && duplicates.length === 0, accepted, errors, duplicates, compliance: { missingCatalog: [], missingLegalNotes: errors.filter((error) => String(error.message).includes("legal")), overlappingCoverage: duplicates }, activation: { approved: accepted.length } };
+  return { dryRun: options.dryRun ?? false, valid: errors.length === 0 && duplicates.length === 0, accepted, excluded, errors, duplicates, compliance: { missingCatalog: [], missingLegalNotes: errors.filter((error) => String(error.message).includes("legal")), overlappingCoverage: duplicates }, activation: { approved: accepted.length } };
 }
 
 function normalizeSeedSource(source: any, bundle: any) {
