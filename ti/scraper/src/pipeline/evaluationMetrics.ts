@@ -75,7 +75,8 @@ export function buildEvaluationMetrics(store: CaptureMetadataStore, input: { ten
   const sourceById = new Map(sources.map((source) => [source.id, source]));
   const captureById = new Map(captures.map((capture) => [capture.id, capture]));
   const subjects = new Map([...entities, ...indicators, ...incidents, ...claims].map((record) => [record.id, record]));
-  const labelEvents = scoped(store.listEvaluationLabels()).filter((label) => !input.datasetSplit || label.datasetSplit === input.datasetSplit);
+  const allLabelEvents = scoped(store.listEvaluationLabels());
+  const labelEvents = allLabelEvents.filter((label) => !input.datasetSplit || label.datasetSplit === input.datasetSplit);
   const labels = latestLabels(labelEvents);
   const timeliness = scoped(store.listTimelinessRecords());
   const actorByCapture = actorNamesByCapture(entities);
@@ -95,7 +96,7 @@ export function buildEvaluationMetrics(store: CaptureMetadataStore, input: { ten
   const completedBenchmarkById = new Map(completedBenchmarks.map((benchmark) => [benchmark.id, benchmark]));
   const benchmarkTasks = new Map<string, EvaluationTaskRecord>(completedBenchmarks.flatMap((benchmark) => (benchmark.manifest ?? []).map((task) => [`${benchmark.id}\u0000${task.id}`, task] as [string, EvaluationTaskRecord])));
   const groupedAdjudications = recordsByTask(adjudications.filter((adjudication) => adjudication.benchmarkId && completedBenchmarkIds.has(adjudication.benchmarkId)));
-  const groupedLabels = recordsByTask(labelEvents.filter((label) => label.benchmarkId && completedBenchmarkIds.has(label.benchmarkId)));
+  const groupedLabels = recordsByTask(allLabelEvents.filter((label) => label.benchmarkId && completedBenchmarkIds.has(label.benchmarkId)));
   const independentLabels = [...benchmarkTasks].flatMap(([key, task]) => {
     const benchmark = completedBenchmarkById.get(key.slice(0, key.indexOf("\u0000")));
     const taskLabels = groupedLabels.get(key) ?? [];
