@@ -42,6 +42,7 @@ const telegramCapture: RawCapture = {
   id: "cap_repo_tg_acme",
   sourceId: telegramSource.id,
   url: "https://t.me/repo_public/101",
+  publishedAt: "2026-06-28T13:04:00.000Z",
   collectedAt: "2026-06-28T13:04:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -55,6 +56,7 @@ const telegramFollowupCapture: RawCapture = {
   id: "cap_repo_tg_acme_followup",
   sourceId: telegramSource.id,
   url: "https://t.me/repo_public/102",
+  publishedAt: "2026-06-28T13:16:00.000Z",
   collectedAt: "2026-06-28T13:16:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -85,6 +87,7 @@ const telegramNoUrlCapture: RawCapture = {
   id: "cap_repo_tg_no_url_acme",
   sourceId: telegramNoUrlSource.id,
   url: "",
+  publishedAt: "2026-06-28T13:33:00.000Z",
   collectedAt: "2026-06-28T13:33:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -109,6 +112,7 @@ const nonmatchCapture: RawCapture = {
   id: "cap_repo_tg_quiet",
   sourceId: telegramSource.id,
   url: "https://t.me/repo_public/103",
+  publishedAt: "2026-06-28T13:18:00.000Z",
   collectedAt: "2026-06-28T13:18:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -122,6 +126,7 @@ const darkwebCapture: RawCapture = {
   id: "cap_repo_darkweb_acme",
   sourceId: darkwebSource.id,
   url: "http://repo-example.onion/acme",
+  publishedAt: "2026-06-28T13:09:00.000Z",
   collectedAt: "2026-06-28T13:09:00.000Z",
   mediaType: "text/plain",
   storageKind: "metadata_only",
@@ -170,6 +175,7 @@ const publicAdvisoryCapture: RawCapture = {
   id: "cap_repo_public_ti_acme",
   sourceId: publicAdvisorySource.id,
   url: "https://cert.example/advisories/acme-session",
+  publishedAt: "2026-06-28T13:11:00.000Z",
   collectedAt: "2026-06-28T13:11:00.000Z",
   mediaType: "text/html",
   storageKind: "inline_text",
@@ -198,6 +204,7 @@ const clearWebCapture: RawCapture = {
   id: "cap_repo_clear_web_acme",
   sourceId: clearWebSource.id,
   url: "https://research.example/reports/acme-session-resale",
+  publishedAt: "2026-06-28T13:21:00.000Z",
   collectedAt: "2026-06-28T13:21:00.000Z",
   mediaType: "text/html",
   storageKind: "inline_text",
@@ -211,6 +218,7 @@ const clearWebFollowupCapture: RawCapture = {
   ...clearWebCapture,
   id: "cap_repo_clear_web_acme_followup",
   url: "https://research.example/reports/acme-session-resale-update",
+  publishedAt: "2026-06-28T13:29:00.000Z",
   collectedAt: "2026-06-28T13:29:00.000Z",
   contentHash: "hash-repo-clear-web-acme-followup",
   body: "Clear-web follow-up repeats acme.com partner credential exposure and links it to the same resale cluster."
@@ -220,6 +228,7 @@ const clearWebNonmatchCapture: RawCapture = {
   id: "cap_repo_clear_web_quiet",
   sourceId: clearWebSource.id,
   url: "https://research.example/reports/general-credential-market",
+  publishedAt: "2026-06-28T13:31:00.000Z",
   collectedAt: "2026-06-28T13:31:00.000Z",
   mediaType: "text/html",
   storageKind: "inline_text",
@@ -233,6 +242,7 @@ const substringFalsePositiveCapture: RawCapture = {
   id: "cap_repo_tg_notacme_false_positive",
   sourceId: telegramSource.id,
   url: "https://t.me/repo_public/104",
+  publishedAt: "2026-06-28T13:19:00.000Z",
   collectedAt: "2026-06-28T13:19:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -269,6 +279,7 @@ const orgBActorCapture: RawCapture = {
   id: "cap_repo_actor_beta",
   sourceId: actorSource.id,
   url: "https://threat.example/actors/repo-actor/beta",
+  publishedAt: "2026-06-28T13:22:00.000Z",
   collectedAt: "2026-06-28T13:22:00.000Z",
   mediaType: "text/plain",
   storageKind: "metadata_only",
@@ -294,7 +305,7 @@ describe("dwm alert repository", () => {
       sourceId: source.id,
       url: source.url,
       publishedAt: "2025-07-09T11:02:00.000Z",
-      collectedAt: "2026-07-23T09:05:00.000Z",
+      collectedAt: "2025-07-09T11:05:00.000Z",
       contentHash: "hash-repo-ntnu-advisory",
       body: "NTNU public notice: the university was affected by a cyberattack against supplier Extend AS."
     } as RawCapture);
@@ -304,7 +315,8 @@ describe("dwm alert repository", () => {
       organizationId: "org_repo_ntnu",
       name: "Hanasand Research Monitor — NTNU (not a customer)",
       terms: [{ id: "term_repo_ntnu", value: "NTNU", kind: "company" }],
-      status: "active"
+      status: "active",
+      createdAt: "2026-07-23T09:05:00.000Z"
     });
 
     const rebuilt = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "org_repo_ntnu", organizationId: "org_repo_ntnu" });
@@ -314,14 +326,20 @@ describe("dwm alert repository", () => {
       firstSeenAt: "2025-07-09T11:02:00.000Z",
       matchTiming: {
         kind: "historical_backfill",
-        firstCollectedAt: "2026-07-23T09:05:00.000Z",
+        basisKind: "watchlist_created_at",
+        basisAt: "2026-07-23T09:05:00.000Z",
+        firstCollectedAt: "2025-07-09T11:05:00.000Z",
         historicalEvidenceCount: 1
       },
       evidence: [expect.objectContaining({
         observedAt: "2025-07-09T11:02:00.000Z",
         provenance: expect.objectContaining({
           publishedAt: "2025-07-09T11:02:00.000Z",
-          collectedAt: "2026-07-23T09:05:00.000Z"
+          collectedAt: "2025-07-09T11:05:00.000Z"
+        }),
+        matchTiming: expect.objectContaining({
+          kind: "historical_backfill",
+          reason: "collected_before_basis"
         })
       })]
     });
@@ -1896,6 +1914,7 @@ describe("dwm alert repository", () => {
     staleEvidenceStore.saveCapture({
       ...telegramCapture,
       id: "cap_repo_old_evidence_acme",
+      publishedAt: "2026-05-01T13:04:00.000Z",
       collectedAt: "2026-05-01T13:04:00.000Z",
       contentHash: "hash-repo-old-evidence-acme"
     } as RawCapture);
@@ -2292,6 +2311,7 @@ describe("dwm alert repository", () => {
     store.saveCapture({
       ...telegramNoUrlCapture,
       id: "cap_repo_tg_no_url_acme_followup",
+      publishedAt: "2026-06-28T13:43:00.000Z",
       collectedAt: "2026-06-28T13:43:00.000Z",
       contentHash: "hash-repo-tg-no-url-acme-followup",
       body: "Follow-up acme.com source-key-only Telegram evidence confirms the same Okta replay chatter."
@@ -2307,7 +2327,7 @@ describe("dwm alert repository", () => {
     expect(preserved.sourceProvenanceSummary.provenanceGaps.map((gap: any) => gap.evidenceId).sort()).toEqual(["cap_repo_tg_no_url_acme", "cap_repo_tg_no_url_acme_followup"]);
   });
 
-  test("persists captures with missing metadata using fallback provenance without fake links", () => {
+  test("quarantines matching captures that have no publisher or observation time", () => {
     const store = new InMemoryScraperStore();
     store.saveSource(telegramNoUrlSource);
     store.saveCapture(telegramMissingProvenanceCapture);
@@ -2329,73 +2349,17 @@ describe("dwm alert repository", () => {
       organizationId: "org_repo_missing_provenance",
       visibilityPolicy: "admins"
     });
-    expect(rebuild.savedAlertCount).toBe(1);
-    const alert = rebuild.alerts[0];
-    expect(alert).toMatchObject({
-      tenantId: "tenant_repo_missing_provenance",
-      organizationId: "org_repo_missing_provenance",
-      sourceFamily: "telegram_public",
-      recommendedRoute: "analyst_review",
-      watchlistIds: ["watch_repo_missing_provenance"],
-      watchlistItemIds: ["watch_item_missing_provenance"]
+    expect(rebuild.savedAlertCount).toBe(0);
+    expect(rebuild.alerts).toEqual([]);
+    expect(rebuild.zeroAlertProof).toMatchObject({
+      zeroAlert: true,
+      state: "blocked_no_matching_capture",
+      blockerCodes: expect.arrayContaining(["no_matching_captures", "missing_evidence"])
     });
-    expect(alert.evidence[0]).toMatchObject({
-      id: "cap_repo_tg_missing_provenance_acme",
-      sourceId: "src_repo_tg_no_url",
-      sourceFamily: "telegram_public",
-      provenance: { captureId: "cap_repo_tg_missing_provenance_acme", sourceId: "src_repo_tg_no_url" }
-    });
-    expect(alert.evidence[0].observedAt).toEqual(expect.any(String));
-    expect(alert.evidence[0].contentHash).toEqual(expect.any(String));
-    expect(alert.sourceProvenanceSummary).toMatchObject({
-      schemaVersion: "dwm.alert_source_provenance.v1",
-      captureIds: ["cap_repo_tg_missing_provenance_acme"],
-      sourceIds: ["src_repo_tg_no_url"],
-      contentHashes: [alert.evidence[0].contentHash],
-      provenanceGaps: [expect.objectContaining({ code: "missing_source_url", evidenceId: "cap_repo_tg_missing_provenance_acme" })],
-      evidenceExcerpts: [expect.objectContaining({
-        captureId: "cap_repo_tg_missing_provenance_acme",
-        sourceKey: "src_repo_tg_no_url",
-        observedAt: expect.any(String),
-        contentHash: alert.evidence[0].contentHash
-      })]
-    });
-    expect(alert.sourceProvenanceSummary.provenanceGaps.map((gap: any) => gap.code)).not.toContain("missing_observed_at");
-    expect(alert.sourceProvenanceSummary.provenanceGaps.map((gap: any) => gap.code)).not.toContain("missing_content_hash");
-    expect(alert.alertCreatedEvent.consumerPayload.sourceProvenanceSummary.provenanceGaps).toEqual([
-      expect.objectContaining({ code: "missing_source_url" })
-    ]);
-    const proof = buildDwmAlertCustomerProofHandoffRow({ alert: { ...alert, sourceProvenanceSummary: undefined } });
-    expect(proof.sourceProvenanceSummary.provenanceGaps.map((gap) => gap.code).sort()).toEqual([
-      "missing_source_url"
-    ]);
-    expect(proof.consumerAdapter.publicTI.fields).toContain("sourceProvenanceSummary.provenanceGaps");
-
-    (store as any).saveDwmAlert({
-      ...alert,
-      workflowStatus: "triaged",
-      assignedOwner: "analyst-missing-provenance",
-      workflowDecision: "reviewed",
-      workflowNote: "Keep missing provenance visible to customer consumers.",
-      workflowEvents: [{ id: "evt_missing_provenance_review", at: "2026-06-28T13:45:00.000Z", toWorkflowStatus: "triaged", note: "Keep missing provenance visible to customer consumers." }]
-    });
-    const replay = rebuildDwmRuntimeAlerts({
-      store: store as any,
-      tenantId: "tenant_repo_missing_provenance",
-      organizationId: "org_repo_missing_provenance",
-      visibilityPolicy: "admins"
-    });
-    expect(replay.savedAlertCount).toBe(1);
-    const preserved = (store as any).listDwmAlerts()[0];
-    expect(preserved.workflowStatus).toBe("triaged");
-    expect(preserved.assignedOwner).toBe("analyst-missing-provenance");
-    expect(preserved.workflowDecision).toBe("reviewed");
-    expect(preserved.workflowNote).toBe("Keep missing provenance visible to customer consumers.");
-    expect(preserved.workflowEvents).toHaveLength(1);
-    expect(preserved.sourceProvenanceSummary.provenanceGaps.map((gap: any) => gap.code).sort()).toEqual([
-      "missing_source_url"
-    ]);
-    expect(preserved.sourceProvenanceSummary.contentHashes).toEqual([alert.evidence[0].contentHash]);
+    expect((store as any).listDwmAlerts()).toEqual([]);
+    const quarantined = (store as any).getCapture("cap_repo_tg_missing_provenance_acme");
+    expect(quarantined.publishedAt).toBeUndefined();
+    expect(quarantined.collectedAt).toBeUndefined();
   });
 
   test("builds customer proof rows from org export alerts while preserving workflow and delivery replay state", () => {

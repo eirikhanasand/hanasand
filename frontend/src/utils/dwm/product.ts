@@ -20,12 +20,16 @@ export type DwmAlert = {
     firstSeenAt: string
     lastSeenAt?: string
     matchTiming?: {
-        kind: 'new_evidence' | 'historical_backfill'
-        firstObservedAt: string
-        lastObservedAt: string
+        kind: 'new_evidence' | 'historical_backfill' | 'unknown'
+        basisKind?: 'watchlist_created_at' | 'alert_created_at'
+        basisAt?: string
+        firstObservedAt?: string
+        lastObservedAt?: string
         firstCollectedAt?: string
         lastCollectedAt?: string
         historicalEvidenceCount: number
+        currentEvidenceCount: number
+        unknownEvidenceCount: number
     }
     assertionKind?: 'source_claim'
     observedMatchSummary?: string
@@ -71,6 +75,12 @@ export type DwmAlert = {
         excerpt: string
         firstSeenAt?: string
         observedAt?: string
+        matchTiming?: {
+            kind: 'new_evidence' | 'historical_backfill' | 'unknown'
+            basisKind?: 'watchlist_created_at' | 'alert_created_at'
+            basisAt?: string
+            reason: 'collected_before_basis' | 'observed_before_basis' | 'publisher_collection_gap' | 'on_or_after_basis' | 'missing_generation_basis' | 'missing_observed_at'
+        }
         provenance?: {
             captureId: string
             sourceId: string

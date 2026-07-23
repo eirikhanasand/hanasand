@@ -288,6 +288,13 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       updatedAt: "2026-07-20T12:05:00.000Z"
     });
     await first.flush();
+    first.saveDwmAlert({
+      ...first.getDwmAlert(alertId),
+      firstSeenAt: incorrectCollectedAt,
+      updatedAt: "2026-07-20T12:10:00.000Z"
+    });
+    await first.flush();
+    expect(new Date(first.getDwmAlert(alertId)?.firstSeenAt).toISOString()).toBe(retainedPublishedAt);
 
     const [persisted] = await admin<{ first_seen_at: Date | string; record_first_seen_at: string }[]>`
       SELECT first_seen_at, record->>'firstSeenAt' AS record_first_seen_at
@@ -295,11 +302,11 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       WHERE id = ${alertId}
     `;
     expect(new Date(persisted.first_seen_at).toISOString()).toBe(retainedPublishedAt);
-    expect(persisted.record_first_seen_at).toBe(retainedPublishedAt);
+    expect(new Date(persisted.record_first_seen_at).toISOString()).toBe(retainedPublishedAt);
     await first.close();
 
     const restarted = await PostgresScraperStore.create({ databaseUrl });
-    expect(restarted.getDwmAlert(alertId)?.firstSeenAt).toBe(retainedPublishedAt);
+    expect(new Date(restarted.getDwmAlert(alertId)?.firstSeenAt).toISOString()).toBe(retainedPublishedAt);
     await restarted.close();
   });
 

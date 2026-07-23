@@ -562,6 +562,8 @@ export function DwmAnalystPortal({
                                         <span className={alert.routingContext?.urgency === 'immediate' || alert.severity === 'critical' ? 'font-semibold text-ui-danger' : ''}>{stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))}</span>
                                         <span>{alert.evidenceSummary?.evidenceCount ?? alert.evidence.length} evidence</span>
                                         {alert.matchTiming?.kind === 'historical_backfill' && <span className='font-semibold text-ui-warning'>Historical match</span>}
+                                        {Number(alert.matchTiming?.historicalEvidenceCount ?? 0) > 0 && <span className='font-semibold text-ui-warning'>{alert.matchTiming?.historicalEvidenceCount} historical evidence</span>}
+                                        {alert.matchTiming?.kind === 'unknown' && <span className='font-semibold text-ui-muted'>Timing unknown</span>}
                                         <span>{relativeTimeLabel(alert.lastSeenAt || alert.evidenceSummary?.lastObservedAt || alert.firstSeenAt)}</span>
                                     </span>
                                 </button>
@@ -1175,7 +1177,6 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAc
                     />
                     <section className='grid gap-4 lg:grid-cols-[1fr_0.82fr]'>
                         <SourceProvenancePanel
-                            alert={alert}
                             sourceFamilies={sourceFamilies}
                             sourceFilter={sourceFilter}
                             selectedEvidence={selectedEvidence}
@@ -1209,7 +1210,6 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAc
                         }}
                     />
                     <SourceProvenancePanel
-                        alert={alert}
                         sourceFamilies={sourceFamilies}
                         sourceFilter={sourceFilter}
                         selectedEvidence={selectedEvidence}
@@ -1236,7 +1236,6 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAc
                         }}
                     />
                     <SourceProvenancePanel
-                        alert={alert}
                         sourceFamilies={sourceFamilies}
                         sourceFilter={sourceFilter}
                         selectedEvidence={selectedEvidence}
@@ -1254,7 +1253,6 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAc
                 <section className='grid gap-4 lg:grid-cols-[0.9fr_1.1fr]'>
                     <DeliveryCaseActivityRail alert={alert} deliveries={deliveries} timeline={timeline} workflowContext={workflowContext} />
                     <SourceProvenancePanel
-                        alert={alert}
                         sourceFamilies={sourceFamilies}
                         sourceFilter={sourceFilter}
                         selectedEvidence={selectedEvidence}
@@ -1597,8 +1595,7 @@ function ExposureEntitiesPanel({ entities, selectedEntityKey, workflowContext, o
     )
 }
 
-function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEvidence, selectedEntity, visibleEvidence, copiedHash, onSourceFilter, onSelectEvidence, onCopyHash }: {
-    alert: PortalAlert
+function SourceProvenancePanel({ sourceFamilies, sourceFilter, selectedEvidence, selectedEntity, visibleEvidence, copiedHash, onSourceFilter, onSelectEvidence, onCopyHash }: {
     sourceFamilies: string[]
     sourceFilter: string
     selectedEvidence?: PortalAlert['evidence'][number]
@@ -1632,7 +1629,10 @@ function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEv
                         <div className='flex flex-wrap items-center gap-2'>
                             <span className='text-sm font-semibold text-ui-text'>{selectedEvidence.sourceName}</span>
                             <span className='rounded-full bg-ui-panel px-2 py-0.5 text-[11px] font-semibold text-ui-muted'>{stateLabel(selectedEvidence.sourceFamily)}</span>
-                            <span className='rounded-full bg-ui-panel px-2 py-0.5 text-[11px] font-semibold text-ui-muted'>{selectedEvidence.observedAt ? relativeTimeLabel(selectedEvidence.observedAt) : relativeTimeLabel(selectedEvidence.firstSeenAt || alert.firstSeenAt)}</span>
+                            <span className='rounded-full bg-ui-panel px-2 py-0.5 text-[11px] font-semibold text-ui-muted'>{evidenceObservedAt(selectedEvidence) ? relativeTimeLabel(evidenceObservedAt(selectedEvidence)!) : 'Time unknown'}</span>
+                            <span className={selectedEvidence.matchTiming?.kind === 'historical_backfill' ? 'rounded-full bg-ui-warning/10 px-2 py-0.5 text-[11px] font-semibold text-ui-warning' : 'rounded-full bg-ui-panel px-2 py-0.5 text-[11px] font-semibold text-ui-muted'}>
+                                {selectedEvidence.matchTiming?.kind ? stateLabel(selectedEvidence.matchTiming.kind) : 'timing unknown'}
+                            </span>
                         </div>
                         <p className='mt-2 text-sm leading-6 text-ui-muted'>{safeEvidenceExcerpt(selectedEvidence.excerpt)}</p>
                         <div className='mt-3 grid gap-2 text-[11px] text-ui-muted sm:grid-cols-2'>
@@ -1666,14 +1666,17 @@ function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEv
                         <tbody className='divide-y divide-ui-border'>
                             {visibleEvidence.map(item => (
                                 <tr key={item.id} className={`cursor-pointer align-top transition hover:bg-ui-raised ${selectedEvidence?.id === item.id ? 'bg-ui-raised' : 'bg-ui-panel'}`} onClick={() => onSelectEvidence(item.id)}>
-                                    <td className='px-3 py-2 font-semibold text-ui-muted'>{shortTime(item.observedAt || item.firstSeenAt || alert.firstSeenAt)}</td>
+                                    <td className='px-3 py-2 font-semibold text-ui-muted'>{evidenceObservedAt(item) ? shortTime(evidenceObservedAt(item)!) : 'Unknown'}</td>
                                     <td className='px-3 py-2'>
                                         <p className='max-w-45 truncate font-semibold text-ui-text' title={item.sourceName}>{item.sourceName}</p>
                                         <p className='mt-0.5 text-[11px] text-ui-muted'>{sourceReferenceState(item)}</p>
                                     </td>
                                     <td className='px-3 py-2 font-semibold text-ui-muted'>{stateLabel(item.sourceFamily)}</td>
                                     <td className='px-3 py-2'>
-                                        <span className='rounded-full bg-ui-primary/10 px-2 py-0.5 font-semibold text-ui-primary'>{stateLabel(item.redactionState)}</span>
+                                        <div className='flex flex-wrap gap-1'>
+                                            <span className='rounded-full bg-ui-primary/10 px-2 py-0.5 font-semibold text-ui-primary'>{stateLabel(item.redactionState)}</span>
+                                            <span className={item.matchTiming?.kind === 'historical_backfill' ? 'rounded-full bg-ui-warning/10 px-2 py-0.5 font-semibold text-ui-warning' : 'rounded-full bg-ui-panel px-2 py-0.5 font-semibold text-ui-muted'}>{item.matchTiming?.kind ? stateLabel(item.matchTiming.kind) : 'timing unknown'}</span>
+                                        </div>
                                     </td>
                                     <td className='px-3 py-2 text-ui-muted'><p className='line-clamp-2 max-w-70'>{safeEvidenceExcerpt(item.excerpt)}</p></td>
                                     <td className='px-3 py-2 text-[11px] font-semibold text-ui-muted'>{evidenceHashState(item.contentHash, copiedHash)}</td>
@@ -1730,7 +1733,7 @@ function EvidenceDispositionQueue({ alert, visibleEvidence, selectedEvidence, se
                                 </td>
                                 <td className='px-3 py-3'>
                                     <p className='max-w-45 truncate font-semibold text-ui-text' title={item.sourceName}>{item.sourceName}</p>
-                                    <p className='mt-1 text-[11px] text-ui-muted'>{stateLabel(item.sourceFamily)} · {relativeTimeLabel(item.observedAt || item.firstSeenAt || alert.firstSeenAt)}</p>
+                                    <p className='mt-1 text-[11px] text-ui-muted'>{stateLabel(item.sourceFamily)} · {evidenceObservedAt(item) ? relativeTimeLabel(evidenceObservedAt(item)!) : 'time unknown'}</p>
                                 </td>
                                 <td className='px-3 py-3'>
                                     <div className='grid gap-1'>
@@ -1804,7 +1807,7 @@ function SelectedContextBar({ alert, selectedEvidence, selectedEntity, sourceFil
                     {selectedEntity?.name || selectedEvidence?.sourceName || alert.company}
                 </p>
                 <p className='mt-0.5 truncate text-xs text-ui-muted' title={selectedEvidence ? safeEvidenceExcerpt(selectedEvidence.excerpt) : safeAlertSummary(alert)}>
-                    {sourceLabel} · {selectedEvidence ? relativeTimeLabel(selectedEvidence.observedAt || selectedEvidence.firstSeenAt || alert.firstSeenAt) : relativeTimeLabel(alert.lastSeenAt || alert.firstSeenAt)}
+                    {sourceLabel} · {selectedEvidence ? (evidenceObservedAt(selectedEvidence) ? relativeTimeLabel(evidenceObservedAt(selectedEvidence)!) : 'time unknown') : relativeTimeLabel(alert.lastSeenAt || alert.firstSeenAt)}
                 </p>
             </div>
             <div className='grid gap-2 text-[11px] sm:grid-cols-3'>
@@ -2507,7 +2510,7 @@ function evidenceMatchesEntity(item: PortalAlert['evidence'][number], entity: Re
 }
 
 function fallbackEvidenceSummary(alert: PortalAlert): NonNullable<PortalAlert['evidenceSummary']> {
-    const observed = alert.evidence.map(item => item.observedAt || item.firstSeenAt || alert.firstSeenAt).sort()
+    const observed = alert.evidence.map(evidenceObservedAt).filter(Boolean).sort() as string[]
     return {
         evidenceCount: alert.evidence.length,
         sourceFamilyCounts: alert.evidence.reduce<Record<string, number>>((counts, item) => {
@@ -2519,6 +2522,10 @@ function fallbackEvidenceSummary(alert: PortalAlert): NonNullable<PortalAlert['e
         firstObservedAt: observed[0] || alert.firstSeenAt,
         lastObservedAt: observed[observed.length - 1] || alert.lastSeenAt || alert.firstSeenAt,
     }
+}
+
+function evidenceObservedAt(item: PortalAlert['evidence'][number]) {
+    return item.provenance?.publishedAt || item.observedAt || item.firstSeenAt
 }
 
 function fallbackRoutingContext(alert: PortalAlert): NonNullable<PortalAlert['routingContext']> {
@@ -2655,7 +2662,7 @@ function filterAlerts(alerts: PortalAlert[], filter: QueueFilter, query: string)
 }
 
 function isFreshAlert(alert: PortalAlert) {
-    if (alert.matchTiming?.kind === 'historical_backfill') return false
+    if (alert.matchTiming?.kind === 'historical_backfill' || alert.matchTiming?.kind === 'unknown') return false
     const value = alert.lastSeenAt || alert.evidenceSummary?.lastObservedAt || alert.firstSeenAt
     const timestamp = new Date(value).getTime()
     if (Number.isNaN(timestamp)) return false

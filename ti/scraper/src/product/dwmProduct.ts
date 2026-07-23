@@ -10,6 +10,11 @@ export type DwmArtifactType = "telegram_mention" | "ransomware_claim" | "infoste
 export type DwmCaptureMode = "public_message" | "metadata_only" | "public_report" | "unknown";
 export type DwmRecommendedRoute = "identity_response" | "vendor_risk" | "incident_response" | "brand_protection" | "analyst_review";
 export type DwmAssertionKind = "source_claim";
+export type DwmMatchTimingKind = "new_evidence" | "historical_backfill" | "unknown";
+export type DwmMatchTimingBasis = {
+  kind: "watchlist_created_at" | "alert_created_at";
+  at: string;
+};
 
 export interface DwmWatchTerm {
   value: string;
@@ -28,6 +33,12 @@ export interface DwmEvidenceRef {
   redactionState: "redacted" | "metadata_only" | "public_safe";
   contentHash: string;
   excerpt: string;
+  matchTiming?: {
+    kind: DwmMatchTimingKind;
+    basisKind?: DwmMatchTimingBasis["kind"];
+    basisAt?: string;
+    reason: "collected_before_basis" | "observed_before_basis" | "publisher_collection_gap" | "on_or_after_basis" | "missing_generation_basis" | "missing_observed_at";
+  };
   provenance: {
     captureId: string;
     sourceId: string;
@@ -56,12 +67,16 @@ export interface DwmAlert {
   firstSeenAt: string;
   lastSeenAt: string;
   matchTiming?: {
-    kind: "new_evidence" | "historical_backfill";
-    firstObservedAt: string;
-    lastObservedAt: string;
+    kind: DwmMatchTimingKind;
+    basisKind?: DwmMatchTimingBasis["kind"];
+    basisAt?: string;
+    firstObservedAt?: string;
+    lastObservedAt?: string;
     firstCollectedAt?: string;
     lastCollectedAt?: string;
     historicalEvidenceCount: number;
+    currentEvidenceCount: number;
+    unknownEvidenceCount: number;
   };
   assertionKind: DwmAssertionKind;
   observedMatchSummary: string;
@@ -269,6 +284,7 @@ function buildAlerts(input: { watchlist: DwmWatchTerm[]; sources: SourceRecord[]
     const sourceFamily = classifySourceFamily(source, capture);
     const artifactType = inferArtifactType(text, sourceFamily);
     const evidence = buildEvidenceRef(capture, source, sourceFamily);
+    if (!evidence) continue;
     const severity = inferSeverity(text, artifactType, sourceFamily);
     const actor = inferActor(capture, text);
     const confidence = inferConfidence({ text, source, sourceFamily, artifactType });
@@ -276,7 +292,7 @@ function buildAlerts(input: { watchlist: DwmWatchTerm[]; sources: SourceRecord[]
     const dedupeSeed = alertDedupeSeed(matchedTerm, artifactType, sourceFamily);
     const delivery = deliveryFor(matchedTerm, artifactType, sourceFamily, dedupeSeed);
 
-    matches.push({
+    matches.push(withDwmAlertMatchTiming({
       id: stableId("dwm_alert", dedupeSeed),
       eventType: "darkweb.monitoring.match",
       severity,
@@ -289,7 +305,6 @@ function buildAlerts(input: { watchlist: DwmWatchTerm[]; sources: SourceRecord[]
       sourceCount: 1,
       firstSeenAt: evidence.observedAt,
       lastSeenAt: evidence.observedAt,
-      matchTiming: matchTimingForEvidence([evidence], input.generatedAt),
       assertionKind: "source_claim",
       observedMatchSummary: observedMatchSummary(matchedTerm, [evidence]),
       claimSummary: summarizeClaim({ matchedTerm, text, artifactType, sourceFamily, actor }),
@@ -304,16 +319,17 @@ function buildAlerts(input: { watchlist: DwmWatchTerm[]; sources: SourceRecord[]
       recommendedRoute: delivery.recommendedRoute,
       evidence: [evidence],
       webhookDelivery: delivery
-    });
+    }));
   }
 
   return mergeDuplicateAlerts(matches);
 }
 
-function buildEvidenceRef(capture: RawCapture, source: SourceRecord | undefined, sourceFamily: DwmSourceFamily): DwmEvidenceRef {
+function buildEvidenceRef(capture: RawCapture, source: SourceRecord | undefined, sourceFamily: DwmSourceFamily): DwmEvidenceRef | undefined {
   const text = matchableCaptureText(capture);
   const captureMode = sourceFamily === "telegram_public" ? "public_message" : sourceFamily === "darkweb_metadata" ? "metadata_only" : sourceFamily === "public_advisory" ? "public_report" : "unknown";
   const timing = captureEvidenceTiming(capture);
+  if (!timing.observedAt) return undefined;
   return {
     id: String((capture as any).id),
     sourceId: String((capture as any).sourceId ?? (source as any)?.id ?? "unknown"),
@@ -488,7 +504,6 @@ function mergeDuplicateAlerts(alerts: DwmAlert[]): DwmAlert[] {
     current.confidenceReasoning = uniqueStrings([...current.confidenceReasoning, ...alert.confidenceReasoning, "Multiple recent captures support the same watchlist alert."]);
     current.firstSeenAt = current.firstSeenAt < alert.firstSeenAt ? current.firstSeenAt : alert.firstSeenAt;
     current.lastSeenAt = current.lastSeenAt > alert.lastSeenAt ? current.lastSeenAt : alert.lastSeenAt;
-    current.matchTiming = matchTimingForEvidence(current.evidence, current.provenance.generatedAt);
     current.provenance = provenanceForAlert(current.provenance.generatedAt, current.evidence);
     current.evidenceSummary = evidenceSummaryFor(current.evidence);
     current.webhookDelivery = {
@@ -496,37 +511,83 @@ function mergeDuplicateAlerts(alerts: DwmAlert[]): DwmAlert[] {
       payloadHash: hashContent(`${current.dedupeKey}:${current.evidenceSummary.evidenceCount}:${current.lastSeenAt}`)
     };
   }
-  return [...merged.values()].sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || b.confidence - a.confidence);
+  return [...merged.values()]
+    .map((alert) => withDwmAlertMatchTiming(alert))
+    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || b.confidence - a.confidence);
 }
 
-export function captureEvidenceTiming(capture: Pick<RawCapture, "publishedAt" | "collectedAt">, fallback = nowIso()) {
+export function captureEvidenceTiming(capture: { publishedAt?: unknown; observedAt?: unknown; collectedAt?: unknown }) {
   const collectedAt = validIso(capture.collectedAt);
   const publishedAt = validIso(capture.publishedAt);
   return {
     collectedAt,
     publishedAt,
-    observedAt: publishedAt ?? collectedAt ?? validIso(fallback) ?? nowIso()
+    observedAt: publishedAt ?? validIso(capture.observedAt)
   };
 }
 
-export function matchTimingForEvidence(evidence: DwmEvidenceRef[], generatedAt: string): DwmAlert["matchTiming"] {
+export function withDwmAlertMatchTiming<T extends DwmAlert>(alert: T, basis?: DwmMatchTimingBasis): T {
+  const evidence = alert.evidence.map((item) => ({
+    ...item,
+    matchTiming: evidenceMatchTiming(item, basis)
+  }));
+  const observed = evidence.map((item) => item.observedAt || item.firstSeenAt).filter(Boolean).sort();
+  return {
+    ...alert,
+    evidence,
+    firstSeenAt: observed[0] ?? alert.firstSeenAt,
+    lastSeenAt: observed.at(-1) ?? alert.lastSeenAt,
+    matchTiming: matchTimingForEvidence(evidence, basis)
+  };
+}
+
+export function matchTimingForEvidence(evidence: DwmEvidenceRef[], basis?: DwmMatchTimingBasis): DwmAlert["matchTiming"] {
   const observed = evidence.map((item) => item.observedAt || item.firstSeenAt).filter(Boolean).sort();
   const collected = evidence.map((item) => item.provenance.collectedAt).filter(Boolean).sort() as string[];
-  // ponytail: a retained publication-to-collection gap is the smallest honest backfill signal
-  // until captures carry an explicit ingestion mode; rebuild time is not evidence time.
-  const historicalEvidenceCount = evidence.filter((item) => {
-    const publishedAt = Date.parse(item.provenance.publishedAt ?? "");
-    const collectedAt = Date.parse(item.provenance.collectedAt ?? "");
-    return Number.isFinite(publishedAt) && Number.isFinite(collectedAt) && collectedAt - publishedAt >= 86_400_000;
-  }).length;
+  const timing = evidence.map((item) => evidenceMatchTiming(item, basis));
+  const historicalEvidenceCount = timing.filter((item) => item.kind === "historical_backfill").length;
+  const currentEvidenceCount = timing.filter((item) => item.kind === "new_evidence").length;
+  const unknownEvidenceCount = timing.filter((item) => item.kind === "unknown").length;
   return {
-    kind: evidence.length > 0 && historicalEvidenceCount === evidence.length ? "historical_backfill" : "new_evidence",
-    firstObservedAt: observed[0] ?? generatedAt,
-    lastObservedAt: observed.at(-1) ?? generatedAt,
+    kind: evidence.length > 0 && historicalEvidenceCount === evidence.length
+      ? "historical_backfill"
+      : unknownEvidenceCount > 0
+        ? "unknown"
+        : "new_evidence",
+    basisKind: basis?.kind,
+    basisAt: validIso(basis?.at),
+    firstObservedAt: observed[0],
+    lastObservedAt: observed.at(-1),
     firstCollectedAt: collected[0],
     lastCollectedAt: collected.at(-1),
-    historicalEvidenceCount
+    historicalEvidenceCount,
+    currentEvidenceCount,
+    unknownEvidenceCount
   };
+}
+
+function evidenceMatchTiming(item: DwmEvidenceRef, basis?: DwmMatchTimingBasis): NonNullable<DwmEvidenceRef["matchTiming"]> {
+  const publishedAt = validIso(item.provenance.publishedAt);
+  const observedAt = publishedAt ?? validIso(item.observedAt) ?? validIso(item.firstSeenAt);
+  const collectedAt = validIso(item.provenance.collectedAt);
+  const basisAt = validIso(basis?.at);
+  if (!observedAt) return { kind: "unknown", basisKind: basis?.kind, basisAt, reason: "missing_observed_at" };
+
+  const publicationTime = Date.parse(publishedAt ?? observedAt);
+  const collectionTime = Date.parse(collectedAt ?? "");
+  const delayedCollection = Number.isFinite(collectionTime) && collectionTime - publicationTime >= 86_400_000;
+  if (delayedCollection) return { kind: "historical_backfill", basisKind: basis?.kind, basisAt, reason: "publisher_collection_gap" };
+  if (!basisAt) return { kind: "unknown", reason: "missing_generation_basis" };
+
+  const basisTime = Date.parse(basisAt);
+  if (basis?.kind === "watchlist_created_at" && Number.isFinite(collectionTime) && collectionTime < basisTime) {
+    return { kind: "historical_backfill", basisKind: basis.kind, basisAt, reason: "collected_before_basis" };
+  }
+  const allowedAlertCreationLag = basis?.kind === "alert_created_at" ? 86_400_000 : 0;
+  if (publicationTime < basisTime - allowedAlertCreationLag) {
+    return { kind: "historical_backfill", basisKind: basis?.kind, basisAt, reason: "observed_before_basis" };
+  }
+  return { kind: "new_evidence", basisKind: basis?.kind, basisAt, reason: "on_or_after_basis" };
 }
 
 function validIso(value: unknown): string | undefined {

@@ -1,4 +1,4 @@
-import { buildDwmProductSnapshot, captureEvidenceTiming, classifySourceFamily, matchableCaptureText, matchTimingForEvidence, type DwmAlert, type DwmWatchTerm } from "../product/dwmProduct.ts";
+import { buildDwmProductSnapshot, captureEvidenceTiming, classifySourceFamily, matchableCaptureText, matchTimingForEvidence, withDwmAlertMatchTiming, type DwmAlert, type DwmMatchTimingBasis, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { stableId, uniqueStrings } from "../utils.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 import type { TiSourceProvenancePublicTiSourceOpsProjection } from "../product/sourceProvenanceTiPageContract.ts";
@@ -908,6 +908,7 @@ export type RuntimeDwmWatchlist = {
   id: string;
   tenantId: string;
   organizationId?: string;
+  createdAt?: string;
   terms: DwmWatchTerm[];
   webhookDestinationId?: string;
   webhookUrl?: string;
@@ -957,6 +958,7 @@ export type DwmAlertGenerationCandidate = {
     lastObservedAt?: string;
   };
   watchlistTermContexts: RuntimeOrgWatchlistTermContext[];
+  watchlistCreatedAt?: string;
   alertGeneratorKeys: string[];
   alertGenerationRefs: RuntimeOrgWatchlistTermContext["alertGenerationRef"][];
   dedupeSeed: string;
@@ -1524,9 +1526,11 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
   const alerts = mergeSnapshotAlertsForGeneration(snapshot.alerts, generationPlan, input)
     .map((alert) => {
     const generationCandidate = findGenerationCandidate(generationPlan, alert);
-    const scopedAlert = scopeAlertForGenerationCandidate(alert, generationCandidate, input);
+    const generatedScopedAlert = scopeAlertForGenerationCandidate(alert, generationCandidate, input);
     const candidateOrganizationId = generationCandidate?.watchlistTermContexts?.[0]?.organizationId;
-    const existing = findExistingAlert(input.store, scopedAlert, input.tenantId, input.organizationId ?? candidateOrganizationId);
+    const existing = findExistingAlert(input.store, generatedScopedAlert, input.tenantId, input.organizationId ?? candidateOrganizationId);
+    const timingBasis = alertMatchTimingBasis(generationCandidate, existing, snapshot.generatedAt);
+    const scopedAlert = withDwmAlertMatchTiming(generatedScopedAlert, timingBasis);
     const alertId = existing?.id ?? scopedAlert.id;
     const routedOrganizationId = input.organizationId ?? candidateOrganizationId ?? existing?.organizationId;
     const generatedWorkflowContext = buildDwmAlertWorkflowContext({
@@ -1786,6 +1790,7 @@ export function buildDwmAlertGenerationPlan(input: {
         existing.sourceFamilies = uniqueStrings([...existing.sourceFamilies, ...sourceFamilies]);
         existing.evidenceWindow = evidenceWindowForCaptureRefs(existing.captureRefs);
         existing.watchlistTermContexts = mergeWatchlistTermContexts(existing.watchlistTermContexts, watchlistTermContexts);
+        existing.watchlistCreatedAt = earliestValidTimestamp(existing.watchlistCreatedAt, watchlist.createdAt);
         existing.alertGeneratorKeys = uniqueStrings([...existing.alertGeneratorKeys, ...watchlistTermContexts.map((term) => term.alertGeneratorKey)]);
         existing.alertGenerationRefs = mergeAlertGenerationRefs(existing.alertGenerationRefs, watchlistTermContexts.map((term) => term.alertGenerationRef));
         existing.membershipContext = existing.membershipContext ?? watchlist.orgMembershipContext;
@@ -1811,6 +1816,7 @@ export function buildDwmAlertGenerationPlan(input: {
         duplicateCaptureCollapseCount: captureEvidence.suppressedDuplicateCaptureRefs.length,
         evidenceWindow: evidenceWindowForCaptureRefs(captureRefs),
         watchlistTermContexts,
+        watchlistCreatedAt: earliestValidTimestamp(watchlist.createdAt),
         alertGeneratorKeys: uniqueStrings(watchlistTermContexts.map((term) => term.alertGeneratorKey)),
         alertGenerationRefs: mergeAlertGenerationRefs([], watchlistTermContexts.map((term) => term.alertGenerationRef)),
         dedupeSeed,
@@ -4841,7 +4847,7 @@ function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, so
   const evidence = candidate.captureRefs
     .filter((ref) => !sourceFamilyFilter || ref.sourceFamily === sourceFamilyFilter)
     .slice(0, 25)
-    .map((ref) => evidenceFromGenerationCaptureRef(ref, captureById.get(String(ref.captureId)), sourceById.get(String(ref.sourceId)), input))
+    .map((ref) => evidenceFromGenerationCaptureRef(ref, captureById.get(String(ref.captureId)), sourceById.get(String(ref.sourceId))))
     .filter(Boolean) as DwmAlert["evidence"];
   if (!evidence.length) return undefined;
 
@@ -4867,7 +4873,7 @@ function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, so
     sourceCount,
     firstSeenAt: observed[0] ?? generatedAt,
     lastSeenAt: observed.at(-1) ?? generatedAt,
-    matchTiming: matchTimingForEvidence(evidence, generatedAt),
+    matchTiming: matchTimingForEvidence(evidence),
     assertionKind: "source_claim",
     observedMatchSummary: generatedObservedMatchSummary(candidate.term.value, evidence.length, sourceCount),
     claimSummary: `${sourceFamily.replaceAll("_", " ")} evidence matched ${candidate.term.value} across ${evidence.length} capture${evidence.length === 1 ? "" : "s"}.`,
@@ -4919,19 +4925,19 @@ function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, so
   };
 }
 
-function evidenceFromGenerationCaptureRef(ref: DwmAlertGenerationCaptureRef, capture: RawCapture | undefined, source: SourceRecord | undefined, input: RebuildDwmRuntimeAlertsInput): DwmAlert["evidence"][number] | undefined {
+function evidenceFromGenerationCaptureRef(ref: DwmAlertGenerationCaptureRef, capture: RawCapture | undefined, source: SourceRecord | undefined): DwmAlert["evidence"][number] | undefined {
   const sourceFamily = sourceFamilyFor(source, capture ?? ({ id: ref.captureId, sourceId: ref.sourceId, metadata: {} } as RawCapture)) as DwmAlert["sourceFamily"];
   const text = capture ? matchableCaptureText(capture) : "";
   const captureId = String(ref.captureId);
   const sourceId = String(ref.sourceId ?? (capture as any)?.sourceId ?? (source as any)?.id ?? "unknown");
-  const fallback = nowFromEvidence(input);
   const timing = capture
-    ? captureEvidenceTiming(capture, fallback)
+    ? captureEvidenceTiming(capture)
     : {
-        observedAt: ref.publishedAt || ref.observedAt || ref.collectedAt || fallback,
+        observedAt: ref.publishedAt || ref.observedAt,
         publishedAt: ref.publishedAt,
-        collectedAt: ref.collectedAt || ref.observedAt || fallback
+        collectedAt: ref.collectedAt
       };
+  if (!timing.observedAt) return undefined;
   const contentHash = ref.contentHash || String((capture as any)?.contentHash ?? stableId("capture_hash", captureId));
   const captureMode = sourceFamily === "telegram_public" ? "public_message" : sourceFamily === "public_advisory" || sourceFamily === "clear_web" ? "public_report" : "metadata_only";
   return {
@@ -4992,7 +4998,7 @@ function mergeGeneratedAlert(current: DwmAlert, next: DwmAlert): DwmAlert {
     sourceCount: sourceIds.length,
     firstSeenAt: observed[0] ?? current.firstSeenAt ?? next.firstSeenAt,
     lastSeenAt: observed.at(-1) ?? next.lastSeenAt ?? current.lastSeenAt,
-    matchTiming: matchTimingForEvidence(evidence, current.provenance.generatedAt),
+    matchTiming: matchTimingForEvidence(evidence),
     assertionKind: "source_claim",
     observedMatchSummary: generatedObservedMatchSummary(current.matchedTerm.value, evidence.length, sourceIds.length),
     confidence: Math.max(Number(current.confidence ?? 0), Number(next.confidence ?? 0)),
@@ -5059,7 +5065,8 @@ function captureRefsForTermWithSuppression(input: { term: DwmWatchTerm; sources:
         publishedAt: timing.publishedAt,
         collectedAt: timing.collectedAt
       };
-    });
+    })
+    .filter((ref) => Boolean(ref.observedAt));
   const byIdentity = new Map<string, DwmAlertGenerationCaptureRef>();
   const captureRefs: DwmAlertGenerationCaptureRef[] = [];
   const suppressedDuplicateCaptureRefs: DwmAlertGenerationSuppressedCaptureRef[] = [];
@@ -5120,6 +5127,34 @@ function evidenceWindowForCaptureRefs(refs: DwmAlertGenerationCaptureRef[]) {
     firstObservedAt: observed[0],
     lastObservedAt: observed.at(-1)
   };
+}
+
+function earliestValidTimestamp(...values: unknown[]): string | undefined {
+  return values
+    .map((value) => {
+      const parsed = Date.parse(String(value ?? ""));
+      return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
+    })
+    .filter(Boolean)
+    .sort()[0];
+}
+
+function alertMatchTimingBasis(candidate: DwmAlertGenerationCandidate | undefined, existing: any, generatedAt: string): DwmMatchTimingBasis {
+  if (candidate?.watchlistCreatedAt) return { kind: "watchlist_created_at", at: candidate.watchlistCreatedAt };
+  const existingBasisAt = earliestValidTimestamp(
+    existing?.matchTiming?.basisAt,
+    existing?.alertCreatedEvent?.at,
+    existing?.deliveryReadinessContext?.alertCreatedAt,
+    existing?.savedAt,
+    existing?.createdAt
+  );
+  if (existingBasisAt) {
+    return {
+      kind: existing?.matchTiming?.basisKind === "watchlist_created_at" ? "watchlist_created_at" : "alert_created_at",
+      at: existingBasisAt
+    };
+  }
+  return { kind: "alert_created_at", at: generatedAt };
 }
 
 function mergeWatchlistTermContexts(existing: RuntimeOrgWatchlistTermContext[], next: RuntimeOrgWatchlistTermContext[]): RuntimeOrgWatchlistTermContext[] {

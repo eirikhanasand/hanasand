@@ -1672,7 +1672,16 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         last_seen_at = EXCLUDED.last_seen_at,
         alerted_at = COALESCE(threat_intel.alerts.alerted_at, EXCLUDED.alerted_at),
         updated_at = EXCLUDED.updated_at,
-        record = EXCLUDED.record
+        record = jsonb_set(
+          EXCLUDED.record,
+          '{firstSeenAt}',
+          to_jsonb((CASE
+            WHEN threat_intel.alerts.first_seen_at IS NULL THEN EXCLUDED.first_seen_at
+            WHEN EXCLUDED.first_seen_at IS NULL THEN threat_intel.alerts.first_seen_at
+            ELSE LEAST(threat_intel.alerts.first_seen_at, EXCLUDED.first_seen_at)
+          END)::text),
+          true
+        )
     `;
   }
 

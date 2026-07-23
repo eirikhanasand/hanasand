@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
-import { buildDwmProductSnapshot, classifySourceFamily, matchTimingForEvidence, normalizeWatchlist } from "../product/dwmProduct.ts";
+import { buildDwmProductSnapshot, classifySourceFamily, matchTimingForEvidence, normalizeWatchlist, withDwmAlertMatchTiming } from "../product/dwmProduct.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 
@@ -59,6 +59,7 @@ const telegramCapture: RawCapture = {
   sourceId: "src_telegram_lumma",
   tenantId: "tenant_acme",
   url: "https://t.me/lumma_broker_room/42",
+  publishedAt: "2026-06-27T08:10:00.000Z",
   collectedAt: "2026-06-27T08:10:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -73,6 +74,7 @@ const telegramFollowupCapture: RawCapture = {
   sourceId: "src_telegram_lumma",
   tenantId: "tenant_acme",
   url: "https://t.me/lumma_broker_room/43",
+  publishedAt: "2026-06-27T08:16:00.000Z",
   collectedAt: "2026-06-27T08:16:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -87,6 +89,7 @@ const telegramDuplicateCapture: RawCapture = {
   sourceId: "src_telegram_lumma",
   tenantId: "tenant_acme",
   url: "https://t.me/lumma_broker_room/43?mirror=1",
+  publishedAt: "2026-06-27T08:18:00.000Z",
   collectedAt: "2026-06-27T08:18:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -101,6 +104,7 @@ const telegramSubstringFalsePositiveCapture: RawCapture = {
   sourceId: "src_telegram_lumma",
   tenantId: "tenant_acme",
   url: "https://t.me/lumma_broker_room/44",
+  publishedAt: "2026-06-27T08:19:00.000Z",
   collectedAt: "2026-06-27T08:19:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -115,6 +119,7 @@ const darkwebCapture: RawCapture = {
   sourceId: "src_akira_metadata",
   tenantId: "tenant_acme",
   url: "http://akira-example.onion/acme",
+  publishedAt: "2026-06-27T08:18:00.000Z",
   collectedAt: "2026-06-27T08:18:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -140,26 +145,61 @@ function timingEvidence(id: string, publishedAt: string, collectedAt: string) {
 }
 
 describe("dwm product snapshot", () => {
-  test("classifies backfill from each retained publication-to-collection gap", () => {
-    const historical = timingEvidence("historical", "2026-01-01T00:00:00.000Z", "2026-01-03T00:00:00.000Z");
-    const current = timingEvidence("current", "2026-01-03T00:00:00.000Z", "2026-01-03T00:05:00.000Z");
+  test("classifies old, current, mixed, and rebuild-later evidence from a stable monitoring basis", () => {
+    const basis = { kind: "watchlist_created_at" as const, at: "2026-01-03T00:00:00.000Z" };
+    const historical = timingEvidence("historical", "2025-10-01T00:00:00.000Z", "2025-10-01T00:05:00.000Z");
+    const current = timingEvidence("current", "2026-01-03T00:01:00.000Z", "2026-01-03T00:05:00.000Z");
 
-    expect(matchTimingForEvidence([historical], "2026-01-03T00:10:00.000Z")).toMatchObject({
+    expect(matchTimingForEvidence([historical], basis)).toMatchObject({
       kind: "historical_backfill",
-      historicalEvidenceCount: 1
+      basisKind: "watchlist_created_at",
+      basisAt: basis.at,
+      historicalEvidenceCount: 1,
+      currentEvidenceCount: 0,
+      unknownEvidenceCount: 0
     });
-    expect(matchTimingForEvidence([current], "2026-01-03T00:10:00.000Z")).toMatchObject({
+    expect(matchTimingForEvidence([current], basis)).toMatchObject({
+      kind: "new_evidence",
+      historicalEvidenceCount: 0,
+      currentEvidenceCount: 1,
+      unknownEvidenceCount: 0
+    });
+    const mixed = withDwmAlertMatchTiming({ evidence: [historical, current], firstSeenAt: current.observedAt, lastSeenAt: current.observedAt } as any, basis);
+    expect(mixed.matchTiming).toMatchObject({
+      kind: "new_evidence",
+      historicalEvidenceCount: 1,
+      currentEvidenceCount: 1,
+      unknownEvidenceCount: 0
+    });
+    expect(mixed.evidence.map((item: any) => item.matchTiming.kind)).toEqual(["historical_backfill", "new_evidence"]);
+    expect(matchTimingForEvidence([current], basis)).toMatchObject({
       kind: "new_evidence",
       historicalEvidenceCount: 0
     });
-    expect(matchTimingForEvidence([historical, current], "2026-01-03T00:10:00.000Z")).toMatchObject({
-      kind: "new_evidence",
-      historicalEvidenceCount: 1
+  });
+
+  test("keeps no-time evidence unknown and quarantines collection-only matches", () => {
+    expect(matchTimingForEvidence([{
+      ...timingEvidence("missing", "invalid", "invalid"),
+      firstSeenAt: undefined,
+      observedAt: undefined,
+      provenance: {}
+    } as any], { kind: "watchlist_created_at", at: "2026-01-03T00:00:00.000Z" })).toMatchObject({
+      kind: "unknown",
+      historicalEvidenceCount: 0,
+      unknownEvidenceCount: 1,
+      firstObservedAt: undefined,
+      firstCollectedAt: undefined
     });
-    expect(matchTimingForEvidence([current], "2030-01-01T00:00:00.000Z")).toMatchObject({
-      kind: "new_evidence",
-      historicalEvidenceCount: 0
+
+    const snapshot = buildDwmProductSnapshot({
+      tenantId: "tenant_acme",
+      watchlist: ["acme.com"],
+      sources: [telegramSource],
+      captures: [{ ...telegramCapture, id: "cap_no_publisher_time", publishedAt: undefined }],
+      generatedAt: "2030-01-01T00:00:00.000Z"
     });
+    expect(snapshot.alerts).toEqual([]);
   });
   test("normalizes watchlists and classifies source families", () => {
     expect(normalizeWatchlist([" acme.com ", "acme.com", "Acme Payments"])).toEqual([

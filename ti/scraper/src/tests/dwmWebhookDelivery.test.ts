@@ -21,6 +21,7 @@ const capture: RawCapture = {
   id: "cap_webhook_acme",
   sourceId: source.id,
   url: "https://t.me/webhook_public/44",
+  publishedAt: "2026-06-27T21:02:00.000Z",
   collectedAt: "2026-06-27T21:02:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -34,6 +35,7 @@ const followupCapture: RawCapture = {
   id: "cap_webhook_acme_followup",
   sourceId: source.id,
   url: "https://t.me/webhook_public/45",
+  publishedAt: "2026-06-27T21:11:00.000Z",
   collectedAt: "2026-06-27T21:11:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -97,6 +99,12 @@ describe("dwm webhook delivery", () => {
       selectedCaptureIds: ["cap_webhook_acme"],
       evidenceCount: 1,
       recommendedRoute: "identity_response",
+      matchTiming: {
+        kind: "historical_backfill",
+        historicalEvidenceCount: 1,
+        currentEvidenceCount: 0,
+        unknownEvidenceCount: 0
+      },
       alertCreatedEvent: {
         schemaVersion: "dwm.alert_created_event.v1",
         eventType: "dwm.alert.created",
@@ -171,6 +179,10 @@ describe("dwm webhook delivery", () => {
       captureId: "cap_webhook_acme",
       sourceId: "src_webhook_tg",
       metadataOnly: false
+    });
+    expect(alertPayload.evidence[0].matchTiming).toMatchObject({
+      kind: "historical_backfill",
+      basisKind: "watchlist_created_at"
     });
     expect(seen[0].headers.get("x-hanasand-event")).toBe("darkweb.monitoring.match");
     expect((store as any).listDwmAlerts()[0].deliveryState).toBe("delivered");

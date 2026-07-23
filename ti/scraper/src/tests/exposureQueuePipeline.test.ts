@@ -606,6 +606,7 @@ describe("DWM exposure queue pipeline", () => {
 
   test("surfaces existing trusted victim-feed captures without exposure metadata backfill", async () => {
     const store = new InMemoryScraperStore();
+    const observedAt = "2026-07-01T13:50:38.000Z";
     store.saveSource({ ...source({
       id: "src_canary_ransomwarelive",
       name: "Ransomware.live Victim Feed",
@@ -618,10 +619,11 @@ describe("DWM exposure queue pipeline", () => {
       title: undefined as any,
       body: "",
       url: "https://www.ransomware.live/#/recentvictims",
-      publishedAt: "2026-07-01T13:50:38.000Z",
+      publishedAt: undefined,
       collectedAt: "2026-07-02T01:00:48.809Z",
       metadata: {
         adapter: "rss",
+        leakSite: { firstSeenAt: observedAt, actorName: "Akira", victimName: "Refinery Hotel", claimedDataCategory: "Corporate data", claimedDataSize: "15 GB" },
         safeExcerpt: "Ransomware.live Victim Feed\n🏴‍☠️ Akira has just published a new victim : Refinery Hotel\nRefinery Hotel is a long descriptive victim-page summary. We will upload 15gb of corporate data soon."
       }
     }));
@@ -641,6 +643,16 @@ describe("DWM exposure queue pipeline", () => {
     expect(queueBody.items[0].company).toBe("Refinery Hotel");
     expect(queueBody.items[0].claimedData).toBe("Corporate data");
     expect(queueBody.items[0].claimedDataSize).toBe("15 GB");
+    expect(queueBody.items[0]).toMatchObject({ observedAt, publishedAt: observedAt, collectedAt: "2026-07-02T01:00:48.809Z" });
+
+    const alerts = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/alerts?sourceFamily=darkweb_metadata"), testOptions(store));
+    const alertBody = await alerts.json() as any;
+    const alert = alertBody.alerts.find((row: any) => row.company === "Refinery Hotel");
+    expect(alert.evidence[0]).toMatchObject({
+      observedAt,
+      matchTiming: expect.objectContaining({ kind: "historical_backfill" }),
+      provenance: expect.objectContaining({ publishedAt: observedAt, collectedAt: "2026-07-02T01:00:48.809Z" })
+    });
   });
 
   test("enriches old exposure rows with country from public news records", async () => {

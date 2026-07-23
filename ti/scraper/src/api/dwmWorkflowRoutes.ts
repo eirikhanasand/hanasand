@@ -1,4 +1,4 @@
-import { captureEvidenceTiming, classifySourceFamily, matchTimingForEvidence, normalizeWatchlist, type DwmSourceFamily, type DwmWatchTerm } from "../product/dwmProduct.ts";
+import { captureEvidenceTiming, classifySourceFamily, normalizeWatchlist, withDwmAlertMatchTiming, type DwmMatchTimingBasis, type DwmSourceFamily, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationReadiness, buildDwmAlertRetentionAudit, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts, type RuntimeDwmWatchlist } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
 import { buildDwmCustomerAlertSummary, sanitizeDwmApiPayload, sanitizeDwmCustomerEvidenceExcerpt } from "../product/dwmCustomerDisplay.ts";
@@ -895,6 +895,7 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     sourceCount: alert.sourceCount,
     firstSeenAt: alert.firstSeenAt,
     lastSeenAt: alert.lastSeenAt,
+    matchTiming: alert.matchTiming,
     assertionKind: alert.assertionKind ?? "source_claim",
     observedMatchSummary: alert.observedMatchSummary,
     claimSummary: buildDwmCustomerAlertSummary(alert),
@@ -913,6 +914,7 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
       sourceName: item.sourceName,
       sourceFamily: item.sourceFamily,
       observedAt: item.observedAt ?? item.firstSeenAt,
+      matchTiming: item.matchTiming,
       captureMode: item.captureMode,
       redactionState: item.redactionState,
       excerpt: sanitizeDwmCustomerEvidenceExcerpt(item.excerpt, item.contentHash),
@@ -1626,15 +1628,33 @@ async function ensureExposureQueueDwmAlerts(options: ApiServerOptions, scope: { 
     for (const claim of exposureClaimsFromStore(options.store, "", { limit: 25, tenantId: scope.tenantId })) {
       const claimTenantId = String((claim as any).tenantId ?? scope.tenantId ?? "default");
       if (claimTenantId !== scope.tenantId) continue;
-      const alert = buildExposureQueueDwmAlert(options, claim, scope, generatedAt);
-      if (!alert) continue;
+      const generatedBasis: DwmMatchTimingBasis = { kind: "alert_created_at", at: generatedAt };
+      const draft = buildExposureQueueDwmAlert(options, claim, scope, generatedAt, generatedBasis);
+      if (!draft) continue;
       const existing = existingAlerts.find((row: any) =>
-        row.id === alert.id
-        || row.dedupeKey === alert.dedupeKey
-        || row.webhookDelivery?.dedupeKey === alert.dedupeKey
-        || row.workflowContext?.exposureQueueId === alert.workflowContext.exposureQueueId
+        row.id === draft.id
+        || row.dedupeKey === draft.dedupeKey
+        || row.webhookDelivery?.dedupeKey === draft.dedupeKey
+        || row.workflowContext?.exposureQueueId === draft.workflowContext.exposureQueueId
       );
-      if (existing) continue;
+      const basisAt = validExposureQueueTimestamp(existing?.matchTiming?.basisAt)
+        ?? validExposureQueueTimestamp(existing?.createdAt)
+        ?? generatedAt;
+      const alert = withDwmAlertMatchTiming(draft, { kind: "alert_created_at", at: basisAt });
+      if (existing) {
+        const repaired = {
+          ...existing,
+          firstSeenAt: alert.firstSeenAt,
+          lastSeenAt: alert.lastSeenAt,
+          matchTiming: alert.matchTiming,
+          evidenceSummary: alert.evidenceSummary,
+          evidence: alert.evidence
+        };
+        if (JSON.stringify(exposureTimingProjection(existing)) !== JSON.stringify(exposureTimingProjection(repaired))) {
+          (options.store as any).saveDwmAlert(repaired);
+        }
+        continue;
+      }
       (options.store as any).saveDwmAlert(alert);
       savedAlertCount++;
     }
@@ -1646,12 +1666,13 @@ async function ensureExposureQueueDwmAlerts(options: ApiServerOptions, scope: { 
   return { savedAlertCount };
 }
 
-function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope: { tenantId: string; organizationId?: string }, generatedAt: string) {
+function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope: { tenantId: string; organizationId?: string }, generatedAt: string, timingBasis: DwmMatchTimingBasis) {
   const source = (options.store as any).getSource?.(claim.sourceId);
   const sourceFamily = exposureAlertSourceFamily(claim, source);
-  const timing = captureEvidenceTiming({ publishedAt: claim.publishedAt, collectedAt: claim.collectedAt }, generatedAt);
-  const observedAt = timing.publishedAt ?? validExposureQueueTimestamp(claim.observedAt);
+  const timing = captureEvidenceTiming({ publishedAt: claim.publishedAt, observedAt: claim.observedAt, collectedAt: claim.collectedAt });
+  const observedAt = timing.observedAt;
   if (!observedAt) return undefined;
+  const publishedAt = timing.publishedAt ?? observedAt;
   const firstSeenAt = observedAt;
   const confidence = confidencePercent(claim.confidence);
   const dedupeKey = stableId("dwm_dedupe", `${scope.tenantId}:${scope.organizationId ?? "default"}:exposure_queue:${claim.id}`);
@@ -1674,7 +1695,7 @@ function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope
     provenance: {
       captureId: evidenceId,
       sourceId,
-      publishedAt: timing.publishedAt,
+      publishedAt,
       collectedAt: timing.collectedAt,
       sourceType: String(source?.type ?? ""),
       collector: "exposure_queue",
@@ -1684,7 +1705,7 @@ function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope
       metadataOnly: claim.metadataOnly !== false
     }
   };
-  return {
+  return withDwmAlertMatchTiming({
     id: stableId("dwm_alert", dedupeKey),
     tenantId: scope.tenantId,
     organizationId: scope.organizationId,
@@ -1699,7 +1720,6 @@ function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope
     sourceCount: 1,
     firstSeenAt,
     lastSeenAt: observedAt,
-    matchTiming: matchTimingForEvidence([evidence], generatedAt),
     claimSummary: `${claim.actor ?? "Unknown actor"} exposure claim for ${claim.company ?? "Unknown company"}: ${claim.claimedData ?? "new victim claim"}.`,
     matchContext: {
       normalizedTerm: String(claim.company ?? "").toLowerCase(),
@@ -1761,6 +1781,23 @@ function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope
     },
     createdAt: generatedAt,
     updatedAt: generatedAt
+  } as any, timingBasis);
+}
+
+function exposureTimingProjection(alert: any) {
+  return {
+    firstSeenAt: alert.firstSeenAt,
+    lastSeenAt: alert.lastSeenAt,
+    matchTiming: alert.matchTiming,
+    evidenceSummary: alert.evidenceSummary,
+    evidence: (alert.evidence ?? []).map((item: any) => ({
+      id: item.id,
+      firstSeenAt: item.firstSeenAt,
+      observedAt: item.observedAt,
+      matchTiming: item.matchTiming,
+      publishedAt: item.provenance?.publishedAt,
+      collectedAt: item.provenance?.collectedAt
+    }))
   };
 }
 
@@ -1893,6 +1930,7 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     sourceName: item.sourceName,
     sourceFamily: item.sourceFamily,
     observedAt: item.observedAt ?? item.firstSeenAt,
+    matchTiming: item.matchTiming,
     captureMode: item.captureMode,
     redactionState: item.redactionState,
     contentHash: item.contentHash,
