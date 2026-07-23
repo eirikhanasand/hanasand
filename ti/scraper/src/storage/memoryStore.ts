@@ -427,7 +427,7 @@ export class InMemoryScraperStore implements ScraperStore {
   }
   getDwmAlert(id: string) { return this.dwmAlerts.get(id); } listDwmAlerts() { return mapValues(this.dwmAlerts); }
   saveDwmWebhookDelivery(delivery: any) {
-    const deliveredAt = delivery.status === "delivered" ? validIso(delivery.deliveredAt) ?? nowIso() : undefined;
+    const deliveredAt = delivery.status === "delivered" ? validIso(delivery.deliveredAt) ?? null : undefined;
     const stored = this.putScoped(this.dwmWebhookDeliveries, { ...delivery, deliveredAt, completedAt: delivery.completedAt ?? deliveredAt, updatedAt: delivery.updatedAt ?? deliveredAt ?? delivery.attemptedAt });
     if (!["dry_run", "skipped"].includes(stored.status)) {
       const alert = this.getDwmAlert(stored.alertId);

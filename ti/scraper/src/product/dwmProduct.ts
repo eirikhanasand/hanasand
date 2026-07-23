@@ -31,6 +31,8 @@ export interface DwmEvidenceRef {
   provenance: {
     captureId: string;
     sourceId: string;
+    publishedAt?: string;
+    collectedAt?: string;
     sourceType?: string;
     collector?: string;
     captureMode: DwmCaptureMode;
@@ -53,6 +55,14 @@ export interface DwmAlert {
   sourceCount: number;
   firstSeenAt: string;
   lastSeenAt: string;
+  matchTiming?: {
+    kind: "new_evidence" | "historical_backfill";
+    firstObservedAt: string;
+    lastObservedAt: string;
+    firstCollectedAt?: string;
+    lastCollectedAt?: string;
+    historicalEvidenceCount: number;
+  };
   assertionKind: DwmAssertionKind;
   observedMatchSummary: string;
   claimSummary: string;
@@ -277,8 +287,9 @@ function buildAlerts(input: { watchlist: DwmWatchTerm[]; sources: SourceRecord[]
       artifactType,
       sourceFamily,
       sourceCount: 1,
-      firstSeenAt: String((capture as any).collectedAt ?? input.generatedAt),
-      lastSeenAt: String((capture as any).collectedAt ?? input.generatedAt),
+      firstSeenAt: evidence.observedAt,
+      lastSeenAt: evidence.observedAt,
+      matchTiming: matchTimingForEvidence([evidence], input.generatedAt),
       assertionKind: "source_claim",
       observedMatchSummary: observedMatchSummary(matchedTerm, [evidence]),
       claimSummary: summarizeClaim({ matchedTerm, text, artifactType, sourceFamily, actor }),
@@ -302,15 +313,15 @@ function buildAlerts(input: { watchlist: DwmWatchTerm[]; sources: SourceRecord[]
 function buildEvidenceRef(capture: RawCapture, source: SourceRecord | undefined, sourceFamily: DwmSourceFamily): DwmEvidenceRef {
   const text = matchableCaptureText(capture);
   const captureMode = sourceFamily === "telegram_public" ? "public_message" : sourceFamily === "darkweb_metadata" ? "metadata_only" : sourceFamily === "public_advisory" ? "public_report" : "unknown";
-  const collectedAt = String((capture as any).collectedAt ?? nowIso());
+  const timing = captureEvidenceTiming(capture);
   return {
     id: String((capture as any).id),
     sourceId: String((capture as any).sourceId ?? (source as any)?.id ?? "unknown"),
     sourceName: String((source as any)?.name ?? sourceFamilyLabels[sourceFamily]),
     sourceFamily,
     url: String((capture as any).url ?? (source as any)?.url ?? "") || undefined,
-    firstSeenAt: collectedAt,
-    observedAt: collectedAt,
+    firstSeenAt: timing.observedAt,
+    observedAt: timing.observedAt,
     captureMode,
     redactionState: captureMode === "metadata_only" ? "metadata_only" : "redacted",
     contentHash: String((capture as any).contentHash ?? hashContent(text)),
@@ -318,6 +329,8 @@ function buildEvidenceRef(capture: RawCapture, source: SourceRecord | undefined,
     provenance: {
       captureId: String((capture as any).id),
       sourceId: String((capture as any).sourceId ?? (source as any)?.id ?? "unknown"),
+      publishedAt: timing.publishedAt,
+      collectedAt: timing.collectedAt,
       sourceType: String((source as any)?.type ?? (capture.metadata as any)?.adapter ?? "") || undefined,
       collector: String((capture.metadata as any)?.adapter ?? (capture.metadata as any)?.collector ?? "") || undefined,
       captureMode,
@@ -475,6 +488,7 @@ function mergeDuplicateAlerts(alerts: DwmAlert[]): DwmAlert[] {
     current.confidenceReasoning = uniqueStrings([...current.confidenceReasoning, ...alert.confidenceReasoning, "Multiple recent captures support the same watchlist alert."]);
     current.firstSeenAt = current.firstSeenAt < alert.firstSeenAt ? current.firstSeenAt : alert.firstSeenAt;
     current.lastSeenAt = current.lastSeenAt > alert.lastSeenAt ? current.lastSeenAt : alert.lastSeenAt;
+    current.matchTiming = matchTimingForEvidence(current.evidence, current.provenance.generatedAt);
     current.provenance = provenanceForAlert(current.provenance.generatedAt, current.evidence);
     current.evidenceSummary = evidenceSummaryFor(current.evidence);
     current.webhookDelivery = {
@@ -483,6 +497,41 @@ function mergeDuplicateAlerts(alerts: DwmAlert[]): DwmAlert[] {
     };
   }
   return [...merged.values()].sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || b.confidence - a.confidence);
+}
+
+export function captureEvidenceTiming(capture: Pick<RawCapture, "publishedAt" | "collectedAt">, fallback = nowIso()) {
+  const collectedAt = validIso(capture.collectedAt);
+  const publishedAt = validIso(capture.publishedAt);
+  return {
+    collectedAt,
+    publishedAt,
+    observedAt: publishedAt ?? collectedAt ?? validIso(fallback) ?? nowIso()
+  };
+}
+
+export function matchTimingForEvidence(evidence: DwmEvidenceRef[], generatedAt: string): DwmAlert["matchTiming"] {
+  const observed = evidence.map((item) => item.observedAt || item.firstSeenAt).filter(Boolean).sort();
+  const collected = evidence.map((item) => item.provenance.collectedAt).filter(Boolean).sort() as string[];
+  // ponytail: a retained publication-to-collection gap is the smallest honest backfill signal
+  // until captures carry an explicit ingestion mode; rebuild time is not evidence time.
+  const historicalEvidenceCount = evidence.filter((item) => {
+    const publishedAt = Date.parse(item.provenance.publishedAt ?? "");
+    const collectedAt = Date.parse(item.provenance.collectedAt ?? "");
+    return Number.isFinite(publishedAt) && Number.isFinite(collectedAt) && collectedAt - publishedAt >= 86_400_000;
+  }).length;
+  return {
+    kind: evidence.length > 0 && historicalEvidenceCount === evidence.length ? "historical_backfill" : "new_evidence",
+    firstObservedAt: observed[0] ?? generatedAt,
+    lastObservedAt: observed.at(-1) ?? generatedAt,
+    firstCollectedAt: collected[0],
+    lastCollectedAt: collected.at(-1),
+    historicalEvidenceCount
+  };
+}
+
+function validIso(value: unknown): string | undefined {
+  const time = Date.parse(String(value ?? ""));
+  return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
 }
 
 function inTenant(record: { tenantId?: string }, tenantId?: string): boolean {

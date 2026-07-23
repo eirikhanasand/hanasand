@@ -454,7 +454,7 @@ function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId
         claimedDataSize: claim.claimedDataSize || "Not disclosed by TA",
         claimedCountry: claim.country || "Not disclosed by TA",
         channelType: claim.sourceFamily === "public_advisory" ? "public victim-claim feed" : claim.sourceFamily === "telegram_public" ? "public Telegram" : undefined,
-        firstSeenAt: claimTime,
+        firstSeenAt: sourcePublishedAt,
         claimType: claim.claimType || "ransomware_victim_publication"
       },
       review: {
@@ -916,6 +916,10 @@ function exposureClaimFromCapture(capture: any, source?: any) {
   const leak = capture.metadata?.leakSite ?? {};
   const parsedTitle = parseVictimClaimTitle(String(capture.title ?? capture.metadata?.safeExcerpt ?? ""));
   const firstSeen = leak.firstSeenAt || capture.publishedAt || capture.collectedAt;
+  const publishedAt = validTimestamp(capture.publishedAt);
+  const collectedAt = validTimestamp(capture.collectedAt);
+  const leakObservedAt = validTimestamp(leak.firstSeenAt);
+  const observedAt = publishedAt ?? (leakObservedAt !== collectedAt ? leakObservedAt : undefined);
   const ageMinutes = Math.max(0, Math.round((Date.now() - Date.parse(firstSeen || capture.collectedAt || nowIso())) / 60_000));
   const confidence = capture.metadata?.parserQuality === "high" ? 0.9 : capture.metadata?.parserQuality === "medium" ? 0.78 : 0.64;
   const text = capture.storageKind === "metadata_only"
@@ -934,6 +938,8 @@ function exposureClaimFromCapture(capture: any, source?: any) {
     country: clean(leak.claimedCountry || leak.country || capture.metadata?.country || countryFromText(text) || countryFromCompanyDomain(leak.victimName || capture.metadata?.victimName || parsedTitle?.company || "") || "Not disclosed by TA"),
     claimType: leak.claimType || "ransomware_victim_publication",
     claimTime: firstSeen,
+    publishedAt,
+    observedAt,
     collectedAt: capture.collectedAt,
     status: capture.metadata?.review?.state === "needs_review" ? "needs_review" : ageMinutes <= 60 ? "new" : "parsed",
     confidence,

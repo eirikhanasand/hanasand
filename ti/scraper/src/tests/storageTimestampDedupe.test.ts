@@ -17,6 +17,33 @@ test("capture storage drops malformed published timestamps", () => {
   expect(stored.publishedAt).toBeUndefined();
 });
 
+test("delivered status does not invent response-completion time", () => {
+  const store = new InMemoryScraperStore();
+  const missingCompletion = store.saveDwmWebhookDelivery({
+    id: "delivery_missing_completion",
+    alertId: "alert_missing_completion",
+    status: "delivered",
+    attemptedAt: "2026-07-22T12:00:00.000Z"
+  });
+  const responseCompletedAt = "2026-07-22T12:00:02.000Z";
+  const confirmed = store.saveDwmWebhookDelivery({
+    id: "delivery_confirmed",
+    alertId: "alert_confirmed",
+    status: "delivered",
+    attemptedAt: "2026-07-22T12:00:01.000Z",
+    completedAt: responseCompletedAt,
+    deliveredAt: responseCompletedAt
+  });
+
+  expect(missingCompletion).toMatchObject({
+    status: "delivered",
+    attemptedAt: "2026-07-22T12:00:00.000Z",
+    completedAt: null,
+    deliveredAt: null
+  });
+  expect(confirmed).toMatchObject({ completedAt: responseCompletedAt, deliveredAt: responseCompletedAt });
+});
+
 test("pipeline storage drops malformed incident timestamps", () => {
   const capture = fixtureCapture();
   const stored = new InMemoryScraperStore().savePipelineResult({

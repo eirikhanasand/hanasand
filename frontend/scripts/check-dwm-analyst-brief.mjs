@@ -122,6 +122,11 @@ assert.ok(source.includes('alertWatchlistMatchCount(alerts)'), 'DWM workflow cou
 assert.ok(source.includes('function alertCasePath(alert: PortalAlert)'), 'DWM selected case links should use alert case paths.')
 assert.ok(source.includes('String(second.attemptedAt || \'\').localeCompare(String(first.attemptedAt || \'\'))'), 'DWM delivery ordering should tolerate persisted attempts without timestamps.')
 assert.ok(!source.includes('.attemptedAt.localeCompare('), 'DWM delivery views should not call localeCompare on nullable persisted timestamps.')
+assert.ok(source.includes('Historical match'), 'DWM alert queue should identify retained historical evidence.')
+assert.ok(source.includes('if (alert.matchTiming?.kind === \'historical_backfill\') return false'), 'DWM Fresh filter must exclude all-historical retained evidence.')
+assert.ok(source.includes('selectedEvidence.provenance?.publishedAt'), 'DWM evidence details should expose the original publisher timestamp.')
+assert.ok(source.includes('selectedEvidence.provenance?.collectedAt'), 'DWM evidence details should expose collection time separately.')
+assert.ok(!source.includes('provenance?.publishedAt || selectedEvidence.observedAt'), 'DWM evidence details must not present collection time as publisher time.')
 
 for (const token of [
     'data-dwm-workflow-runbook',

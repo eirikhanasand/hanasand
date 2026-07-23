@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
-import { buildDwmProductSnapshot, classifySourceFamily, normalizeWatchlist } from "../product/dwmProduct.ts";
+import { buildDwmProductSnapshot, classifySourceFamily, matchTimingForEvidence, normalizeWatchlist } from "../product/dwmProduct.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 
@@ -130,7 +130,37 @@ const darkwebCapture: RawCapture = {
   }
 } as RawCapture;
 
+function timingEvidence(id: string, publishedAt: string, collectedAt: string) {
+  return {
+    id,
+    firstSeenAt: publishedAt,
+    observedAt: publishedAt,
+    provenance: { publishedAt, collectedAt }
+  } as any;
+}
+
 describe("dwm product snapshot", () => {
+  test("classifies backfill from each retained publication-to-collection gap", () => {
+    const historical = timingEvidence("historical", "2026-01-01T00:00:00.000Z", "2026-01-03T00:00:00.000Z");
+    const current = timingEvidence("current", "2026-01-03T00:00:00.000Z", "2026-01-03T00:05:00.000Z");
+
+    expect(matchTimingForEvidence([historical], "2026-01-03T00:10:00.000Z")).toMatchObject({
+      kind: "historical_backfill",
+      historicalEvidenceCount: 1
+    });
+    expect(matchTimingForEvidence([current], "2026-01-03T00:10:00.000Z")).toMatchObject({
+      kind: "new_evidence",
+      historicalEvidenceCount: 0
+    });
+    expect(matchTimingForEvidence([historical, current], "2026-01-03T00:10:00.000Z")).toMatchObject({
+      kind: "new_evidence",
+      historicalEvidenceCount: 1
+    });
+    expect(matchTimingForEvidence([current], "2030-01-01T00:00:00.000Z")).toMatchObject({
+      kind: "new_evidence",
+      historicalEvidenceCount: 0
+    });
+  });
   test("normalizes watchlists and classifies source families", () => {
     expect(normalizeWatchlist([" acme.com ", "acme.com", "Acme Payments"])).toEqual([
       { value: "acme.com", kind: "domain" },
