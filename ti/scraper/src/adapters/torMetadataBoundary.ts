@@ -36,9 +36,9 @@ export class TorMetadataHttpBoundary {
       }
       if (!response.ok) throw Object.assign(new Error(`Tor metadata HTTP ${response.status}`), { httpStatus: response.status });
       const contentType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
-      if (contentType && !["text/html", "application/xhtml+xml", "text/plain"].includes(contentType)) throw new Error(`Tor metadata unsupported media type: ${contentType}`);
+      if (contentType && !["text/html", "application/xhtml+xml", "text/plain", "application/json"].includes(contentType)) throw new Error(`Tor metadata unsupported media type: ${contentType}`);
       const body = await boundedText(response, maxBytes);
-      return metadataFromHtml(body.text, request.actorName);
+      return contentType === "application/json" ? metadataFromJson(body.text, request.actorName) : metadataFromHtml(body.text, request.actorName);
     }
     throw new Error("Tor metadata redirect limit exceeded");
   }
@@ -107,14 +107,44 @@ function victimNamesFromHtml(html: string, actorName?: string): string[] {
     ...(actor === "nova" ? [...html.matchAll(/<[^>]*class=["'][^"']*\bpost-card\b[^"']*["'][^>]*>[\s\S]*?<a\b[^>]*class=["'][^"']*\blogo\b[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi)].map((match) => clean(match[1])) : []),
     ...(actor === "interlock" ? [...html.matchAll(/<([a-z0-9]+)\b[^>]*class=["'][^"']*\badvert_info_title\b[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi)].map((match) => clean(match[2])) : [])
   ];
-  return [...new Set(names.map(safeMetadataText).filter((name) => name.length >= 2 && name.length <= 160 && !name.includes("[redacted-")))].slice(0, 24);
+  return safeVictimNames(names);
+}
+
+function metadataFromJson(json: string, actorName?: string) {
+  const actor = actorName?.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (actor !== "lamashtu") throw new Error("Tor metadata JSON parser is not approved for this actor");
+  let document: any;
+  try { document = JSON.parse(json); }
+  catch { throw new Error("Tor metadata JSON parser rejected invalid payload"); }
+  const rows = document?.posts;
+  if (!Array.isArray(rows)) throw new Error("Tor metadata JSON parser found no approved victim listing");
+  const candidates = rows.map((row: any) => ({
+    name: row?.title,
+    timestamp: validTimestamp(row?.publish_at)
+  })).filter((item: any) => typeof item.name === "string");
+  const victimNames = safeVictimNames(candidates.map((item: any) => item.name));
+  const sourceTimestamp = candidates.filter((item: any) => victimNames.includes(safeMetadataText(item.name))).map((item: any) => item.timestamp).filter(Boolean).sort((left: string, right: string) => Date.parse(right) - Date.parse(left))[0];
+  const title = `${safeMetadataText(actorName ?? "")} victim metadata`.trim().slice(0, 300);
+  return {
+    title,
+    description: victimNames.join(" | ").slice(0, 1_000) || undefined,
+    actorName,
+    victimName: victimNames[0],
+    victimNames,
+    sourceTimestamp,
+    links: []
+  };
 }
 
 function tag(html: string, name: string): string { return html.match(new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)<\\/${name}>`, "i"))?.[1] ?? ""; }
 function meta(html: string, name: string): string { const element = [...html.matchAll(/<meta\b[^>]*>/gi)].map((match) => match[0]).find((value) => new RegExp(`(?:name|property)=["'](?:og:)?${name}["']`, "i").test(value)); return element?.match(/content=["']([^"']*)["']/i)?.[1] ?? ""; }
 function time(html: string): string | undefined { const value = html.match(/<time\b[^>]*datetime=["']([^"']+)["']/i)?.[1]?.trim(); return value && /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) && Number.isFinite(Date.parse(value)) ? value : undefined; }
+function validTimestamp(value: unknown): string | undefined { return typeof value === "string" && /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) && Number.isFinite(Date.parse(value)) ? value : undefined; }
 function labeled(text: string | undefined, labels: string[]): string | undefined { if (!text) return undefined; const match = text.match(new RegExp(`(?:${labels.join("|")})\\s*[:\\-]\\s*([^|;\\n]{2,120})`, "i")); return match?.[1]?.trim(); }
 function clean(value: string): string { return value.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'").replace(/\s+/g, " ").trim(); }
+function safeVictimNames(values: string[]): string[] {
+  return [...new Set(values.map(safeMetadataText).filter((name) => name.length >= 2 && name.length <= 160 && !name.includes("[redacted-")))].slice(0, 24);
+}
 function safeMetadataText(value: string): string {
   return clean(value)
     .replace(/\bhttps?:\/\/[^\s"'<>]+/gi, "[redacted-url]")
