@@ -8557,7 +8557,7 @@ async function deliverToDwmWebhookDestination({
     if (!dryRun && live && process.env.DWM_WEBHOOK_LIVE_DELIVERY !== 'true') {
         error = 'Live DWM webhook delivery is disabled. Set DWM_WEBHOOK_LIVE_DELIVERY=true and send live=true to enable external calls.'
     } else if (liveRequested && !shouldSendLive) {
-        error = `Delivery blocked because this idempotency lineage reached the ${MAX_DWM_WEBHOOK_DELIVERY_ATTEMPTS}-attempt limit.`
+        error = `Delivery attempt limit reached for this report (${MAX_DWM_WEBHOOK_DELIVERY_ATTEMPTS} attempts).`
     }
 
     if (shouldSendLive) {

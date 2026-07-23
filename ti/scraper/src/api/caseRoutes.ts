@@ -811,8 +811,8 @@ function exportThirdPartyCaseReport(caseRecord: AnalystCase, options: ApiServerO
   });
   const evidenceRefs = bundle.objects.filter((object: any) => object.type === "x-ti-evidence").map((object: any) => object.id);
   bundle.objects.push(reportObject(
-    `Case ${caseRecord.id}: ${sanitizeDwmCustomerText(caseRecord.title, "Evidence-backed case report", 160)}`,
-    sanitizeDwmCustomerText(caseRecord.summary, "Evidence-backed findings selected by an authenticated tenant analyst.", 500) ?? "Evidence-backed findings selected by an authenticated tenant analyst.",
+    `Case ${caseRecord.id}: ${sanitizeDwmCustomerText(caseRecord.title, "Case report", 160)}`,
+    sanitizeDwmCustomerText(caseRecord.summary, "Selected findings from this case.", 500) ?? "Selected findings from this case.",
     evidenceRefs,
     generatedAt,
     selectedEvidence.map((item: any) => safeEvidenceProvenance(item))
@@ -856,7 +856,7 @@ function buildThirdPartyJsonCaseExport(caseRecord: AnalystCase, alert: any, orga
     organization: safeOrganizationReference(organization, caseRecord),
     summary: {
       caseId: caseRecord.id,
-      title: sanitizeDwmCustomerText(caseRecord.title, "Evidence-backed case report", 160),
+      title: sanitizeDwmCustomerText(caseRecord.title, "Case report", 160),
       summary: sanitizeDwmCustomerText(caseRecord.summary, undefined, 500),
       status: caseRecord.status,
       priority: caseRecord.priority,
