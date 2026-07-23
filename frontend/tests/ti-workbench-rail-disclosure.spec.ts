@@ -30,6 +30,7 @@ test('TI workbench keeps selected-case actions primary and collapses secondary r
     expect(route).toContain('title=\'Attacks\'')
     expect(attacksRoute).toContain('export { default, dynamic } from \'../workbench/page\'')
     expect(sidebar).toContain('{ href: \'/dashboard/ti/attacks\', label: \'Attacks\'')
+    expect(sidebar).toContain('{ href: \'/dashboard/ti/timeliness\', label: \'Timeliness\'')
     expect(page).toContain('const workbenchStatsGrid')
     expect(page).toContain('Org and shared watchlist')
     expect(page).toContain('Case groups and links')

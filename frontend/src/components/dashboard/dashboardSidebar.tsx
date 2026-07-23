@@ -73,6 +73,7 @@ export default function DashboardSidebar({
         tiAdminItems.push(
             { href: '/dashboard/ti/review', label: 'Claim review', icon: <ClipboardCheck className='h-4 w-4' /> },
             { href: '/dashboard/ti/evaluation', label: 'Evaluation', icon: <ListChecks className='h-4 w-4' /> },
+            { href: '/dashboard/ti/timeliness', label: 'Timeliness', icon: <AlarmClockCheck className='h-4 w-4' /> },
         )
     }
 
