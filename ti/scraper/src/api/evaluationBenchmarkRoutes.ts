@@ -1718,9 +1718,9 @@ function independentlyAcceptedTaskIds(store: CaptureMetadataStore, benchmark: Ev
   return accepted;
 }
 function canonicalEvaluationRecord(value: unknown): string {
-  const canonical = (candidate: any): any => Array.isArray(candidate)
+  const canonical = (candidate: unknown): unknown => Array.isArray(candidate)
     ? candidate.map(canonical)
-    : candidate && typeof candidate === "object"
+    : isRecord(candidate)
       ? Object.fromEntries(Object.keys(candidate).sort().filter((key) => candidate[key] !== undefined).map((key) => [key, canonical(candidate[key])]))
       : candidate;
   return JSON.stringify(canonical(value));
