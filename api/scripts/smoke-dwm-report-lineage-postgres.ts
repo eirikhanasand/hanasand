@@ -83,11 +83,21 @@ async function exercise() {
     assert.ok(failed.id)
     assert.ok(failed.idempotencyKey.includes(failed.payload.report.exportChecksum))
     assert.equal(failed.payloadHash, payloadHash(originalReceiverBody))
+    let prematureNetworkAttempts = 0
+    const premature = await retryDwmWebhookDelivery(adminId, orgId, failed.id, async () => {
+        prematureNetworkAttempts += 1
+        return { status: 204, body: 'must not be sent before due' }
+    })
+    assert.equal(premature.ok, false)
+    assert.equal(premature.code, 'delivery_retry_not_ready')
+    assert.equal(new Date(premature.nextRetryAt).toISOString(), new Date(failed.nextRetryAt).toISOString())
+    assert.equal(prematureNetworkAttempts, 0)
     await writeFile(receiverObservationPath, JSON.stringify({
         body: originalReceiverBody,
         payloadHash: failed.payloadHash,
         idempotencyKey: failed.idempotencyKey,
         deliveryId: failed.id,
+        prematureRetryBlocked: true,
     }))
     for (let index = 0; index < 101; index += 1) {
         const [generic] = await deliverDwmAlertNotification(ownerId, {
@@ -117,6 +127,7 @@ async function exercise() {
         persistedFailedDeliveryId: failed.id,
         nextRetryAt: failed.nextRetryAt,
         reportReceiptPastHundredRows: reportRowsPastLimit.length === 1,
+        prematureRetryBlocked: true,
         next: `Stop and restart PostgreSQL, then rerun this script with DB=${database} and phase verify; verification waits until the persisted retry due time.`,
     }, null, 2))
 }
@@ -139,6 +150,7 @@ async function verifyAfterRestart() {
         payloadHash: string
         idempotencyKey: string
         deliveryId: string
+        prematureRetryBlocked: boolean
     }
     const storedPayload = canonicalJson(prior.payload)
     const storedIdempotencyKey = prior.idempotency_key
@@ -152,21 +164,8 @@ async function verifyAfterRestart() {
         reportExportChecksum: prior.payload.report.exportChecksum,
     })
     assert.deepEqual(reportRowsPastLimit.map(row => row.id), [prior.id])
-    const retryDelayMs = Math.max(0, Date.parse(prior.next_retry_at) - Date.now())
-    let prematureRetryBlocked = retryDelayMs === 0
-    if (retryDelayMs) {
-        let prematureNetworkAttempts = 0
-        const premature = await retryDwmWebhookDelivery(adminId, orgId, prior.id, async () => {
-            prematureNetworkAttempts += 1
-            return { status: 204, body: 'must not be sent before due' }
-        })
-        assert.equal(premature.ok, false)
-        assert.equal(premature.code, 'delivery_retry_not_ready')
-        assert.equal(new Date(premature.nextRetryAt).toISOString(), new Date(prior.next_retry_at).toISOString())
-        assert.equal(prematureNetworkAttempts, 0)
-        prematureRetryBlocked = true
-    }
-    if (retryDelayMs) await Bun.sleep(retryDelayMs + 25)
+    const retryDelayMs = Math.max(0, new Date(prior.next_retry_at).getTime() - Date.now())
+    if (retryDelayMs) await Bun.sleep(retryDelayMs + 50)
     const sentBodies: string[] = []
 
     const retried = await retryDwmWebhookDelivery(adminId, orgId, prior.id, async (_endpoint, body) => {
@@ -205,7 +204,7 @@ async function verifyAfterRestart() {
         priorDeliveryId: prior.id,
         exactOriginalReceiverBody: sentBodies[0] === receiverObservation.body,
         exactOriginalReceiverPayloadHash: retried.delivery.payloadHash === receiverObservation.payloadHash,
-        prematureRetryBlocked,
+        prematureRetryBlocked: receiverObservation.prematureRetryBlocked,
         reportReceiptPastHundredRows: reportRowsPastLimit.length === 1,
         exactIdempotencyLineage: retried.delivery.idempotencyKey === storedIdempotencyKey,
         retryActorAuditOnly: retried.delivery.ownerId === ownerId && retried.delivery.auditActorId === adminId,
