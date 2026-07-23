@@ -1,17 +1,31 @@
 // @ts-nocheck
 import { actorAliasesFor, ACTOR_ALIAS_RECORDS } from "../pipeline/actorAliases.ts";
+import { resolveMitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
 
 export function expandQueryTerms(query, entityType, actorIdentities) {
   const terms = new Set([query.trim()]);
-  const record = Array.isArray(actorIdentities) ? undefined : ACTOR_ALIAS_RECORDS.find((r) => r.canonical.toLowerCase() === query.trim().toLowerCase() || r.aliases.includes(query.trim().toLowerCase()));
-  if ((entityType === "actor" || entityType === "alias" || entityType === "free_text") && record) [record.canonical, ...actorAliasesFor(record.canonical)].forEach((t) => terms.add(t));
+  if (entityType === "actor" || entityType === "alias" || entityType === "free_text") actorTerms(query, actorIdentities).forEach((term) => terms.add(term));
   if (entityType === "cve" || entityType === "indicator") terms.add(query.trim().toUpperCase());
   return [...terms].filter(Boolean).slice(0, 12);
 }
 
 export function reuseTerms(query, entityType, terms, actorIdentities) {
-  const record = Array.isArray(actorIdentities) ? undefined : ACTOR_ALIAS_RECORDS.find((r) => r.canonical.toLowerCase() === query.trim().toLowerCase() || r.aliases.includes(query.trim().toLowerCase()) || terms.some((t) => r.aliases.includes(t.toLowerCase())));
-  return record && ["actor", "alias", "free_text"].includes(entityType) ? [record.canonical, ...actorAliasesFor(record.canonical)].map((t) => t.toLowerCase()).sort() : uniq(terms.map((t) => t.trim().toLowerCase()));
+  const resolved = ["actor", "alias", "free_text"].includes(entityType) ? actorTerms(query, actorIdentities) : [];
+  return uniq((resolved.length ? resolved : terms).map((term) => term.trim().toLowerCase()));
+}
+
+function actorTerms(query, actorIdentities) {
+  if (Array.isArray(actorIdentities) && actorIdentities.length) {
+    const resolution = resolveMitreActorIdentity(query, actorIdentities);
+    if (!resolution.ambiguous && resolution.candidates.length === 1) {
+      const identity = resolution.candidates[0].identity;
+      return [identity.canonicalName, ...identity.associatedNames];
+    }
+    return [];
+  }
+  const normalized = query.trim().toLowerCase();
+  const record = ACTOR_ALIAS_RECORDS.find((candidate) => candidate.canonical.toLowerCase() === normalized || candidate.aliases.includes(normalized));
+  return record ? [record.canonical, ...actorAliasesFor(record.canonical)] : [];
 }
 
 export function hour(at) {

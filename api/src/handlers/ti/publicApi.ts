@@ -176,7 +176,7 @@ function publicSearchResult(result: TiSearchResponse) {
             corroboratingSourceIds: strings(item.corroboratingSourceIds), contradictingSourceIds: strings(item.contradictingSourceIds),
         })),
         targets: array(result.targets).map(item => compact({ sector: text(item.sector), regions: strings(item.regions), rationale: text(item.rationale), confidence: confidence(item.confidence) })),
-        ttps: array(result.ttps).map(item => compact({ name: text(item.name), attackId: text(item.attackId), tactic: text(item.tactic), detail: text(item.detail), confidence: confidence(item.confidence) })),
+        ttps: array(result.ttps).map(item => compact({ name: text(item.name), attackId: text(item.attackId), tactic: text(item.tactic), detail: text(item.detail), confidence: confidence(item.confidence), extractionMethod: text(item.extractionMethod)?.slice(0, 120), extractorVersion: text(item.extractorVersion)?.slice(0, 120) })),
         datasets: array(result.datasets).map(item => compact({ name: text(item.name), type: text(item.type), coverage: text(item.coverage), status: text(item.status), url: httpUrl(item.url) })),
         sources: array(result.sources).map(item => compact({ id: text(item.id), name: text(item.name), type: text(item.type), provenance: text(item.provenance), url: httpUrl(item.url), captureId: text(item.captureId), sourceRequestId: text(item.sourceRequestId), sourceFamily: text(item.sourceFamily), parserStatus: text(item.parserStatus), reportDate: iso(item.reportDate), lastCollectedAt: iso(item.lastCollectedAt) })),
         notes: strings(result.notes),

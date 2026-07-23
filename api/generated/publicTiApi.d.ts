@@ -280,6 +280,8 @@ export interface components {
             tactic: string;
             detail: string;
             confidence: number;
+            extractionMethod?: string;
+            extractorVersion?: string;
         };
         Dataset: {
             name: string;

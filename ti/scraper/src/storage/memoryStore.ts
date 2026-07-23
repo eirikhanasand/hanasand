@@ -610,19 +610,25 @@ function claimFromAnalystEntry(entry: any, previous?: any): any {
 
 export function evidenceIndependence(store: any, captureIds: string[]) {
   const evidence = captureIds.map((id) => store.getCapture(id)).filter(Boolean).map((capture: any) => ({
+    sourceId: capture.sourceId,
     publisher: publisherKey(store.getSource?.(capture.sourceId), capture.sourceId),
     content: capture.normalizedTextHash || capture.contentHash
   }));
-  if (!evidence.length) return { groupCount: 1, publisherKeys: [], method: "publisher_or_identical_content" };
+  if (!evidence.length) return { groupCount: 1, publisherKeys: [], groups: [], method: "publisher_or_identical_content" };
   // ponytail: claim evidence sets are small; replace this O(n^2) union scan only if measured corpus size makes it material.
   const parent = evidence.map((_: any, index: number) => index);
   const find = (index: number): number => parent[index] === index ? index : (parent[index] = find(parent[index]));
   for (let left = 0; left < evidence.length; left++) for (let right = left + 1; right < evidence.length; right++) {
     if (evidence[left].publisher === evidence[right].publisher || evidence[left].content && evidence[left].content === evidence[right].content) parent[find(right)] = find(left);
   }
+  const roots = unique(evidence.map((_: any, index: number) => String(find(index))));
   return {
-    groupCount: new Set(evidence.map((_: any, index: number) => find(index))).size,
+    groupCount: roots.length,
     publisherKeys: unique(evidence.map((item: any) => item.publisher)),
+    groups: roots.map((root) => {
+      const members = evidence.filter((_: any, index: number) => String(find(index)) === root);
+      return { sourceIds: unique(members.map((item: any) => item.sourceId)), publisherKeys: unique(members.map((item: any) => item.publisher)) };
+    }),
     method: "publisher_or_identical_content"
   };
 }

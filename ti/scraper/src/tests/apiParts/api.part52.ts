@@ -45,7 +45,7 @@ describe("api v1", () => {
     const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
     expect(response.status).toBe("partial");
     expect(response.evidenceAssessment.corroboratedClaimCount).toBe(0);
-    expect(response.claims).toEqual([expect.objectContaining({ id: "claim_identity", corroborationState: "corroborated", sourceCount: 2 })]);
+    expect(response.claims).toEqual([expect.objectContaining({ id: "claim_identity", corroborationState: "single_source", sourceCount: 1 })]);
     expect(response.rows[0].title).toBe("MITRE APT29");
     expect(response.rows[0].summary).toBe("APT29 actor reference ® evidence.");
     expect(response.targets).toEqual([]);
@@ -274,11 +274,119 @@ describe("api v1", () => {
     expect(response.actorIntelligence.campaigns).toEqual(["Amazon shuts down watering hole attack attributed to APT29"]);
   });
 
-  test("classifies domain and CVE queries without forcing actor semantics", async () => {
+  test("classifies domain, CVE, and indicator queries without forcing actor semantics", async () => {
     const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_indicator_report", tenantId: "tenant_api", name: "Indicator report" }));
+    store.saveCapture(fixtureCapture({ id: "cap_indicator_report", sourceId: "src_indicator_report", title: "Observed malware network indicator", body: "A public malware investigation reports 203.0.113.10 as observed command-and-control infrastructure and preserves the source evidence for review.", publishedAt: "2026-07-20T00:00:00.000Z" }));
+    store.saveIndicator({ id: "indicator_ip", tenantId: "tenant_api", captureId: "cap_indicator_report", sourceId: "src_indicator_report", type: "ipv4", value: "203.0.113.10", normalizedValue: "203.0.113.10", confidence: 0.9 });
     const domain = await body(await handleApiRequest(api("/v1/intel/search?q=example.com"), { store, frontier: new FocusedFrontier() })) as any;
     const cve = await body(await handleApiRequest(api("/v1/intel/search?q=CVE-2026-1234"), { store, frontier: new FocusedFrontier() })) as any;
+    const indicator = await body(await handleApiRequest(api("/v1/intel/search?q=203.0.113.10&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
     expect(domain.queryKind).toBe("domain");
     expect(cve.queryKind).toBe("cve");
+    expect(indicator.queryKind).toBe("indicator");
+    expect(indicator.rows).toEqual([expect.objectContaining({ id: "cap_indicator_report" })]);
+    expect(indicator.actorProfile).toBeUndefined();
+    expect(indicator.actorIdentity).toBeUndefined();
+    expect(indicator.actorIntelligence).toBeUndefined();
+    expect(indicator.evidenceAssessment.missingFields).not.toContain("indicator evidence");
+    expect(domain.actorProfile).toBeUndefined();
+    expect(domain.actorIdentity).toBeUndefined();
+    expect(domain.actorIntelligence).toBeUndefined();
+    expect(domain.evidenceAssessment.missingFields).not.toContain("actor");
+    expect(domain.actionability.watchlistCandidates).toEqual([{
+      kind: "domain",
+      value: "example.com",
+      reason: "Exact domain supplied by the user; no activity is inferred from the query itself.",
+      confidence: 1
+    }]);
+  });
+
+  test("classifies an exact single-name victim as an organization without creating an actor profile", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_microsoft_report", tenantId: "tenant_api", name: "Microsoft disclosure" }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_microsoft_report",
+      sourceId: "src_microsoft_report",
+      title: "Microsoft publishes incident disclosure",
+      body: "Microsoft publishes a source-backed incident disclosure.",
+      metadata: { exposureClaim: true },
+      publishedAt: "2026-07-20T00:00:00.000Z"
+    }));
+    store.saveExtractedEntity({ id: "victim_microsoft", tenantId: "tenant_api", captureId: "cap_microsoft_report", sourceId: "src_microsoft_report", type: "victim", value: "Microsoft", normalizedValue: "microsoft", confidence: 0.8, extractionMethod: "source_specific" });
+
+    const response = await body(await handleApiRequest(api("/v1/intel/search?q=Microsoft&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
+
+    expect(response.queryKind).toBe("organization");
+    expect(response.actorProfile).toBeUndefined();
+    expect(response.actorIdentity).toBeUndefined();
+    expect(response.actorIntelligence).toBeUndefined();
+    expect(response.evidenceAssessment.missingFields).not.toContain("organization evidence");
+    expect(response.actionability.watchlistCandidates).toContainEqual(expect.objectContaining({ kind: "company", value: "Microsoft", confidence: 1 }));
+  });
+
+  test("keeps deterministic keyword TTPs as row assertions instead of actor characterization", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_ttp_report", tenantId: "tenant_api", name: "TTP report" }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_ttp_report",
+      sourceId: "src_ttp_report",
+      title: "APT29 phishing campaign",
+      body: "APT29 phishing campaign used source-documented spearphishing.",
+      metadata: { actorName: "APT29" },
+      publishedAt: "2026-07-20T00:00:00.000Z"
+    }));
+    store.saveExtractedEntity({ id: "ttp_keyword", tenantId: "tenant_api", captureId: "cap_ttp_report", sourceId: "src_ttp_report", type: "ttp", value: "phishing", normalizedValue: "phishing", confidence: 0.72, extractionMethod: "deterministic_fallback", extractorVersion: "ti-extractor-v2", assertionKind: "extracted" });
+    store.saveExtractedEntity({ id: "ttp_documented", tenantId: "tenant_api", captureId: "cap_ttp_report", sourceId: "src_ttp_report", type: "ttp", value: "spearphishing attachment", normalizedValue: "spearphishing attachment", confidence: 0.9, extractionMethod: "source_specific", extractorVersion: "vendor-parser-v1", assertionKind: "observed" });
+
+    const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
+
+    expect(response.ttps.map((ttp: any) => ttp.name)).toEqual(["spearphishing attachment"]);
+    expect(response.ttps[0]).toMatchObject({ extractionMethod: "source_specific", extractorVersion: "vendor-parser-v1" });
+    expect(response.rows[0].assertions).toContainEqual(expect.objectContaining({ id: "ttp_keyword", value: "phishing", extractionMethod: "deterministic_fallback" }));
+  });
+
+  test("counts mirrored captures as one activity publisher", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_mirror_a", tenantId: "tenant_api", name: "Publisher mirror A", url: "https://publisher.example/feed-a" }));
+    store.saveSource(source({ id: "src_mirror_b", tenantId: "tenant_api", name: "Publisher mirror B", url: "https://publisher.example/feed-b" }));
+    for (const [id, sourceId, url] of [["a", "src_mirror_a", "https://publisher.example/a"], ["b", "src_mirror_b", "https://publisher.example/b"]]) {
+      store.saveCapture(fixtureCapture({ id: `cap_mirror_${id}`, sourceId, url, title: "APT29 campaign report", body: "A public malware investigation reports that APT29 conducted a credential phishing campaign against diplomatic organizations.", metadata: { actorName: "APT29" }, publishedAt: "2026-07-20T00:00:00.000Z" }));
+    }
+    store.saveIntelligenceClaim({ id: "claim_mirrored", tenantId: "tenant_api", sourceIds: ["src_mirror_a", "src_mirror_b"], captureIds: ["cap_mirror_a", "cap_mirror_b"], claimType: "incident", value: { actor: "APT29" }, summary: "Mirrored claim", confidence: 0.95, reviewState: "confirmed", corroborationState: "corroborated" });
+
+    const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
+
+    expect(response.evidenceAssessment).toMatchObject({ sourceCount: 1, corroboratedClaimCount: 0, confidence: 0.69, ready: true });
+    expect(response.evidenceAssessment.reasons).toContain("Single-source evidence is capped below high confidence.");
+    expect(response.claims).toEqual([expect.objectContaining({ id: "claim_mirrored", sourceCount: 1, corroborationState: "single_source", reviewState: "confirmed" })]);
+    expect(response.recentActivity).toHaveLength(2);
+    expect(response.recentActivity.every((item: any) => item.publisherCount === 1 && item.corroboratingSourceIds.length === 0 && item.corroborationState === "single_source")).toBe(true);
+  });
+
+  test("keeps ineligible claims visible without treating them as corroborated support", async () => {
+    for (const input of [
+      { id: "rejected", reviewState: "rejected", corroborationState: "corroborated" },
+      { id: "contradicted", reviewState: "contradicted", corroborationState: "contradicted" },
+      { id: "needs_review", reviewState: "needs_review", corroborationState: "corroborated" },
+      { id: "stale", reviewState: "confirmed", corroborationState: "corroborated", staleAfter: "2026-07-21T00:00:00.000Z" }
+    ]) {
+      const store = new InMemoryScraperStore();
+      store.saveSource(source({ id: `src_${input.id}_a`, tenantId: "tenant_api", name: "Publisher A", url: "https://publisher-a.example/feed" }));
+      store.saveSource(source({ id: `src_${input.id}_b`, tenantId: "tenant_api", name: "Publisher B", url: "https://publisher-b.example/feed" }));
+      for (const suffix of ["a", "b"]) {
+        store.saveCapture(fixtureCapture({ id: `cap_${input.id}_${suffix}`, sourceId: `src_${input.id}_${suffix}`, url: `https://publisher-${suffix}.example/${input.id}`, title: `APT29 ${input.id} campaign report`, body: `A public malware investigation ${suffix} reports that APT29 conducted a credential phishing campaign against diplomatic organizations.`, metadata: { actorName: "APT29" }, publishedAt: "2026-07-20T00:00:00.000Z" }));
+      }
+      store.saveIntelligenceClaim({ ...input, id: `claim_${input.id}`, tenantId: "tenant_api", sourceIds: [`src_${input.id}_a`, `src_${input.id}_b`], captureIds: [`cap_${input.id}_a`, `cap_${input.id}_b`], claimType: "incident", value: { actor: "APT29" }, summary: `${input.id} claim`, confidence: 0.95 });
+
+      const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
+      const expectedState = input.id === "stale" ? "stale" : input.reviewState;
+
+      expect(response.evidenceAssessment).toMatchObject({ ready: false, confidence: 0.35, corroboratedClaimCount: 0 });
+      expect(response.evidenceAssessment.missingFields).toContain("analyst-confirmed claim");
+      expect(response.claims).toEqual([expect.objectContaining({ id: `claim_${input.id}`, reviewState: expectedState, corroborationState: input.id === "contradicted" ? "contradicted" : "single_source", sourceCount: 2 })]);
+      expect(response.rows.every((row: any) => row.reviewState === expectedState)).toBe(true);
+      expect(response.recentActivity.every((item: any) => item.reviewState === expectedState && item.publisherCount === 1 && item.corroboratingSourceIds.length === 0 && item.corroborationState !== "corroborated")).toBe(true);
+    }
   });
 });

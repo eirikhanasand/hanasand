@@ -36,6 +36,8 @@ export interface TiTtp {
     tactic: string
     detail: string
     confidence: number
+    extractionMethod?: string
+    extractorVersion?: string
 }
 
 export interface TiDataset {

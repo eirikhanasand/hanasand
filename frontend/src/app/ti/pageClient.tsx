@@ -358,7 +358,7 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
 
                 <EvidenceBoundaryStrip result={result} />
 
-                {actorQuery || result.status === 'searching' || result.status === 'queued' || error ? (
+                {actorQuery ? (
                     <ActorBusinessModelEvidence
                         model={result.actorIntelligence?.businessModel}
                         sources={result.sources}
@@ -484,13 +484,19 @@ function EvidenceBoundaryStrip({ result }: { result: TiSearchResponse }) {
         + incidents.filter(incident => incident.reviewState !== 'confirmed').length
     const reviewMeasured = Boolean(assessment || claims.length || incidents.length)
     const contradicted = assessment?.contradictedClaimCount ?? claims.filter(claim => claim.corroborationState === 'contradicted').length
+    const rejected = assessment?.rejectedClaimCount ?? claims.filter(claim => claim.reviewState === 'rejected').length
+    const stale = assessment?.staleClaimCount ?? 0
     const missing = assessment?.missingFields ?? result.actorIntelligence?.missingFields ?? []
     const facts = [
         { label: 'Observed evidence', value: `${captureCount} captured record${captureCount === 1 ? '' : 's'}` },
         { label: 'Source claims', value: `${claims.length} claim${claims.length === 1 ? '' : 's'}` },
         { label: 'Inferred incidents', value: `${incidents.length} candidate${incidents.length === 1 ? '' : 's'}` },
         { label: 'Independent sources', value: `${sourceCount} source${sourceCount === 1 ? '' : 's'}` },
-        { label: 'Parser / review', value: reviewCount ? `${reviewCount} need review` : reviewMeasured ? 'No open review' : 'Review state pending' },
+        { label: 'Parser / review', value: [
+            reviewCount ? `${reviewCount} need review` : reviewMeasured ? 'No open review' : 'Review state pending',
+            rejected ? `${rejected} rejected` : '',
+            stale ? `${stale} stale` : '',
+        ].filter(Boolean).join(' · ') },
     ]
 
     return (
@@ -500,7 +506,7 @@ function EvidenceBoundaryStrip({ result }: { result: TiSearchResponse }) {
                     <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Evidence boundary</p>
                     <p className='mt-1 max-w-4xl text-xs leading-5 text-ui-muted dark:text-ui-muted'>Captured matches are observed evidence. Source statements remain claims. Incident records and profile conclusions are parser or analyst inferences until review and independent corroboration.</p>
                 </div>
-                <span className={sourceHealthChipClass(contradicted ? 'blocked' : assessment?.ready ? 'ready' : 'review')}>{contradicted ? `${contradicted} contradicted` : assessment?.ready ? 'reviewed evidence' : 'partial evidence'}</span>
+                <span className={sourceHealthChipClass(contradicted || rejected ? 'blocked' : assessment?.ready ? 'ready' : 'review')}>{contradicted ? `${contradicted} contradicted` : rejected ? `${rejected} rejected` : stale ? `${stale} stale` : assessment?.ready ? 'reviewed evidence' : 'partial evidence'}</span>
             </div>
             <div className='grid grid-cols-2 gap-3 md:grid-cols-5'>
                 {facts.map(fact => (

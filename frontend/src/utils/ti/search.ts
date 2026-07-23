@@ -56,6 +56,8 @@ export interface TiSearchResponse {
         sourceIds?: string[]
         captureIds?: string[]
         reviewState?: string
+        extractionMethod?: string
+        extractorVersion?: string
     }>
     datasets: Array<{
         name: string
@@ -243,9 +245,11 @@ export interface TiEvidenceAssessment {
     corroboratedClaimCount: number
     validationCount: number
     contradictedClaimCount: number
+    rejectedClaimCount?: number
+    staleClaimCount?: number
     metadataOnly: boolean
     reasons: string[]
-    claimCounts?: { total: number; confirmed: number; needsReview: number; contradicted: number; corroborated: number }
+    claimCounts?: { total: number; confirmed: number; needsReview: number; rejected?: number; stale?: number; contradicted: number; corroborated: number }
     missingFields: string[]
 }
 

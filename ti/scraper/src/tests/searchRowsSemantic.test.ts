@@ -21,11 +21,13 @@ describe("search row semantics", () => {
     const row = rowFromCapture({
       id: "cap_google_apt29",
       sourceId: "src_gen_google_threat_apt29",
+      url: "https://news.google.com/rss/articles/opaque-aggregator-id?oc=5",
       title: "What is APT29? - wiz.io",
       body: "Google News threat RSS: APT29 What is APT29? - wiz.io What is APT29? wiz.io",
       publishedAt: "2026-02-12T08:00:00.000Z",
     }, { name: "Google News threat RSS: APT29", type: "rss" });
 
     expect(row.summary).toBe("Captured source record from Google News threat RSS: APT29.");
+    expect(row.url).toBeUndefined();
   });
 });
