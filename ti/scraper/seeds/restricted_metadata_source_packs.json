@@ -20,6 +20,15 @@
   ],
   "reviewedRejectedCandidates": [
     {
+      "id": "restricted_ransomhouse_victim_blog",
+      "actorName": "RansomHouse",
+      "disposition": "rejected",
+      "reason": "Three current approved-proxy repeats returned the same 200 text/html response of 622 bytes and no parseable victim metadata, so the earlier JSON observation failed revalidation.",
+      "evidenceCheckedAt": "2026-07-23T19:35:46.194Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/ransomhouse",
+      "countsAsCoverage": false
+    },
+    {
       "id": "restricted_blacknevas_victim_blog",
       "actorName": "BlackNevas",
       "disposition": "rejected",
@@ -306,7 +315,9 @@
       "metadata": {
         "sourceFamily": "dark_web_victim_feed",
         "actorName": "SafePay",
-        "actors": ["SafePay"],
+        "actors": [
+          "SafePay"
+        ],
         "discoveryAuthorityUrl": "https://ransomwhere.org/data",
         "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/safepay",
         "discoveryCheckedAt": "2026-07-22T12:54:43.000Z",
@@ -347,7 +358,9 @@
       "metadata": {
         "sourceFamily": "dark_web_victim_feed",
         "actorName": "Space Bears",
-        "actors": ["Space Bears"],
+        "actors": [
+          "Space Bears"
+        ],
         "discoveryAuthorityUrl": "https://ransomwhere.org/data",
         "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/spacebears",
         "discoveryCheckedAt": "2026-07-22T12:54:43.000Z",
@@ -389,7 +402,9 @@
       "metadata": {
         "sourceFamily": "dark_web_victim_feed",
         "actorName": "Blackwater",
-        "actors": ["Blackwater"],
+        "actors": [
+          "Blackwater"
+        ],
         "discoveryAuthorityUrl": "https://ransomwhere.org/data",
         "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/blackwater",
         "discoveryCheckedAt": "2026-07-23T16:30:03.000Z",
@@ -457,7 +472,9 @@
       "metadata": {
         "sourceFamily": "dark_web_victim_feed",
         "actorName": "Qilin",
-        "actors": ["Qilin"],
+        "actors": [
+          "Qilin"
+        ],
         "discoveryAuthorityUrl": "https://ransomwhere.org/data",
         "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/qilin",
         "discoveryCheckedAt": "2026-07-22T14:42:52.000Z",
@@ -498,7 +515,9 @@
       "metadata": {
         "sourceFamily": "dark_web_victim_feed",
         "actorName": "Nova",
-        "actors": ["Nova"],
+        "actors": [
+          "Nova"
+        ],
         "discoveryAuthorityUrl": "https://ransomwhere.org/data",
         "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/nova",
         "discoveryCheckedAt": "2026-07-22T14:42:52.000Z",
@@ -539,7 +558,9 @@
       "metadata": {
         "sourceFamily": "dark_web_victim_feed",
         "actorName": "Interlock",
-        "actors": ["Interlock"],
+        "actors": [
+          "Interlock"
+        ],
         "discoveryAuthorityUrl": "https://ransomwhere.org/data",
         "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/interlock",
         "discoveryCheckedAt": "2026-07-22T14:42:52.000Z",
@@ -555,6 +576,77 @@
         "retainRawContent": false,
         "retentionDays": 30,
         "attribution": "Ransomwhere.org and RansomLook public research inventories plus approved-proxy metadata verification"
+      }
+    },
+    {
+      "id": "restricted_lamashtu_victim_blog",
+      "name": "Lamashtu victim blog",
+      "type": "tor_metadata",
+      "url": "http://lamashtux5j74mcm7lwwgn5yrvuwtrpxjoyendif3v3hrztjesfoyayd.onion/api/posts?page=1&filter=all",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.82,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public victim titles and their publication timestamps from the bounded listing response during governed probation. Never authenticate, interact with operators, retain descriptions, images, websites, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-07-23T19:29:50.000Z",
+        "approvedBy": "source-review:goal4-gate3-candidate-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Lamashtu",
+        "actors": [
+          "Lamashtu"
+        ],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/data",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/lamashtu",
+        "discoveryCheckedAt": "2026-07-23T19:29:50.000Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-07-23T19:29:50.000Z",
+        "productionCollectionVerifiedAt": "2026-07-23T19:29:50.000Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "json_posts_title",
+        "parserShape": "posts[].title",
+        "reportedVictimCount": 34,
+        "observedParsedItemCount": 20,
+        "lastReportedVictimAt": "2026-06-17T18:24:19.153Z",
+        "discoveryAuthorityChain": [
+          {
+            "name": "Ransomwhere.org",
+            "role": "current public ransomware leak-service and victim inventory",
+            "url": "https://ransomwhere.org/data",
+            "recordUrl": "https://ransomwhere.org/api/groups/lamashtu"
+          },
+          {
+            "name": "Red Piranha",
+            "role": "independent threat research confirming the actor-operated public victim API",
+            "url": "https://redpiranha.net/",
+            "recordUrl": "https://redpiranha.net/news/threat-intelligence-report-april-21-april-27-2026"
+          }
+        ],
+        "qualificationState": "pending_two_productive_scheduled_cycles",
+        "countsAsCoverage": false,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T19:29:50.000Z",
+          "legalBasisVerifiedAt": "2026-07-23T19:29:50.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "contentType": "application/json",
+          "publisherReference": "https://ransomwhere.org/api/groups/lamashtu",
+          "latestPublishedAt": "2026-06-17T18:24:19.153Z"
+        },
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "attribution": "Ransomwhere.org public research inventory, Red Piranha threat research, and approved-proxy metadata verification"
       }
     }
   ]
