@@ -262,7 +262,7 @@ function managedSourceConfiguration(source: SourceRecord) {
 
 function configuredSeedPaths() {
   const configured = Bun.env.TI_SOURCE_SEED_PATHS?.split(",").map((item) => item.trim()).filter(Boolean);
-  return configured?.length ? configured : [...defaultSeedPaths, ...optionalPortfolioSeedPaths.filter(existsSync)];
+  return [...new Set([...(configured?.length ? configured : defaultSeedPaths), ...optionalPortfolioSeedPaths.filter(existsSync)])];
 }
 
 function shouldImportSource(source: SourceRecord) {
