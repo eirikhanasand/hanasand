@@ -123,6 +123,8 @@ test('dwm case actions use the dashboard detail route instead of the scraper API
 
     expect(page).not.toContain('const caseHref = workflowContext.casePath ||')
     expect(page).not.toContain('const caseHref = casePath ||')
+    expect(page).toContain('const caseId = alertCaseId(alert)')
+    expect(page).toContain('return Boolean(alertCaseId(alert))')
     expect(page).toContain('return `/dashboard/dwm/cases/${encodeURIComponent(caseId)}')
 })
 

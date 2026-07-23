@@ -1016,7 +1016,8 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAc
     const selectedEvidence = alert.evidence.find(item => item.id === selectedEvidenceId) ?? visibleEvidence[0] ?? alert.evidence[0]
     const [copiedHash, setCopiedHash] = useState('')
     const analystBrief = buildAnalystBrief(alert, evidenceSummary, routingContext, workflowContext)
-    const caseHref = workflowContext.caseId ? caseDetailHref(workflowContext.caseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined
+    const caseId = alertCaseId(alert)
+    const caseHref = caseId ? caseDetailHref(caseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined
     const timeline = buildTimeline(alert, deliveries)
     async function copyHash(value: string) {
         try {
@@ -1325,7 +1326,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
     onOpenCase: (alert: PortalAlert, assignedOwner?: string, note?: string) => Promise<void>
 }) {
     const latestDelivery = orderDeliveries(deliveries)[0]
-    const actualCaseId = alert.caseId
+    const actualCaseId = alertCaseId(alert)
     const caseCandidate = alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate
     const casePath = actualCaseId ? caseDetailHref(actualCaseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined
     const canOpenCase = Boolean(alert.id && alertCaptureIds(alert).length)
@@ -1914,8 +1915,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
     const replayReason = actionUnavailableReason(alert, 'replay')
     const deliveryReason = hasDeliveryRoute ? actionUnavailableReason(alert, 'deliver') : 'Configure a webhook destination before testing or sending.'
     const closeReason = actionUnavailableReason(alert, 'close')
-    const casePath = alertCasePath(alert)
-    const caseId = alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseId || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseId || alert.webhookContext?.caseIdCandidate || caseIdFromPath(casePath)
+    const caseId = alertCaseId(alert)
     const caseHref = caseId ? caseDetailHref(caseId, alert.id, alertOrganizationId(alert), 'alert_queue') : undefined
     const caseReady = Boolean(alert.id && alertCaptureIds(alert).length)
     const caseReason = caseReady ? undefined : 'Evidence must include a source or capture record before opening a case.'
@@ -2241,7 +2241,7 @@ function SourcePosture({ snapshot, operations }: { snapshot: DwmProductSnapshot,
 function DeliveryPanel({ alert, deliveries, busyAction, onTest, onSend }: { alert?: PortalAlert, deliveries: DeliveryItem[], busyAction: string | null, onTest: (alertId: string) => Promise<void>, onSend: (alertId: string) => Promise<void> }) {
     const visible = orderDeliveries(alert ? deliveries.filter(delivery => delivery.alertId === alert.id || delivery.alertId === 'webhook_test') : deliveries)
     const orgId = alert ? alertOrganizationId(alert) : undefined
-    const caseId = alert?.caseId || alert?.caseIdCandidate || alert?.workflowContext?.caseIdCandidate || alert?.webhookContext?.caseIdCandidate
+    const caseId = alert ? alertCaseId(alert) : undefined
     const caseHref = alert && caseId ? caseDetailHref(caseId, alert.id, orgId, 'delivery_history') : undefined
     const latestDelivery = visible[0]
     const lastFailedDelivery = visible.find(delivery => delivery.status === 'failed')
@@ -2690,7 +2690,11 @@ function selectedWorkflowContext(alert: PortalAlert, deliveries: DeliveryItem[])
 }
 
 function hasAlertCaseLink(alert: PortalAlert) {
-    return Boolean(alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseId || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseId || alert.webhookContext?.caseIdCandidate || alertCasePath(alert))
+    return Boolean(alertCaseId(alert))
+}
+
+function alertCaseId(alert: PortalAlert) {
+    return alert.caseId || alert.workflowContext?.caseId || alert.webhookContext?.caseId
 }
 
 function alertCasePath(alert: PortalAlert) {
