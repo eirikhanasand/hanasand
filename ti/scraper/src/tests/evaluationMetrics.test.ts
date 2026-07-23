@@ -127,11 +127,12 @@ describe("durable evaluation metrics", () => {
     });
   });
 
-  test("rejects tampered, extra, and missing independently flagged labels", () => {
-    for (const variant of ["tampered", "extra", "missing"] as const) {
+  test("rejects tampered, extra, missing, cross-split, and multiply adjudicated independently flagged labels", async () => {
+    for (const variant of ["tampered", "extra", "missing", "cross_split", "multiple"] as const) {
       const store = new InMemoryScraperStore();
-      const task = { ...independentTask(store, `task_${variant}`, `capture_${variant}`, "actor", ["APT29"]), observedValues: ["APT29"] };
-      const benchmark: EvaluationBenchmarkRecord = { id: `benchmark_${variant}`, status: "complete", datasetSplit: "test", taskCount: 1, captureIds: [task.captureId!], manifest: [task], protocol: { version: "ti.independent_extraction_benchmark.v4" } };
+      const benchmarkId = `benchmark_${variant}`;
+      const task = { ...independentTask(store, `task_${variant}`, `capture_${variant}`, "actor", ["APT29"]), benchmarkId, observedValues: ["APT29"] };
+      const benchmark: EvaluationBenchmarkRecord = { id: benchmarkId, status: "complete", datasetSplit: "test", taskCount: 1, captureIds: [task.captureId!], manifest: [task], protocol: { version: "ti.independent_extraction_benchmark.v4" } };
       store.saveEvaluationBenchmark(benchmark);
       const adjudication = {
         id: `adjudication_${variant}`, benchmarkId: benchmark.id, taskId: task.id, captureId: task.captureId, labelType: task.labelType,
@@ -144,13 +145,33 @@ describe("durable evaluation metrics", () => {
         ? []
         : variant === "extra"
           ? [...expected, { ...expected[0], id: `${expected[0].id}_extra`, evaluationUnitId: `${expected[0].evaluationUnitId}:extra` }]
-          : [{ ...expected[0], expectedValue: null, observedValue: null, outcome: "true_negative" }];
+          : variant === "tampered"
+            ? [{ ...expected[0], expectedValue: null, observedValue: null, outcome: "true_negative" }]
+            : variant === "cross_split"
+              ? [...expected, { ...expected[0], id: `${expected[0].id}_cross_split`, datasetSplit: "validation" }]
+              : expected;
+      if (variant === "multiple") store.saveEvaluationAdjudication({ ...adjudication, id: `${adjudication.id}_duplicate` });
       for (const label of labels) store.saveEvaluationLabel(label);
 
       expect(buildEvaluationMetrics(store, { datasetSplit: "test" }).quality).toMatchObject({
         evaluatedUnitCount: 0,
         benchmarkEvidence: { completedBenchmarkCount: 0, completedTaskCount: 0, adjudicationCount: 0 }
       });
+      if (variant === "tampered") {
+        const response = await handleApiRequest(new Request("http://local/v1/intel/evaluation/benchmarks", {
+          headers: { authorization: "Bearer test", id: "evaluation_operator" }
+        }), {
+          store,
+          frontier: new FocusedFrontier(),
+          authApiBase: "http://auth.test/api",
+          authFetch: async () => Response.json({ id: "evaluation_operator", roles: [{ id: "analyst" }] })
+        } as any);
+        expect(response.status).toBe(200);
+        expect((await response.json() as any).benchmarks[0]).toMatchObject({
+          status: "annotating",
+          progress: { adjudicatedTaskCount: 0, diagnostics: { partialAdjudicationCount: 1 } }
+        });
+      }
     }
   });
 
