@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { SQL } from "bun";
+import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createEvaluationBenchmark, runAutomaticEvaluationCycle } from "../api/evaluationBenchmarkRoutes.ts";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import type { MitreActorCatalogSnapshot, MitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
@@ -202,6 +204,65 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
   afterAll(async () => {
     await admin?.close({ timeout: 2 });
   });
+
+  test("persists bounded automatic evaluation task transitions across restart", async () => {
+    const at = "2026-07-21T07:00:00.000Z";
+    const first = await PostgresScraperStore.create({ databaseUrl });
+    first.saveSource(source({ id: "src_evaluation_restart", name: "Restart evaluation source" }));
+    const evidence = "APT29 is the retained authoritative actor name.";
+    first.saveCapture({
+      id: "cap_evaluation_restart", sourceId: "src_evaluation_restart", url: "https://example.test/evaluation-restart",
+      collectedAt: at, publishedAt: at, contentHash: hashContent(evidence), mediaType: "text/plain", storageKind: "inline_text", body: evidence,
+      metadata: { extractionProfile: "ransomware_group_metadata", parserVersion: "parser-v1", ransomwareGroup: { actorName: "APT29" } }, sensitive: false
+    } as any);
+    first.saveExtractedEntity({ id: "actor_evaluation_restart", sourceId: "src_evaluation_restart", captureId: "cap_evaluation_restart", type: "actor", value: "APT29", normalizedValue: "apt29", confidence: 0.9, extractorVersion: "parser-v1" });
+    first.saveSource(source({ id: "src_evaluation_authority", name: "Restart evaluation authority", url: "https://authority.test/evaluation-reference" }));
+    const referenceEvidence = "Frozen exhaustive actor set: APT29.";
+    first.saveCapture({
+      id: "cap_evaluation_authority", sourceId: "src_evaluation_authority", url: "https://authority.test/evaluation-reference",
+      collectedAt: at, publishedAt: at, contentHash: hashContent(referenceEvidence), mediaType: "text/plain", storageKind: "inline_text", body: referenceEvidence,
+      metadata: { parserVersion: "authority:v1" }, sensitive: false
+    } as any);
+    first.saveValidationRecord({
+      id: "evaluation_reference_restart",
+      captureId: "cap_evaluation_restart",
+      validationType: "independent_evaluation_reference",
+      status: "supported",
+      referenceUrl: "https://authority.test/evaluation-reference",
+      referenceCaptureId: "cap_evaluation_authority",
+      referenceSourceId: "src_evaluation_authority",
+      referenceContentHash: hashContent(referenceEvidence),
+      labelType: "actor",
+      expectedValues: ["APT29"],
+      expectedValuesHash: createHash("sha256").update(JSON.stringify(["actor", "apt29"])).digest("hex"),
+      exhaustiveExpectedValues: true,
+      truthSchemaVersion: "ti.independent_evaluation_reference.v1",
+      truthFrozenAt: at,
+      matchedAt: at,
+      reviewerId: "independent-reference-curator"
+    });
+    const benchmark = createEvaluationBenchmark(first, { sampleSize: 1, labelTypes: ["actor"], datasetSplit: "test", reviewMode: "automatic_model", createdAt: at })!;
+    const review = async (request: any) => ({
+      expectedValues: ["APT29"], decision: "present", confidence: 0.9, rationale: "The retained source field and evidence name APT29.",
+      evidenceIds: [request.evidence.references[0].id], reviewerProvider: "hanasand-ai", reviewerModel: "hanasand", reviewerModelVersion: "hanasand-v2",
+      promptVersion: request.promptVersion, schemaVersion: request.schemaVersion, modelConversationId: `conversation-${request.contextId}`, modelResponseId: `response-${request.contextId}`
+    });
+    await runAutomaticEvaluationCycle({ store: first, autoCreate: false, maxTasks: 1, now: () => "2026-07-21T07:01:00.000Z", review });
+    await first.flush();
+    await first.close();
+
+    const second = await PostgresScraperStore.create({ databaseUrl });
+    expect(second.getEvaluationBenchmark(benchmark.id)!.manifest![0].automation).toMatchObject({ status: "queued", stage: "reviewer_2" });
+    expect(second.listEvaluationAnnotations()).toHaveLength(1);
+    await runAutomaticEvaluationCycle({ store: second, autoCreate: false, maxTasks: 1, now: () => "2026-07-21T07:02:00.000Z", review });
+    await second.flush();
+    await second.close();
+
+    const third = await PostgresScraperStore.create({ databaseUrl });
+    expect(third.getEvaluationBenchmark(benchmark.id)).toMatchObject({ status: "complete", manifest: [expect.objectContaining({ automation: expect.objectContaining({ status: "adjudicated" }) })] });
+    expect({ annotations: third.listEvaluationAnnotations().length, adjudications: third.listEvaluationAdjudications().length, labels: third.listEvaluationLabels().length }).toEqual({ annotations: 2, adjudications: 1, labels: 1 });
+    await third.close();
+  }, 30_000);
 
   test("durably reconciles organization privacy purge failures through the real route", async () => {
     const organizationId = "org_privacy_postgres";

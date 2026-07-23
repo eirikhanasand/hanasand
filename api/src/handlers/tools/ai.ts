@@ -251,6 +251,7 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
             context,
             strategy,
         })
+        const responseId = `tools-response-${crypto.randomUUID()}`
         await recordToolAiEconomics({
             actorId,
             billingMode: body.billingMode,
@@ -271,11 +272,13 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
             status: 'completed',
             provider: 'hanasand-ai',
             model: preferredClient.name,
+            modelVersion: preferredClient.modelId || null,
             modelStrategy: strategy,
             message: redactAgentText(completion.content || ''),
             artifacts: completion.artifacts || [],
             metrics: completion.metrics || null,
             conversationId,
+            responseId,
         }))
     } catch (error) {
         req.log.error({ error, promptLength: prompt.length, clientName: preferredClient.name }, 'Hanasand AI tool request failed')

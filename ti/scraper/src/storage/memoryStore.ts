@@ -1,7 +1,15 @@
 // @ts-nocheck
 import { createHash } from "node:crypto";
 import type { CaptureReplayJob, DiscoveryEvidence, EvidenceDelta, IncidentCandidate, LiveSearchSnapshot, PipelineResult, RawCapture, ReplayPipelineInput, SourceRecord } from "../types.ts";
-import type { CaptureMetadataStore } from "./evidenceStore.ts";
+import type {
+  CaptureMetadataStore,
+  EvaluationAdjudicationRecord,
+  EvaluationAnnotationRecord,
+  EvaluationBenchmarkRecord,
+  EvaluationLabelRecord,
+  EvaluationTaskRecord,
+  EvaluationValidationRecord
+} from "./evidenceStore.ts";
 import { InMemoryEvidenceQueries } from "./evidenceQueries.ts";
 import { installMemoryStoreDiscoveryMethods } from "./memoryStoreDiscoveryMethods.ts";
 import { InMemoryObjectEvidenceStore } from "./memoryObjectEvidenceStore.ts";
@@ -18,9 +26,9 @@ const mapValues = <T>(map: Map<string, T>) => [...map.values()];
 const put = <T extends { id: string }>(map: Map<string, T>, item: T) => (map.set(item.id, item), item);
 export class InMemoryScraperStore implements ScraperStore {
   private captures = new Map<string, RawCapture>(); private dedupe = new Map<string, string>(); private incidents = new Map<string, IncidentCandidate>(); private sources = new Map<string, SourceRecord>(); private plans = new Map<string, any>(); private runs = new Map<string, any>();
-  private extractedEntities = new Map<string, any>(); private indicators = new Map<string, any>(); private actorProfiles = new Map<string, any>(); private actorAliases = new Map<string, any>(); private actorIdentityCatalogs = new Map<string, any>(); private actorIdentities = new Map<string, any>(); private evidenceLinks = new Map<string, any>(); private validationRecords = new Map<string, any>(); private evaluationLabels = new Map<string, any>();
+  private extractedEntities = new Map<string, any>(); private indicators = new Map<string, any>(); private actorProfiles = new Map<string, any>(); private actorAliases = new Map<string, any>(); private actorIdentityCatalogs = new Map<string, any>(); private actorIdentities = new Map<string, any>(); private evidenceLinks = new Map<string, any>(); private validationRecords = new Map<string, EvaluationValidationRecord>(); private evaluationLabels = new Map<string, EvaluationLabelRecord>();
   private sourceHealthObservations = new Map<string, any>(); private timelinessRecords = new Map<string, any>();
-  private evaluationBenchmarks = new Map<string, any>(); private evaluationAnnotations = new Map<string, any>(); private evaluationAdjudications = new Map<string, any>();
+  private evaluationBenchmarks = new Map<string, EvaluationBenchmarkRecord>(); private evaluationBenchmarkTaskIndexes = new Map<string, Map<string, number>>(); private evaluationAnnotations = new Map<string, EvaluationAnnotationRecord>(); private evaluationAdjudications = new Map<string, EvaluationAdjudicationRecord>();
   private intelligenceClaims = new Map<string, any>(); private claimEvidence = new Map<string, any>(); private claimReviews = new Map<string, any>();
   private analystMetadataReviewTasks = new Map<string, any>(); private analystSourceActivationPackets = new Map<string, any>(); private analystVictimNotificationPackets = new Map<string, any>(); private analystClaimLedgerEntries = new Map<string, any>(); private analystLoopSnapshots = new Map<string, any>();
   private organizations = new Map<string, any>(); private organizationMembers = new Map<string, any>(); private organizationInvites = new Map<string, any>(); private webhookDestinations = new Map<string, any>();
@@ -259,11 +267,38 @@ export class InMemoryScraperStore implements ScraperStore {
   getActorIdentityCatalog(id: string) { return this.actorIdentityCatalogs.get(id); } listActorIdentityCatalogs() { return mapValues(this.actorIdentityCatalogs); }
   getActorIdentity(id: string) { return this.actorIdentities.get(id); } listActorIdentities() { return mapValues(this.actorIdentities); }
   saveEvidenceLink(linkRecord: any) { return this.putScoped(this.evidenceLinks, linkRecord); } getEvidenceLink(id: string) { return this.evidenceLinks.get(id); } listEvidenceLinks() { return mapValues(this.evidenceLinks); }
-  saveValidationRecord(record: any) { return this.putScoped(this.validationRecords, record); } getValidationRecord(id: string) { return this.validationRecords.get(id); } listValidationRecords() { return mapValues(this.validationRecords); }
-  saveEvaluationLabel(label: any) { this.assertOrganizationWritable(label); const previous = this.evaluationLabels.get(label.id); if (previous && canonicalJson(previous) !== canonicalJson(label)) throw new Error(`Evaluation label is immutable: ${label.id}`); return previous ?? put(this.evaluationLabels, label); } getEvaluationLabel(id: string) { return this.evaluationLabels.get(id); } listEvaluationLabels() { return mapValues(this.evaluationLabels); }
-  saveEvaluationBenchmark(record: any) { return this.putScoped(this.evaluationBenchmarks, record); } getEvaluationBenchmark(id: string) { return this.evaluationBenchmarks.get(id); } listEvaluationBenchmarks() { return mapValues(this.evaluationBenchmarks); }
-  saveEvaluationAnnotation(record: any) { this.assertOrganizationWritable(record); const previous = this.evaluationAnnotations.get(record.id); if (previous && canonicalJson(previous) !== canonicalJson(record)) throw new Error(`Evaluation annotation is immutable: ${record.id}`); return previous ?? put(this.evaluationAnnotations, record); } getEvaluationAnnotation(id: string) { return this.evaluationAnnotations.get(id); } listEvaluationAnnotations() { return mapValues(this.evaluationAnnotations); }
-  saveEvaluationAdjudication(record: any) { this.assertOrganizationWritable(record); const previous = this.evaluationAdjudications.get(record.id); if (previous && canonicalJson(previous) !== canonicalJson(record)) throw new Error(`Evaluation adjudication is immutable: ${record.id}`); return previous ?? put(this.evaluationAdjudications, record); } getEvaluationAdjudication(id: string) { return this.evaluationAdjudications.get(id); } listEvaluationAdjudications() { return mapValues(this.evaluationAdjudications); }
+  saveValidationRecord(record: EvaluationValidationRecord) {
+    const previous = this.validationRecords.get(record.id);
+    if (record.validationType === "independent_evaluation_reference" && previous && canonicalJson(previous) !== canonicalJson(record)) throw new Error(`Independent evaluation reference is immutable: ${record.id}`);
+    return record.validationType === "independent_evaluation_reference" && previous ? previous : this.putScoped(this.validationRecords, record);
+  }
+  getValidationRecord(id: string) { return this.validationRecords.get(id); } listValidationRecords() { return mapValues(this.validationRecords); }
+  saveEvaluationLabel(label: EvaluationLabelRecord) { this.assertOrganizationWritable(label); const previous = this.evaluationLabels.get(label.id); if (previous && canonicalJson(previous) !== canonicalJson(label)) throw new Error(`Evaluation label is immutable: ${label.id}`); return previous ?? put(this.evaluationLabels, label); } getEvaluationLabel(id: string) { return this.evaluationLabels.get(id); } listEvaluationLabels() { return mapValues(this.evaluationLabels); }
+  saveEvaluationBenchmark(record: EvaluationBenchmarkRecord) {
+    const stored = this.putScoped(this.evaluationBenchmarks, record);
+    this.evaluationBenchmarkTaskIndexes.set(record.id, new Map((record.manifest ?? []).map((task: any, index: number) => [task.id, index])));
+    return stored;
+  }
+  updateEvaluationBenchmarkTask(id: string, taskId: string, update: (task: EvaluationTaskRecord) => EvaluationTaskRecord) {
+    const benchmark = this.evaluationBenchmarks.get(id);
+    if (!benchmark) throw new Error(`Unknown evaluation benchmark: ${id}`);
+    const index = this.evaluationBenchmarkTaskIndexes.get(id)?.get(taskId);
+    if (index === undefined || !benchmark.manifest?.[index]) throw new Error(`Unknown evaluation task: ${taskId}`);
+    const task = update(benchmark.manifest[index]);
+    benchmark.manifest[index] = task;
+    benchmark.updatedAt = nowIso();
+    return { benchmark, task, index };
+  }
+  patchEvaluationBenchmark(id: string, patch: Partial<EvaluationBenchmarkRecord>) {
+    const benchmark = this.evaluationBenchmarks.get(id);
+    if (!benchmark) throw new Error(`Unknown evaluation benchmark: ${id}`);
+    this.assertOrganizationWritable(benchmark);
+    Object.assign(benchmark, patch);
+    return benchmark;
+  }
+  getEvaluationBenchmark(id: string) { return this.evaluationBenchmarks.get(id); } listEvaluationBenchmarks() { return mapValues(this.evaluationBenchmarks); }
+  saveEvaluationAnnotation(record: EvaluationAnnotationRecord) { this.assertOrganizationWritable(record); const previous = this.evaluationAnnotations.get(record.id); if (previous && canonicalJson(previous) !== canonicalJson(record)) throw new Error(`Evaluation annotation is immutable: ${record.id}`); return previous ?? put(this.evaluationAnnotations, record); } getEvaluationAnnotation(id: string) { return this.evaluationAnnotations.get(id); } listEvaluationAnnotations() { return mapValues(this.evaluationAnnotations); }
+  saveEvaluationAdjudication(record: EvaluationAdjudicationRecord) { this.assertOrganizationWritable(record); const previous = this.evaluationAdjudications.get(record.id); if (previous && canonicalJson(previous) !== canonicalJson(record)) throw new Error(`Evaluation adjudication is immutable: ${record.id}`); return previous ?? put(this.evaluationAdjudications, record); } getEvaluationAdjudication(id: string) { return this.evaluationAdjudications.get(id); } listEvaluationAdjudications() { return mapValues(this.evaluationAdjudications); }
   saveIntelligenceClaim(claim: any) { return this.putScoped(this.intelligenceClaims, claim); } getIntelligenceClaim(id: string) { return this.intelligenceClaims.get(id); } listIntelligenceClaims() { return mapValues(this.intelligenceClaims); }
   saveClaimEvidence(evidence: any) { return this.putScoped(this.claimEvidence, evidence); } getClaimEvidence(id: string) { return this.claimEvidence.get(id); } listClaimEvidence() { return mapValues(this.claimEvidence); }
   saveClaimReview(review: any) {

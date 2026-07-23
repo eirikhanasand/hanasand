@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { AnalystClaimLedgerEntry, AnalystLoopSnapshot, AnalystMetadataReviewTask, AnalystSourceActivationPacket, AnalystVictimNotificationPacket, CaptureReplayJob, CaptureWriteResult, CollectionPlan, CollectionRun, DiscoveryEvidence, DiscoveryPromotion, EvidenceDelta, IncidentCandidate, LiveSearchSnapshot, PipelineResult, RawCapture, SourceRecord } from "../types.ts";
+import type { EvaluationAdjudicationRecord, EvaluationAnnotationRecord, EvaluationBenchmarkRecord, EvaluationLabelRecord, EvaluationTaskRecord, EvaluationValidationRecord } from "./evidenceStoreTypes.ts";
 import { InMemoryScraperStore } from "./memoryStore.ts";
 
 export type FileBackedScraperStoreOptions = { snapshotPath: string };
@@ -35,11 +36,14 @@ export class FileBackedScraperStore extends InMemoryScraperStore {
     provenance: Parameters<InMemoryScraperStore["replaceActorIdentityCatalog"]>[1]
   ) { return this.saved(() => super.replaceActorIdentityCatalog(snapshot, provenance)); }
   override saveEvidenceLink(linkRecord: any): any { return this.saved(() => super.saveEvidenceLink(linkRecord)); }
-  override saveValidationRecord(record: any): any { return this.saved(() => super.saveValidationRecord(record)); }
-  override saveEvaluationLabel(label: any): any { return this.saved(() => super.saveEvaluationLabel(label)); }
-  override saveEvaluationBenchmark(record: any): any { return this.saved(() => super.saveEvaluationBenchmark(record)); }
-  override saveEvaluationAnnotation(record: any): any { return this.saved(() => super.saveEvaluationAnnotation(record)); }
-  override saveEvaluationAdjudication(record: any): any { return this.saved(() => super.saveEvaluationAdjudication(record)); }
+  override saveValidationRecord(record: EvaluationValidationRecord): EvaluationValidationRecord { return this.saved(() => super.saveValidationRecord(record)); }
+  override saveEvaluationLabel(label: EvaluationLabelRecord): EvaluationLabelRecord { return this.saved(() => super.saveEvaluationLabel(label)); }
+  override saveEvaluationBenchmark(record: EvaluationBenchmarkRecord): EvaluationBenchmarkRecord { return this.saved(() => super.saveEvaluationBenchmark(record)); }
+  // ponytail: the file store is a development fallback with whole-snapshot durability; PostgreSQL uses bounded JSON updates.
+  override updateEvaluationBenchmarkTask(id: string, taskId: string, update: (task: EvaluationTaskRecord) => EvaluationTaskRecord) { return this.saved(() => super.updateEvaluationBenchmarkTask(id, taskId, update)); }
+  override patchEvaluationBenchmark(id: string, patch: Partial<EvaluationBenchmarkRecord>): EvaluationBenchmarkRecord { return this.saved(() => super.patchEvaluationBenchmark(id, patch)); }
+  override saveEvaluationAnnotation(record: EvaluationAnnotationRecord): EvaluationAnnotationRecord { return this.saved(() => super.saveEvaluationAnnotation(record)); }
+  override saveEvaluationAdjudication(record: EvaluationAdjudicationRecord): EvaluationAdjudicationRecord { return this.saved(() => super.saveEvaluationAdjudication(record)); }
   override saveIntelligenceClaim(claim: any): any { return this.saved(() => super.saveIntelligenceClaim(claim)); }
   override saveClaimEvidence(evidence: any): any { return this.saved(() => super.saveClaimEvidence(evidence)); }
   override saveClaimReview(review: any): any { return this.saved(() => super.saveClaimReview(review)); }

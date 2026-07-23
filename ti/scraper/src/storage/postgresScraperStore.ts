@@ -20,6 +20,14 @@ import type {
   SourceRecord
 } from "../types.ts";
 import { stableId } from "../utils.ts";
+import type {
+  EvaluationAdjudicationRecord,
+  EvaluationAnnotationRecord,
+  EvaluationBenchmarkRecord,
+  EvaluationLabelRecord,
+  EvaluationTaskRecord,
+  EvaluationValidationRecord
+} from "./evidenceStoreTypes.ts";
 import { InMemoryScraperStore, linkedAlertCaptureIds } from "./memoryStore.ts";
 import { persistActorIdentityCatalog } from "./postgresActorIdentityCatalog.ts";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
@@ -727,22 +735,49 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return stored;
   }
 
-  override saveValidationRecord(record: any): any {
+  override saveValidationRecord(record: EvaluationValidationRecord): EvaluationValidationRecord {
     validateValidationRecord(record);
     const stored = super.saveValidationRecord(record);
     this.enqueue(`validation:${stored.id}`, () => this.persistValidationRecord(stored));
     return stored;
   }
 
-  override saveEvaluationLabel(label: any): any {
+  override saveEvaluationLabel(label: EvaluationLabelRecord): EvaluationLabelRecord {
     validateEvaluationLabel(label);
     const stored = super.saveEvaluationLabel(label);
     this.enqueue(`evaluation-label:${stored.id}`, () => this.persistEvaluationLabel(stored));
     return stored;
   }
-  override saveEvaluationBenchmark(record: any): any { return this.saveWorkflow("evaluation_benchmark", record, () => super.saveEvaluationBenchmark(record)); }
-  override saveEvaluationAnnotation(record: any): any { return this.saveWorkflow("evaluation_annotation", record, () => super.saveEvaluationAnnotation(record)); }
-  override saveEvaluationAdjudication(record: any): any { return this.saveWorkflow("evaluation_adjudication", record, () => super.saveEvaluationAdjudication(record)); }
+  override saveEvaluationBenchmark(record: EvaluationBenchmarkRecord): EvaluationBenchmarkRecord { return this.saveWorkflow("evaluation_benchmark", record, () => super.saveEvaluationBenchmark(record)); }
+  override updateEvaluationBenchmarkTask(id: string, taskId: string, update: (task: EvaluationTaskRecord) => EvaluationTaskRecord) {
+    const stored = super.updateEvaluationBenchmarkTask(id, taskId, update);
+    this.enqueue(`evaluation_benchmark_task:${id}:${taskId}`, async () => {
+      await this.sql`
+        UPDATE threat_intel.workflow_records
+        SET record = jsonb_set(
+          jsonb_set(record, ARRAY['manifest', ${String(stored.index)}], ${toJson(stored.task)}::text::jsonb, false),
+          ARRAY['updatedAt'], to_jsonb(${stored.benchmark.updatedAt}::text), true
+        ), updated_at = ${stored.benchmark.updatedAt}
+        WHERE record_type = 'evaluation_benchmark' AND id = ${id}
+      `;
+    });
+    return stored;
+  }
+  override patchEvaluationBenchmark(id: string, patch: Partial<EvaluationBenchmarkRecord>): EvaluationBenchmarkRecord {
+    const benchmark = super.patchEvaluationBenchmark(id, patch);
+    const clearCompletedAt = Object.prototype.hasOwnProperty.call(patch, "completedAt") && patch.completedAt === undefined;
+    this.enqueue(`evaluation_benchmark_patch:${id}`, async () => {
+      await this.sql`
+        UPDATE threat_intel.workflow_records
+        SET record = (CASE WHEN ${clearCompletedAt} THEN record - 'completedAt' ELSE record END) || ${toJson(patch)}::text::jsonb,
+            updated_at = ${benchmark.updatedAt}
+        WHERE record_type = 'evaluation_benchmark' AND id = ${id}
+      `;
+    });
+    return benchmark;
+  }
+  override saveEvaluationAnnotation(record: EvaluationAnnotationRecord): EvaluationAnnotationRecord { return this.saveWorkflow("evaluation_annotation", record, () => super.saveEvaluationAnnotation(record)); }
+  override saveEvaluationAdjudication(record: EvaluationAdjudicationRecord): EvaluationAdjudicationRecord { return this.saveWorkflow("evaluation_adjudication", record, () => super.saveEvaluationAdjudication(record)); }
 
   override saveSource(source: SourceRecord): SourceRecord {
     const stored = super.saveSource(source);
@@ -1581,7 +1616,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     `;
   }
 
-  private async persistValidationRecord(record: any): Promise<void> {
+  private async persistValidationRecord(record: EvaluationValidationRecord): Promise<void> {
     await this.sql`
       INSERT INTO threat_intel.validation_records (
         id, tenant_id, capture_id, incident_id, claim_id, validation_type, status, reference_url,
@@ -1636,7 +1671,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     `;
   }
 
-  private async persistEvaluationLabel(label: any): Promise<void> {
+  private async persistEvaluationLabel(label: EvaluationLabelRecord): Promise<void> {
     await this.sql`
       INSERT INTO threat_intel.evaluation_labels (
         id, tenant_id, capture_id, incident_id, entity_id, indicator_id, claim_id, label_type,
@@ -1819,15 +1854,29 @@ function actorAliasRecords(profile: any, firstSeenAt: string, lastSeenAt: string
   }));
 }
 
-function validateValidationRecord(record: any): void {
+function validateValidationRecord(record: EvaluationValidationRecord): void {
   if (!record?.id || (!record.captureId && !record.incidentId && !record.claimId)) throw new Error("Validation record requires id and a capture, incident, or claim subject");
   if (!["supported", "partially_supported", "unconfirmed", "contradicted"].includes(record.status)) throw new Error(`Invalid validation status: ${record.status}`);
   if (!record.validationType || !record.referenceUrl || !record.matchedAt) throw new Error("Validation record requires validationType, referenceUrl, and matchedAt");
+  if (record.validationType === "independent_evaluation_reference" && (
+    record.status !== "supported"
+    || !record.captureId
+    || !record.referenceCaptureId
+    || !record.referenceSourceId
+    || !record.referenceContentHash
+    || !record.labelType
+    || !Array.isArray(record.expectedValues)
+    || record.exhaustiveExpectedValues !== true
+    || record.truthSchemaVersion !== "ti.independent_evaluation_reference.v1"
+    || !record.truthFrozenAt
+    || !record.expectedValuesHash
+    || !record.reviewerId
+  )) throw new Error("Independent evaluation reference requires frozen exhaustive label truth and immutable reference lineage");
 }
 
-function validateEvaluationLabel(label: any): void {
+function validateEvaluationLabel(label: EvaluationLabelRecord): void {
   if (!label?.id || (!label.captureId && !label.incidentId && !label.entityId && !label.indicatorId && !label.claimId)) throw new Error("Evaluation label requires id and a labeled subject");
-  if (!["true_positive", "false_positive", "false_negative", "true_negative", "correct", "incorrect", "needs_review"].includes(label.outcome)) throw new Error(`Invalid evaluation outcome: ${label.outcome}`);
+  if (!label.outcome || !["true_positive", "false_positive", "false_negative", "true_negative", "correct", "incorrect", "needs_review"].includes(label.outcome)) throw new Error(`Invalid evaluation outcome: ${label.outcome}`);
   if (!label.labelType || !label.labeledBy || !label.labeledAt) throw new Error("Evaluation label requires labelType, labeledBy, and labeledAt");
 }
 

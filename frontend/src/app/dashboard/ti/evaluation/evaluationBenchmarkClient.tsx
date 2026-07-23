@@ -6,8 +6,8 @@ import { DashboardPanel } from '@/components/dashboard/ui'
 
 type QueueStatus = 'queued' | 'running' | 'retry_scheduled' | 'dead_letter' | 'failed' | 'adjudicated'
 type HistoryItem = { status: string, stage?: string, at: string, reason?: string, modelVersion?: string, failure?: { code?: string, message?: string, retryable?: boolean } }
-type Review = { id: string, reviewerRole?: string, reviewerModel?: string, reviewerModelVersion?: string, promptVersion?: string, schemaVersion?: string, modelResponseId?: string, decision?: string, confidence?: number, rationale?: string, evidenceIds?: string[], expectedValues?: string[], annotatedAt?: string }
-type Adjudication = { id: string, method?: string, adjudicatedBy?: string, reviewerModel?: string, reviewerModelVersion?: string, promptVersion?: string, schemaVersion?: string, modelResponseId?: string, decision?: string, confidence?: number, rationale?: string, evidenceIds?: string[], annotationIds?: string[], expectedValues?: string[], adjudicatedAt?: string }
+type Review = { id: string, reviewerRole?: string, reviewerProvider?: string, reviewerModel?: string, reviewerModelVersion?: string, promptVersion?: string, schemaVersion?: string, modelConversationId?: string, modelResponseId?: string, decision?: string, confidence?: number, rationale?: string, evidenceIds?: string[], expectedValues?: string[], annotatedAt?: string }
+type Adjudication = { id: string, method?: string, adjudicatedBy?: string, reviewerProvider?: string, reviewerModel?: string, reviewerModelVersion?: string, promptVersion?: string, schemaVersion?: string, modelConversationId?: string, modelResponseId?: string, decision?: string, confidence?: number, rationale?: string, evidenceIds?: string[], annotationIds?: string[], expectedValues?: string[], adjudicatedAt?: string }
 type Result = { expectedValue: string | null, observedValue: string | null, outcome: 'true_positive' | 'false_positive' | 'false_negative' | 'true_negative' }
 type Score = {
     sampleSize?: number
@@ -25,12 +25,13 @@ type Score = {
 }
 type Interval = { lower: number | null, upper: number | null, sampleSize: number }
 type Breakdown = Score & { name: string, sampleSize: number }
+type ExactMatch = { sampleSize: number, exactMatchCount: number, errorCount: number, exactMatchRate: number | null, confidenceInterval: Interval }
 
 type Benchmark = {
     id: string
     tenantId?: string
     name: string
-    status: 'annotating' | 'complete'
+    status: 'diagnostic_only' | 'annotating' | 'complete' | 'complete_with_failures'
     reviewMode: 'human' | 'automatic_model'
     datasetSplit: 'validation' | 'test'
     labelTypes: string[]
@@ -43,12 +44,12 @@ type Benchmark = {
         taskCount: number
         annotationCount: number
         adjudicatedTaskCount: number
+        terminalTaskCount?: number
         pendingTaskCount: number
         reviewerCount: number
         doubleAnnotatedTaskCount: number
         exactSetAgreement: number | null
-        queueCounts?: Record<string, number>
-        failureCount?: number
+        diagnostics?: { storedStatus?: string, legacyTaskCount?: number, contextOnlyTaskCount?: number, partialAnnotationCount?: number, partialAdjudicationCount?: number, queueCounts?: Record<string, number>, failureCount?: number }
     }
 }
 
@@ -73,7 +74,8 @@ type Task = {
     reviewHistory?: Review[]
     adjudicationHistory?: Adjudication[]
     results?: Result[]
-    protocol?: { predictionHidden?: boolean, exhaustiveExpectedValues?: boolean, promptVersion?: string, schemaVersion?: string }
+    diagnostics?: { partialAnnotationCount?: number, partialAdjudicationCount?: number }
+    protocol?: { predictionHidden?: boolean, exhaustiveExpectedValues?: boolean, truthBasis?: string, evaluationModelIsolationRequired?: boolean, promptVersion?: string, schemaVersion?: string }
 }
 
 type EvaluationMetrics = {
@@ -89,7 +91,14 @@ type EvaluationMetrics = {
         byReviewerModelVersion: Breakdown[]
         byPromptVersion: Breakdown[]
         bySchemaVersion: Breakdown[]
-        benchmarkEvidence: { validationStatus: string, heldOutCaptureCount: number, heldOutReviewerCount: number, stratifiedCoverageComplete: boolean }
+        endToEnd: { taskSetExactMatch: ExactMatch, captureExactMatch: ExactMatch }
+        benchmarkEvidence: {
+            validationStatus: string
+            heldOutCaptureCount: number
+            heldOutReviewerCount: number
+            stratifiedCoverageComplete: boolean
+            heldOutCaseCoverage: { positiveTaskCount: number, negativeTaskCount: number, ambiguousTaskCount: number, parserFailureTaskCount: number, unsupportedAttributionTaskCount: number }
+        }
         drift: { status: string, latestDelta: { precision: number | null, recall: number | null, specificity: number | null, f1: number | null } | null, series: Array<{ benchmarkId: string, completedAt?: string, datasetSplit: string, sampleSize: number, precision: number | null, recall: number | null, specificity: number | null, f1: number | null, reviewerModelVersions: string[], parserVersions: string[] }> }
     }
 }
@@ -196,6 +205,7 @@ export default function EvaluationBenchmarkClient() {
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-3 py-2'>
                     <div className='flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2 text-xs text-ui-muted'>
+                        <span className='font-semibold uppercase'>Diagnostic runtime queue</span>
                         <Metric label='Queued' value={queueTotals.queued || 0} />
                         <Metric label='Running' value={queueTotals.running || 0} />
                         <Metric label='Retrying' value={queueTotals.retry_scheduled || 0} />
@@ -218,7 +228,7 @@ export default function EvaluationBenchmarkClient() {
                     <div className='border-b border-ui-border p-2'>
                         <label className='text-[10px] font-semibold uppercase text-ui-muted' htmlFor='benchmark-select'>Benchmark</label>
                         <select id='benchmark-select' value={selectedBenchmarkId} onChange={event => setSelectedBenchmarkId(event.target.value)} className='mt-1 h-9 w-full rounded-md border border-ui-border bg-ui-raised px-2 text-sm text-ui-text'>
-                            {benchmarks.map(item => <option key={item.id} value={item.id}>{item.name} · {item.reviewMode === 'automatic_model' ? 'automatic' : 'manual'} · {benchmarkScope(item)}</option>)}
+                            {benchmarks.map(item => <option key={item.id} value={item.id}>{item.name} · {item.reviewMode === 'automatic_model' ? 'automatic' : 'manual'} · {item.status.replaceAll('_', ' ')} · {benchmarkScope(item)}</option>)}
                             {!benchmarks.length ? <option value=''>No persisted benchmarks</option> : null}
                         </select>
                         {selectedBenchmark ? <BenchmarkProgress benchmark={selectedBenchmark} /> : null}
@@ -263,7 +273,7 @@ function TaskWorkbench({ task, saving, canReplay, onReplay }: { task: Task, savi
         <aside className='max-h-[calc(100vh-17rem)] overflow-auto p-3'>
             <section className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-3'>
                 <div className='flex items-center justify-between gap-2'><h3 className='text-xs font-semibold text-ui-text'>Automatic queue</h3><ShieldCheck className='h-4 w-4 text-ui-primary' /></div>
-                <dl className='grid grid-cols-2 gap-2'><Datum label='Stage' value={task.automation?.stage} /><Datum label='Attempts' value={task.automation ? `${task.automation.attemptCount || 0}/${task.automation.maxAttempts || 0}` : 'Not automatic'} /><Datum label='Lifetime attempts' value={String(task.automation?.lifetimeAttemptCount || 0)} /><Datum label='Replays' value={String(task.automation?.replayCount || 0)} /><Datum label='Next attempt' value={formatDate(task.automation?.nextAttemptAt)} /><Datum label='Last success' value={formatDate(task.automation?.lastSuccessAt)} /></dl>
+                <dl className='grid grid-cols-2 gap-2'><Datum label='Stage' value={task.automation?.stage} /><Datum label='Truth basis' value={task.protocol?.truthBasis?.replaceAll('_', ' ')} /><Datum label='Model isolation' value={task.protocol?.evaluationModelIsolationRequired ? 'Required' : 'Not recorded'} /><Datum label='Attempts' value={task.automation ? `${task.automation.attemptCount || 0}/${task.automation.maxAttempts || 0}` : 'Not automatic'} /><Datum label='Lifetime attempts' value={String(task.automation?.lifetimeAttemptCount || 0)} /><Datum label='Replays' value={String(task.automation?.replayCount || 0)} /><Datum label='Next attempt' value={formatDate(task.automation?.nextAttemptAt)} /><Datum label='Last success' value={formatDate(task.automation?.lastSuccessAt)} /></dl>
                 {task.automation?.lastFailure ? <div className='rounded-md border border-ui-danger/30 bg-ui-danger/10 p-2 text-xs text-ui-danger'><strong>{task.automation.lastFailure.code || 'evaluation_failed'}</strong><p className='mt-1 wrap-break-word'>{task.automation.lastFailure.message || 'No failure detail was persisted.'}</p></div> : null}
                 {canReplay ? <button type='button' onClick={onReplay} disabled={saving} className='inline-flex h-9 items-center justify-center gap-2 rounded-md bg-ui-primary px-3 text-xs font-semibold text-ui-canvas disabled:opacity-50'>{saving ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <RotateCcw className='h-4 w-4' />}Replay safely</button> : null}
             </section>
@@ -280,11 +290,11 @@ function Timeline({ title, items }: { title: string, items: HistoryItem[] }) {
 }
 
 function ReviewHistory({ reviews }: { reviews: Review[] }) {
-    return <section className='mt-3'><h3 className='text-[10px] font-semibold uppercase text-ui-muted'>Independent reviewer history</h3><div className='mt-1 grid gap-1'>{reviews.map(review => <div key={review.id} className='rounded-md border border-ui-border p-2 text-xs text-ui-text'><div className='flex flex-wrap justify-between gap-1'><strong>{review.reviewerRole || 'reviewer'} · {review.reviewerModelVersion || review.reviewerModel || 'unknown model'}</strong><span>{percent(review.confidence ?? null)}</span></div><time className='text-[10px] text-ui-muted'>{formatDate(review.annotatedAt)}</time><p className='mt-1 wrap-break-word text-ui-muted'>{review.rationale || 'No rationale persisted.'}</p>{review.expectedValues ? <p className='mt-1'><span className='text-ui-muted'>Expected: </span>{review.expectedValues.length ? review.expectedValues.join(', ') : 'none'}</p> : null}{review.evidenceIds?.length ? <p className='mt-1 truncate font-mono text-[10px] text-ui-muted' title={review.evidenceIds.join(', ')}>Evidence {review.evidenceIds.join(', ')}</p> : null}<VersionLine prompt={review.promptVersion} schema={review.schemaVersion} /></div>)}{!reviews.length ? <p className='text-xs text-ui-muted'>No model review has completed.</p> : null}</div></section>
+    return <section className='mt-3'><h3 className='text-[10px] font-semibold uppercase text-ui-muted'>Independently accepted reviewer history</h3><div className='mt-1 grid gap-1'>{reviews.map(review => <div key={review.id} className='rounded-md border border-ui-border p-2 text-xs text-ui-text'><div className='flex flex-wrap justify-between gap-1'><strong>{review.reviewerRole || 'reviewer'} · {[review.reviewerProvider, review.reviewerModel, review.reviewerModelVersion].filter(Boolean).join(' / ') || 'unknown model'}</strong><span>{percent(review.confidence ?? null)}</span></div><time className='text-[10px] text-ui-muted'>{formatDate(review.annotatedAt)}</time><p className='mt-1 wrap-break-word text-ui-muted'>{review.rationale || 'No rationale persisted.'}</p>{review.expectedValues ? <p className='mt-1'><span className='text-ui-muted'>Expected: </span>{review.expectedValues.length ? review.expectedValues.join(', ') : 'none'}</p> : null}{review.evidenceIds?.length ? <p className='mt-1 truncate font-mono text-[10px] text-ui-muted' title={review.evidenceIds.join(', ')}>Evidence {review.evidenceIds.join(', ')}</p> : null}<VersionLine prompt={review.promptVersion} schema={review.schemaVersion} /></div>)}{!reviews.length ? <p className='text-xs text-ui-muted'>No independently accepted model review exists.</p> : null}</div></section>
 }
 
 function AdjudicationHistory({ adjudications }: { adjudications: Adjudication[] }) {
-    return <section className='mt-3'><h3 className='text-[10px] font-semibold uppercase text-ui-muted'>Adjudication history</h3><div className='mt-1 grid gap-1'>{adjudications.map(item => <div key={item.id} className='rounded-md border border-ui-primary/30 bg-ui-primary/5 p-2 text-xs text-ui-text'><strong>{item.method?.replaceAll('_', ' ') || 'adjudicated'} · {item.reviewerModelVersion || item.adjudicatedBy}</strong><time className='block text-[10px] text-ui-muted'>{formatDate(item.adjudicatedAt)}</time><p className='mt-1 wrap-break-word text-ui-muted'>{item.rationale || 'Consensus was exact.'}</p>{item.expectedValues ? <p className='mt-1'><span className='text-ui-muted'>Expected: </span>{item.expectedValues.length ? item.expectedValues.join(', ') : 'none'}</p> : null}{item.evidenceIds?.length ? <p className='mt-1 truncate font-mono text-[10px] text-ui-muted' title={item.evidenceIds.join(', ')}>Evidence {item.evidenceIds.join(', ')}</p> : null}<VersionLine prompt={item.promptVersion} schema={item.schemaVersion} /></div>)}{!adjudications.length ? <p className='text-xs text-ui-muted'>No terminal adjudication exists.</p> : null}</div></section>
+    return <section className='mt-3'><h3 className='text-[10px] font-semibold uppercase text-ui-muted'>Independently accepted adjudication history</h3><div className='mt-1 grid gap-1'>{adjudications.map(item => <div key={item.id} className='rounded-md border border-ui-primary/30 bg-ui-primary/5 p-2 text-xs text-ui-text'><strong>{item.method?.replaceAll('_', ' ') || 'adjudicated'} · {[item.reviewerProvider, item.reviewerModel, item.reviewerModelVersion].filter(Boolean).join(' / ') || item.adjudicatedBy}</strong><time className='block text-[10px] text-ui-muted'>{formatDate(item.adjudicatedAt)}</time><p className='mt-1 wrap-break-word text-ui-muted'>{item.rationale || 'Consensus was exact.'}</p>{item.expectedValues ? <p className='mt-1'><span className='text-ui-muted'>Expected: </span>{item.expectedValues.length ? item.expectedValues.join(', ') : 'none'}</p> : null}{item.evidenceIds?.length ? <p className='mt-1 truncate font-mono text-[10px] text-ui-muted' title={item.evidenceIds.join(', ')}>Evidence {item.evidenceIds.join(', ')}</p> : null}<VersionLine prompt={item.promptVersion} schema={item.schemaVersion} /></div>)}{!adjudications.length ? <p className='text-xs text-ui-muted'>No independently accepted terminal adjudication exists.</p> : null}</div></section>
 }
 
 function Results({ results }: { results: Result[] }) {
@@ -292,8 +302,9 @@ function Results({ results }: { results: Result[] }) {
 }
 
 function MetricsSummary({ metrics }: { metrics: EvaluationMetrics }) {
-    const { overall, benchmarkEvidence, evaluatedUnitCount } = metrics.quality
-    return <dl className='grid grid-cols-2 gap-px border-t border-ui-border bg-ui-border sm:grid-cols-4 lg:grid-cols-9'>
+    const { overall, endToEnd, benchmarkEvidence, evaluatedUnitCount } = metrics.quality
+    const cases = benchmarkEvidence.heldOutCaseCoverage
+    return <dl className='grid grid-cols-2 gap-px border-t border-ui-border bg-ui-border sm:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-12'>
         <ScoreDatum label='Validation' value={benchmarkEvidence.validationStatus.replaceAll('_', ' ')} />
         <ScoreDatum label='Units' value={String(evaluatedUnitCount)} />
         <ScoreDatum label='Precision' value={metricWithCi(overall.precision, overall.confidenceIntervals.precision)} />
@@ -302,6 +313,10 @@ function MetricsSummary({ metrics }: { metrics: EvaluationMetrics }) {
         <ScoreDatum label='F1' value={percent(overall.f1)} />
         <ScoreDatum label='Calibration / Brier' value={`${decimal(overall.calibration.expectedCalibrationError)} / ${decimal(overall.calibration.brierScore)}`} />
         <ScoreDatum label='Class balance' value={`${overall.classBalance.positiveCount}+ / ${overall.classBalance.negativeCount}−`} />
+        <ScoreDatum label='Task exact match' value={`${percent(endToEnd.taskSetExactMatch.exactMatchRate)} · n=${endToEnd.taskSetExactMatch.sampleSize}`} />
+        <ScoreDatum label='Capture exact match' value={`${percent(endToEnd.captureExactMatch.exactMatchRate)} · n=${endToEnd.captureExactMatch.sampleSize}`} />
+        <ScoreDatum label='Held-out cases' value={`${cases.positiveTaskCount}+ / ${cases.negativeTaskCount}− / ${cases.ambiguousTaskCount} ambiguous`} />
+        <ScoreDatum label='Failure cases' value={`${cases.parserFailureTaskCount} parser / ${cases.unsupportedAttributionTaskCount} attribution`} />
         <ScoreDatum label='Held-out evidence' value={`${benchmarkEvidence.heldOutCaptureCount} captures / ${benchmarkEvidence.heldOutReviewerCount} reviewers`} />
     </dl>
 }
@@ -335,14 +350,14 @@ function CreateForm({ value, onChange, onSubmit, saving }: { value: CreateFormSt
 }
 
 function Segment({ label, values, selected, onSelect }: { label: string, values: string[], selected: string, onSelect: (value: string) => void }) { return <div><p className='mb-1 text-[10px] font-semibold uppercase text-ui-muted'>{label}</p><div className='grid h-9 grid-flow-col rounded-md border border-ui-border bg-ui-canvas p-0.5'>{values.map(value => <button key={value} type='button' onClick={() => onSelect(value)} className={`px-2 text-xs font-semibold capitalize ${selected === value ? 'bg-ui-raised text-ui-primary' : 'text-ui-muted'}`}>{value}</button>)}</div></div> }
-function BenchmarkProgress({ benchmark }: { benchmark: Benchmark }) { const progress = benchmark.progress.taskCount ? Math.round((benchmark.progress.adjudicatedTaskCount / benchmark.progress.taskCount) * 100) : 0; return <div className='mt-2 grid gap-1'><div className='flex justify-between text-[10px] text-ui-muted'><span>{benchmark.progress.adjudicatedTaskCount}/{benchmark.progress.taskCount} terminal · {benchmark.datasetSplit}{benchmark.protocol?.testSplitLocked ? ' locked' : ''}</span><span>{progress}%</span></div><div className='h-1.5 overflow-hidden rounded-full bg-ui-canvas'><div className='h-full bg-ui-primary' style={{ width: `${progress}%` }} /></div><div className='flex justify-between text-[10px] text-ui-muted'><span>{benchmark.progress.failureCount || 0} failures</span><span>{benchmark.progress.exactSetAgreement == null ? 'Agreement pending' : `${Math.round(benchmark.progress.exactSetAgreement * 100)}% exact agreement`}</span></div></div> }
+function BenchmarkProgress({ benchmark }: { benchmark: Benchmark }) { const accepted = benchmark.progress.adjudicatedTaskCount; const progress = benchmark.progress.taskCount ? Math.round((accepted / benchmark.progress.taskCount) * 100) : 0; const diagnostic = benchmark.progress.diagnostics; return <div className='mt-2 grid gap-1'><div className='flex justify-between text-[10px] text-ui-muted'><span>{accepted}/{benchmark.progress.taskCount} independently accepted · {benchmark.datasetSplit}{benchmark.protocol?.testSplitLocked ? ' locked' : ''}</span><span>{progress}%</span></div><div className='h-1.5 overflow-hidden rounded-full bg-ui-canvas'><div className='h-full bg-ui-primary' style={{ width: `${progress}%` }} /></div><div className='flex justify-between text-[10px] text-ui-muted'><span>Diagnostic only: {diagnostic?.partialAnnotationCount || 0} annotations / {diagnostic?.partialAdjudicationCount || 0} adjudications / {diagnostic?.failureCount || 0} failures</span><span>{benchmark.progress.exactSetAgreement == null ? 'Accepted agreement pending' : `${Math.round(benchmark.progress.exactSetAgreement * 100)}% accepted exact agreement`}</span></div></div> }
 function VersionLine({ prompt, schema }: { prompt?: string, schema?: string }) { return <p className='mt-1 truncate font-mono text-[10px] text-ui-muted' title={`${prompt || 'unknown'} · ${schema || 'unknown'}`}>{prompt || 'unknown prompt'} · {schema || 'unknown schema'}</p> }
 function Metric({ label, value, danger = false }: { label: string, value: number, danger?: boolean }) { return <span><strong className={`mr-1 text-sm ${danger && value ? 'text-ui-danger' : 'text-ui-text'}`}>{value}</strong>{label}</span> }
 function ScoreDatum({ label, value }: { label: string, value: string }) { return <div className='bg-ui-panel px-3 py-2'><dt className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</dt><dd className='mt-0.5 text-xs font-semibold text-ui-text'>{value}</dd></div> }
 function Datum({ label, value }: { label: string, value?: string }) { return <div><dt className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</dt><dd className='mt-0.5 truncate text-xs text-ui-text' title={value}>{value || 'Unknown'}</dd></div> }
 function Status({ label }: { label: string }) { return <span className='ml-1 inline-flex rounded-full bg-ui-primary/15 px-2 py-0.5 text-[10px] font-semibold capitalize text-ui-primary'>{label.replaceAll('_', ' ')}</span> }
 function TaskIcon({ status }: { status: string }) { if (status === 'adjudicated') return <Check className='h-4 w-4 shrink-0 text-ui-success' />; if (status === 'dead_letter' || status === 'failed') return <AlertTriangle className='h-4 w-4 shrink-0 text-ui-danger' />; if (status === 'retry_scheduled') return <RotateCcw className='h-4 w-4 shrink-0 text-ui-warning' />; return <Clock3 className='h-4 w-4 shrink-0 text-ui-muted' /> }
-function aggregateQueue(benchmarks: Benchmark[]) { const counts: Record<string, number> = {}; for (const benchmark of benchmarks) for (const [status, count] of Object.entries(benchmark.progress.queueCounts || {})) counts[status] = (counts[status] || 0) + count; return counts }
+function aggregateQueue(benchmarks: Benchmark[]) { const counts: Record<string, number> = {}; for (const benchmark of benchmarks) for (const [status, count] of Object.entries(benchmark.progress.diagnostics?.queueCounts || {})) counts[status] = (counts[status] || 0) + count; return counts }
 function benchmarkScope(benchmark?: Benchmark): 'default' | 'global' { return benchmark?.tenantId === 'default' ? 'default' : 'global' }
 function formatDate(value?: string) { if (!value) return undefined; const date = new Date(value); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(date) : 'Invalid timestamp' }
 function percent(value: number | null) { return value === null ? 'Unmeasured' : `${Math.round(value * 1000) / 10}%` }
