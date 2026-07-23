@@ -7121,7 +7121,9 @@ export async function retryDwmWebhookDelivery(
             attemptCount: attemptCount || 1,
         })
         if (!priorRetry.retryable) return { ok: false as const, status: 409, code: 'delivery_retry_not_eligible', error: 'The persisted delivery failure is not retryable.' }
-        const persistedRetryAt = prior.next_retry_at && Number.isFinite(Date.parse(prior.next_retry_at)) ? prior.next_retry_at : null
+        const persistedRetryAt = prior.next_retry_at && Number.isFinite(Date.parse(prior.next_retry_at))
+            ? new Date(prior.next_retry_at).toISOString()
+            : null
         const nextRetryAt = persistedRetryAt || priorRetry.nextRetryAt
         if (nextRetryAt && Date.parse(nextRetryAt) > Date.now()) {
             return {

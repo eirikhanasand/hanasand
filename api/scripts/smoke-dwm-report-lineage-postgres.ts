@@ -7,6 +7,7 @@ import { canonicalJson } from '../src/utils/dwm/customerOutputSafety.ts'
 import {
     computeOutboundThirdPartyReportChecksum,
     deliverDwmAlertNotification,
+    listDwmWebhookDeliveries,
     normalizeDwmWebhookDestinationInput,
     retryDwmWebhookDelivery,
 } from '../src/utils/dwm/webhooks.ts'
@@ -88,6 +89,22 @@ async function exercise() {
         idempotencyKey: failed.idempotencyKey,
         deliveryId: failed.id,
     }))
+    for (let index = 0; index < 101; index += 1) {
+        const [generic] = await deliverDwmAlertNotification(ownerId, {
+            ...deliveryInput(`generic_${index}`, true),
+            alert: {
+                ...deliveryInput(`generic_${index}`, true).alert,
+                report: undefined,
+            },
+        })
+        assert.equal(generic.status, 'dry_run')
+    }
+    const reportRowsPastLimit = await listDwmWebhookDeliveries(adminId, orgId, {
+        alertId: 'report_pg_alert_restart',
+        reportCaseId: 'case_restart',
+        reportExportChecksum: failed.payload.report.exportChecksum,
+    })
+    assert.deepEqual(reportRowsPastLimit.map(row => row.id), [failed.id])
 
     console.log(JSON.stringify({
         phase,
@@ -99,6 +116,7 @@ async function exercise() {
         blockedAfterBudget: budgetStatuses.at(-1),
         persistedFailedDeliveryId: failed.id,
         nextRetryAt: failed.nextRetryAt,
+        reportReceiptPastHundredRows: reportRowsPastLimit.length === 1,
         next: `Stop and restart PostgreSQL, then rerun this script with DB=${database} and phase verify; verification waits until the persisted retry due time.`,
     }, null, 2))
 }
@@ -128,6 +146,12 @@ async function verifyAfterRestart() {
     assert.equal(storedPayload, receiverObservation.body)
     assert.equal(prior.payload_hash, receiverObservation.payloadHash)
     assert.equal(prior.idempotency_key, receiverObservation.idempotencyKey)
+    const reportRowsPastLimit = await listDwmWebhookDeliveries(adminId, orgId, {
+        alertId: 'report_pg_alert_restart',
+        reportCaseId: 'case_restart',
+        reportExportChecksum: prior.payload.report.exportChecksum,
+    })
+    assert.deepEqual(reportRowsPastLimit.map(row => row.id), [prior.id])
     const retryDelayMs = Math.max(0, Date.parse(prior.next_retry_at) - Date.now())
     let prematureRetryBlocked = retryDelayMs === 0
     if (retryDelayMs) {
@@ -138,7 +162,7 @@ async function verifyAfterRestart() {
         })
         assert.equal(premature.ok, false)
         assert.equal(premature.code, 'delivery_retry_not_ready')
-        assert.equal(premature.nextRetryAt, prior.next_retry_at)
+        assert.equal(new Date(premature.nextRetryAt).toISOString(), new Date(prior.next_retry_at).toISOString())
         assert.equal(prematureNetworkAttempts, 0)
         prematureRetryBlocked = true
     }
@@ -182,6 +206,7 @@ async function verifyAfterRestart() {
         exactOriginalReceiverBody: sentBodies[0] === receiverObservation.body,
         exactOriginalReceiverPayloadHash: retried.delivery.payloadHash === receiverObservation.payloadHash,
         prematureRetryBlocked,
+        reportReceiptPastHundredRows: reportRowsPastLimit.length === 1,
         exactIdempotencyLineage: retried.delivery.idempotencyKey === storedIdempotencyKey,
         retryActorAuditOnly: retried.delivery.ownerId === ownerId && retried.delivery.auditActorId === adminId,
         concurrentActualAttempts: concurrentRows.filter(row => row.attempted_at).length,
