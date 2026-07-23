@@ -5,7 +5,6 @@ export type DarkwebIndexLiveness = "live" | "dead" | "intermittent" | "blocked_b
 export type DarkwebIndexReviewState = "approved_metadata_only" | "needs_review" | "legal_hold" | "blocked_unsafe" | "false_positive_review";
 export type DarkwebIndexSourceType = "directory" | "seed_list" | "analyst_import" | "public_report" | "safe_search_result" | "internal_discovery";
 export type DarkwebIndexSourceApprovalState = "approved_metadata_only" | "pending_legal_review" | "disabled_kill_switch" | "blocked_unsafe";
-export type DarkwebIndexPublicHandoffDecision = "sellable_with_public_support" | "useful_caveated_metadata" | "needs_public_corroboration" | "reject_low_value" | "blocked_unsafe";
 
 export interface DarkwebIndexNoLeakSerialization {
   passed: boolean;

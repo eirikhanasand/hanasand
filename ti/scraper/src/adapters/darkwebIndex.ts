@@ -1,7 +1,4 @@
 export {
-  rowsFromRuntime
-} from "./darkwebIndexRuntime.ts";
-export {
   buildDarkwebIndexStatus
 } from "./darkwebIndexStatus.ts";
 export {
@@ -9,4 +6,3 @@ export {
   searchDarkwebIndex
 } from "./darkwebIndexSearch.ts";
 export type * from "./darkwebIndexTypes.ts";
-export type * from "./darkwebIndexTypeAliases.ts";
