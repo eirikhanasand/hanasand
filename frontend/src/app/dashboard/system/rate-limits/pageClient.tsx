@@ -855,7 +855,7 @@ function ApiKeyCard({
     )
     const fieldValidation = useMemo(
         () => validateKeyFields({
-            ownerId: apiKey.ownerId,
+            ownerId: apiKey.ownerId || '',
             name: apiKey.name,
             tier: apiKey.tier,
             description: apiKey.description || '',
@@ -878,7 +878,7 @@ function ApiKeyCard({
                     </div>
                     <p className='mt-2 text-sm text-ui-muted'>{apiKey.description || 'No description set.'}</p>
                     <div className='mt-2 flex flex-wrap gap-3 text-xs text-ui-muted'>
-                        <span>Owner `{apiKey.ownerId}`</span>
+                        <span>{apiKey.ownerId ? <>Creator `{apiKey.ownerId}`</> : 'Organization-owned'}</span>
                         <span>Created {new Date(apiKey.createdAt).toLocaleString()}</span>
                         <span>Last used {apiKey.lastUsedAt ? new Date(apiKey.lastUsedAt).toLocaleString() : 'never'}</span>
                     </div>
@@ -928,7 +928,7 @@ function ApiKeyCard({
                     />
                     <OwnerUserPicker
                         label='Owner'
-                        value={apiKey.ownerId}
+                        value={apiKey.ownerId || ''}
                         users={ownerUsers}
                         loading={ownerUsersLoading}
                         error={ownerUsersError}

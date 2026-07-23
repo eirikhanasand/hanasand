@@ -29,6 +29,7 @@
     "smoke:admin-support-live": "bun scripts/guard-production-smoke.mjs && API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-admin-access-recovery-live.mjs",
     "smoke:organizations-unit": "bun scripts/guard-production-smoke.mjs && bun scripts/smoke-organizations.ts",
     "smoke:organization-retention-postgres": "bun scripts/smoke-organization-retention-postgres.ts",
+    "smoke:commercial-api-lifecycle-postgres": "bun scripts/smoke-commercial-api-lifecycle-postgres.ts",
     "smoke:notes-unit": "bun scripts/guard-production-smoke.mjs && bun scripts/smoke-notes.ts",
     "smoke:roles-unit": "bun scripts/guard-production-smoke.mjs && bun scripts/smoke-role-permissions.ts",
     "smoke:user-delete-unit": "bun scripts/guard-production-smoke.mjs && bun scripts/smoke-user-delete-contract.ts",

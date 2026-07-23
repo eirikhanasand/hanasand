@@ -28,7 +28,10 @@ const invites = new Map<string, Row>()
 const watchlists = new Map<string, Row>()
 const serviceLogs: Row[] = []
 
-mock.module('#db', () => ({ default: fakeRun }))
+mock.module('#db', () => ({
+    default: fakeRun,
+    withTransaction: async <T>(work: (query: typeof fakeRun) => Promise<T>) => work(fakeRun),
+}))
 mock.module('#utils/auth/tokenWrapper.ts', () => ({
     default: async (req: any) => {
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')
@@ -5284,13 +5287,22 @@ function parseBody(body: string) {
 async function fakeRun(query: string, params: any[] = []) {
     const compact = query.replace(/\s+/g, ' ').trim()
 
+    if (compact.startsWith('SELECT id FROM organizations WHERE id = $1 FOR UPDATE') || compact.startsWith('SELECT status FROM organizations WHERE id = $1 FOR UPDATE')) {
+        const organization = organizations.get(params[0])
+        return rows(organization ? [{ id: organization.id, status: organization.status }] : [])
+    }
+
+    if (compact.startsWith('SELECT id FROM users WHERE id = ANY($1::text[])')) {
+        return rows((params[0] as string[]).flatMap(id => users.has(id) ? [{ id }] : []))
+    }
+
     if (compact.startsWith('SELECT slug FROM organizations') || compact.startsWith('SELECT id, slug FROM organizations')) {
         const [slug, like] = params
         const prefix = String(like).replace(/%$/, '')
         return rows([...organizations.values()].filter(org => org.slug === slug || org.slug.startsWith(prefix)).map(org => ({ slug: org.slug })))
     }
 
-    if (compact.startsWith('INSERT INTO service_logs')) {
+    if (compact.includes('INSERT INTO service_logs')) {
         serviceLogs.push({ service: params[0], host: params[1], level: params[2], message: params[3], metadata: JSON.parse(params[4]) })
         return rows([])
     }
@@ -5308,6 +5320,7 @@ async function fakeRun(query: string, params: any[] = []) {
         const activeMemberships = [...members.values()].filter(member => member.status === 'active')
         const scoped = activeMemberships.filter(member => member.user_id === userId
             && users.get(member.user_id)?.active !== false
+            && !users.get(member.user_id)?.deletion_scheduled_at
             && (!organizationId || member.organization_id === organizationId))
         return rows(scoped.map(member => organizationSummary(member.organization_id, member.role)))
     }
@@ -5477,7 +5490,13 @@ async function fakeRun(query: string, params: any[] = []) {
 
     if (compact.startsWith('SELECT COUNT(*)::int AS owner_count FROM organization_members')) {
         return rows([{
-            owner_count: [...members.values()].filter(member => member.organization_id === params[0] && member.status === 'active' && member.role === 'owner').length,
+            owner_count: [...members.values()].filter(member =>
+                member.organization_id === params[0]
+                && member.status === 'active'
+                && member.role === 'owner'
+                && users.get(member.user_id)?.active !== false
+                && !users.get(member.user_id)?.deletion_scheduled_at
+            ).length,
         }])
     }
 
@@ -5501,12 +5520,33 @@ async function fakeRun(query: string, params: any[] = []) {
         return rows([{ ...updated, name: users.get(userId)?.name ?? userId, avatar: users.get(userId)?.avatar ?? '' }])
     }
 
-    if (compact.includes('WITH promoted AS')) {
+    if (compact.startsWith('UPDATE organization_members SET role = \'owner\'')) {
+        const [organizationId, userId] = params
+        const key = memberKey(organizationId, userId)
+        const existing = members.get(key)
+        if (!existing || existing.status !== 'active') return rows([])
+        const updated = { ...existing, role: 'owner' }
+        members.set(key, updated)
+        return rows([{ ...updated, name: users.get(userId)?.name ?? userId, avatar: users.get(userId)?.avatar ?? '' }])
+    }
+
+    if (compact.startsWith('UPDATE organization_members SET role = \'admin\'')) {
+        const [organizationId, userId] = params
+        const key = memberKey(organizationId, userId)
+        const existing = members.get(key)
+        if (!existing || existing.status !== 'active' || existing.role !== 'owner') return rows([])
+        members.set(key, { ...existing, role: 'admin' })
+        return rows([{ user_id: userId }])
+    }
+
+    if (compact.includes('WITH promoted AS') || compact.includes('WITH viable_target AS')) {
         const [organizationId, targetUserId, previousOwnerId] = params
         const targetKey = memberKey(organizationId, targetUserId)
         const previousOwnerKey = memberKey(organizationId, previousOwnerId)
         const target = members.get(targetKey)
-        if (!target || target.status !== 'active') return rows([])
+        const targetUser = users.get(targetUserId)
+        const previousOwnerUser = users.get(previousOwnerId)
+        if (!target || target.status !== 'active' || targetUser?.active === false || targetUser?.deletion_scheduled_at || previousOwnerUser?.active === false || previousOwnerUser?.deletion_scheduled_at) return rows([])
         const promoted = { ...target, role: 'owner' }
         members.set(targetKey, promoted)
         const previousOwner = members.get(previousOwnerKey)

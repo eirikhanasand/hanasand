@@ -63,7 +63,8 @@ const API_KEY_TIER_PRESETS: Record<ApiKeyTierPreset, ApiKeyTierDefinition> = {
 
 type ApiKeyRow = {
     id: string
-    owner_id: string
+    owner_id: string | null
+    organization_id: string | null
     name: string
     tier: string
     description: string | null
@@ -97,7 +98,7 @@ type ApiKeyRoleRow = {
 
 export async function listApiKeys() {
     const keysResult = await run(`
-        SELECT id, owner_id, name, tier, description, enabled, key_prefix, expires_at, last_used_at, created_at, updated_at
+        SELECT id, owner_id, organization_id, name, tier, description, enabled, key_prefix, expires_at, last_used_at, created_at, updated_at
         FROM api_keys
         ORDER BY created_at DESC
     `)
@@ -116,6 +117,48 @@ export async function listApiKeys() {
     }
 
     return (keysResult.rows as ApiKeyRow[]).map((row) => toApiKeySummary(row, scopesByKey.get(row.id) || []))
+}
+
+export async function listOrganizationApiKeys(organizationId: string, query: typeof run = run) {
+    const keysResult = await query(`
+        SELECT id, owner_id, organization_id, name, tier, description, enabled, key_prefix, expires_at, last_used_at, created_at, updated_at
+        FROM api_keys
+        WHERE organization_id = $1
+        ORDER BY created_at DESC
+    `, [organizationId])
+    const summaries = await Promise.all((keysResult.rows as ApiKeyRow[]).map(async row =>
+        toApiKeySummary(row, await getApiKeyScopes(row.id, query))
+    ))
+    return summaries
+}
+
+export async function findEnabledOrganizationApiKey(organizationId: string, query: typeof run = run) {
+    const result = await query(`
+        SELECT id
+        FROM api_keys
+        WHERE organization_id = $1
+          AND enabled IS TRUE
+        LIMIT 1
+    `, [organizationId])
+    return result.rows[0]?.id as string | undefined
+}
+
+export function organizationPublicApiScopes(): ApiKeyScopeRule[] {
+    const routes = [
+        ['POST', '/api/v1/ti/search'],
+        ['POST', '/api/v1/ti/search/batch'],
+        ...['actors', 'aliases', 'incidents', 'claims', 'evidence', 'sources', 'validations', 'alerts', 'evaluation', 'timeliness']
+            .map(route => ['GET', `/api/v1/${route}`]),
+    ]
+    return routes.map(([method, route], index) => ({
+        id: `organization-public-api-${index}`,
+        enabled: true,
+        method,
+        route,
+        limits: route.endsWith('/batch')
+            ? { perSecond: 1, perMinute: 12, perHour: 120, perDay: 1_000 }
+            : { ...API_KEY_TIER_PRESETS.starter.defaultLimits },
+    }))
 }
 
 export function listApiKeyTierPresets() {
@@ -182,27 +225,29 @@ export function validateApiKeyFields(input: {
 
 export async function createApiKey(input: {
     ownerId: string
+    organizationId?: string | null
     name: string
     tier: ApiKeyTierPreset | string
     description?: string | null
     enabled?: boolean
     expiresAt?: string | null
     scopes?: ApiKeyScopeRule[]
-}): Promise<ApiKeyCreateResult> {
+}, query: typeof run = run): Promise<ApiKeyCreateResult> {
     const id = randomUUID()
     const secret = buildApiKeySecret()
     const keyPrefix = extractApiKeyPrefix(secret)
     const hash = hashApiKeySecret(secret)
 
-    const result = await run(`
+    const result = await query(`
         INSERT INTO api_keys (
-            id, owner_id, name, tier, description, enabled, key_prefix, secret_hash, expires_at, last_used_at, created_at, updated_at
+            id, owner_id, organization_id, name, tier, description, enabled, key_prefix, secret_hash, expires_at, last_used_at, created_at, updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::timestamptz, NULL, NOW(), NOW())
-        RETURNING id, owner_id, name, tier, description, enabled, key_prefix, secret_hash, expires_at, last_used_at, created_at, updated_at
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz, NULL, NOW(), NOW())
+        RETURNING id, owner_id, organization_id, name, tier, description, enabled, key_prefix, secret_hash, expires_at, last_used_at, created_at, updated_at
     `, [
         id,
         input.ownerId,
+        input.organizationId || null,
         input.name.trim(),
         normalizeApiKeyTier(input.tier),
         input.description?.trim() || null,
@@ -212,12 +257,16 @@ export async function createApiKey(input: {
         input.expiresAt || null,
     ])
 
-    await replaceApiKeyScopes(id, normalizeScopeInputs(input.scopes))
-    const scopes = await getApiKeyScopes(id)
-
-    return {
-        apiKey: toApiKeySummary(result.rows[0] as ApiKeyRow, scopes),
-        secret,
+    try {
+        await replaceApiKeyScopes(id, normalizeScopeInputs(input.scopes), query)
+        const scopes = await getApiKeyScopes(id, query)
+        return {
+            apiKey: toApiKeySummary(result.rows[0] as ApiKeyRow, scopes),
+            secret,
+        }
+    } catch (error) {
+        await query('DELETE FROM api_keys WHERE id = $1', [id]).catch(() => undefined)
+        throw error
     }
 }
 
@@ -240,7 +289,7 @@ export async function updateApiKey(id: string, input: {
             expires_at = $7::timestamptz,
             updated_at = NOW()
         WHERE id = $1
-        RETURNING id, owner_id, name, tier, description, enabled, key_prefix, secret_hash, expires_at, last_used_at, created_at, updated_at
+        RETURNING id, owner_id, organization_id, name, tier, description, enabled, key_prefix, secret_hash, expires_at, last_used_at, created_at, updated_at
     `, [
         id,
         input.ownerId,
@@ -265,18 +314,51 @@ export async function deleteApiKey(id: string) {
     return (result.rowCount || 0) > 0
 }
 
-export async function validateApiKey(secret: string) {
+export async function revokeOrganizationApiKey(organizationId: string, id: string, query: typeof run = run) {
+    const result = await query(`
+        UPDATE api_keys
+        SET enabled = FALSE,
+            updated_at = NOW()
+        WHERE id = $1
+          AND organization_id = $2
+          AND enabled IS TRUE
+        RETURNING id, owner_id, organization_id, name, tier, description, enabled, key_prefix, secret_hash, expires_at, last_used_at, created_at, updated_at
+    `, [id, organizationId])
+    const row = result.rows[0] as ApiKeyRow | undefined
+    return row ? toApiKeySummary(row, await getApiKeyScopes(row.id, query)) : null
+}
+
+export async function validateApiKey(secret: string, query: typeof run = run) {
     const prefix = extractApiKeyPrefix(secret)
     if (!prefix) {
         return null
     }
 
-    const result = await run(`
-        SELECT id, owner_id, name, tier, description, enabled, key_prefix, secret_hash, expires_at, last_used_at, created_at, updated_at
-        FROM api_keys
-        WHERE key_prefix = $1
-          AND enabled IS TRUE
-          AND (expires_at IS NULL OR expires_at > NOW())
+    const result = await query(`
+        SELECT k.id, k.owner_id, k.organization_id, k.name, k.tier, k.description, k.enabled, k.key_prefix, k.secret_hash, k.expires_at, k.last_used_at, k.created_at, k.updated_at
+        FROM api_keys k
+        LEFT JOIN organizations o ON o.id = k.organization_id
+        WHERE k.key_prefix = $1
+          AND k.enabled IS TRUE
+          AND (k.expires_at IS NULL OR k.expires_at > NOW())
+          AND (
+              (k.organization_id IS NULL AND k.owner_id IS NOT NULL)
+              OR (
+                  k.organization_id IS NOT NULL
+                  AND o.status = 'active'
+                  AND EXISTS (
+                      SELECT 1
+                      FROM organization_members owner_membership
+                      JOIN users active_owner
+                        ON active_owner.id = owner_membership.user_id
+                       AND active_owner.active IS TRUE
+                       AND active_owner.deletion_scheduled_at IS NULL
+                      WHERE owner_membership.organization_id = k.organization_id
+                        AND owner_membership.role = 'owner'
+                        AND owner_membership.status = 'active'
+                  )
+              )
+          )
         LIMIT 1
     `, [prefix])
 
@@ -289,16 +371,18 @@ export async function validateApiKey(secret: string) {
         return null
     }
 
-    const scopes = await getApiKeyScopes(apiKey.id)
-    const rolesResult = await run(`
-        SELECT r.id, r.name, r.description, r.priority
-        FROM roles r
-        JOIN user_roles ur ON ur.role_id = r.id
-        WHERE ur.user_id = $1
-        ORDER BY r.priority ASC, r.id ASC
-    `, [apiKey.owner_id])
+    const scopes = await getApiKeyScopes(apiKey.id, query)
+    const rolesResult = apiKey.owner_id
+        ? await query(`
+            SELECT r.id, r.name, r.description, r.priority
+            FROM roles r
+            JOIN user_roles ur ON ur.role_id = r.id
+            WHERE ur.user_id = $1
+            ORDER BY r.priority ASC, r.id ASC
+        `, [apiKey.owner_id])
+        : { rows: [] }
 
-    await run(`
+    await query(`
         UPDATE api_keys
         SET last_used_at = NOW(),
             updated_at = updated_at
@@ -308,6 +392,7 @@ export async function validateApiKey(secret: string) {
     return {
         apiKey: toApiKeySummary(apiKey, scopes),
         ownerId: apiKey.owner_id,
+        organizationId: apiKey.organization_id,
         roles: rolesResult.rows as ApiKeyRoleRow[],
     }
 }
@@ -339,11 +424,11 @@ function hashApiKeySecret(secret: string) {
     return createHash('sha256').update(secret).digest('hex')
 }
 
-async function replaceApiKeyScopes(apiKeyId: string, scopes: ApiKeyScopeRule[]) {
-    await run('DELETE FROM api_key_scopes WHERE api_key_id = $1', [apiKeyId])
+async function replaceApiKeyScopes(apiKeyId: string, scopes: ApiKeyScopeRule[], query: typeof run = run) {
+    await query('DELETE FROM api_key_scopes WHERE api_key_id = $1', [apiKeyId])
 
     for (const scope of scopes) {
-        await run(`
+        await query(`
             INSERT INTO api_key_scopes (
                 id, api_key_id, method, route, enabled, per_second, per_minute, per_hour, per_day, created_at, updated_at
             )
@@ -399,8 +484,8 @@ function normalizeScopeInput(scope: unknown, index: number): ApiKeyScopeRule | n
     }
 }
 
-async function getApiKeyScopes(apiKeyId: string) {
-    const result = await run(`
+async function getApiKeyScopes(apiKeyId: string, query: typeof run = run) {
+    const result = await query(`
         SELECT id, api_key_id, method, route, enabled, per_second, per_minute, per_hour, per_day
         FROM api_key_scopes
         WHERE api_key_id = $1
@@ -414,6 +499,7 @@ function toApiKeySummary(row: ApiKeyRow, scopes: ApiKeyScopeRule[]): ApiKeySumma
     return {
         id: row.id,
         ownerId: row.owner_id,
+        organizationId: row.organization_id,
         name: row.name,
         tier: row.tier,
         description: row.description,

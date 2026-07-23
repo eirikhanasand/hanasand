@@ -2,6 +2,8 @@ import run from '#db'
 
 const SETTINGS_ID = 'global'
 const CACHE_TTL_MS = 5000
+export const RATE_LIMIT_BUCKET_CLEANUP_BATCH = 100
+export const RATE_LIMIT_BUCKET_RETENTION_MS = 2 * 24 * 60 * 60 * 1000
 const routeCatalog = new Map<string, RateLimitRoute>()
 
 const DEFAULT_SETTINGS: Omit<RateLimitSettings, 'updatedAt' | 'updatedBy'> = {
@@ -30,6 +32,74 @@ type RateLimitSettingsValidationResult = {
     valid: boolean
     settings: RateLimitSettings
     error: string | null
+}
+
+export async function consumeSharedRateLimitBucket(
+    { key, rule }: { key: string, rule: RateLimitRule },
+    query: typeof run = run,
+) {
+    const result = await query(`
+        WITH expired AS (
+            SELECT bucket_key
+            FROM api_rate_limit_buckets
+            WHERE updated_at < NOW() - ($4 * INTERVAL '1 millisecond')
+              AND bucket_key <> $1
+            ORDER BY updated_at
+            LIMIT $5
+        ),
+        cleaned AS (
+            DELETE FROM api_rate_limit_buckets bucket
+            USING expired
+            WHERE bucket.bucket_key = expired.bucket_key
+              AND bucket.updated_at < NOW() - ($4 * INTERVAL '1 millisecond')
+            RETURNING 1
+        ),
+        consumed AS (
+            INSERT INTO api_rate_limit_buckets (bucket_key, window_started_at, request_count, updated_at)
+            VALUES (
+                $1,
+                to_timestamp(floor(extract(epoch FROM NOW()) * 1000 / $2) * $2 / 1000),
+                1,
+                NOW()
+            )
+            ON CONFLICT (bucket_key) DO UPDATE SET
+                window_started_at = EXCLUDED.window_started_at,
+                request_count = CASE
+                    WHEN api_rate_limit_buckets.window_started_at = EXCLUDED.window_started_at
+                        THEN LEAST(api_rate_limit_buckets.request_count + 1, $3 + 1)
+                    ELSE 1
+                END,
+                updated_at = NOW()
+            RETURNING
+                request_count,
+                window_started_at + ($2 * INTERVAL '1 millisecond') AS reset_at,
+                GREATEST(
+                    EXTRACT(EPOCH FROM (window_started_at + ($2 * INTERVAL '1 millisecond') - NOW())) * 1000,
+                    0
+                ) AS retry_after_ms
+        )
+        SELECT consumed.*, (SELECT COUNT(*)::int FROM cleaned) AS cleanup_count
+        FROM consumed
+    `, [key, rule.windowMs, rule.maxRequests, RATE_LIMIT_BUCKET_RETENTION_MS, RATE_LIMIT_BUCKET_CLEANUP_BATCH])
+    const count = Number(result.rows[0]?.request_count)
+    const resetAt = new Date(result.rows[0]?.reset_at).getTime()
+    const retryAfterMs = Number(result.rows[0]?.retry_after_ms)
+    const allowed = Number.isFinite(count) && count <= rule.maxRequests
+    return {
+        allowed,
+        remaining: allowed ? Math.max(rule.maxRequests - count, 0) : 0,
+        resetAt,
+        retryAfterMs: Number.isFinite(retryAfterMs) ? retryAfterMs : 0,
+        cleanupCount: Number(result.rows[0]?.cleanup_count) || 0,
+    }
+}
+
+export async function resetSharedRateLimitBuckets(prefix: string, query: typeof run = run) {
+    const result = await query(`
+        DELETE FROM api_rate_limit_buckets
+        WHERE LEFT(bucket_key, LENGTH($1)) = $1
+    `, [prefix])
+    return result.rowCount ?? 0
 }
 
 export async function getRateLimitSettings({ fresh = false }: { fresh?: boolean } = {}): Promise<RateLimitSettings> {

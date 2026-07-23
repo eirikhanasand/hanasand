@@ -24,7 +24,7 @@ export default async function resetApiKeyUsageHandler(req: FastifyRequest<{ Para
     const apiKey = (await listApiKeys()).find(key => key.id === req.params.id)
     if (!apiKey) return res.status(404).send({ error: 'API key not found.' })
 
-    const resetCount = resetApiKeyRateLimitBuckets(apiKey.id)
+    const resetCount = await resetApiKeyRateLimitBuckets(apiKey.id)
     await recordAdminAuditEvent(req, {
         actionType: 'support.api_key.usage_reset',
         actorId: access.authenticatedId || access.id || '',

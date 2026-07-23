@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS organizations (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
-    created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'deleted')),
     default_webhook_policy TEXT NOT NULL DEFAULT 'active_destinations' CHECK (default_webhook_policy IN ('active_destinations', 'manual_selection', 'disabled')),
     alert_visibility_policy TEXT NOT NULL DEFAULT 'members' CHECK (alert_visibility_policy IN ('members', 'admins', 'owners')),
@@ -285,9 +285,18 @@ CREATE TABLE IF NOT EXISTS api_rate_limit_settings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS api_rate_limit_buckets (
+    bucket_key TEXT PRIMARY KEY,
+    window_started_at TIMESTAMPTZ NOT NULL,
+    request_count INT NOT NULL CHECK (request_count >= 0),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_api_rate_limit_buckets_updated_at ON api_rate_limit_buckets(updated_at);
+
 CREATE TABLE IF NOT EXISTS api_keys (
     id TEXT PRIMARY KEY,
-    owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    owner_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    organization_id TEXT REFERENCES organizations(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     tier TEXT NOT NULL DEFAULT 'custom',
     description TEXT,
@@ -315,6 +324,8 @@ CREATE TABLE IF NOT EXISTS api_key_scopes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_api_keys_owner_created_at ON api_keys(owner_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_api_keys_organization_created_at ON api_keys(organization_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_one_active_org ON api_keys(organization_id) WHERE organization_id IS NOT NULL AND enabled IS TRUE;
 CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
 CREATE INDEX IF NOT EXISTS idx_api_key_scopes_key_route ON api_key_scopes(api_key_id, method, route);
 

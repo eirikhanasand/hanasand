@@ -136,10 +136,11 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                     <p className='text-xs font-semibold uppercase tracking-[0.18em] text-ui-primary'>Enterprise onboarding</p>
                     <h1 className='text-4xl font-semibold leading-tight tracking-normal text-ui-text'>Create a console account or start a managed setup.</h1>
                     <p className='text-sm leading-6 text-ui-muted'>
-                        Self-serve accounts are useful for evaluating search, reports, and dashboard workflows. Larger teams should start with a managed setup for SSO, tenant policy, webhook signing, retention, and procurement.
+                        Self-serve accounts can create an organization, issue a bounded read-only API key, and evaluate search, reports, and dashboard workflows. Larger teams should start with a managed setup for SSO, tenant policy, webhook signing, retention, and procurement.
                     </p>
                     <div className='grid gap-3'>
                         <OnboardingItem title='Self-serve console' detail='Create an account now and continue to the dashboard.' />
+                        <OnboardingItem title='Developer API' detail='Create an organization-bound 90-day key and run the first versioned API request.' />
                         <OnboardingItem title='Managed pilot' detail='Send company, watchlist, delivery, SSO, and compliance needs before rollout.' />
                         <OnboardingItem title='Procurement ready path' detail='Use contact sales for DPA, security review, invoice terms, or vendor onboarding.' />
                     </div>

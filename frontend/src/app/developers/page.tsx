@@ -4,6 +4,7 @@ import { ArrowRight, Braces, FileJson, KeyRound, ShieldCheck } from 'lucide-reac
 import { buildRouteMetadata } from '../seo'
 import { authApiUrl } from '@/utils/auth/authApiUrl'
 import CopyCodeButton from './copyCodeButton'
+import ApiKeyOnboarding from './apiKeyOnboarding'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Developers',
@@ -22,7 +23,7 @@ export default async function DevelopersPage() {
     const server = contract.servers?.[0]?.url ?? 'https://api.hanasand.com/api/v1'
     const endpoints = Object.entries(contract.paths).flatMap(([path, methods]) => (['get', 'post'] as const).flatMap(method => {
         const operation = methods[method]
-        return operation ? [{ method: method.toUpperCase(), path, summary: operation.summary ?? operation.operationId ?? path, access: operation.security?.length === 0 ? 'Anonymous' : 'API key or session', scope: `${method.toUpperCase()} /api/v1${path}` }] : []
+        return operation ? [{ method: method.toUpperCase(), path, summary: operation.summary ?? operation.operationId ?? path, access: operationAccessLabel(operation.security), scope: `${method.toUpperCase()} /api/v1${path}` }] : []
     }))
     const firstProtected = endpoints.find(endpoint => endpoint.method === 'GET' && endpoint.access !== 'Anonymous') ?? endpoints[0]
     const apiKeyHeader = contract.components?.securitySchemes?.ApiKey?.name ?? 'X-API-Key'
@@ -52,18 +53,20 @@ if (error) throw new Error(error.error.message)`
                         <p className='mt-4 text-base leading-7 text-ui-muted'>{contract.info.description}</p>
                     </div>
                     <div className='flex flex-wrap gap-3'>
-                        <Link href='/contact?intent=api' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>Request API access<ArrowRight className='h-4 w-4' /></Link>
+                        <Link href='/register?path=%2Fdevelopers%23api-access' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>Create API key<ArrowRight className='h-4 w-4' /></Link>
                         <Link href='/api/openapi/ti' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'><FileJson className='h-4 w-4' />OpenAPI JSON</Link>
                     </div>
                 </div>
             </section>
+
+            <ApiKeyOnboarding server={server} />
 
             <section className='border-b border-ui-border'>
                 <div className='mx-auto grid max-w-7xl gap-6 px-4 py-9 md:px-8 lg:grid-cols-2'>
                     <CodeBlock title='Authenticated request' code={requestExample} />
                     <div className='rounded-lg border border-ui-border bg-ui-panel p-5'>
                         <div className='flex items-center gap-2'><KeyRound className='h-5 w-5 text-ui-primary' /><h2 className='text-lg font-semibold'>Authentication</h2></div>
-                        <p className='mt-3 text-sm leading-7 text-ui-muted'>Send a provisioned key in <code className='font-semibold text-ui-text'>{apiKeyHeader}</code>. Single search is anonymously rate-limited; batch search and collection routes require an exact method-and-route key scope or an authenticated session.</p>
+                        <p className='mt-3 text-sm leading-7 text-ui-muted'>Send a provisioned key in <code className='font-semibold text-ui-text'>{apiKeyHeader}</code>. Single search is anonymously rate-limited; batch search and most collection routes accept an exact method-and-route key scope or an authenticated session. Tenant-scoped alerts require an organization API key.</p>
                         <p className='mt-3 text-sm leading-7 text-ui-muted'>Responses include <code>X-Request-Id</code> and quota headers. API responses are <code>no-store</code>; failures and partial batches keep their real status.</p>
                     </div>
                 </div>
@@ -104,6 +107,17 @@ if (error) throw new Error(error.error.message)`
 
 function CodeBlock({ title, code }: { title: string, code: string }) {
     return <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-text'><div className='flex items-center justify-between gap-3 border-b border-ui-border/40 px-4 py-3 text-sm font-semibold text-ui-canvas'><span className='flex items-center gap-2'><Braces className='h-4 w-4 text-ui-primary' />{title}</span><CopyCodeButton value={code} /></div><pre className='overflow-x-auto whitespace-pre-wrap p-5 text-sm leading-7 text-ui-canvas/85'>{code}</pre></div>
+}
+
+function operationAccessLabel(security: OpenApiOperation['security']) {
+    if (security?.length === 0) return 'Anonymous'
+    const schemes = new Set((security ?? []).flatMap(requirement => Object.keys(requirement)))
+    const apiKey = schemes.has('ApiKey')
+    const session = schemes.has('SessionBearer') || schemes.has('SessionId')
+    if (apiKey && session) return 'API key or session'
+    if (apiKey) return 'API key'
+    if (session) return 'Session'
+    return 'Authenticated'
 }
 
 async function loadContract(): Promise<OpenApiDocument | null> {

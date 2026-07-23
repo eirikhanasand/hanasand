@@ -20,6 +20,8 @@ test('pricing and subscription use one truthful commercial access contract', asy
     expect(contract).toContain('priceLabel: \'Sales scoped\'')
     expect(contract).toContain('Coverage and limits recorded in the order form')
     expect(pricing).toContain('Console evaluation is self-serve.')
+    expect(contract).toContain('Organization-scoped 90-day API key')
+    expect(contract).toContain('/register?path=%2Fdevelopers%23api-access')
     expect(subscription).toContain('Not a paid subscription')
 
     for (const unsupported of ['$49', '$149', '$399', '$499', '5 evaluation watch terms', '250 watched names', '1,500 watched names', 'Priority analyst review']) {

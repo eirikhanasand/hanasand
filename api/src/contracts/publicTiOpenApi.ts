@@ -43,7 +43,7 @@ const schemas: Record<string, Schema> = {
     ErrorDetail: object({ code: string(), message: string(), requestId: string() }, ['code', 'message', 'requestId']),
     ErrorEnvelope: object({ error: ref('ErrorDetail') }, ['error']),
     Pagination: object({ limit: integer({ minimum: 1, maximum: 100 }), total: integer({ minimum: 0 }), nextCursor: nullableString() }, ['limit', 'total', 'nextCursor']),
-    Meta: object({ requestId: string() }, ['requestId']),
+    Meta: object({ requestId: string(), organizationId: string({ description: 'Organization bound to the presented API key. Present on organization-scoped responses.' }) }, ['requestId']),
     SearchRequest: object({ query: string({ minLength: 2, maxLength: 200, example: 'APT29' }) }, ['query']),
     BatchSearchRequest: object({ queries: { type: 'array', minItems: 1, maxItems: 25, items: string({ minLength: 2, maxLength: 200 }), example: ['APT29', 'CVE-2024-3094'] } }, ['queries']),
     Activity: object({
@@ -64,7 +64,19 @@ const schemas: Record<string, Schema> = {
     BatchSearchResponse: object({ generatedAt: dateTime(), count: integer({ minimum: 1, maximum: 25 }), partial: boolean(), results: { type: 'array', items: { oneOf: [ref('BatchSuccess'), ref('BatchFailure')] } } }, ['generatedAt', 'count', 'partial', 'results']),
     Actor: object({ id: string(), canonicalName: string(), normalizedName: string(), actorType: string(), aliases: stringArray(), confidence: confidence(), firstSeenAt: dateTime(), lastSeenAt: dateTime(), evidenceCount: integer({ minimum: 0 }), sourceIds: stringArray(), captureIds: stringArray(), reviewState: string(), updatedAt: dateTime() }, ['id', 'canonicalName', 'aliases', 'confidence', 'sourceIds', 'captureIds']),
     ActorAlias: object({ id: string(), actorProfileId: string(), alias: string(), normalizedAlias: string(), confidence: confidence(), firstSeenAt: dateTime(), lastSeenAt: dateTime(), evidenceCount: integer({ minimum: 0 }), sourceIds: stringArray(), updatedAt: dateTime() }, ['id', 'actorProfileId', 'alias', 'normalizedAlias', 'confidence', 'sourceIds']),
-    Incident: object({ id: string(), sourceId: string(), captureId: string(), title: string(), summary: string(), firstSeenAt: dateTime(), confidence: confidence(), assertionKind: string({ const: 'inferred' }), reviewState: string(), extractorVersion: string(), reviewReasons: stringArray() }, ['id', 'sourceId', 'captureId', 'title', 'summary', 'confidence', 'assertionKind', 'reviewState', 'reviewReasons']),
+    ActorAttributionProvenance: object({
+        promptVersion: string({ maxLength: 200 }), responseSchemaVersion: string({ maxLength: 200 }), evidenceProjectionSchema: string({ maxLength: 200 }), reviewedAt: dateTime(),
+    }),
+    IncidentActorAttribution: object({
+        externalId: string({ maxLength: 200 }), catalogId: string({ maxLength: 200 }), canonicalName: string({ maxLength: 200 }), aliases: { type: 'array', maxItems: 100, items: string({ maxLength: 200 }) }, supportingEvidenceCount: integer({ minimum: 0, maximum: 100 }), provenance: ref('ActorAttributionProvenance'),
+    }, ['canonicalName', 'aliases', 'provenance']),
+    ModelRuntimeIdentity: object({
+        status: string({ const: 'completed' }), provider: string({ maxLength: 200 }), model: string({ maxLength: 200 }),
+    }, ['status', 'provider', 'model']),
+    IncidentAutomaticReview: object({
+        configuredModelVersion: string({ maxLength: 200 }), runtimeIdentity: ref('ModelRuntimeIdentity'), promptVersion: string({ maxLength: 200 }), responseSchemaVersion: string({ maxLength: 200 }), evidenceProjectionSchema: string({ maxLength: 200 }), linkedEvidenceCount: integer({ minimum: 0, maximum: 100_000 }), linkedSourceCount: integer({ minimum: 0, maximum: 100_000 }), linkedIndependentSourceCount: integer({ minimum: 0, maximum: 100_000 }), reviewedAt: dateTime(), action: string({ enum: ['confirm', 'reject', 'mark_contradicted', 'mark_needs_review'] }), claimValidity: string({ enum: ['supported', 'invalid', 'contradicted', 'uncertain'] }), confidence: confidence(),
+    }, ['configuredModelVersion']),
+    Incident: object({ id: string({ maxLength: 200 }), title: string({ maxLength: 500 }), summary: string({ maxLength: 4000 }), firstSeenAt: dateTime(), confidence: confidence(), assertionKind: string({ const: 'inferred' }), reviewState: string({ maxLength: 100 }), actorAttribution: { oneOf: [ref('IncidentActorAttribution'), { type: 'null' }] }, automaticReview: ref('IncidentAutomaticReview'), extractorVersion: string({ maxLength: 200 }) }, ['id', 'title', 'summary', 'assertionKind', 'reviewState', 'actorAttribution']),
     ClaimValue: object({ title: string(), summary: string(), type: string(), value: string(), normalizedValue: string(), company: string(), victim: string(), datasetType: string() }),
     Claim: object({ id: string(), claimType: string(), subjectType: string(), subjectId: string(), value: ref('ClaimValue'), summary: string(), confidence: confidence(), evidenceStage: string(), extractionMethod: string(), extractorVersion: string(), reviewState: string(), corroborationState: string(), sourceCount: integer({ minimum: 0 }), evidenceCount: integer({ minimum: 0 }), firstSeenAt: dateTime(), lastSeenAt: dateTime(), sourceIds: stringArray(), captureIds: stringArray(), uncertaintyReasons: stringArray(), legalHold: boolean(), retentionClass: string(), createdAt: dateTime(), updatedAt: dateTime() }, ['id', 'claimType', 'subjectType', 'subjectId', 'value', 'summary', 'confidence', 'reviewState', 'sourceIds', 'captureIds']),
     EvidenceLink: object({ id: string(), captureId: string(), subjectType: string(), subjectId: string(), relationship: string(), confidence: confidence(), extractorVersion: string(), createdAt: dateTime() }, ['id', 'captureId', 'subjectType', 'subjectId', 'relationship', 'confidence']),
@@ -72,7 +84,7 @@ const schemas: Record<string, Schema> = {
     Publisher: object({ name: string(), country: string(), homepage: string({ format: 'uri' }), trustBasis: string() }, ['name']),
     Collection: object({ cadenceSeconds: integer({ minimum: 0 }), freshnessTargetSeconds: integer({ minimum: 0 }), lastSeenAt: dateTime(), createdAt: dateTime(), updatedAt: dateTime() }, ['cadenceSeconds']),
     Source: object({ id: string(), name: string(), type: string(), status: string(), risk: string(), trustScore: confidence(), language: string(), tags: stringArray(), url: string({ format: 'uri' }), urlHash: string(), locatorRedacted: boolean(), operatingMode: ref('OperatingMode'), publisher: ref('Publisher'), collection: ref('Collection') }, ['id', 'name', 'type', 'status', 'risk', 'trustScore', 'tags', 'urlHash', 'locatorRedacted', 'operatingMode', 'collection']),
-    Validation: object({ id: string(), captureId: string(), incidentId: string(), claimId: string(), validationType: string(), status: string({ enum: ['supported', 'partially_supported', 'unconfirmed', 'contradicted'] }), referenceUrl: string({ format: 'uri' }), referencePublishedAt: dateTime(), matchedAt: dateTime(), reviewerId: string(), notes: string(), updatedAt: dateTime() }, ['id', 'validationType', 'status', 'referenceUrl', 'matchedAt']),
+    Validation: object({ id: string(), captureId: string(), incidentId: string(), claimId: string(), validationType: string(), status: string({ enum: ['supported', 'partially_supported', 'unconfirmed', 'contradicted'] }), referenceUrl: string({ format: 'uri' }), referencePublishedAt: dateTime(), matchedAt: dateTime(), notes: string(), updatedAt: dateTime() }, ['id', 'validationType', 'status', 'referenceUrl', 'matchedAt']),
     AlertEvidence: object({ captureIds: stringArray(), sourceIds: stringArray(), evidenceCount: integer({ minimum: 0 }), sourceCount: integer({ minimum: 0 }), metadataOnly: boolean() }, ['captureIds', 'sourceIds', 'evidenceCount', 'sourceCount', 'metadataOnly']),
     Alert: object({ id: string(), incidentId: string(), actor: string(), victim: string(), assertionKind: string(), observedMatchSummary: string(), summary: string(), severity: string(), confidence: confidence(), reviewState: string(), workflowState: string(), deliveryState: string(), sourceFamily: string(), firstSeenAt: dateTime(), lastSeenAt: dateTime(), alertedAt: dateTime(), deliveredAt: dateTime(), evidence: ref('AlertEvidence') }, ['id', 'assertionKind', 'reviewState', 'evidence']),
     Scalar: { type: ['string', 'number', 'boolean', 'null'] },
@@ -101,7 +113,7 @@ const paths: Record<string, unknown> = {
         post: {
             operationId: 'batchSearchThreatIntelligence',
             summary: 'Search up to 25 unique queries',
-            description: 'Requires an API key or authenticated session. HTTP 207 reports per-query partial failures without disguising them as successful search results.',
+            description: 'Requires an API key or authenticated session. Input is capped at 25 unique queries and executed with concurrency 3. HTTP 207 reports per-query partial failures without disguising them as successful search results.',
             security: protectedSecurity(),
             requestBody: { required: true, content: { 'application/json': { schema: ref('BatchSearchRequest') } } },
             responses: { '200': jsonResponse('All searches completed', ref('BatchSearchResponse')), '207': jsonResponse('One or more searches failed', ref('BatchSearchResponse')), ...errorResponses },
@@ -114,7 +126,8 @@ for (const [path, [schemaName, summary]] of Object.entries(resourceDefinitions))
         get: {
             operationId: `list${schemaName === 'EvidenceLink' ? 'Evidence' : schemaName === 'EvaluationLabel' ? 'EvaluationLabels' : `${schemaName}s`}`,
             summary,
-            security: protectedSecurity(),
+            ...(path === '/alerts' ? { description: 'Returns only alerts belonging to the organization embedded in the presented API key. Caller-supplied tenant headers or query parameters cannot select another organization.' } : {}),
+            security: path === '/alerts' ? [{ ApiKey: [] }] : protectedSecurity(),
             parameters: paginationParameters,
             responses: { '200': jsonResponse(`${schemaName} page`, ref(`${schemaName}Collection`)), ...errorResponses },
         },
@@ -129,13 +142,14 @@ export const publicTiOpenApi = {
         description: 'Versioned, metadata-safe access to production-backed public intelligence. Version 1 is read-only: POST search operations are retrieval operations, and no mutation or idempotency-key contract is advertised.',
         'x-compatibility-policy': 'Additive fields and endpoints may be introduced within v1. Removing or changing existing fields, semantics, authentication, or pagination requires a new major API version.',
         'x-idempotency-policy': 'v1 exposes no public mutations. Search POSTs are retrieval-only and safe to retry; no Idempotency-Key header is required.',
+        'x-onboarding': 'Create an account, organization, and 90-day organization API key at https://hanasand.com/developers#api-access. The secret is returned once.',
     },
     servers: [{ url: 'https://api.hanasand.com/api/v1', description: 'Production' }],
     tags: [{ name: 'Search' }, { name: 'Intelligence' }],
     paths,
     components: {
         securitySchemes: {
-            ApiKey: { type: 'apiKey', in: 'header', name: 'X-API-Key', description: 'Provisioned key with an exact method and route scope.' },
+            ApiKey: { type: 'apiKey', in: 'header', name: 'X-API-Key', description: 'Organization-owned key with exact method-and-route scopes. Self-serve keys use Starter limits; batch is additionally limited to 1 request/second, 12/minute, 120/hour, and 1,000/day.' },
             SessionBearer: { type: 'http', scheme: 'bearer', bearerFormat: 'session-token' },
             SessionId: { type: 'apiKey', in: 'header', name: 'id', description: 'Session identifier required together with SessionBearer.' },
         },

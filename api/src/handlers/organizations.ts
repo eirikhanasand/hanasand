@@ -1,8 +1,15 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { randomUUID } from 'crypto'
-import run from '#db'
+import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import recordLog from '#utils/logs/recordLog.ts'
+import {
+    createApiKey,
+    findEnabledOrganizationApiKey,
+    listOrganizationApiKeys,
+    organizationPublicApiScopes,
+    revokeOrganizationApiKey,
+} from '#utils/auth/apiKeys.ts'
 import {
     buildOrganizationBridgeContext,
     buildOrganizationDwmAlertReference,
@@ -67,6 +74,10 @@ type OrganizationParams = {
 type OrganizationMemberParams = {
     id: string
     userId: string
+}
+
+type OrganizationApiKeyParams = OrganizationParams & {
+    keyId: string
 }
 
 type InviteParams = {
@@ -243,6 +254,98 @@ export async function getOrganization(req: FastifyRequest<{ Params: Organization
     })
 }
 
+export async function getOrganizationApiKeys(req: FastifyRequest<{ Params: OrganizationParams }>, res: FastifyReply) {
+    res.header('Cache-Control', 'no-store')
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) return res.status(401).send({ error: { code: 'authentication_required', message: 'Sign in to manage organization API keys.' } })
+
+    const organization = await loadOrganizationForMember(req.params.id, userId)
+    if (!organization) return res.status(404).send({ error: { code: 'organization_not_found', message: 'Organization not found.' } })
+    if (!roleCanManageOrganization(organization.role)) return res.status(403).send({ error: { code: 'organization_role_forbidden', message: 'Organization owners and administrators manage API keys.' } })
+
+    return res.send({
+        organizationId: organization.id,
+        apiKeys: await listOrganizationApiKeys(organization.id),
+    })
+}
+
+export async function postOrganizationApiKey(req: FastifyRequest<{ Params: OrganizationParams, Body: { name?: unknown } }>, res: FastifyReply) {
+    res.header('Cache-Control', 'no-store')
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) return res.status(401).send({ error: { code: 'authentication_required', message: 'Sign in to create an organization API key.' } })
+
+    const organization = await loadOrganizationForMember(req.params.id, userId)
+    if (!organization) return res.status(404).send({ error: { code: 'organization_not_found', message: 'Organization not found.' } })
+    if (!roleCanManageOrganization(organization.role)) return res.status(403).send({ error: { code: 'organization_role_forbidden', message: 'Organization owners and administrators manage API keys.' } })
+    if (organization.status !== 'active') return res.status(409).send({ error: { code: 'organization_inactive', message: 'Reactivate the organization before creating an API key.' } })
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body) || Object.keys(req.body).some(key => key !== 'name')) {
+        return res.status(400).send({ error: { code: 'invalid_request', message: 'API key creation accepts only the name field.' } })
+    }
+    const name = typeof req.body.name === 'string' ? req.body.name.trim() : ''
+    if (name.length < 2 || name.length > 80) return res.status(400).send({ error: { code: 'invalid_api_key_name', message: 'API key name must contain 2-80 characters.' } })
+
+    try {
+        const expiresAt = new Date(Date.now() + 90 * 86_400_000).toISOString()
+        const creation = await withTransaction(async query => {
+            await query('SELECT id FROM organizations WHERE id = $1 FOR UPDATE', [organization.id])
+            const lockedOrganization = await loadOrganizationForMember(organization.id, userId, query)
+            if (!lockedOrganization) return { error: 'organization_not_found' as const }
+            if (!roleCanManageOrganization(lockedOrganization.role)) return { error: 'organization_role_forbidden' as const }
+            if (lockedOrganization.status !== 'active') return { error: 'organization_inactive' as const }
+            if (await activeOwnerCount(organization.id, query) < 1) return { error: 'organization_owner_required' as const }
+            if (await findEnabledOrganizationApiKey(organization.id, query)) return { error: 'active_api_key_exists' as const }
+            return {
+                created: await createApiKey({
+                    ownerId: userId,
+                    organizationId: organization.id,
+                    name,
+                    tier: 'starter',
+                    description: `Organization API access for ${organization.name}.`,
+                    enabled: true,
+                    expiresAt,
+                    scopes: organizationPublicApiScopes(),
+                }, query),
+            }
+        })
+        if ('error' in creation) {
+            if (creation.error === 'organization_not_found') return res.status(404).send({ error: { code: creation.error, message: 'Organization not found.' } })
+            if (creation.error === 'organization_role_forbidden') return res.status(403).send({ error: { code: creation.error, message: 'Organization owners and administrators manage API keys.' } })
+            if (creation.error === 'organization_inactive') return res.status(409).send({ error: { code: creation.error, message: 'Reactivate the organization before creating an API key.' } })
+            if (creation.error === 'organization_owner_required') return res.status(409).send({ error: { code: creation.error, message: 'Add or transfer ownership to an active member before creating an API key.' } })
+            return res.status(409).send({ error: { code: creation.error, message: 'Revoke the current organization API key before creating another.' } })
+        }
+        const { created } = creation
+        logOrganizationEvent(req, 'organization_api_key_created', organization.id, userId, {
+            apiKeyId: created.apiKey.id,
+            keyPrefix: created.apiKey.keyPrefix,
+            expiresAt,
+        })
+        return res.status(201).send(created)
+    } catch (error) {
+        if ((error as { code?: string }).code === '23505') return res.status(409).send({ error: { code: 'active_api_key_exists', message: 'Revoke the current organization API key before creating another.' } })
+        req.log.error({ error, organizationId: organization.id }, 'Failed to create organization API key')
+        return res.status(500).send({ error: { code: 'api_key_create_failed', message: 'The API key could not be created.' } })
+    }
+}
+
+export async function deleteOrganizationApiKey(req: FastifyRequest<{ Params: OrganizationApiKeyParams }>, res: FastifyReply) {
+    res.header('Cache-Control', 'no-store')
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) return res.status(401).send({ error: { code: 'authentication_required', message: 'Sign in to revoke an organization API key.' } })
+
+    const organization = await loadOrganizationForMember(req.params.id, userId)
+    if (!organization) return res.status(404).send({ error: { code: 'organization_not_found', message: 'Organization not found.' } })
+    if (!roleCanManageOrganization(organization.role)) return res.status(403).send({ error: { code: 'organization_role_forbidden', message: 'Organization owners and administrators manage API keys.' } })
+
+    const apiKey = await revokeOrganizationApiKey(organization.id, req.params.keyId)
+    if (!apiKey) return res.status(404).send({ error: { code: 'api_key_not_found', message: 'Active organization API key not found.' } })
+    logOrganizationEvent(req, 'organization_api_key_revoked', organization.id, userId, {
+        apiKeyId: apiKey.id,
+        keyPrefix: apiKey.keyPrefix,
+    })
+    return res.send({ apiKey })
+}
+
 export async function getOrganizationSettings(req: FastifyRequest<{ Params: OrganizationParams }>, res: FastifyReply) {
     const { valid, id: userId } = await tokenWrapper(req, res)
     if (!valid || !userId) {
@@ -313,28 +416,57 @@ export async function putOrganizationSettings(req: FastifyRequest<{ Params: Orga
     }
 
     const slug = input.slug ? await uniqueOrganizationSlug(input.slug, req.params.id) : undefined
-    await run(`
-        UPDATE organizations
-        SET name = COALESCE($2, name),
-            slug = COALESCE($3, slug),
-            default_webhook_policy = COALESCE($4, default_webhook_policy),
-            alert_visibility_policy = COALESCE($5, alert_visibility_policy),
-            status = COALESCE($6, status),
-            retention_days = COALESCE($7, retention_days),
-            audit_safe_metadata = COALESCE($8::jsonb, audit_safe_metadata),
-            updated_at = NOW()
-        WHERE id = $1
-        RETURNING *
-    `, [
-        req.params.id,
-        input.name ?? null,
-        slug ?? null,
-        input.defaultWebhookPolicy ?? null,
-        input.alertVisibilityPolicy ?? null,
-        input.lifecycleStatus ?? null,
-        input.retentionDays ?? null,
-        input.auditSafeMetadata === undefined ? null : JSON.stringify(input.auditSafeMetadata),
-    ])
+    const lifecycleUpdate = await withTransaction(async query => {
+        await query('SELECT id FROM organizations WHERE id = $1 FOR UPDATE', [req.params.id])
+        const lockedOrganization = await loadOrganizationForMember(req.params.id, userId, query)
+        if (!lockedOrganization) return { error: 'organization_not_found' as const }
+        if (privacyDeletionMutationBlocker(lockedOrganization, 'update organization settings')) {
+            return { error: 'organization_deletion_in_progress' as const, organization: lockedOrganization }
+        }
+        if (!roleCanManageOrganization(lockedOrganization.role)) {
+            return { error: 'organization_role_forbidden' as const, organization: lockedOrganization }
+        }
+        if (input.lifecycleStatus === 'active' && await activeOwnerCount(req.params.id, query) < 1) {
+            return { error: 'organization_owner_required' as const, organization: lockedOrganization }
+        }
+        await query(`
+            UPDATE organizations
+            SET name = COALESCE($2, name),
+                slug = COALESCE($3, slug),
+                default_webhook_policy = COALESCE($4, default_webhook_policy),
+                alert_visibility_policy = COALESCE($5, alert_visibility_policy),
+                status = COALESCE($6, status),
+                retention_days = COALESCE($7, retention_days),
+                audit_safe_metadata = COALESCE($8::jsonb, audit_safe_metadata),
+                updated_at = NOW()
+            WHERE id = $1
+            RETURNING *
+        `, [
+            req.params.id,
+            input.name ?? null,
+            slug ?? null,
+            input.defaultWebhookPolicy ?? null,
+            input.alertVisibilityPolicy ?? null,
+            input.lifecycleStatus ?? null,
+            input.retentionDays ?? null,
+            input.auditSafeMetadata === undefined ? null : JSON.stringify(input.auditSafeMetadata),
+        ])
+        return { error: null, organization: lockedOrganization }
+    })
+    if (lifecycleUpdate.error === 'organization_not_found') {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+    if (lifecycleUpdate.error === 'organization_deletion_in_progress') {
+        const blocker = privacyDeletionMutationBlocker(lifecycleUpdate.organization!, 'update organization settings')
+        return sendOrganizationLifecycleBlocker(req, res, blocker!, userId, lifecycleUpdate.organization!.role)
+    }
+    if (lifecycleUpdate.error === 'organization_role_forbidden') {
+        return res.status(403).send({ error: 'Only organization owners and admins can update settings.' })
+    }
+    if (lifecycleUpdate.error === 'organization_owner_required') {
+        return res.status(409).send({ error: 'Add or transfer ownership to an active member before reactivating the organization.' })
+    }
+    const authorizedOrganization = lifecycleUpdate.organization!
 
     logOrganizationEvent(req, 'organization_settings_updated', req.params.id, userId, {
         fields: Object.entries({
@@ -359,10 +491,10 @@ export async function putOrganizationSettings(req: FastifyRequest<{ Params: Orga
             organizationId: req.params.id,
             tenantId: req.params.id,
             actorId: userId,
-            actorRole: organization.role,
-            previousLifecycleStatus: organization.status ?? 'active',
+            actorRole: authorizedOrganization.role,
+            previousLifecycleStatus: authorizedOrganization.status ?? 'active',
             lifecycleStatus: updated.status ?? 'active',
-            lifecycleChanged: (organization.status ?? 'active') !== (updated.status ?? 'active'),
+            lifecycleChanged: (authorizedOrganization.status ?? 'active') !== (updated.status ?? 'active'),
             mutatedFields: Object.entries({
                 name: input.name,
                 slug,
@@ -546,62 +678,105 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
         return res.status(403).send({ error: permissionError, memberMutationDenial: denial })
     }
 
-    const ownerCount = await activeOwnerCount(req.params.id)
-    if (target.role === 'owner' && ownerCount <= 1) {
+    const mutation = await withTransaction(async query => {
+        await query(`
+            SELECT id
+            FROM users
+            WHERE id = ANY($1::text[])
+            ORDER BY id
+            FOR UPDATE
+        `, [[userId, req.params.userId].sort()])
+        await query('SELECT id FROM organizations WHERE id = $1 FOR UPDATE', [req.params.id])
+
+        const lockedOrganization = await loadOrganizationForMember(req.params.id, userId, query)
+        if (!lockedOrganization) return { error: 'organization_not_found' as const }
+        const lockedLifecycleBlocker = inactiveOrganizationMutationBlocker(lockedOrganization, 'remove members')
+        if (lockedLifecycleBlocker) return { error: 'organization_inactive' as const, organization: lockedOrganization, lifecycleBlocker: lockedLifecycleBlocker }
+
+        const lockedTarget = await loadOrganizationMembership(req.params.id, req.params.userId, query)
+        if (!lockedTarget || lockedTarget.status !== 'active') return { error: 'member_not_found' as const, organization: lockedOrganization }
+        const lockedPermissionError = removalPermissionError(lockedOrganization.role, lockedTarget.role)
+        if (lockedPermissionError) return { error: 'organization_role_forbidden' as const, organization: lockedOrganization, target: lockedTarget, permissionError: lockedPermissionError }
+
+        const ownerCount = await activeOwnerCount(req.params.id, query)
+        if (lockedTarget.role === 'owner' && ownerCount <= 1) {
+            return { error: 'organization_owner_required' as const, organization: lockedOrganization, target: lockedTarget, ownerCount }
+        }
+
+        const removed = await query(`
+            UPDATE organization_members
+            SET status = 'removed', removed_at = NOW()
+            WHERE organization_id = $1
+              AND user_id = $2
+              AND status = 'active'
+            RETURNING *
+        `, [req.params.id, req.params.userId])
+        if (!removed.rows.length) return { error: 'member_not_found' as const, organization: lockedOrganization }
+
+        const revokedInvites = await query(`
+            UPDATE organization_invites
+            SET status = 'revoked',
+                revoked_at = NOW(),
+                accepted_at = NULL,
+                accepted_by = NULL
+            FROM users
+            WHERE organization_invites.organization_id = $1
+              AND users.id = $2
+              AND lower(organization_invites.email) IN (lower(users.id), lower(users.name))
+              AND organization_invites.status = 'pending'
+            RETURNING organization_invites.*
+        `, [req.params.id, req.params.userId])
+        await query('UPDATE organizations SET updated_at = NOW() WHERE id = $1', [req.params.id])
+        return { error: null, organization: lockedOrganization, target: lockedTarget, ownerCount, removed, revokedInvites }
+    })
+
+    if (mutation.error === 'organization_not_found' || mutation.error === 'member_not_found') {
+        return res.status(404).send({ error: mutation.error === 'organization_not_found' ? 'Organization not found.' : 'Organization member not found.' })
+    }
+    if (mutation.error === 'organization_inactive') {
+        return sendOrganizationLifecycleBlocker(req, res, mutation.lifecycleBlocker, userId, mutation.organization.role)
+    }
+    if (mutation.error === 'organization_role_forbidden') {
+        const denial = organizationMemberMutationDenial({
+            organizationId: req.params.id,
+            actorId: userId,
+            actorRole: mutation.organization.role,
+            targetUserId: req.params.userId,
+            targetRole: mutation.target.role,
+            action: 'remove_member',
+            requestId: req.headers['x-request-id'] ? String(req.headers['x-request-id']) : null,
+            message: mutation.permissionError,
+        })
+        return res.status(403).send({ error: mutation.permissionError, memberMutationDenial: denial })
+    }
+    if (mutation.error === 'organization_owner_required') {
         const message = 'Transfer ownership before removing the last owner.'
         const guard = organizationLastOwnerGuard({
             organizationId: req.params.id,
             actorId: userId,
-            actorRole: organization.role,
+            actorRole: mutation.organization.role,
             targetUserId: req.params.userId,
             action: 'remove_owner',
-            ownerCount,
+            ownerCount: mutation.ownerCount,
             message,
             requestId: req.headers['x-request-id'] ? String(req.headers['x-request-id']) : null,
         })
         logOrganizationEvent(req, guard.serviceLogAction, req.params.id, userId, {
             requestId: guard.requestId,
             targetUserId: req.params.userId,
-            actorRole: organization.role,
+            actorRole: mutation.organization.role,
             action: guard.action,
             blockerCode: guard.blockerCode,
-            ownerCount,
+            ownerCount: mutation.ownerCount,
         })
         return res.status(409).send({ error: message, lastOwnerGuard: guard })
     }
 
-    const removed = await run(`
-        UPDATE organization_members
-        SET status = 'removed', removed_at = NOW()
-        WHERE organization_id = $1
-          AND user_id = $2
-          AND status = 'active'
-        RETURNING *
-    `, [req.params.id, req.params.userId])
-
-    if (!removed.rows.length) {
-        return res.status(404).send({ error: 'Organization member not found.' })
-    }
-
-    const revokedInvites = await run(`
-        UPDATE organization_invites
-        SET status = 'revoked',
-            revoked_at = NOW(),
-            accepted_at = NULL,
-            accepted_by = NULL
-        FROM users
-        WHERE organization_invites.organization_id = $1
-          AND users.id = $2
-          AND lower(organization_invites.email) IN (lower(users.id), lower(users.name))
-          AND organization_invites.status = 'pending'
-        RETURNING organization_invites.*
-    `, [req.params.id, req.params.userId])
-
-    await touchOrganization(req.params.id)
+    const { organization: authorizedOrganization, target: authorizedTarget, ownerCount, removed, revokedInvites } = mutation
     logOrganizationEvent(req, 'organization_member_removed', req.params.id, userId, {
         targetUserId: req.params.userId,
-        targetRole: target.role,
-        actorRole: organization.role,
+        targetRole: authorizedTarget.role,
+        actorRole: authorizedOrganization.role,
         ownerCountBefore: ownerCount,
         revokedInviteIds: revokedInvites.rows.map((invite: OrganizationInviteRow) => invite.id),
         revokedInviteCount: revokedInvites.rows.length,
@@ -616,7 +791,7 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
             organizationId: req.params.id,
             tenantId: req.params.id,
             targetUserId: req.params.userId,
-            targetRole: target.role,
+            targetRole: authorizedTarget.role,
             revokedInviteIds: revokedInvites.rows.map((invite: OrganizationInviteRow) => invite.id),
             revokedInviteCount: revokedInvites.rows.length,
             revokedInviteStatus: 'revoked' as const,
@@ -628,7 +803,7 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
                 organizationId: req.params.id,
                 tenantId: req.params.id,
                 targetUserId: req.params.userId,
-                targetRole: target.role,
+                targetRole: authorizedTarget.role,
                 revokedInviteIds: revokedInvites.rows.map((invite: OrganizationInviteRow) => invite.id),
                 revokedInviteCount: revokedInvites.rows.length,
                 blockedRoutes: [
@@ -666,7 +841,7 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
                     organizationId: req.params.id,
                     tenantId: req.params.id,
                     targetUserId: req.params.userId,
-                    targetRole: target.role,
+                    targetRole: authorizedTarget.role,
                     blockedRoute: 'POST /v1/dwm/webhooks/deliver',
                     blockedContracts: [
                         'organization.webhook_destination_ownership.v1',
@@ -691,7 +866,7 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
                     organizationId: req.params.id,
                     tenantId: req.params.id,
                     targetUserId: req.params.userId,
-                    targetRole: target.role,
+                    targetRole: authorizedTarget.role,
                     membershipStatusAfter: 'removed' as const,
                     blockerCode: 'member_revoked' as const,
                     activeMembershipRequired: true,
@@ -874,54 +1049,99 @@ export async function patchOrganizationMemberRole(req: FastifyRequest<{ Params: 
         return res.status(403).send({ error: permissionError, memberMutationDenial: denial })
     }
 
-    const ownerCount = await activeOwnerCount(req.params.id)
-    if (target.role === 'owner' && input.role !== 'owner' && ownerCount <= 1) {
+    const mutation = await withTransaction(async query => {
+        await query(`
+            SELECT id
+            FROM users
+            WHERE id = ANY($1::text[])
+            ORDER BY id
+            FOR UPDATE
+        `, [[userId, req.params.userId].sort()])
+        await query('SELECT id FROM organizations WHERE id = $1 FOR UPDATE', [req.params.id])
+
+        const lockedOrganization = await loadOrganizationForMember(req.params.id, userId, query)
+        if (!lockedOrganization) return { error: 'organization_not_found' as const }
+        const lockedLifecycleBlocker = inactiveOrganizationMutationBlocker(lockedOrganization, 'change member roles')
+        if (lockedLifecycleBlocker) return { error: 'organization_inactive' as const, organization: lockedOrganization, lifecycleBlocker: lockedLifecycleBlocker }
+
+        const lockedTarget = await loadOrganizationMembership(req.params.id, req.params.userId, query)
+        if (!lockedTarget || lockedTarget.status !== 'active') return { error: 'member_not_found' as const, organization: lockedOrganization }
+        const lockedPermissionError = roleUpdatePermissionError(lockedOrganization.role, lockedTarget.role, input.role)
+        if (lockedPermissionError) return { error: 'organization_role_forbidden' as const, organization: lockedOrganization, target: lockedTarget, permissionError: lockedPermissionError }
+
+        const ownerCount = await activeOwnerCount(req.params.id, query)
+        if (lockedTarget.role === 'owner' && input.role !== 'owner' && ownerCount <= 1) {
+            return { error: 'organization_owner_required' as const, organization: lockedOrganization, target: lockedTarget, ownerCount }
+        }
+
+        const result = await query(`
+            UPDATE organization_members
+            SET role = $3
+            WHERE organization_id = $1
+              AND user_id = $2
+              AND status = 'active'
+            RETURNING *
+        `, [req.params.id, req.params.userId, input.role])
+        if (!result.rows.length) return { error: 'member_not_found' as const, organization: lockedOrganization }
+        await query('UPDATE organizations SET updated_at = NOW() WHERE id = $1', [req.params.id])
+        return { error: null, organization: lockedOrganization, target: lockedTarget, ownerCount, result }
+    })
+
+    if (mutation.error === 'organization_not_found' || mutation.error === 'member_not_found') {
+        return res.status(404).send({ error: mutation.error === 'organization_not_found' ? 'Organization not found.' : 'Organization member not found.' })
+    }
+    if (mutation.error === 'organization_inactive') {
+        return sendOrganizationLifecycleBlocker(req, res, mutation.lifecycleBlocker, userId, mutation.organization.role)
+    }
+    if (mutation.error === 'organization_role_forbidden') {
+        const denial = organizationMemberMutationDenial({
+            organizationId: req.params.id,
+            actorId: userId,
+            actorRole: mutation.organization.role,
+            targetUserId: req.params.userId,
+            targetRole: mutation.target.role,
+            action: 'change_member_role',
+            requestedRole: input.role,
+            reason: input.reason,
+            requestId: input.requestId,
+            message: mutation.permissionError,
+        })
+        return res.status(403).send({ error: mutation.permissionError, memberMutationDenial: denial })
+    }
+    if (mutation.error === 'organization_owner_required') {
         const message = 'Transfer ownership before changing the last owner role.'
         const guard = organizationLastOwnerGuard({
             organizationId: req.params.id,
             actorId: userId,
-            actorRole: organization.role,
+            actorRole: mutation.organization.role,
             targetUserId: req.params.userId,
             action: 'change_owner_role',
             requestedRole: input.role,
-            ownerCount,
+            ownerCount: mutation.ownerCount,
             message,
             requestId: input.requestId,
         })
         logOrganizationEvent(req, guard.serviceLogAction, req.params.id, userId, {
             requestId: guard.requestId,
             targetUserId: req.params.userId,
-            actorRole: organization.role,
+            actorRole: mutation.organization.role,
             action: guard.action,
             requestedRole: input.role,
             blockerCode: guard.blockerCode,
-            ownerCount,
+            ownerCount: mutation.ownerCount,
             reason: input.reason,
         })
         return res.status(409).send({ error: message, lastOwnerGuard: guard })
     }
 
-    const result = await run(`
-        UPDATE organization_members
-        SET role = $3
-        WHERE organization_id = $1
-          AND user_id = $2
-          AND status = 'active'
-        RETURNING *
-    `, [req.params.id, req.params.userId, input.role])
-
-    if (!result.rows.length) {
-        return res.status(404).send({ error: 'Organization member not found.' })
-    }
-
-    await touchOrganization(req.params.id)
+    const { organization: authorizedOrganization, target: authorizedTarget, result } = mutation
     const serviceLogAction = 'organization_member_role_updated'
     logOrganizationEvent(req, serviceLogAction, req.params.id, userId, {
         requestId: input.requestId,
         targetUserId: req.params.userId,
-        previousRole: target.role,
+        previousRole: authorizedTarget.role,
         newRole: input.role,
-        actorRole: organization.role,
+        actorRole: authorizedOrganization.role,
         reason: input.reason,
     })
 
@@ -935,7 +1155,7 @@ export async function patchOrganizationMemberRole(req: FastifyRequest<{ Params: 
             tenantId: req.params.id,
             actorId: userId,
             targetUserId: req.params.userId,
-            previousRole: target.role,
+            previousRole: authorizedTarget.role,
             newRole: input.role,
             reason: input.reason,
             requestId: input.requestId ?? null,
@@ -945,9 +1165,9 @@ export async function patchOrganizationMemberRole(req: FastifyRequest<{ Params: 
                 organizationId: req.params.id,
                 tenantId: req.params.id,
                 actorId: userId,
-                actorRole: organization.role,
+                actorRole: authorizedOrganization.role,
                 targetUserId: req.params.userId,
-                previousRole: target.role,
+                previousRole: authorizedTarget.role,
                 newRole: input.role,
                 membershipStatus: 'active' as const,
                 routes: {
@@ -964,12 +1184,12 @@ export async function patchOrganizationMemberRole(req: FastifyRequest<{ Params: 
                     'organization.webhook_alert_delivery_readiness.v1',
                 ],
                 before: {
-                    role: target.role,
+                    role: authorizedTarget.role,
                     canReadSharedWatchlists: true,
-                    canExportAlertTerms: ['owner', 'admin'].includes(target.role),
-                    canMutateSharedWatchlists: ['owner', 'admin'].includes(target.role),
-                    canAssignCases: ['owner', 'admin'].includes(target.role),
-                    canDryRunWebhookDelivery: ['owner', 'admin'].includes(target.role),
+                    canExportAlertTerms: ['owner', 'admin'].includes(authorizedTarget.role),
+                    canMutateSharedWatchlists: ['owner', 'admin'].includes(authorizedTarget.role),
+                    canAssignCases: ['owner', 'admin'].includes(authorizedTarget.role),
+                    canDryRunWebhookDelivery: ['owner', 'admin'].includes(authorizedTarget.role),
                     canReadWebhookDeliverySummary: true,
                 },
                 after: {
@@ -1003,19 +1223,19 @@ export async function patchOrganizationMemberRole(req: FastifyRequest<{ Params: 
                     organizationId: req.params.id,
                     tenantId: req.params.id,
                     actorId: userId,
-                    actorRole: organization.role,
+                    actorRole: authorizedOrganization.role,
                     targetUserId: req.params.userId,
-                    previousRole: target.role,
+                    previousRole: authorizedTarget.role,
                     newRole: input.role,
                     membershipStatus: 'active' as const,
-                    roleChanged: target.role !== input.role,
+                    roleChanged: authorizedTarget.role !== input.role,
                     blockerReason: null,
                     before: {
                         sharedWatchlistReadReady: true,
-                        alertGenerationExportReady: ['owner', 'admin'].includes(target.role),
-                        watchlistMutationReady: ['owner', 'admin'].includes(target.role),
-                        caseAssignmentReady: ['owner', 'admin'].includes(target.role),
-                        webhookDeliveryReady: ['owner', 'admin'].includes(target.role),
+                        alertGenerationExportReady: ['owner', 'admin'].includes(authorizedTarget.role),
+                        watchlistMutationReady: ['owner', 'admin'].includes(authorizedTarget.role),
+                        caseAssignmentReady: ['owner', 'admin'].includes(authorizedTarget.role),
+                        webhookDeliveryReady: ['owner', 'admin'].includes(authorizedTarget.role),
                         deliverySummaryReady: true,
                     },
                     after: {
@@ -1106,37 +1326,63 @@ export async function postOrganizationOwnershipTransfer(req: FastifyRequest<{ Pa
         return res.status(404).send({ error: 'Target member not found.' })
     }
 
-    const ownerCount = await activeOwnerCount(req.params.id)
-    const result = await run(`
-        WITH promoted AS (
+    const transferOutcome = await withTransaction(async query => {
+        await query(`
+            SELECT id
+            FROM users
+            WHERE id = ANY($1::text[])
+            ORDER BY id
+            FOR UPDATE
+        `, [[userId, input.targetUserId].sort()])
+        await query('SELECT id FROM organizations WHERE id = $1 FOR UPDATE', [req.params.id])
+        const lockedOrganization = await loadOrganizationForMember(req.params.id, userId, query)
+        if (!lockedOrganization) return { error: 'organization_not_found' as const }
+        if (lockedOrganization.role !== 'owner') return { error: 'organization_role_forbidden' as const, organization: lockedOrganization }
+        const lockedLifecycleBlocker = inactiveOrganizationMutationBlocker(lockedOrganization, 'transfer ownership')
+        if (lockedLifecycleBlocker) return { error: 'organization_inactive' as const, organization: lockedOrganization, lifecycleBlocker: lockedLifecycleBlocker }
+
+        const lockedTargetOrganization = await loadOrganizationForMember(req.params.id, input.targetUserId, query)
+        if (!lockedTargetOrganization) return { error: 'member_not_found' as const, organization: lockedOrganization }
+        const lockedTarget = await loadOrganizationMembership(req.params.id, input.targetUserId, query)
+        if (!lockedTarget || lockedTarget.status !== 'active') return { error: 'member_not_found' as const, organization: lockedOrganization }
+        const ownerCount = await activeOwnerCount(req.params.id, query)
+
+        const result = await query(`
             UPDATE organization_members
             SET role = 'owner'
             WHERE organization_id = $1
               AND user_id = $2
               AND status = 'active'
             RETURNING *
-        ),
-        demoted AS (
+        `, [req.params.id, input.targetUserId])
+        if (!result.rows.length) throw new Error('Ownership transfer promotion failed after locked membership validation.')
+        const demoted = await query(`
             UPDATE organization_members
             SET role = 'admin'
             WHERE organization_id = $1
-              AND user_id = $3
+              AND user_id = $2
               AND status = 'active'
               AND role = 'owner'
-            RETURNING *
-        )
-        SELECT promoted.*
-        FROM promoted
-    `, [req.params.id, input.targetUserId, userId])
-
-    if (!result.rows.length) {
-        return res.status(404).send({ error: 'Target member not found.' })
+            RETURNING user_id
+        `, [req.params.id, userId])
+        if (!demoted.rows.length) throw new Error('Ownership transfer demotion failed after locked owner validation.')
+        await query('UPDATE organizations SET updated_at = NOW() WHERE id = $1', [req.params.id])
+        return { error: null, organization: lockedOrganization, target: lockedTarget, ownerCount, result }
+    })
+    if (transferOutcome.error === 'organization_not_found' || transferOutcome.error === 'member_not_found') {
+        return res.status(404).send({ error: transferOutcome.error === 'organization_not_found' ? 'Organization not found.' : 'Target member not found.' })
     }
+    if (transferOutcome.error === 'organization_role_forbidden') {
+        return res.status(403).send({ error: 'Only organization owners can transfer ownership.' })
+    }
+    if (transferOutcome.error === 'organization_inactive') {
+        return sendOrganizationLifecycleBlocker(req, res, transferOutcome.lifecycleBlocker, userId, transferOutcome.organization.role)
+    }
+    const { target: authorizedTarget, ownerCount, result } = transferOutcome
 
-    await touchOrganization(req.params.id)
     logOrganizationEvent(req, 'organization_ownership_transferred', req.params.id, userId, {
         targetUserId: input.targetUserId,
-        previousTargetRole: target.role,
+        previousTargetRole: authorizedTarget.role,
         previousOwnerCount: ownerCount,
         reason: input.reason,
     })
@@ -2929,8 +3175,8 @@ export async function postOrganizationWatchlistCleanup(req: FastifyRequest<{ Par
     })
 }
 
-async function loadOrganizationForMember(organizationId: string, userId: string) {
-    const result = await run(`
+async function loadOrganizationForMember(organizationId: string, userId: string, query: typeof run = run) {
+    const result = await query(`
         SELECT
             o.*,
             om.role,
@@ -2947,6 +3193,7 @@ async function loadOrganizationForMember(organizationId: string, userId: string)
         JOIN users current_member_user
           ON current_member_user.id = om.user_id
          AND current_member_user.active = TRUE
+         AND current_member_user.deletion_scheduled_at IS NULL
         LEFT JOIN organization_members active_members
           ON active_members.organization_id = o.id
          AND active_members.status = 'active'
@@ -2983,8 +3230,8 @@ async function loadOrganizationForMember(organizationId: string, userId: string)
     return result.rows[0] as OrganizationRow | undefined
 }
 
-async function loadOrganizationMembership(organizationId: string, userId: string) {
-    const result = await run(`
+async function loadOrganizationMembership(organizationId: string, userId: string, query: typeof run = run) {
+    const result = await query(`
         SELECT
             om.organization_id,
             om.user_id,
@@ -3053,13 +3300,17 @@ async function loadInviteById(organizationId: string, inviteId: string) {
     return result.rows[0] as OrganizationInviteRow | undefined
 }
 
-async function activeOwnerCount(organizationId: string) {
-    const result = await run(`
+async function activeOwnerCount(organizationId: string, query: typeof run = run) {
+    const result = await query(`
         SELECT COUNT(*)::int AS owner_count
-        FROM organization_members
-        WHERE organization_id = $1
-          AND status = 'active'
-          AND role = 'owner'
+        FROM organization_members membership
+        JOIN users owner
+          ON owner.id = membership.user_id
+         AND owner.active IS TRUE
+         AND owner.deletion_scheduled_at IS NULL
+        WHERE membership.organization_id = $1
+          AND membership.status = 'active'
+          AND membership.role = 'owner'
     `, [organizationId])
 
     return Number(result.rows[0]?.owner_count ?? 0)

@@ -19,6 +19,10 @@ export default async function purgeDeletedAccounts() {
             DELETE FROM login_events WHERE user_id IN (SELECT id FROM due_users)
         ), deleted_attempts AS (
             DELETE FROM attempts WHERE id IN (SELECT id FROM due_users)
+        ), deleted_unbound_api_keys AS (
+            DELETE FROM api_keys
+            WHERE owner_id IN (SELECT id FROM due_users)
+              AND organization_id IS NULL
         )
         DELETE FROM users WHERE id IN (SELECT id FROM due_users)
     `)

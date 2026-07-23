@@ -144,8 +144,8 @@ export async function revokeToken({ tokenId, userId, revokedBy }: { tokenId: num
     return (result.rowCount ?? 0) > 0
 }
 
-export async function revokeAllTokens({ userId, revokedBy, exceptToken }: { userId: string, revokedBy: string, exceptToken?: string }) {
-    const result = await run(`
+export async function revokeAllTokens({ userId, revokedBy, exceptToken }: { userId: string, revokedBy: string, exceptToken?: string }, query: typeof run = run) {
+    const result = await query(`
         UPDATE tokens
         SET revoked_at = NOW(),
             revoked_by = $2

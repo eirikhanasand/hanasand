@@ -35,7 +35,7 @@ export interface paths {
         put?: never;
         /**
          * Search up to 25 unique queries
-         * @description Requires an API key or authenticated session. HTTP 207 reports per-query partial failures without disguising them as successful search results.
+         * @description Requires an API key or authenticated session. Input is capped at 25 unique queries and executed with concurrency 3. HTTP 207 reports per-query partial failures without disguising them as successful search results.
          */
         post: operations["batchSearchThreatIntelligence"];
         delete?: never;
@@ -170,7 +170,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Metadata-safe threat alerts */
+        /**
+         * Metadata-safe threat alerts
+         * @description Returns only alerts belonging to the organization embedded in the presented API key. Caller-supplied tenant headers or query parameters cannot select another organization.
+         */
         get: operations["listAlerts"];
         put?: never;
         post?: never;
@@ -233,6 +236,8 @@ export interface components {
         };
         Meta: {
             requestId: string;
+            /** @description Organization bound to the presented API key. Present on organization-scoped responses. */
+            organizationId?: string;
         };
         SearchRequest: {
             /** @example APT29 */
@@ -419,20 +424,57 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string;
         };
+        ActorAttributionProvenance: {
+            promptVersion?: string;
+            responseSchemaVersion?: string;
+            evidenceProjectionSchema?: string;
+            /** Format: date-time */
+            reviewedAt?: string;
+        };
+        IncidentActorAttribution: {
+            externalId?: string;
+            catalogId?: string;
+            canonicalName: string;
+            aliases: string[];
+            supportingEvidenceCount?: number;
+            provenance: components["schemas"]["ActorAttributionProvenance"];
+        };
+        ModelRuntimeIdentity: {
+            /** @constant */
+            status: "completed";
+            provider: string;
+            model: string;
+        };
+        IncidentAutomaticReview: {
+            configuredModelVersion: string;
+            runtimeIdentity?: components["schemas"]["ModelRuntimeIdentity"];
+            promptVersion?: string;
+            responseSchemaVersion?: string;
+            evidenceProjectionSchema?: string;
+            linkedEvidenceCount?: number;
+            linkedSourceCount?: number;
+            linkedIndependentSourceCount?: number;
+            /** Format: date-time */
+            reviewedAt?: string;
+            /** @enum {string} */
+            action?: "confirm" | "reject" | "mark_contradicted" | "mark_needs_review";
+            /** @enum {string} */
+            claimValidity?: "supported" | "invalid" | "contradicted" | "uncertain";
+            confidence?: number;
+        };
         Incident: {
             id: string;
-            sourceId: string;
-            captureId: string;
             title: string;
             summary: string;
             /** Format: date-time */
             firstSeenAt?: string;
-            confidence: number;
+            confidence?: number;
             /** @constant */
             assertionKind: "inferred";
             reviewState: string;
+            actorAttribution: components["schemas"]["IncidentActorAttribution"] | null;
+            automaticReview?: components["schemas"]["IncidentAutomaticReview"];
             extractorVersion?: string;
-            reviewReasons: string[];
         };
         ClaimValue: {
             title?: string;
@@ -538,7 +580,6 @@ export interface components {
             referencePublishedAt?: string;
             /** Format: date-time */
             matchedAt: string;
-            reviewerId?: string;
             notes?: string;
             /** Format: date-time */
             updatedAt?: string;

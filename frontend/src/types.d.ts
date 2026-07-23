@@ -912,7 +912,7 @@ type ApiKeyScopeRule = {
 
 type ApiKeySummary = {
     id: string
-    ownerId: string
+    ownerId: string | null
     name: string
     tier: ApiKeyTierPreset | string
     description: string | null

@@ -3,17 +3,17 @@ export const commercialAccessPlans = [
         id: 'evaluation',
         name: 'Evaluation',
         priceLabel: 'No card required',
-        bestFor: 'Individuals validating threat search, browser analysis, reports, and organization workflows before monitored coverage is activated.',
-        access: 'Self-serve console',
+        bestFor: 'Individuals validating threat search, the versioned JSON API, browser analysis, and organization workflows before monitored coverage is activated.',
+        access: 'Self-serve console and API',
         delivery: 'Setup request',
         review: 'Product evaluation',
-        cta: 'Create evaluation account',
-        href: '/register?path=/organizations',
+        cta: 'Create account and API key',
+        href: '/register?path=%2Fdevelopers%23api-access',
         features: [
             'Console and organization workspace',
             'Public threat-intelligence search',
+            'Organization-scoped 90-day API key',
             'Browser sandbox allowance shown in product',
-            'Managed monitoring setup request',
         ],
     },
     {
@@ -45,10 +45,9 @@ export const commercialAccessPlans = [
         href: '/contact?plan=integration',
         features: [
             'Everything in Monitoring',
-            'Scoped public API keys',
+            'Production API budgets and key lifecycle',
             'Authenticated batch search and pagination',
             'Security and procurement review before activation',
         ],
     },
 ] as const
-

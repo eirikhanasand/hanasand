@@ -1,15 +1,16 @@
 import fp from 'fastify-plugin'
 import type { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from 'fastify'
-import { matchApiKeyScope, validateApiKey } from '#utils/auth/apiKeys.ts'
+import { matchApiKeyScope, organizationPublicApiScopes, validateApiKey } from '#utils/auth/apiKeys.ts'
 import { validateSession } from '#utils/auth/session.ts'
-import { getRateLimitSettings, registerRateLimitRoute } from '#utils/rateLimit/config.ts'
+import {
+    consumeSharedRateLimitBucket,
+    getRateLimitSettings,
+    registerRateLimitRoute,
+    resetSharedRateLimitBuckets,
+} from '#utils/rateLimit/config.ts'
 import hasInternalToken from '#utils/auth/internalToken.ts'
 import { verifiedClientIp } from '#utils/http/publicBoundary.ts'
-
-type Bucket = {
-    count: number
-    resetAt: number
-}
+import { withTransaction } from '#db'
 
 type RateLimitActor = {
     scope: RateLimitScope
@@ -19,18 +20,12 @@ type RateLimitActor = {
     invalidSession?: boolean
 }
 
-const buckets = new Map<string, Bucket>()
+const sessionBatchScope = organizationPublicApiScopes().find(scope =>
+    scope.method === 'POST' && scope.route === '/api/v1/ti/search/batch'
+)
 
-export function resetApiKeyRateLimitBuckets(apiKeyId: string) {
-    let resetCount = 0
-    const prefix = `api_key:${apiKeyId}:`
-    for (const key of buckets.keys()) {
-        if (key.startsWith(prefix)) {
-            buckets.delete(key)
-            resetCount += 1
-        }
-    }
-    return resetCount
+export async function resetApiKeyRateLimitBuckets(apiKeyId: string) {
+    return resetSharedRateLimitBuckets(`api_key:${apiKeyId}:`)
 }
 
 export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
@@ -44,84 +39,93 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
         }
     })
 
-    fastify.addHook('preHandler', async (req: FastifyRequest, res: FastifyReply) => {
-        const path = normalizeRequestPath(req)
-        if (req.headers.upgrade?.toLowerCase() === 'websocket' || isInfrastructureWebSocketPath(path) || isBrowserStreamPath(path)) {
-            return
-        }
-
-        if (!path.startsWith('/api')) {
-            return
-        }
-
-        if (isTrustedStatusIngest(req, path)) {
-            return
-        }
-
-        const actor = await resolveRateLimitActor(req)
-        if (actor.invalidApiKey) {
-            return sendBoundaryError(req, res, 401, 'invalid_api_key', 'The presented API key is invalid, disabled, or expired.')
-        }
-        if (actor.invalidSession) {
-            return sendBoundaryError(req, res, 401, 'invalid_session', 'The presented session is invalid or expired.')
-        }
-        let apiKeyScope: ReturnType<typeof matchApiKeyScope> = null
-        if (actor.apiKey) {
-            ;(req as FastifyRequest & { apiKeyAuth?: typeof actor.apiKey }).apiKeyAuth = actor.apiKey
-            apiKeyScope = matchApiKeyScope(actor.apiKey.apiKey.scopes, req.method, path)
-            if (!apiKeyScope) {
-                return sendBoundaryError(req, res, 403, 'scope_forbidden', 'API key is not allowed to access this endpoint.')
-            }
-
-        }
-
-        const settings = await getRateLimitSettings()
-        if (!settings.enabled) {
-            return
-        }
-
-        if (actor.apiKey && apiKeyScope) {
-            const periodChecks = consumeApiKeyScopeBudgets({
-                apiKeyId: actor.apiKey.apiKey.id,
-                method: req.method,
-                route: path,
-                limits: apiKeyScope.limits,
-            })
-
-            applyApiKeyLimitHeaders(res, periodChecks)
-            const rejected = periodChecks.find((check) => !check.allowed)
-            if (rejected) {
-                res.header('retry-after', String(Math.max(Math.ceil(rejected.retryAfterMs / 1000), 1)))
-                return sendBoundaryError(req, res, 429, 'rate_limit_exceeded', 'API key rate limit exceeded.')
-            }
-        }
-
-        const scopeRule = settings.defaults[actor.scope]
-        const routeRule = resolveRouteRule(settings, req.method, path, actor.scope)
-
-        const globalCheck = consumeBucket({
-            key: `${actor.scope}:${actor.identifier}:global`,
-            rule: scopeRule,
-        })
-
-        applyRateLimitHeaders(res, globalCheck, scopeRule, actor.scope, 'global')
-
-        if (!globalCheck.allowed) {
-            return sendRateLimitExceeded(req, res, globalCheck, actor.scope, 'global')
-        }
-
-        const routeCheck = consumeBucket({
-            key: `${actor.scope}:${actor.identifier}:${req.method}:${path}`,
-            rule: routeRule,
-        })
-
-        applyRateLimitHeaders(res, routeCheck, routeRule, actor.scope, path)
-
-        if (!routeCheck.allowed) {
-            return sendRateLimitExceeded(req, res, routeCheck, actor.scope, path)
-        }
+    fastify.addHook('preHandler', (req, res, done) => {
+        void enforceRateLimit(req, res).then(proceed => {
+            if (proceed) done()
+        }, error => done(error as Error))
     })
 })
+
+async function enforceRateLimit(req: FastifyRequest, res: FastifyReply) {
+    const path = normalizeRequestPath(req)
+    if (
+        req.headers.upgrade?.toLowerCase() === 'websocket'
+        || isInfrastructureWebSocketPath(path)
+        || isBrowserStreamPath(path)
+        || !path.startsWith('/api')
+        || isTrustedStatusIngest(req, path)
+    ) return true
+
+    const actor = await resolveRateLimitActor(req)
+    if (actor.invalidApiKey) {
+        sendBoundaryError(req, res, 401, 'invalid_api_key', 'The presented API key is invalid, disabled, or expired.')
+        return false
+    }
+    if (actor.invalidSession) {
+        sendBoundaryError(req, res, 401, 'invalid_session', 'The presented session is invalid or expired.')
+        return false
+    }
+    let apiKeyScope: ReturnType<typeof matchApiKeyScope> = null
+    if (actor.apiKey) {
+        ;(req as FastifyRequest & { apiKeyAuth?: typeof actor.apiKey }).apiKeyAuth = actor.apiKey
+        apiKeyScope = matchApiKeyScope(actor.apiKey.apiKey.scopes, req.method, path)
+        if (!apiKeyScope) {
+            sendBoundaryError(req, res, 403, 'scope_forbidden', 'API key is not allowed to access this endpoint.')
+            return false
+        }
+    }
+
+    const settings = await getRateLimitSettings()
+    if (!settings.enabled) return true
+
+    const periodLimits = credentialPeriodLimits({
+        actorIdentifier: actor.identifier,
+        apiKeyScope,
+        method: req.method,
+        route: path,
+    })
+    if (periodLimits) {
+        const periodChecks = await consumeCredentialPeriodBudgets({
+            actorIdentifier: actor.identifier,
+            method: req.method,
+            route: path,
+            limits: periodLimits,
+        })
+
+        applyCredentialLimitHeaders(res, periodChecks)
+        const rejected = periodChecks
+            .filter((check) => !check.allowed)
+            .sort((left, right) => right.retryAfterMs - left.retryAfterMs)[0]
+        if (rejected) {
+            res.header('retry-after', String(Math.max(Math.ceil(rejected.retryAfterMs / 1000), 1)))
+            sendBoundaryError(req, res, 429, 'rate_limit_exceeded', 'Credential rate limit exceeded.')
+            return false
+        }
+    }
+
+    const scopeRule = settings.defaults[actor.scope]
+    const routeRule = resolveRouteRule(settings, req.method, path, actor.scope)
+    const globalCheck = await consumeSharedRateLimitBucket({
+        key: `${actor.identifier}:global:${actor.scope}`,
+        rule: scopeRule,
+    })
+    applyRateLimitHeaders(res, globalCheck, scopeRule, actor.scope, 'global')
+    if (!globalCheck.allowed) {
+        sendRateLimitExceeded(req, res, globalCheck, actor.scope, 'global')
+        return false
+    }
+
+    const routeCheck = await consumeSharedRateLimitBucket({
+        key: `${actor.identifier}:route:${actor.scope}:${req.method}:${path}`,
+        rule: routeRule,
+    })
+    applyRateLimitHeaders(res, routeCheck, routeRule, actor.scope, path)
+    if (!routeCheck.allowed) {
+        sendRateLimitExceeded(req, res, routeCheck, actor.scope, path)
+        return false
+    }
+    return true
+}
 
 function isInfrastructureWebSocketPath(path: string) {
     return path.startsWith('/api/client/ws/')
@@ -235,63 +239,37 @@ function extractPresentedApiKey(req: FastifyRequest) {
     return ''
 }
 
-function consumeBucket({
-    key,
-    rule,
+export function credentialPeriodLimits({
+    actorIdentifier,
+    apiKeyScope,
+    method,
+    route,
 }: {
-    key: string
-    rule: RateLimitRule
+    actorIdentifier: string
+    apiKeyScope: ReturnType<typeof matchApiKeyScope>
+    method: string
+    route: string
 }) {
-    const now = Date.now()
-    const existing = buckets.get(key)
-    const bucket = existing && existing.resetAt > now
-        ? existing
-        : {
-            count: 0,
-            resetAt: now + rule.windowMs,
-        }
-
-    if (bucket.count >= rule.maxRequests) {
-        buckets.set(key, bucket)
-        return {
-            allowed: false,
-            remaining: 0,
-            resetAt: bucket.resetAt,
-            retryAfterMs: bucket.resetAt - now,
-        }
-    }
-
-    bucket.count += 1
-    buckets.set(key, bucket)
-
-    return {
-        allowed: true,
-        remaining: Math.max(rule.maxRequests - bucket.count, 0),
-        resetAt: bucket.resetAt,
-        retryAfterMs: Math.max(bucket.resetAt - now, 0),
-    }
+    if (apiKeyScope) return apiKeyScope.limits
+    if (
+        actorIdentifier.startsWith('user:')
+        && method.toUpperCase() === 'POST'
+        && route === '/api/v1/ti/search/batch'
+    ) return sessionBatchScope?.limits ?? null
+    return null
 }
 
-function consumeApiKeyScopeBudgets({
-    apiKeyId,
+async function consumeCredentialPeriodBudgets({
+    actorIdentifier,
     method,
     route,
     limits,
 }: {
-    apiKeyId: string
+    actorIdentifier: string
     method: string
     route: string
     limits: ApiKeyPeriodLimits
 }) {
-    const checks: Array<{
-        period: 'second' | 'minute' | 'hour' | 'day'
-        limit: number
-        allowed: boolean
-        remaining: number
-        resetAt: number
-        retryAfterMs: number
-    }> = []
-
     const periodRules = [
         { period: 'second' as const, windowMs: 1_000, maxRequests: limits.perSecond },
         { period: 'minute' as const, windowMs: 60_000, maxRequests: limits.perMinute },
@@ -299,25 +277,24 @@ function consumeApiKeyScopeBudgets({
         { period: 'day' as const, windowMs: 86_400_000, maxRequests: limits.perDay },
     ]
 
-    for (const periodRule of periodRules) {
-        if (!periodRule.maxRequests || periodRule.maxRequests <= 0) {
-            continue
+    return withTransaction(async query => {
+        const checks = []
+        for (const periodRule of periodRules) {
+            if (!periodRule.maxRequests || periodRule.maxRequests <= 0) continue
+            checks.push({
+                period: periodRule.period,
+                limit: periodRule.maxRequests,
+                ...await consumeSharedRateLimitBucket({
+                    key: `${actorIdentifier}:endpoint:${method}:${route}:${periodRule.period}`,
+                    rule: {
+                        windowMs: periodRule.windowMs,
+                        maxRequests: periodRule.maxRequests,
+                    },
+                }, query),
+            })
         }
-
-        checks.push({
-            period: periodRule.period,
-            limit: periodRule.maxRequests,
-            ...consumeBucket({
-                key: `api_key:${apiKeyId}:${method}:${route}:${periodRule.period}`,
-                rule: {
-                    windowMs: periodRule.windowMs,
-                    maxRequests: periodRule.maxRequests,
-                },
-            }),
-        })
-    }
-
-    return checks
+        return checks
+    })
 }
 
 function applyRateLimitHeaders(
@@ -361,7 +338,7 @@ function sendBoundaryError(req: FastifyRequest, res: FastifyReply, status: numbe
     return res.status(status).send({ error: code, message })
 }
 
-function applyApiKeyLimitHeaders(
+function applyCredentialLimitHeaders(
     res: FastifyReply,
     checks: Array<{
         period: 'second' | 'minute' | 'hour' | 'day'

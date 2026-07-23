@@ -2,7 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import Fastify from 'fastify'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { isAllowedApiOrigin, verifiedClientIp } from '#utils/http/publicBoundary.ts'
-import { resolveRateLimitActor } from '#plugins/rateLimit.ts'
+import { credentialPeriodLimits, resolveRateLimitActor } from '#plugins/rateLimit.ts'
+import { organizationPublicApiScopes } from '#utils/auth/apiKeys.ts'
 import postTiSearch, { normalizeBatchQueries, postTiSearchBatch, TI_BATCH_MAX_QUERIES } from '../src/handlers/ti/search.ts'
 import { TRUSTED_API_PROXIES } from '../src/utils/http/publicBoundary.ts'
 import { readFile } from 'node:fs/promises'
@@ -64,6 +65,14 @@ describe('public TI API boundary', () => {
 
         const internalAdmin = await resolveRateLimitActor(request, async () => ({ apiKey: { id: 'key', tier: 'internal' }, roles: [{ id: 'admin', name: 'Admin' }] }) as any)
         expect(internalAdmin.scope).toBe('internal')
+    })
+
+    test('applies the documented durable batch budget equally to sessions and API keys', () => {
+        const apiKeyScope = organizationPublicApiScopes().find(scope => scope.route === '/api/v1/ti/search/batch')!
+        const request = { method: 'POST', route: '/api/v1/ti/search/batch' }
+        expect(credentialPeriodLimits({ actorIdentifier: 'user:customer', apiKeyScope: null, ...request })).toEqual(apiKeyScope.limits)
+        expect(credentialPeriodLimits({ actorIdentifier: 'api_key:key', apiKeyScope, ...request })).toEqual(apiKeyScope.limits)
+        expect(credentialPeriodLimits({ actorIdentifier: 'user:customer', apiKeyScope: null, method: 'GET', route: '/api/v1/actors' })).toBeNull()
     })
 
     test('allows only configured browser origins', () => {

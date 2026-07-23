@@ -65,6 +65,22 @@ export async function withDatabaseAdvisoryLock<T>(key: string, work: () => Promi
     }
 }
 
+export async function withTransaction<T>(work: (query: typeof queryOnce) => Promise<T>) {
+    const client = await pool.connect()
+    const query = ((sql: string, params?: SQLParamType) => client.query(sql, params ?? [])) as typeof queryOnce
+    try {
+        await client.query('BEGIN')
+        const result = await work(query)
+        await client.query('COMMIT')
+        return result
+    } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+    } finally {
+        client.release()
+    }
+}
+
 function isTransientDatabaseError(error: unknown) {
     const err = error as PgError
     const message = err?.message?.toLowerCase() || ''
