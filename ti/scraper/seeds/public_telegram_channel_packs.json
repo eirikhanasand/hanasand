@@ -1,10 +1,10 @@
 {
-  "version": 3,
+  "version": 4,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-07-23T16:23:47.000Z",
+  "generatedAt": "2026-07-23T19:34:33.000Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 10,
+  "sourceCount": 12,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -1095,6 +1095,250 @@
           "collectionSlaSeconds": 1800,
           "budgetClass": "normal",
           "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_cert_gov_az_telegram",
+      "name": "Azerbaijan CERT public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/certgovaz",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.95,
+      "language": "az",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public Azerbaijani government CERT advisories from the channel linked by cert.gov.az. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim submissions.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T19:34:33.000Z",
+        "approvedBy": "source-review:government-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "cert_government",
+          "malware_research",
+          "cybercrime_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "certgovaz",
+        "verifiedSourceId": "src_cert_gov_az_telegram",
+        "publisherReference": "https://www.cert.gov.az/en",
+        "ownershipVerifiedAt": "2026-07-23T19:34:33.000Z",
+        "activityVerifiedAt": "2026-07-23T19:34:33.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "malware campaigns",
+          "phishing",
+          "vulnerabilities",
+          "government advisories"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T19:34:33.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 5,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.cert.gov.az/en",
+          "legalBasisVerifiedAt": "2026-07-23T19:34:33.000Z",
+          "latestPublishedAt": "2026-07-22T10:02:41+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "gov:az:cert:telegram",
+        "publisher": {
+          "name": "Computer Emergency Response Center of Azerbaijan",
+          "country": "AZ",
+          "homepage": "https://www.cert.gov.az/en",
+          "trustBasis": "government CERT website links the exact public Telegram handle"
+        },
+        "tier": "tier_1",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public government communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public government channel used for defensive security research.",
+        "reliability": 0.95,
+        "intelligenceValue": 0.88,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "malware campaigns",
+            "phishing",
+            "vulnerabilities",
+            "government advisories"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "technology",
+            "finance",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Azerbaijan",
+            "South Caucasus"
+          ],
+          "countries": [
+            "Azerbaijan"
+          ],
+          "languages": [
+            "az"
+          ],
+          "queryPatterns": [
+            "zərərli",
+            "kiberhücum",
+            "boşluq",
+            "fişinq"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "high",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_uzcert_live_telegram",
+      "name": "UZCERT Live public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/uzcert_live",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.95,
+      "language": "uz",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public Uzbek government CERT advisories from the channel linked by uzcert.uz. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim submissions.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T19:34:33.000Z",
+        "approvedBy": "source-review:government-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "cert_government",
+          "malware_research",
+          "cybercrime_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "uzcert_live",
+        "verifiedSourceId": "src_uzcert_live_telegram",
+        "publisherReference": "https://uzcert.uz/",
+        "ownershipVerifiedAt": "2026-07-23T19:34:33.000Z",
+        "activityVerifiedAt": "2026-07-23T19:34:33.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "malware campaigns",
+          "actively exploited vulnerabilities",
+          "phishing",
+          "government advisories"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T19:34:33.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 4,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://uzcert.uz/",
+          "legalBasisVerifiedAt": "2026-07-23T19:34:33.000Z",
+          "latestPublishedAt": "2026-07-23T14:30:52+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "gov:uz:uzcert:telegram",
+        "publisher": {
+          "name": "UZCERT",
+          "country": "UZ",
+          "homepage": "https://uzcert.uz/",
+          "trustBasis": "national CERT website links the exact public Telegram handle"
+        },
+        "tier": "tier_1",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public government communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public government channel used for defensive security research.",
+        "reliability": 0.95,
+        "intelligenceValue": 0.88,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "malware campaigns",
+            "actively exploited vulnerabilities",
+            "phishing",
+            "government advisories"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "technology",
+            "finance",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Uzbekistan",
+            "Central Asia"
+          ],
+          "countries": [
+            "Uzbekistan"
+          ],
+          "languages": [
+            "uz"
+          ],
+          "queryPatterns": [
+            "zararli",
+            "kiberhujum",
+            "zaiflik",
+            "fishing"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "high",
+          "crawlCadenceSeconds": 900
         },
         "adapterCompatibility": [
           "telegram_public"

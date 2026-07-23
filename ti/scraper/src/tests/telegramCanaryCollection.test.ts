@@ -82,7 +82,7 @@ describe("public Telegram canary collection", () => {
     const families = new Set(report.accepted.flatMap((item: any) => item.metadata.sourceFamilies));
 
     expect(report).toMatchObject({ valid: true, errors: [], duplicates: [] });
-    expect(report.accepted).toHaveLength(10);
+    expect(report.accepted).toHaveLength(12);
     expect(report.accepted.every((item: any) => item.tenantId === undefined)).toBe(true);
     expect(report.accepted.map((item: any) => item.id)).toEqual(expect.arrayContaining([
       "src_group_ib_telegram",
@@ -94,9 +94,11 @@ describe("public Telegram canary collection", () => {
       "src_ctt_report_hub_telegram",
       "src_cert_agid_telegram",
       "src_solar_4rays_telegram",
-      "src_d3lab_telegram"
+      "src_d3lab_telegram",
+      "src_cert_gov_az_telegram",
+      "src_uzcert_live_telegram"
     ]));
-    expect(report.accepted.map((item: any) => item.language)).toEqual(expect.arrayContaining(["en", "it", "ru", "hi", "uk"]));
+    expect(report.accepted.map((item: any) => item.language)).toEqual(expect.arrayContaining(["en", "it", "ru", "hi", "uk", "az", "uz"]));
     expect([...families]).toEqual(expect.arrayContaining([
       "apt_research",
       "malware_research",
@@ -118,7 +120,9 @@ describe("public Telegram canary collection", () => {
     expect(candidates.map((item: any) => item.id)).toEqual([
       "src_cert_agid_telegram",
       "src_solar_4rays_telegram",
-      "src_d3lab_telegram"
+      "src_d3lab_telegram",
+      "src_cert_gov_az_telegram",
+      "src_uzcert_live_telegram"
     ]);
     expect(candidates.every((item: any) => item.countsAsCoverage !== true
       && item.metadata.productionCollection === false
@@ -142,8 +146,8 @@ describe("public Telegram canary collection", () => {
     const first = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: bundle.generatedAt });
     const restart = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: bundle.generatedAt });
 
-    expect(first).toMatchObject({ importedSourceCount: 10, updatedSourceCount: 0, activeSourceCount: 7, errors: [] });
-    expect(restart).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 10, activeSourceCount: 7, totalSourceCount: 10, errors: [] });
+    expect(first).toMatchObject({ importedSourceCount: 12, updatedSourceCount: 0, activeSourceCount: 7, errors: [] });
+    expect(restart).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 12, activeSourceCount: 7, totalSourceCount: 12, errors: [] });
   });
 
   test("backs off a public-preview source after a bounded upstream failure", async () => {
@@ -225,8 +229,8 @@ describe("public Telegram canary collection", () => {
     expect(isExecutableSource(store.getSource(sourceId)!)).toBe(true);
     expect(store.listSourceHealthObservations().filter((row: any) => row.sourceId === sourceId)).toHaveLength(2);
 
-    const restart = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: "2026-07-23T17:01:00.000Z" });
-    expect(restart).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 10, activeSourceCount: 8, totalSourceCount: 10, errors: [] });
+    const restart = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: "2026-07-23T19:35:00.000Z" });
+    expect(restart).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 12, activeSourceCount: 8, totalSourceCount: 12, errors: [] });
     expect(store.listSources().filter((item: any) => item.id === sourceId)).toHaveLength(1);
     expect(store.getSource(sourceId)).toMatchObject({
       status: "active",
