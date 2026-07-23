@@ -1,4 +1,6 @@
 import { afterEach, expect, mock, test } from 'bun:test'
+import { createHash } from 'node:crypto'
+import { canonicalJson } from '../src/utils/dwm/customerOutputSafety.ts'
 
 const queries: Array<{ sql: string, params: unknown[] }> = []
 const ledger: Array<Record<string, any>> = []
@@ -60,6 +62,18 @@ mock.module('#db', () => ({
                     created_at: '2026-07-23T10:00:00.000Z',
                     updated_at: '2026-07-23T10:00:00.000Z',
                 }],
+            }
+        }
+        if (sql.includes('AND status IN (\'delivered\', \'failed\')')) {
+            return {
+                rows: deliveries.filter(row =>
+                    row.org_id === params[0]
+                    && row.destination_id === params[1]
+                    && row.idempotency_key === params[2]
+                    && ['delivered', 'failed'].includes(row.status)
+                    && !row.dry_run
+                    && row.attempted_at
+                ).sort((left, right) => String(right.attempted_at).localeCompare(String(left.attempted_at))).slice(0, 1),
             }
         }
         if (sql.includes('AND status = \'delivered\'')) {
@@ -192,14 +206,14 @@ test('retries a failed report after persistence reload with the exact stored pay
         dry_run: false,
         endpoint_hint: 'receiver.example/...',
         endpoint_hash: 'endpoint_hash',
-        payload_hash: 'payload_hash',
+        payload_hash: payloadHash(canonicalJson(payload)),
         payload,
         response_status: 503,
         response_body: 'retry later',
         error: 'Webhook returned HTTP 503.',
         error_class: 'upstream_5xx',
         attempt_count: 1,
-        next_retry_at: '2026-07-23T10:01:00.000Z',
+        next_retry_at: '2020-07-23T10:01:00.000Z',
         idempotency_key: `dwm.alert.updated:org_1:destination_1:${exportChecksum}`,
         watchlist_id: null,
         watchlist_name: null,
@@ -219,7 +233,8 @@ test('retries a failed report after persistence reload with the exact stored pay
             return { status: 204, body: '' }
         })
         expect(result.ok).toBe(true)
-        expect(sentBodies).toEqual([JSON.stringify(payload)])
+        expect(sentBodies).toEqual([canonicalJson(payload)])
+        expect(insertedDelivery?.payload_hash).toBe(persistedDelivery.payload_hash)
         expect(insertedDelivery?.payload).toEqual(payload)
         expect(insertedDelivery?.owner_id).toBe('owner_1')
         expect(insertedDelivery?.idempotency_key).toBe(persistedDelivery.idempotency_key)
@@ -233,6 +248,88 @@ test('retries a failed report after persistence reload with the exact stored pay
         if (previousLive === undefined) delete process.env.DWM_WEBHOOK_LIVE_DELIVERY
         else process.env.DWM_WEBHOOK_LIVE_DELIVERY = previousLive
     }
+})
+
+test('blocks an exact persisted retry until its due timestamp without a network attempt', async () => {
+    const { retryDwmWebhookDelivery } = await import('../src/utils/dwm/webhooks.ts')
+    const nextRetryAt = '2099-07-23T10:01:00.000Z'
+    persistedDelivery = failedDeliveryFixture(nextRetryAt)
+    const previousLive = process.env.DWM_WEBHOOK_LIVE_DELIVERY
+    process.env.DWM_WEBHOOK_LIVE_DELIVERY = 'true'
+    let networkAttempts = 0
+    try {
+        const result = await retryDwmWebhookDelivery('member_2', 'org_1', persistedDelivery.id, async () => {
+            networkAttempts += 1
+            return { status: 204, body: '' }
+        })
+        expect(result).toMatchObject({
+            ok: false,
+            status: 409,
+            code: 'delivery_retry_not_ready',
+            nextRetryAt,
+        })
+        expect(networkAttempts).toBe(0)
+        expect(insertedDelivery).toBeUndefined()
+    } finally {
+        if (previousLive === undefined) delete process.env.DWM_WEBHOOK_LIVE_DELIVERY
+        else process.env.DWM_WEBHOOK_LIVE_DELIVERY = previousLive
+    }
+})
+
+test('rejects a persisted payload whose canonical body no longer matches its hash', async () => {
+    const { retryDwmWebhookDelivery } = await import('../src/utils/dwm/webhooks.ts')
+    persistedDelivery = { ...failedDeliveryFixture('2020-07-23T10:01:00.000Z'), payload_hash: 'payload_tampered' }
+    const previousLive = process.env.DWM_WEBHOOK_LIVE_DELIVERY
+    process.env.DWM_WEBHOOK_LIVE_DELIVERY = 'true'
+    let networkAttempts = 0
+    try {
+        const result = await retryDwmWebhookDelivery('member_2', 'org_1', persistedDelivery.id, async () => {
+            networkAttempts += 1
+            return { status: 204, body: '' }
+        })
+        expect(result).toMatchObject({ ok: false, status: 409, code: 'persisted_payload_invalid' })
+        expect(networkAttempts).toBe(0)
+    } finally {
+        if (previousLive === undefined) delete process.env.DWM_WEBHOOK_LIVE_DELIVERY
+        else process.env.DWM_WEBHOOK_LIVE_DELIVERY = previousLive
+    }
+})
+
+test('filters exact report receipts in PostgreSQL before the bounded delivery ledger limit', async () => {
+    const { listDwmWebhookDeliveries } = await import('../src/utils/dwm/webhooks.ts')
+    await listDwmWebhookDeliveries('member_2', 'org_1', {
+        alertId: 'alert_1',
+        reportCaseId: 'case_1',
+        reportExportChecksum: 'case_report_exact',
+    })
+    const query = queries.at(-1)
+    expect(query?.params).toEqual(['org_1', 'alert_1', 'case_1', 'case_report_exact'])
+    expect(query?.sql).toContain("metadata->>'reportValidation' AS report_validation")
+    expect(query?.sql).toContain("audit.report_validation = 'valid'")
+    expect(query?.sql.indexOf('deliveries.alert_id = $2')).toBeLessThan(query?.sql.indexOf('LIMIT 100') ?? -1)
+    expect(query?.sql.indexOf('audit.report_case_id = $3')).toBeLessThan(query?.sql.indexOf('LIMIT 100') ?? -1)
+    expect(query?.sql.indexOf('audit.report_export_checksum = $4')).toBeLessThan(query?.sql.indexOf('LIMIT 100') ?? -1)
+})
+
+test('exposes report identity from the persisted delivery audit projection', async () => {
+    const { buildDwmWebhookDeliveryLedger, toDwmWebhookDelivery } = await import('../src/utils/dwm/webhooks.ts')
+    const row = {
+        ...failedDeliveryFixture('2020-07-23T10:01:00.000Z'),
+        report_validation: 'valid',
+        report_export_checksum: 'case_report_exact',
+        report_case_id: 'case_1',
+    }
+    const ledger = buildDwmWebhookDeliveryLedger({
+        deliveries: [toDwmWebhookDelivery(row)],
+        filters: { reportCaseId: 'case_1', reportExportChecksum: 'case_report_exact' },
+    })
+    expect(ledger).toHaveLength(1)
+    expect(ledger[0]).toMatchObject({
+        reportValidation: 'valid',
+        reportExportChecksum: 'case_report_exact',
+        reportCaseId: 'case_1',
+        thirdPartyReport: true,
+    })
 })
 
 test('serializes the same org destination checksum across two admins', async () => {
@@ -317,4 +414,45 @@ function deliveryInput(dedupeKey: string, dryRun: boolean) {
             firstSeenAt: '2026-07-23T10:00:00.000Z',
         },
     }
+}
+
+function failedDeliveryFixture(nextRetryAt: string) {
+    const payload = {
+        schemaVersion: 'dwm.webhook.v1',
+        alert: { id: 'alert_1', title: 'Persisted delivery' },
+        delivery: { dedupeKey: 'retry_fixture' },
+    }
+    return {
+        id: 'failed_delivery_fixture',
+        destination_id: 'destination_1',
+        owner_id: 'owner_1',
+        org_id: 'org_1',
+        alert_id: 'alert_1',
+        event_type: 'dwm.alert.updated',
+        status: 'failed',
+        dry_run: false,
+        endpoint_hint: 'receiver.example/...',
+        endpoint_hash: 'endpoint_hash',
+        payload_hash: payloadHash(canonicalJson(payload)),
+        payload,
+        response_status: 503,
+        response_body: 'retry later',
+        error: 'Webhook returned HTTP 503.',
+        error_class: 'upstream_5xx',
+        attempt_count: 1,
+        next_retry_at: nextRetryAt,
+        idempotency_key: 'dwm.alert.updated:org_1:destination_1:retry_fixture',
+        watchlist_id: null,
+        watchlist_name: null,
+        route: 'customer_webhook',
+        case_path: '/dashboard/dwm/cases/case_1',
+        attempted_at: '2020-07-23T10:00:00.000Z',
+        completed_at: '2020-07-23T10:00:01.000Z',
+        delivered_at: null,
+        created_at: '2020-07-23T10:00:00.000Z',
+    }
+}
+
+function payloadHash(body: string) {
+    return `payload_${createHash('sha256').update(body).digest('hex').slice(0, 32)}`
 }

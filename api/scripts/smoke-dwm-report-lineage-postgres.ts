@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { readFile, unlink, writeFile } from 'node:fs/promises'
 import { queryOnce } from '../src/utils/db.ts'
 import ensureSchema from '../src/utils/db/ensureSchema.ts'
+import { canonicalJson } from '../src/utils/dwm/customerOutputSafety.ts'
 import {
     computeOutboundThirdPartyReportChecksum,
     deliverDwmAlertNotification,
@@ -14,6 +17,7 @@ const ownerId = 'report_pg_owner'
 const adminId = 'report_pg_admin'
 const orgId = 'report_pg_org'
 const destinationId = 'report_pg_destination'
+const receiverObservationPath = '/tmp/hanasand-reporting-receiver-observation.json'
 
 assert.equal(process.env.DB, database, `Refusing to run outside the disposable ${database} database.`)
 assert.ok(['exercise', 'verify', 'cleanup'].includes(phase), 'Usage: bun scripts/smoke-dwm-report-lineage-postgres.ts exercise|verify|cleanup')
@@ -68,14 +72,22 @@ async function exercise() {
     assert.equal(budgetRows.filter(row => row.attempted_at).length, 5)
     assert.equal(budgetRows.filter(row => row.status === 'skipped').length, 1)
 
-    const [failed] = await deliverDwmAlertNotification(ownerId, deliveryInput('restart', false), async () => ({
-        status: 503,
-        body: 'receiver unavailable',
-    }))
+    let originalReceiverBody = ''
+    const [failed] = await deliverDwmAlertNotification(ownerId, deliveryInput('restart', false), async (_endpoint, body) => {
+        originalReceiverBody = body
+        return { status: 503, body: 'receiver unavailable' }
+    })
     assert.equal(failed.status, 'failed')
     assert.equal(failed.attemptCount, 1)
     assert.ok(failed.id)
     assert.ok(failed.idempotencyKey.includes(failed.payload.report.exportChecksum))
+    assert.equal(failed.payloadHash, payloadHash(originalReceiverBody))
+    await writeFile(receiverObservationPath, JSON.stringify({
+        body: originalReceiverBody,
+        payloadHash: failed.payloadHash,
+        idempotencyKey: failed.idempotencyKey,
+        deliveryId: failed.id,
+    }))
 
     console.log(JSON.stringify({
         phase,
@@ -86,7 +98,8 @@ async function exercise() {
         liveBudgetAttempts: budgetRows.filter(row => row.attempted_at).length,
         blockedAfterBudget: budgetStatuses.at(-1),
         persistedFailedDeliveryId: failed.id,
-        next: `Stop and restart PostgreSQL, then rerun this script with DB=${database} and phase verify.`,
+        nextRetryAt: failed.nextRetryAt,
+        next: `Stop and restart PostgreSQL, then rerun this script with DB=${database} and phase verify; verification waits until the persisted retry due time.`,
     }, null, 2))
 }
 
@@ -103,8 +116,33 @@ async function verifyAfterRestart() {
     `, [orgId])
     const prior = priorResult.rows[0]
     assert.ok(prior, 'Exercise phase did not persist the failed report delivery.')
-    const storedPayload = JSON.stringify(prior.payload)
+    const receiverObservation = JSON.parse(await readFile(receiverObservationPath, 'utf8')) as {
+        body: string
+        payloadHash: string
+        idempotencyKey: string
+        deliveryId: string
+    }
+    const storedPayload = canonicalJson(prior.payload)
     const storedIdempotencyKey = prior.idempotency_key
+    assert.equal(prior.id, receiverObservation.deliveryId)
+    assert.equal(storedPayload, receiverObservation.body)
+    assert.equal(prior.payload_hash, receiverObservation.payloadHash)
+    assert.equal(prior.idempotency_key, receiverObservation.idempotencyKey)
+    const retryDelayMs = Math.max(0, Date.parse(prior.next_retry_at) - Date.now())
+    let prematureRetryBlocked = retryDelayMs === 0
+    if (retryDelayMs) {
+        let prematureNetworkAttempts = 0
+        const premature = await retryDwmWebhookDelivery(adminId, orgId, prior.id, async () => {
+            prematureNetworkAttempts += 1
+            return { status: 204, body: 'must not be sent before due' }
+        })
+        assert.equal(premature.ok, false)
+        assert.equal(premature.code, 'delivery_retry_not_ready')
+        assert.equal(premature.nextRetryAt, prior.next_retry_at)
+        assert.equal(prematureNetworkAttempts, 0)
+        prematureRetryBlocked = true
+    }
+    if (retryDelayMs) await Bun.sleep(retryDelayMs + 25)
     const sentBodies: string[] = []
 
     const retried = await retryDwmWebhookDelivery(adminId, orgId, prior.id, async (_endpoint, body) => {
@@ -112,7 +150,8 @@ async function verifyAfterRestart() {
         return { status: 204, body: 'accepted after restart' }
     })
     assert.equal(retried.ok, true, JSON.stringify(retried))
-    assert.deepEqual(sentBodies, [storedPayload])
+    assert.deepEqual(sentBodies, [receiverObservation.body])
+    assert.equal(retried.delivery.payloadHash, receiverObservation.payloadHash)
     assert.equal(retried.delivery.idempotencyKey, storedIdempotencyKey)
     assert.equal(retried.delivery.ownerId, ownerId)
     assert.equal(retried.delivery.auditActorId, adminId)
@@ -123,7 +162,8 @@ async function verifyAfterRestart() {
     assert.equal(restartRows.filter(row => row.attempted_at).length, 2)
     assert.equal(restartRows.filter(row => row.status === 'delivered').length, 1)
     assert.equal(new Set(restartRows.map(row => row.idempotency_key)).size, 1)
-    assert.ok(restartRows.every(row => JSON.stringify(row.payload) === storedPayload))
+    assert.ok(restartRows.every(row => canonicalJson(row.payload) === receiverObservation.body))
+    assert.ok(restartRows.every(row => row.payload_hash === receiverObservation.payloadHash))
 
     const budgetRows = await deliveryRows('report_pg_alert_budget')
     assert.equal(budgetRows.filter(row => row.dry_run).length, 3)
@@ -139,7 +179,9 @@ async function verifyAfterRestart() {
         restartReconnect: true,
         retriedDeliveryId: retried.delivery.id,
         priorDeliveryId: prior.id,
-        exactStoredPayload: sentBodies[0] === storedPayload,
+        exactOriginalReceiverBody: sentBodies[0] === receiverObservation.body,
+        exactOriginalReceiverPayloadHash: retried.delivery.payloadHash === receiverObservation.payloadHash,
+        prematureRetryBlocked,
         exactIdempotencyLineage: retried.delivery.idempotencyKey === storedIdempotencyKey,
         retryActorAuditOnly: retried.delivery.ownerId === ownerId && retried.delivery.auditActorId === adminId,
         concurrentActualAttempts: concurrentRows.filter(row => row.attempted_at).length,
@@ -243,6 +285,7 @@ async function deliveryRows(alertId: string) {
 }
 
 async function cleanup() {
+    await unlink(receiverObservationPath).catch(() => {})
     await queryOnce('DELETE FROM dwm_webhook_audit_events WHERE org_id = $1', [orgId]).catch(() => {})
     await queryOnce('DELETE FROM dwm_webhook_deliveries WHERE org_id = $1', [orgId]).catch(() => {})
     await queryOnce('DELETE FROM dwm_webhook_destinations WHERE org_id = $1', [orgId]).catch(() => {})
@@ -251,4 +294,8 @@ async function cleanup() {
     await queryOnce('DELETE FROM tokens WHERE id IN ($1, $2)', [ownerId, adminId]).catch(() => {})
     await queryOnce('DELETE FROM users WHERE id IN ($1, $2)', [ownerId, adminId]).catch(() => {})
     if (phase === 'cleanup') console.log(JSON.stringify({ phase, database, cleaned: true }, null, 2))
+}
+
+function payloadHash(body: string) {
+    return `payload_${createHash('sha256').update(body).digest('hex').slice(0, 32)}`
 }

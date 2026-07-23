@@ -164,6 +164,25 @@ describe("authenticated third-party reporting", () => {
     store.saveDwmAlert(scopedAlert);
 
     store.saveDwmAlert({
+      ...scopedAlert,
+      evidence: scopedAlert.evidence.map((item: any) => item.id === "evidence_public"
+        ? {
+            ...item,
+            captureId: "capture_sensitive",
+            provenance: {
+              ...item.provenance,
+              sourceId: "conflicting_source",
+              contentHash: "conflicting_hash"
+            }
+          }
+        : item)
+    });
+    const conflictingEvidenceProvenance = await report(options, "json", ["evidence_public"]);
+    expect(conflictingEvidenceProvenance.status).toBe(409);
+    expect((await conflictingEvidenceProvenance.json() as any).error.code).toBe("report_evidence_provenance_invalid");
+    store.saveDwmAlert(scopedAlert);
+
+    store.saveDwmAlert({
       ...store.getDwmAlert("alert_report"),
       evidence: Array.from({ length: 26 }, (_, index) => ({
         id: `evidence_${index}`,

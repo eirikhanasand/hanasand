@@ -830,16 +830,21 @@ function exportThirdPartyCaseReport(caseRecord: AnalystCase, options: ApiServerO
 
 function reportCaptureForEvidence(item: any, caseRecord: AnalystCase, options: ApiServerOptions) {
   const provenance = item?.provenance && typeof item.provenance === "object" ? item.provenance : {};
-  const captureId = String(provenance.captureId ?? item.captureId ?? "").trim();
-  if (!captureId) return undefined;
+  const captureId = exactEvidenceReference(item.captureId, provenance.captureId);
+  const sourceId = exactEvidenceReference(item.sourceId, provenance.sourceId);
+  const contentHash = exactEvidenceReference(item.contentHash, provenance.contentHash);
+  if (!captureId || !sourceId || !contentHash) return undefined;
   const capture = options.store.listCaptures().find((row: any) => row.id === captureId);
   if (!capture || capture.tenantId !== caseRecord.tenantId) return undefined;
-  const sourceId = String(item.sourceId ?? provenance.sourceId ?? "").trim();
-  const contentHash = String(item.contentHash ?? provenance.contentHash ?? "").trim();
-  if (!sourceId || sourceId !== capture.sourceId || !contentHash || contentHash !== capture.contentHash) return undefined;
+  if (sourceId !== capture.sourceId || contentHash !== capture.contentHash) return undefined;
   const source = options.store.listSources().find((row: any) => row.id === sourceId);
   if (!source || source.tenantId !== caseRecord.tenantId) return undefined;
   return capture;
+}
+
+function exactEvidenceReference(...values: unknown[]) {
+  const distinct = [...new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean))];
+  return distinct.length === 1 ? distinct[0] : undefined;
 }
 
 function buildThirdPartyJsonCaseExport(caseRecord: AnalystCase, alert: any, organization: unknown, selectedEvidence: any[], generatedAt: string, reportPolicy: any) {

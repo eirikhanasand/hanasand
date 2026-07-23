@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
             organizationId,
             orgId: organizationId,
             tenantId: organizationId,
+            destinationId: reportRequest.value?.destinationId || clean(body.destinationId),
             dryRun: body.dryRun === true,
             live: body.live === true || body.dryRun !== true,
         }),
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
 }
 
 function thirdPartyReportRequest(body: Record<string, unknown>): {
-    value?: { caseId: string, evidenceIds: string[], format: 'json' | 'stix' }
+    value?: { caseId: string, evidenceIds: string[], format: 'json' | 'stix', destinationId: string }
     error?: { code: string, message: string, status: number }
 } {
     const caseId = clean(body.caseId)
@@ -94,8 +95,10 @@ function thirdPartyReportRequest(body: Record<string, unknown>): {
     const evidenceIds = requested.sort()
     if (!evidenceIds.length) return { error: { code: 'report_evidence_required', message: 'Select at least one evidence row before delivery.', status: 400 } }
     if (evidenceIds.length > 25) return { error: { code: 'report_evidence_limit', message: 'A report may contain at most 25 evidence rows.', status: 413 } }
+    const destinationId = clean(body.destinationId)
+    if (!destinationId) return { error: { code: 'report_destination_required', message: 'Select one configured destination for third-party report delivery.', status: 400 } }
     const format = body.reportFormat === 'json' ? 'json' : 'stix'
-    return { value: { caseId, evidenceIds, format } }
+    return { value: { caseId, evidenceIds, format, destinationId } }
 }
 
 function scopedUrl(url: string, organizationId: string) {

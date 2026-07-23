@@ -63,6 +63,9 @@ export type DwmWebhookDeliveryRow = {
     audit_event_id?: string | null
     audit_action?: string | null
     audit_actor_id?: string | null
+    report_validation?: string | null
+    report_export_checksum?: string | null
+    report_case_id?: string | null
 }
 
 export type DwmWebhookAuditRow = {
@@ -314,6 +317,8 @@ export type DwmWebhookDeliveryEvidenceFilters = {
     timeTo?: unknown
     retryState?: unknown
     actorId?: unknown
+    reportCaseId?: unknown
+    reportExportChecksum?: unknown
 }
 
 export type DwmWebhookDeliveryAttemptState = 'queued' | 'sent' | 'failed' | 'skipped'
@@ -440,6 +445,9 @@ export function toDwmWebhookDelivery(row: DwmWebhookDeliveryRow) {
         auditEventId: row.audit_event_id ?? null,
         auditAction: row.audit_action ?? null,
         auditActorId: row.audit_actor_id ?? null,
+        reportValidation: row.report_validation ?? null,
+        reportExportChecksum: row.report_export_checksum ?? null,
+        reportCaseId: row.report_case_id ?? null,
     }
     return {
         ...delivery,
@@ -653,25 +661,44 @@ export async function archiveDwmWebhookDestination(ownerId: string, id: string) 
     return toDwmWebhookDestination(destination)
 }
 
-export async function listDwmWebhookDeliveries(ownerId: string, orgId?: string) {
+export async function listDwmWebhookDeliveries(ownerId: string, orgId?: string, filters: {
+    alertId?: string
+    reportCaseId?: string
+    reportExportChecksum?: string
+} = {}) {
+    const alertId = clean(filters.alertId) || null
+    const reportCaseId = clean(filters.reportCaseId) || null
+    const reportExportChecksum = clean(filters.reportExportChecksum) || null
     if (orgId && orgId !== ownerId) {
         const result = await run(`
             SELECT deliveries.*,
                    audit.id AS audit_event_id,
                    audit.action AS audit_action,
-                   audit.actor_id AS audit_actor_id
+                   audit.actor_id AS audit_actor_id,
+                   audit.report_validation,
+                   audit.report_export_checksum,
+                   audit.report_case_id
             FROM dwm_webhook_deliveries deliveries
             LEFT JOIN LATERAL (
-                SELECT id, action, actor_id
+                SELECT id, action, actor_id,
+                       metadata->>'reportValidation' AS report_validation,
+                       metadata->>'reportExportChecksum' AS report_export_checksum,
+                       metadata->>'reportCaseId' AS report_case_id
                 FROM dwm_webhook_audit_events
                 WHERE delivery_id = deliveries.id
-                ORDER BY created_at DESC
+                ORDER BY (metadata->>'reportValidation' = 'valid') DESC NULLS LAST, created_at DESC
                 LIMIT 1
             ) audit ON TRUE
             WHERE deliveries.org_id = $1
+              AND ($2::TEXT IS NULL OR deliveries.alert_id = $2)
+              AND ($3::TEXT IS NULL OR (
+                  audit.report_validation = 'valid'
+                  AND audit.report_case_id = $3
+              ))
+              AND ($4::TEXT IS NULL OR audit.report_export_checksum = $4)
             ORDER BY deliveries.created_at DESC
             LIMIT 100
-        `, [orgId])
+        `, [orgId, alertId, reportCaseId, reportExportChecksum])
 
         return (result.rows as DwmWebhookDeliveryRow[]).map(toDwmWebhookDelivery)
     }
@@ -680,20 +707,32 @@ export async function listDwmWebhookDeliveries(ownerId: string, orgId?: string) 
         SELECT deliveries.*,
                audit.id AS audit_event_id,
                audit.action AS audit_action,
-               audit.actor_id AS audit_actor_id
+               audit.actor_id AS audit_actor_id,
+               audit.report_validation,
+               audit.report_export_checksum,
+               audit.report_case_id
         FROM dwm_webhook_deliveries deliveries
         LEFT JOIN LATERAL (
-            SELECT id, action, actor_id
+            SELECT id, action, actor_id,
+                   metadata->>'reportValidation' AS report_validation,
+                   metadata->>'reportExportChecksum' AS report_export_checksum,
+                   metadata->>'reportCaseId' AS report_case_id
             FROM dwm_webhook_audit_events
             WHERE delivery_id = deliveries.id
-            ORDER BY created_at DESC
+            ORDER BY (metadata->>'reportValidation' = 'valid') DESC NULLS LAST, created_at DESC
             LIMIT 1
         ) audit ON TRUE
         WHERE deliveries.owner_id = $1
           AND ($2::TEXT IS NULL OR deliveries.org_id = $2)
+          AND ($3::TEXT IS NULL OR deliveries.alert_id = $3)
+          AND ($4::TEXT IS NULL OR (
+              audit.report_validation = 'valid'
+              AND audit.report_case_id = $4
+          ))
+          AND ($5::TEXT IS NULL OR audit.report_export_checksum = $5)
         ORDER BY deliveries.created_at DESC
         LIMIT 100
-    `, [ownerId, orgId || null])
+    `, [ownerId, orgId || null, alertId, reportCaseId, reportExportChecksum])
 
     return (result.rows as DwmWebhookDeliveryRow[]).map(toDwmWebhookDelivery)
 }
@@ -748,6 +787,8 @@ export function buildDwmWebhookDeliveryEvidence({
         timeTo: clean(filters.timeTo),
         retryState: clean(filters.retryState),
         actorId: clean(filters.actorId),
+        reportCaseId: clean(filters.reportCaseId),
+        reportExportChecksum: clean(filters.reportExportChecksum),
     }
     const auditByDelivery = new Map<string, DwmWebhookAuditPublic>()
     for (const audit of auditEvents) {
@@ -809,9 +850,15 @@ export function buildDwmWebhookDeliveryEvidence({
                     summary: delivery.responseBody ? redactDeliveryEvidenceText(truncate(delivery.responseBody, 500)) : null,
                 },
                 error: delivery.error ? redactDeliveryEvidenceText(truncate(delivery.error, 500)) : null,
-                auditEventId: audit?.id || null,
-                auditAction: audit?.action || null,
-                actorId: audit?.actorId || null,
+                auditEventId: audit?.id || delivery.auditEventId || null,
+                auditAction: audit?.action || delivery.auditAction || null,
+                actorId: audit?.actorId || delivery.auditActorId || null,
+                reportValidation: delivery.reportValidation,
+                reportExportChecksum: delivery.reportExportChecksum,
+                reportCaseId: delivery.reportCaseId,
+                thirdPartyReport: delivery.reportValidation === 'valid'
+                    && Boolean(delivery.reportExportChecksum)
+                    && Boolean(delivery.reportCaseId),
                 retryState,
             }
         })
@@ -829,6 +876,8 @@ export function buildDwmWebhookDeliveryEvidence({
             if (normalizedFilters.status && evidence.status !== normalizedFilters.status && deliveryAttemptState(evidence.status, evidence.dryRun) !== normalizedFilters.status) return false
             if (normalizedFilters.retryState && evidence.retryState !== normalizedFilters.retryState) return false
             if (normalizedFilters.actorId && evidence.actorId !== normalizedFilters.actorId) return false
+            if (normalizedFilters.reportCaseId && evidence.reportCaseId !== normalizedFilters.reportCaseId) return false
+            if (normalizedFilters.reportExportChecksum && evidence.reportExportChecksum !== normalizedFilters.reportExportChecksum) return false
             if (normalizedFilters.timeFrom && String(evidence.attemptedAt || evidence.createdAt).localeCompare(normalizedFilters.timeFrom) < 0) return false
             if (normalizedFilters.timeTo && String(evidence.attemptedAt || evidence.createdAt).localeCompare(normalizedFilters.timeTo) > 0) return false
             return true
@@ -918,6 +967,10 @@ export function buildDwmWebhookDeliveryLedger({
             auditEventId: item.auditEventId,
             auditAction: item.auditAction,
             actorId: item.actorId,
+            reportValidation: item.reportValidation,
+            reportExportChecksum: item.reportExportChecksum,
+            reportCaseId: item.reportCaseId,
+            thirdPartyReport: item.thirdPartyReport,
         }
     })
 }
@@ -7040,8 +7093,9 @@ export async function retryDwmWebhookDelivery(
     if (!prior) return { ok: false as const, status: 404, code: 'delivery_not_found', error: 'Delivery not found for this organization.' }
     if (prior.status !== 'failed' || prior.dry_run) return { ok: false as const, status: 409, code: 'delivery_retry_not_eligible', error: 'Only a failed live delivery can be retried.' }
     if (!prior.destination_id) return { ok: false as const, status: 409, code: 'delivery_destination_missing', error: 'The persisted delivery has no destination.' }
+    const destinationId = prior.destination_id
 
-    const destination = await loadDwmWebhookDestination(ownerId, prior.destination_id)
+    const destination = await loadDwmWebhookDestination(ownerId, destinationId)
     if (!destination || destination.org_id !== orgId || destination.status !== 'active') {
         return { ok: false as const, status: 409, code: 'delivery_destination_unavailable', error: 'The persisted delivery destination is unavailable.' }
     }
@@ -7049,8 +7103,12 @@ export async function retryDwmWebhookDelivery(
         return { ok: false as const, status: 503, code: 'live_delivery_disabled', error: 'Live webhook delivery is disabled.' }
     }
     return withDatabaseAdvisoryLock(`dwm-webhook-delivery:${prior.idempotency_key}`, async () => {
+        const latest = await loadLatestDwmWebhookDeliveryAttempt(orgId, destinationId, prior.idempotency_key)
+        if (!latest || latest.id !== prior.id) {
+            return { ok: false as const, status: 409, code: 'delivery_retry_stale', error: 'Retry the latest failed attempt for this delivery lineage.' }
+        }
         const lineageOwnerId = prior.owner_id
-        const attemptCount = await countDwmWebhookDeliveryAttempts(orgId, prior.destination_id, prior.idempotency_key)
+        const attemptCount = await countDwmWebhookDeliveryAttempts(orgId, destinationId, prior.idempotency_key)
         if (attemptCount >= MAX_DWM_WEBHOOK_DELIVERY_ATTEMPTS) {
             return { ok: false as const, status: 409, code: 'delivery_retry_limit', error: `Delivery retry is limited to ${MAX_DWM_WEBHOOK_DELIVERY_ATTEMPTS} total attempts.` }
         }
@@ -7063,11 +7121,27 @@ export async function retryDwmWebhookDelivery(
             attemptCount: attemptCount || 1,
         })
         if (!priorRetry.retryable) return { ok: false as const, status: 409, code: 'delivery_retry_not_eligible', error: 'The persisted delivery failure is not retryable.' }
+        const persistedRetryAt = prior.next_retry_at && Number.isFinite(Date.parse(prior.next_retry_at)) ? prior.next_retry_at : null
+        const nextRetryAt = persistedRetryAt || priorRetry.nextRetryAt
+        if (nextRetryAt && Date.parse(nextRetryAt) > Date.now()) {
+            return {
+                ok: false as const,
+                status: 409,
+                code: 'delivery_retry_not_ready',
+                error: `This delivery can be retried at ${nextRetryAt}.`,
+                nextRetryAt,
+            }
+        }
 
         const delivered = await findDeliveredDwmWebhookDelivery(orgId, destination.id, prior.idempotency_key)
         if (delivered) return { ok: false as const, status: 409, code: 'delivery_already_delivered', error: 'This exact idempotency lineage already has a delivered attempt.' }
 
         const payload = prior.payload
+        const payloadBody = canonicalJson(payload)
+        const payloadHash = hashValue('payload', payloadBody)
+        if (payloadHash !== prior.payload_hash) {
+            return { ok: false as const, status: 409, code: 'persisted_payload_invalid', error: 'The persisted delivery payload does not match its stored hash.' }
+        }
         const persistedReport = reportFromPersistedPayload(payload)
         if (persistedReport) {
             const checksum = clean(persistedReport.exportChecksum)
@@ -7083,8 +7157,6 @@ export async function retryDwmWebhookDelivery(
         }
 
         const attemptedAt = new Date().toISOString()
-        const payloadBody = JSON.stringify(payload)
-        const payloadHash = hashValue('payload', payloadBody)
         let responseStatus: number | null = null
         let responseBody: string | null = null
         let error: string | null
@@ -7128,7 +7200,7 @@ export async function retryDwmWebhookDelivery(
             prior.endpoint_hint,
             prior.endpoint_hash,
             payloadHash,
-            JSON.stringify(payload),
+            payloadBody,
             responseStatus,
             responseBody,
             error,
@@ -8464,9 +8536,10 @@ async function deliverToDwmWebhookDestination({
 }) {
     const deliveryId = crypto.randomUUID()
     const payload = buildDwmAlertDeliveryPayload({ destination, alert, eventType, deliveryId })
+    const payloadBody = canonicalJson(payload)
     const normalizedAlert = normalizeAlert(alert)
     const watchlist = normalizeWatchlist(alert.watchlist)
-    const payloadHash = hashValue('payload', JSON.stringify(payload))
+    const payloadHash = hashValue('payload', payloadBody)
     const liveRequested = live && !dryRun && process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true'
     let status: DwmWebhookDeliveryRow['status'] = dryRun ? 'dry_run' : 'skipped'
     let responseStatus: number | null = null
@@ -8488,7 +8561,7 @@ async function deliverToDwmWebhookDestination({
     if (shouldSendLive) {
         try {
             const endpoint = decryptWebhookSecret(destination.endpoint_encrypted)
-            const response = await sender(endpoint, JSON.stringify(payload))
+            const response = await sender(endpoint, payloadBody)
             responseStatus = response.status
             responseBody = sanitizeDwmWebhookDeliveryDiagnostic(response.body)
             status = response.status >= 200 && response.status < 300 ? 'delivered' : 'failed'
@@ -8545,7 +8618,7 @@ async function deliverToDwmWebhookDestination({
         destination.endpoint_hint,
         destination.endpoint_hash,
         payloadHash,
-        JSON.stringify(payload),
+        payloadBody,
         responseStatus,
         responseBody,
         error,
@@ -9060,6 +9133,27 @@ async function findDeliveredDwmWebhookDelivery(
           AND dry_run = FALSE
           AND attempted_at IS NOT NULL
         ORDER BY attempted_at DESC
+        LIMIT 1
+    `, [orgId, destinationId, idempotencyKey])
+
+    return (result.rows as DwmWebhookDeliveryRow[])[0] || null
+}
+
+async function loadLatestDwmWebhookDeliveryAttempt(
+    orgId: string,
+    destinationId: string,
+    idempotencyKey: string
+) {
+    const result = await run(`
+        SELECT *
+        FROM dwm_webhook_deliveries
+        WHERE org_id = $1
+          AND destination_id = $2
+          AND idempotency_key = $3
+          AND dry_run = FALSE
+          AND attempted_at IS NOT NULL
+          AND status IN ('delivered', 'failed')
+        ORDER BY attempted_at DESC, created_at DESC
         LIMIT 1
     `, [orgId, destinationId, idempotencyKey])
 

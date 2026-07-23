@@ -177,6 +177,18 @@ type DeliveryRow = {
     retryCount?: number | null
     nextRetryAt?: string | null
     retryable?: boolean
+    reportValidation?: string
+    reportExportChecksum?: string
+    reportCaseId?: string
+    thirdPartyReport?: boolean
+}
+
+type WebhookDestination = {
+    id: string
+    name?: string
+    kind?: string
+    endpointHint?: string
+    status?: string
 }
 
 type TimelineRow = {
@@ -202,8 +214,10 @@ type LoadState = {
     loading: boolean
     error?: string
     deliveryError?: string
+    destinationError?: string
     detail?: CaseDetail
     exportPayload?: CaseExport
+    destinations?: WebhookDestination[]
 }
 
 const primaryActions = ['review', 'assign', 'escalate', 'suppress', 'false_positive', 'close', 'reopen', 'note']
@@ -227,6 +241,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     const [note, setNote] = useState('')
     const [owner, setOwner] = useState(initialDetail?.case?.assignedOwner || initialDetail?.workflowState?.assignedOwner || '')
     const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([])
+    const [selectedDestinationId, setSelectedDestinationId] = useState('')
 
     const caseRecord = state.detail?.case
     const alert = state.detail?.alert
@@ -250,12 +265,23 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
             const scopedOrganizationId = resolvedOrganizationId(detailPayload.case, organizationId)
             const scopedAlertId = resolvedAlertId(detailPayload.case, detailPayload.alertContext, alertId)
             let deliveryError: string | undefined
+            let destinationError: string | undefined
             let deliveries: DeliveryRow[] = []
+            let destinations: WebhookDestination[] = []
             if (scopedOrganizationId && scopedAlertId) {
-                const deliveryResponse = await fetch(`/api/dwm/webhooks/deliveries${queryString({ organizationId: scopedOrganizationId, alertId: scopedAlertId })}`, { cache: 'no-store' })
+                const [deliveryResponse, destinationResponse] = await Promise.all([
+                    fetch(`/api/dwm/webhooks/deliveries${queryString({ organizationId: scopedOrganizationId, alertId: scopedAlertId, reportCaseId: caseId })}`, { cache: 'no-store' }),
+                    fetch(`/api/organizations/${encodeURIComponent(scopedOrganizationId)}/webhooks`, { cache: 'no-store' }),
+                ])
                 const deliveryPayload = await deliveryResponse.json().catch(() => ({}))
-                if (deliveryResponse.ok) deliveries = deliveryRowsFromApi(deliveryPayload)
+                const destinationPayload = await destinationResponse.json().catch(() => ({}))
+                if (deliveryResponse.ok) {
+                    deliveries = deliveryRowsFromApi(deliveryPayload)
+                        .filter(delivery => delivery.thirdPartyReport === true && delivery.reportCaseId === caseId)
+                }
                 else deliveryError = deliveryPayload.error?.message || deliveryPayload.error || 'Canonical delivery history is unavailable.'
+                if (destinationResponse.ok) destinations = destinationRowsFromApi(destinationPayload)
+                else destinationError = destinationPayload.error?.message || destinationPayload.error || 'Configured destinations are unavailable.'
             }
             const orderedDeliveries = orderCaseDeliveries(deliveries)
             const detail = {
@@ -264,9 +290,10 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                 deliveryContext: deliveryContextFromApi(orderedDeliveries),
             }
             const canonicalExport = exportResponse.ok ? { ...exportPayload, deliveryEvidence: orderedDeliveries } : undefined
-            setState({ loading: false, detail, exportPayload: canonicalExport, deliveryError })
+            setState({ loading: false, detail, exportPayload: canonicalExport, deliveryError, destinationError, destinations })
             const availableIds = (detailPayload.evidence || exportPayload.evidenceSummary || []).map((row: EvidenceRow) => row.id).filter(Boolean).slice(0, DWM_CASE_REPORT_MAX_EVIDENCE) as string[]
             setSelectedEvidenceIds(previous => previous.filter(id => availableIds.includes(id)))
+            setSelectedDestinationId(previous => destinations.some(destination => destination.id === previous) ? previous : '')
             const nextOwner = detailPayload.case?.assignedOwner || detailPayload.workflowState?.assignedOwner || ''
             setOwner(nextOwner)
         } catch (error) {
@@ -350,10 +377,19 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
     async function sendWebhook(dryRun: boolean) {
         const targetAlertId = resolvedAlertId(caseRecord, alertContext, alertId)
-        const retryDeliveryId = !dryRun && latestDelivery?.status === 'failed' && latestDelivery.retryable === true ? latestDelivery.id : undefined
+        const retryBlockedReason = !dryRun ? deliveryRetryBlockedReason(latestDelivery) : undefined
+        const retryDeliveryId = !dryRun && latestDelivery?.status === 'failed' && latestDelivery.retryable === true && !retryBlockedReason ? latestDelivery.id : undefined
         const blockedReason = webhookActionBlockedReason(state.detail, targetAlertId)
         if (blockedReason) {
             setMessage({ ok: false, text: blockedReason })
+            return
+        }
+        if (retryBlockedReason) {
+            setMessage({ ok: false, text: retryBlockedReason })
+            return
+        }
+        if (!retryDeliveryId && !selectedDestinationId) {
+            setMessage({ ok: false, text: state.destinationError || 'Select one configured external receiver before delivery.' })
             return
         }
         if (!retryDeliveryId && !selectedEvidenceIds.length) {
@@ -376,7 +412,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                     caseId,
                     evidenceIds: selectedEvidenceIds,
                     reportFormat: 'stix',
-                    limit: 1,
+                    destinationId: selectedDestinationId,
                     dryRun,
                 }),
             })
@@ -419,6 +455,10 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     const deliveries = orderCaseDeliveries(state.detail.deliveries || state.exportPayload?.deliveryEvidence || [])
     const latestDelivery = deliveries[0]
     const latestDeliveryRetryable = latestDelivery?.status === 'failed' && latestDelivery.retryable === true
+    const retryBlockedReason = latestDeliveryRetryable ? deliveryRetryBlockedReason(latestDelivery) : undefined
+    const destinationBlockedReason = !latestDeliveryRetryable && !selectedDestinationId
+        ? state.destinationError || (state.destinations?.length ? 'Select one configured external receiver before delivery.' : 'Webhook delivery needs an active customer destination before it can be tested or sent.')
+        : undefined
     const readOnly = Boolean(state.detail.access?.readOnly || state.detail.workflowActionPolicy?.summary?.readOnly)
     const scopedTenantId = resolvedTenantId(caseRecord, tenantId)
     const scopedOrganizationId = resolvedOrganizationId(caseRecord, organizationId)
@@ -430,7 +470,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
         ? `/organizations${queryString({ organizationId: scopedOrganizationId, caseId: caseRecord.id, alertId: scopedAlertId, destinationId: latestDelivery?.webhookDestinationId || latestDelivery?.destinationId, focus: 'destinations' })}`
         : '/organizations?focus=destinations'
     const actionBlockers = actionUnavailableReasons(actions, readOnly)
-    const webhookBlockedReason = webhookActionBlockedReason(state.detail, scopedAlertId)
+    const webhookBlockedReason = webhookActionBlockedReason(state.detail, scopedAlertId) || retryBlockedReason || destinationBlockedReason
     const webhookActionDisabled = Boolean(readOnly || busy !== null || webhookBlockedReason)
     const reportJsonHref = thirdPartyReportHref(caseRecord.id, scopedTenantId, scopedOrganizationId, scopedAlertId, selectedEvidenceIds, 'json')
     const reportStixHref = thirdPartyReportHref(caseRecord.id, scopedTenantId, scopedOrganizationId, scopedAlertId, selectedEvidenceIds, 'stix')
@@ -587,6 +627,16 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
                         <Panel title='Third-party report delivery' action={state.detail.deliveryContext?.retryable ? 'retryable' : latestDelivery?.status || 'pending'}>
                             {state.deliveryError ? <p className='mb-3 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-xs text-ui-danger'>{state.deliveryError}</p> : null}
+                            {state.destinationError ? <p className='mb-3 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-xs text-ui-danger'>{state.destinationError}</p> : null}
+                            <label className='mb-3 grid gap-1 text-xs font-semibold text-ui-muted'>
+                                External receiver
+                                <select value={selectedDestinationId} onChange={event => setSelectedDestinationId(event.target.value)} disabled={readOnly || busy !== null || latestDeliveryRetryable} className='h-9 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text disabled:cursor-not-allowed disabled:opacity-60'>
+                                    <option value=''>Select one configured receiver</option>
+                                    {(state.destinations || []).map(destination => (
+                                        <option key={destination.id} value={destination.id}>{destination.name || destination.endpointHint || destination.id}{destination.kind ? ` · ${destination.kind}` : ''}</option>
+                                    ))}
+                                </select>
+                            </label>
                             {latestDelivery ? (
                                 <div className='grid gap-2 text-xs text-ui-muted'>
                                     <KeyValue label='Status' value={stateLabel(latestDelivery.status)} />
@@ -955,9 +1005,27 @@ function deliveryRowsFromApi(payload: Record<string, unknown>): DeliveryRow[] {
                 attemptCount: typeof row.attemptCount === 'number' ? row.attemptCount : null,
                 nextRetryAt: stringValue(row.nextRetryAt) || null,
                 retryable: row.retryable === true,
+                reportValidation: stringValue(row.reportValidation),
+                reportExportChecksum: stringValue(row.reportExportChecksum),
+                reportCaseId: stringValue(row.reportCaseId),
+                thirdPartyReport: row.thirdPartyReport === true,
             }
         })
         .filter(row => Boolean(row.id))
+}
+
+function destinationRowsFromApi(payload: Record<string, unknown>): WebhookDestination[] {
+    const rows = Array.isArray(payload.destinations) ? payload.destinations : []
+    return rows
+        .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object' && !Array.isArray(row))
+        .map(row => ({
+            id: String(row.id || ''),
+            name: stringValue(row.name),
+            kind: stringValue(row.kind),
+            endpointHint: stringValue(row.endpointHint),
+            status: stringValue(row.status),
+        }))
+        .filter(row => Boolean(row.id) && row.status === 'active')
 }
 
 function deliveryContextFromApi(deliveries: DeliveryRow[]): NonNullable<CaseDetail['deliveryContext']> {
@@ -1143,6 +1211,14 @@ function deliveryDestinationState(row: DeliveryRow) {
     if (row.endpointHint || row.endpointHash) return 'configured destination'
     if (row.webhookDestinationId || row.destinationId) return 'saved destination'
     return 'destination pending'
+}
+
+function deliveryRetryBlockedReason(row?: DeliveryRow) {
+    if (row?.status !== 'failed' || row.retryable !== true || !row.nextRetryAt) return undefined
+    const dueAt = Date.parse(row.nextRetryAt)
+    return Number.isFinite(dueAt) && dueAt > Date.now()
+        ? `Exact report retry is available at ${new Date(dueAt).toLocaleString()}.`
+        : undefined
 }
 
 function webhookActionBlockedReason(detail: CaseDetail | null | undefined, alertId?: string) {

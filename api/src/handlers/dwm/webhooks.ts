@@ -91,6 +91,10 @@ type OrgQuery = {
     retry_state?: string
     actorId?: string
     actor_id?: string
+    reportCaseId?: string
+    report_case_id?: string
+    reportExportChecksum?: string
+    report_export_checksum?: string
 }
 
 type Membership = {
@@ -595,13 +599,20 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
         }
     }
 
-    const deliveries = await listDwmWebhookDeliveries(userId, orgId || undefined)
+    const alertId = clean(req.query?.alertId) || clean(req.query?.alert_id)
+    const reportCaseId = clean(req.query?.reportCaseId) || clean(req.query?.report_case_id)
+    const reportExportChecksum = clean(req.query?.reportExportChecksum) || clean(req.query?.report_export_checksum)
+    const deliveries = await listDwmWebhookDeliveries(userId, orgId || undefined, {
+        alertId,
+        reportCaseId,
+        reportExportChecksum,
+    })
     const auditEvents = await listDwmWebhookAuditEvents(userId, orgId || undefined)
     const destinations = await listDwmWebhookDestinations(userId, orgId || undefined)
     const deliveryFilters = {
         orgId,
         destinationId: clean(req.query?.destinationId) || clean(req.query?.destination_id),
-        alertId: clean(req.query?.alertId) || clean(req.query?.alert_id),
+        alertId,
         casePath: clean(req.query?.casePath) || clean(req.query?.case_path),
         dedupeKey: clean(req.query?.dedupeKey) || clean(req.query?.dedupe_key),
         requestId: clean(req.query?.requestId) || clean(req.query?.request_id) || clean(req.query?.deliveryId) || clean(req.query?.delivery_id),
@@ -612,6 +623,8 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
         timeTo: clean(req.query?.timeTo) || clean(req.query?.time_to),
         retryState: clean(req.query?.retryState) || clean(req.query?.retry_state),
         actorId: clean(req.query?.actorId) || clean(req.query?.actor_id),
+        reportCaseId,
+        reportExportChecksum,
     }
     const evidence = buildDwmWebhookDeliveryEvidence({
         deliveries,
@@ -1008,13 +1021,17 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
     const retryDeliveryId = clean(req.body?.deliveryId)
     if (retryDeliveryId) {
         const retry = await retryDwmWebhookDelivery(userId, orgId, retryDeliveryId)
-        if (!retry.ok) return res.status(retry.status).send({ error: retry.error, code: retry.code })
+        if (!retry.ok) return res.status(retry.status).send({ error: retry.error, code: retry.code, ...('nextRetryAt' in retry ? { nextRetryAt: retry.nextRetryAt } : {}) })
         input = { ...input, alertId: retry.delivery.alertId, destinationId: retry.delivery.destinationId }
         return sendDwmWebhookDeliveryResult(res, userId, orgId, input, [retry.delivery])
     }
 
     const submittedReport = req.body?.alert?.report
     if (submittedReport !== undefined) {
+        const destinationId = clean(input.destinationId) || clean(input.destination_id)
+        if (!destinationId) {
+            return res.status(400).send({ error: 'Select one configured destination for third-party report delivery.', code: 'report_destination_required' })
+        }
         const canonical = await canonicalThirdPartyReportForDelivery({
             submittedReport,
             organizationId: orgId,
@@ -1026,6 +1043,7 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
         if (!canonical.report) return res.status(canonical.status).send({ error: canonical.error, code: canonical.code })
         input = {
             ...input,
+            destinationId,
             dedupeKey: canonical.report.exportChecksum,
             alert: {
                 ...input.alert,
