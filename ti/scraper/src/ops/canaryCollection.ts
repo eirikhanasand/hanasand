@@ -8,6 +8,7 @@ import { detachedState, externalize, fetchItems, health, maxItemsFor, tasksForSo
 import { isSellableIntelText, sellableReason } from "../value/sellableIntel.ts";
 import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { buildRawCapture } from "../pipeline/pipelineCapture.ts";
+import { activeWatchlistDiscoveryTerms, collectWatchlistDiscoveryEvidence, scheduleWatchlistDiscoveryRuns } from "./watchlistDiscovery.ts";
 export { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts"; export { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanaryReadinessPacket, buildCanarySoakReport } from "./canaryReports.ts";
 export type * from "./canaryCollectionTypes.ts";
@@ -36,7 +37,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
 }
 export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { enabled?: boolean; intervalSeconds?: number; queueLimit?: number; onCycle?: (r: any) => void; onError?: (e: unknown) => void }): CanaryCollectionLoopHandle {
   const state = detachedState(options.now?.() ?? nowIso(), options.queueLimit ?? 500), intervalMs = Math.max(5, options.intervalSeconds ?? 300) * 1000; let timer: Timer | undefined, startupTimer: Timer | undefined;
-  const cycle = async () => { if (!state.enabled || state.running) return; state.running = true; state.lastCycleAt = nowIso(); try { const result = await runCanaryCollectionCycle(options); state.latestResult = result; state.successCount++; state.lastSuccessAt = result.generatedAt; options.onCycle?.(result); } catch (e) { state.errorCount++; state.consecutiveErrorCount++; state.lastError = e instanceof Error ? e.message : String(e); state.lastErrorAt = nowIso(); options.onError?.(e); } finally { state.running = false; state.cycleCount++; state.nextCycleAt = state.enabled ? new Date(Date.now() + intervalMs).toISOString() : undefined; } };
+  const cycle = async () => { if (!state.enabled || state.running) return; state.running = true; state.lastCycleAt = nowIso(); try { const watchlistDiscovery = await scheduleWatchlistDiscoveryRuns(options, options.now?.() ?? nowIso()); const result = await runCanaryCollectionCycle(options); result.watchlistDiscovery = watchlistDiscovery; state.latestResult = result; state.successCount++; state.lastSuccessAt = result.generatedAt; options.onCycle?.(result); } catch (e) { state.errorCount++; state.consecutiveErrorCount++; state.lastError = e instanceof Error ? e.message : String(e); state.lastErrorAt = nowIso(); options.onError?.(e); } finally { state.running = false; state.cycleCount++; state.nextCycleAt = state.enabled ? new Date(Date.now() + intervalMs).toISOString() : undefined; } };
   Object.assign(state, { supervisorAttached: true, enabled: options.enabled !== false, intervalSeconds: options.intervalSeconds ?? 300, maxSources: options.maxSources ?? 10, maxTasks: options.maxTasks ?? 5, maxConcurrentTasks: options.maxConcurrentTasks ?? 5, maxItemsPerTask: options.maxItemsPerTask ?? 40, maxBytes: options.maxBytes ?? 512_000, timeoutMs: options.timeoutMs ?? 30_000, queueLimit: options.queueLimit ?? 500, activateSources: Boolean(options.activateSources) });
   if (state.enabled) {
     state.nextCycleAt = new Date(Date.now() + 1_000).toISOString();
@@ -63,16 +64,25 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
   const taskMetrics: any = { itemCount: 0, captureCount: 0, incidentCount: 0, duplicateCount: 0, parserWarningCount: 0, actorIds: new Set<string>(), publishedAt: [] };
   try {
     if (!source) throw new Error("source missing");
-    const collectedItems = await fetchItems(source, task, fetcher, mode, generatedAt, maxBytes, options.timeoutMs ?? 12_000, itemLimit(source, options, task));
+    if (task.planning?.watchlistDiscovery) {
+      const activeTerms = activeWatchlistDiscoveryTerms(options.store, task);
+      if (!activeTerms.length) { counters.completedTaskCount++; options.frontier.complete(task); return; }
+      task.planning.watchlistDiscovery = { ...task.planning.watchlistDiscovery, terms: activeTerms };
+    }
+    const discoveredItems = await fetchItems(source, task, fetcher, mode, generatedAt, maxBytes, options.timeoutMs ?? 12_000, itemLimit(source, options, task));
+    const collectedItems = task.planning?.watchlistDiscovery
+      ? await collectWatchlistDiscoveryEvidence({ store: options.store, source, task, discoveryItems: discoveredItems, fetcher, generatedAt, timeoutMs: options.timeoutMs ?? 12_000, maxBytes: Math.max(maxBytes, 2_000_000), nativeFetch: mode === "native_live_http" })
+      : discoveredItems;
     taskMetrics.itemCount = collectedItems.length;
     taskMetrics.httpStatus = collectedItems[0]?.metadata?.fetchProvenance?.httpStatus;
     taskMetrics.parserWarningCount = collectedItems.reduce((total: number, item: any) => total + (Array.isArray(item.metadata?.parserWarnings) ? item.metadata.parserWarnings.length : 0), 0);
     taskMetrics.publishedAt = collectedItems.map((item: any) => item.publishedAt).filter(Boolean);
-    const sellableItems = collectedItems.filter((collected: any) => ["cisa_kev", "ransomware_group_metadata", "mitre_actor_catalog", "ransomware_operation_catalog", "ransomware_operation_activity_evidence"].includes(collected.metadata?.extractionProfile) || isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt, maxAgeDays: source.metadata?.queryClass === "threat-intel" ? 365 : 30 }));
+    const sellableItems = task.planning?.watchlistDiscovery ? collectedItems : collectedItems.filter((collected: any) => ["cisa_kev", "ransomware_group_metadata", "mitre_actor_catalog", "ransomware_operation_catalog", "ransomware_operation_activity_evidence"].includes(collected.metadata?.extractionProfile) || isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt, maxAgeDays: source.metadata?.queryClass === "threat-intel" ? 365 : 30 }));
     counters.skippedLowValueCount += collectedItems.length - sellableItems.length;
     for (const collected of sellableItems.slice(0, itemLimit(source, options, task))) {
-      collected.tenantId = source.tenantId;
-      collected.metadata = { ...collected.metadata, runId, queryTerms: task.planning?.queryTerms ?? [], sellableCandidate: true, sellableReason: sellableReason(collected.rawText) };
+      collected.tenantId = task.tenantId ?? collected.tenantId ?? source.tenantId;
+      collected.organizationId = task.planning?.watchlistDiscovery?.organizationId ?? collected.organizationId;
+      collected.metadata = { ...collected.metadata, runId, queryTerms: task.planning?.watchlistDiscovery ? (collected.metadata?.matchedWatchlistTerms ?? []).map((term: any) => term.value) : task.planning?.queryTerms ?? [], sellableCandidate: true, sellableReason: sellableReason(collected.rawText) };
       const actorIdentityCatalogSnapshot = collected.metadata?.actorIdentityCatalogSnapshot ?? collected.metadata?.ransomwareOperationCatalogSnapshot;
       const catalogEvidenceOnly = collected.metadata?.catalogEvidenceOnly === true;
       const { actorIdentityCatalogSnapshot: _mitreSnapshot, ransomwareOperationCatalogSnapshot: _ransomwareSnapshot, ...captureMetadata } = collected.metadata ?? {};
@@ -88,8 +98,9 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
       }
       if (duplicate) { counters.duplicateCaptureCount++; taskMetrics.duplicateCount++; } else { counters.insertedCaptureCount++; taskMetrics.captureCount++; }
       if (saved.incident) { counters.incidentCount++; taskMetrics.incidentCount++; }
+      if (task.planning?.watchlistDiscovery && collected.sourceId !== source.id) recordWatchlistEvidenceHealth(options.store, collected, task, runId, generatedAt, Boolean(duplicate), Boolean(saved.incident));
       for (const entity of pipeline.entities ?? []) if (["actor", "ransomware_family"].includes(entity.type)) taskMetrics.actorIds.add(String(entity.normalizedValue ?? entity.value));
-      if (!actorIdentityCatalogSnapshot && !catalogEvidenceOnly && await saveExposureClaimFromCollectedItem(options.store, collected, generatedAt)) counters.exposureClaimCount++;
+      if (!task.planning?.watchlistDiscovery && !actorIdentityCatalogSnapshot && !catalogEvidenceOnly && await saveExposureClaimFromCollectedItem(options.store, collected, generatedAt)) counters.exposureClaimCount++;
       latestCaptureIds.push(saved.capture.id);
     }
     counters.completedTaskCount++; options.frontier.complete(task);
@@ -120,13 +131,42 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
     }
   }
 }
+function recordWatchlistEvidenceHealth(store: any, collected: any, task: any, runId: string, checkedAt: string, duplicate: boolean, incident: boolean) {
+  const evidenceSource = store.getSource?.(collected.sourceId);
+  if (!evidenceSource) return;
+  store.saveSourceHealthObservation?.({
+    id: stableId("source-health", `${runId}:${task.id}:${evidenceSource.id}:${collected.contentHash}`),
+    tenantId: collected.tenantId,
+    sourceId: evidenceSource.id,
+    collectionRunId: runId,
+    taskId: task.id,
+    checkedAt,
+    status: "healthy",
+    success: true,
+    useful: !duplicate || incident,
+    itemCount: 1,
+    captureCount: duplicate ? 0 : 1,
+    incidentCount: incident ? 1 : 0,
+    duplicateCount: duplicate ? 1 : 0,
+    parserWarningCount: 0,
+    observedActorCount: 0,
+    legalMode: "public_content"
+  });
+  store.saveSource({
+    ...evidenceSource,
+    lastSeenAt: checkedAt,
+    health: { ...(evidenceSource.health ?? {}), status: "healthy", checkedAt, lastSuccessAt: checkedAt, lastUsefulAt: !duplicate || incident ? checkedAt : evidenceSource.health?.lastUsefulAt, consecutiveFailures: 0, errorRate: 0, parserStatus: "healthy", lastError: undefined },
+    crawlState: { ...(evidenceSource.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + (evidenceSource.crawlFrequencySeconds ?? 86_400) * 1000).toISOString(), backoffUntil: undefined, lastError: undefined },
+    updatedAt: checkedAt
+  });
+}
 function sourceHealthObservation(source: any, task: any, runId: string, checkedAt: string, latencyMs: number, metrics: any, outcome: { success: boolean; useful: boolean; failureReason?: string }) {
   const latestPublishedAt = [...metrics.publishedAt].sort((a: string, b: string) => Date.parse(b) - Date.parse(a))[0];
   const freshnessLagSeconds = latestPublishedAt ? Math.max(0, Math.round((Date.parse(checkedAt) - Date.parse(latestPublishedAt)) / 1000)) : undefined;
   const httpStatus = metrics.httpStatus;
   return {
     id: stableId("source-health", `${runId}:${task.id}`),
-    tenantId: source.tenantId,
+    tenantId: task.tenantId ?? source.tenantId,
     sourceId: source.id,
     collectionRunId: runId,
     taskId: task.id,

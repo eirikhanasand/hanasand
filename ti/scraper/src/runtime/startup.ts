@@ -29,6 +29,26 @@ export async function startScraperRuntime() {
     crawlBudgetPolicies: { "public-canary": { taskLimit: Number(Bun.env.TI_CANARY_BUDGET_TASKS ?? "1000"), byteLimit: Number(Bun.env.TI_CANARY_BUDGET_BYTES ?? "512000000") } }
   });
   const sourceBootstrap = await bootstrapRuntimeSources(store as any);
+  const runTimers = new Map<string, Timer>();
+  const executeRun = (runId: string): Promise<any> => {
+    const existingTimer = runTimers.get(runId);
+    if (existingTimer) clearTimeout(existingTimer);
+    runTimers.delete(runId);
+    const execution = executeScheduledCollectionRun({
+      store,
+      frontier,
+      objectStore,
+      maxConcurrentTasks: Math.min(4, Number(Bun.env.TI_CANARY_MAX_CONCURRENT_TASKS ?? "4")),
+      timeoutMs: Number(Bun.env.TI_CANARY_TIMEOUT_MS ?? Bun.env.SCRAPER_DEFAULT_TIMEOUT_MS ?? "12000"),
+      maxItemsPerTask: Number(Bun.env.TI_CANARY_MAX_ITEMS_PER_TASK ?? "4"),
+    }, runId);
+    void execution.then((run: any) => {
+      if (run?.status !== "queued" || !run.nextAttemptAt) return;
+      const delay = Math.max(0, Math.min(2_147_000_000, Date.parse(run.nextAttemptAt) - Date.now()));
+      runTimers.set(runId, setTimeout(() => void executeRun(runId), delay));
+    }).catch((error) => logger.warn("scheduled collection run failed", { event: "scheduled_run.error", runId, error: error instanceof Error ? error.message : String(error) }));
+    return execution;
+  };
   const canary = startCanaryCollectionLoop({
     store, frontier, objectStore,
     enabled: Bun.env.TI_CANARY_ENABLED !== "false",
@@ -41,6 +61,7 @@ export async function startScraperRuntime() {
     queueLimit: Number(Bun.env.TI_CANARY_MAX_QUEUE_SIZE ?? "500"),
     operatorId: Bun.env.TI_CANARY_OPERATOR_ID ?? "startup-canary",
     activateSources: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true",
+    runExecutor: executeRun,
     onCycle: (result) => logger.info("public canary collection cycle", { event: "canary.cycle", ...result }),
     onError: (error) => logger.warn("public canary collection failed", { event: "canary.error", error: error instanceof Error ? error.message : String(error) })
   });
@@ -55,24 +76,6 @@ export async function startScraperRuntime() {
     maxSources: Number(Bun.env.TI_RESTRICTED_METADATA_MAX_SOURCES ?? "2"),
     onError: (error: unknown) => logger.warn("restricted metadata collection failed", { event: "restricted_metadata.error", error: error instanceof Error ? error.message : String(error) })
   });
-  const runTimers = new Map<string, Timer>();
-  const executeRun = (runId: string) => {
-    const existingTimer = runTimers.get(runId);
-    if (existingTimer) clearTimeout(existingTimer);
-    runTimers.delete(runId);
-    void executeScheduledCollectionRun({
-      store,
-      frontier,
-      objectStore,
-      maxConcurrentTasks: Math.min(4, Number(Bun.env.TI_CANARY_MAX_CONCURRENT_TASKS ?? "4")),
-      timeoutMs: Number(Bun.env.TI_CANARY_TIMEOUT_MS ?? Bun.env.SCRAPER_DEFAULT_TIMEOUT_MS ?? "12000"),
-      maxItemsPerTask: Number(Bun.env.TI_CANARY_MAX_ITEMS_PER_TASK ?? "4"),
-    }, runId).then((run: any) => {
-      if (run?.status !== "queued" || !run.nextAttemptAt) return;
-      const delay = Math.max(0, Math.min(2_147_000_000, Date.parse(run.nextAttemptAt) - Date.now()));
-      runTimers.set(runId, setTimeout(() => executeRun(runId), delay));
-    }).catch((error) => logger.warn("scheduled collection run failed", { event: "scheduled_run.error", runId, error: error instanceof Error ? error.message : String(error) }));
-  };
   const recoveredRuns = recoverCollectionRuns({ store, execute: executeRun });
   const evaluation = startAutomaticEvaluationLoop({
     store,
