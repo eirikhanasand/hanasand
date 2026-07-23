@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { executeScheduledCollectionRun, recoverCollectionRuns } from "../ops/scheduledCollection.ts";
-import { createScheduledRunBoundary } from "../runtime/startup.ts";
+import { createScheduledRunBoundary, createScraperRuntimeStop } from "../runtime/startup.ts";
 import type { MitreActorCatalogSnapshot } from "../pipeline/mitreActorCatalog.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
@@ -36,6 +36,78 @@ describe("scheduled API collection runs", () => {
     expect({ calls, writes, lateWrites, closed }).toEqual({ calls: 1, writes: ["run_deferred"], lateWrites: 0, closed: true });
     await boundary.execute("run_deferred");
     expect(calls).toBe(1);
+  });
+
+  test("shutdown signals every worker before draining active writes", async () => {
+    let releaseScheduled!: () => void;
+    const scheduledGate = new Promise<void>((resolve) => { releaseScheduled = resolve; });
+    const writes: string[] = [];
+    const postShutdownStarts: string[] = [];
+    let scheduledCalls = 0;
+    const boundary = createScheduledRunBoundary({
+      execute: async () => {
+        scheduledCalls++;
+        await scheduledGate;
+        writes.push("scheduled");
+        return { status: "queued", nextAttemptAt: new Date().toISOString() };
+      },
+      onError: () => undefined
+    });
+    const scheduled = boundary.execute("run_blocked");
+
+    const signals: string[] = [];
+    let stoppedLoops = 0;
+    let resolveStoppedLoops!: () => void;
+    const stoppedLoopsPromise = new Promise<void>((resolve) => { resolveStoppedLoops = resolve; });
+    const mockLoop = (name: string) => {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const active = gate.then(() => { writes.push(name); });
+      const timer = setTimeout(() => { postShutdownStarts.push(name); }, 5);
+      return {
+        release,
+        stop: () => {
+          signals.push(name);
+          clearTimeout(timer);
+          if (++stoppedLoops === 2) resolveStoppedLoops();
+          return active;
+        }
+      };
+    };
+    const evaluation = mockLoop("evaluation");
+    const automaticReview = mockLoop("automaticReview");
+    let writesAtClose: string[] = [];
+    const stop = createScraperRuntimeStop({
+      scheduledRuns: {
+        beginStopping: boundary.beginStopping,
+        drain: async () => { signals.push("drain"); await boundary.drain(); }
+      },
+      server: { stop: async () => { signals.push("server"); } },
+      canary: { stop: async () => { signals.push("canary"); } },
+      restrictedMetadata: { stop: async () => { signals.push("restricted"); } },
+      evaluation,
+      automaticReview,
+      store: { close: async () => { writesAtClose = [...writes]; signals.push("close"); } }
+    });
+
+    const firstStop = stop();
+    const repeatedStop = stop();
+    expect(repeatedStop).toBe(firstStop);
+    await stoppedLoopsPromise;
+    expect(signals).toEqual(["server", "canary", "restricted", "evaluation", "automaticReview", "drain"]);
+    await Bun.sleep(10);
+    expect(postShutdownStarts).toEqual([]);
+    expect(writesAtClose).toEqual([]);
+
+    releaseScheduled();
+    evaluation.release();
+    automaticReview.release();
+    await Promise.all([scheduled, firstStop]);
+    await Bun.sleep(10);
+
+    expect(scheduledCalls).toBe(1);
+    expect(writesAtClose.sort()).toEqual(["automaticReview", "evaluation", "scheduled"]);
+    expect(signals.at(-1)).toBe("close");
   });
 
   test("executes a queued run and exposes its captured results", async () => {

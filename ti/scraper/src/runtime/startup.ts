@@ -64,6 +64,32 @@ export function createScheduledRunBoundary(options: {
   };
 }
 
+type Stoppable = { stop: () => Promise<unknown> };
+
+export function createScraperRuntimeStop(options: {
+  scheduledRuns: { beginStopping: () => void; drain: () => Promise<void> };
+  server: Stoppable;
+  canary: Stoppable;
+  restrictedMetadata: Stoppable;
+  evaluation: Stoppable;
+  automaticReview: Stoppable;
+  store: { close: () => Promise<unknown> };
+}) {
+  let stopPromise: Promise<void> | undefined;
+  return () => stopPromise ??= (async () => {
+    options.scheduledRuns.beginStopping();
+    await options.server.stop();
+    await Promise.all([
+      options.canary.stop(),
+      options.restrictedMetadata.stop(),
+      options.evaluation.stop(),
+      options.automaticReview.stop(),
+      options.scheduledRuns.drain()
+    ]);
+    await options.store.close();
+  })();
+}
+
 export async function startScraperRuntime() {
   const config = loadRuntimeConfig();
   const logger = createLogger(Bun.env.SCRAPER_LOG_LEVEL === "debug" ? "debug" : "info");
@@ -132,15 +158,5 @@ export async function startScraperRuntime() {
   const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
   const automaticReview = startAutomaticReviewWorker({ store, frontier, config } as any);
   logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0), publicCanaryEnabled: Bun.env.TI_CANARY_ENABLED !== "false", publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", automaticEvaluationEnabled: Bun.env.TI_AUTOMATIC_EVALUATION_ENABLED !== "false", recoveredRuns, sourceBootstrap, ...paths });
-  let stopPromise: Promise<void> | undefined;
-  return { stop: () => stopPromise ??= (async () => {
-    scheduledRuns.beginStopping();
-    await server.stop();
-    await canary.stop();
-    await restrictedMetadata.stop();
-    await scheduledRuns.drain();
-    await evaluation.stop();
-    await automaticReview.stop();
-    await store.close();
-  })() };
+  return { stop: createScraperRuntimeStop({ scheduledRuns, server, canary, restrictedMetadata, evaluation, automaticReview, store }) };
 }
