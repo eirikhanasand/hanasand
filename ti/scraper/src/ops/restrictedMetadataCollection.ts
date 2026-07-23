@@ -9,12 +9,21 @@ import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts
 export async function runRestrictedMetadataCollectionCycle(options: any) {
   const generatedAt = options.now?.() ?? nowIso();
   const productivity = reconcilePublicSourceProductivity({ ...options, now: generatedAt });
-  const sources = options.store.listSources().filter((source: any) => due(source, generatedAt)).slice(0, Math.max(1, Math.min(2, options.maxSources ?? 2)));
+  const maxSources = Math.max(1, Number(options.maxSources ?? 250));
+  const maxConcurrentSources = Math.max(1, Math.min(
+    Number(options.boundary?.config?.maxConcurrency ?? 2),
+    Number(options.maxConcurrentSources ?? 2)
+  ));
+  const sources = options.store.listSources()
+    .filter((source: any) => due(source, generatedAt))
+    .sort((left: any, right: any) => sourceScheduleTime(left) - sourceScheduleTime(right) || String(left.id).localeCompare(String(right.id)))
+    .slice(0, maxSources);
   const runId = stableId("restricted-run", generatedAt);
   const counters = { sourceCount: sources.length, intelligenceSourceCount: sources.filter((source: any) => !source.metadata?.transportCanary).length, transportProbeCount: sources.filter((source: any) => source.metadata?.transportCanary).length, completedSourceCount: 0, failedSourceCount: 0, captureCount: 0, duplicateCount: 0, incidentCount: 0 };
   options.store.saveRun?.({ id: runId, requestId: "restricted_metadata_scheduler", status: "running", createdAt: generatedAt, startedAt: generatedAt, updatedAt: generatedAt, sourceCount: sources.length, taskCount: sources.length, captureCount: 0, incidentCount: 0 });
 
-  for (const source of sources) {
+  for (let offset = 0; offset < sources.length; offset += maxConcurrentSources) {
+    await Promise.all(sources.slice(offset, offset + maxConcurrentSources).map(async (source: any) => {
     const task = { id: stableId("restricted-task", `${source.id}:${generatedAt}`), tenantId: source.tenantId, sourceId: source.id, sourceType: source.type, targetUrl: source.url, queuedAt: generatedAt, retryCount: source.crawlState?.retryCount ?? 0, maxBytes: 64_000, runId };
     const started = Date.now();
     try {
@@ -77,17 +86,27 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
       options.store.saveSourceHealthObservation?.(observation(source, runId, task.id, checkedAt, Date.now() - started, false, false, 0, message, (caught as any)?.httpStatus));
       options.store.saveSource({ ...source, health: { ...(source.health ?? {}), status: retryCount >= 5 ? "failing" : "degraded", checkedAt, lastFailureAt: checkedAt, consecutiveFailures: retryCount, lastError: message }, crawlState: { ...(source.crawlState ?? {}), retryCount, lastError: message, lastErrorAt: checkedAt, backoffUntil: new Date(Date.parse(checkedAt) + Math.min(86_400, retryCount * retryCount * 900) * 1_000).toISOString() }, updatedAt: checkedAt });
     }
+    }));
   }
 
   const completedAt = options.now?.() ?? nowIso();
   const status = counters.failedSourceCount ? counters.completedSourceCount ? "degraded" : "failed" : "completed";
   options.store.saveRun?.({ id: runId, requestId: "restricted_metadata_scheduler", status, createdAt: generatedAt, startedAt: generatedAt, completedAt, updatedAt: completedAt, taskCount: sources.length, ...counters });
-  return { schemaVersion: "ti.restricted_metadata_cycle.v1", runId, generatedAt, status, retiredSourceCount: productivity.retired.length, ...counters, metadataOnly: true };
+  return { schemaVersion: "ti.restricted_metadata_cycle.v1", runId, generatedAt, status, maxSources, maxConcurrentSources, retiredSourceCount: productivity.retired.length, ...counters, metadataOnly: true };
 }
 
 export function startRestrictedMetadataCollectionLoop(options: any) {
   const intervalSeconds = Math.max(60, Number(options.intervalSeconds ?? 900));
-  const state: any = { enabled: options.enabled === true, running: false, intervalSeconds, cycleCount: 0, successCount: 0, errorCount: 0 };
+  const state: any = {
+    enabled: options.enabled === true,
+    running: false,
+    intervalSeconds,
+    maxSources: Math.max(1, Number(options.maxSources ?? 250)),
+    maxConcurrentSources: Math.max(1, Math.min(Number(options.boundary?.config?.maxConcurrency ?? 2), Number(options.maxConcurrentSources ?? 2))),
+    cycleCount: 0,
+    successCount: 0,
+    errorCount: 0
+  };
   let startup: Timer | undefined, timer: Timer | undefined, active: Promise<void> | undefined;
   const cycle = () => {
     if (!state.enabled || active) return active ?? Promise.resolve();
@@ -145,6 +164,7 @@ function currentProductiveCycles(store: any, source: any, generatedAt: string) {
   return [...byRun.values()].sort((left: any, right: any) => Date.parse(left.checkedAt) - Date.parse(right.checkedAt));
 }
 function cadence(source: any) { return Math.max(900, Number(source.crawlFrequencySeconds ?? (source.crawlFrequencyMinutes ?? 60) * 60)); }
+function sourceScheduleTime(source: any) { return Date.parse(source.health?.checkedAt ?? source.crawlState?.lastCollectedAt ?? source.updatedAt ?? source.createdAt ?? "") || 0; }
 function hasUsefulVictimMetadata(item: any) { const leakSite = item.metadata?.leakSite; return typeof leakSite?.victimName === "string" && leakSite.victimName.trim().length > 1 || Array.isArray(leakSite?.victimNames) && leakSite.victimNames.some((name: unknown) => typeof name === "string" && name.trim().length > 1); }
 function observation(source: any, runId: string, taskId: string, checkedAt: string, latencyMs: number, success: boolean, useful: boolean, itemCount: number, failureReason?: string, httpStatus?: number, captureCount = 0, duplicateCount = 0) { const category = success ? undefined : failureCategory(failureReason); return { id: stableId("source-health", `${runId}:${taskId}`), tenantId: source.tenantId, sourceId: source.id, collectionRunId: runId, taskId, checkedAt, status: success ? "healthy" : "failed", success, useful, httpStatus: Number.isInteger(httpStatus) ? httpStatus : undefined, latencyMs: Math.max(0, latencyMs), itemCount, captureCount, incidentCount: 0, duplicateCount, parserWarningCount: category === "parser_failure" ? 1 : 0, observedActorCount: source.metadata?.transportCanary ? 0 : source.metadata?.actorName || source.metadata?.actors?.length ? 1 : 0, adapterFailureCategory: category, failureReason, legalMode: "metadata_only" }; }
 function failureCategory(message?: string) { return !message ? undefined : /timeout|abort/i.test(message) ? "timeout" : /HTTP 429/i.test(message) ? "rate_limited" : /HTTP 5\d\d/i.test(message) ? "upstream_failure" : /HTTP 4\d\d/i.test(message) ? "source_rejected" : /parser|record/i.test(message) ? "parser_failure" : /proxy|onion|policy|target/i.test(message) ? "policy_blocked" : "collection_failure"; }

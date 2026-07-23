@@ -115,9 +115,9 @@ describe("restricted metadata collection", () => {
 
     expect(first).toMatchObject({ status: "completed", intelligenceSourceCount: 2, captureCount: 2 });
     expect(second).toMatchObject({ status: "completed", intelligenceSourceCount: 1, captureCount: 1 });
-    expect(store.listCaptures().map((capture) => capture.metadata.leakSite.victimName)).toEqual(["Qilin Victim", "Nova Victim", "Interlock Victim"]);
+    expect(store.listCaptures().map((capture) => capture.metadata.leakSite.victimName).sort()).toEqual(["Interlock Victim", "Nova Victim", "Qilin Victim"]);
     expect(store.listCaptures().every((capture) => capture.storageKind === "metadata_only" && !capture.body && !capture.objectRef && !capture.metadata.leakSite.links?.length)).toBe(true);
-    expect(store.listExtractedEntities().filter((entity) => entity.type === "victim").map((entity) => entity.value)).toEqual(["Qilin Victim", "Nova Victim", "Interlock Victim"]);
+    expect(store.listExtractedEntities().filter((entity) => entity.type === "victim").map((entity) => entity.value).sort()).toEqual(["Interlock Victim", "Nova Victim", "Qilin Victim"]);
     expect(JSON.stringify(store.listCaptures())).not.toContain("dynamic");
   });
 
@@ -182,6 +182,52 @@ describe("restricted metadata collection", () => {
 
     await expect(malformed.fetchMetadata({ url: `http://${"m".repeat(56)}.onion/`, actorName: "Lamashtu" })).rejects.toThrow("rejected invalid payload");
     await expect(unsupported.fetchMetadata({ url: `http://${"u".repeat(56)}.onion/`, actorName: "RansomHouse" })).rejects.toThrow("not approved for this actor");
+  });
+
+  test("fairly monitors 1,000 hourly Tor sources with the bounded production lane", async () => {
+    const store = new InMemoryScraperStore();
+    const onion = `${"a".repeat(56)}.onion`;
+    for (let index = 0; index < 1_000; index++) {
+      store.saveSource(source({
+        id: `src_tor_capacity_${String(index).padStart(4, "0")}`,
+        type: "tor_metadata",
+        url: `http://${onion}/victims/${index}`,
+        accessMethod: "approved_proxy",
+        status: "active",
+        risk: "restricted",
+        crawlFrequencySeconds: 3_600,
+        legalNotes: "Approved public victim-listing metadata only.",
+        governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-07-23T00:00:00.000Z", approvedBy: "reviewer" },
+        metadata: { actorName: `Capacity ${index}`, productionCollection: true }
+      }));
+    }
+    let active = 0, peak = 0;
+    const boundary = {
+      id: "tor-approved-metadata-proxy",
+      network: "tor",
+      accessMethod: "approved_proxy",
+      config: { maxConcurrency: 2, maxMetadataBytes: 64_000, timeoutClass: "metadata_standard" },
+      async fetchMetadata(input: any) {
+        active++;
+        peak = Math.max(peak, active);
+        await Promise.resolve();
+        active--;
+        throw new Error(`bounded unavailable ${input.sourceId}`);
+      }
+    };
+
+    const cycles: Awaited<ReturnType<typeof runRestrictedMetadataCollectionCycle>>[] = [];
+    for (let index = 0; index < 4; index++) {
+      const at = new Date(Date.parse("2026-07-23T12:00:00.000Z") + index * 900_000).toISOString();
+      cycles.push(await runRestrictedMetadataCollectionCycle({ store, boundary, maxSources: 250, maxConcurrentSources: 2, now: () => at }));
+    }
+
+    expect(cycles.map((cycle) => cycle.sourceCount)).toEqual([250, 250, 250, 250]);
+    expect(cycles.every((cycle) => cycle.status === "failed" && cycle.failedSourceCount === 250 && cycle.maxConcurrentSources === 2)).toBe(true);
+    expect(peak).toBe(2);
+    expect(store.listSourceHealthObservations()).toHaveLength(1_000);
+    expect(new Set(store.listSourceHealthObservations().map((row) => row.sourceId)).size).toBe(1_000);
+    expect(store.listRuns().every((run) => run.taskCount === 250 && run.status === "failed")).toBe(true);
   });
 
   test("keeps repeated scheduled cycles idempotent and records only novel useful victim metadata", async () => {

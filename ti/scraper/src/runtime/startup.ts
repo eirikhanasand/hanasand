@@ -150,8 +150,8 @@ export async function startScraperRuntime() {
     includeSharedSources: false,
     scheduleWatchlistDiscovery: false,
     enabled: defaultCanaryEnabled,
-    maxSources: Math.max(1, Number(Bun.env.TI_DEFAULT_CANARY_MAX_SOURCES ?? "10")),
-    maxTasks: Math.max(1, Number(Bun.env.TI_DEFAULT_CANARY_MAX_TASKS ?? "5")),
+    maxSources: Math.max(1, Number(Bun.env.TI_DEFAULT_CANARY_MAX_SOURCES ?? "60")),
+    maxTasks: Math.max(1, Number(Bun.env.TI_DEFAULT_CANARY_MAX_TASKS ?? "60")),
     maxConcurrentTasks: defaultCollectionConcurrency || 1,
     operatorId: Bun.env.TI_DEFAULT_CANARY_OPERATOR_ID ?? "startup-default-canary",
     onCycle: (result) => logger.info("default-tenant public canary collection cycle", { event: "canary.default.cycle", ...result }),
@@ -160,12 +160,17 @@ export async function startScraperRuntime() {
   const restrictedEnabled = Bun.env.TI_RESTRICTED_METADATA_ENABLED === "true";
   const proxyUrl = Bun.env.TI_TOR_METADATA_PROXY;
   if (restrictedEnabled && !proxyUrl) throw new Error("TI_TOR_METADATA_PROXY is required when restricted metadata collection is enabled");
+  const restrictedBoundary = proxyUrl ? new TorMetadataHttpBoundary({ proxyUrl }) : undefined;
   const restrictedMetadata = startRestrictedMetadataCollectionLoop({
     store,
-    boundary: proxyUrl ? new TorMetadataHttpBoundary({ proxyUrl }) : undefined,
+    boundary: restrictedBoundary,
     enabled: restrictedEnabled,
     intervalSeconds: Number(Bun.env.TI_RESTRICTED_METADATA_INTERVAL_SECONDS ?? "900"),
-    maxSources: Number(Bun.env.TI_RESTRICTED_METADATA_MAX_SOURCES ?? "2"),
+    maxSources: Number(Bun.env.TI_RESTRICTED_METADATA_MAX_SOURCES ?? "250"),
+    maxConcurrentSources: Math.max(1, Math.min(
+      config.limits.maxConcurrentDarknetMetadataTasks,
+      restrictedBoundary?.config.maxConcurrency ?? 1
+    )),
     onError: (error: unknown) => logger.warn("restricted metadata collection failed", { event: "restricted_metadata.error", error: error instanceof Error ? error.message : String(error) })
   });
   const recoveredRuns = recoverCollectionRuns({ store, execute: executeRun });

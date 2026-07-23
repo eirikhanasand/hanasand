@@ -173,6 +173,48 @@ describe("public collection boundary", () => {
     expect(frontier.snapshot().map((item: any) => item.id).sort()).toEqual(["existing-a", "existing-b"]);
   });
 
+  test("drains the production-shaped exact-default fleet without crossing tenant scope", async () => {
+    const store = new InMemoryScraperStore();
+    for (let index = 0; index < 131; index++) {
+      store.saveSource(source({
+        id: `default-${String(index).padStart(3, "0")}`,
+        tenantId: "default",
+        url: `https://default.example.test/${index}.xml`,
+        crawlFrequencySeconds: index < 5 ? 900 : 3_600,
+        metadata: { productionCollection: true }
+      }));
+    }
+    store.saveSource(source({ id: "global", tenantId: undefined, url: "https://global.example.test/feed.xml", metadata: { productionCollection: true } }));
+    store.saveSource(source({ id: "customer", tenantId: "customer", url: "https://customer.example.test/feed.xml", metadata: { productionCollection: true } }));
+    const fetched: string[] = [];
+    const frontier = new FocusedFrontier({ maxQueueSize: 10_000 });
+    const cycles: Awaited<ReturnType<typeof runCanaryCollectionCycle>>[] = [];
+    for (let index = 0; index < 3; index++) {
+      const at = new Date(Date.parse("2026-07-23T12:00:00.000Z") + index * 300_000).toISOString();
+      cycles.push(await runCanaryCollectionCycle({
+        store,
+        frontier,
+        tenantId: "default",
+        includeSharedSources: false,
+        maxSources: 60,
+        maxTasks: 60,
+        maxConcurrentTasks: 2,
+        queueLimit: 10_000,
+        now: () => at,
+        fetch: async (url: string) => {
+          fetched.push(url);
+          return new Response("<rss><channel></channel></rss>", { headers: { "content-type": "application/rss+xml" } });
+        }
+      }));
+    }
+
+    expect(cycles.map((cycle) => [cycle.activeSourceCount, cycle.deferredDueSourceCount])).toEqual([[60, 71], [60, 11], [11, 0]]);
+    expect(fetched).toHaveLength(131);
+    expect(fetched.every((url) => url.startsWith("https://default.example.test/"))).toBe(true);
+    expect(new Set(store.listSourceHealthObservations().map((row) => row.sourceId))).toHaveLength(131);
+    expect(frontier.snapshot()).toHaveLength(0);
+  });
+
   test("does not refresh useful or content timestamps for duplicate-only checks", async () => {
     const store = new InMemoryScraperStore();
     const feed = "<rss><channel><item><title>APT29 campaign report</title><link>https://example.test/report</link><description>APT29 targeted government victims with malware and command infrastructure.</description><pubDate>Wed, 22 Jul 2026 10:00:00 GMT</pubDate></item></channel></rss>";
