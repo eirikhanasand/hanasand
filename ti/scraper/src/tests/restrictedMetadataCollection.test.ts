@@ -42,7 +42,12 @@ describe("restricted metadata collection", () => {
     expect(capture).toMatchObject({ sourceId: "src_restricted_live", storageKind: "metadata_only", sensitive: true, body: undefined, metadata: { captureMode: "metadata_only", leakSite: { actorName: "Akira", victimName: "Northwind Health", extortionType: "double extortion", monetizationPath: "ransom demand", publicityTactic: "countdown announcement", buyerSellerCommunication: "auction contact channel", intermediaryCommunication: "broker listing", profitabilitySignal: "claimed paid victims", metadataOnly: true } } });
     expect(capture.metadata.leakSite.victimNames).toEqual(["Fabrikam.example", "Contoso Manufacturing"]);
     expect(store.listExtractedEntities().filter((entity) => entity.type === "victim").map((entity) => entity.value)).toEqual(["Northwind Health", "Fabrikam.example", "Contoso Manufacturing"]);
-    expect(JSON.stringify(capture)).not.toContain("raw page content");
+    const serializedCapture = JSON.stringify(capture);
+    expect(capture.url).toMatch(/^https:\/\/restricted\.invalid\/capture\/[a-f0-9]+$/);
+    expect(capture.canonicalUrl).toMatch(/^https:\/\/restricted\.invalid\/capture\/[a-f0-9]+$/);
+    expect(serializedCapture).not.toContain(onion);
+    expect(serializedCapture).not.toContain("/posts");
+    expect(serializedCapture).not.toContain("raw page content");
     expect(capture.objectRef).toBeUndefined();
     expect(store.listSourceHealthObservations()).toEqual([expect.objectContaining({ sourceId: "src_restricted_live", success: true, useful: true, legalMode: "metadata_only" })]);
     expect(store.listRuns().at(-1)).toMatchObject({ id: result.runId, status: "completed", captureCount: 1 });

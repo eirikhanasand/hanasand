@@ -34,8 +34,9 @@ export class DarknetMetadataAdapter implements CollectionAdapter {
       evidencePath: "proxy.metadata.sourceTimestamp",
       parserVersion: "darknet-metadata-v2"
     });
+    const captureUrl = `https://restricted.invalid/capture/${hashContent(url)}`;
     return {
-      items: [{ tenantId: source.tenantId, sourceId: source.id, taskId: task?.id, url, collectedAt: nowIso(), publishedAt: fetched.sourceTimestamp, title: fetched.title, rawText: serializeLeakSite(leakSite, fetched.title), contentHash: hashContent(JSON.stringify({ leakSite, title: fetched.title })), language: source.language, links: sanitizeLinks(fetched.links ?? []), sensitive: true, metadata: { adapter: "darknet_metadata", network, sourceType: this.type, extractionProfile: "ransomware_victim_blog", proxyBoundaryId: this.proxyBoundary.id, captureMode: "metadata_only", urlHash: leakSite.urlHash, leakSite, policyDecision: decision, blockedOperations: BLOCKED_OPERATIONS, extractorVersion: "darknet-metadata-v2", reportTimestamps: reportTimestamp ? [reportTimestamp] : undefined } }],
+      items: [{ tenantId: source.tenantId, sourceId: source.id, taskId: task?.id, url: captureUrl, collectedAt: nowIso(), publishedAt: fetched.sourceTimestamp, title: fetched.title, rawText: serializeLeakSite(leakSite, fetched.title), contentHash: hashContent(JSON.stringify({ leakSite, title: fetched.title })), language: source.language, links: sanitizeLinks(fetched.links ?? []), sensitive: true, metadata: { adapter: "darknet_metadata", network, sourceType: this.type, extractionProfile: "ransomware_victim_blog", proxyBoundaryId: this.proxyBoundary.id, captureMode: "metadata_only", urlHash: leakSite.urlHash, leakSite, policyDecision: decision, blockedOperations: BLOCKED_OPERATIONS, extractorVersion: "darknet-metadata-v2", reportTimestamps: reportTimestamp ? [reportTimestamp] : undefined } }],
       discovered: [],
       warnings: ["metadata only; no leaked contents or payload bodies captured"]
     };
