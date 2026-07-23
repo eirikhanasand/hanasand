@@ -1452,7 +1452,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     `;
     expect(integrity).toEqual({ cross_scope_profiles: 0, cross_scope_evidence: 0, cross_scope_aliases: 0, unresolved_workflows: 0 });
     expect(await immutableSnapshot()).toEqual(immutableBefore);
-    expect(await migrated.databaseHealth()).toMatchObject({ ok: true, migrationVersion: "032_reconcile_actor_profile_scope_lineage", actorProfileScopeReady: true });
+    expect(await migrated.databaseHealth()).toMatchObject({ ok: true, migrationVersion: "033_bound_source_operations", actorProfileScopeReady: true });
     await migrated.close();
 
     const restarted = await PostgresScraperStore.create({ databaseUrl });
