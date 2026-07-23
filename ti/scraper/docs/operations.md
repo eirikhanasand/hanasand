@@ -56,10 +56,15 @@
 - Re-enable gradually by adapter family and source family.
 
 ## Backup And Restore
-- Create and verify a database plus evidence-volume archive: `./ti/scraper/scripts/threat-intel-backup.sh backup /secure/path/ti-backup`.
-- Exercise an isolated restore without changing production: `./ti/scraper/scripts/threat-intel-backup.sh drill /secure/path/ti-backup`.
-- Stop collection and restore the isolated `threat_intel` schema and evidence volume: `TI_RESTORE_CONFIRM=restore-threat-intel ./ti/scraper/scripts/threat-intel-backup.sh restore /secure/path/ti-backup`.
-- Store archives encrypted outside the application host and run the drill before relying on a new backup.
+- Create and verify the complete application PostgreSQL snapshot plus evidence volume: `./ti/scraper/scripts/threat-intel-backup.sh backup /secure/path/ti-backup`. The artifact includes every non-system schema/table so TI workflow tables outside `threat_intel` and future migrations cannot be silently omitted. Every backup also exports external-object references from that same database snapshot, requires the referenced `.bin` and `.bin.json` files in the evidence tar, and binds their bytes plus both database and file-object recovery metadata to real SHA-256 values before publication. Historical database/file retention-class differences are preserved exactly and counted rather than rewritten during recovery.
+- Exercise a full restore without changing production: `./ti/scraper/scripts/threat-intel-backup.sh drill /secure/path/ti-backup`. The drill starts ephemeral PostgreSQL and evidence-volume targets, reconciles every table, evidence-file hash, and DB-linked object, runs `PostgresScraperStore` reads against the restored state, records the exact verifier commit and scraper image ID, and removes both targets.
+- The scheduled wrapper runs daily at 02:23 UTC, drills on Sunday, retains 14 days by default, and writes `LATEST-STATUS` with an exit code plus allowlisted phase/reason on success or failure. It requires host `flock`; a concurrent run is logged as skipped and does not overwrite the last completed status. If the configured backup root itself cannot be created or made private, only stderr is possible because there is no safe location for durable status.
+- There is deliberately no in-place production restore action. Keep production online and restore only into an isolated target; promote recovered data through a separately reviewed incident plan.
+- Store archives encrypted outside the application host and require the receipt named by `RESTORE-LATEST` to have a successful `RESTORE-REPORT` before relying on a backup. A failed drill writes bounded details to `RESTORE-LAST-ATTEMPT` and leaves the last successful receipt unchanged.
+
+Each published archive contains `database.dump`, `DATABASE-INVENTORY.tsv`, `OBJECT-REFERENCES.tsv`, `OBJECT-LEDGER.tsv`, `evidence.tar.gz`, `EVIDENCE-INVENTORY.tsv`, `BACKUP-MANIFEST`, and `SHA256SUMS`. A successful drill atomically publishes a `RESTORE-RECEIPT-*` directory containing `RESTORE-INVENTORY.tsv`, `RESTORE-EVIDENCE-INVENTORY.tsv`, `RESTORE-OBJECT-LEDGER.tsv`, `APPLICATION-READ-PROOF.json`, `RESTORE-REPORT`, and `RESTORE-SHA256SUMS`; all source/restored inventories and the DB-bound object ledger must be byte-identical.
+
+Deployment keeps the existing managed cron entry and defaults. After integration, build the `ti-scraper` image so the application-read command is available, run one manual backup and drill into a new archive directory, confirm `status=succeeded`, `content_hashes=matched`, `application_read=passed`, and `target_removed=true`, then observe the next scheduled daily run. Changing production cron, replacing live data, or stopping healthy services is not part of this runbook.
 
 ## Incident Response
 - If unsafe output appears, stop affected source family, preserve hashes/metadata, and remove public exposure.

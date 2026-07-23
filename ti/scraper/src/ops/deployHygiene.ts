@@ -12,6 +12,8 @@ export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygien
   const scraperDockerfileDockerignorePath = join(root, "ti", "scraper", "Dockerfile.dockerignore");
   const backupWrapperPath = join(root, "ops", "threat-intel-backup", "run-threat-intel-backup.sh");
   const backupScriptPath = join(root, "ti", "scraper", "scripts", "threat-intel-backup.sh");
+  const backupPostgresPath = join(root, "ti", "scraper", "scripts", "threat-intel-postgres.sh");
+  const restoreVerifierPath = join(root, "ti", "scraper", "scripts", "verify-restored-database.ts");
   const compose = readIfExists(composePath);
   const scraperDockerfile = readIfExists(scraperDockerfilePath);
   const rootDockerignore = readIfExists(rootDockerignorePath);
@@ -26,6 +28,8 @@ export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygien
     "!api/src/utils/dwm/",
     "!api/src/utils/dwm/customerOutputSafety.ts"
   ]);
+  const backupPostgres = readIfExists(backupPostgresPath);
+  const restoreVerifier = readIfExists(restoreVerifierPath);
 
   const checks: DeployHygieneCheck[] = [
     check("required.compose", Boolean(compose), "root docker-compose.yml exists"),
@@ -33,7 +37,7 @@ export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygien
     check("required.root_dockerignore", Boolean(rootDockerignore), "root .dockerignore exists"),
     check("required.scraper_dockerignore", Boolean(scraperDockerignore), "ti/scraper .dockerignore exists"),
     check("required.scraper_dockerfile_dockerignore", Boolean(scraperDockerfileDockerignore), "ti/scraper Dockerfile.dockerignore exists"),
-    check("required.backup_scripts", Boolean(backupWrapper && backupScript), "threat-intelligence backup scripts exist"),
+    check("required.backup_scripts", Boolean(backupWrapper && backupScript && backupPostgres), "threat-intelligence backup scripts exist"),
     check("dockerfile.test_enforced", /FROM\s+test\s+AS\s+runtime/i.test(scraperDockerfile), "scraper runtime stage depends on test stage"),
     check("dockerfile.runs_tests", /RUN\s+bun\s+(?:run\s+)?test/.test(scraperDockerfile) && /RUN\s+bun\s+run\s+check/.test(scraperDockerfile), "scraper Docker build runs tests and type-check"),
     check("compose.scraper_service", /ti-scraper:\s*\n/.test(compose), "compose declares ti-scraper service"),
@@ -61,7 +65,17 @@ export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygien
     "scraper Dockerfile.dockerignore excludes unrelated application trees"),
     check("dockerignore.scraper_excludes_env", /(^|\n)\.env(\n|$)/.test(scraperDockerignore) && /(^|\n)\.env\.\*(\n|$)/.test(scraperDockerignore), "scraper .dockerignore excludes env files"),
     check("backup.private_permissions", /umask 077/.test(backupWrapper) && /chmod 700 "\$backup_root"/.test(backupWrapper) && /umask 077/.test(backupScript) && /chmod 700 "\$archive"/.test(backupScript), "backup archives use private permissions"),
-    check("backup.atomic_completion", /partial="\$archive\.partial\.\$\$"/.test(backupWrapper) && /mv "\$partial" "\$archive"/.test(backupWrapper), "backup archives are published only after verification")
+    check("backup.atomic_completion", /partial="\$archive\.partial\.\$\$"/.test(backupWrapper) && /mv "\$partial" "\$archive"/.test(backupWrapper), "backup archives are published only after verification"),
+    check("backup.complete_database_inventory", /--snapshot="\$snapshot"/.test(backupPostgres) && !/--schema=threat_intel/.test(backupPostgres), "backup uses one database snapshot and does not silently limit tables by schema"),
+    check("backup.snapshot_object_references", /object_references_sql "\$snapshot"/.test(backupPostgres) && /OBJECT-REFERENCES\.tsv/.test(backupScript) && /OBJECT-LEDGER\.tsv/.test(backupScript), "backup reconciles snapshot-bound database object references against every archive"),
+    check("backup.object_integrity", /O_NOFOLLOW/.test(restoreVerifier) && /createHash\("sha256"\)/.test(restoreVerifier) && /mediaType/.test(restoreVerifier) && /retentionClass/.test(restoreVerifier), "restore rejects linked-object path, byte hash, and recovery metadata mismatches"),
+    check("backup.exact_restore_reconciliation", /cmp -s "\$database_inventory" "\$restored_inventory"/.test(backupScript) && /RESTORE-EVIDENCE-INVENTORY\.tsv/.test(backupScript) && /APPLICATION-READ-PROOF\.json/.test(backupScript), "restore drill reconciles database and evidence hashes before an application read"),
+    check("backup.atomic_restore_receipt", /receipt_stage=\$\(mktemp -d "\$archive_parent/.test(backupScript) && /mv "\$receipt_stage" "\$receipt_target"/.test(backupScript) && /RESTORE-LAST-ATTEMPT/.test(backupScript), "restore proof is staged outside the archive and only the successful receipt is published"),
+    check("backup.restore_provenance", /verifier_commit=\$\(git -C "\$repo_root" rev-parse HEAD\)/.test(backupScript) && /scraper_image_id=\$\(resolve_scraper_image\)/.test(backupScript) && /scraper_image=\$scraper_image_id/.test(backupScript), "restore receipts record and run the exact verifier commit and immutable scraper image"),
+    check("backup.isolated_restore", /docker run/.test(backupScript) && /--tmpfs/.test(backupScript) && !/compose stop/.test(backupScript), "restore drill uses ephemeral PostgreSQL without stopping healthy services"),
+    check("backup.signal_cleanup", /trap 'exit 130' INT/.test(backupPostgres) && /trap 'exit 143' TERM/.test(backupPostgres) && !/set \+e/.test(backupPostgres), "PostgreSQL backup helper exits nonzero after signal cleanup"),
+    check("backup.failure_audit", /status=failed/.test(backupWrapper) && /LATEST-STATUS/.test(backupWrapper) && /exit_code=%s/.test(backupWrapper) && /phase=%s/.test(backupWrapper) && /reason=%s/.test(backupWrapper), "scheduled failures persist bounded phase, reason, and exit status"),
+    check("backup.native_lock", /command -v flock/.test(backupWrapper) && /flock -n -E 75 9/.test(backupWrapper) && !/kill -0/.test(backupWrapper), "scheduled backups use a kernel-held lock instead of trusting a PID")
   ];
 
   return { ok: checks.every((item) => item.ok), repoRoot: root, checks };
