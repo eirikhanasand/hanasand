@@ -58,7 +58,6 @@ CROSS JOIN LATERAL jsonb_array_elements_text(
   CASE WHEN jsonb_typeof(profile.record->'captureIds') = 'array' THEN profile.record->'captureIds' ELSE '[]'::jsonb END
 ) capture_id
 JOIN threat_intel.captures capture ON capture.id = capture_id
-WHERE COALESCE(profile.record->>'identityResolutionState', 'active') <> 'archived'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO _actor_profile_scope_refs
@@ -72,7 +71,6 @@ FROM threat_intel.actor_profiles profile
 JOIN threat_intel.evidence_links link
   ON link.subject_type = 'actor_profile' AND link.subject_id = profile.id
 JOIN threat_intel.captures capture ON capture.id = link.capture_id
-WHERE COALESCE(profile.record->>'identityResolutionState', 'active') <> 'archived'
 ON CONFLICT DO NOTHING;
 
 CREATE TEMP TABLE _actor_profile_scope_affected ON COMMIT DROP AS
@@ -213,7 +211,9 @@ GROUP BY
 CREATE TEMP TABLE _actor_profile_scope_rebuilt ON COMMIT DROP AS
 SELECT
   materialized.*,
-  COALESCE((
+  CASE
+    WHEN materialized.source_record->>'identityResolutionState' = 'archived' THEN '[]'::jsonb
+    ELSE COALESCE((
     SELECT jsonb_agg(to_jsonb(label) ORDER BY lower(label), label)
     FROM (
       SELECT DISTINCT ON (lower(label)) label
@@ -236,7 +236,13 @@ SELECT
       WHERE btrim(label) <> ''
       ORDER BY lower(label), label
     ) distinct_labels
-  ), jsonb_build_array(materialized.canonical_name)) AS aliases,
+    ), jsonb_build_array(materialized.canonical_name))
+  END AS aliases,
+  CASE
+    WHEN materialized.source_record->>'identityResolutionState' = 'archived'
+      THEN 'archived:' || materialized.target_actor_profile_id
+    ELSE materialized.normalized_name
+  END AS target_normalized_name,
   COALESCE((
     SELECT jsonb_object_agg(field.key, filtered.observations ORDER BY field.key)
     FROM jsonb_each(
@@ -304,7 +310,7 @@ SELECT
   rebuilt.target_actor_profile_id,
   rebuilt.scope_tenant_id,
   rebuilt.canonical_name,
-  rebuilt.normalized_name,
+  rebuilt.target_normalized_name,
   rebuilt.actor_type,
   rebuilt.confidence,
   rebuilt.first_seen_at,
@@ -316,7 +322,7 @@ SELECT
     'id', rebuilt.target_actor_profile_id,
     'tenantId', rebuilt.scope_tenant_id,
     'canonicalName', rebuilt.canonical_name,
-    'normalizedName', rebuilt.normalized_name,
+    'normalizedName', rebuilt.target_normalized_name,
     'aliases', rebuilt.aliases,
     'confidence', rebuilt.confidence,
     'firstSeenAt', rebuilt.first_seen_at,
@@ -333,6 +339,7 @@ WHERE rebuilt.target_actor_profile_id <> rebuilt.source_actor_profile_id;
 UPDATE threat_intel.actor_profiles profile
 SET
   tenant_id = rebuilt.scope_tenant_id,
+  normalized_name = rebuilt.target_normalized_name,
   confidence = rebuilt.confidence,
   first_seen_at = rebuilt.first_seen_at,
   last_seen_at = rebuilt.last_seen_at,
@@ -342,7 +349,7 @@ SET
     'id', rebuilt.target_actor_profile_id,
     'tenantId', rebuilt.scope_tenant_id,
     'canonicalName', rebuilt.canonical_name,
-    'normalizedName', rebuilt.normalized_name,
+    'normalizedName', rebuilt.target_normalized_name,
     'aliases', rebuilt.aliases,
     'confidence', rebuilt.confidence,
     'firstSeenAt', rebuilt.first_seen_at,
@@ -419,6 +426,7 @@ CROSS JOIN LATERAL jsonb_array_elements_text(
   CASE WHEN jsonb_typeof(profile.record->'aliases') = 'array' THEN profile.record->'aliases' ELSE '[]'::jsonb END
 ) alias(value)
 WHERE btrim(alias.value) <> ''
+  AND COALESCE(profile.record->>'identityResolutionState', 'active') <> 'archived'
 ON CONFLICT (actor_profile_id, normalized_alias) DO NOTHING;
 
 INSERT INTO threat_intel.actor_profile_scope_lineage (
@@ -610,8 +618,7 @@ BEGIN
       CASE WHEN jsonb_typeof(profile.record->'captureIds') = 'array' THEN profile.record->'captureIds' ELSE '[]'::jsonb END
     ) capture_id
     JOIN threat_intel.captures capture ON capture.id = capture_id
-    WHERE COALESCE(profile.record->>'identityResolutionState', 'active') <> 'archived'
-      AND profile.tenant_id IS DISTINCT FROM capture.tenant_id
+    WHERE profile.tenant_id IS DISTINCT FROM capture.tenant_id
   ) OR EXISTS (
     SELECT 1
     FROM threat_intel.evidence_links link

@@ -1093,6 +1093,14 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     const defaultOnlyResult = seed.savePipelineResult(governed("src_scope_default_only", "APT29", "Default Only Systems", "default"));
     seed.saveCapture(actorProfileCapture("cap_scope_identity", "src_scope_identity", "tenant_customer"));
     seed.saveCapture(actorProfileCapture("cap_scope_unresolved", "src_scope_unresolved", "tenant_customer"));
+    const archivedGlobalCaptureIds = Array.from({ length: 2 }, (_, index) => `cap_scope_worldleaks_global_${String(index + 1).padStart(2, "0")}`);
+    const archivedDefaultCaptureIds = Array.from({ length: 43 }, (_, index) => `cap_scope_worldleaks_default_${String(index + 1).padStart(2, "0")}`);
+    for (const captureId of archivedGlobalCaptureIds) {
+      seed.saveCapture(actorProfileCapture(captureId, "src_scope_global"));
+    }
+    for (const captureId of archivedDefaultCaptureIds) {
+      seed.saveCapture(actorProfileCapture(captureId, "src_scope_default", "default"));
+    }
     seed.saveExtractedEntity({
       id: "entity_scope_identity",
       tenantId: "tenant_customer",
@@ -1143,11 +1151,19 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     `;
 
     const archivedProfile = {
-      ...legacyActorProfile("actor_scope_archived", undefined, "Archived Group", [], [], []),
-      normalizedName: "archived:actor_scope_archived",
-      evidenceCount: 1,
+      ...legacyActorProfile(
+        "actor_8e9b65d7fdd83b03",
+        undefined,
+        "WorldLeaks",
+        ["ransomware-live-current-operations:worldleaks"],
+        ["src_scope_default", "src_scope_global"],
+        [...archivedGlobalCaptureIds, ...archivedDefaultCaptureIds].sort()
+      ),
+      normalizedName: "archived:actor_8e9b65d7fdd83b03",
+      aliases: [],
+      evidenceCount: 45,
       identityResolutionState: "archived",
-      identityResolutionReason: "unresolved"
+      identityResolutionReason: "inactive_identity"
     };
     await admin`
       INSERT INTO threat_intel.actor_profiles (
@@ -1159,7 +1175,22 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         ${archivedProfile.lastSeenAt}, ${archivedProfile.evidenceCount}, ${archivedProfile.updatedAt}, ${JSON.stringify(archivedProfile)}::text::jsonb
       )
     `;
-    for (const profileId of [globalMagic.id, defaultOnly.id]) {
+    for (const captureId of archivedGlobalCaptureIds) {
+      await insertActorProfileEvidenceLink(admin, {
+        id: `link_scope_worldleaks_global_${captureId}`,
+        captureId,
+        subjectId: archivedProfile.id
+      });
+    }
+    for (const captureId of archivedDefaultCaptureIds) {
+      await insertActorProfileEvidenceLink(admin, {
+        id: `link_scope_worldleaks_default_${captureId}`,
+        tenantId: "default",
+        captureId,
+        subjectId: archivedProfile.id
+      });
+    }
+    for (const profileId of [globalMagic.id, defaultOnly.id, archivedProfile.id]) {
       await admin`
         INSERT INTO threat_intel.actor_profile_identity_history (
           id, actor_profile_id, canonical_actor_profile_id, reconciliation_key,
@@ -1207,7 +1238,8 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await insertWorkflow("workflow_scope_evidence_missing", "actor_scope_missing_evidence", "default", [defaultResult.capture.id]);
     await insertWorkflow("workflow_scope_identity_missing", "actor_scope_missing_identity", "tenant_customer", ["cap_scope_identity"]);
     await insertWorkflow("workflow_scope_unresolved_missing", "actor_scope_missing_unresolved", "tenant_customer", ["cap_scope_unresolved"]);
-    await insertWorkflow("workflow_scope_archived", archivedProfile.id, undefined, [], "actor_scope_probe");
+    await insertWorkflow("workflow_scope_archived_global", archivedProfile.id, undefined, archivedGlobalCaptureIds, "actor_scope_probe");
+    await insertWorkflow("workflow_scope_archived_default", archivedProfile.id, "default", archivedDefaultCaptureIds);
 
     await admin`
       INSERT INTO threat_intel.intelligence_claims (
@@ -1283,15 +1315,19 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       ORDER BY source_actor_profile_id, scope_key
     `;
     const split = lineage.find((row) => row.source_actor_profile_id === globalMagic.id && row.resolution_status === "scope_split")!;
+    const archivedSplit = lineage.find((row) => row.source_actor_profile_id === archivedProfile.id && row.resolution_status === "scope_split")!;
     expect(split.target_actor_profile_id).toBeString();
     expect(split.target_actor_profile_id).not.toBe(globalMagic.id);
+    expect(archivedSplit.target_actor_profile_id).toBeString();
+    expect(archivedSplit.target_actor_profile_id).not.toBe(archivedProfile.id);
     expect(lineage).toEqual(expect.arrayContaining([
       expect.objectContaining({ source_actor_profile_id: globalMagic.id, target_actor_profile_id: globalMagic.id, resolution_status: "scope_preserved" }),
       expect.objectContaining({ source_actor_profile_id: defaultOnly.id, target_actor_profile_id: defaultOnly.id, resolution_status: "scope_moved" }),
       expect.objectContaining({ source_actor_profile_id: "actor_scope_missing_evidence", target_actor_profile_id: split.target_actor_profile_id, resolution_status: "evidence_resolved" }),
       expect.objectContaining({ source_actor_profile_id: "actor_scope_missing_identity", target_actor_profile_id: null, actor_identity_id: "mitre-attack-enterprise:G0059", resolution_status: "identity_resolved" }),
       expect.objectContaining({ source_actor_profile_id: "actor_scope_missing_unresolved", target_actor_profile_id: null, actor_identity_id: null, resolution_status: "archived_unresolved" }),
-      expect.objectContaining({ source_actor_profile_id: archivedProfile.id, target_actor_profile_id: null, resolution_status: "archived_unresolved" })
+      expect.objectContaining({ source_actor_profile_id: archivedProfile.id, target_actor_profile_id: archivedProfile.id, resolution_status: "scope_preserved" }),
+      expect.objectContaining({ source_actor_profile_id: archivedProfile.id, target_actor_profile_id: archivedSplit.target_actor_profile_id, resolution_status: "scope_split" })
     ]));
     expect(lineage.find((row) => row.source_actor_profile_id === "actor_scope_missing_unresolved")?.record).toMatchObject({
       evidenceCaptureIds: ["cap_scope_unresolved"],
@@ -1303,6 +1339,52 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       expect.objectContaining({ id: split.target_actor_profile_id, tenantId: "default", canonicalName: "Magic Hound", captureIds: [defaultResult.capture.id] }),
       expect.objectContaining({ id: defaultOnly.id, tenantId: "default", canonicalName: "APT29", captureIds: [defaultOnlyResult.capture.id] })
     ]));
+    const ownershipProfiles = await migrated.listActorProfilesForOwnership();
+    expect(ownershipProfiles).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: archivedProfile.id,
+        tenantId: null,
+        canonicalName: "WorldLeaks",
+        normalizedName: `archived:${archivedProfile.id}`,
+        aliases: [],
+        captureIds: archivedGlobalCaptureIds,
+        identityResolutionState: "archived",
+        identityResolutionReason: "inactive_identity"
+      }),
+      expect.objectContaining({
+        id: archivedSplit.target_actor_profile_id,
+        tenantId: "default",
+        canonicalName: "WorldLeaks",
+        normalizedName: `archived:${archivedSplit.target_actor_profile_id}`,
+        aliases: [],
+        captureIds: archivedDefaultCaptureIds,
+        identityResolutionState: "archived",
+        identityResolutionReason: "inactive_identity"
+      })
+    ]));
+    expect(migrated.listActorProfiles().some((profile: any) =>
+      profile.id === archivedProfile.id || profile.id === archivedSplit.target_actor_profile_id
+    )).toBe(false);
+    expect((await migrated.listActorAliasesForOwnership()).some((alias: any) =>
+      alias.actorProfileId === archivedProfile.id || alias.actorProfileId === archivedSplit.target_actor_profile_id
+    )).toBe(false);
+    expect(await admin`
+      SELECT id
+      FROM threat_intel.actor_aliases
+      WHERE actor_profile_id IN (${archivedProfile.id}, ${archivedSplit.target_actor_profile_id})
+    `).toHaveLength(0);
+    expect(await admin<{ capture_id: string }[]>`
+      SELECT capture_id
+      FROM threat_intel.evidence_links
+      WHERE subject_type = 'actor_profile' AND subject_id = ${archivedProfile.id}
+      ORDER BY capture_id
+    `).toEqual(archivedGlobalCaptureIds.map((capture_id) => ({ capture_id })));
+    expect(await admin<{ capture_id: string }[]>`
+      SELECT capture_id
+      FROM threat_intel.evidence_links
+      WHERE subject_type = 'actor_profile' AND subject_id = ${archivedSplit.target_actor_profile_id}
+      ORDER BY capture_id
+    `).toEqual(archivedDefaultCaptureIds.map((capture_id) => ({ capture_id })));
     expect(await migrated.queryStructuredRecords("actorProfiles", { limit: 20 })).toMatchObject({
       total: 1,
       records: [expect.objectContaining({ id: globalMagic.id, canonicalName: "Magic Hound" })]
