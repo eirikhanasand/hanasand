@@ -12,7 +12,7 @@ import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
 const BASE = "/v1/intel/evaluation/benchmarks";
 const LABEL_TYPES = ["actor", "ransomware", "victim", "incident", "cve", "malware", "ttp", "country", "sector", "indicator", "impact", "dataset", "business_mechanism"] as const;
 const LABEL_TYPE_SET = new Set<string>(LABEL_TYPES);
-const REVIEW_PROMPT_VERSION = "ti.automatic_evaluation_review.v1";
+const REVIEW_PROMPT_VERSION = "ti.automatic_evaluation_review.v2";
 const REVIEW_SCHEMA_VERSION = "ti.automatic_evaluation_response.v1";
 // ponytail: keep one complete model context per capture; add chunked review only when reports over 24 KB must enter the benchmark.
 const MAX_REVIEW_EVIDENCE_BYTES = 24_000;
@@ -110,7 +110,7 @@ export function createEvaluationBenchmark(store: any, input: {
     .filter((capture) => { const evidence = exhaustiveEvidenceText(capture); if (evidence) evidenceByCapture.set(capture.id, evidence); return sourceById.has(capture.sourceId) && Boolean(evidence); })
     .filter((capture) => datasetSplit === "validation" ? !lockedTestCaptureIds.has(capture.id) : !lockedTestCaptureIds.size || lockedTestCaptureIds.has(capture.id))
     .filter((capture) => !capture.metadata?.fixture && !capture.metadata?.synthetic && !capture.metadata?.demo);
-  const selected = balancedSample(eligible, sourceById, Math.max(1, Math.min(200, input.sampleSize)), seed, subjectsByCapture, createdAt);
+  const selected = balancedSample(eligible, sourceById, Math.max(1, Math.min(200, input.sampleSize)), seed, subjectsByCapture, createdAt, labelTypes);
   if (!selected.length) return undefined;
   const id = stableId("evaluation-benchmark", `${input.tenantId ?? "global"}:${seed}:${createdAt}`);
   const manifest = selected.flatMap((capture) => {
@@ -162,7 +162,7 @@ export function createEvaluationBenchmark(store: any, input: {
       };
     });
   });
-  const selectedStrata = selected.flatMap((capture) => captureStrata(capture, subjectsByCapture.get(capture.id), createdAt)).sort();
+  const selectedStrata = selected.flatMap((capture) => captureStrata(capture, subjectsByCapture.get(capture.id), createdAt, labelTypes)).sort();
   const benchmark = {
     id,
     tenantId: input.tenantId,
@@ -174,7 +174,7 @@ export function createEvaluationBenchmark(store: any, input: {
     requiredReviewers,
     selectionSeed: seed,
     selectionSeedSource: "server_generated",
-    samplingMethod: "stable_hash_stratified_source_family_case_type",
+    samplingMethod: "stable_hash_stratified_source_family_case_and_label_candidate",
     selectionStrata: countByValue(selectedStrata),
     selectionFrameHash: evaluationHash(eligible.map((capture) => `${capture.id}:${capture.contentHash}:${evaluationHash(evidenceByCapture.get(capture.id)!)}`).sort().join("\n")),
     eligibleCaptureCount: eligible.length,
@@ -876,20 +876,30 @@ function evaluationFailure(code: string, message: string, retryable: boolean) { 
 function automaticFailure(caught: any) { return { code: cleanText(caught?.code, 100) ?? "evaluation_failed", message: safeFailureMessage(caught), retryable: caught?.retryable !== false }; }
 function safeFailureMessage(caught: unknown) { return (caught instanceof Error ? caught.message : String(caught)).replace(/\bhttps?:\/\/\S+/gi, "[redacted-url]").slice(0, 500); }
 
-function balancedSample(captures: any[], sourceById: Map<string, any>, size: number, seed: string, subjectsByCapture = new Map<string, any>(), generatedAt = nowIso()) {
-  const groups = new Map<string, any[]>();
+function balancedSample(captures: any[], sourceById: Map<string, any>, size: number, seed: string, subjectsByCapture = new Map<string, any>(), generatedAt = nowIso(), labelTypes: readonly string[] = LABEL_TYPES) {
+  const groupSizes = new Map<string, number>();
+  const tags = new Map<string, string[]>();
   for (const capture of captures) {
     const family = sourceFamily(sourceById.get(capture.sourceId), capture);
-    const stratum = captureStrata(capture, subjectsByCapture.get(capture.id), generatedAt)[0] ?? "ordinary";
-    const key = `${family}:${stratum}`;
-    groups.set(key, [...(groups.get(key) ?? []), capture]);
+    const captureTags = [`source:${family}`, ...captureStrata(capture, subjectsByCapture.get(capture.id), generatedAt, labelTypes)];
+    tags.set(capture.id, captureTags);
+    for (const tag of captureTags) groupSizes.set(tag, (groupSizes.get(tag) ?? 0) + 1);
   }
-  for (const rows of groups.values()) rows.sort((a, b) => evaluationHash(`${seed}:${a.id}`).localeCompare(evaluationHash(`${seed}:${b.id}`)));
-  const selected: any[] = [], names = [...groups.keys()].sort();
-  while (selected.length < Math.min(size, captures.length)) {
-    let progressed = false;
-    for (const name of names) { const row = groups.get(name)?.shift(); if (row) { selected.push(row); progressed = true; if (selected.length === Math.min(size, captures.length)) break; } }
-    if (!progressed) break;
+  const target = Math.min(size, captures.length), selected: any[] = [], selectedIds = new Set<string>(), counts = new Map<string, number>();
+  const sourceGroupCount = [...groupSizes.keys()].filter((tag) => tag.startsWith("source:")).length;
+  const quota = (tag: string) => tag.startsWith("source:") ? Math.ceil(target / Math.max(1, sourceGroupCount)) : tag.endsWith("_candidate") ? Math.min(5, groupSizes.get(tag) ?? 0) : 1;
+  // ponytail: this bounded greedy scan covers scarce positive strata without adding an optimizer; sample size is capped at 200.
+  while (selected.length < target) {
+    const remaining = captures.filter((capture) => !selectedIds.has(capture.id));
+    const ranked = remaining.map((capture) => ({
+      capture,
+      score: (tags.get(capture.id) ?? []).reduce((score, tag) => score + ((counts.get(tag) ?? 0) < quota(tag) ? tag.endsWith("_positive_candidate") ? 3 : 1 : 0), 0),
+      tie: evaluationHash(`${seed}:${capture.id}`)
+    })).sort((left, right) => right.score - left.score || left.tie.localeCompare(right.tie));
+    const next = ranked[0]?.capture;
+    if (!next) break;
+    selected.push(next); selectedIds.add(next.id);
+    for (const tag of tags.get(next.id) ?? []) counts.set(tag, (counts.get(tag) ?? 0) + 1);
   }
   return selected;
 }
@@ -988,8 +998,9 @@ function normalizedConfidence(value: unknown): number | undefined {
   return Number.isFinite(number) ? Number(Math.max(0, Math.min(1, number > 1 ? number / 100 : number)).toFixed(3)) : undefined;
 }
 
-function captureStrata(capture: any, subjects: { entities?: any[]; indicators?: any[]; incidents?: any[] } = {}, generatedAt = nowIso()) {
+function captureStrata(capture: any, subjects: { entities?: any[]; indicators?: any[]; incidents?: any[] } = {}, generatedAt = nowIso(), labelTypes: readonly string[] = LABEL_TYPES) {
   const entities = subjects.entities ?? [];
+  const completeSubjects = { entities, indicators: subjects.indicators ?? [], incidents: subjects.incidents ?? [] };
   const markers = [
     (capture.metadata?.parserWarnings?.length || capture.metadata?.parserStatus === "failed") && "parser_failure",
     (capture.metadata?.review?.state === "needs_review" || entities.some((entity) => Number(entity.confidence ?? 1) < 0.6)) && "ambiguous",
@@ -999,7 +1010,7 @@ function captureStrata(capture: any, subjects: { entities?: any[]; indicators?: 
     entities.some((entity) => BUSINESS_MECHANISM_TYPES.has(entity.type)) && "business_mechanism",
     entities.length || subjects.indicators?.length || subjects.incidents?.length ? "positive_candidate" : "negative_candidate"
   ].filter(Boolean) as string[];
-  return unique(markers);
+  return unique([...markers, ...labelTypes.map((labelType) => `${labelType}_${predictionsFor(labelType, completeSubjects).length ? "positive" : "negative"}_candidate`)]);
 }
 
 function referenceEvidenceFor(capture: any, source: any, incidents: any[], validations: any[], evidence = blindExcerpt(capture)) {

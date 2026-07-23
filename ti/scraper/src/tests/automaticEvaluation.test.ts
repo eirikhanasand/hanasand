@@ -159,7 +159,7 @@ describe("automatic independent evaluation", () => {
     expect(retryReceipt).toMatchObject({ taskId: replayed.manifest[0].id, status: "queued", replayedAt: expect.any(String) });
     expect(store.getEvaluationBenchmark(replayed.id).manifest[0].automation).toMatchObject({ replayCount: 1, attemptCount: 0, status: "queued" });
 
-    await runAutomaticEvaluationCycle({ store, autoCreate: false, maxTasks: 2, now: () => "2026-07-23T00:00:00.000Z", review: successfulActorReview });
+    await runAutomaticEvaluationCycle({ store, autoCreate: false, maxTasks: 2, now: () => "2099-07-23T00:00:00.000Z", review: successfulActorReview });
     expect(store.getEvaluationBenchmark(replayed.id)).toMatchObject({ status: "complete", automation: { status: "complete" } });
 
     const restart = automaticActorBenchmark(store, "restart benchmark", "2026-07-21T12:00:00.000Z");
@@ -176,7 +176,7 @@ describe("automatic independent evaluation", () => {
     const terminalRestart = automaticActorBenchmark(store, "terminal restart benchmark", "2026-07-21T13:00:00.000Z");
     const terminalTask = terminalRestart.manifest[0];
     store.saveEvaluationBenchmark({ ...terminalRestart, manifest: [{ ...terminalTask, automation: { ...terminalTask.automation, status: "running", stage: "adjudicator", leaseExpiresAt: "2026-07-21T13:00:30.000Z" } }] });
-    store.saveEvaluationAdjudication({ id: stableId("evaluation-adjudication", terminalTask.id), benchmarkId: terminalRestart.id, taskId: terminalTask.id, captureId: terminalTask.captureId, labelType: "actor", expectedValues: ["APT29"], annotationIds: [], method: "independent_model_adjudicator", adjudicatedBy: "hanasand-ai:adjudicator", reviewKind: "automatic_model_adjudication", reviewerModelVersion: "hanasand-v2", promptVersion: "ti.automatic_evaluation_review.v1", schemaVersion: "ti.automatic_evaluation_response.v1", adjudicatedAt: "2026-07-21T13:00:20.000Z" });
+    store.saveEvaluationAdjudication({ id: stableId("evaluation-adjudication", terminalTask.id), benchmarkId: terminalRestart.id, taskId: terminalTask.id, captureId: terminalTask.captureId, labelType: "actor", expectedValues: ["APT29"], annotationIds: [], method: "independent_model_adjudicator", adjudicatedBy: "hanasand-ai:adjudicator", reviewKind: "automatic_model_adjudication", reviewerModelVersion: "hanasand-v2", promptVersion: "ti.automatic_evaluation_review.v2", schemaVersion: "ti.automatic_evaluation_response.v1", adjudicatedAt: "2026-07-21T13:00:20.000Z" });
     await runAutomaticEvaluationCycle({ store, autoCreate: false, maxTasks: 1, now: () => "2026-07-21T13:01:00.000Z", review: async () => { throw new Error("terminal recovery must not call the model"); } });
     expect(store.getEvaluationBenchmark(terminalRestart.id)).toMatchObject({ status: "complete", manifest: [expect.objectContaining({ automation: expect.objectContaining({ status: "adjudicated", history: expect.arrayContaining([expect.objectContaining({ reason: "restart_terminal_reconciliation" })]) }) })] });
     expect(store.listEvaluationLabels().some((label: any) => label.benchmarkId === terminalRestart.id && label.outcome === "true_positive")).toBe(true);
@@ -197,8 +197,19 @@ describe("automatic independent evaluation", () => {
     store.saveExtractedEntity({ id: "entity_mechanism", tenantId: "tenant_automatic", sourceId: "src_automatic", captureId: "cap_negative", type: "extortion_type", value: "double extortion", normalizedValue: "double extortion", confidence: 0.8, extractorVersion: "parser-v1" });
 
     const stratified = createEvaluationBenchmark(store, { tenantId: "tenant_automatic", sampleSize: 6, labelTypes: ["actor"], datasetSplit: "validation", reviewMode: "automatic_model", createdAt: "2026-07-21T13:00:00.000Z" })!;
-    expect(stratified.selectionStrata).toMatchObject({ parser_failure: 1, ambiguous: 1, duplicate: 1, cross_actor_mention: 1, stale: 1, business_mechanism: 1, positive_candidate: 2, negative_candidate: 4 });
+    expect(stratified.selectionStrata).toMatchObject({ parser_failure: 1, ambiguous: 1, duplicate: 1, cross_actor_mention: 1, stale: 1, business_mechanism: 1, positive_candidate: 2, negative_candidate: 4, actor_positive_candidate: 1, actor_negative_candidate: 5 });
     expect(stratified.captureIds).not.toContain("cap_truncated_object");
+
+    const coverageStore = new InMemoryScraperStore();
+    coverageStore.saveSource(store.getSource("src_automatic")!);
+    for (let index = 0; index < 15; index++) {
+      const captureId = `cap_coverage_${index}`;
+      coverageStore.saveCapture({ id: captureId, tenantId: "tenant_automatic", sourceId: "src_automatic", url: `https://evidence.test/coverage/${index}`, collectedAt: at, publishedAt: at, contentHash: hashContent(`Coverage ${index}`), mediaType: "text/plain", storageKind: "inline_text", body: `Coverage ${index}`, metadata: {}, sensitive: false });
+      if (index < 5) coverageStore.saveExtractedEntity({ id: `actor_${index}`, tenantId: "tenant_automatic", sourceId: "src_automatic", captureId, type: "actor", value: `Actor ${index}`, confidence: 0.8, extractorVersion: "parser-v1" });
+      else if (index < 10) coverageStore.saveExtractedEntity({ id: `victim_${index}`, tenantId: "tenant_automatic", sourceId: "src_automatic", captureId, type: "victim", value: `Victim ${index}`, confidence: 0.8, extractorVersion: "parser-v1" });
+    }
+    const labelBalanced = createEvaluationBenchmark(coverageStore, { tenantId: "tenant_automatic", sampleSize: 10, labelTypes: ["actor", "victim"], datasetSplit: "validation", reviewMode: "automatic_model", createdAt: "2026-07-21T13:00:15.000Z" })!;
+    expect(labelBalanced.selectionStrata).toMatchObject({ actor_positive_candidate: 5, actor_negative_candidate: 5, victim_positive_candidate: 5, victim_negative_candidate: 5 });
 
     const objectRoot = mkdtempSync(join(tmpdir(), "automatic-evaluation-"));
     const previousObjectRoot = Bun.env.TI_EVIDENCE_OBJECT_DIR;
