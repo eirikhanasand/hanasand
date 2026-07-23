@@ -1,4 +1,4 @@
-import type { TiActionabilityContract, TiActorIntelligenceContract, TiSearchResponse } from '@/utils/ti/search'
+import type { TiActionabilityContract, TiActorBusinessFinding, TiActorIntelligenceContract, TiSearchResponse } from '@/utils/ti/search'
 
 export function sanitizeTiResultForPublicPage(result: TiSearchResponse | null): TiSearchResponse | null {
     if (!result) return null
@@ -88,6 +88,20 @@ export function sanitizeTiResultForPublicPage(result: TiSearchResponse | null): 
             }))
         } : undefined,
         actorIntelligence: sanitizeActorIntelligence(result.actorIntelligence),
+        actorCaseStudies: result.actorCaseStudies ? {
+            ...result.actorCaseStudies,
+            qualification: publicTiText(result.actorCaseStudies.qualification),
+            cases: result.actorCaseStudies.cases.map(caseStudy => ({
+                ...caseStudy,
+                actor: publicTiText(caseStudy.actor),
+                categories: caseStudy.categories.map(publicTiText),
+                reviewStates: caseStudy.reviewStates.map(publicTiText),
+                findings: caseStudy.findings?.map(sanitizeActorBusinessFinding),
+            })),
+            reviewedFindings: result.actorCaseStudies.reviewedFindings?.map(sanitizeActorBusinessFinding),
+            pendingFindings: result.actorCaseStudies.pendingFindings?.map(sanitizeActorBusinessFinding),
+            missingContexts: result.actorCaseStudies.missingContexts.map(publicTiText),
+        } : undefined,
         actionability: sanitizeActionability(result.actionability),
         analystLoop: result.analystLoop ? {
             resultState: result.analystLoop.resultState,
@@ -167,6 +181,7 @@ function sanitizeActorIntelligence(actorIntelligence?: TiActorIntelligenceContra
             advertisedProducts: sanitizeBusinessObservations(actorIntelligence.businessModel.advertisedProducts),
             advertisedData: sanitizeBusinessObservations(actorIntelligence.businessModel.advertisedData),
             pricingClaims: sanitizeBusinessObservations(actorIntelligence.businessModel.pricingClaims),
+            negotiationClaims: sanitizeBusinessObservations(actorIntelligence.businessModel.negotiationClaims),
             paymentClaims: sanitizeBusinessObservations(actorIntelligence.businessModel.paymentClaims),
             revenueClaims: sanitizeBusinessObservations(actorIntelligence.businessModel.revenueClaims),
             revenueShareClaims: sanitizeBusinessObservations(actorIntelligence.businessModel.revenueShareClaims),
@@ -179,6 +194,7 @@ function sanitizeActorIntelligence(actorIntelligence?: TiActorIntelligenceContra
             intermediaryCommunications: sanitizeBusinessObservations(actorIntelligence.businessModel.intermediaryCommunications),
             monetizationPaths: sanitizeBusinessObservations(actorIntelligence.businessModel.monetizationPaths),
             profitabilitySignals: sanitizeBusinessObservations(actorIntelligence.businessModel.profitabilitySignals),
+            pendingFindings: sanitizeBusinessObservations(actorIntelligence.businessModel.pendingFindings),
             profitabilityConclusion: actorIntelligence.businessModel.profitabilityConclusion ? {
                 status: actorIntelligence.businessModel.profitabilityConclusion.status,
                 summary: publicTiText(actorIntelligence.businessModel.profitabilityConclusion.summary),
@@ -221,6 +237,8 @@ function sanitizeBusinessObservations(rows: NonNullable<TiActorIntelligenceContr
         sourceIds: row.sourceIds,
         captureIds: row.captureIds,
         claimIds: row.claimIds,
+        claimEvidenceIds: row.claimEvidenceIds,
+        entityIds: row.entityIds,
         reviewState: row.reviewState,
         reviewReasons: row.reviewReasons.map(publicTiText),
         corroborationState: row.corroborationState,
@@ -228,17 +246,56 @@ function sanitizeBusinessObservations(rows: NonNullable<TiActorIntelligenceContr
         evidenceCount: row.evidenceCount,
         firstSeenAt: row.firstSeenAt,
         lastSeenAt: row.lastSeenAt,
+        firstPublishedAt: row.firstPublishedAt,
+        lastPublishedAt: row.lastPublishedAt,
+        firstCollectedAt: row.firstCollectedAt,
+        lastCollectedAt: row.lastCollectedAt,
         evidenceStages: row.evidenceStages,
         extractionMethods: row.extractionMethods,
         extractorVersions: row.extractorVersions,
         evidence: row.evidence?.map(evidence => ({
             sourceId: evidence.sourceId,
             captureId: evidence.captureId,
-            url: evidence.url,
+            claimId: evidence.claimId,
+            claimEvidenceId: evidence.claimEvidenceId,
+            entityId: evidence.entityId,
+            contentHash: evidence.contentHash,
+            url: safePublicTiUrl(evidence.url),
+            publishedAt: evidence.publishedAt,
             collectedAt: evidence.collectedAt,
-            excerpt: publicTiText(evidence.excerpt),
+            excerpt: publicEvidenceText(evidence.excerpt),
         })),
     })) ?? []
+}
+
+function sanitizeActorBusinessFinding(finding: TiActorBusinessFinding): TiActorBusinessFinding {
+    return {
+        actorId: finding.actorId,
+        actor: publicTiText(finding.actor),
+        actorClass: finding.actorClass,
+        category: finding.category,
+        type: finding.type,
+        value: publicTiText(finding.value),
+        assertionKind: finding.assertionKind,
+        confidence: finding.confidence,
+        claimId: finding.claimId,
+        claimEvidenceId: finding.claimEvidenceId,
+        entityId: finding.entityId,
+        captureId: finding.captureId,
+        sourceId: finding.sourceId,
+        relationship: finding.relationship,
+        evidenceStage: finding.evidenceStage,
+        reviewState: finding.reviewState,
+        reviewedAt: finding.reviewedAt,
+        reviewReasons: finding.reviewReasons.map(publicTiText),
+        extractionMethod: finding.extractionMethod,
+        extractorVersion: finding.extractorVersion,
+        contentHash: finding.contentHash,
+        publishedAt: finding.publishedAt,
+        collectedAt: finding.collectedAt,
+        url: safePublicTiUrl(finding.url),
+        excerpt: publicEvidenceText(finding.excerpt),
+    }
 }
 
 function sanitizeActionability(actionability?: TiActionabilityContract): TiActionabilityContract | undefined {
@@ -323,7 +380,7 @@ function sanitizeActionability(actionability?: TiActionabilityContract): TiActio
 }
 
 function publicTiText(value: string) {
-    return publicBackendCopyText(value)
+    return publicEvidenceText(publicBackendCopyText(value)
         .replace(/GET\s+\/api\/organizations\/[^/\s]+\/alert-readiness/gi, 'Check organization alert state')
         .replace(/GET\s+\/api\/organizations\/[^/\s]+\/alert-status/gi, 'Check organization alert state')
         .replace(/\/api\/organizations\/[^/\s]+\/alert-readiness/gi, 'organization alert state')
@@ -358,18 +415,81 @@ function publicTiText(value: string) {
         .replace(/\bexposure metadata\b/gi, 'exposure records')
         .replace(/\bcredential-exposure metadata\b/gi, 'credential-exposure records')
         .replace(/\bcaptured metadata\b/gi, 'captured page text')
-        .replace(/\bcollected as metadata\b/gi, 'collected as reviewable records')
+        .replace(/\bcollected as metadata\b/gi, 'collected as reviewable records'))
 }
 
-function sanitizeBackendShapedPublicText<T>(value: T): T {
-    if (typeof value === 'string') return publicBackendCopyText(value) as T
-    if (Array.isArray(value)) return value.map(item => sanitizeBackendShapedPublicText(item)) as T
+function sanitizeBackendShapedPublicText<T>(value: T, field?: string): T {
+    if (typeof value === 'string') {
+        if (field && PUBLIC_URL_FIELDS.has(field.toLowerCase())) return safePublicTiUrl(value) as T
+        return publicContactText(publicBackendCopyText(value)) as T
+    }
+    if (Array.isArray(value)) return value.map(item => sanitizeBackendShapedPublicText(item, field)) as T
     if (!value || typeof value !== 'object') return value
 
     return Object.fromEntries(
-        Object.entries(value).map(([key, item]) => [key, sanitizeBackendShapedPublicText(item)]),
+        Object.entries(value).flatMap(([key, item]) => {
+            if (INTERNAL_REVIEW_FIELDS.has(key.toLowerCase())) return []
+            if (PUBLIC_URL_FIELDS.has(key.toLowerCase()) && typeof item === 'string') {
+                const url = safePublicTiUrl(item)
+                return url ? [[key, url]] : []
+            }
+            return [[key, sanitizeBackendShapedPublicText(item, key)]]
+        }),
     ) as T
 }
+
+function publicEvidenceText(value: string) {
+    return publicContactText(value)
+}
+
+function publicContactText(value: string) {
+    return value
+        .replace(/(?:https?:\/\/)?(?:t\.me|telegram\.me|telegram\.dog)\/[^\s"'<>]+|\btg:(?:\/\/)?[^\s"'<>]+/gi, '[telegram contact removed]')
+        .replace(/\bhttps?:\/\/[^\s"'<>]+/gi, url => safePublicTiUrl(url) ?? '[external reference removed]')
+        .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
+        .replace(/(^|\s)@[A-Za-z0-9_]{4,}\b/g, '$1[handle]')
+        .replace(/(?<![A-Za-z0-9.-])(?<![\d-])(?!\d{4}-\d{2}-\d{2}(?:T|\b))(?!\d{1,3}(?:\.\d{1,3}){3}\b)\+?\d[\d\s().-]{7,}\d/g, '[phone]')
+}
+
+function safePublicTiUrl(value?: string) {
+    if (!value) return undefined
+    try {
+        const parsed = new URL(value)
+        const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '')
+        if (
+            !['http:', 'https:'].includes(parsed.protocol)
+            || parsed.username
+            || parsed.password
+            || privatePublicHost(host)
+            || /^(?:t\.me|telegram\.me|telegram\.dog)$/.test(host)
+            || /\.onion$/.test(host)
+            || [...parsed.searchParams.keys()].some(key => /(?:token|secret|password|authorization|cookie|api[_-]?key|signature)/i.test(key))
+        ) return undefined
+        return parsed.toString()
+    } catch {
+        return undefined
+    }
+}
+
+function privatePublicHost(host: string) {
+    if (!host.includes('.') && !host.includes(':')) return true
+    if (host === 'localhost' || /\.(?:local|internal)$/.test(host)) return true
+    if (host.includes(':')) return host === '::' || host === '::1' || /^0(?::0){6}:[01]$|(?:^|:)ffff:|^f[cd]|^fe[89ab]|^2001:db8:/i.test(host)
+    if (!/^\d+(?:\.\d+){3}$/.test(host)) return false
+    const octets = host.split('.').map(Number)
+    if (octets.some(octet => !Number.isInteger(octet) || octet < 0 || octet > 255)) return true
+    const [a, b] = octets
+    return a === 0 || a === 10 || a === 127 || a >= 224
+        || (a === 100 && b >= 64 && b <= 127)
+        || (a === 169 && b === 254)
+        || (a === 172 && b >= 16 && b <= 31)
+        || (a === 192 && (b === 0 || b === 168))
+        || (a === 198 && (b === 18 || b === 19 || (b === 51 && octets[2] === 100)))
+        || (a === 203 && b === 0 && octets[2] === 113)
+}
+
+const INTERNAL_REVIEW_FIELDS = new Set(['reviewedby', 'reviewerid', 'revieweremail'])
+const PUBLIC_URL_FIELDS = new Set(['url', 'href', 'sourceurl', 'targeturl', 'messageurl'])
 
 function publicBackendCopyText(value: string) {
     return value

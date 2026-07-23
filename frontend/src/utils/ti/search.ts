@@ -84,6 +84,7 @@ export interface TiSearchResponse {
     analystLoop?: TiAnalystLoop
     collectionStrategy?: TiCollectionStrategy
     actorIntelligence?: TiActorIntelligenceContract
+    actorCaseStudies?: TiActorCaseStudyCatalog
     actorIdentity?: TiActorIdentityMatch
     actionability?: TiActionabilityContract
 }
@@ -156,6 +157,8 @@ export interface TiBusinessModelObservation {
     sourceIds: string[]
     captureIds: string[]
     claimIds?: string[]
+    claimEvidenceIds?: string[]
+    entityIds?: string[]
     reviewState: string
     reviewReasons: string[]
     corroborationState?: string
@@ -163,25 +166,35 @@ export interface TiBusinessModelObservation {
     evidenceCount?: number
     firstSeenAt?: string
     lastSeenAt?: string
+    firstPublishedAt?: string
+    lastPublishedAt?: string
+    firstCollectedAt?: string
+    lastCollectedAt?: string
     evidenceStages?: string[]
     extractionMethods?: string[]
     extractorVersions?: string[]
     evidence?: Array<{
         sourceId: string
         captureId: string
+        claimId?: string
+        claimEvidenceId?: string
+        entityId?: string
+        contentHash?: string
         url?: string
+        publishedAt?: string
         collectedAt?: string
         excerpt: string
     }>
 }
 
 export interface TiBusinessModelAssessment {
-    schemaVersion: 'ti.actor.business_model.v1' | 'ti.actor.business_model.v2'
-    evidenceState: 'observed_mechanisms' | 'not_observed'
+    schemaVersion: 'ti.actor.business_model.v1' | 'ti.actor.business_model.v2' | 'ti.actor.business_model.v3'
+    evidenceState: 'observed_mechanisms' | 'reviewed_mechanisms' | 'pending_review' | 'not_observed'
     extortionModels?: TiBusinessModelObservation[]
     advertisedProducts?: TiBusinessModelObservation[]
     advertisedData?: TiBusinessModelObservation[]
     pricingClaims?: TiBusinessModelObservation[]
+    negotiationClaims?: TiBusinessModelObservation[]
     paymentClaims?: TiBusinessModelObservation[]
     revenueClaims?: TiBusinessModelObservation[]
     revenueShareClaims?: TiBusinessModelObservation[]
@@ -194,6 +207,7 @@ export interface TiBusinessModelAssessment {
     intermediaryCommunications: TiBusinessModelObservation[]
     monetizationPaths: TiBusinessModelObservation[]
     profitabilitySignals: TiBusinessModelObservation[]
+    pendingFindings?: TiBusinessModelObservation[]
     profitabilityConclusion?: {
         status: 'profitability_reported' | 'revenue_reported' | 'unknown'
         summary: string
@@ -203,6 +217,71 @@ export interface TiBusinessModelAssessment {
     }
     missingEvidence: string[]
     evidenceBoundary: string
+}
+
+export interface TiActorCaseStudyCatalog {
+    schemaVersion: 'ti.actor.case_studies.v1' | 'ti.actor.case_studies.v2'
+    supportedActorCount: number
+    caseStudyCount: number
+    pendingActorCount?: number
+    pendingFindingCount?: number
+    qualification: string
+    actorClassCounts: {
+        ransomwareOrExtortion: number
+        aptOrIntrusionSet: number
+        otherThreatActor: number
+    }
+    categoryCounts: Record<string, number>
+    cases: Array<{
+        actorId?: string
+        actor: string
+        actorClass: 'ransomware_or_extortion' | 'apt_or_intrusion_set' | 'threat_actor'
+        categories: string[]
+        findingCount: number
+        evidenceCount: number
+        captureCount: number
+        sourceCount: number
+        firstSeenAt?: string
+        lastSeenAt?: string
+        firstPublishedAt?: string
+        lastPublishedAt?: string
+        firstCollectedAt?: string
+        lastCollectedAt?: string
+        reviewStates: string[]
+        findings?: TiActorBusinessFinding[]
+    }>
+    reviewedFindings?: TiActorBusinessFinding[]
+    pendingFindings?: TiActorBusinessFinding[]
+    missingContexts: string[]
+}
+
+export interface TiActorBusinessFinding {
+    actorId: string
+    actor: string
+    actorClass: 'ransomware_or_extortion' | 'apt_or_intrusion_set' | 'threat_actor'
+    category: string
+    type: string
+    value: string
+    assertionKind: string
+    confidence: number
+    claimId: string
+    claimEvidenceId: string
+    entityId: string
+    captureId: string
+    sourceId: string
+    relationship: 'supports'
+    evidenceStage: string
+    reviewState: string
+    reviewedAt?: string
+    reviewedBy?: string
+    reviewReasons: string[]
+    extractionMethod?: string
+    extractorVersion?: string
+    contentHash: string
+    publishedAt?: string
+    collectedAt?: string
+    url?: string
+    excerpt: string
 }
 
 export interface TiClaimAssessment {

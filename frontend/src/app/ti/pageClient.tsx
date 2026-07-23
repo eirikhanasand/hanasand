@@ -206,7 +206,7 @@ function CatalogOnlyActorResult({ result, identity, error }: { result: TiSearchR
                 </p>
             </div>
             <ActorIdentityPanel identity={identity} />
-            <ActorBusinessModelEvidence model={result.actorIntelligence?.businessModel} sources={result.sources} state={error ? 'error' : 'ready'} error={error} />
+            <ActorBusinessModelEvidence model={result.actorIntelligence?.businessModel} sources={result.sources} caseStudies={result.actorCaseStudies} state={error ? 'error' : 'ready'} error={error} />
         </section>
     )
 }
@@ -362,6 +362,7 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
                     <ActorBusinessModelEvidence
                         model={result.actorIntelligence?.businessModel}
                         sources={result.sources}
+                        caseStudies={result.actorCaseStudies}
                         state={error ? 'error' : result.status === 'searching' || result.status === 'queued' ? 'loading' : 'ready'}
                         error={error}
                     />

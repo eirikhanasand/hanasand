@@ -1,5 +1,7 @@
 import { hashContent } from "../utils.ts";
 import { sanitizeDwmCustomerText } from "../product/dwmCustomerDisplay.ts";
+import { minimizeTelegramPii } from "../adapters/telegramPublicHelpers.ts";
+import { privateTarget } from "../registry/sourceRegistry.ts";
 import { tagsFor } from "./searchTags.ts";
 
 export function rowFromCapture(capture: any, source?: any) {
@@ -7,7 +9,7 @@ export function rowFromCapture(capture: any, source?: any) {
   const rawSummary = cleanSearchText(metadataOnly ? safeMetadataText(capture.metadata) : capture.body ?? capture.rawText ?? capture.metadata?.safeExcerpt ?? "");
   const title = cleanTitle(capture.title, rawSummary, source?.name);
   const summary = cleanActivitySummary(rawSummary, title, source?.name);
-  const url = safePublicUrl(capture.url, capture.metadata);
+  const url = safePublicSearchUrl(capture.url, capture.metadata);
   const claim = victimClaim(title);
   return {
     id: capture.id,
@@ -73,13 +75,19 @@ function safeMetadataText(metadata: any) {
   ].filter(Boolean).join(". ");
 }
 
-function safePublicUrl(url: unknown, metadata: any) {
+export function safePublicSearchUrl(url: unknown, metadata: any = {}) {
   const value = String(url ?? "");
   if (!/^https?:\/\//i.test(value) || /\.onion\b/i.test(value)) return undefined;
   if (metadata?.adapter === "darknet_metadata" || metadata?.captureMode === "metadata_only") return undefined;
   try {
     const parsed = new URL(value);
-    if (parsed.username || parsed.password || [...parsed.searchParams.keys()].some((key) => /(?:token|secret|password|authorization|cookie|api[_-]?key|signature)/i.test(key))) return undefined;
+    if (
+      parsed.username
+      || parsed.password
+      || privateTarget(parsed.hostname)
+      || /^(?:t\.me|telegram\.me|telegram\.dog)$/i.test(parsed.hostname)
+      || [...parsed.searchParams.keys()].some((key) => /(?:token|secret|password|authorization|cookie|api[_-]?key|signature)/i.test(key))
+    ) return undefined;
     if (parsed.hostname === "news.google.com" && /^\/(?:rss\/)?articles\//.test(parsed.pathname)) return undefined;
     return parsed.toString();
   } catch {
@@ -92,7 +100,7 @@ export function isMetadataOnlyCapture(capture: any) {
 }
 
 export function cleanSearchText(value: unknown, maxLength = 500) {
-  const cleaned = String(value ?? "")
+  const cleaned = minimizeTelegramPii(String(value ?? "")
     .replace(/<script\b[\s\S]*?<\/script>|<style\b[\s\S]*?<\/style>|<noscript\b[\s\S]*?<\/noscript>|<!--[\s\S]*?-->/gi, " ")
     .replace(/\.[a-z][\w-]*\s*\{[^{}]{0,500}\}/gi, " ")
     .replace(/(?:^|\s|\.)(?:[#.][a-z][\w-]*|[a-z][\w-]{2,})\s+display\s*:\s*none\s*;?/gi, " ")
@@ -105,7 +113,10 @@ export function cleanSearchText(value: unknown, maxLength = 500) {
     .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
     .replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'")
     .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)));
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10))))
+    .replace(/(?:https?:\/\/)?(?:t\.me|telegram\.me|telegram\.dog)\/[^\s"'<>]+|\btg:(?:\/\/)?[^\s"'<>]+/gi, "[telegram contact removed]")
+    .replace(/\b(?:https?:\/\/|www\.)\S+/gi, "[external reference removed]")
+    .replace(/(^|\s)@[A-Za-z0-9_]{4,}\b/g, "$1[handle]");
   return sanitizeDwmCustomerText(cleaned, undefined, maxLength) ?? "";
 }
 

@@ -449,17 +449,18 @@ describe("DWM exposure queue pipeline", () => {
     const search = await handleApiRequest(new Request("http://local/v1/intel/search?tenantId=default&q=Akira&entityType=actor"), { store, frontier: new FocusedFrontier(), port: 0 } as any);
     const businessModel = (await search.json() as any).actorIntelligence.businessModel;
     expect(businessModel).toMatchObject({
-      evidenceState: "observed_mechanisms",
-      publicationStrategies: expect.arrayContaining([expect.objectContaining({ value: "staged publication status", sourceIds: ["src_public_news"], captureIds: [store.listCaptures()[0].id] })]),
-      pressureTactics: [expect.objectContaining({ value: "countdown to publication" })],
+      evidenceState: "not_observed",
+      publicationStrategies: [],
+      pressureTactics: [],
       buyerSellerCommunications: [],
       intermediaryCommunications: [],
       monetizationPaths: [],
-      profitabilitySignals: []
+      profitabilitySignals: [],
+      pendingFindings: [],
     });
     expect(businessModel.missingEvidence).toEqual(expect.arrayContaining([
-      "pricing or ransom demands",
-      "payment demands or methods",
+      "reviewed pricing or ransom demands",
+      "reviewed payment demands or methods",
       "independently verified revenue",
       "independently verified profitability"
     ]));
