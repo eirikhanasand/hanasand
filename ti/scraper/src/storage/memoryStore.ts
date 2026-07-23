@@ -10,6 +10,7 @@ import { canonicalizeUrl, captureDedupeKey, dedupeIndexKeys, enforceSensitiveMet
 import { nowIso, stableId } from "../utils.ts";
 import { canonicalActorIdentity, normalizeActorLabel, resolveMitreActorIdentity, type ActorIdentityRecord, type MitreActorCatalogSnapshot } from "../pipeline/mitreActorCatalog.ts";
 import type { RansomwareOperationCatalogSnapshot } from "../pipeline/ransomwareOperationCatalog.ts";
+import { publicReferenceUrl } from "../pipeline/timelinessGroundTruth.ts";
 export interface RawEvidenceStore extends CaptureMetadataStore {} export interface ScraperStore extends CaptureMetadataStore {}
 export type ActorIdentityCatalogSnapshot = MitreActorCatalogSnapshot | RansomwareOperationCatalogSnapshot;
 export type ActorIdentityCatalogProvenance = { sourceId: string; captureId: string; importedAt?: string };
@@ -287,7 +288,9 @@ export class InMemoryScraperStore implements ScraperStore {
   }
   getClaimReview(id: string) { return this.claimReviews.get(id); } listClaimReviews() { return mapValues(this.claimReviews); }
   saveSourceHealthObservation(observation: any) { return this.putScoped(this.sourceHealthObservations, observation); } getSourceHealthObservation(id: string) { return this.sourceHealthObservations.get(id); } listSourceHealthObservations() { return mapValues(this.sourceHealthObservations); }
-  saveTimelinessRecord(record: any) { return this.putScoped(this.timelinessRecords, record); } getTimelinessRecord(id: string) { return this.timelinessRecords.get(id); } listTimelinessRecords() { return mapValues(this.timelinessRecords); }
+  saveTimelinessRecord(record: any) { assertTimelinessOrder(record); return this.putScoped(this.timelinessRecords, record); }
+  hydrateTimelinessSnapshot(record: any) { return put(this.timelinessRecords, record); }
+  getTimelinessRecord(id: string) { return this.timelinessRecords.get(id); } listTimelinessRecords() { return mapValues(this.timelinessRecords); }
   saveSource(source: SourceRecord) { return this.putScoped(this.sources, source); } getSource(id: string) { return this.sources.get(id); } listSources() { return mapValues(this.sources); }
   savePlan(plan: any) { return this.putScoped(this.plans, plan); } getPlan(id: string) { return this.plans.get(id); } listPlans() { return mapValues(this.plans); }
   saveRun(run: any) { return this.putScoped(this.runs, run); } getRun(id: string) { return this.runs.get(id); } findRunByIdempotencyKey(tenantId: string | undefined, key: string) { return mapValues(this.runs).find((run) => run.tenantId === tenantId && run.idempotencyKey === key); } listRuns() { return mapValues(this.runs); }
@@ -758,11 +761,13 @@ function reportTimeline(capture: any, source?: any): any {
   const reportTimestamps = (Array.isArray(capture.metadata?.reportTimestamps) ? capture.metadata.reportTimestamps : [])
     .map((evidence: any) => {
       const role = verifiedReportRole(evidence?.role, source);
-      const timestamp = validIso(evidence?.timestamp);
-      if (!role || !timestamp || evidence?.extractionMethod !== "source_field") return undefined;
+      const timestamp = zonedIso(evidence?.timestamp);
+      const referenceUrl = publicReferenceUrl(evidence?.referenceUrl);
+      if (!role || !timestamp || !referenceUrl || evidence?.extractionMethod !== "source_field") return undefined;
       return {
         role,
         timestamp,
+        referenceUrl,
         sourceId: capture.sourceId,
         sourceName: source?.name ?? evidence.sourceName,
         captureId: capture.id,
@@ -904,6 +909,22 @@ function publisherProvenance(record: any) { return record.reportTimestamps?.find
 function elapsed(from: unknown, to: unknown): number | undefined { const start = Date.parse(String(from ?? "")), end = Date.parse(String(to ?? "")); return Number.isFinite(start) && Number.isFinite(end) ? Math.round((end - start) / 1000) : undefined; }
 function negative(code: string, from: unknown, to: unknown): string | undefined { const value = elapsed(from, to); return value !== undefined && value < 0 ? code : undefined; }
 function validIso(value: unknown): string | undefined { const time = Date.parse(String(value ?? "")); return Number.isFinite(time) ? new Date(time).toISOString() : undefined; }
+function zonedIso(value: unknown): string | undefined { const raw = typeof value === "string" ? value.trim() : ""; return /(?:Z|[+-]\d{2}:\d{2})$/i.test(raw) ? validIso(raw) : undefined; }
+function assertTimelinessOrder(record: any): void {
+  const stages = [
+    ["reported_at", record.firstReportedAt ?? record.reportedAt],
+    ["published_at", record.publishedAt],
+    ["collected_at", record.collectedAt],
+    ["processed_at", record.processedAt],
+    ["first_visible_at", record.firstVisibleAt],
+    ["alert_created_at", record.alertCreatedAt ?? record.alertedAt],
+    ["delivery_attempted_at", record.deliveryAttemptedAt],
+    ["delivered_at", record.deliveredAt],
+  ].filter(([, value]) => value !== undefined && value !== null && value !== "");
+  for (let index = 1; index < stages.length; index += 1) {
+    if ((elapsed(stages[index - 1][1], stages[index][1]) ?? 0) < 0) throw new Error(`Timeliness timestamp inversion: ${stages[index - 1][0]} must not follow ${stages[index][0]}`);
+  }
+}
 function canonicalJson(value: any): string { return JSON.stringify(canonicalValue(value)); }
 function canonicalValue(value: any): any { if (Array.isArray(value)) return value.map(canonicalValue); if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().filter((key) => value[key] !== undefined).map((key) => [key, canonicalValue(value[key])])); return value; }
 function unique(values: any[]): string[] { return [...new Set(values.filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim()))]; }

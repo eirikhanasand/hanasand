@@ -1,4 +1,4 @@
-import { buildTimelinessWorkbench, mergePublicReportReference, type ReportRole, type TimelinessQueueStatus } from "../pipeline/timelinessGroundTruth.ts";
+import { buildTimelinessWorkbench, mergePublicReportReference, publicReferenceUrl, type ReportRole, type TimelinessQueueStatus } from "../pipeline/timelinessGroundTruth.ts";
 import { authenticateRequest } from "./requestAuthentication.ts";
 import { error, json, numberQuery, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
@@ -10,6 +10,7 @@ type TimelinessStore = {
   getIncident(id: string): JsonObject | undefined;
   getTimelinessRecord(id: string): JsonObject | undefined;
   listCaptures(): JsonObject[];
+  listDwmWebhookDeliveries(): JsonObject[];
   listExtractedEntities(): JsonObject[];
   listIncidents(): JsonObject[];
   listSources(): JsonObject[];
@@ -21,7 +22,7 @@ type TimelinessStore = {
 const WORKBENCH = "/v1/intel/timeliness/workbench";
 const REFERENCES = "/v1/intel/timeliness/references";
 const ROLES = new Set(["owner", "admin", "administrator", "system_admin", "analyst"]);
-const STATUSES = new Set<TimelinessQueueStatus>(["unresolved_reference", "anomaly", "awaiting_alert", "awaiting_delivery", "complete"]);
+const STATUSES = new Set<TimelinessQueueStatus>(["unresolved_reference", "anomaly", "incomplete_timeline", "awaiting_alert", "awaiting_delivery", "complete"]);
 
 export async function handleTimelinessRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
   const url = new URL(request.url);
@@ -43,6 +44,7 @@ function workbench(request: Request, url: URL, options: ApiServerOptions): Respo
     sources: store.listSources().filter((record) => inTenantScope(record, scope.tenantId)),
     incidents: store.listIncidents().filter((record) => inTenantScope(record, scope.tenantId)),
     captures: store.listCaptures().filter((record) => inTenantScope(record, scope.tenantId)),
+    deliveryRecords: store.listDwmWebhookDeliveries().filter((record) => inTenantScope(record, scope.tenantId)),
     entities: store.listExtractedEntities().filter((record) => inTenantScope(record, scope.tenantId)),
     validationRecords: store.listValidationRecords().filter((record) => inTenantScope(record, scope.tenantId)),
   };
@@ -85,20 +87,30 @@ async function addReference(request: Request, url: URL, options: ApiServerOption
   if (!["actor", "victim", "publisher"].includes(role) || !timestamp || !referenceUrl || !evidencePath) {
     return error("invalid_timeliness_reference", "A role, exact timestamp with timezone, public reference URL, and source-field path are required", 400);
   }
-  const merged = mergePublicReportReference(current, {
-    role,
-    timestamp,
-    referenceUrl,
-    referenceTitle,
-    evidencePath,
-    recordedBy,
-    recordedAt: new Date().toISOString(),
-  });
-  const saved = merged.created ? store.saveTimelinessRecord(merged.record) : merged.record;
+  let merged: ReturnType<typeof mergePublicReportReference>;
+  let saved: JsonObject;
+  try {
+    merged = mergePublicReportReference(current, {
+      role,
+      timestamp,
+      referenceUrl,
+      referenceTitle,
+      evidencePath,
+      recordedBy,
+      recordedAt: new Date().toISOString(),
+    });
+    saved = merged.created ? store.saveTimelinessRecord(merged.record) : merged.record;
+  } catch (cause) {
+    if (cause instanceof Error && cause.message.startsWith("Timeliness timestamp inversion:")) {
+      return error("timeliness_timestamp_inversion", cause.message, 409);
+    }
+    throw cause;
+  }
   const snapshot = buildTimelinessWorkbench([saved], {
     sources: store.listSources().filter((record) => inTenantScope(record, scope.tenantId)),
     incidents: store.listIncidents().filter((record) => inTenantScope(record, scope.tenantId)),
     captures: store.listCaptures().filter((record) => inTenantScope(record, scope.tenantId)),
+    deliveryRecords: store.listDwmWebhookDeliveries().filter((record) => inTenantScope(record, scope.tenantId)),
     entities: store.listExtractedEntities().filter((record) => inTenantScope(record, scope.tenantId)),
     validationRecords: store.listValidationRecords().filter((record) => inTenantScope(record, scope.tenantId)),
   });
@@ -129,27 +141,4 @@ function safeText(value: unknown, max: number): string | undefined {
   if (typeof value !== "string") return undefined;
   const result = value.replace(/\0/g, "").replace(/\s+/g, " ").trim();
   return result ? result.slice(0, max) : undefined;
-}
-
-function publicReferenceUrl(value: unknown): string | undefined {
-  try {
-    const url = new URL(String(value ?? ""));
-    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.toString().length > 2_048) return undefined;
-    const host = url.hostname.toLowerCase();
-    if (!host || host === "localhost" || host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".onion") || host.endsWith(".i2p") || privateHost(host)) return undefined;
-    if ([...url.searchParams.keys()].some((key) => /token|secret|password|authorization|cookie|api[_-]?key|signature/i.test(key))) return undefined;
-    return url.toString();
-  } catch {
-    return undefined;
-  }
-}
-
-function privateHost(host: string): boolean {
-  if (host === "::1" || host.includes(":")) return true;
-  const octets = host.split(".").map(Number);
-  if (octets.length !== 4 || octets.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) return false;
-  return octets[0] === 0 || octets[0] === 10 || octets[0] === 127 || octets[0] >= 224
-    || octets[0] === 169 && octets[1] === 254
-    || octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31
-    || octets[0] === 192 && octets[1] === 168;
 }

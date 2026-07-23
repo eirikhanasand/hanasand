@@ -1849,7 +1849,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(second.listPlans()).toHaveLength(1);
     expect(second.listRuns()).toEqual([expect.objectContaining({ id: "run_postgres", status: "completed" })]);
     expect(second.listSourceHealthObservations()).toEqual([expect.objectContaining({ id: "health_postgres", useful: true })]);
-    expect(second.listTimelinessRecords()).toEqual([expect.objectContaining({ incidentId: result.incident.id, firstReportedKind: "publisher", publisherReportedAt: "2026-05-24T09:58:00.000Z", firstReportedProvenance: expect.objectContaining({ sourceId: "src_postgres", evidencePath: "feed.entry.publishedAt" }), alertCreatedAt: alertedAt, alertedAt, deliveryAttemptedAt: new Date(Date.parse(alertedAt) + 1_000).toISOString(), deliveredAt: new Date(Date.parse(alertedAt) + 2_000).toISOString() })]);
+    expect(second.listTimelinessRecords()).toEqual([expect.objectContaining({ incidentId: result.incident.id, firstReportedKind: "publisher", publisherReportedAt: "2026-05-24T09:58:00.000Z", firstReportedProvenance: expect.objectContaining({ sourceId: "src_postgres", referenceUrl: "https://example.test/src_postgres/report", evidencePath: "feed.entry.publishedAt" }), alertCreatedAt: alertedAt, alertedAt, deliveryAttemptedAt: new Date(Date.parse(alertedAt) + 1_000).toISOString(), deliveredAt: new Date(Date.parse(alertedAt) + 2_000).toISOString() })]);
 
     const [counts] = await admin<{ sources: number; captures: number; entities: number; profiles: number; aliases: number; incidents: number; links: number; claims: number; claim_evidence: number; claim_reviews: number; validations: number; alerts: number; labels: number; runs: number; health: number; timeliness: number; legacy_runs: number; legacy_claims: number; public_core_tables: number }[]>`
       SELECT
@@ -2166,7 +2166,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         sourceFamily: "darkweb_metadata",
         extractionProfile: "ransomware_victim_blog",
         leakSite: { actorName: "Akira", victimName: "Verified Industries" },
-        reportTimestamps: [{ role: "publisher", timestamp: "2026-07-21T11:29:27.000Z", sourceId: "src_seed_ransomwarelive_victims", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }]
+        reportTimestamps: [{ role: "publisher", timestamp: "2026-07-21T11:29:27.000Z", referenceUrl: "https://www.ransomware.live/id/verified", sourceId: "src_seed_ransomwarelive_victims", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }]
       },
       sensitive: true
     });
@@ -2860,7 +2860,7 @@ function pipeline(sourceId: string, tenantId?: string, suffix = "") {
     rawText,
     contentHash: hashContent(rawText),
     links: [],
-    metadata: { reportTimestamps: [{ role: "publisher", timestamp: publishedAt, sourceId, evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] },
+    metadata: { reportTimestamps: [{ role: "publisher", timestamp: publishedAt, referenceUrl: `https://example.test/${sourceId}/report`, sourceId, evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] },
     sensitive: false
   }, { actorIdentities: [actorIdentity("G0016", "APT29", ["Cozy Bear"])] });
   result.entities = result.entities.map((entity) => entity.type === "actor" && entity.value === "APT29"

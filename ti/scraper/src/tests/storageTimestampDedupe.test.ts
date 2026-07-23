@@ -1,4 +1,8 @@
 import { expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { fixtureCapture } from "./helpers/storageFixtures.ts";
 
@@ -64,9 +68,9 @@ test("later evidence preserves the incident's first capture timing", () => {
 test("aggregate alert and delivery events update every linked evidence incident without conflating timestamps", () => {
   const store = new InMemoryScraperStore();
   const publishedAt = "2026-05-24T09:59:59.000Z";
-  const first = fixtureCapture({ id: "cap_alert_first", contentHash: "hash_alert_first", publishedAt, firstVisibleAt: "2026-05-24T10:00:02.000Z", metadata: { reportTimestamps: [{ role: "publisher", timestamp: publishedAt, sourceId: "src_fixture", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] } });
-  const second = fixtureCapture({ id: "cap_alert_second", sourceId: "src_fixture_second", url: "https://example.test/second-report", contentHash: "hash_alert_second", collectedAt: "2026-05-24T10:00:01.000Z", publishedAt, firstVisibleAt: "2026-05-24T10:00:03.000Z", metadata: { reportTimestamps: [{ role: "publisher", timestamp: publishedAt, sourceId: "src_fixture_second", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] } });
-  const windowOnly = fixtureCapture({ id: "cap_alert_window", sourceId: "src_fixture_window", url: "https://example.test/window-report", contentHash: "hash_alert_window", collectedAt: "2026-05-24T10:00:02.000Z", publishedAt, firstVisibleAt: "2026-05-24T10:00:03.000Z", metadata: { reportTimestamps: [{ role: "publisher", timestamp: publishedAt, sourceId: "src_fixture_window", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] } });
+  const first = fixtureCapture({ id: "cap_alert_first", contentHash: "hash_alert_first", publishedAt, firstVisibleAt: "2026-05-24T10:00:02.000Z", metadata: { reportTimestamps: [{ role: "publisher", timestamp: publishedAt, referenceUrl: "https://example.test/report", sourceId: "src_fixture", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] } });
+  const second = fixtureCapture({ id: "cap_alert_second", sourceId: "src_fixture_second", url: "https://example.test/second-report", contentHash: "hash_alert_second", collectedAt: "2026-05-24T10:00:01.000Z", publishedAt, firstVisibleAt: "2026-05-24T10:00:03.000Z", metadata: { reportTimestamps: [{ role: "publisher", timestamp: publishedAt, referenceUrl: "https://example.test/second-report", sourceId: "src_fixture_second", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] } });
+  const windowOnly = fixtureCapture({ id: "cap_alert_window", sourceId: "src_fixture_window", url: "https://example.test/window-report", contentHash: "hash_alert_window", collectedAt: "2026-05-24T10:00:02.000Z", publishedAt, firstVisibleAt: "2026-05-24T10:00:03.000Z", metadata: { reportTimestamps: [{ role: "publisher", timestamp: publishedAt, referenceUrl: "https://example.test/window-report", sourceId: "src_fixture_window", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] } });
   for (const capture of [first, second, windowOnly]) store.savePipelineResult({
     capture,
     incident: { id: `incident_${capture.id}`, sourceId: capture.sourceId, captureId: capture.id, title: "Incident", summary: "Summary", firstSeenAt: capture.collectedAt, confidence: 0.5, extractorVersion: "test", reviewState: "unreviewed" },
@@ -96,7 +100,7 @@ test("aggregate alert and delivery events update every linked evidence incident 
   expect(store.getTimelinessRecord(`incident_${windowOnly.id}`)).toMatchObject({ alertCreatedAt: "2026-05-24T10:00:04.000Z", deliveryAttemptedAt: "2026-05-24T10:01:00.000Z", deliveredAt: "2026-05-24T10:01:02.000Z", latencies: { visibilityToAlertSeconds: 1, reportToDeliveredSeconds: 63 } });
 });
 
-test("unknown report times stay unknown and impossible event order is flagged", () => {
+test("unknown report times stay unknown and impossible event order is rejected", () => {
   const store = new InMemoryScraperStore();
   const capture = fixtureCapture({
     id: "cap_unknown_report",
@@ -106,21 +110,16 @@ test("unknown report times stay unknown and impossible event order is flagged", 
     firstVisibleAt: "2026-05-24T09:59:58.000Z",
     metadata: { reportedAt: "2026-05-24T09:00:00.000Z" }
   });
-  store.savePipelineResult({ capture, incident: { id: "incident_unknown_report", sourceId: capture.sourceId, captureId: capture.id, title: "Incident", summary: "Summary", firstSeenAt: capture.collectedAt, confidence: 0.5, extractorVersion: "test", reviewState: "unreviewed" }, entities: [], indicators: [] });
-
-  expect(store.getTimelinessRecord("incident_unknown_report")).toMatchObject({
-    reportedAt: undefined,
-    firstReportedAt: undefined,
-    firstReportedProvenance: undefined,
-    timestampAnomalies: ["collected_after_processing", "processed_after_visibility"]
-  });
+  expect(() => store.savePipelineResult({ capture, incident: { id: "incident_unknown_report", sourceId: capture.sourceId, captureId: capture.id, title: "Incident", summary: "Summary", firstSeenAt: capture.collectedAt, confidence: 0.5, extractorVersion: "test", reviewState: "unreviewed" }, entities: [], indicators: [] }))
+    .toThrow("collected_at must not follow processed_at");
+  expect(store.getTimelinessRecord("incident_unknown_report")).toBeUndefined();
 });
 
 test("unverified actor report metadata is retained only as publisher provenance", () => {
   const store = new InMemoryScraperStore();
   store.saveSource({ id: "src_unverified_actor", name: "Unverified actor feed", metadata: { reporterRole: "actor" } } as any);
   const at = "2026-05-24T09:00:00.000Z";
-  const capture = fixtureCapture({ id: "cap_unverified_actor", sourceId: "src_unverified_actor", contentHash: "hash_unverified_actor", publishedAt: at, metadata: { reportTimestamps: [{ role: "actor", timestamp: at, sourceId: "src_unverified_actor", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] } });
+  const capture = fixtureCapture({ id: "cap_unverified_actor", sourceId: "src_unverified_actor", contentHash: "hash_unverified_actor", publishedAt: at, metadata: { reportTimestamps: [{ role: "actor", timestamp: at, referenceUrl: "https://example.test/report", sourceId: "src_unverified_actor", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] } });
   store.savePipelineResult({ capture, incident: { id: "incident_unverified_actor", sourceId: capture.sourceId, captureId: capture.id, title: "Incident", summary: "Summary", firstSeenAt: at, confidence: 0.5, extractorVersion: "test", reviewState: "unreviewed" }, entities: [], indicators: [] });
 
   expect(store.getTimelinessRecord("incident_unverified_actor")).toMatchObject({ actorReportedAt: undefined, publisherReportedAt: at, firstReportedKind: "publisher" });
@@ -135,7 +134,7 @@ test("publication latency exists only with source-field evidence", () => {
     return store.getTimelinessRecord(`incident_${id}`);
   };
 
-  const verified = save("verified_zero", { reportTimestamps: [{ role: "publisher", timestamp: at, sourceId: "src_fixture", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] });
+  const verified = save("verified_zero", { reportTimestamps: [{ role: "publisher", timestamp: at, referenceUrl: "https://example.test/report", sourceId: "src_fixture", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] });
   const unverified = save("unverified_zero", {});
 
   expect(verified.zeroSecondEvidence.publicationToCollectionSeconds).toMatchObject({ verified: true, from: at, to: at });
@@ -143,4 +142,27 @@ test("publication latency exists only with source-field evidence", () => {
   expect(unverified.publishedAt).toBeUndefined();
   expect(unverified.zeroSecondEvidence.publicationToCollectionSeconds).toBeUndefined();
   expect(unverified.timestampAnomalies).not.toContain("unverified_zero:publicationToCollectionSeconds");
+});
+
+test("restart preserves historical anomalies while rejecting new inverted timelines", () => {
+  const directory = mkdtempSync(join(tmpdir(), "ti-timeliness-restart-"));
+  const snapshotPath = join(directory, "store.json");
+  const inverted = {
+    id: "incident_historical_inversion",
+    sourceId: "src_fixture",
+    captureId: "cap_fixture",
+    incidentId: "incident_historical_inversion",
+    collectedAt: "2026-05-24T10:00:00.000Z",
+    processedAt: "2026-05-24T09:59:59.000Z",
+  };
+  try {
+    writeFileSync(snapshotPath, JSON.stringify({ timelinessRecords: [inverted] }));
+    const restarted = new FileBackedScraperStore({ snapshotPath });
+    expect(restarted.getTimelinessRecord(inverted.id)).toEqual(inverted);
+    expect(() => restarted.saveTimelinessRecord({ ...inverted, id: "incident_new_inversion", incidentId: "incident_new_inversion" }))
+      .toThrow("collected_at must not follow processed_at");
+    expect(restarted.getTimelinessRecord("incident_new_inversion")).toBeUndefined();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

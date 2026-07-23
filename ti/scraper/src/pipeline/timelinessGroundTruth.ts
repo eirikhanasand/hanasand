@@ -1,7 +1,7 @@
 import { stableId } from "../utils.ts";
 
 export type ReportRole = "actor" | "victim" | "publisher";
-export type TimelinessQueueStatus = "unresolved_reference" | "anomaly" | "awaiting_alert" | "awaiting_delivery" | "complete";
+export type TimelinessQueueStatus = "unresolved_reference" | "anomaly" | "incomplete_timeline" | "awaiting_alert" | "awaiting_delivery" | "complete";
 
 type JsonObject = Record<string, unknown>;
 
@@ -21,11 +21,16 @@ export type TimelinessContext = {
   captures?: JsonObject[];
   entities?: JsonObject[];
   validationRecords?: JsonObject[];
+  deliveryRecords?: JsonObject[];
   generatedAt?: string;
 };
 
 export type TimelinessMetric = {
+  populationSize: number;
   sampleSize: number;
+  missingCount: number;
+  excludedCount: number;
+  exclusions: Array<{ name: string; count: number }>;
   medianSeconds: number | null;
   p95Seconds: number | null;
   p99Seconds: number | null;
@@ -59,12 +64,13 @@ export type TimelinessRecordView = {
 };
 
 export type TimelinessWorkbenchDto = {
-  schemaVersion: "ti.timeliness_workbench.v2";
+  schemaVersion: "ti.timeliness_workbench.v3";
   generatedAt: string;
   summary: {
     recordCount: number;
     unresolvedReferenceCount: number;
     anomalyCount: number;
+    incompleteTimelineCount: number;
     awaitingAlertCount: number;
     awaitingDeliveryCount: number;
     completeCount: number;
@@ -81,7 +87,7 @@ export type TimelinessWorkbenchDto = {
     byStage: Array<{ name: string } & TimelinessMetric>;
   };
   quality: {
-    fields: Array<{ name: string; presentCount: number; missingCount: number; coverage: number }>;
+    fields: Array<{ name: string; presentCount: number; provenanceCount: number; missingCount: number; unprovenCount: number; coverage: number }>;
     issues: Array<{ name: string; count: number }>;
     bySourceClass: TimelinessQualityGroup[];
   };
@@ -126,14 +132,15 @@ export function mergePublicReportReference(
   const sourceId = requiredString(inputRecord, "sourceId");
   const timestamp = requiredZonedIso(input.timestamp, "reference timestamp");
   const recordedAt = requiredIso(input.recordedAt, "recorded timestamp");
+  const referenceUrl = requiredPublicReferenceUrl(input.referenceUrl);
   const reference = {
-    id: stableId("timeliness-reference", `${incidentId}:${input.role}:${timestamp}:${input.referenceUrl}:${input.evidencePath}`),
+    id: stableId("timeliness-reference", `${incidentId}:${input.role}:${timestamp}:${referenceUrl}:${input.evidencePath}`),
     role: input.role,
     timestamp,
     sourceId,
     captureId,
     incidentId,
-    referenceUrl: input.referenceUrl,
+    referenceUrl,
     referenceTitle: cleanText(input.referenceTitle, 240),
     evidencePath: input.evidencePath,
     extractionMethod: "public_reference",
@@ -159,6 +166,7 @@ export function buildTimelinessWorkbench(records: JsonObject[], context: Timelin
   const sources = index(context.sources, "id");
   const incidents = index(context.incidents, "id");
   const captures = index(context.captures, "id");
+  const deliveries = index(context.deliveryRecords, "id");
   const entities = context.entities ?? [];
   const validations = validationIndex(context.validationRecords ?? []);
   const items = records.map((record) => {
@@ -171,7 +179,7 @@ export function buildTimelinessWorkbench(records: JsonObject[], context: Timelin
     const contextStages = contextualStages(record, capture, incident, uniqueObjects([...(validations.get(incidentId) ?? []), ...(validations.get(captureId) ?? [])]));
     const preliminary = deriveTimeliness({ ...record, ...contextStages.values }, generatedAt);
     const provenance = stageProvenance(preliminary, sourceStageProvenance(preliminary, capture, incident, contextStages.provenance));
-    const derived = deriveTimeliness(preliminary, generatedAt, provenance, sourceQualityIssues(preliminary, capture, provenance));
+    const derived = deriveTimeliness(preliminary, generatedAt, provenance, sourceQualityIssues(preliminary, capture, provenance, deliveries));
     return toView(derived, {
       actorName: actorName(incident, entities, incidentId, captureId),
       sourceName: string(source?.name),
@@ -181,12 +189,13 @@ export function buildTimelinessWorkbench(records: JsonObject[], context: Timelin
   }).sort((left, right) => priority(left.status) - priority(right.status) || Date.parse(right.updatedAt ?? "") - Date.parse(left.updatedAt ?? ""));
   const overall = metrics(items);
   return {
-    schemaVersion: "ti.timeliness_workbench.v2",
+    schemaVersion: "ti.timeliness_workbench.v3",
     generatedAt,
     summary: {
       recordCount: items.length,
       unresolvedReferenceCount: items.filter((item) => !item.stages.first_report).length,
       anomalyCount: items.filter((item) => item.timestampAnomalies.length).length,
+      incompleteTimelineCount: count(items, "incomplete_timeline"),
       awaitingAlertCount: count(items, "awaiting_alert"),
       awaitingDeliveryCount: count(items, "awaiting_delivery"),
       completeCount: count(items, "complete"),
@@ -194,7 +203,7 @@ export function buildTimelinessWorkbench(records: JsonObject[], context: Timelin
       reviewedCoverage: stageCoverage(items, "reviewed"),
       reportToAlertCoverage: coverage(items, "reportToAlertSeconds"),
       reportToDeliveredCoverage: coverage(items, "reportToDeliveredSeconds"),
-      excludedMetricRecordCount: items.filter((item) => item.timestampAnomalies.length).length,
+      excludedMetricRecordCount: items.filter((item) => Object.entries(item.latencies).some(([field, value]) => value !== undefined && !validMetric(item, field))).length,
     },
     metrics: {
       overall,
@@ -265,40 +274,36 @@ function toView(
 function statusFor(stages: Record<string, string | undefined>, anomalies: string[]): TimelinessQueueStatus {
   if (anomalies.length) return "anomaly";
   if (!stages.first_report) return "unresolved_reference";
+  if (["publication", "collection", "processing", "first_visible"].some((stage) => !stages[stage])) return "incomplete_timeline";
   if (!stages.alert_created) return "awaiting_alert";
   if (!stages.delivery_attempt || !stages.delivered) return "awaiting_delivery";
   return "complete";
 }
 
 function stageProvenance(record: JsonObject, overrides: Record<string, JsonObject | undefined> = {}): Record<string, JsonObject | undefined> {
-  const captureId = string(record.captureId);
-  const incidentId = string(record.incidentId);
-  const sourceId = string(record.sourceId);
   return {
-    observed: string(record.observedAt) ? { event: "observed", timestamp: record.observedAt, evidencePath: "timeliness_record.observedAt" } : undefined,
+    observed: object(record.observedProvenance),
     first_report: object(record.firstReportedProvenance),
-    publication: string(record.publishedAt) ? { event: "publication", sourceId, captureId, timestamp: record.publishedAt, evidencePath: "timeliness_record.publishedAt" } : undefined,
-    collection: string(record.collectedAt) ? { event: "collection", sourceId, captureId, timestamp: record.collectedAt, evidencePath: "timeliness_record.collectedAt" } : undefined,
-    processing: string(record.processedAt) ? { event: "processing", captureId, timestamp: record.processedAt, evidencePath: "timeliness_record.processedAt" } : undefined,
-    first_visible: string(record.firstVisibleAt) ? { event: "first_visible", incidentId, timestamp: record.firstVisibleAt, evidencePath: "timeliness_record.firstVisibleAt" } : undefined,
-    reviewed: string(record.reviewedAt) ? { event: "reviewed", timestamp: record.reviewedAt, evidencePath: "timeliness_record.reviewedAt" } : undefined,
+    publication: object(record.publicationProvenance),
+    collection: object(record.collectionProvenance),
+    processing: object(record.processingProvenance),
+    first_visible: object(record.firstVisibleProvenance),
+    reviewed: object(record.reviewedProvenance),
     alert_created: object(record.alertCreatedProvenance),
     delivery_attempt: object(record.deliveryAttemptProvenance),
     delivered: object(record.deliveredProvenance),
-    ...overrides,
+    ...Object.fromEntries(Object.entries(overrides).filter(([, value]) => value)),
   };
 }
 
 function contextualStages(record: JsonObject, capture: JsonObject | undefined, incident: JsonObject | undefined, validations: JsonObject[]) {
   const observed = firstTimestamp([
-    [record.observedAt, "timeliness_record.observedAt", record],
     [capture?.observedAt, "capture.observedAt", capture],
     [object(capture?.metadata)?.observedAt, "capture.metadata.observedAt", capture],
     [incident?.observedAt, "incident.observedAt", incident],
     [object(incident?.metadata)?.observedAt, "incident.metadata.observedAt", incident],
   ]);
   const explicitReview = firstTimestamp([
-    [record.reviewedAt, "timeliness_record.reviewedAt", record],
     [capture?.reviewedAt, "capture.reviewedAt", capture],
     [incident?.reviewedAt, "incident.reviewedAt", incident],
   ]);
@@ -318,8 +323,14 @@ function contextualStages(record: JsonObject, capture: JsonObject | undefined, i
     },
   } : undefined);
   return {
-    values: { observedAt: observed?.timestamp, reviewedAt: review?.timestamp },
-    provenance: { observed: observed?.provenance, reviewed: review?.provenance },
+    values: Object.fromEntries([
+      ["observedAt", observed?.timestamp],
+      ["reviewedAt", review?.timestamp],
+    ].filter(([, value]) => value)),
+    provenance: Object.fromEntries([
+      ["observed", observed?.provenance],
+      ["reviewed", review?.provenance],
+    ].filter(([, value]) => value)),
   };
 }
 
@@ -337,9 +348,8 @@ function sourceStageProvenance(
   incident: JsonObject | undefined,
   contextual: Record<string, JsonObject | undefined>,
 ): Record<string, JsonObject | undefined> {
+  const publisher = reportReferences(record).find((reference) => reference.role === "publisher" && sameTime(reference.timestamp, record.publishedAt));
   const candidates: Array<[string, string, JsonObject | undefined, string]> = [
-    ["publication", "publishedAt", capture, "capture.publishedAt"],
-    ["publication", "publishedAt", incident, "incident.publishedAt"],
     ["collection", "collectedAt", capture, "capture.collectedAt"],
     ["collection", "collectedAt", incident, "incident.collectedAt"],
     ["processing", "processedAt", capture, "capture.processedAt"],
@@ -348,6 +358,7 @@ function sourceStageProvenance(
     ["first_visible", "firstVisibleAt", capture, "capture.firstVisibleAt"],
   ];
   const result = { ...contextual };
+  if (publisher) result.publication = { ...publisher, event: "publication" };
   for (const [stage, field, source, evidencePath] of candidates) {
     if (result[stage] || !sameTime(record[field], source?.[field])) continue;
     result[stage] = { event: stage, timestamp: validIso(record[field]), evidencePath, id: string(source?.id), sourceId: string(record.sourceId), captureId: string(record.captureId), incidentId: string(record.incidentId) };
@@ -355,15 +366,27 @@ function sourceStageProvenance(
   return result;
 }
 
-function sourceQualityIssues(record: JsonObject, capture: JsonObject | undefined, provenance: Record<string, JsonObject | undefined>): string[] {
+function sourceQualityIssues(
+  record: JsonObject,
+  capture: JsonObject | undefined,
+  provenance: Record<string, JsonObject | undefined>,
+  deliveries: Map<string, JsonObject>,
+): string[] {
   const result = new Set<string>();
   if (validIso(record.processedAt) && validIso(capture?.processedAt) && !sameTime(record.processedAt, capture?.processedAt)) result.add("source_mismatch:processing");
   const publisher = reportReferences(record).find((reference) => reference.role === "publisher");
   if (sameTime(record.publishedAt, record.collectedAt) && !sameTime(record.publishedAt, publisher?.timestamp)) result.add("suspected_copy:publication_collection");
+  const firstReport = object(record.firstReportedProvenance);
+  if (string(record.firstReportedAt) && !publicReferenceUrl(firstReport?.referenceUrl)) result.add("provenance_missing_public_reference:first_report");
+  if (string(record.publishedAt) && !publicReferenceUrl(publisher?.referenceUrl)) result.add("provenance_missing_public_reference:publication");
   for (const reference of objectArray(record.reportTimestamps)) {
     if (validIso(reference.timestamp) && !zonedIso(reference.timestamp)) result.add("timezone_missing:first_report_reference");
   }
   for (const [field, stage] of STAGES) if (string(record[field]) && !provenance[stage]) result.add(`provenance_missing:${stage}`);
+  const delivered = object(record.deliveredProvenance);
+  const delivery = deliveries.get(string(delivered?.deliveryId) ?? "");
+  if (string(record.deliveredAt) && (!delivery || string(delivery.status) !== "delivered" || !sameTime(record.deliveredAt, delivery.deliveredAt))) result.add("source_mismatch:delivered");
+  if (delivery && sameTime(delivery.attemptedAt, delivery.deliveredAt)) result.add("suspected_copy:delivery_attempt_delivered");
   return [...result];
 }
 
@@ -395,21 +418,51 @@ function anomalies(record: JsonObject, latencies: Record<string, number | undefi
 }
 
 function metrics(items: TimelinessRecordView[]): Record<string, TimelinessMetric> {
-  return Object.fromEntries(INTERVALS.map(([name]) => [name, distribution(items.flatMap((item) => validMetric(item, name) ? [item.latencies[name]!] : []))]));
+  return Object.fromEntries(INTERVALS.map(([name, from, to]) => [name, metric(items, name, from, to)]));
 }
 
-function validMetric(item: TimelinessRecordView, field: string): boolean {
+function metric(items: TimelinessRecordView[], field: string, from: string, to: string): TimelinessMetric {
+  const present = items.filter((item) => item.latencies[field] !== undefined);
+  const included = present.filter((item) => validMetric(item, field, from, to));
+  const exclusions = namedCounts(countStrings(present.flatMap((item) => metricExclusions(item, field, from, to))));
+  return {
+    populationSize: items.length,
+    sampleSize: included.length,
+    missingCount: items.length - present.length,
+    excludedCount: present.length - included.length,
+    exclusions,
+    ...distribution(included.map((item) => item.latencies[field]!)),
+  };
+}
+
+function validMetric(item: TimelinessRecordView, field: string, from?: string, to?: string): boolean {
   const value = item.latencies[field];
-  if (value === undefined || value < 0 || item.timestampAnomalies.length) return false;
-  const evidence = object(item.provenance.first_report);
-  if (field.startsWith("report") || field.startsWith("firstReport")) return Boolean(evidence);
-  return true;
+  const interval = INTERVALS.find(([name]) => name === field);
+  return value !== undefined && metricExclusions(item, field, from ?? interval?.[1] ?? "", to ?? interval?.[2] ?? "").length === 0;
 }
 
-function distribution(values: number[]): TimelinessMetric {
+function metricExclusions(item: TimelinessRecordView, field: string, from: string, to: string): string[] {
+  const value = item.latencies[field];
+  if (value === undefined) return [];
+  const stageByField = new Map<string, string>(STAGES.map(([stageField, stage]) => [stageField, stage]));
+  const stages = [stageByField.get(from), stageByField.get(to)].filter(Boolean) as string[];
+  const reasons = new Set<string>();
+  if (value < 0) reasons.add(`negative:${field}`);
+  for (const stage of stages) if (!item.provenance[stage]) reasons.add(`provenance_missing:${stage}`);
+  for (const issue of item.timestampAnomalies) {
+    if (issue === `negative:${field}` || issue === `unverified_zero:${field}`) reasons.add(issue);
+    else if (stages.some((stage) => issue.endsWith(`:${stage}`))) reasons.add(issue);
+    else if (issue === "timezone_missing:first_report_reference" && stages.includes("first_report")) reasons.add(issue);
+    else if (issue === "first_report_provenance_missing" && stages.includes("first_report")) reasons.add(issue);
+    else if (issue === "suspected_copy:publication_collection" && stages.includes("publication")) reasons.add(issue);
+    else if (issue === "suspected_copy:delivery_attempt_delivered" && stages.includes("delivered")) reasons.add(issue);
+  }
+  return [...reasons];
+}
+
+function distribution(values: number[]): Pick<TimelinessMetric, "medianSeconds" | "p95Seconds" | "p99Seconds"> {
   const sorted = [...values].sort((a, b) => a - b);
   return {
-    sampleSize: sorted.length,
     medianSeconds: percentile(sorted, 0.5),
     p95Seconds: percentile(sorted, 0.95),
     p99Seconds: percentile(sorted, 0.99),
@@ -423,7 +476,8 @@ function stageCoverage(items: TimelinessRecordView[], stage: string): number {
 function quality(items: TimelinessRecordView[]): TimelinessWorkbenchDto["quality"] {
   const fields = STAGES.map(([, name]) => {
     const presentCount = items.filter((item) => item.stages[name]).length;
-    return { name, presentCount, missingCount: items.length - presentCount, coverage: items.length ? presentCount / items.length : 0 };
+    const provenanceCount = items.filter((item) => item.stages[name] && item.provenance[name]).length;
+    return { name, presentCount, provenanceCount, missingCount: items.length - presentCount, unprovenCount: presentCount - provenanceCount, coverage: items.length ? provenanceCount / items.length : 0 };
   });
   const issueCounts = (records: TimelinessRecordView[]) => countStrings(records.flatMap((item) => item.timestampAnomalies));
   return {
@@ -454,9 +508,10 @@ function reportReferences(record: JsonObject): JsonObject[] {
     const timestamp = zonedIso(reference.timestamp);
     const extractionMethod = string(reference.extractionMethod);
     const hasStoredLineage = string(reference.sourceId) && string(reference.captureId) && string(reference.evidencePath);
-    const hasAcceptedOrigin = extractionMethod === "source_field" || extractionMethod === "public_reference" && string(reference.referenceUrl);
+    const referenceUrl = publicReferenceUrl(reference.referenceUrl);
+    const hasAcceptedOrigin = extractionMethod === "source_field" || extractionMethod === "public_reference" && referenceUrl;
     if (!timestamp || !["actor", "victim", "publisher"].includes(role ?? "") || !hasStoredLineage || !hasAcceptedOrigin) return [];
-    return [{ ...reference, id: string(reference.id) ?? stableId("timeliness-reference", `${string(record.incidentId)}:${role}:${timestamp}:${string(reference.referenceUrl)}:${string(reference.evidencePath)}`), role, timestamp }];
+    return [{ ...reference, referenceUrl, id: string(reference.id) ?? stableId("timeliness-reference", `${string(record.incidentId)}:${role}:${timestamp}:${referenceUrl}:${string(reference.evidencePath)}`), role, timestamp }];
   });
 }
 
@@ -466,7 +521,7 @@ function sortReferences(values: JsonObject[]): JsonObject[] {
 }
 
 function roleRank(value?: string): number { return value === "actor" ? 0 : value === "victim" ? 1 : 2; }
-function priority(value: TimelinessQueueStatus): number { return ["unresolved_reference", "anomaly", "awaiting_alert", "awaiting_delivery", "complete"].indexOf(value); }
+function priority(value: TimelinessQueueStatus): number { return ["unresolved_reference", "anomaly", "incomplete_timeline", "awaiting_alert", "awaiting_delivery", "complete"].indexOf(value); }
 function count(items: TimelinessRecordView[], status: TimelinessQueueStatus): number { return items.filter((item) => item.status === status).length; }
 function coverage(items: TimelinessRecordView[], field: string): number { return items.length ? items.filter((item) => validMetric(item, field)).length / items.length : 0; }
 function elapsed(from?: string, to?: string): number | undefined { const start = Date.parse(from ?? ""), end = Date.parse(to ?? ""); return Number.isFinite(start) && Number.isFinite(end) ? Math.round((end - start) / 1000) : undefined; }
@@ -489,3 +544,24 @@ function requiredIso(value: unknown, label: string): string { const result = val
 function requiredZonedIso(value: unknown, label: string): string { const result = zonedIso(value); if (!result) throw new Error(`Invalid ${label}; include an explicit timezone`); return result; }
 function sameTime(left: unknown, right: unknown): boolean { const a = validIso(left), b = validIso(right); return Boolean(a && b && a === b); }
 function cleanText(value: unknown, max: number): string | undefined { const result = string(value)?.replace(/\s+/g, " "); return result?.slice(0, max); }
+export function publicReferenceUrl(value: unknown): string | undefined {
+  try {
+    const url = new URL(String(value ?? ""));
+    const host = url.hostname.toLowerCase();
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.toString().length > 2_048 || !host || host === "localhost" || host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".onion") || host.endsWith(".i2p") || privateHost(host)) return undefined;
+    if ([...url.searchParams.keys()].some((key) => /token|secret|password|authorization|cookie|api[_-]?key|signature/i.test(key))) return undefined;
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+function requiredPublicReferenceUrl(value: unknown): string { const result = publicReferenceUrl(value); if (!result) throw new Error("Invalid public reference URL"); return result; }
+function privateHost(host: string): boolean {
+  if (host === "::1" || host.includes(":")) return true;
+  const octets = host.split(".").map(Number);
+  if (octets.length !== 4 || octets.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) return false;
+  return octets[0] === 0 || octets[0] === 10 || octets[0] === 127 || octets[0] >= 224
+    || octets[0] === 169 && octets[1] === 254
+    || octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31
+    || octets[0] === 192 && octets[1] === 168;
+}

@@ -896,7 +896,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     for (const row of alerts) super.saveDwmAlert(readRecord(row));
     for (const row of evaluationLabels) super.saveEvaluationLabel(readRecord(row));
     for (const row of sourceHealth) super.saveSourceHealthObservation(readRecord(row));
-    for (const row of timeliness) super.saveTimelinessRecord(readRecord(row));
+    for (const row of timeliness) this.hydrateTimelinessSnapshot(readRecord(row));
     for (const row of runs) super.saveRun(readRecord(row));
     for (const row of claims) super.saveIntelligenceClaim(readRecord(row));
     for (const row of claimEvidence) super.saveClaimEvidence(readRecord(row));
