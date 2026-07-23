@@ -72,7 +72,7 @@ describe("organization retention and privacy lifecycle", () => {
     expect(rerun.hasMore).toBe(false);
     expect(store.getCapture("capture_other")?.body).toBe("other tenant secret");
 
-    const exported = exportOrganizationPrivacyData(options, "org_a");
+    const exported = await exportOrganizationPrivacyData(options, "org_a");
     expect(exported.organizationId).toBe("org_a");
     expect(exported.protection).toMatchObject({ heldClaimIds: ["claim_hold"] });
     expect(JSON.stringify(exported)).not.toContain("held secret");

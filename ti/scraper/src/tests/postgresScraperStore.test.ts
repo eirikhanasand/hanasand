@@ -251,7 +251,28 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     first.saveSource(source({ id: "src_privacy_other", tenantId: "org_privacy_other", name: "Other tenant source", url: "https://other-tenant.example/feed" }));
     first.saveOrganization({ id: "org_privacy_other", tenantId: "org_privacy_other", name: "Other tenant customer", status: "active" });
     first.saveCapture(fixtureCapture({ id: "capture_privacy_other", tenantId: "org_privacy_other", sourceId: "src_privacy_other", url: "https://other-tenant.example/capture", body: "other tenant untouched payload" }));
+    const actorProfile = first.saveActorProfile({
+      id: "actor_privacy_history", tenantId: organizationId, canonicalName: "Customer private actor", normalizedName: "customer private actor",
+      actorType: "threat_actor", confidence: 0.8, firstSeenAt: collectedAt, lastSeenAt: collectedAt, evidenceCount: 1, updatedAt: collectedAt,
+      aliases: ["Customer private alias"], sourceIds: [structured.capture.sourceId], captureIds: [structured.capture.id], characterization: {}
+    });
     await first.flush();
+    const actorHistoryId = "actor-profile-history-privacy-postgres";
+    await admin`
+      INSERT INTO threat_intel.actor_profile_identity_history (
+        id, actor_profile_id, canonical_actor_profile_id, reconciliation_key, resolution_status,
+        original_tenant_id, original_record, reference_snapshot, reconciled_at
+      ) VALUES (
+        ${actorHistoryId}, ${actorProfile.id}, ${actorProfile.id}, 'privacy-postgres', 'canonicalized',
+        ${organizationId}, ${JSON.stringify({ ...actorProfile, privateNote: "Customer private actor history" })}::text::jsonb,
+        ${JSON.stringify({ aliases: [{ alias: "Customer private alias" }], evidenceLinks: [], claims: [], claimEvidence: [], claimReviews: [], workflows: [] })}::text::jsonb,
+        ${collectedAt}
+      )
+    `;
+    const immutableActorHistory = await admin`
+      SELECT id, actor_profile_id, canonical_actor_profile_id, reconciliation_key, resolution_status, reconciled_at
+      FROM threat_intel.actor_profile_identity_history WHERE id = ${actorHistoryId}
+    `;
 
     const failedObject = await privacy(first, "run_privacy_postgres", { deleteObject: () => false });
     expect(failedObject.status).toBe(503);
@@ -290,7 +311,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     const exportBody = await exported.json() as any;
     expect(exportBody).toMatchObject({ data: { organization: { name: "Deleted organization" }, members: [], invites: [], destinations: [], watchlists: [] }, protection: { heldCaptureIds: ["capture_privacy_hold"] } });
     expect(Object.keys(exportBody.data).sort()).toEqual([
-      "actorAliases", "actorIdentities", "actorIdentityCatalogs", "actorOrganizationReviews", "actorProfiles", "alerts",
+      "actorAliases", "actorIdentities", "actorIdentityCatalogs", "actorOrganizationReviews", "actorProfileIdentityHistory", "actorProfiles", "alerts",
       "analystClaimLedgerEntries", "analystLoopSnapshots", "analystMetadataReviewTasks", "analystSourceActivationPackets", "analystVictimNotificationPackets",
       "captures", "cases", "claimEvidence", "claimReviews", "claims", "collectionPlans", "collectionRuns", "deliveries", "destinations",
       "discoveryEvidence", "entities", "evaluationAdjudications", "evaluationAnnotations", "evaluationBenchmarks", "evaluationLabels", "evidenceDeltas",
@@ -299,6 +320,16 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     ]);
     expect(JSON.stringify(exportBody)).not.toContain("Customer private");
     expect(JSON.stringify(exportBody)).not.toContain("Northwind Health");
+    expect(exportBody.data.actorProfileIdentityHistory).toContainEqual(expect.objectContaining({
+      id: actorHistoryId,
+      originalTenantId: organizationId,
+      originalRecord: expect.objectContaining({ privacyDeletionRunId: "run_privacy_postgres", privacyAction: "redact" }),
+      referenceSnapshot: expect.objectContaining({ aliases: [], evidenceLinks: [], claims: [], claimEvidence: [], claimReviews: [], workflows: [] })
+    }));
+    expect(await admin`
+      SELECT id, actor_profile_id, canonical_actor_profile_id, reconciliation_key, resolution_status, reconciled_at
+      FROM threat_intel.actor_profile_identity_history WHERE id = ${actorHistoryId}
+    `).toEqual(immutableActorHistory);
 
     const normalizedViolations = await admin<{ kind: string }[]>`
       SELECT 'source' kind FROM threat_intel.sources WHERE tenant_id = ${organizationId} AND id <> 'src_privacy_held' AND (name <> 'Deleted source' OR url NOT LIKE 'privacy://deleted/%' OR status <> 'retired')
@@ -341,6 +372,8 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       UNION ALL SELECT record FROM threat_intel.claim_reviews WHERE tenant_id = ${organizationId}
       UNION ALL SELECT record FROM threat_intel.alerts WHERE tenant_id = ${organizationId}
       UNION ALL SELECT record FROM threat_intel.workflow_records WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT original_record FROM threat_intel.actor_profile_identity_history WHERE original_tenant_id = ${organizationId}
+      UNION ALL SELECT reference_snapshot FROM threat_intel.actor_profile_identity_history WHERE original_tenant_id = ${organizationId}
     `;
     expect(JSON.stringify(retainedPayloads)).not.toContain("Customer private");
     expect(JSON.stringify(retainedPayloads)).not.toContain("Northwind Health");

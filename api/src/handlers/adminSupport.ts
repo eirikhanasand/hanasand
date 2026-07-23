@@ -4688,7 +4688,7 @@ function supportOrganizationDeletionLocked(organization: Pick<OrganizationRow, '
 }
 
 async function organizationDeletionLocked(organizationId: string) {
-    const result = await run("SELECT audit_safe_metadata ? 'privacyDeletionRunId' locked FROM organizations WHERE id = $1", [organizationId])
+    const result = await run('SELECT audit_safe_metadata ? \'privacyDeletionRunId\' locked FROM organizations WHERE id = $1', [organizationId])
     return result.rows[0]?.locked === true
 }
 

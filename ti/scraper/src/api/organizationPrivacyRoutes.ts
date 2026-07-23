@@ -26,8 +26,9 @@ const ORGANIZATION_PRIVACY_INVENTORY = [
   ["incidents", "incident", "listIncidents", "tenant", true],
   ["entities", "entity", "listExtractedEntities", "tenant", true],
   ["indicators", "indicator", "listIndicators", "tenant", true],
-  ["actorProfiles", "actor_profile", "listActorProfiles", "tenant", true],
-  ["actorAliases", "actor_alias", "listActorAliases", "tenant", true],
+  ["actorProfiles", "actor_profile", "listActorProfilesForOwnership", "tenant", true],
+  ["actorAliases", "actor_alias", "listActorAliasesForOwnership", "tenant", true],
+  ["actorProfileIdentityHistory", "actor_profile_identity_history", "listActorProfileIdentityHistoryForOwnership", "actor_history", true],
   ["actorIdentityCatalogs", "actor_identity_catalog", "listActorIdentityCatalogs", "tenant", true],
   ["actorIdentities", "actor_identity", "listActorIdentities", "tenant", true],
   ["evidenceLinks", "evidence_link", "listEvidenceLinks", "tenant", true],
@@ -62,7 +63,7 @@ export async function handleOrganizationPrivacyRequest(request: Request, options
   if (access.error) return access.error;
   if (!access.identity) return error("authentication_unavailable", "Organization privacy authentication is not configured", 503);
   if (!(options.store as any).getOrganization?.(organizationId)) return error("organization_not_found", "Organization is not mirrored into the TI runtime", 404);
-  if (request.method === "GET") return json(exportOrganizationPrivacyData(options, organizationId));
+  if (request.method === "GET") return json(await exportOrganizationPrivacyData(options, organizationId));
   if (request.method !== "POST") return error("method_not_allowed", "Organization privacy supports GET and POST", 405);
 
   const body = await readJson<any>(request);
@@ -82,11 +83,11 @@ export async function handleOrganizationPrivacyRequest(request: Request, options
   return json(result, result.failed.length ? 503 : 200);
 }
 
-export function exportOrganizationPrivacyData(options: ApiServerOptions, organizationId: string) {
+export async function exportOrganizationPrivacyData(options: ApiServerOptions, organizationId: string) {
   const store = options.store as any;
   const organization = store.getOrganization?.(organizationId);
   if (!organization) throw new Error("Organization is not mirrored into the TI runtime");
-  const inventory = organizationPrivacyInventory(store, organizationId);
+  const inventory = await organizationPrivacyInventory(store, organizationId);
   const captures = inventory.captures;
   const claims = inventory.claims;
   const alerts = inventory.alerts;
@@ -134,8 +135,8 @@ export async function purgeOrganizationPrivacyData(options: ApiServerOptions, in
     });
     await store.flush?.();
   }
-  const selected = retentionCandidates(store, input).slice(0, input.limit);
-  const reconciled = reconciledItems(store, input.organizationId, input.runId);
+  const selected = (await retentionCandidates(store, input)).slice(0, input.limit);
+  const reconciled = await reconciledItems(store, input.organizationId, input.runId);
   const completed: PrivacyItem[] = [];
   const failed: PrivacyItem[] = [];
 
@@ -160,6 +161,8 @@ export async function purgeOrganizationPrivacyData(options: ApiServerOptions, in
         });
       } else if (candidate.recordType === "dwm_webhook_delivery" && input.mode !== "deletion") {
         store.saveDwmWebhookDelivery({ ...candidate.record, payload: undefined, responseBody: undefined, responseSummary: undefined, error: undefined, retentionRedactedAt: nowIso(), retentionRunId: input.runId, retentionReason: candidate.reason });
+      } else if (candidate.recordType === "actor_profile_identity_history") {
+        if (!await store.replaceActorProfileIdentityHistoryForRetention(actorHistoryTombstone(candidate.record, candidate, input.runId))) throw new Error(`Stored ${candidate.recordType} disappeared before privacy redaction`);
       } else if (candidate.action === "redact") {
         if (candidate.recordType === "capture" && candidate.record.objectRef) {
           const deleteObject = (options.objectStore as any)?.deleteObject;
@@ -179,8 +182,8 @@ export async function purgeOrganizationPrivacyData(options: ApiServerOptions, in
     }
   }
 
-  const remaining = retentionCandidates(store, input);
-  const protection = protectionState(store, input.organizationId, input.cutoffAt, input.mode);
+  const remaining = await retentionCandidates(store, input);
+  const protection = await protectionState(store, input.organizationId, input.cutoffAt, input.mode);
   const protectedOffset = input.protectedOffset ?? 0;
   const protectedPage = protection.items.slice(protectedOffset, protectedOffset + Math.max(0, input.limit - selected.length));
   const protectedHasMore = protectedOffset + protectedPage.length < protection.items.length;
@@ -226,8 +229,8 @@ export async function purgeOrganizationPrivacyData(options: ApiServerOptions, in
   };
 }
 
-function retentionCandidates(store: any, input: { organizationId: string; cutoffAt: string; mode: PurgeMode; protectedInviteIds?: string[] }) {
-  const protection = protectionState(store, input.organizationId, input.cutoffAt, input.mode);
+async function retentionCandidates(store: any, input: { organizationId: string; cutoffAt: string; mode: PurgeMode; protectedInviteIds?: string[] }) {
+  const protection = await protectionState(store, input.organizationId, input.cutoffAt, input.mode);
   const heldAlertIds = new Set(protection.heldAlertIds);
   const protectedCaptureIds = new Set(protection.protectedCaptureIds);
   const protectedWatchlistIds = new Set(protection.protectedWatchlistIds);
@@ -248,11 +251,11 @@ function retentionCandidates(store: any, input: { organizationId: string; cutoff
     if (protectedWatchlistIds.has(String(record.id))) return false;
     return input.mode === "deletion" || !["active", "enabled"].includes(String(record.status ?? "").toLowerCase());
   });
-  const inventory = organizationPrivacyInventory(store, input.organizationId);
+  const inventory = await organizationPrivacyInventory(store, input.organizationId);
   for (const [key, recordType, , , scheduled] of ORGANIZATION_PRIVACY_INVENTORY) {
     if (["members", "invites", "destinations", "watchlists", "captures", "deliveries"].includes(key)) continue;
     for (const record of inventory[key]) {
-      if (record.privacyRedactedAt || protection.protectedRecordIds.includes(String(record.id))) continue;
+      if (privacyRedacted(record, recordType) || protection.protectedRecordIds.includes(String(record.id))) continue;
       if (input.mode !== "deletion" && (!scheduled || !oldEnough(record, input.cutoffAt, ...RETENTION_TIMESTAMPS))) continue;
       candidates.push({ recordType, record, action: "redact", reason: input.mode === "deletion" ? "organization_privacy_deletion" : "organization_retention_expired", at: retentionTimestamp(record) ?? input.cutoffAt });
     }
@@ -267,8 +270,8 @@ function addWorkflowCandidates(output: Array<{ recordType: string; record: any; 
   }
 }
 
-function protectionState(store: any, organizationId: string, cutoffAt: string, mode: PurgeMode) {
-  const inventory = organizationPrivacyInventory(store, organizationId);
+async function protectionState(store: any, organizationId: string, cutoffAt: string, mode: PurgeMode) {
+  const inventory = await organizationPrivacyInventory(store, organizationId);
   const captures = inventory.captures;
   const claims = inventory.claims;
   const alerts = inventory.alerts;
@@ -335,8 +338,8 @@ function alertCaptureIds(alert: any) {
 }
 
 function claimCaptureIds(claim: any) { return unique([...array(claim.captureIds), ...array(claim.evidenceCaptureIds), claim.captureId].filter(Boolean).map(String)); }
-function reconciledItems(store: any, organizationId: string, runId: string): PrivacyItem[] {
-  const inventory = organizationPrivacyInventory(store, organizationId);
+async function reconciledItems(store: any, organizationId: string, runId: string): Promise<PrivacyItem[]> {
+  const inventory = await organizationPrivacyInventory(store, organizationId);
   const items = [
     ...scoped(store.listCaptures?.(), organizationId)
       .filter((capture: any) => array(capture.metadata?.retentionAudit).some((entry: any) => entry?.runId === runId))
@@ -345,8 +348,8 @@ function reconciledItems(store: any, organizationId: string, runId: string): Pri
       .filter((delivery: any) => delivery.retentionRunId === runId)
       .map((delivery: any) => item("dwm_webhook_delivery", delivery.id, "redact", "redacted", delivery.retentionReason ?? "delivery_payload_retention_expired")),
     ...ORGANIZATION_PRIVACY_INVENTORY.flatMap(([key, recordType]) => inventory[key]
-      .filter(record => record.privacyDeletionRunId === runId)
-      .map(record => item(recordType, record.id, "redact", "redacted", record.privacyReason ?? "organization_privacy_deletion"))),
+      .filter(record => (recordType === "actor_profile_identity_history" ? record.originalRecord : record).privacyDeletionRunId === runId)
+      .map(record => item(recordType, record.id, "redact", "redacted", (recordType === "actor_profile_identity_history" ? record.originalRecord : record).privacyReason ?? "organization_privacy_deletion"))),
     ...array(store.getOrganization?.(organizationId)?.privacyRetentionAudit)
       .filter((entry: any) => entry.runId === runId)
       .map((entry: any) => item(entry.recordType, entry.recordId, entry.action ?? "delete", entry.status ?? "deleted", entry.reason ?? "organization_privacy_deletion"))
@@ -357,11 +360,15 @@ function reconciledItems(store: any, organizationId: string, runId: string): Pri
 const RETENTION_TIMESTAMPS = ["updatedAt", "completedAt", "reviewedAt", "labeledAt", "matchedAt", "checkedAt", "collectedAt", "observedAt", "capturedAt", "savedAt", "createdAt", "firstSeenAt", "lastSeenAt"];
 const LIFECYCLE_TIMESTAMPS = ["removedAt", "revokedAt", "acceptedAt", "expiredAt", "archivedAt", "completedAt", "updatedAt", "createdAt", "observedAt", "capturedAt"];
 const PRIVACY_AUDIT_FIELDS = new Set(["id", "tenantId", "organizationId", "orgId", "sourceId", "captureId", "captureIds", "incidentId", "entityId", "indicatorId", "claimId", "alertId", "caseId", "subjectType", "subjectId", "relationship", "type", "kind", "status", "action", "previousState", "nextState", "reviewState", "deliveryState", "outcome", "confidence", "claimType", "evidenceStage", "extractionMethod", "extractorVersion", "corroborationState", "sourceCount", "evidenceCount", "legalHold", "retentionClass", "contentHash", "normalizedTextHash", "mediaType", "storageKind", "unsafeMaterialAccessed", "dryRun", ...RETENTION_TIMESTAMPS]);
-function organizationPrivacyInventory(store: any, organizationId: string): Record<string, any[]> {
-  return Object.fromEntries(ORGANIZATION_PRIVACY_INVENTORY.map(([key, , listMethod, scope]) => {
-    const records = store[listMethod]?.call(store);
-    return [key, scope === "organization" ? byOrganization(records, organizationId) : scoped(records, organizationId)];
-  }));
+async function organizationPrivacyInventory(store: any, organizationId: string): Promise<Record<string, any[]>> {
+  return Object.fromEntries(await Promise.all(ORGANIZATION_PRIVACY_INVENTORY.map(async ([key, , listMethod, scope]) => {
+    const records = await store[listMethod]?.call(store);
+    return [key, scope === "organization"
+      ? byOrganization(records, organizationId)
+      : scope === "actor_history"
+        ? array(records).filter(record => String(record.originalTenantId ?? record.originalRecord?.tenantId ?? "") === organizationId)
+        : scoped(records, organizationId)];
+  })));
 }
 function retentionTimestamp(record: any) { return RETENTION_TIMESTAMPS.map(field => validIso(record?.[field])).find(Boolean); }
 function privacyTombstone(record: any, candidate: { recordType: string; action: string; reason: string }, runId: string) {
@@ -377,6 +384,23 @@ function privacyTombstone(record: any, candidate: { recordType: string; action: 
   if (candidate.recordType === "intelligence_claim") Object.assign(tombstone, { value: {}, summary: "" });
   return { ...tombstone, id: record.id, privacyRedactedAt: nowIso(), privacyDeletionRunId: runId, privacyRecordType: candidate.recordType, privacyAction: candidate.action, privacyReason: candidate.reason };
 }
+function actorHistoryTombstone(record: any, candidate: { recordType: string; action: string; reason: string }, runId: string) {
+  const privacyRedactedAt = nowIso();
+  return {
+    ...record,
+    originalRecord: {
+      id: record.actorProfileId,
+      tenantId: record.originalTenantId,
+      privacyRedactedAt,
+      privacyDeletionRunId: runId,
+      privacyRecordType: "actor_profile_identity_history",
+      privacyAction: candidate.action,
+      privacyReason: candidate.reason
+    },
+    referenceSnapshot: { aliases: [], evidenceLinks: [], claims: [], claimEvidence: [], claimReviews: [], workflows: [], privacyRedactedAt, privacyDeletionRunId: runId }
+  };
+}
+function privacyRedacted(record: any, recordType: string) { return Boolean(record.privacyRedactedAt || (recordType === "actor_profile_identity_history" && record.originalRecord?.privacyRedactedAt)); }
 function recordReferenceIds(value: any): string[] {
   const ids: string[] = [];
   const visit = (entry: any, key = "") => {

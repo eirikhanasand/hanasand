@@ -294,7 +294,7 @@ await recordLog({
         error: 'unscoped-onerror-error-marker', stack: 'unscoped-onerror-stack-marker',
     },
 })
-const unscopedLogs = (await queryOnce("SELECT service, host, level, message, metadata FROM service_logs WHERE id > $1 AND message = 'organization_request_error' ORDER BY id", [unscopedLogStart])).rows
+const unscopedLogs = (await queryOnce('SELECT service, host, level, message, metadata FROM service_logs WHERE id > $1 AND message = \'organization_request_error\' ORDER BY id', [unscopedLogStart])).rows
 assert.deepEqual(unscopedLogs, [
     { service: 'hanasand-api', host: '', level: 'error', message: 'organization_request_error', metadata: { category: 'organization_request_error', surface: 'organizations' } },
     { service: 'hanasand-api', host: '', level: 'error', message: 'organization_request_error', metadata: { category: 'organization_request_error', surface: 'organizations' } },
@@ -311,7 +311,7 @@ const beforeDeleteIngest = await app.inject({
     },
 })
 assert.equal(beforeDeleteIngest.statusCode, 201, beforeDeleteIngest.body)
-const beforeDeleteServiceLog = (await queryOnce("SELECT id, service, host, level, message, metadata FROM service_logs WHERE service = 'internal-ingest-service-marker' ORDER BY id DESC LIMIT 1")).rows[0]
+const beforeDeleteServiceLog = (await queryOnce('SELECT id, service, host, level, message, metadata FROM service_logs WHERE service = \'internal-ingest-service-marker\' ORDER BY id DESC LIMIT 1')).rows[0]
 assert.equal(JSON.stringify(beforeDeleteServiceLog).includes('internal-ingest-message-marker'), true)
 assert.equal(JSON.stringify(beforeDeleteServiceLog).includes('raw-service-request@example.test'), true)
 const serviceLogId = beforeDeleteServiceLog.id
@@ -397,7 +397,7 @@ assert.equal((postDeleteExport.data.public.service_logs as Array<{ id: string }>
 assert.equal((postDeleteExport.data.public.service_logs as Array<{ id: string }>).some(log => String(log.id) === String(postDeleteServiceLog.id)), true)
 const postDeleteState = await organizationPrivacyState('retention_org_c')
 assert.equal(postDeleteState.protection.immutable_service_logs, 2)
-assert.equal((await queryOnce("SELECT COUNT(*)::int count FROM organization_retention_run_items WHERE run_id = $1 AND record_type = 'service_log' AND status = 'redacted'", [deletion.id])).rows[0].count, 1)
+assert.equal((await queryOnce('SELECT COUNT(*)::int count FROM organization_retention_run_items WHERE run_id = $1 AND record_type = \'service_log\' AND status = \'redacted\'', [deletion.id])).rows[0].count, 1)
 
 const counts = (await queryOnce('SELECT selected_count, protected_count, deleted_count, redacted_count, failed_count, retried_count FROM organization_retention_runs WHERE id = $1', [runA.id])).rows[0]
 assert.equal(counts.selected_count, counts.protected_count + counts.deleted_count + counts.redacted_count + counts.failed_count + counts.retried_count)
