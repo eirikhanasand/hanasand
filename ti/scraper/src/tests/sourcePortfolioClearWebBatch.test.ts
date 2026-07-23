@@ -20,8 +20,8 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(28);
-    expect(batch.exclusions).toHaveLength(43);
+    expect(batch.sources).toHaveLength(34);
+    expect(batch.exclusions).toHaveLength(73);
 
     const ids = new Set<string>();
     const endpoints = new Set<string>();
@@ -87,6 +87,28 @@ describe("clear-web source portfolio batch", () => {
       ["Google Cloud Service Mesh Security Bulletins", [25, "2026-06-29T21:23:09.915Z"]],
       ["Google Confidential VM Security Bulletins", [7, "2026-04-14T23:41:36.964Z"]],
       ["Google Cloud VMware Engine Security Bulletins", [23, "2026-05-27T18:38:43.030Z"]],
+    ] as const);
+    const sources = batch.sources.filter((source: any) => expected.has(source.name));
+    expect(sources).toHaveLength(expected.size);
+    for (const source of sources) {
+      const [observedItemCount, latestPublishedAt] = expected.get(source.name)!;
+      expect(source.id).toBe(`src_portfolio_cw_${hash(source.url).slice(0, 20)}`);
+      expect(source.metadata.sourcePortfolioVerification).toMatchObject({ observedItemCount, latestPublishedAt });
+      expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
+      expect(source.metadata).not.toHaveProperty("countsAsCoverage");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
+    }
+  });
+
+  test("keeps ledger 010 current and candidate-only until productive scheduled cycles exist", () => {
+    const expected = new Map([
+      ["Siemens ProductCERT Security Advisories", [150, "2026-07-23T00:00:00.000Z"]],
+      ["Elastic Product Security Announcements", [25, "2026-07-21T23:08:36.000Z"]],
+      ["CERT Polska English Security Publications", [100, "2026-07-22T13:55:00.000Z"]],
+      ["JPCERT Coordination Center Threat Research", [15, "2026-07-23T02:32:28.000Z"]],
+      ["Japan Vulnerability Notes Updates", [20, "2026-07-23T06:00:30.000Z"]],
+      ["HashiCorp Product Security Updates", [25, "2026-07-08T20:18:59.000Z"]],
     ] as const);
     const sources = batch.sources.filter((source: any) => expected.has(source.name));
     expect(sources).toHaveLength(expected.size);
