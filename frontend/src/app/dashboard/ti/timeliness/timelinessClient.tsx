@@ -239,7 +239,7 @@ function StageRow({ stage, timestamp, provenance }: { stage: string, timestamp?:
     const url = typeof provenance?.referenceUrl === 'string' ? provenance.referenceUrl : undefined
     return <div className='grid grid-cols-[7.5rem_minmax(0,1fr)] gap-2 rounded-md border border-ui-border px-2.5 py-2 text-xs'>
         <span className='flex items-center gap-1.5 font-medium text-ui-muted'>{timestamp ? <CheckCircle2 className='h-3.5 w-3.5 text-ui-success' /> : <Clock3 className='h-3.5 w-3.5' />}{label(stage)}</span>
-        <span className='min-w-0'><span className='block font-mono text-[11px] text-ui-text'>{timestamp ? date(timestamp) : 'Unknown'}</span>{provenance ? <span className='mt-0.5 block truncate text-[10px] text-ui-muted'>{String(provenance.evidencePath || provenance.event || 'stored provenance')}{url ? <> · <a href={url} target='_blank' rel='noreferrer' className='inline-flex items-center gap-0.5 text-ui-primary hover:underline'>reference<ExternalLink className='h-2.5 w-2.5' /></a></> : null}</span> : null}</span>
+        <span className='min-w-0'><span className='block font-mono text-[11px] text-ui-text'>{timestamp ? date(timestamp) : 'Unknown'}</span>{provenance ? <span className='mt-0.5 block truncate text-[10px] text-ui-muted'>{String(provenance.evidencePath || provenance.event || 'stored provenance')}{url ? <> · <a href={url} target='_blank' rel='noopener noreferrer' className='inline-flex items-center gap-0.5 text-ui-primary hover:underline'>reference<ExternalLink className='h-2.5 w-2.5' /></a></> : null}</span> : null}</span>
     </div>
 }
 
