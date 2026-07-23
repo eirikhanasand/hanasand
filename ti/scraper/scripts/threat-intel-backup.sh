@@ -14,9 +14,10 @@ objects="$archive/evidence.tar.gz"
 evidence_inventory="$archive/EVIDENCE-INVENTORY.tsv"
 manifest="$archive/BACKUP-MANIFEST"
 checksums="$archive/SHA256SUMS"
-postgres_image=${TI_RESTORE_POSTGRES_IMAGE:-postgres:15}
-scraper_image_ref=${TI_RESTORE_SCRAPER_IMAGE:-hanasand_ti_scraper}
-scraper_image=
+postgres_image_ref=${TI_RESTORE_POSTGRES_IMAGE:-postgres:15}
+verifier_image_ref=${TI_RESTORE_SCRAPER_IMAGE:-hanasand_ti_scraper}
+postgres_image=
+verifier_image=
 repo_root=$(CDPATH= cd -- "$script_dir/../../.." && pwd)
 
 usage() {
@@ -27,7 +28,21 @@ usage() {
 [ -n "$action" ] && [ -n "$archive" ] || usage
 
 compose() { docker compose "$@"; }
-resolve_scraper_image() { docker image inspect "$scraper_image_ref" --format '{{.Id}}'; }
+resolve_image() {
+  resolved_image=$(docker image inspect "$1" --format '{{.Id}}')
+  [ -n "$resolved_image" ] || { echo "could not resolve image: $1" >&2; exit 1; }
+  printf '%s\n' "$resolved_image"
+}
+resolve_source_container() {
+  resolved_container=$(compose ps -q "$1")
+  [ -n "$resolved_container" ] || { echo "could not resolve running Compose service: $1" >&2; exit 1; }
+  [ "$(docker container inspect "$resolved_container" --format '{{.State.Running}}')" = true ] || {
+    echo "Compose service is not running: $1" >&2
+    exit 1
+  }
+  printf '%s\n' "$resolved_container"
+}
+container_image() { docker container inspect "$1" --format '{{.Image}}'; }
 
 inspect_evidence_archive() (
   set -eu
@@ -86,7 +101,7 @@ inspect_evidence_archive() (
   docker run --rm \
     -v "$evidence_tmp:/evidence:ro" \
     -v "$references_path:/backup/OBJECT-REFERENCES.tsv:ro" \
-    "$scraper_image" \
+    "$verifier_image" \
     bun scripts/verify-restored-database.ts ledger /backup/OBJECT-REFERENCES.tsv /evidence > "$ledger_output"
 )
 
@@ -167,18 +182,22 @@ case "$action" in
     mkdir -p "$archive"
     chmod 700 "$archive"
     [ ! -e "$dump" ] || { echo "backup archive already contains database.dump: $archive" >&2; exit 1; }
-    backup_image_id=$(resolve_scraper_image)
-    scraper_image=$backup_image_id
+    verifier_image=$(resolve_image "$verifier_image_ref")
+    postgres_image=$(resolve_image "$postgres_image_ref")
+    source_scraper_container=$(resolve_source_container ti-scraper)
+    source_postgres_container=$(resolve_source_container postgres)
+    source_scraper_image=$(container_image "$source_scraper_container")
+    source_postgres_image=$(container_image "$source_postgres_container")
 
     database_bundle="$archive/.database-bundle.$$"
-    if ! compose exec -T postgres sh -s -- backup < "$postgres_helper" > "$database_bundle"; then
+    if ! docker exec -i "$source_postgres_container" sh -s -- backup < "$postgres_helper" > "$database_bundle"; then
       rm -f -- "$database_bundle"
       exit 1
     fi
     tar -C "$archive" -xf "$database_bundle"
     rm -f -- "$database_bundle"
 
-    compose exec -T ti-scraper tar -C /var/lib/ti-scraper/evidence -czf - . > "$objects"
+    docker exec "$source_scraper_container" tar -C /var/lib/ti-scraper/evidence -czf - . > "$objects"
     inspect_evidence_archive "$objects" "$evidence_inventory" "$object_ledger"
 
     database_schemas=$(awk -F '\t' 'NR > 1 { seen[$1] = 1 } END { for (schema in seen) count += 1; print count + 0 }' "$database_inventory")
@@ -194,10 +213,15 @@ case "$action" in
     source_database=$(sed -n '1p' "$archive/SOURCE-DATABASE")
 
     {
-      printf 'format=hanasand.threat_intel_backup.v3\n'
+      printf 'format=hanasand.threat_intel_backup.v4\n'
       printf 'created_at=%s\n' "$(date -u +%FT%TZ)"
       printf 'release_commit=%s\n' "$release_commit"
-      printf 'scraper_image_id=%s\n' "$backup_image_id"
+      printf 'source_scraper_container_id=%s\n' "$source_scraper_container"
+      printf 'source_scraper_image_id=%s\n' "$source_scraper_image"
+      printf 'source_postgres_container_id=%s\n' "$source_postgres_container"
+      printf 'source_postgres_image_id=%s\n' "$source_postgres_image"
+      printf 'verifier_image_id=%s\n' "$verifier_image"
+      printf 'restore_postgres_image_id=%s\n' "$postgres_image"
       printf 'source_database=%s\n' "$source_database"
       printf 'database_scope=all_non_system_schemas\n'
       printf 'database_schemas=%s\n' "$database_schemas"
@@ -221,7 +245,8 @@ case "$action" in
     verify
     ;;
   verify)
-    scraper_image=$(resolve_scraper_image)
+    verifier_image=$(resolve_image "$verifier_image_ref")
+    postgres_image=$(resolve_image "$postgres_image_ref")
     verify
     ;;
   drill)
@@ -238,7 +263,8 @@ case "$action" in
     receipt_phase=initialize
     receipt_reason=command_failed
     verifier_commit=unavailable
-    scraper_image_id=unavailable
+    verifier_image=unavailable
+    postgres_image=unavailable
 
     write_last_attempt() {
       attempt_status=$1
@@ -253,7 +279,8 @@ case "$action" in
         printf 'phase=%s\n' "$receipt_phase"
         printf 'reason=%s\n' "$attempt_reason"
         printf 'verifier_commit=%s\n' "$verifier_commit"
-        printf 'scraper_image_id=%s\n' "$scraper_image_id"
+        printf 'verifier_image_id=%s\n' "$verifier_image"
+        printf 'postgres_image_id=%s\n' "$postgres_image"
       } > "$attempt_tmp"
       mv "$attempt_tmp" "$archive/RESTORE-LAST-ATTEMPT"
     }
@@ -280,8 +307,8 @@ case "$action" in
     trap 'exit 143' TERM
 
     verifier_commit=$(git -C "$repo_root" rev-parse HEAD)
-    scraper_image_id=$(resolve_scraper_image)
-    scraper_image=$scraper_image_id
+    verifier_image=$(resolve_image "$verifier_image_ref")
+    postgres_image=$(resolve_image "$postgres_image_ref")
     receipt_phase=verify
     verify
     receipt_stage=$(mktemp -d "$archive_parent/.hanasand-ti-restore-receipt.XXXXXX")
@@ -326,11 +353,11 @@ case "$action" in
     receipt_phase=evidence_restore
     docker run --rm -i \
       -v "$drill_evidence:/var/lib/ti-scraper/evidence" \
-      "$scraper_image" tar -C /var/lib/ti-scraper/evidence -xzf - < "$objects"
+      "$verifier_image" tar -C /var/lib/ti-scraper/evidence -xzf - < "$objects"
     restored_evidence_archive="$receipt_stage/.restored-evidence.tar.gz"
     docker run --rm \
       -v "$drill_evidence:/var/lib/ti-scraper/evidence:ro" \
-      "$scraper_image" tar -C /var/lib/ti-scraper/evidence -czf - . > "$restored_evidence_archive"
+      "$verifier_image" tar -C /var/lib/ti-scraper/evidence -czf - . > "$restored_evidence_archive"
     receipt_phase=evidence_reconcile
     restored_evidence_inventory="$receipt_stage/RESTORE-EVIDENCE-INVENTORY.tsv"
     restored_object_ledger="$receipt_stage/RESTORE-OBJECT-LEDGER.tsv"
@@ -354,11 +381,11 @@ case "$action" in
       -e TI_RESTORE_EVIDENCE_INVENTORY=/restore/EVIDENCE-INVENTORY.tsv \
       -e TI_RESTORE_OBJECT_LEDGER=/restore/OBJECT-LEDGER.tsv \
       -e TI_RESTORE_VERIFIER_COMMIT="$verifier_commit" \
-      -e TI_RESTORE_SCRAPER_IMAGE_ID="$scraper_image_id" \
+      -e TI_RESTORE_SCRAPER_IMAGE_ID="$verifier_image" \
       -v "$drill_evidence:/var/lib/ti-scraper/evidence:ro" \
       -v "$evidence_inventory:/restore/EVIDENCE-INVENTORY.tsv:ro" \
       -v "$object_ledger:/restore/OBJECT-LEDGER.tsv:ro" \
-      "$scraper_image" bun scripts/verify-restored-database.ts > "$application_proof"
+      "$verifier_image" bun scripts/verify-restored-database.ts > "$application_proof"
 
     receipt_phase=cleanup
     cleanup_resources
@@ -380,7 +407,8 @@ case "$action" in
       printf 'status=succeeded\n'
       printf 'completed_at=%s\n' "$(date -u +%FT%TZ)"
       printf 'verifier_commit=%s\n' "$verifier_commit"
-      printf 'scraper_image_id=%s\n' "$scraper_image_id"
+      printf 'verifier_image_id=%s\n' "$verifier_image"
+      printf 'postgres_image_id=%s\n' "$postgres_image"
       printf 'target=ephemeral_postgresql_container\n'
       printf 'target_removed=true\n'
       printf 'evidence_target=ephemeral_docker_volume\n'

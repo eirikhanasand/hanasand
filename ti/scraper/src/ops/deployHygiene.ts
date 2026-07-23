@@ -71,7 +71,14 @@ export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygien
     check("backup.object_integrity", /O_NOFOLLOW/.test(restoreVerifier) && /createHash\("sha256"\)/.test(restoreVerifier) && /mediaType/.test(restoreVerifier) && /retentionClass/.test(restoreVerifier), "restore rejects linked-object path, byte hash, and recovery metadata mismatches"),
     check("backup.exact_restore_reconciliation", /cmp -s "\$database_inventory" "\$restored_inventory"/.test(backupScript) && /RESTORE-EVIDENCE-INVENTORY\.tsv/.test(backupScript) && /APPLICATION-READ-PROOF\.json/.test(backupScript), "restore drill reconciles database and evidence hashes before an application read"),
     check("backup.atomic_restore_receipt", /receipt_stage=\$\(mktemp -d "\$archive_parent/.test(backupScript) && /mv "\$receipt_stage" "\$receipt_target"/.test(backupScript) && /RESTORE-LAST-ATTEMPT/.test(backupScript), "restore proof is staged outside the archive and only the successful receipt is published"),
-    check("backup.restore_provenance", /verifier_commit=\$\(git -C "\$repo_root" rev-parse HEAD\)/.test(backupScript) && /scraper_image_id=\$\(resolve_scraper_image\)/.test(backupScript) && /scraper_image=\$scraper_image_id/.test(backupScript), "restore receipts record and run the exact verifier commit and immutable scraper image"),
+    check("backup.restore_provenance", /verifier_commit=\$\(git -C "\$repo_root" rev-parse HEAD\)/.test(backupScript)
+      && /verifier_image=\$\(resolve_image "\$verifier_image_ref"\)/.test(backupScript)
+      && /postgres_image=\$\(resolve_image "\$postgres_image_ref"\)/.test(backupScript)
+      && /source_scraper_container=\$\(resolve_source_container ti-scraper\)/.test(backupScript)
+      && /docker exec "\$source_scraper_container"/.test(backupScript)
+      && /verifier_image_id=%s/.test(backupScript)
+      && /postgres_image_id=%s/.test(backupScript),
+    "backup and restore pin and receipt the source, verifier, and PostgreSQL execution identities"),
     check("backup.isolated_restore", /docker run/.test(backupScript) && /--tmpfs/.test(backupScript) && !/compose stop/.test(backupScript), "restore drill uses ephemeral PostgreSQL without stopping healthy services"),
     check("backup.signal_cleanup", /trap 'exit 130' INT/.test(backupPostgres) && /trap 'exit 143' TERM/.test(backupPostgres) && !/set \+e/.test(backupPostgres), "PostgreSQL backup helper exits nonzero after signal cleanup"),
     check("backup.failure_audit", /status=failed/.test(backupWrapper) && /LATEST-STATUS/.test(backupWrapper) && /exit_code=%s/.test(backupWrapper) && /phase=%s/.test(backupWrapper) && /reason=%s/.test(backupWrapper), "scheduled failures persist bounded phase, reason, and exit status"),
