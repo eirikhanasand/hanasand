@@ -46,14 +46,12 @@ export class FileObjectEvidenceStore implements ObjectEvidenceStore {
   }
 
   deleteObject(ref: ObjectStoreRef, _reason: string): boolean {
-    if (ref.bucket !== this.bucket) return false;
+    if (ref.bucket !== this.bucket) throw new Error("Object belongs to a different evidence bucket");
     const objectPath = fileObjectPathForKey(this.rootDir, ref.key);
-    let deleted = false;
     for (const path of [objectPath, `${objectPath}.json`]) {
       if (!existsSync(path)) continue;
       unlinkSync(path);
-      deleted = true;
     }
-    return deleted;
+    return true;
   }
 }

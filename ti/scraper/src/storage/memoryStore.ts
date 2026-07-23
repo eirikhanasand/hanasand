@@ -24,10 +24,21 @@ export class InMemoryScraperStore implements ScraperStore {
   private dwmWatchlists = new Map<string, any>(); private dwmAlerts = new Map<string, any>(); private dwmWebhookDeliveries = new Map<string, any>();
   private actorOrgRelevanceReviews = new Map<string, any>();
   private replayJobs = new Map<string, CaptureReplayJob>(); private discoveryEvidence = new Map<string, DiscoveryEvidence>(); private liveSearchSnapshots = new Map<string, LiveSearchSnapshot>(); private evidenceDeltas = new Map<string, EvidenceDelta>(); private cursorOwners = new Map<string, string>(); private sequence = 0;
+  private organizationWriteGuardDepth = 0;
   private evidenceQueries = new InMemoryEvidenceQueries(() => ({ captures: this.listCaptures(), incidents: this.listIncidents(), replayJobs: this.listReplayJobs(), discoveryEvidence: this.listDiscoveryEvidence(), liveSearchSnapshots: this.listLiveSearchSnapshots(), evidenceDeltas: this.listEvidenceDeltas() }));
+  assertOrganizationWritable(record: any) {
+    if (this.organizationWriteGuardDepth) return;
+    const organizationIds = new Set([record?.tenantId, record?.organizationId, record?.orgId].map((value) => String(value ?? "").trim()).filter(Boolean));
+    for (const organizationId of organizationIds) {
+      if (this.organizations.get(organizationId)?.privacyDeletionRunId) throw new Error(`Organization deletion is in progress; writes are blocked: ${organizationId}`);
+    }
+  }
+  protected hydrateWithoutOrganizationWriteGuard<T>(hydrate: () => T): T { this.organizationWriteGuardDepth++; try { return hydrate(); } finally { this.organizationWriteGuardDepth--; } }
+  private putScoped<T extends { id: string }>(map: Map<string, T>, item: T): T { this.assertOrganizationWritable(item); return put(map, item); }
   saveCapture(capture: RawCapture): RawCapture { return this.saveCaptureWithDedupe(capture).capture; }
   protected hydrateCaptureSnapshot(capture: RawCapture): RawCapture { return this.insertCapture(prepareCapture(capture), false); }
   saveCaptureWithDedupe(capture: RawCapture) {
+    this.assertOrganizationWritable(capture);
     const prepared = prepareCapture(capture); enforceSensitiveMetadataOnly(prepared);
     const previous = this.captures.get(capture.id);
     if (previous) { if (previous.contentHash !== prepared.contentHash) throw new Error(`Capture is immutable: ${capture.id}`); return { capture: previous, status: "duplicate", duplicateOf: previous.id, dedupeKey: captureDedupeKey(previous) }; }
@@ -37,7 +48,7 @@ export class InMemoryScraperStore implements ScraperStore {
   }
   private insertCapture(capture: RawCapture, delta: boolean) { this.captures.set(capture.id, capture); for (const key of dedupeIndexKeys(capture)) this.dedupe.set(key, capture.id); if (delta) this.recordCaptureDelta("added", capture); return capture; }
   getCapture(id: string) { return this.captures.get(id); }
-  updateCaptureMetadata(id: string, update: (metadata: any) => any) { const previous = this.mustCapture(id); const next = { ...previous, metadata: update(previous.metadata ?? {}) }; this.captures.set(id, next); return next; }
+  updateCaptureMetadata(id: string, update: (metadata: any) => any) { const previous = this.mustCapture(id); this.assertOrganizationWritable(previous); const next = { ...previous, metadata: update(previous.metadata ?? {}) }; this.captures.set(id, next); return next; }
   replaceCaptureForRetention(capture: RawCapture) { const previous = this.mustCapture(capture.id); if (previous.contentHash !== capture.contentHash || previous.sourceId !== capture.sourceId) throw new Error(`Retention cannot change capture identity: ${capture.id}`); this.captures.set(capture.id, capture); return capture; }
   findDuplicateCapture(capture: RawCapture) { const prepared = prepareCapture(capture); for (const key of dedupeIndexKeys(prepared)) { const id = this.dedupe.get(key); if (id) return this.captures.get(id); } }
   listCaptures() { return mapValues(this.captures); }
@@ -116,11 +127,11 @@ export class InMemoryScraperStore implements ScraperStore {
   protected hydrateEvidenceDeltaSnapshot(delta: EvidenceDelta) { return (this as any).storeDelta(delta, false); }
   listEvidenceDeltas() { return mapValues(this.evidenceDeltas); }
   queries() { return this.evidenceQueries; }
-  saveIncident(candidate: IncidentCandidate) { return put(this.incidents, candidate); } getIncident(id: string) { return this.incidents.get(id); } listIncidents() { return mapValues(this.incidents); }
-  saveExtractedEntity(entity: any) { return put(this.extractedEntities, entity); } getExtractedEntity(id: string) { return this.extractedEntities.get(id); } listExtractedEntities() { return mapValues(this.extractedEntities); }
-  saveIndicator(indicator: any) { return put(this.indicators, indicator); } getIndicator(id: string) { return this.indicators.get(id); } listIndicators() { return mapValues(this.indicators); }
+  saveIncident(candidate: IncidentCandidate) { return this.putScoped(this.incidents, candidate); } getIncident(id: string) { return this.incidents.get(id); } listIncidents() { return mapValues(this.incidents); }
+  saveExtractedEntity(entity: any) { return this.putScoped(this.extractedEntities, entity); } getExtractedEntity(id: string) { return this.extractedEntities.get(id); } listExtractedEntities() { return mapValues(this.extractedEntities); }
+  saveIndicator(indicator: any) { return this.putScoped(this.indicators, indicator); } getIndicator(id: string) { return this.indicators.get(id); } listIndicators() { return mapValues(this.indicators); }
   saveActorProfile(profile: any) {
-    const stored = put(this.actorProfiles, profile);
+    const stored = this.putScoped(this.actorProfiles, profile);
     const aliases = unique([...(profile.aliases ?? []), profile.canonicalName]);
     const active = new Set(aliases.map((alias) => alias.toLowerCase()));
     for (const [id, record] of this.actorAliases) if (record.actorProfileId === profile.id && !active.has(record.normalizedAlias)) this.actorAliases.delete(id);
@@ -139,7 +150,14 @@ export class InMemoryScraperStore implements ScraperStore {
         evidenceCount: profile.evidenceCount ?? 1,
         sourceIds: profile.sourceIds ?? [],
         captureIds: profile.captureIds ?? [],
-        updatedAt: profile.updatedAt ?? profile.lastSeenAt
+        updatedAt: profile.updatedAt ?? profile.lastSeenAt,
+        ...(profile.privacyRedactedAt ? {
+          privacyRedactedAt: profile.privacyRedactedAt,
+          privacyDeletionRunId: profile.privacyDeletionRunId,
+          privacyRecordType: "actor_alias",
+          privacyAction: profile.privacyAction,
+          privacyReason: profile.privacyReason
+        } : {})
       });
     }
     return stored;
@@ -154,6 +172,7 @@ export class InMemoryScraperStore implements ScraperStore {
   async listActorProfileIdentityHistoryForOwnership(): Promise<any[]> { return []; }
   async replaceActorProfileIdentityHistoryForRetention(_record: any): Promise<any | undefined> { return undefined; }
   replaceActorIdentityCatalog(snapshot: MitreActorCatalogSnapshot, provenance: { sourceId: string; captureId: string; importedAt?: string }) {
+    this.assertOrganizationWritable(snapshot);
     const incomingIds = new Set(snapshot.identities.map((identity) => identity.id));
     if (incomingIds.size !== snapshot.identities.length || snapshot.counts.totalIdentityCount !== snapshot.identities.length) throw new Error("Actor identity catalog count mismatch.");
     const importedAt = provenance.importedAt ?? snapshot.retrievedAt;
@@ -178,15 +197,16 @@ export class InMemoryScraperStore implements ScraperStore {
   protected hydrateActorIdentitySnapshot(identity: any) { return put(this.actorIdentities, identity); }
   getActorIdentityCatalog(id: string) { return this.actorIdentityCatalogs.get(id); } listActorIdentityCatalogs() { return mapValues(this.actorIdentityCatalogs); }
   getActorIdentity(id: string) { return this.actorIdentities.get(id); } listActorIdentities() { return mapValues(this.actorIdentities); }
-  saveEvidenceLink(linkRecord: any) { return put(this.evidenceLinks, linkRecord); } getEvidenceLink(id: string) { return this.evidenceLinks.get(id); } listEvidenceLinks() { return mapValues(this.evidenceLinks); }
-  saveValidationRecord(record: any) { return put(this.validationRecords, record); } getValidationRecord(id: string) { return this.validationRecords.get(id); } listValidationRecords() { return mapValues(this.validationRecords); }
-  saveEvaluationLabel(label: any) { const previous = this.evaluationLabels.get(label.id); if (previous && canonicalJson(previous) !== canonicalJson(label)) throw new Error(`Evaluation label is immutable: ${label.id}`); return previous ?? put(this.evaluationLabels, label); } getEvaluationLabel(id: string) { return this.evaluationLabels.get(id); } listEvaluationLabels() { return mapValues(this.evaluationLabels); }
-  saveEvaluationBenchmark(record: any) { return put(this.evaluationBenchmarks, record); } getEvaluationBenchmark(id: string) { return this.evaluationBenchmarks.get(id); } listEvaluationBenchmarks() { return mapValues(this.evaluationBenchmarks); }
-  saveEvaluationAnnotation(record: any) { const previous = this.evaluationAnnotations.get(record.id); if (previous && canonicalJson(previous) !== canonicalJson(record)) throw new Error(`Evaluation annotation is immutable: ${record.id}`); return previous ?? put(this.evaluationAnnotations, record); } getEvaluationAnnotation(id: string) { return this.evaluationAnnotations.get(id); } listEvaluationAnnotations() { return mapValues(this.evaluationAnnotations); }
-  saveEvaluationAdjudication(record: any) { const previous = this.evaluationAdjudications.get(record.id); if (previous && canonicalJson(previous) !== canonicalJson(record)) throw new Error(`Evaluation adjudication is immutable: ${record.id}`); return previous ?? put(this.evaluationAdjudications, record); } getEvaluationAdjudication(id: string) { return this.evaluationAdjudications.get(id); } listEvaluationAdjudications() { return mapValues(this.evaluationAdjudications); }
-  saveIntelligenceClaim(claim: any) { return put(this.intelligenceClaims, claim); } getIntelligenceClaim(id: string) { return this.intelligenceClaims.get(id); } listIntelligenceClaims() { return mapValues(this.intelligenceClaims); }
-  saveClaimEvidence(evidence: any) { return put(this.claimEvidence, evidence); } getClaimEvidence(id: string) { return this.claimEvidence.get(id); } listClaimEvidence() { return mapValues(this.claimEvidence); }
+  saveEvidenceLink(linkRecord: any) { return this.putScoped(this.evidenceLinks, linkRecord); } getEvidenceLink(id: string) { return this.evidenceLinks.get(id); } listEvidenceLinks() { return mapValues(this.evidenceLinks); }
+  saveValidationRecord(record: any) { return this.putScoped(this.validationRecords, record); } getValidationRecord(id: string) { return this.validationRecords.get(id); } listValidationRecords() { return mapValues(this.validationRecords); }
+  saveEvaluationLabel(label: any) { this.assertOrganizationWritable(label); const previous = this.evaluationLabels.get(label.id); if (previous && canonicalJson(previous) !== canonicalJson(label)) throw new Error(`Evaluation label is immutable: ${label.id}`); return previous ?? put(this.evaluationLabels, label); } getEvaluationLabel(id: string) { return this.evaluationLabels.get(id); } listEvaluationLabels() { return mapValues(this.evaluationLabels); }
+  saveEvaluationBenchmark(record: any) { return this.putScoped(this.evaluationBenchmarks, record); } getEvaluationBenchmark(id: string) { return this.evaluationBenchmarks.get(id); } listEvaluationBenchmarks() { return mapValues(this.evaluationBenchmarks); }
+  saveEvaluationAnnotation(record: any) { this.assertOrganizationWritable(record); const previous = this.evaluationAnnotations.get(record.id); if (previous && canonicalJson(previous) !== canonicalJson(record)) throw new Error(`Evaluation annotation is immutable: ${record.id}`); return previous ?? put(this.evaluationAnnotations, record); } getEvaluationAnnotation(id: string) { return this.evaluationAnnotations.get(id); } listEvaluationAnnotations() { return mapValues(this.evaluationAnnotations); }
+  saveEvaluationAdjudication(record: any) { this.assertOrganizationWritable(record); const previous = this.evaluationAdjudications.get(record.id); if (previous && canonicalJson(previous) !== canonicalJson(record)) throw new Error(`Evaluation adjudication is immutable: ${record.id}`); return previous ?? put(this.evaluationAdjudications, record); } getEvaluationAdjudication(id: string) { return this.evaluationAdjudications.get(id); } listEvaluationAdjudications() { return mapValues(this.evaluationAdjudications); }
+  saveIntelligenceClaim(claim: any) { return this.putScoped(this.intelligenceClaims, claim); } getIntelligenceClaim(id: string) { return this.intelligenceClaims.get(id); } listIntelligenceClaims() { return mapValues(this.intelligenceClaims); }
+  saveClaimEvidence(evidence: any) { return this.putScoped(this.claimEvidence, evidence); } getClaimEvidence(id: string) { return this.claimEvidence.get(id); } listClaimEvidence() { return mapValues(this.claimEvidence); }
   saveClaimReview(review: any) {
+    this.assertOrganizationWritable(review);
     const claim = this.getIntelligenceClaim(review.claimId);
     if (!claim) throw new Error(`Unknown intelligence claim: ${review.claimId}`);
     const nextState = claimStateForReview(review.action, claim.reviewState);
@@ -206,32 +226,96 @@ export class InMemoryScraperStore implements ScraperStore {
     return { review: storedReview, claim: updated };
   }
   getClaimReview(id: string) { return this.claimReviews.get(id); } listClaimReviews() { return mapValues(this.claimReviews); }
-  saveSourceHealthObservation(observation: any) { return put(this.sourceHealthObservations, observation); } getSourceHealthObservation(id: string) { return this.sourceHealthObservations.get(id); } listSourceHealthObservations() { return mapValues(this.sourceHealthObservations); }
-  saveTimelinessRecord(record: any) { return put(this.timelinessRecords, record); } getTimelinessRecord(id: string) { return this.timelinessRecords.get(id); } listTimelinessRecords() { return mapValues(this.timelinessRecords); }
-  saveSource(source: SourceRecord) { return put(this.sources, source); } getSource(id: string) { return this.sources.get(id); } listSources() { return mapValues(this.sources); }
-  savePlan(plan: any) { return put(this.plans, plan); } getPlan(id: string) { return this.plans.get(id); } listPlans() { return mapValues(this.plans); }
-  saveRun(run: any) { return put(this.runs, run); } getRun(id: string) { return this.runs.get(id); } findRunByIdempotencyKey(tenantId: string | undefined, key: string) { return mapValues(this.runs).find((run) => run.tenantId === tenantId && run.idempotencyKey === key); } listRuns() { return mapValues(this.runs); }
-  saveAnalystMetadataReviewTask(task: any) { if (task.unsafeMaterialAccessed !== false) throw new Error(`Analyst metadata review task must not record unsafe material access: ${task.id}`); return put(this.analystMetadataReviewTasks, task); } getAnalystMetadataReviewTask(id: string) { return this.analystMetadataReviewTasks.get(id); } listAnalystMetadataReviewTasks() { return mapValues(this.analystMetadataReviewTasks); }
-  saveAnalystSourceActivationPacket(packet: any) { if (packet.dryRun !== true) throw new Error(`Analyst source activation packet must be dry-run only: ${packet.id}`); return put(this.analystSourceActivationPackets, packet); } listAnalystSourceActivationPackets() { return mapValues(this.analystSourceActivationPackets); }
-  saveAnalystVictimNotificationPacket(packet: any) { return put(this.analystVictimNotificationPackets, packet); } listAnalystVictimNotificationPackets() { return mapValues(this.analystVictimNotificationPackets); }
+  saveSourceHealthObservation(observation: any) { return this.putScoped(this.sourceHealthObservations, observation); } getSourceHealthObservation(id: string) { return this.sourceHealthObservations.get(id); } listSourceHealthObservations() { return mapValues(this.sourceHealthObservations); }
+  saveTimelinessRecord(record: any) { return this.putScoped(this.timelinessRecords, record); } getTimelinessRecord(id: string) { return this.timelinessRecords.get(id); } listTimelinessRecords() { return mapValues(this.timelinessRecords); }
+  saveSource(source: SourceRecord) { return this.putScoped(this.sources, source); } getSource(id: string) { return this.sources.get(id); } listSources() { return mapValues(this.sources); }
+  savePlan(plan: any) { return this.putScoped(this.plans, plan); } getPlan(id: string) { return this.plans.get(id); } listPlans() { return mapValues(this.plans); }
+  saveRun(run: any) { return this.putScoped(this.runs, run); } getRun(id: string) { return this.runs.get(id); } findRunByIdempotencyKey(tenantId: string | undefined, key: string) { return mapValues(this.runs).find((run) => run.tenantId === tenantId && run.idempotencyKey === key); } listRuns() { return mapValues(this.runs); }
+  saveAnalystMetadataReviewTask(task: any) { if (task.unsafeMaterialAccessed !== false) throw new Error(`Analyst metadata review task must not record unsafe material access: ${task.id}`); return this.putScoped(this.analystMetadataReviewTasks, task); } getAnalystMetadataReviewTask(id: string) { return this.analystMetadataReviewTasks.get(id); } listAnalystMetadataReviewTasks() { return mapValues(this.analystMetadataReviewTasks); }
+  saveAnalystSourceActivationPacket(packet: any) { if (packet.dryRun !== true) throw new Error(`Analyst source activation packet must be dry-run only: ${packet.id}`); return this.putScoped(this.analystSourceActivationPackets, packet); } listAnalystSourceActivationPackets() { return mapValues(this.analystSourceActivationPackets); }
+  saveAnalystVictimNotificationPacket(packet: any) { return this.putScoped(this.analystVictimNotificationPackets, packet); } listAnalystVictimNotificationPackets() { return mapValues(this.analystVictimNotificationPackets); }
   saveAnalystClaimLedgerEntry(entry: any) {
     const safeEntry = stripForbiddenClaimMaterial(entry);
-    const stored = put(this.analystClaimLedgerEntries, safeEntry);
+    const stored = this.putScoped(this.analystClaimLedgerEntries, safeEntry);
+    if (safeEntry.privacyRedactedAt) return stored;
     this.saveIntelligenceClaim(claimFromAnalystEntry(safeEntry, this.getIntelligenceClaim(safeEntry.id)));
     const capture = safeEntry.captureId ? this.getCapture(safeEntry.captureId) : undefined;
     if (capture) recordAnalystClaimEvidence(this, capture, safeEntry);
     return stored;
   }
   listAnalystClaimLedgerEntries() { return mapValues(this.analystClaimLedgerEntries); }
-  saveAnalystLoopSnapshot(snapshot: any) { return put(this.analystLoopSnapshots, snapshot); } listAnalystLoopSnapshots() { return mapValues(this.analystLoopSnapshots); }
-  saveOrganization(organization: any) { return put(this.organizations, organization); } getOrganization(id: string) { return this.organizations.get(id); } listOrganizations() { return mapValues(this.organizations); }
-  saveOrganizationMember(member: any) { return put(this.organizationMembers, member); } getOrganizationMember(id: string) { return this.organizationMembers.get(id); } listOrganizationMembers() { return mapValues(this.organizationMembers); }
-  saveOrganizationInvite(invite: any) { return put(this.organizationInvites, invite); } getOrganizationInvite(id: string) { return this.organizationInvites.get(id); } listOrganizationInvites() { return mapValues(this.organizationInvites); }
-  saveWebhookDestination(destination: any) { return put(this.webhookDestinations, destination); } getWebhookDestination(id: string) { return this.webhookDestinations.get(id); } listWebhookDestinations() { return mapValues(this.webhookDestinations); }
-  saveCase(caseRecord: any) { return put(this.cases, caseRecord); } getCase(id: string) { return this.cases.get(id); } listCases() { return mapValues(this.cases); }
-  saveDwmWatchlist(watchlist: any) { return put(this.dwmWatchlists, watchlist); } getDwmWatchlist(id: string) { return this.dwmWatchlists.get(id); } listDwmWatchlists() { return mapValues(this.dwmWatchlists); }
+  saveAnalystLoopSnapshot(snapshot: any) { return this.putScoped(this.analystLoopSnapshots, snapshot); } listAnalystLoopSnapshots() { return mapValues(this.analystLoopSnapshots); }
+  saveOrganization(organization: any) { const existing = this.organizations.get(organization.id); if (existing?.privacyDeletionRunId && existing.privacyDeletionRunId !== organization.privacyDeletionRunId) throw new Error(`Organization deletion is in progress; lifecycle cannot be reopened: ${organization.id}`); return put(this.organizations, organization); } getOrganization(id: string) { return this.organizations.get(id); } listOrganizations() { return mapValues(this.organizations); }
+  saveOrganizationMember(member: any) { return this.putScoped(this.organizationMembers, member); } getOrganizationMember(id: string) { return this.organizationMembers.get(id); } listOrganizationMembers() { return mapValues(this.organizationMembers); }
+  saveOrganizationInvite(invite: any) { return this.putScoped(this.organizationInvites, invite); } getOrganizationInvite(id: string) { return this.organizationInvites.get(id); } listOrganizationInvites() { return mapValues(this.organizationInvites); }
+  saveWebhookDestination(destination: any) { return this.putScoped(this.webhookDestinations, destination); } getWebhookDestination(id: string) { return this.webhookDestinations.get(id); } listWebhookDestinations() { return mapValues(this.webhookDestinations); }
+  saveCase(caseRecord: any) { return this.putScoped(this.cases, caseRecord); } getCase(id: string) { return this.cases.get(id); } listCases() { return mapValues(this.cases); }
+  saveDwmWatchlist(watchlist: any) { return this.putScoped(this.dwmWatchlists, watchlist); } getDwmWatchlist(id: string) { return this.dwmWatchlists.get(id); } listDwmWatchlists() { return mapValues(this.dwmWatchlists); }
+  replaceRecordForRetention(recordType: string, record: any) {
+    const records: Record<string, Map<string, any>> = {
+      source: this.sources,
+      capture: this.captures,
+      incident: this.incidents,
+      entity: this.extractedEntities,
+      indicator: this.indicators,
+      actor_profile: this.actorProfiles,
+      actor_alias: this.actorAliases,
+      actor_identity_catalog: this.actorIdentityCatalogs,
+      actor_identity: this.actorIdentities,
+      evidence_link: this.evidenceLinks,
+      validation_record: this.validationRecords,
+      evaluation_label: this.evaluationLabels,
+      collection_run: this.runs,
+      source_health: this.sourceHealthObservations,
+      timeliness_record: this.timelinessRecords,
+      intelligence_claim: this.intelligenceClaims,
+      claim_evidence: this.claimEvidence,
+      claim_review: this.claimReviews,
+      collection_plan: this.plans,
+      replay_job: this.replayJobs,
+      discovery_evidence: this.discoveryEvidence,
+      live_search_snapshot: this.liveSearchSnapshots,
+      evidence_delta: this.evidenceDeltas,
+      analyst_metadata_review_task: this.analystMetadataReviewTasks,
+      analyst_source_activation_packet: this.analystSourceActivationPackets,
+      analyst_victim_notification_packet: this.analystVictimNotificationPackets,
+      analyst_claim_ledger_entry: this.analystClaimLedgerEntries,
+      analyst_loop_snapshot: this.analystLoopSnapshots,
+      evaluation_benchmark: this.evaluationBenchmarks,
+      evaluation_annotation: this.evaluationAnnotations,
+      evaluation_adjudication: this.evaluationAdjudications,
+      case: this.cases,
+      alert: this.dwmAlerts,
+      dwm_webhook_delivery: this.dwmWebhookDeliveries,
+      actor_org_relevance_review: this.actorOrgRelevanceReviews
+    };
+    const target = records[recordType];
+    if (!target?.has(record.id)) return undefined;
+    target.set(record.id, record);
+    return record;
+  }
+  deleteWorkflowForRetention(recordType: string, id: string, audit?: { organizationId: string; runId: string; item: any }) {
+    const records: Record<string, Map<string, any>> = {
+      organization_member: this.organizationMembers,
+      organization_invite: this.organizationInvites,
+      webhook_destination: this.webhookDestinations,
+      dwm_watchlist: this.dwmWatchlists
+    };
+    const deleted = records[recordType]?.delete(id) ?? false;
+    if (deleted && audit) {
+      const organization = this.getOrganization(audit.organizationId);
+      if (organization) {
+        const previous = Array.isArray(organization.privacyRetentionAudit) ? organization.privacyRetentionAudit : [];
+        this.organizations.set(organization.id, {
+          ...organization,
+          privacyRetentionAudit: [...previous.filter((entry: any) => !(entry.runId === audit.runId && entry.recordType === audit.item.recordType && entry.recordId === audit.item.recordId)), { ...audit.item, runId: audit.runId }].slice(-2_000)
+        });
+      }
+    }
+    return deleted;
+  }
   saveDwmAlert(alert: any) {
-    const stored = put(this.dwmAlerts, alert);
+    const stored = this.putScoped(this.dwmAlerts, alert);
     const alertCreated = [["alertCreatedAt", alert.alertCreatedAt], ["createdAt", alert.createdAt], ["savedAt", alert.savedAt]]
       .map(([field, value]) => ({ field, timestamp: validIso(value) }))
       .find((candidate) => candidate.timestamp);
@@ -246,7 +330,7 @@ export class InMemoryScraperStore implements ScraperStore {
   getDwmAlert(id: string) { return this.dwmAlerts.get(id); } listDwmAlerts() { return mapValues(this.dwmAlerts); }
   saveDwmWebhookDelivery(delivery: any) {
     const deliveredAt = delivery.status === "delivered" ? validIso(delivery.deliveredAt) ?? nowIso() : undefined;
-    const stored = put(this.dwmWebhookDeliveries, { ...delivery, deliveredAt, completedAt: delivery.completedAt ?? deliveredAt, updatedAt: delivery.updatedAt ?? deliveredAt ?? delivery.attemptedAt });
+    const stored = this.putScoped(this.dwmWebhookDeliveries, { ...delivery, deliveredAt, completedAt: delivery.completedAt ?? deliveredAt, updatedAt: delivery.updatedAt ?? deliveredAt ?? delivery.attemptedAt });
     if (!["dry_run", "skipped"].includes(stored.status)) {
       const alert = this.getDwmAlert(stored.alertId);
       if (alert) {
@@ -261,7 +345,7 @@ export class InMemoryScraperStore implements ScraperStore {
   }
   protected hydrateDwmWebhookDeliverySnapshot(delivery: any) { return put(this.dwmWebhookDeliveries, delivery); }
   getDwmWebhookDelivery(id: string) { return this.dwmWebhookDeliveries.get(id); } listDwmWebhookDeliveries() { return mapValues(this.dwmWebhookDeliveries); }
-  saveActorOrgRelevanceReview(review: any) { return put(this.actorOrgRelevanceReviews, review); } getActorOrgRelevanceReview(id: string) { return this.actorOrgRelevanceReviews.get(id); } listActorOrgRelevanceReviews() { return mapValues(this.actorOrgRelevanceReviews); }
+  saveActorOrgRelevanceReview(review: any) { return this.putScoped(this.actorOrgRelevanceReviews, review); } getActorOrgRelevanceReview(id: string) { return this.actorOrgRelevanceReviews.get(id); } listActorOrgRelevanceReviews() { return mapValues(this.actorOrgRelevanceReviews); }
 }
 
 function preservedIncidentReview(previous: any, candidate: any) {

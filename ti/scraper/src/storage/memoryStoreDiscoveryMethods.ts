@@ -8,6 +8,7 @@ const sameDelta = (a: any, b: any) => a.kind === b.kind && a.subjectType === b.s
 
 export function installMemoryStoreDiscoveryMethods(Store: any) {
   Store.prototype.saveDiscoveryEvidence = function (evidence: any) {
+    this.assertOrganizationWritable(evidence);
     const previous = this.discoveryEvidence.get(evidence.id);
     if (previous && JSON.stringify(previous) !== JSON.stringify(evidence)) throw new Error(`Discovery evidence is immutable: ${evidence.id}`);
     this.discoveryEvidence.set(evidence.id, evidence);
@@ -17,17 +18,20 @@ export function installMemoryStoreDiscoveryMethods(Store: any) {
   Store.prototype.promoteDiscoveryEvidence = function (promotion: any) {
     const evidence = this.discoveryEvidence.get(promotion.discoveryEvidenceId);
     if (!evidence) throw new Error(`Unknown discovery evidence: ${promotion.discoveryEvidenceId}`);
+    this.assertOrganizationWritable(evidence);
     if (promotion.captureId && !this.captures.has(promotion.captureId)) throw new Error(`Unknown capture for discovery promotion: ${promotion.captureId}`);
     if (promotion.incidentId && !this.incidents.has(promotion.incidentId)) throw new Error(`Unknown incident for discovery promotion: ${promotion.incidentId}`);
     const promoted = { ...evidence, promotedToTaskId: promotion.taskId ?? evidence.promotedToTaskId, promotedToCaptureId: promotion.captureId ?? evidence.promotedToCaptureId, promotedToIncidentId: promotion.incidentId ?? evidence.promotedToIncidentId, metadata: { ...evidence.metadata, promotions: [...readPromotionMetadata(evidence.metadata), promotion] } };
     this.discoveryEvidence.set(promoted.id, promoted); this.recordDiscoveryDelta("promoted", promoted, promotion); return promoted;
   };
   Store.prototype.saveLiveSearchSnapshot = function (snapshot: any) {
+    this.assertOrganizationWritable(snapshot);
     const previous = this.liveSearchSnapshots.get(snapshot.id), delta = this.saveEvidenceDelta(deltaForSnapshot(previous ? "updated" : "added", snapshot));
     return put(this.liveSearchSnapshots, { ...snapshot, deltaCursors: [...(snapshot.deltaCursors ?? []), delta.cursor] });
   };
   Store.prototype.saveEvidenceDelta = function (delta: any) { return this.storeDelta(delta, true); };
   Store.prototype.storeDelta = function (delta: any, immutable: boolean) {
+    if (immutable) this.assertOrganizationWritable(delta);
     const prepared = { ...delta, cursor: delta.cursor || evidenceCursor(delta.observedAt, ++this.sequence, delta.id) }, previous = this.evidenceDeltas.get(prepared.id);
     if (immutable && previous && !sameDelta(previous, prepared)) throw new Error(`Evidence delta is immutable: ${prepared.id}`);
     const owner = this.cursorOwners.get(prepared.cursor); if (owner && owner !== prepared.id) throw new Error(`Evidence delta cursor must be unique: ${prepared.cursor}`);

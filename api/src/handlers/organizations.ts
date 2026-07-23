@@ -273,6 +273,9 @@ export async function putOrganizationSettings(req: FastifyRequest<{ Params: Orga
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
+    const deletionBlocker = privacyDeletionMutationBlocker(organization, 'update organization settings')
+    if (deletionBlocker) return sendOrganizationLifecycleBlocker(req, res, deletionBlocker, userId, organization.role)
+
     if (!roleCanManageOrganization(organization.role)) {
         const attemptedFields = Object.entries({
             name: req.body?.name,
@@ -512,6 +515,9 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
+    const lifecycleBlocker = inactiveOrganizationMutationBlocker(organization, 'remove members')
+    if (lifecycleBlocker) return sendOrganizationLifecycleBlocker(req, res, lifecycleBlocker, userId, organization.role)
+
     const target = await loadOrganizationMembership(req.params.id, req.params.userId)
     if (!target || target.status !== 'active') {
         return res.status(404).send({ error: 'Organization member not found.' })
@@ -566,7 +572,7 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
 
     const removed = await run(`
         UPDATE organization_members
-        SET status = 'removed'
+        SET status = 'removed', removed_at = NOW()
         WHERE organization_id = $1
           AND user_id = $2
           AND status = 'active'
@@ -580,6 +586,7 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
     const revokedInvites = await run(`
         UPDATE organization_invites
         SET status = 'revoked',
+            revoked_at = NOW(),
             accepted_at = NULL,
             accepted_by = NULL
         FROM users
@@ -1226,6 +1233,7 @@ export async function postOrganizationInvites(req: FastifyRequest<{ Params: Orga
             DO UPDATE SET role = EXCLUDED.role,
                           invited_by = EXCLUDED.invited_by,
                           status = 'pending',
+                          revoked_at = NULL,
                           accepted_at = NULL,
                           accepted_by = NULL,
                           expires_at = EXCLUDED.expires_at,
@@ -1298,6 +1306,9 @@ export async function postOrganizationInviteAction(req: FastifyRequest<{ Params:
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
+    const deletionBlocker = privacyDeletionMutationBlocker(organization, 'change invites')
+    if (deletionBlocker) return sendOrganizationLifecycleBlocker(req, res, deletionBlocker, userId, organization.role)
+
     if (!roleCanManageOrganization(organization.role)) {
         const action = req.body?.action === 'revoke'
             ? 'revoke_invite'
@@ -1361,6 +1372,7 @@ export async function postOrganizationInviteAction(req: FastifyRequest<{ Params:
         ? await run(`
             UPDATE organization_invites
             SET status = 'pending',
+                revoked_at = NULL,
                 accepted_at = NULL,
                 accepted_by = NULL,
                 expires_at = $3,
@@ -1373,6 +1385,7 @@ export async function postOrganizationInviteAction(req: FastifyRequest<{ Params:
         : await run(`
             UPDATE organization_invites
             SET status = 'revoked',
+                revoked_at = NOW(),
                 accepted_at = NULL,
                 accepted_by = NULL
             WHERE id = $1
@@ -1532,6 +1545,7 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
         WITH accepted_invite AS (
             UPDATE organization_invites
             SET status = 'accepted',
+                revoked_at = NULL,
                 accepted_at = NOW(),
                 accepted_by = $2
             WHERE id = $1
@@ -1570,6 +1584,7 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
                                 ELSE EXCLUDED.role
                               END,
                           status = 'active',
+                          removed_at = NULL,
                           invited_by = EXCLUDED.invited_by,
                           joined_at = NOW()
             RETURNING *
@@ -2684,6 +2699,9 @@ export async function deleteOrganizationWatchlist(req: FastifyRequest<{ Params: 
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
+    const deletionBlocker = privacyDeletionMutationBlocker(organization, 'archive shared watchlists')
+    if (deletionBlocker) return sendOrganizationLifecycleBlocker(req, res, deletionBlocker, userId, organization.role)
+
     if (!roleCanWriteWatchlist(organization.role)) {
         return sendWatchlistMutationDenial(req, res, organization, userId, {
             action: 'archive_watchlist',
@@ -2750,6 +2768,9 @@ export async function postOrganizationWatchlistAction(req: FastifyRequest<{ Para
     if (!organization) {
         return res.status(404).send({ error: 'Organization not found.' })
     }
+
+    const deletionBlocker = privacyDeletionMutationBlocker(organization, 'change shared watchlists')
+    if (deletionBlocker) return sendOrganizationLifecycleBlocker(req, res, deletionBlocker, userId, organization.role)
 
     if (!roleCanWriteWatchlist(organization.role)) {
         return sendWatchlistMutationDenial(req, res, organization, userId, {
@@ -2838,6 +2859,9 @@ export async function postOrganizationWatchlistCleanup(req: FastifyRequest<{ Par
     if (!organization) {
         return res.status(404).send({ error: 'Organization not found.' })
     }
+
+    const deletionBlocker = privacyDeletionMutationBlocker(organization, 'clean up shared watchlists')
+    if (deletionBlocker) return sendOrganizationLifecycleBlocker(req, res, deletionBlocker, userId, organization.role)
 
     if (!roleCanWriteWatchlist(organization.role)) {
         return sendWatchlistMutationDenial(req, res, organization, userId, {
@@ -3112,6 +3136,19 @@ function inactiveOrganizationMutationBlocker(organization: Pick<OrganizationRow,
         code: status === 'deleted' ? 'org_deleted' : 'org_archived',
         action,
         message: `Organization is ${status}; reactivate it before ${action}.`,
+    }
+}
+
+function privacyDeletionMutationBlocker(organization: Pick<OrganizationRow, 'id' | 'status' | 'audit_safe_metadata'>, action: string) {
+    if (!organization.audit_safe_metadata?.privacyDeletionRunId) return null
+    return {
+        schemaVersion: 'organization.lifecycle_mutation_blocker.v1' as const,
+        organizationId: organization.id,
+        tenantId: organization.id,
+        status: 'archived' as const,
+        code: 'org_archived' as const,
+        action,
+        message: 'Organization deletion is in progress; writes are blocked.',
     }
 }
 

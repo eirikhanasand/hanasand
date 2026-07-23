@@ -205,6 +205,7 @@ import {
 import { getBrowserSandboxProfiles, putBrowserSandboxProfiles } from './handlers/browserSandboxProfiles.ts'
 import { getBrowserRunReport, getBrowserRuns, postBrowserRunReport } from './handlers/browserSandboxRuns.ts'
 import { getCommercialContactRequests, postCommercialContactRequest } from './handlers/commercialContactRequests.ts'
+import { getOrganizationPrivacy, postOrganizationPrivacy } from './handlers/organizationPrivacy.ts'
 
 /**
  * Defines the routes available in the API.
@@ -367,6 +368,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/organizations/:id/ownership-transfer', postOrganizationOwnershipTransfer)
     fastify.get('/organizations/:id/settings', getOrganizationSettings)
     fastify.put('/organizations/:id/settings', putOrganizationSettings)
+    fastify.get('/organizations/:id/privacy', getOrganizationPrivacy)
+    fastify.post('/organizations/:id/privacy', postOrganizationPrivacy)
     fastify.get('/organizations/:id/alert-readiness', getOrganizationAlertReadiness)
     fastify.get('/organizations/:id/alert-case-visibility', getOrganizationAlertCaseVisibility)
     fastify.get('/organizations/:id/watchlists/alert-terms', getOrganizationWatchlistAlertTerms)

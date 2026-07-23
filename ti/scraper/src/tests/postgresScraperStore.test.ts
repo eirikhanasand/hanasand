@@ -117,12 +117,16 @@ describe("structured threat-intelligence storage contract", () => {
 
   test("applies authenticated takedown redaction and claim correction actions", async () => {
     const store = new InMemoryScraperStore();
+    store.saveOrganization({ id: "tenant_governed", tenantId: "tenant_governed", name: "Governed tenant", status: "active" });
     store.saveSource(source({ id: "src_governed", tenantId: "tenant_governed" }));
     const result = store.savePipelineResult(pipeline("src_governed", "tenant_governed"));
+    const lockedCapture = store.saveCapture(fixtureCapture({ id: "cap_locked_governed", sourceId: "src_governed", tenantId: "tenant_governed", objectRef: { bucket: "governed", key: "locked" } } as any));
     const claim = store.listIntelligenceClaims().find((record: any) => record.claimType === "actor");
+    const deletedObjectRefs: any[] = [];
     const options = {
       store,
       frontier: new FocusedFrontier(),
+      objectStore: { deleteObject: (reference: any) => deletedObjectRefs.push(reference) },
       authApiBase: "http://auth.test/api",
       authFetch: async () => Response.json({ id: "admin-test", roles: [{ id: "admin" }] })
     } as any;
@@ -139,6 +143,11 @@ describe("structured threat-intelligence storage contract", () => {
     expect((await governance({ action: "correct_claim", claimId: claim.id, correctedValue: "APT28", reason: "Analyst verified the actor was misidentified" })).status).toBe(201);
     expect(store.getIntelligenceClaim(claim.id)?.reviewState).toBe("rejected");
     expect(store.listClaimReviews()).toContainEqual(expect.objectContaining({ action: "correct", correctedValue: "APT28", reviewerId: "admin-test" }));
+
+    store.saveOrganization({ ...store.getOrganization("tenant_governed"), status: "suspended", privacyDeletionRunId: "run_locked_governed" });
+    expect((await governance({ action: "redact_capture", captureId: lockedCapture.id, reason: "Late evidence removal request" })).status).toBe(409);
+    expect(deletedObjectRefs).toEqual([]);
+    expect(store.getCapture(lockedCapture.id)?.objectRef).toEqual({ bucket: "governed", key: "locked" });
   });
 });
 
@@ -189,6 +198,226 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
 
   afterAll(async () => {
     await admin?.close({ timeout: 2 });
+  });
+
+  test("durably reconciles organization privacy purge failures through the real route", async () => {
+    const organizationId = "org_privacy_postgres";
+    const serviceToken = "privacy-postgres-service";
+    const privacy = (store: PostgresScraperStore, runId: string, objectStore: any, id = organizationId, mode = "deletion") => handleApiRequest(api(`/v1/organizations/${id}/privacy`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-hanasand-service-token": serviceToken },
+      body: JSON.stringify({ action: "purge", runId, cutoffAt: "2025-01-01T00:00:00.000Z", mode, limit: 100 })
+    }), { store, frontier: new FocusedFrontier(), serviceToken, objectStore } as any);
+
+    const first = await PostgresScraperStore.create({ databaseUrl });
+    first.saveSource(source({ id: "src_privacy_postgres", tenantId: organizationId, name: "Customer private source", url: "https://customer-private.example/feed" }));
+    first.saveSource(source({ id: "src_privacy_held", tenantId: organizationId, name: "Held provenance source", url: "https://held-provenance.example/feed" }));
+    first.saveOrganization({ id: organizationId, tenantId: organizationId, name: "Sensitive TI Customer", status: "active" });
+    first.saveOrganizationMember({ id: "member_privacy_postgres", organizationId, userId: "user_privacy", status: "active", createdAt: collectedAt });
+    first.saveOrganizationInvite({ id: "invite_privacy_postgres", organizationId, tenantId: organizationId, email: "private-invite@example.test", status: "revoked", updatedAt: collectedAt });
+    first.saveWebhookDestination({ id: "destination_privacy_postgres", organizationId, tenantId: organizationId, name: "Private customer webhook", url: "https://customer-private.example/hook", status: "archived", updatedAt: collectedAt });
+    first.saveDwmWatchlist({ id: "watch_privacy_postgres", organizationId, tenantId: organizationId, status: "archived", updatedAt: "2020-01-01T00:00:00.000Z" });
+    const structured = first.savePipelineResult(pipeline("src_privacy_postgres", organizationId, " Customer private pipeline note."));
+    const entity = first.listExtractedEntities().find((record: any) => record.tenantId === organizationId && record.type === "actor");
+    const claim = first.listIntelligenceClaims().find((record: any) => record.tenantId === organizationId && record.claimType === "actor");
+    first.saveClaimReview({ id: "review_privacy_postgres", tenantId: organizationId, claimId: claim.id, action: "confirm", reviewerId: "private-reviewer", reason: "Customer private review note", reviewedAt: collectedAt });
+    first.saveValidationRecord({ id: "validation_privacy_postgres", tenantId: organizationId, incidentId: structured.incident.id, validationType: "public_breach_confirmation", status: "supported", referenceUrl: "https://customer-private.example/validation", matchedAt: collectedAt, reviewerId: "private-validator", notes: "Customer private validation note" });
+    first.saveEvaluationLabel({ id: "label_privacy_postgres", tenantId: organizationId, entityId: entity.id, labelType: "actor_extraction", expectedValue: "Customer private expectation", observedValue: entity.value, outcome: "true_positive", datasetSplit: "test", labeledBy: "private-labeler", labeledAt: collectedAt, notes: "Customer private label note" });
+    first.saveDwmAlert({ id: "alert_privacy_postgres", tenantId: organizationId, organizationId, captureId: structured.capture.id, incidentId: structured.incident.id, dedupeKey: "customer-private-alert", severity: "high", confidence: 80, reviewState: "confirmed", deliveryState: "pending_review", firstSeenAt: collectedAt, lastSeenAt: collectedAt, updatedAt: collectedAt, ownerId: "private-alert-owner", note: "Customer private alert note", events: [{ message: "Customer private event" }] });
+    first.saveCase({ id: "case_privacy_postgres", tenantId: organizationId, organizationId, alertId: "alert_privacy_postgres", status: "open", ownerId: "private-case-owner", note: "Customer private case note", events: [{ message: "Customer private case event" }], createdAt: collectedAt, updatedAt: collectedAt });
+    first.savePlan({ id: "plan_privacy_postgres", tenantId: organizationId, requestId: "customer-private-request", query: "Customer private query", createdAt: collectedAt, updatedAt: collectedAt });
+    first.saveRun({ id: "run_privacy_ti", tenantId: organizationId, planId: "plan_privacy_postgres", requestId: "customer-private-request", idempotencyKey: "customer-private-key", status: "failed", startedAt: collectedAt, updatedAt: collectedAt, error: "Customer private run error" });
+    first.saveSourceHealthObservation({ id: "health_privacy_postgres", tenantId: organizationId, sourceId: "src_privacy_postgres", collectionRunId: "run_privacy_ti", checkedAt: collectedAt, status: "failed", success: false, useful: false, legalMode: "public_content", failureReason: "Customer private source failure" });
+    first.createReplayJob({ id: "replay_privacy_postgres", tenantId: organizationId, captureId: structured.capture.id, sourceId: "src_privacy_postgres", toExtractorVersion: "privacy-v2", requestedAt: collectedAt, metadata: { note: "Customer private replay note" } });
+    first.saveDiscoveryEvidence({ id: "discovery_privacy_postgres", tenantId: organizationId, query: "Customer private query", normalizedQuery: "customer private query", provider: "search_provider", evidenceType: "search_snippet", resultId: "private-result", observedAt: collectedAt, title: "Customer private discovery", snippet: "Customer private discovery note", url: "https://customer-private.example/discovery", sourceId: "src_privacy_postgres", confidence: 0.5, retentionClass: "discovery_snippet", metadata: {} });
+    first.saveLiveSearchSnapshot({ id: "snapshot_privacy_postgres", tenantId: organizationId, query: "Customer private query", normalizedQuery: "customer private query", status: "ready", capturedAt: collectedAt, discoveryEvidenceIds: ["discovery_privacy_postgres"], captureIds: [structured.capture.id], incidentIds: [structured.incident.id], newEvidenceIds: ["discovery_privacy_postgres"], metadata: { note: "Customer private snapshot note" }, retentionClass: "live_search_snapshot" });
+    first.saveAnalystMetadataReviewTask({ id: "metadata_review_privacy_postgres", tenantId: organizationId, company: "Customer private company", note: "Customer private metadata review", unsafeMaterialAccessed: false, createdAt: collectedAt, updatedAt: collectedAt });
+    first.saveAnalystSourceActivationPacket({ id: "activation_privacy_postgres", tenantId: organizationId, sourceId: "src_privacy_postgres", reason: "Customer private activation reason", dryRun: true, createdAt: collectedAt });
+    first.saveAnalystVictimNotificationPacket({ id: "victim_privacy_postgres", tenantId: organizationId, company: "Customer private victim", claimSummary: "Customer private victim note", createdAt: collectedAt });
+    first.saveAnalystClaimLedgerEntry({ id: "ledger_privacy_postgres", tenantId: organizationId, normalizedQuery: "customer private claim", captureId: structured.capture.id, sourceId: "src_privacy_postgres", claimKind: "victim_claim", company: "Customer private ledger company", victim: "Customer private ledger victim", claimTextSummary: "Customer private ledger note", sourceHash: "private-ledger-hash", confidence: 0.7, ledgerStatus: "metadata_review", observedAt: collectedAt, provenance: { sourceFamily: "public" }, createdAt: collectedAt });
+    first.saveAnalystLoopSnapshot({ id: "loop_privacy_postgres", tenantId: organizationId, headline: "Customer private loop headline", capturedAt: collectedAt });
+    first.saveEvaluationBenchmark({ id: "benchmark_privacy_postgres", tenantId: organizationId, status: "annotating", note: "Customer private benchmark", createdAt: collectedAt, updatedAt: collectedAt });
+    first.saveEvaluationAnnotation({ id: "annotation_privacy_postgres", tenantId: organizationId, benchmarkId: "benchmark_privacy_postgres", reviewerId: "private-annotation-owner", note: "Customer private annotation", createdAt: collectedAt, updatedAt: collectedAt });
+    first.saveEvaluationAdjudication({ id: "adjudication_privacy_postgres", tenantId: organizationId, benchmarkId: "benchmark_privacy_postgres", adjudicatedBy: "private-adjudicator", note: "Customer private adjudication", createdAt: collectedAt, updatedAt: collectedAt });
+    first.saveActorOrgRelevanceReview({ id: "actor_review_privacy_postgres", tenantId: organizationId, organizationId, ownerId: "private-actor-review-owner", note: "Customer private actor review", createdAt: collectedAt, updatedAt: collectedAt });
+    first.saveCapture(fixtureCapture({ id: "capture_privacy_inline", tenantId: organizationId, sourceId: "src_privacy_postgres", url: "https://customer-private.example/inline", collectedAt: "2020-01-01T00:00:00.000Z", body: "inline customer payload" }));
+    first.saveCapture(fixtureCapture({
+      id: "capture_privacy_object", tenantId: organizationId, sourceId: "src_privacy_postgres", url: "https://customer-private.example/object", collectedAt: "2020-01-01T00:00:00.000Z",
+      body: undefined, storageKind: "external_object", objectRef: { bucket: "privacy", key: "org/object", sizeBytes: 10, sha256: "object_hash" }
+    }));
+    first.saveCapture(fixtureCapture({ id: "capture_privacy_after_cutoff", tenantId: organizationId, sourceId: "src_privacy_postgres", url: "https://customer-private.example/new", collectedAt: "2030-01-01T00:00:00.000Z", body: "newer customer payload" }));
+    first.saveCapture(fixtureCapture({ id: "capture_privacy_hold", tenantId: organizationId, sourceId: "src_privacy_held", url: "https://held-provenance.example/item", collectedAt: "2020-01-01T00:00:00.000Z", body: "legally held customer payload", retentionClass: "legal_hold" }));
+    first.saveDwmWebhookDelivery({ id: "delivery_privacy_after_cutoff", organizationId, tenantId: organizationId, alertId: "alert_new", attemptedAt: "2030-01-01T00:00:00.000Z", payload: { secret: "newer delivery payload" } });
+    first.saveSource(source({ id: "src_privacy_other", tenantId: "org_privacy_other", name: "Other tenant source", url: "https://other-tenant.example/feed" }));
+    first.saveOrganization({ id: "org_privacy_other", tenantId: "org_privacy_other", name: "Other tenant customer", status: "active" });
+    first.saveCapture(fixtureCapture({ id: "capture_privacy_other", tenantId: "org_privacy_other", sourceId: "src_privacy_other", url: "https://other-tenant.example/capture", body: "other tenant untouched payload" }));
+    await first.flush();
+
+    const failedObject = await privacy(first, "run_privacy_postgres", { deleteObject: () => false });
+    expect(failedObject.status).toBe(503);
+    expect(await failedObject.json()).toMatchObject({ failed: [expect.objectContaining({ recordId: "capture_privacy_object", status: "failed" })] });
+    await first.close();
+
+    const retry = await PostgresScraperStore.create({ databaseUrl });
+    expect(retry.getCapture("capture_privacy_inline")).toMatchObject({ body: undefined, storageKind: "metadata_only" });
+    expect(retry.getCapture("capture_privacy_object")?.objectRef).toBeDefined();
+    expect(retry.getCapture("capture_privacy_hold")?.body).toBe("legally held customer payload");
+    expect(retry.getDwmWatchlist("watch_privacy_postgres")).toBeUndefined();
+    expect(retry.getOrganizationMember("member_privacy_postgres")).toBeDefined();
+    expect(retry.getOrganization(organizationId)).toMatchObject({ status: "suspended", privacyDeletionRunId: "run_privacy_postgres" });
+    expect(() => retry.saveDwmWatchlist({ id: "late_privacy_write", organizationId, tenantId: organizationId, status: "active" })).toThrow("writes are blocked");
+    const completed = await privacy(retry, "run_privacy_postgres", { deleteObject: () => true });
+    expect(completed.status).toBe(200);
+    expect(await completed.json()).toMatchObject({ failed: [], hasMore: false });
+    await retry.close();
+
+    const rehydrated = await PostgresScraperStore.create({ databaseUrl });
+    expect(rehydrated.getCapture("capture_privacy_object")).toMatchObject({ body: undefined, storageKind: "metadata_only" });
+    expect(rehydrated.getCapture("capture_privacy_object")?.objectRef).toBeUndefined();
+    expect(rehydrated.getCapture("capture_privacy_after_cutoff")).toMatchObject({ body: undefined, storageKind: "metadata_only" });
+    expect(rehydrated.getCapture("capture_privacy_hold")?.body).toBe("legally held customer payload");
+    expect(rehydrated.getDwmWebhookDelivery("delivery_privacy_after_cutoff")?.payload).toBeUndefined();
+    expect(rehydrated.getOrganizationMember("member_privacy_postgres")).toBeUndefined();
+    expect(rehydrated.getOrganization(organizationId)).toMatchObject({ name: "Deleted organization", status: "suspended", privacyDeletionRunId: "run_privacy_postgres" });
+    expect(JSON.stringify(rehydrated.getOrganization(organizationId))).not.toContain("Sensitive TI Customer");
+    expect(rehydrated.getSource("src_privacy_postgres")).toMatchObject({ name: "Deleted source", status: "retired", url: "privacy://deleted/src_privacy_postgres" });
+    expect(rehydrated.getSource("src_privacy_held")).toMatchObject({ name: "Held provenance source", status: "active", url: "https://held-provenance.example/feed" });
+    expect(rehydrated.getCapture("capture_privacy_hold")).toMatchObject({ body: "legally held customer payload", sourceId: "src_privacy_held", url: "https://held-provenance.example/item" });
+    expect(rehydrated.getSource("src_privacy_other")?.name).toBe("Other tenant source");
+    expect(rehydrated.getCapture("capture_privacy_other")?.body).toBe("other tenant untouched payload");
+    expect(rehydrated.getOrganization("org_privacy_other")?.name).toBe("Other tenant customer");
+    const exported = await handleApiRequest(api(`/v1/organizations/${organizationId}/privacy`, { headers: { "x-hanasand-service-token": serviceToken } }), { store: rehydrated, frontier: new FocusedFrontier(), serviceToken } as any);
+    const exportBody = await exported.json() as any;
+    expect(exportBody).toMatchObject({ data: { organization: { name: "Deleted organization" }, members: [], invites: [], destinations: [], watchlists: [] }, protection: { heldCaptureIds: ["capture_privacy_hold"] } });
+    expect(Object.keys(exportBody.data).sort()).toEqual([
+      "actorAliases", "actorIdentities", "actorIdentityCatalogs", "actorOrganizationReviews", "actorProfiles", "alerts",
+      "analystClaimLedgerEntries", "analystLoopSnapshots", "analystMetadataReviewTasks", "analystSourceActivationPackets", "analystVictimNotificationPackets",
+      "captures", "cases", "claimEvidence", "claimReviews", "claims", "collectionPlans", "collectionRuns", "deliveries", "destinations",
+      "discoveryEvidence", "entities", "evaluationAdjudications", "evaluationAnnotations", "evaluationBenchmarks", "evaluationLabels", "evidenceDeltas",
+      "evidenceLinks", "incidents", "indicators", "invites", "liveSearchSnapshots", "members", "organization", "replayJobs", "sourceHealth",
+      "sources", "timelinessRecords", "validationRecords", "watchlists"
+    ]);
+    expect(JSON.stringify(exportBody)).not.toContain("Customer private");
+    expect(JSON.stringify(exportBody)).not.toContain("Northwind Health");
+
+    const normalizedViolations = await admin<{ kind: string }[]>`
+      SELECT 'source' kind FROM threat_intel.sources WHERE tenant_id = ${organizationId} AND id <> 'src_privacy_held' AND (name <> 'Deleted source' OR url NOT LIKE 'privacy://deleted/%' OR status <> 'retired')
+      UNION ALL SELECT 'capture' FROM threat_intel.captures WHERE tenant_id = ${organizationId} AND retention_class <> 'legal_hold' AND (body IS NOT NULL OR object_ref IS NOT NULL OR url NOT LIKE 'privacy://deleted/%')
+      UNION ALL SELECT 'incident' FROM threat_intel.incidents WHERE tenant_id = ${organizationId} AND (title <> 'Deleted incident' OR summary <> '')
+      UNION ALL SELECT 'incident_revision' FROM threat_intel.incident_revisions WHERE tenant_id = ${organizationId} AND (title <> 'Deleted incident' OR summary <> '')
+      UNION ALL SELECT 'entity' FROM threat_intel.entities WHERE tenant_id = ${organizationId} AND value NOT LIKE 'deleted:%'
+      UNION ALL SELECT 'indicator' FROM threat_intel.indicators WHERE tenant_id = ${organizationId} AND value NOT LIKE 'deleted:%'
+      UNION ALL SELECT 'actor_profile' FROM threat_intel.actor_profiles WHERE tenant_id = ${organizationId} AND normalized_name NOT LIKE 'deleted:%'
+      UNION ALL SELECT 'actor_alias' FROM threat_intel.actor_aliases WHERE tenant_id = ${organizationId} AND normalized_alias NOT LIKE 'deleted:%'
+      UNION ALL SELECT 'validation' FROM threat_intel.validation_records WHERE tenant_id = ${organizationId} AND (reference_url NOT LIKE 'about:blank#%' OR reviewer_id IS NOT NULL OR notes IS NOT NULL)
+      UNION ALL SELECT 'evaluation_label' FROM threat_intel.evaluation_labels WHERE tenant_id = ${organizationId} AND (expected_value IS NOT NULL OR observed_value IS NOT NULL OR labeled_by <> 'deleted' OR notes IS NOT NULL)
+      UNION ALL SELECT 'collection_run' FROM threat_intel.collection_runs WHERE tenant_id = ${organizationId} AND (request_id IS NOT NULL OR idempotency_key IS NOT NULL OR error IS NOT NULL)
+      UNION ALL SELECT 'source_health' FROM threat_intel.source_health WHERE tenant_id = ${organizationId} AND failure_reason IS NOT NULL
+      UNION ALL SELECT 'timeliness' FROM threat_intel.timeliness_records WHERE tenant_id = ${organizationId} AND first_reported_provenance IS NOT NULL
+      UNION ALL SELECT 'claim' FROM threat_intel.intelligence_claims WHERE tenant_id = ${organizationId} AND (claim_value <> '{}'::jsonb OR summary <> '' OR reviewed_by IS NOT NULL OR contradiction_reason IS NOT NULL)
+      UNION ALL SELECT 'claim_evidence' FROM threat_intel.claim_evidence WHERE tenant_id = ${organizationId} AND provenance <> '{}'::jsonb
+      UNION ALL SELECT 'claim_review' FROM threat_intel.claim_reviews WHERE tenant_id = ${organizationId} AND (reviewer_id <> 'deleted' OR reason <> 'Privacy redacted')
+      UNION ALL SELECT 'alert' FROM threat_intel.alerts WHERE tenant_id = ${organizationId} AND dedupe_key NOT LIKE 'privacy:%'
+      UNION ALL SELECT 'workflow' FROM threat_intel.workflow_records WHERE tenant_id = ${organizationId} AND record_type <> 'organization' AND record->>'privacyRedactedAt' IS NULL AND COALESCE(record->>'retentionClass', '') <> 'legal_hold'
+    `;
+    expect(normalizedViolations).toEqual([]);
+    const retainedPayloads = await admin<{ record: any }[]>`
+      SELECT record FROM threat_intel.sources WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.captures WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.incidents WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.incident_revisions WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.entities WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.indicators WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.actor_profiles WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.actor_aliases WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.evidence_links WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.validation_records WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.evaluation_labels WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.collection_runs WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.source_health WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.timeliness_records WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.intelligence_claims WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.claim_evidence WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.claim_reviews WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.alerts WHERE tenant_id = ${organizationId}
+      UNION ALL SELECT record FROM threat_intel.workflow_records WHERE tenant_id = ${organizationId}
+    `;
+    expect(JSON.stringify(retainedPayloads)).not.toContain("Customer private");
+    expect(JSON.stringify(retainedPayloads)).not.toContain("Northwind Health");
+    const organizationBeforeRerun = structuredClone(rehydrated.getOrganization(organizationId));
+    const workflowBeforeRerun = await admin<{ id: string; tenant_id: string; updated_at: string; digest: string }[]>`
+      SELECT id, tenant_id, updated_at::text, md5(record::text) digest
+      FROM threat_intel.workflow_records
+      WHERE record_type = 'organization' AND id = ${organizationId}
+    `;
+    const rerun = await privacy(rehydrated, "run_privacy_postgres", { deleteObject: () => true });
+    expect(await rerun.json()).toMatchObject({ selected: 0, failed: [], hasMore: false });
+    await rehydrated.flush();
+    expect(rehydrated.getOrganization(organizationId)).toEqual(organizationBeforeRerun);
+    expect(await admin<{ id: string; tenant_id: string; updated_at: string; digest: string }[]>`
+      SELECT id, tenant_id, updated_at::text, md5(record::text) digest
+      FROM threat_intel.workflow_records
+      WHERE record_type = 'organization' AND id = ${organizationId}
+    `).toEqual(workflowBeforeRerun);
+    await rehydrated.close();
+
+    const idempotenceRestart = await PostgresScraperStore.create({ databaseUrl });
+    expect(idempotenceRestart.getOrganization(organizationId)).toEqual(organizationBeforeRerun);
+    expect(await admin<{ id: string; tenant_id: string; updated_at: string; digest: string }[]>`
+      SELECT id, tenant_id, updated_at::text, md5(record::text) digest
+      FROM threat_intel.workflow_records
+      WHERE record_type = 'organization' AND id = ${organizationId}
+    `).toEqual(workflowBeforeRerun);
+    await idempotenceRestart.close();
+
+    const dbFailureOrganizationId = "org_privacy_db_failure";
+    const failing = await PostgresScraperStore.create({ databaseUrl });
+    failing.saveOrganization({ id: dbFailureOrganizationId, tenantId: dbFailureOrganizationId, name: "DB Failure Customer", status: "active" });
+    failing.saveDwmWatchlist({ id: "watch_privacy_db_failure", organizationId: dbFailureOrganizationId, tenantId: dbFailureOrganizationId, status: "archived", updatedAt: "2020-01-01T00:00:00.000Z" });
+    await failing.flush();
+    await admin.unsafe(`
+      CREATE OR REPLACE FUNCTION public.fail_privacy_workflow_delete() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF OLD.id = 'watch_privacy_db_failure' THEN RAISE EXCEPTION 'forced privacy persistence failure'; END IF;
+        RETURN OLD;
+      END $$;
+      CREATE TRIGGER fail_privacy_workflow_delete
+      BEFORE DELETE ON threat_intel.workflow_records
+      FOR EACH ROW EXECUTE FUNCTION public.fail_privacy_workflow_delete();
+    `);
+    await expect(privacy(failing, "run_privacy_db_failure", {}, dbFailureOrganizationId)).rejects.toThrow("forced privacy persistence failure");
+    expect(await admin`SELECT id FROM threat_intel.workflow_records WHERE id = 'watch_privacy_db_failure'`).toHaveLength(1);
+    expect(await admin`SELECT id FROM threat_intel.workflow_records WHERE id = ${dbFailureOrganizationId} AND record->>'status' = 'suspended' AND record->>'privacyDeletionRunId' = 'run_privacy_db_failure'`).toHaveLength(1);
+
+    const restarted = await PostgresScraperStore.create({ databaseUrl });
+    expect(restarted.getDwmWatchlist("watch_privacy_db_failure")).toBeDefined();
+    expect(restarted.getOrganization(dbFailureOrganizationId)).toMatchObject({ status: "suspended", privacyDeletionRunId: "run_privacy_db_failure" });
+    await admin.unsafe(`DROP TRIGGER fail_privacy_workflow_delete ON threat_intel.workflow_records; DROP FUNCTION public.fail_privacy_workflow_delete();`);
+    expect((await privacy(restarted, "run_privacy_db_failure", {}, dbFailureOrganizationId)).status).toBe(200);
+    await restarted.close();
+    await expect(failing.flush()).rejects.toThrow("disappeared before PostgreSQL privacy deletion");
+    await (failing as any).sql.close({ timeout: 1 });
+
+    const verified = await PostgresScraperStore.create({ databaseUrl });
+    expect(verified.getDwmWatchlist("watch_privacy_db_failure")).toBeUndefined();
+    expect(verified.getOrganization(dbFailureOrganizationId)).toMatchObject({ name: "Deleted organization", status: "suspended" });
+    await verified.close();
+
+    const lifecycleOrganizationId = "org_privacy_lifecycle_times";
+    const lifecycle = await PostgresScraperStore.create({ databaseUrl });
+    lifecycle.saveOrganization({ id: lifecycleOrganizationId, tenantId: lifecycleOrganizationId, name: "Lifecycle times", status: "active" });
+    lifecycle.saveOrganizationMember({ id: "member_privacy_removed", organizationId: lifecycleOrganizationId, status: "removed", joinedAt: "2030-01-01T00:00:00.000Z", removedAt: "2020-01-01T00:00:00.000Z" });
+    lifecycle.saveOrganizationMember({ id: "member_privacy_active", organizationId: lifecycleOrganizationId, status: "active", joinedAt: "2020-01-01T00:00:00.000Z" });
+    lifecycle.saveOrganizationInvite({ id: "invite_privacy_revoked", organizationId: lifecycleOrganizationId, status: "revoked", createdAt: "2030-01-01T00:00:00.000Z", revokedAt: "2020-01-01T00:00:00.000Z" });
+    await lifecycle.flush();
+    expect((await privacy(lifecycle, "run_privacy_lifecycle_times", {}, lifecycleOrganizationId, "scheduled")).status).toBe(200);
+    await lifecycle.close();
+    const lifecycleRestart = await PostgresScraperStore.create({ databaseUrl });
+    expect(lifecycleRestart.getOrganizationMember("member_privacy_removed")).toBeUndefined();
+    expect(lifecycleRestart.getOrganizationMember("member_privacy_active")).toBeDefined();
+    expect(lifecycleRestart.getOrganizationInvite("invite_privacy_revoked")).toBeUndefined();
+    expect(lifecycleRestart.getOrganization(lifecycleOrganizationId)?.status).toBe("active");
+    await lifecycleRestart.close();
   });
 
   test("merges legacy actor-type duplicates without losing profile evidence", async () => {

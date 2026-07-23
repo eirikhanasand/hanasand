@@ -145,7 +145,7 @@ export type OrganizationRow = {
     id: string
     name: string
     slug: string
-    created_by: string
+    created_by: string | null
     created_at: string
     updated_at: string
     member_count?: number

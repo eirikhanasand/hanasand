@@ -447,6 +447,25 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   override saveWebhookDestination(record: any): any { return this.saveWorkflow("webhook_destination", record, () => super.saveWebhookDestination(record)); }
   override saveCase(record: any): any { return this.saveWorkflow("case", record, () => super.saveCase(record)); }
   override saveDwmWatchlist(record: any): any { return this.saveWorkflow("dwm_watchlist", record, () => super.saveDwmWatchlist(record)); }
+  override replaceRecordForRetention(recordType: string, record: any): any {
+    const stored = super.replaceRecordForRetention(recordType, record);
+    if (stored) this.enqueue(`retention-redact:${recordType}:${record.id}`, () => this.persistPrivacyRedaction(recordType, stored));
+    return stored;
+  }
+  override deleteWorkflowForRetention(recordType: string, id: string, audit?: { organizationId: string; runId: string; item: any }): boolean {
+    const deleted = super.deleteWorkflowForRetention(recordType, id, audit);
+    if (deleted) {
+      const organization = audit ? structuredClone(this.getOrganization(audit.organizationId)) : undefined;
+      this.enqueue(`retention-delete:${recordType}:${id}`, async () => {
+        await this.sql.begin(async sql => {
+          const removed = await sql`DELETE FROM threat_intel.workflow_records WHERE record_type = ${recordType} AND id = ${id} RETURNING id`;
+          if (!removed.length) throw new Error(`Stored ${recordType} disappeared before PostgreSQL privacy deletion: ${id}`);
+          if (organization) await this.persistWorkflow("organization", organization, sql);
+        });
+      });
+    }
+    return deleted;
+  }
   override saveDwmAlert(alert: any): any {
     const captureIds = new Set(linkedAlertCaptureIds(alert));
     const linkedIncidentIds = new Set(this.listTimelinessRecords()
@@ -519,6 +538,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       this.sql`SELECT record FROM threat_intel.claim_reviews ORDER BY reviewed_at`,
       this.sql`SELECT record_type, record FROM threat_intel.workflow_records ORDER BY created_at`
     ]);
+    this.hydrateWithoutOrganizationWriteGuard(() => {
     for (const row of sources) super.saveSource(readRecord(row));
     for (const row of captures) this.hydrateCaptureSnapshot(readRecord(row));
     for (const row of incidents) super.saveIncident(readRecord(row));
@@ -541,6 +561,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     for (const row of claimEvidence) super.saveClaimEvidence(readRecord(row));
     for (const row of claimReviews) super.saveClaimReview(readRecord(row));
     for (const row of workflows) this.hydrateWorkflow(String(row.record_type), readRecord(row));
+    });
   }
 
   private hasStoredData(): boolean {
@@ -1233,6 +1254,44 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         record = EXCLUDED.record
     `;
   }
+
+  private async persistPrivacyRedaction(recordType: string, record: any): Promise<void> {
+    const json = toJson(record);
+    const id = record.id;
+    const required = (rows: any[]) => {
+      if (!rows.length) throw new Error(`Stored ${recordType} disappeared before PostgreSQL privacy redaction: ${id}`);
+    };
+    if (recordType === "source") required(await this.sql`UPDATE threat_intel.sources SET name = 'Deleted source', url = ${`privacy://deleted/${id}`}, status = 'retired', record = ${json}::text::jsonb, updated_at = now() WHERE id = ${id} RETURNING id`);
+    else if (recordType === "capture") required(await this.sql`UPDATE threat_intel.captures SET url = ${`privacy://deleted/${id}`}, canonical_url = ${`privacy://deleted/${id}`}, body = NULL, object_ref = NULL, storage_kind = 'metadata_only', record = ${json}::text::jsonb WHERE id = ${id} RETURNING id`);
+    else if (recordType === "incident") await this.sql.begin(async sql => {
+      required(await sql`UPDATE threat_intel.incidents SET title = 'Deleted incident', summary = '', record = ${json}::text::jsonb, updated_at = now() WHERE id = ${id} RETURNING id`);
+      await sql`UPDATE threat_intel.incident_revisions SET title = 'Deleted incident', summary = '', record = ${json}::text::jsonb WHERE incident_id = ${id}`;
+      await sql`UPDATE threat_intel.incident_identity_history SET identity_subject = NULL, old_incident = ${json}::text::jsonb, reference_snapshot = '{}'::jsonb, reversed_by = NULL, reversal_reason = NULL, record = ${json}::text::jsonb WHERE old_incident_id = ${id} OR canonical_incident_id = ${id}`;
+    });
+    else if (recordType === "entity") required(await this.sql`UPDATE threat_intel.entities SET value = ${`deleted:${id}`}, normalized_value = ${`deleted:${id}`}, provenance = '{}'::jsonb, record = ${json}::text::jsonb WHERE id = ${id} RETURNING id`);
+    else if (recordType === "indicator") required(await this.sql`UPDATE threat_intel.indicators SET value = ${`deleted:${id}`}, normalized_value = ${`deleted:${id}`}, provenance = '{}'::jsonb, record = ${json}::text::jsonb WHERE id = ${id} RETURNING id`);
+    else if (recordType === "actor_profile") required(await this.sql`UPDATE threat_intel.actor_profiles SET canonical_name = ${`Deleted actor ${id}`}, normalized_name = ${`deleted:${id}`}, record = ${json}::text::jsonb, updated_at = now() WHERE id = ${id} RETURNING id`);
+    else if (recordType === "actor_alias") required(await this.sql`UPDATE threat_intel.actor_aliases SET alias = ${`Deleted alias ${id}`}, normalized_alias = ${`deleted:${id}`}, record = ${json}::text::jsonb, updated_at = now() WHERE id = ${id} RETURNING id`);
+    else if (recordType === "actor_identity_catalog") await this.sql.begin(async sql => {
+      required(await sql`UPDATE threat_intel.actor_identity_catalogs SET record = ${json}::text::jsonb, updated_at = now() WHERE id = ${id} RETURNING id`);
+      await sql`UPDATE threat_intel.actor_identity_catalog_versions SET record = ${json}::text::jsonb WHERE catalog_id = ${id}`;
+    });
+    else if (recordType === "actor_identity") await this.sql.begin(async sql => {
+      required(await sql`UPDATE threat_intel.actor_identities SET canonical_name = ${`Deleted actor ${id}`}, normalized_name = ${`deleted:${id}`}, record = ${json}::text::jsonb, updated_at = now() WHERE id = ${id} RETURNING id`);
+      await sql`UPDATE threat_intel.actor_identity_aliases SET label = ${`Deleted alias ${id}`}, normalized_label = ${`deleted:${id}`} || ':' || id, record = ${json}::text::jsonb, updated_at = now() WHERE actor_identity_id = ${id}`;
+    });
+    else if (recordType === "evidence_link") required(await this.sql`UPDATE threat_intel.evidence_links SET record = ${json}::text::jsonb WHERE id = ${id} RETURNING id`);
+    else if (recordType === "validation_record") required(await this.sql`UPDATE threat_intel.validation_records SET reference_url = ${`about:blank#${id}`}, reviewer_id = NULL, notes = NULL, record = ${json}::text::jsonb, updated_at = now() WHERE id = ${id} RETURNING id`);
+    else if (recordType === "evaluation_label") required(await this.sql`UPDATE threat_intel.evaluation_labels SET expected_value = NULL, observed_value = NULL, labeled_by = 'deleted', notes = NULL, record = ${json}::text::jsonb, updated_at = now() WHERE id = ${id} RETURNING id`);
+    else if (recordType === "collection_run") required(await this.sql`UPDATE threat_intel.collection_runs SET request_id = NULL, idempotency_key = NULL, error = NULL, record = ${json}::text::jsonb, updated_at = now() WHERE id = ${id} RETURNING id`);
+    else if (recordType === "source_health") required(await this.sql`UPDATE threat_intel.source_health SET failure_reason = NULL, record = ${json}::text::jsonb WHERE id = ${id} RETURNING id`);
+    else if (recordType === "timeliness_record") required(await this.sql`UPDATE threat_intel.timeliness_records SET first_reported_provenance = NULL, record = ${json}::text::jsonb, updated_at = now() WHERE id = ${id} RETURNING id`);
+    else if (recordType === "intelligence_claim") required(await this.sql`UPDATE threat_intel.intelligence_claims SET claim_value = '{}'::jsonb, summary = '', reviewed_by = NULL, contradiction_reason = NULL, record = ${json}::text::jsonb, updated_at = now() WHERE id = ${id} RETURNING id`);
+    else if (recordType === "claim_evidence") required(await this.sql`UPDATE threat_intel.claim_evidence SET provenance = '{}'::jsonb, record = ${json}::text::jsonb WHERE id = ${id} RETURNING id`);
+    else if (recordType === "claim_review") required(await this.sql`UPDATE threat_intel.claim_reviews SET reviewer_id = 'deleted', reason = 'Privacy redacted', record = ${json}::text::jsonb WHERE id = ${id} RETURNING id`);
+    else if (recordType === "alert") required(await this.sql`UPDATE threat_intel.alerts SET dedupe_key = ${`privacy:${id}`}, record = ${json}::text::jsonb, updated_at = now() WHERE id = ${id} RETURNING id`);
+    else await this.persistWorkflow(recordType, record);
+  }
 }
 
 const legacyWorkflowLoaders: Array<[
@@ -1336,7 +1395,14 @@ function actorAliasRecords(profile: any, firstSeenAt: string, lastSeenAt: string
     evidenceCount: Math.max(1, count(profile.evidenceCount)),
     sourceIds: profile.sourceIds ?? [],
     captureIds: profile.captureIds ?? [],
-    updatedAt: profile.updatedAt ?? lastSeenAt
+    updatedAt: profile.updatedAt ?? lastSeenAt,
+    ...(profile.privacyRedactedAt ? {
+      privacyRedactedAt: profile.privacyRedactedAt,
+      privacyDeletionRunId: profile.privacyDeletionRunId,
+      privacyRecordType: "actor_alias",
+      privacyAction: profile.privacyAction,
+      privacyReason: profile.privacyReason
+    } : {})
   }));
 }
 

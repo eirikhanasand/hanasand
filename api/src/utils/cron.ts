@@ -12,6 +12,7 @@ import { runTrackedBackgroundJob } from './backgroundJobRuntime.ts'
 import { runDueVulnerabilityScan, VULNERABILITY_SCAN_JOB_ID } from './vulnerabilities/scanner.ts'
 import { DATABASE_BACKUP_JOB_ID, runDueDatabaseBackup } from './db/backups.ts'
 import run, { queryOnce } from '#db'
+import { ORGANIZATION_RETENTION_JOB_ID, runOrganizationRetentionWorker } from './organizationPrivacy.ts'
 
 const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
     'api-auth-token-cleanup': invalidateOldTokens,
@@ -24,6 +25,11 @@ const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
     [DATABASE_BACKUP_JOB_ID]: runDueDatabaseBackup,
     'api-agent-automations': runDueAutomations,
     'api-mail-account-provisioning': provisionExistingMailAccounts,
+    [ORGANIZATION_RETENTION_JOB_ID]: async() => {
+        const result = await runOrganizationRetentionWorker()
+        if ('failed' in result && result.failed) throw new Error(result.error || `Organization retention run ${result.runId} failed and was queued for retry.`)
+        return result
+    },
 }
 
 export function canRunApiCronJobNow(id: string) {
@@ -85,6 +91,7 @@ export default function cron() {
                 runDueApiCronJob(VULNERABILITY_SCAN_JOB_ID),
                 runDueApiCronJob(DATABASE_BACKUP_JOB_ID),
                 runDueApiCronJob('api-agent-automations'),
+                runDueApiCronJob(ORGANIZATION_RETENTION_JOB_ID),
             ]
 
             if (mailConfig.adminPassword) {

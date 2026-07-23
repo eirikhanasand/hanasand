@@ -131,8 +131,19 @@ type ScopedCase = {
     updatedAt?: string
 }
 
+type OrganizationPrivacyState = {
+    schemaVersion?: string
+    organization?: { id?: string, status?: string, retention_days?: number, retentionDays?: number }
+    runs?: Array<Record<string, unknown>>
+    requests?: Array<Record<string, unknown>>
+    items?: Array<Record<string, unknown>>
+    protection?: Record<string, unknown>
+    permissions?: { canExport?: boolean, canRunRetention?: boolean, canRequestDeletion?: boolean }
+}
+
 type OrgBundle = {
     settings: OrganizationSettings | null
+    privacy: OrganizationPrivacyState | null
     members: OrganizationMember[]
     invites: OrganizationInvite[]
     watchlists: WatchlistItem[]
@@ -297,6 +308,7 @@ type ApiError = Error & { status?: number }
 
 const initialBundle: OrgBundle = {
     settings: null,
+    privacy: null,
     members: [],
     invites: [],
     watchlists: [],
@@ -699,6 +711,7 @@ export default function OrganizationWorkspaceClient() {
         setError('')
         const endpoints = [
             ['settings', `/api/organizations/${encodeURIComponent(organizationId)}/settings`],
+            ['privacy', `/api/organizations/${encodeURIComponent(organizationId)}/privacy`],
             ['members', `/api/organizations/${encodeURIComponent(organizationId)}/members`],
             ['invites', `/api/organizations/${encodeURIComponent(organizationId)}/invites`],
             ['watchlists', `/api/organizations/${encodeURIComponent(organizationId)}/watchlists`],
@@ -723,6 +736,9 @@ export default function OrganizationWorkspaceClient() {
             const payload = result.value
             if (key === 'settings') {
                 nextBundle.settings = objectValue(payload.settings)
+            }
+            if (key === 'privacy') {
+                nextBundle.privacy = payload as OrganizationPrivacyState
             }
             if (key === 'members') {
                 nextBundle.members = arrayValue<OrganizationMember>(payload.members)
@@ -947,6 +963,40 @@ export default function OrganizationWorkspaceClient() {
         })
         return 'Organization settings updated.'
     }, 'settings')
+
+    const runRetention = () => selectedOrganization && runAction('run-retention', async () => {
+        requireManage()
+        await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/privacy`, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'run_retention', requestId: privacyActionRequestId('retention') }),
+        })
+        return 'Retention run started. Progress and protected records are shown below.'
+    }, 'privacy')
+
+    const exportPrivacyData = () => selectedOrganization && runAction('export-privacy', async () => {
+        requireManage()
+        const payload = await requestJson<{ export?: Record<string, unknown> }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/privacy`, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'export', requestId: privacyActionRequestId('export') }),
+        })
+        if (!payload.export) throw new Error('The privacy runtime returned no export data.')
+        const url = URL.createObjectURL(new Blob([JSON.stringify(payload.export, null, 2)], { type: 'application/json' }))
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = `${selectedOrganization.slug || selectedOrganization.id}-privacy-export.json`
+        anchor.click()
+        URL.revokeObjectURL(url)
+        return 'Organization data export completed.'
+    }, 'privacy')
+
+    const requestPrivacyDeletion = (confirmation: string, currentPassword: string) => selectedOrganization && runAction('delete-organization-data', async () => {
+        requireManage()
+        await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/privacy`, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'delete', requestId: privacyActionRequestId('deletion'), confirmation, currentPassword }),
+        })
+        return 'Privacy deletion requested. Protected evidence remains and eligible data is processed in bounded batches.'
+    }, 'privacy')
 
     const sendInvite = () => selectedOrganization && runAction('send-invite', async () => {
         requireManage()
@@ -1402,6 +1452,7 @@ export default function OrganizationWorkspaceClient() {
                                 <section className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
                                     <div className='grid gap-5'>
                                         <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} rowMessage={rowMessages.settings} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />
+                                        <PrivacyLifecyclePanel organization={selectedOrganization} privacy={bundle.privacy} retentionDays={Number(bundle.settings?.retentionDays || 365)} canManage={canManage} busy={busy} rowMessage={rowMessages.privacy} onRun={() => void runRetention()} onExport={() => void exportPrivacyData()} onDelete={(confirmation, currentPassword) => void requestPrivacyDeletion(confirmation, currentPassword)} />
                                         <WatchlistPanel
                                             watchlists={bundle.watchlists}
                                             activeTerms={bundle.alertTerms}
@@ -1984,6 +2035,82 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canMana
             </div>
         </details>
     )
+}
+
+export function PrivacyLifecyclePanel({ organization, privacy, retentionDays, canManage, busy, rowMessage, onRun, onExport, onDelete }: { organization: OrganizationSummary, privacy: OrganizationPrivacyState | null, retentionDays: number, canManage: boolean, busy: string, rowMessage?: RowMessage, onRun: () => void, onExport: () => void, onDelete: (confirmation: string, currentPassword: string) => void }) {
+    const [confirmation, setConfirmation] = useState('')
+    const [currentPassword, setCurrentPassword] = useState('')
+    const latestRun = privacy?.runs?.[0] || {}
+    const latestRequest = privacy?.requests?.[0] || {}
+    const runStatus = privacyText(latestRun, 'status') || 'No run yet'
+    const runAt = privacyText(latestRun, 'completed_at', 'updated_at', 'created_at')
+    const protectedCount = privacyNumber(latestRun, 'protected_count')
+    const deletedCount = privacyNumber(latestRun, 'deleted_count')
+    const redactedCount = privacyNumber(latestRun, 'redacted_count')
+    const failedCount = privacyNumber(latestRun, 'failed_count')
+    const retriedCount = privacyNumber(latestRun, 'retried_count')
+    const requestStatus = privacyText(latestRequest, 'status')
+    const explanation = cleanString(privacy?.protection?.explanation) || 'Legal holds and immutable audit, alert, case, claim, and analyst evidence remain protected.'
+    const deleting = busy === 'delete-organization-data'
+    const running = busy === 'run-retention'
+    const exporting = busy === 'export-privacy'
+    const deletionConfirmed = confirmation === organization.name
+    const serverCanManage = privacy?.permissions?.canRunRetention !== false
+    const serverCanDelete = privacy?.permissions?.canRequestDeletion === true
+
+    return (
+        <details id='privacy' open className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-privacy-lifecycle>
+            <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                <SectionTitle icon={<ShieldCheck className='h-4 w-4' />} title='Retention & privacy' detail={`${retentionDays} day policy · bounded scheduled purge`} />
+                <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold capitalize text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>{runStatus.replaceAll('_', ' ')}</span>
+            </summary>
+            <div className='grid gap-3 border-t border-ui-border p-4 dark:border-ui-border sm:grid-cols-2 lg:grid-cols-4'>
+                <PrivacyMetric label='Deleted' value={deletedCount} />
+                <PrivacyMetric label='Redacted' value={redactedCount} />
+                <PrivacyMetric label='Protected' value={protectedCount} tone='protected' />
+                <PrivacyMetric label='Failed' value={failedCount} tone={failedCount ? 'failed' : undefined} />
+                <PrivacyMetric label='Retried' value={retriedCount} />
+                <div className='rounded-md border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas sm:col-span-2 lg:col-span-4'>
+                    <p className='text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>Protection contract</p>
+                    <p className='mt-1 text-sm text-ui-text dark:text-ui-text'>{explanation}</p>
+                    <p className='mt-2 text-xs text-ui-muted dark:text-ui-muted'>Last run: {runAt ? formatDate(runAt) : 'waiting for first scheduled or manual run'}{requestStatus ? ` · Latest privacy request: ${requestStatus.replaceAll('_', ' ')}` : ''}</p>
+                </div>
+                {(privacy?.runs?.length || 0) > 0 && <div className='overflow-x-auto rounded-md border border-ui-border dark:border-ui-border sm:col-span-2 lg:col-span-4' data-org-privacy-history>
+                    <table className='w-full min-w-[38rem] text-left text-xs'>
+                        <thead className='bg-ui-raised text-ui-muted dark:bg-ui-canvas dark:text-ui-muted'><tr><th className='px-3 py-2'>Run</th><th className='px-3 py-2'>Status</th><th className='px-3 py-2'>Deleted</th><th className='px-3 py-2'>Redacted</th><th className='px-3 py-2'>Protected</th><th className='px-3 py-2'>Failed</th><th className='px-3 py-2'>Retried</th></tr></thead>
+                        <tbody>{privacy?.runs?.slice(0, 5).map(run => <tr key={privacyText(run, 'id')} className='border-t border-ui-border dark:border-ui-border'><td className='px-3 py-2'>{formatDate(privacyText(run, 'completed_at', 'updated_at', 'created_at'))}</td><td className='px-3 py-2 capitalize'>{(privacyText(run, 'status') || 'unknown').replaceAll('_', ' ')}</td><td className='px-3 py-2'>{privacyNumber(run, 'deleted_count')}</td><td className='px-3 py-2'>{privacyNumber(run, 'redacted_count')}</td><td className='px-3 py-2'>{privacyNumber(run, 'protected_count')}</td><td className='px-3 py-2'>{privacyNumber(run, 'failed_count')}</td><td className='px-3 py-2'>{privacyNumber(run, 'retried_count')}</td></tr>)}</tbody>
+                    </table>
+                </div>}
+            </div>
+            <div className='grid gap-3 border-t border-ui-border p-4 dark:border-ui-border lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end'>
+                <label className='grid gap-1 text-xs font-semibold text-ui-muted dark:text-ui-muted'>
+                    Type <span className='text-ui-text dark:text-ui-text'>{organization.name}</span> to enable privacy deletion
+                    <input className={inputClass} value={confirmation} disabled={!canManage || Boolean(busy)} onChange={event => setConfirmation(event.target.value)} placeholder={organization.name} data-org-privacy-delete-confirmation />
+                </label>
+                <label className='grid gap-1 text-xs font-semibold text-ui-muted dark:text-ui-muted'>
+                    Re-enter your password to authorize deletion
+                    <input className={inputClass} type='password' autoComplete='current-password' value={currentPassword} disabled={!serverCanDelete || Boolean(busy)} onChange={event => setCurrentPassword(event.target.value)} data-org-privacy-delete-password />
+                </label>
+                <div className='flex flex-wrap gap-2 lg:justify-end'>
+                    <button type='button' className={secondaryButtonClass} disabled={!canManage || !serverCanManage || Boolean(busy)} onClick={onExport}>
+                        {exporting ? <Loader2 className='h-4 w-4 animate-spin' /> : <Archive className='h-4 w-4' />} Export data
+                    </button>
+                    <button type='button' className={secondaryButtonClass} disabled={!canManage || !serverCanManage || Boolean(busy)} onClick={onRun}>
+                        {running ? <Loader2 className='h-4 w-4 animate-spin' /> : <RefreshCw className='h-4 w-4' />} Run purge now
+                    </button>
+                    <button type='button' className='inline-flex items-center justify-center gap-2 rounded-md bg-ui-danger px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50' disabled={!canManage || !serverCanManage || !serverCanDelete || !deletionConfirmed || !currentPassword || Boolean(busy)} onClick={() => { onDelete(confirmation, currentPassword); setCurrentPassword('') }}>
+                        {deleting ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />} Request deletion
+                    </button>
+                </div>
+                <div className='lg:col-span-2'><RowStatus message={rowMessage} /></div>
+            </div>
+        </details>
+    )
+}
+
+function PrivacyMetric({ label, value, tone }: { label: string, value: number, tone?: 'protected' | 'failed' }) {
+    const valueClass = tone === 'failed' ? 'text-ui-danger' : tone === 'protected' ? 'text-ui-warning' : 'text-ui-text'
+    return <div className='rounded-md border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas'><p className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>{label}</p><p className={`mt-1 text-2xl font-semibold ${valueClass}`}>{value}</p></div>
 }
 
 function InvitePanel({ emails, setEmails, role, setRole, invites, members, canManage, busy, rowMessages, selectedSubject, onSelectSubject, onInvite, onInviteAction, onCopyInvite }: { emails: string, setEmails: (value: string) => void, role: OrganizationRole, setRole: (value: OrganizationRole) => void, invites: OrganizationInvite[], members: OrganizationMember[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void, onInvite: () => void, onInviteAction: (invite: OrganizationInvite, action: 'revoke' | 'resend') => void, onCopyInvite: (invite: OrganizationInvite) => void }) {
@@ -4093,6 +4220,7 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
     if (subject.type === 'organization') {
         return [
             { label: 'Settings', href: '#settings' },
+            { label: 'Retention & privacy', href: '#privacy' },
             { label: 'Members', href: '#members' },
             { label: 'Invites', href: '#invites' },
             { label: 'Watchlists', href: '#watchlists' },
@@ -4245,13 +4373,25 @@ function normalizeSettings(settings: OrganizationSettings = {}) {
     }
 }
 
+function privacyActionRequestId(action: string) {
+    return `org-ui-${action}-${globalThis.crypto.randomUUID()}`
+}
+
+function privacyText(row: Record<string, unknown>, ...keys: string[]) {
+    return keys.map(key => cleanString(row[key])).find(Boolean)
+}
+
+function privacyNumber(row: Record<string, unknown>, key: string) {
+    return numberValue(row[key]) ?? 0
+}
+
 function settingsValidationMessage(settings: OrganizationSettings = {}) {
     const name = (settings.name || '').trim()
     const slug = (settings.slug || '').trim()
     const retentionDays = Number(settings.retentionDays || 365)
     if (!name) return 'Organization name is required.'
     if (slug && slugifyOrganizationName(slug) !== slug) return 'Use lowercase letters, numbers, and hyphens for slug.'
-    if (!Number.isFinite(retentionDays) || retentionDays < 30 || retentionDays > 3650) return 'Retention days must be between 30 and 3650.'
+    if (!Number.isFinite(retentionDays) || retentionDays < 30 || retentionDays > 2555) return 'Retention days must be between 30 and 2555.'
     return ''
 }
 

@@ -16,6 +16,7 @@ import { error, json, numberQuery, readJson } from "./http.ts";
 import { handleEvidenceRequest } from "./evidenceRoutes.ts";
 import { handleOrgAlertCaseActionLedgerRequest } from "./orgAlertCaseActionLedgerRoutes.ts";
 import { authorizeOrganizationRequest, createOrganization, createOrganizationInvites, createWebhookDestination, disableWebhookDestination, listOrganizationMembers, listOrganizations, listWebhookDestinations, resolveOrganizationScope, testOrganizationWebhook, updateWebhookDestination } from "./organizationRoutes.ts";
+import { handleOrganizationPrivacyRequest } from "./organizationPrivacyRoutes.ts";
 import { publicChannelApplyPlan, publicChannelStatus } from "./publicChannelDispatch.ts";
 import { qualityPayload } from "./qualityRoute.ts";
 import { buildRestrictedMetadataApplyPlanRouteResponse, buildRestrictedMetadataStatusRouteResponse } from "./restrictedMetadataRoutes.ts";
@@ -100,6 +101,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/ops/collection-scheduler" && request.method === "POST") return updateCollectionSchedulerControl(request, options);
     if (url.pathname === "/v1/organizations" && request.method === "GET") return listOrganizations(request, options);
     if (url.pathname === "/v1/organizations" && request.method === "POST") return createOrganization(request, options);
+    if (/^\/v1\/organizations\/[^/]+\/privacy$/.test(url.pathname) && (request.method === "GET" || request.method === "POST")) return handleOrganizationPrivacyRequest(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/members$/.test(url.pathname) && request.method === "GET") return listOrganizationMembers(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/invites$/.test(url.pathname) && request.method === "POST") return createOrganizationInvites(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/entitlements\/readiness$/.test(url.pathname) && (request.method === "GET" || request.method === "POST")) return getOrganizationEntitlementReadiness(request, options, url.pathname.split("/")[3]);

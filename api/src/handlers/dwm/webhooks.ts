@@ -96,6 +96,8 @@ type Membership = {
     status?: 'active' | 'removed'
     user_active?: boolean
     alert_visibility_policy?: OrganizationAlertVisibilityPolicy
+    organization_status?: string
+    privacy_deletion_run_id?: string | null
 }
 
 export async function getDwmWebhookDestinations(req: FastifyRequest<{ Querystring: OrgQuery }>, res: FastifyReply) {
@@ -1282,6 +1284,9 @@ async function configurationPermissionError(orgId: string, userId: string) {
     if (!membership) {
         return { status: 404, message: 'Organization not found.' }
     }
+    if (membership.privacy_deletion_run_id || membership.organization_status !== 'active') {
+        return { status: 409, message: membership.privacy_deletion_run_id ? 'Organization deletion is in progress; writes are blocked.' : 'Organization lifecycle blocks webhook changes.' }
+    }
     if (!roleCanManageOrganization(membership.role)) {
         return { status: 403, message: 'Only organization owners and admins can configure webhook destinations.' }
     }
@@ -1304,11 +1309,13 @@ function destinationCrudActionForUpdate(input: DwmWebhookDestinationInput, desti
 
 async function loadOrganizationMembership(orgId: string, userId: string): Promise<Membership | null> {
     const result = await run(`
-        SELECT role
-        FROM organization_members
-        WHERE organization_id = $1
-          AND user_id = $2
-          AND status = 'active'
+        SELECT member.role, organization.status AS organization_status,
+               organization.audit_safe_metadata->>'privacyDeletionRunId' AS privacy_deletion_run_id
+        FROM organization_members member
+        JOIN organizations organization ON organization.id = member.organization_id
+        WHERE member.organization_id = $1
+          AND member.user_id = $2
+          AND member.status = 'active'
         LIMIT 1
     `, [orgId, userId])
 

@@ -6,6 +6,7 @@ import { getBackgroundJobRuntime, type BackgroundJobRuntime } from './background
 import { canRunApiCronJobNow, isApiCronJobPaused, runApiCronJobNow, setApiCronJobPaused } from './cron.ts'
 import { getVulnerabilityReport, isVulnerabilityScanActive, setVulnerabilityScannerPaused, startTrackedVulnerabilityScan, VULNERABILITY_SCAN_CADENCE_SECONDS, VULNERABILITY_SCAN_JOB_ID } from './vulnerabilities/scanner.ts'
 import { collectDatabaseBackupServices, createDatabaseBackup, DATABASE_BACKUP_JOB_ID, setDatabaseBackupSchedulePaused } from './db/backups.ts'
+import { ORGANIZATION_RETENTION_JOB_ID } from './organizationPrivacy.ts'
 
 const execFileAsync = promisify(execFile)
 const BEGIN = '# BEGIN HANASAND MANAGED CRON'
@@ -224,6 +225,16 @@ const apiBackgroundJobDefinitions: Array<{
         cadenceSeconds: API_CRON_CADENCE_SECONDS,
         source: 'api/src/utils/cron.ts',
         controls: [],
+    },
+    {
+        id: ORGANIZATION_RETENTION_JOB_ID,
+        name: 'Organization retention and privacy lifecycle',
+        description: 'Applies each organization retention setting in bounded batches, preserves legal holds, and resumes auditable privacy deletion work.',
+        category: 'Backup/Database',
+        schedule: 'Every minute',
+        cadenceSeconds: API_CRON_CADENCE_SECONDS,
+        source: 'api/src/utils/organizationPrivacy.ts',
+        controls: ['pause', 'resume', 'run_now'],
     },
     {
         id: 'api-synthetic-monitor',

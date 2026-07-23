@@ -62,12 +62,13 @@ export class FileBackedScraperStore extends InMemoryScraperStore {
   override saveWebhookDestination(destination: any): any { return this.saved(() => super.saveWebhookDestination(destination)); }
   override saveCase(caseRecord: any): any { return this.saved(() => super.saveCase(caseRecord)); }
   override saveDwmWatchlist(watchlist: any): any { return this.saved(() => super.saveDwmWatchlist(watchlist)); }
+  override deleteWorkflowForRetention(recordType: string, id: string): boolean { return this.saved(() => super.deleteWorkflowForRetention(recordType, id)); }
   override saveDwmAlert(alert: any): any { return this.saved(() => super.saveDwmAlert(alert)); }
   override saveDwmWebhookDelivery(delivery: any): any { return this.saved(() => super.saveDwmWebhookDelivery(delivery)); }
   override saveActorOrgRelevanceReview(review: any): any { return this.saved(() => super.saveActorOrgRelevanceReview(review)); }
   private saved<T>(write: () => T): T { const value = write(); this.batchDepth ? this.dirty = true : this.persist(); return value; }
   private finishBatch(): void { this.batchDepth--; if (!this.batchDepth && this.dirty) this.persist(); }
-  private hydrate(): void { if (!existsSync(this.snapshotPath)) return; this.hydrating = true; try { this.load(JSON.parse(readFileSync(this.snapshotPath, "utf8"))); } finally { this.hydrating = false; } }
+  private hydrate(): void { if (!existsSync(this.snapshotPath)) return; this.hydrating = true; try { this.hydrateWithoutOrganizationWriteGuard(() => this.load(JSON.parse(readFileSync(this.snapshotPath, "utf8")))); } finally { this.hydrating = false; } }
   private load(snapshot: Partial<FileBackedScraperSnapshot>): void {
     for (const source of snapshot.sources ?? []) super.saveSource(source);
     for (const capture of snapshot.captures ?? []) this.hydrateCaptureSnapshot(capture);

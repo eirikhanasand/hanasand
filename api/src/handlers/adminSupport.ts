@@ -2192,6 +2192,7 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
     if (!organization) {
         return res.status(404).send({ error: 'Organization not found.' })
     }
+    if (supportOrganizationDeletionLocked(organization)) return res.status(409).send({ error: 'Organization deletion is in progress; support writes are blocked.' })
 
     const requestId = input.requestId || supportRequestId(req)
     const controls = supportInviteAssistExecutorControls(req, req.body, requestId)
@@ -2360,6 +2361,7 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
             DO UPDATE SET role = EXCLUDED.role,
                           invited_by = EXCLUDED.invited_by,
                           status = 'pending',
+                          revoked_at = NULL,
                           accepted_at = NULL,
                           accepted_by = NULL,
                           expires_at = EXCLUDED.expires_at,
@@ -2510,6 +2512,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
     if (!organization) {
         return res.status(404).send({ error: 'Organization not found.' })
     }
+    if (supportOrganizationDeletionLocked(organization)) return res.status(409).send({ error: 'Organization deletion is in progress; support writes are blocked.' })
 
     const requestId = text(req.body?.requestId || req.body?.request_id) || supportRequestId(req)
     const actionType = action === 'revoke'
@@ -2856,6 +2859,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
     const updated = await run(`
         UPDATE organization_invites
         SET status = $3,
+            revoked_at = CASE WHEN $3 = 'revoked' THEN NOW() ELSE NULL END,
             accepted_at = NULL,
             accepted_by = NULL,
             expires_at = $4,
@@ -3431,6 +3435,7 @@ export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequ
     if (!organization) {
         return res.status(404).send({ error: 'Organization not found.' })
     }
+    if (supportOrganizationDeletionLocked(organization)) return res.status(409).send({ error: 'Organization deletion is in progress; support writes are blocked.' })
 
     const requestId = input.requestId || supportRequestId(req)
     const actionType = 'support.organization.member_role_recovery'
@@ -4149,6 +4154,7 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
     if (!organization) {
         return res.status(404).send({ error: 'Organization not found.' })
     }
+    if (supportOrganizationDeletionLocked(organization)) return res.status(409).send({ error: 'Organization deletion is in progress; support writes are blocked.' })
 
     const requestId = text(req.body?.requestId || req.body?.request_id) || supportRequestId(req)
     const targetUserId = text(req.body?.targetUserId)
@@ -4237,6 +4243,7 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
         DO UPDATE SET role = EXCLUDED.role,
                       invited_by = EXCLUDED.invited_by,
                       status = 'pending',
+                      revoked_at = NULL,
                       accepted_at = NULL,
                       accepted_by = NULL,
                       expires_at = EXCLUDED.expires_at,
@@ -4261,6 +4268,7 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
         const revokedInvite = await run(`
             UPDATE organization_invites
             SET status = 'revoked',
+                revoked_at = NOW(),
                 accepted_at = NULL,
                 accepted_by = NULL
             WHERE id = $1
@@ -4441,6 +4449,7 @@ async function decideSupportAccessRecovery(
         })
         return res.status(404).send({ error: 'Access recovery request not found.' })
     }
+    if (await organizationDeletionLocked(current.organization_id)) return res.status(409).send({ error: 'Organization deletion is in progress; support writes are blocked.' })
 
     const supportSessionId = supportSessionIdFromRequest(req, req.body)
     const requiredScope = decision === 'approved' ? 'recovery:approve' : 'recovery:deny'
@@ -4597,6 +4606,7 @@ async function decideSupportAccessRecovery(
     const invite = await run(`
         UPDATE organization_invites
         SET status = $2,
+            revoked_at = CASE WHEN $2 = 'revoked' THEN NOW() ELSE NULL END,
             accepted_at = NULL,
             accepted_by = NULL
         WHERE id = $1
@@ -4671,6 +4681,15 @@ async function loadOrganizationSupportDetail(organizationId: string) {
     `, [organizationId])
 
     return result.rows[0] as OrganizationRow | undefined
+}
+
+function supportOrganizationDeletionLocked(organization: Pick<OrganizationRow, 'audit_safe_metadata'>) {
+    return Boolean(organization.audit_safe_metadata?.privacyDeletionRunId)
+}
+
+async function organizationDeletionLocked(organizationId: string) {
+    const result = await run("SELECT audit_safe_metadata ? 'privacyDeletionRunId' locked FROM organizations WHERE id = $1", [organizationId])
+    return result.rows[0]?.locked === true
 }
 
 async function loadInspectionOrganizations(input: { q?: string, org: string, user: string, email: string, request: string, limit: number }) {

@@ -141,6 +141,7 @@ async function applyGovernanceAction(request: Request, options: ApiServerOptions
     const capture = (options.store as any).getCapture?.(body.captureId);
     if (!capture || !inTenantScope(capture, scope.tenantId)) return error("capture_not_found", "Capture not found", 404);
     if (capture.legalHold || capture.retentionClass === "legal_hold") return error("capture_on_legal_hold", "Release the legal hold before redaction", 409);
+    try { (options.store as any).assertOrganizationWritable(capture); } catch { return error("organization_deletion_in_progress", "Organization deletion is in progress; writes are blocked", 409); }
     const audit = { id, action, reason: reason.slice(0, 1_000), appliedAt: at, appliedBy: actor.id };
     if (capture.objectRef) (options.objectStore as any)?.deleteObject?.(capture.objectRef, `governance:${id}`);
     const saved = (options.store as any).replaceCaptureForRetention({ ...capture, body: undefined, objectRef: undefined, storageKind: "metadata_only", metadata: { ...(capture.metadata ?? {}), governanceAudit: [...(capture.metadata?.governanceAudit ?? []).filter((entry: any) => entry.id !== id), audit] } });

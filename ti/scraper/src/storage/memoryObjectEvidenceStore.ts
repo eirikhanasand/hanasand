@@ -22,6 +22,8 @@ export class InMemoryObjectEvidenceStore implements ObjectEvidenceStore {
   }
 
   deleteObject(ref: ObjectStoreRef, _reason: string) {
-    return this.objects.delete(objectKey(ref));
+    if (ref.bucket !== "memory-evidence") throw new Error("Object belongs to a different evidence bucket");
+    this.objects.delete(objectKey(ref));
+    return true;
   }
 }

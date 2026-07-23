@@ -328,6 +328,9 @@ export function resolveOrganizationScope(input: { body?: any; url?: URL; request
     if (tenantIds[0] && tenantIds[0] !== organization.tenantId) {
       return { organizationId, tenantId: tenantIds[0], error: error("tenant_scope_mismatch", "Organization and tenant scope must match", 403) };
     }
+    if (input.request && !["GET", "HEAD"].includes(input.request.method) && (organization as any).privacyDeletionRunId) {
+      return { organizationId, tenantId: organization.tenantId, error: error("organization_deletion_in_progress", "Organization deletion is in progress; writes are blocked", 409) };
+    }
     return { organization, organizationId: organization.id, tenantId: organization.tenantId };
   }
   const tenantId = tenantIds[0] ?? "default";
@@ -339,13 +342,17 @@ function scopeValues(...values: unknown[]): string[] {
   return values.map((value) => typeof value === "string" ? value.trim() : "").filter(Boolean);
 }
 
-export async function authorizeOrganizationRequest(request: Request, options: ApiServerOptions, organizationId?: string, mutate = false, mutationRoles: OrganizationRole[] = ["owner", "admin"]): Promise<{ identity?: AuthenticatedIdentity; service?: boolean; privileged?: boolean; error?: Response }> {
+export async function authorizeOrganizationRequest(request: Request, options: ApiServerOptions, organizationId?: string, mutate = false, mutationRoles: OrganizationRole[] = ["owner", "admin"], allowPrivacyDeletion = false): Promise<{ identity?: AuthenticatedIdentity; service?: boolean; privileged?: boolean; error?: Response }> {
   const authentication = await authenticateOperatorRequest(request, options);
   if (authentication.error) return { error: authentication.error };
   const identity = authentication.identity;
   if (!identity) return {};
   const service = identity.roles.includes("service");
   const privileged = service || identity.roles.includes("system_admin");
+  const organization = organizationId ? findOrganization(options, organizationId) : undefined;
+  if (mutate && organization && (organization as any).privacyDeletionRunId && !allowPrivacyDeletion) {
+    return { error: error("organization_deletion_in_progress", "Organization deletion is in progress; writes are blocked", 409) };
+  }
   if (!organizationId || privileged) return { identity, service, privileged };
   const member = activeMembers(options).find((row) => row.organizationId === organizationId && memberMatchesIdentity(row, identity.id));
   if (!member) return { error: error("organization_access_denied", "Organization access requires an active membership", 403) };

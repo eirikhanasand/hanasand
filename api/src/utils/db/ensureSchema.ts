@@ -628,6 +628,7 @@ export default async function ensureSchema() {
     await run('ALTER TABLE organizations ADD COLUMN IF NOT EXISTS alert_visibility_policy TEXT NOT NULL DEFAULT \'members\'')
     await run('ALTER TABLE organizations ADD COLUMN IF NOT EXISTS retention_days INT NOT NULL DEFAULT 365')
     await run('ALTER TABLE organizations ADD COLUMN IF NOT EXISTS audit_safe_metadata JSONB NOT NULL DEFAULT \'{}\'::jsonb')
+    await run('ALTER TABLE organizations ALTER COLUMN created_by DROP NOT NULL')
     await run('ALTER TABLE organizations DROP CONSTRAINT IF EXISTS organizations_default_webhook_policy_check')
     await run('ALTER TABLE organizations DROP CONSTRAINT IF EXISTS organizations_status_check')
     await run('ALTER TABLE organizations ADD CONSTRAINT organizations_status_check CHECK (status IN (\'active\', \'archived\', \'deleted\'))')
@@ -665,10 +666,14 @@ export default async function ensureSchema() {
     `)
     await run('ALTER TABLE organization_members DROP CONSTRAINT IF EXISTS organization_members_role_check')
     await run('ALTER TABLE organization_members ADD CONSTRAINT organization_members_role_check CHECK (role IN (\'owner\', \'admin\', \'member\', \'viewer\'))')
+    await run('ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS removed_at TIMESTAMPTZ')
+    await run('UPDATE organization_members SET removed_at = NOW() WHERE status = \'removed\' AND removed_at IS NULL')
     await run('ALTER TABLE organization_invites DROP CONSTRAINT IF EXISTS organization_invites_role_check')
     await run('ALTER TABLE organization_invites ADD CONSTRAINT organization_invites_role_check CHECK (role IN (\'admin\', \'member\', \'viewer\'))')
     await run('ALTER TABLE organization_invites ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL \'14 days\')')
     await run('ALTER TABLE organization_invites ADD COLUMN IF NOT EXISTS accepted_by TEXT REFERENCES users(id) ON DELETE SET NULL')
+    await run('ALTER TABLE organization_invites ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ')
+    await run('UPDATE organization_invites SET revoked_at = NOW() WHERE status = \'revoked\' AND revoked_at IS NULL')
     await run(`
         CREATE TABLE IF NOT EXISTS organization_watchlist_items (
             id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -699,6 +704,78 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_organization_watchlist_org_kind ON organization_watchlist_items(organization_id, kind, value) WHERE archived_at IS NULL')
     await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_organization_watchlist_unique_active ON organization_watchlist_items(organization_id, kind, lower(value)) WHERE archived_at IS NULL')
     await run(`
+        CREATE TABLE IF NOT EXISTS organization_privacy_requests (
+            id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+            organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            request_type TEXT NOT NULL CHECK (request_type IN ('export', 'deletion')),
+            status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'completed', 'failed')),
+            requested_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+            request_id TEXT NOT NULL,
+            requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            started_at TIMESTAMPTZ,
+            completed_at TIMESTAMPTZ,
+            retry_count INT NOT NULL DEFAULT 0 CHECK (retry_count >= 0),
+            result JSONB NOT NULL DEFAULT '{}'::jsonb,
+            error TEXT,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (organization_id, request_type, request_id)
+        )
+    `)
+    await run(`
+        CREATE TABLE IF NOT EXISTS organization_retention_runs (
+            id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+            organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            privacy_request_id TEXT REFERENCES organization_privacy_requests(id) ON DELETE SET NULL,
+            trigger_type TEXT NOT NULL CHECK (trigger_type IN ('scheduled', 'manual', 'privacy_deletion')),
+            status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'completed', 'failed')),
+            retention_days INT NOT NULL CHECK (retention_days BETWEEN 0 AND 2555),
+            cutoff_at TIMESTAMPTZ NOT NULL,
+            run_date DATE NOT NULL DEFAULT CURRENT_DATE,
+            requested_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+            request_id TEXT,
+            attempt_count INT NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+            selected_count INT NOT NULL DEFAULT 0 CHECK (selected_count >= 0),
+            protected_count INT NOT NULL DEFAULT 0 CHECK (protected_count >= 0),
+            deleted_count INT NOT NULL DEFAULT 0 CHECK (deleted_count >= 0),
+            redacted_count INT NOT NULL DEFAULT 0 CHECK (redacted_count >= 0),
+            failed_count INT NOT NULL DEFAULT 0 CHECK (failed_count >= 0),
+            started_at TIMESTAMPTZ,
+            completed_at TIMESTAMPTZ,
+            next_retry_at TIMESTAMPTZ,
+            error TEXT,
+            result JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run(`
+        CREATE TABLE IF NOT EXISTS organization_retention_run_items (
+            run_id TEXT NOT NULL REFERENCES organization_retention_runs(id) ON DELETE CASCADE,
+            organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            source_service TEXT NOT NULL CHECK (source_service IN ('hanasand-api', 'ti-scraper')),
+            record_type TEXT NOT NULL,
+            record_id TEXT NOT NULL,
+            action TEXT NOT NULL CHECK (action IN ('delete', 'redact', 'retain')),
+            status TEXT NOT NULL CHECK (status IN ('deleted', 'redacted', 'protected', 'failed')),
+            reason TEXT NOT NULL,
+            attempt_count INT NOT NULL DEFAULT 1 CHECK (attempt_count >= 1),
+            error TEXT,
+            processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (run_id, source_service, record_type, record_id)
+        )
+    `)
+    await run('ALTER TABLE organization_retention_runs DROP CONSTRAINT IF EXISTS organization_retention_runs_status_check')
+    await run('ALTER TABLE organization_retention_runs ADD CONSTRAINT organization_retention_runs_status_check CHECK (status IN (\'queued\', \'running\', \'completed\', \'failed\', \'dead_letter\'))')
+    await run('ALTER TABLE organization_retention_runs ADD COLUMN IF NOT EXISTS retried_count INT NOT NULL DEFAULT 0 CHECK (retried_count >= 0)')
+    await run('ALTER TABLE organization_retention_run_items DROP CONSTRAINT IF EXISTS organization_retention_run_items_status_check')
+    await run('ALTER TABLE organization_retention_run_items ADD CONSTRAINT organization_retention_run_items_status_check CHECK (status IN (\'deleted\', \'redacted\', \'protected\', \'failed\', \'retried\'))')
+    await run('CREATE INDEX IF NOT EXISTS idx_organization_privacy_requests_org_updated ON organization_privacy_requests(organization_id, updated_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_organization_retention_runs_due ON organization_retention_runs(status, next_retry_at, created_at)')
+    await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_organization_retention_daily_run ON organization_retention_runs(organization_id, trigger_type, run_date) WHERE trigger_type = \'scheduled\'')
+    await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_organization_retention_request_run ON organization_retention_runs(organization_id, trigger_type, request_id) WHERE request_id IS NOT NULL')
+    await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_organization_retention_one_active ON organization_retention_runs(organization_id) WHERE status IN (\'queued\', \'running\', \'failed\')')
+    await run('CREATE INDEX IF NOT EXISTS idx_organization_retention_items_org_processed ON organization_retention_run_items(organization_id, processed_at DESC)')
+    await run(`
         CREATE TABLE IF NOT EXISTS admin_audit_events (
             id BIGSERIAL PRIMARY KEY,
             action_type TEXT NOT NULL,
@@ -721,6 +798,7 @@ export default async function ensureSchema() {
     `)
     await run('ALTER TABLE admin_audit_events ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT \'admin\'')
     await run('ALTER TABLE admin_audit_events ADD COLUMN IF NOT EXISTS service TEXT NOT NULL DEFAULT \'hanasand-api\'')
+    await run('ALTER TABLE admin_audit_events ALTER COLUMN actor_id DROP NOT NULL')
     await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_created_at ON admin_audit_events(created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_source_service_created ON admin_audit_events(source, service, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_org_created ON admin_audit_events(organization_id, created_at DESC)')
@@ -876,6 +954,8 @@ export default async function ensureSchema() {
         )
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_audit_owner_created ON dwm_webhook_audit_events(owner_id, created_at DESC)')
+    await run('ALTER TABLE dwm_webhook_audit_events ALTER COLUMN owner_id DROP NOT NULL')
+    await run('ALTER TABLE dwm_webhook_audit_events ALTER COLUMN actor_id DROP NOT NULL')
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_audit_org_created ON dwm_webhook_audit_events(org_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_audit_destination_created ON dwm_webhook_audit_events(destination_id, created_at DESC)')
     await run(`
