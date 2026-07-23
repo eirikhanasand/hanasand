@@ -16,7 +16,6 @@ export default async function TiAdminPage() {
     const enrichment = await getTiEnrichmentOverview()
     const now = Date.now()
 
-    const activeSources = sources.filter(source => source.status === 'active')
     const candidateSources = sources.filter(source => source.status === 'candidate' || source.status === 'review')
     const staleSources = sources.filter(source => now - new Date(source.lastRunAt).getTime() > 12 * 60 * 60 * 1000)
     const reviewDomains = domains.filter(domain => domain.status === 'review')

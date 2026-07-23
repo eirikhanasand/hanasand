@@ -6,6 +6,7 @@ import { ArrowLeft, BellRing, CheckCircle2, Copy, Loader2, RotateCcw, Send, Shie
 import { safeEvidenceExcerpt } from '@/utils/dwm/display'
 
 const DWM_CASE_REPORT_MAX_EVIDENCE = 25
+const DWM_CASE_EVIDENCE_PREVIEW_ROWS = 6
 const DWM_CASE_TIMELINE_PREVIEW_ROWS = 8
 
 export type CaseDetail = {
@@ -241,6 +242,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     const [note, setNote] = useState('')
     const [owner, setOwner] = useState(initialDetail?.case?.assignedOwner || initialDetail?.workflowState?.assignedOwner || '')
     const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([])
+    const [showAllEvidenceRows, setShowAllEvidenceRows] = useState(false)
     const [selectedDestinationId, setSelectedDestinationId] = useState('')
 
     const caseRecord = state.detail?.case
@@ -452,6 +454,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
     const timeline = state.detail.timeline || state.exportPayload?.timelineSummary || []
     const evidence = state.detail.evidence || state.exportPayload?.evidenceSummary || []
+    const visibleEvidence = showAllEvidenceRows ? evidence.slice(0, DWM_CASE_REPORT_MAX_EVIDENCE) : evidence.slice(0, DWM_CASE_EVIDENCE_PREVIEW_ROWS)
     const deliveries = orderCaseDeliveries(state.detail.deliveries || state.exportPayload?.deliveryEvidence || [])
     const latestDelivery = deliveries[0]
     const latestDeliveryRetryable = latestDelivery?.status === 'failed' && latestDelivery.retryable === true
@@ -540,6 +543,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                 <div className='mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ui-border bg-ui-canvas p-2'>
                                     <p className='text-xs text-ui-muted'><span className='font-semibold text-ui-text'>{selectedEvidenceIds.length}</span> of {Math.min(evidence.length, DWM_CASE_REPORT_MAX_EVIDENCE)} selected for the report</p>
                                     <div className='flex gap-2'>
+                                        {evidence.length > DWM_CASE_EVIDENCE_PREVIEW_ROWS ? <button type='button' onClick={() => setShowAllEvidenceRows(value => !value)} className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text'>{showAllEvidenceRows ? 'Show fewer' : 'Show all'}</button> : null}
                                         <button type='button' onClick={() => setSelectedEvidenceIds(evidence.map(row => row.id).filter(Boolean).slice(0, DWM_CASE_REPORT_MAX_EVIDENCE) as string[])} className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text'>Select all</button>
                                         <button type='button' onClick={() => setSelectedEvidenceIds([])} className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text'>Clear</button>
                                     </div>
@@ -548,7 +552,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                     {evidence.length ? (
                                         <>
                                             <div className='grid gap-2 p-2 md:hidden' data-dwm-case-evidence-mobile-list='true'>
-                                                {evidence.slice(0, DWM_CASE_REPORT_MAX_EVIDENCE).map((row, index) => <EvidenceMobileRow key={row.id || index} row={row} selected={Boolean(row.id && selectedEvidenceIds.includes(row.id))} onToggle={() => row.id && setSelectedEvidenceIds(toggleSelectedEvidence(selectedEvidenceIds, row.id))} />)}
+                                                {visibleEvidence.map((row, index) => <EvidenceMobileRow key={row.id || index} row={row} selected={Boolean(row.id && selectedEvidenceIds.includes(row.id))} onToggle={() => row.id && setSelectedEvidenceIds(toggleSelectedEvidence(selectedEvidenceIds, row.id))} />)}
                                             </div>
                                             <div className='hidden overflow-x-auto md:block'>
                                                 <table className='w-full min-w-190 text-left text-xs' data-dwm-case-evidence-desktop-table='true'>
@@ -562,7 +566,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                                         </tr>
                                                     </thead>
                                                     <tbody className='divide-y divide-ui-border bg-ui-panel'>
-                                                        {evidence.slice(0, DWM_CASE_REPORT_MAX_EVIDENCE).map((row, index) => (
+                                                        {visibleEvidence.map((row, index) => (
                                                             <tr key={row.id || index} className='hover:bg-ui-raised'>
                                                                 <td className='px-3 py-2 align-top'><input type='checkbox' aria-label={`Select ${row.sourceName || row.id || 'evidence'} for third-party report`} checked={Boolean(row.id && selectedEvidenceIds.includes(row.id))} disabled={!row.id} onChange={() => row.id && setSelectedEvidenceIds(toggleSelectedEvidence(selectedEvidenceIds, row.id))} /></td>
                                                                 <td className='px-3 py-2 align-top font-semibold text-ui-text'>{row.sourceName || sourceReferenceState(row)}<p className='text-[11px] font-normal text-ui-muted'>{stateLabel(row.sourceFamily)}</p></td>

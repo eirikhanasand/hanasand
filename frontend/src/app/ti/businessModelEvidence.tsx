@@ -155,18 +155,18 @@ function ActorCaseStudyIndex({ catalog }: { catalog: TiActorCaseStudyCatalog }) 
             </div>
             {currentCase ? (
                 <div className='mt-3 min-w-0 border-t border-ui-border py-3 dark:border-ui-border'>
-                            <div className='flex min-w-0 items-center justify-between gap-2'>
-                                <span className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{currentCase.actor}</span>
-                                <span className='shrink-0 text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{currentCase.findingCount} reviewed findings</span>
-                            </div>
-                            <div className='mt-2 flex min-w-0 flex-wrap gap-1'>
-                                {currentCase.categories.map(category => <span key={category} className='rounded-md bg-ui-raised px-1.5 py-0.5 text-[10px] font-semibold text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>{caseCategoryLabel(category)}</span>)}
-                            </div>
-                            <p className='mt-2 text-[11px] text-ui-muted dark:text-ui-muted'>
-                                {currentCase.sourceCount} independent source{currentCase.sourceCount === 1 ? '' : 's'} · {currentCase.evidenceCount} exact reviewed evidence record{currentCase.evidenceCount === 1 ? '' : 's'}
-                                {currentCase.lastPublishedAt ? ` · last published ${formatDate(currentCase.lastPublishedAt)}` : ''}
-                                {currentCase.lastCollectedAt ? ` · last collected ${formatDate(currentCase.lastCollectedAt)}` : ''}
-                            </p>
+                    <div className='flex min-w-0 items-center justify-between gap-2'>
+                        <span className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{currentCase.actor}</span>
+                        <span className='shrink-0 text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{currentCase.findingCount} reviewed findings</span>
+                    </div>
+                    <div className='mt-2 flex min-w-0 flex-wrap gap-1'>
+                        {currentCase.categories.map(category => <span key={category} className='rounded-md bg-ui-raised px-1.5 py-0.5 text-[10px] font-semibold text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>{caseCategoryLabel(category)}</span>)}
+                    </div>
+                    <p className='mt-2 text-[11px] text-ui-muted dark:text-ui-muted'>
+                        {currentCase.sourceCount} independent source{currentCase.sourceCount === 1 ? '' : 's'} · {currentCase.evidenceCount} exact reviewed evidence record{currentCase.evidenceCount === 1 ? '' : 's'}
+                        {currentCase.lastPublishedAt ? ` · last published ${formatDate(currentCase.lastPublishedAt)}` : ''}
+                        {currentCase.lastCollectedAt ? ` · last collected ${formatDate(currentCase.lastCollectedAt)}` : ''}
+                    </p>
                 </div>
             ) : <p className='mt-3 text-sm text-ui-muted dark:text-ui-muted'>This actor has no current reviewed evidence in two separate analysis categories.</p>}
             <p className='mt-3 text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{catalog.qualification}</p>
