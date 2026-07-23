@@ -74,6 +74,7 @@ type DiscoveryOptions = {
   sourceFeedDiscoveryFetch?: CanaryFetch;
   timeoutMs?: number;
   sourceFeedDiscoveryTimeoutMs?: number;
+  sourceFeedDiscoveryCycleTimeoutMs?: number;
   sourceFeedDiscoveryMaxReferences?: number;
   sourceFeedDiscoveryMaxConcurrent?: number;
   sourceFeedDiscoveryMaxFeedsPerReference?: number;
@@ -127,12 +128,22 @@ export async function runSourceFeedDiscoveryCycle(options: DiscoveryOptions, gen
     };
   }
 
-  const fetcher = publicAdvisoryFetcher((options.sourceFeedDiscoveryFetch ?? options.fetch) as typeof fetch | undefined, positiveInteger(options.sourceFeedDiscoveryTimeoutMs ?? options.timeoutMs, 8_000, 30_000));
+  const requestTimeoutMs = positiveInteger(options.sourceFeedDiscoveryTimeoutMs ?? options.timeoutMs, 8_000, 30_000);
+  const fetcher = publicAdvisoryFetcher((options.sourceFeedDiscoveryFetch ?? options.fetch) as typeof fetch | undefined, requestTimeoutMs);
   const concurrency = positiveInteger(options.sourceFeedDiscoveryMaxConcurrent, 2, 8);
+  const controller = new AbortController();
+  const cycleTimeout = setTimeout(
+    () => controller.abort(new Error("Public feed discovery cycle timed out.")),
+    positiveInteger(options.sourceFeedDiscoveryCycleTimeoutMs, Math.min(60_000, requestTimeoutMs * 2), 60_000)
+  );
   const results: ProcessedReference[] = [];
-  for (let index = 0; index < due.length; index += concurrency) {
-    results.push(...await Promise.all(due.slice(index, index + concurrency).map((reference) =>
-      processReference({ store, fetcher, reference, generatedAt, maxFeeds: positiveInteger(options.sourceFeedDiscoveryMaxFeedsPerReference, 4, 8) }))));
+  try {
+    for (let index = 0; index < due.length && !controller.signal.aborted; index += concurrency) {
+      results.push(...await Promise.all(due.slice(index, index + concurrency).map((reference) =>
+        processReference({ store, fetcher, reference, generatedAt, signal: controller.signal, maxFeeds: positiveInteger(options.sourceFeedDiscoveryMaxFeedsPerReference, 4, 8) }))));
+    }
+  } finally {
+    clearTimeout(cycleTimeout);
   }
   return {
     generatedAt,
@@ -156,18 +167,14 @@ async function processReference(input: {
   fetcher: CanaryFetch;
   reference: PublisherReference;
   generatedAt: string;
+  signal: AbortSignal;
   maxFeeds: number;
 }): Promise<ProcessedReference> {
   const previous = input.store.getPlan?.(planId(input.reference.publisherKey));
   const attemptCount = Number(previous?.attemptCount ?? 0) + 1;
   try {
-    const response = await input.fetcher(input.reference.referenceUrl, { headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.8" } });
-    const pageUrl = safePublicReference(response.url || input.reference.referenceUrl);
-    if (!response.ok) throw new Error(`Public feed discovery returned HTTP ${response.status}.`);
-    if (!pageUrl) throw new Error("Public feed discovery returned an unsafe response URL.");
-    const body = await boundedResponseText(response, MAX_RESPONSE_BYTES);
-    const direct = feedProof(body, pageUrl, response.headers.get("content-type"), input.generatedAt);
-    const advertised = direct ? [direct] : await advertisedFeedProofs(body, pageUrl, input.fetcher, input.generatedAt, input.maxFeeds);
+    const advertised = await abortable(discoverFeedProofs(input), input.signal);
+    if (input.signal.aborted) throw input.signal.reason;
     const admissions = advertised.map((proof) => admitFeed(input.store, input.reference, proof, input.generatedAt));
     const result: AttemptResult = {
       outcome: advertised.length ? "feeds_proven" : "no_feed",
@@ -193,6 +200,25 @@ async function processReference(input: {
     const saved = saveAttempt(input.store, input.reference, previous, input.generatedAt, attemptCount, consecutiveFailureCount, addSeconds(input.generatedAt, backoffSeconds), result);
     return { planId: saved.id, ...result };
   }
+}
+
+async function discoverFeedProofs(input: {
+  fetcher: CanaryFetch;
+  reference: PublisherReference;
+  generatedAt: string;
+  signal: AbortSignal;
+  maxFeeds: number;
+}) {
+  const response = await abortable(input.fetcher(input.reference.referenceUrl, {
+    headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.8" },
+    signal: input.signal
+  }), input.signal);
+  const pageUrl = safePublicReference(response.url || input.reference.referenceUrl);
+  if (!response.ok) throw new Error(`Public feed discovery returned HTTP ${response.status}.`);
+  if (!pageUrl) throw new Error("Public feed discovery returned an unsafe response URL.");
+  const body = await abortable(boundedResponseText(response, MAX_RESPONSE_BYTES), input.signal);
+  const direct = feedProof(body, pageUrl, response.headers.get("content-type"), input.generatedAt);
+  return direct ? [direct] : advertisedFeedProofs(body, pageUrl, input.fetcher, input.generatedAt, input.maxFeeds, input.signal);
 }
 
 function retainedPublisherReferences(store: DiscoveryStore) {
@@ -233,18 +259,35 @@ function retainedPublisherReferences(store: DiscoveryStore) {
   return { references: [...byPublisher.values()].sort((left, right) => left.publisherKey.localeCompare(right.publisherKey)), rejectedReferenceCount };
 }
 
-async function advertisedFeedProofs(html: string, pageUrl: string, fetcher: CanaryFetch, generatedAt: string, maxFeeds: number) {
+async function advertisedFeedProofs(html: string, pageUrl: string, fetcher: CanaryFetch, generatedAt: string, maxFeeds: number, signal: AbortSignal) {
   const proofs: FeedProof[] = [];
   for (const url of alternateFeedUrls(html, pageUrl).slice(0, maxFeeds)) {
-    const response = await fetcher(url, { headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml" } });
+    const response = await abortable(fetcher(url, {
+      headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml" },
+      signal
+    }), signal);
     if (!response.ok) continue;
     const effectiveUrl = safePublicReference(response.url || url);
     if (!effectiveUrl) continue;
-    const body = await boundedResponseText(response, MAX_RESPONSE_BYTES);
+    const body = await abortable(boundedResponseText(response, MAX_RESPONSE_BYTES), signal);
     const proof = feedProof(body, effectiveUrl, response.headers.get("content-type"), generatedAt);
     if (proof && !proofs.some((row) => row.feedEndpointKey === proof.feedEndpointKey)) proofs.push(proof);
   }
   return proofs;
+}
+
+async function abortable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) throw signal.reason;
+  let abort!: () => void;
+  const aborted = new Promise<never>((_, reject) => {
+    abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+  });
+  try {
+    return await Promise.race([operation, aborted]);
+  } finally {
+    signal.removeEventListener("abort", abort);
+  }
 }
 
 function feedProof(body: string, feedUrl: string, mediaType: string | null, generatedAt: string): FeedProof | undefined {

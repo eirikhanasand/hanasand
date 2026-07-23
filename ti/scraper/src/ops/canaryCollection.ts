@@ -84,7 +84,7 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
         const sourceFeedDiscovery = await runSourceFeedDiscoveryCycle(options, options.now?.() ?? nowIso());
         const watchlistDiscovery = options.scheduleWatchlistDiscovery === false
           ? { scheduledRunCount: 0, skippedRunCount: 0, reason: "disabled_for_scheduler_lane" }
-          : await scheduleWatchlistDiscoveryRuns(options, options.now?.() ?? nowIso());
+          : await scheduleWatchlistDiscoveryRuns({ ...options, awaitWatchlistDiscoveryExecution: false }, options.now?.() ?? nowIso());
         const result = await runCanaryCollectionCycle(options);
         result.sourceFeedDiscovery = sourceFeedDiscovery;
         result.watchlistDiscovery = watchlistDiscovery;

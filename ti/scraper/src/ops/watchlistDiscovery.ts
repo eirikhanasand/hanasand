@@ -83,7 +83,11 @@ export async function scheduleWatchlistDiscoveryRuns(options: any, generatedAt =
     prepared.push({ runId });
   }
 
-  for (const job of prepared) await options.runExecutor(job.runId);
+  for (const job of prepared) {
+    const execution = Promise.resolve().then(() => options.runExecutor(job.runId));
+    if (options.awaitWatchlistDiscoveryExecution === false) void execution.catch(() => undefined);
+    else await execution;
+  }
   return {
     scheduledRunCount: prepared.length,
     skippedRunCount: Math.max(0, jobs.length - selected.length),

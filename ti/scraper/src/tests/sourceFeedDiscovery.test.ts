@@ -125,6 +125,113 @@ describe("scheduled public feed discovery", () => {
     }
   });
 
+  test("bounds stuck auxiliary work before the canonical run and remains restart-idempotent", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "source-feed-discovery-timeout-"));
+    const snapshotPath = join(directory, "store.json");
+    try {
+      const store = new FileBackedScraperStore({ snapshotPath });
+      usefulCapture(store, "stuck-parent", undefined, "run-stuck-parent", ["https://stuck-publisher.example/report"]);
+      store.saveSource(source({ id: "canonical-source", url: "https://canonical.example/feed.xml", status: "active", metadata: { productionCollection: true } }));
+      store.saveSource(source({
+        id: "watchlist-provider",
+        url: "https://news.example/rss/search?q={query}",
+        status: "active",
+        metadata: { sourceFamily: "public_news_search", productionCollection: true }
+      }));
+      store.saveDwmWatchlist({
+        id: "watch-stuck",
+        tenantId: "tenant-watch",
+        organizationId: "org-watch",
+        name: "Stuck Corp",
+        status: "active",
+        terms: [{ id: "term-stuck", value: "Stuck Corp", kind: "company" }],
+        createdAt: generatedAt,
+        updatedAt: generatedAt
+      });
+      let discoveryFetchCount = 0, watchlistExecutionCount = 0, canonicalFetchCount = 0;
+      const loop = startCanaryCollectionLoop({
+        store,
+        frontier: new FocusedFrontier(),
+        enabled: false,
+        sourceIds: ["canonical-source"],
+        maxSources: 1,
+        maxTasks: 1,
+        sourceFeedDiscoveryMaxReferences: 1,
+        sourceFeedDiscoveryCycleTimeoutMs: 10,
+        sourceFeedDiscoveryFetch: async () => {
+          discoveryFetchCount++;
+          return await new Promise<Response>(() => undefined);
+        },
+        runExecutor: async () => {
+          watchlistExecutionCount++;
+          return await new Promise<never>(() => undefined);
+        },
+        fetch: async (input: string | URL | Request) => {
+          canonicalFetchCount++;
+          return response("<rss><channel></channel></rss>", String(input), "application/rss+xml");
+        },
+        now: () => generatedAt
+      });
+      loop.setEnabled(true);
+      await loop.runOnce();
+
+      expect(loop.getState()).toMatchObject({
+        running: false,
+        cycleCount: 1,
+        successCount: 1,
+        nextCycleAt: expect.any(String),
+        latestResult: {
+          status: "completed",
+          sourceFeedDiscovery: { failedPublisherCount: 1, processedPublisherCount: 1 },
+          watchlistDiscovery: { scheduledRunCount: 1 }
+        }
+      });
+      expect({ discoveryFetchCount, watchlistExecutionCount, canonicalFetchCount }).toEqual({
+        discoveryFetchCount: 1,
+        watchlistExecutionCount: 1,
+        canonicalFetchCount: 1
+      });
+      expect(store.listRuns().filter((run: any) => run.requestId === "req_public_canary")).toContainEqual(
+        expect.objectContaining({ tenantId: undefined, status: "completed", completedTaskCount: 1 })
+      );
+      const discoveryPlan = store.listPlans().find((plan: any) => plan.requestId === "req_source_feed_discovery");
+      expect(discoveryPlan).toMatchObject({
+        status: "failed",
+        attemptCount: 1,
+        consecutiveFailureCount: 1,
+        nextEligibleAt: expect.any(String),
+        result: { outcome: "fetch_failed", error: "Public feed discovery cycle timed out." },
+        audit: [{ at: generatedAt, outcome: "fetch_failed" }]
+      });
+      expect(store.listPlans().filter((plan: any) => plan.request?.requesterId === "scheduled-watchlist-discovery")).toHaveLength(1);
+      await loop.stop();
+
+      const restarted = new FileBackedScraperStore({ snapshotPath });
+      const restartedLoop = startCanaryCollectionLoop({
+        store: restarted,
+        frontier: new FocusedFrontier(),
+        enabled: false,
+        sourceIds: ["canonical-source"],
+        maxSources: 1,
+        maxTasks: 1,
+        sourceFeedDiscoveryFetch: async () => { discoveryFetchCount++; throw new Error("failed discovery plan must back off"); },
+        runExecutor: async () => { watchlistExecutionCount++; throw new Error("durable watchlist plan must not duplicate"); },
+        fetch: async () => response("<rss><channel></channel></rss>", "https://canonical.example/feed.xml", "application/rss+xml"),
+        now: () => "2026-07-23T12:01:00.000Z"
+      });
+      restartedLoop.setEnabled(true);
+      await restartedLoop.runOnce();
+      await restartedLoop.stop();
+
+      expect({ discoveryFetchCount, watchlistExecutionCount }).toEqual({ discoveryFetchCount: 1, watchlistExecutionCount: 1 });
+      expect(restarted.listPlans().filter((plan: any) => plan.requestId === "req_source_feed_discovery")).toHaveLength(1);
+      expect(restarted.listPlans().filter((plan: any) => plan.request?.requesterId === "scheduled-watchlist-discovery")).toHaveLength(1);
+      expect(restarted.getPlan(discoveryPlan.id)).toMatchObject({ attemptCount: 1, audit: [{ at: generatedAt, outcome: "fetch_failed" }] });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test("keeps discovery candidate-only until two useful retained collection cycles", async () => {
     const store = new InMemoryScraperStore();
     usefulCapture(store, "parent", undefined, "run-parent", ["https://candidate.example/feed.xml"]);
