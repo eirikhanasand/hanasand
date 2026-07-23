@@ -53,25 +53,32 @@ Acceptance:
 
 ### 2. Make Source Accounting Complete And Truthful
 
-Baseline: 1,473 registered sources, 795 active, 357 capture-producing, and nine with `last_seen_at`.
+Historical baseline: 1,473 registered sources, 795 active, 357 capture-producing, and nine with `last_seen_at`.
+
+Required minimum operating baseline: at least 5,000 qualifying clear-web feeds, 1,000 qualifying lawful dark-web/Tor feeds, and 100 qualifying public Telegram feeds, for at least 6,100 unique active intelligence-producing feeds. These are minimums, not completion caps; automatic discovery and validation must continue beyond them toward 10,000–100,000+ feeds where legitimate, relevant, useful feeds actually exist.
 
 Required implementation:
 
 - Audit every registered source for canonical identity, duplication, current reachability, legal mode, collection method, and production caller.
 - Remove registry padding and retire obsolete, duplicate, fake, superseded, or permanently dead sources. The target is every retained source genuinely monitored, not preserving an inflated number.
+- Count only active feeds that publish or update operational intelligence. Static legacy documentation, historical reference pages, generic homepages, search-result wrappers, copied mirrors, source-description records, and registration-only entries do not satisfy the baseline.
 - Schedule bounded automatic health checks for every retained source, including sources that currently yield no intelligence.
 - Persist `last_checked_at` for every attempt, `last_success_at` for successful retrieval, and `last_seen_at` only for a real observed source response/content event. Never update `last_seen_at` merely to make coverage look complete.
 - Feed every check into source health and expose failure class, retry/backoff, freshness, useful yield, and last real evidence without leaking restricted locators.
 - Use Hanasand AI automatically to review source relevance and parser output after collection; AI review cannot manufacture source success or evidence.
+- Discover, validate, schedule, and retire feeds automatically with bounded concurrency, per-source cadence, backpressure, retry, and resource accounting suitable for 6,100+ feeds without starving processing, review, alerts, or API traffic.
 
 Acceptance:
 
 - Every retained source has a recent scheduled check or an explicit persisted bounded backoff/failure state.
+- Production has at least 5,000 qualifying clear-web feeds, 1,000 qualifying lawful dark-web/Tor feeds, and 100 qualifying public Telegram feeds; no source is counted in more than one baseline slot.
+- Every source counted toward the baseline has an executable production collector, regularly updated `last_checked_at`, truthful last-content/update time, and sustained useful retained intelligence over multiple scheduled cycles within its documented activity window.
 - Active, checked, successful, useful, capture-producing, and recently seen counts reconcile across PostgreSQL, API, scheduler, and UI.
 - No source is marked active when it has no executable production collection path.
+- Duplicate, bad, irrelevant, inactive, legacy-documentation-style, copied, unsafe, or non-producing sources are excluded from qualifying counts even if registered or reachable.
 - A restart resumes monitoring without duplicate schedules, lost health history, or timestamp fabrication.
 
-### 3. Establish Strong, Current Telegram And Tor Coverage
+### 3. Establish Large, Current Telegram And Dark-Web Coverage
 
 Required implementation:
 
@@ -79,14 +86,15 @@ Required implementation:
 - Collect only public Telegram content and lawful metadata-only Tor evidence. Never retain stolen content, credentials, raw leak bodies, private invitations, or restricted locators in public output.
 - Diversify sources across APT reporting, CERT/government reporting, malware/ransomware research, actor announcements, victim publications, and relevant regional/language coverage.
 - Automatically reverify sources, retire dead or hijacked channels/services, and measure useful capture yield, actor/victim coverage, freshness, parser quality, duplicates, and failure rates.
-- Expand until a documented source-saturation review shows that adding newly discovered verified sources no longer materially changes covered actors, regions, languages, and source families. Raw source count alone is not strength.
+- Maintain at least 100 qualifying public Telegram feeds and 1,000 qualifying lawful dark-web/Tor feeds, all independently verified, regularly checked, and sustainably producing useful retained intelligence. One actor mirrored across copied channels/services counts once unless each feed contributes independently useful evidence.
+- Continue automatic discovery beyond the minimums until a documented source-saturation review shows that newly discovered verified feeds no longer materially change covered actors, regions, languages, and source families. Raw source count alone is not strength.
 
 Acceptance:
 
-- Production contains many independently verified, currently reachable Telegram and Tor sources with sustained useful captures across multiple scheduled cycles.
+- Production contains at least 100 independently verified public Telegram feeds and 1,000 independently verified lawful dark-web/Tor feeds with sustained useful captures across multiple scheduled cycles.
 - Random positive and negative samples pass automated relevance, redaction, identity, and provenance checks.
-- Dead, fake, copied, unverified, or old sources do not count and are not active.
-- The live UI/API reports real source and capture counts with timestamps and no hidden fixture records.
+- Dead, fake, copied, unverified, inactive, irrelevant, legacy-documentation-style, or non-producing sources do not count and are not active.
+- The live UI/API lists every qualifying feed with source family, last checked time, last real content/update time, last useful intelligence time, current health/backoff, and retained capture/evidence counts, without exposing restricted locators.
 
 ### 4. Implement Fully Automatic Hanasand AI Review And Actor Attribution
 
