@@ -3,6 +3,11 @@
 !ti/
 !ti/scraper/
 !ti/scraper/**
+!api/
+!api/src/
+!api/src/utils/
+!api/src/utils/dwm/
+!api/src/utils/dwm/customerOutputSafety.ts
 !ops/
 !ops/threat-intel-backup/
 !ops/threat-intel-backup/run-threat-intel-backup.sh

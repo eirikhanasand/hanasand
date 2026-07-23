@@ -5,6 +5,7 @@ import { mapAttackTechniqueCandidates } from "./attack.ts";
 import { buildRelationshipGraph } from "./relationships.ts";
 import { attackObject, bundle, domainObject, evidenceObject, identityObject, indicatorObject, merge, observedObject, relationshipObject, reportObject, withCaptureProvenance } from "./stixObjects.ts";
 import { kindForEntity, stixId } from "./stixIds.ts";
+import { sanitizeDwmCustomerValue } from "../product/dwmCustomerDisplay.ts";
 
 export interface EvidenceBackedStixBundleInput {
   captures: RawCapture[];
@@ -40,7 +41,7 @@ export function exportPipelineResultToStixBundle(result: PipelineResult, options
     }
   }
   if (result.incident) objects.set(stixId("report", result.incident.id), reportObject(result.incident.title, result.incident.summary, [...objects.keys()].filter((id) => id !== identity.id), options.generatedAt, result.capture.provenance ? [result.capture.provenance] : []));
-  return bundle(`${options.producerName}:${options.generatedAt}:${result.capture.id}`, objects);
+  return sanitizeDwmCustomerValue(bundle(`${options.producerName}:${options.generatedAt}:${result.capture.id}`, objects));
 }
 
 export function exportEvidenceBackedStixBundle(input: EvidenceBackedStixBundleInput): StixBundle {
@@ -51,5 +52,5 @@ export function exportEvidenceBackedStixBundle(input: EvidenceBackedStixBundleIn
     if (text && input.options.includeDerivedIntelligence === true) merge(objects, withCaptureProvenance(exportPipelineResultToStixBundle(processCollectedItem({ sourceId: capture.sourceId, taskId: capture.taskId, url: capture.url, collectedAt: capture.collectedAt, title: String(capture.metadata?.title ?? "Captured evidence"), rawText: text, contentHash: capture.contentHash, links: [], metadata: capture.metadata ?? {}, sensitive: capture.sensitive }), input.options), capture));
     if (!text || input.options.includeMetadataOnlyCaptures !== false) objects.set(stixId("x-ti-evidence", capture.id), evidenceObject(capture, input.options.generatedAt));
   }
-  return bundle(`${input.options.producerName}:${input.options.generatedAt}:${input.options.bundleKey ?? "evidence"}`, objects);
+  return sanitizeDwmCustomerValue(bundle(`${input.options.producerName}:${input.options.generatedAt}:${input.options.bundleKey ?? "evidence"}`, objects));
 }

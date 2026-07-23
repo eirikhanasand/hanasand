@@ -33,6 +33,7 @@ export function validateIndicator(object: StixObject, path: string, issues: Stix
 }
 
 export function validateReport(object: StixObject, path: string, objectIds: Set<string>, issues: StixValidationIssue[]): void {
+  if (!object.published || !ISO_RE.test(object.published)) issue(issues, `${path}.published`, "report published must be an ISO timestamp");
   if (!Array.isArray(object.object_refs) || object.object_refs.length === 0) return issue(issues, `${path}.object_refs`, "report must reference exported objects");
   object.object_refs.forEach((ref, index) => {
     if (!objectIds.has(ref)) issue(issues, `${path}.object_refs.${index}`, "report object_ref must point to an object in the bundle");

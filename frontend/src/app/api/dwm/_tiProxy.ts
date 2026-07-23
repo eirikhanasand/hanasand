@@ -47,9 +47,13 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
         const target = new URL(path, base)
         for (const [key, value] of request.nextUrl.searchParams.entries()) {
             if (key === 'tenantId' || key === 'organizationId' || key === 'orgId') continue
-            target.searchParams.set(key, value)
+            target.searchParams.append(key, value)
         }
         target.searchParams.set('tenantId', storageScope.tenantId)
+        if (storageScope.organizationId) {
+            target.searchParams.set('organizationId', storageScope.organizationId)
+            target.searchParams.set('orgId', storageScope.organizationId)
+        }
 
         const init: RequestInit = {
             method,
@@ -57,6 +61,7 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
             headers: {
                 'content-type': 'application/json',
                 'x-tenant-id': storageScope.tenantId,
+                ...(storageScope.organizationId ? { 'x-organization-id': storageScope.organizationId } : {}),
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 ...(id ? { id } : {}),
                 ...(actorId ? { 'x-actor-id': actorId, 'x-user-id': actorId } : {}),
@@ -126,8 +131,11 @@ export function withDwmRequestScope(body: Record<string, unknown>, scope: Pick<D
     return scoped
 }
 
-export function dwmStorageScope(scope: Pick<DwmRequestScope, 'tenantId'>) {
-    return { tenantId: scope.tenantId }
+export function dwmStorageScope(scope: Pick<DwmRequestScope, 'tenantId' | 'organizationId'>) {
+    return {
+        tenantId: scope.tenantId,
+        ...(scope.organizationId ? { organizationId: scope.organizationId } : {}),
+    }
 }
 
 async function organizationScopeError(organizationId: string, token: string, id: string, mutation: boolean) {

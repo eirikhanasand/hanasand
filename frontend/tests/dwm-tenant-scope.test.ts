@@ -24,7 +24,7 @@ describe('DWM tenant scope', () => {
         })
 
         assert.deepEqual(scope, { tenantId: 'org-456', organizationId: 'org-456' })
-        assert.deepEqual(dwmStorageScope(scope), { tenantId: 'org-456' })
+        assert.deepEqual(dwmStorageScope(scope), { tenantId: 'org-456', organizationId: 'org-456' })
     })
 
     test('rejects conflicting organization scopes', () => {
@@ -52,8 +52,20 @@ describe('DWM tenant scope', () => {
         assert.deepEqual(scope, { tenantId: 'org-456', organizationId: 'org-456' })
         assert.deepEqual(withDwmRequestScope({ items: [{ tenantId: 'another-tenant', organizationId: 'org-456', actor: 'Actor' }] }, dwmStorageScope(scope)), {
             tenantId: 'org-456',
-            items: [{ tenantId: 'org-456', actor: 'Actor' }],
+            organizationId: 'org-456',
+            orgId: 'org-456',
+            items: [{ tenantId: 'org-456', organizationId: 'org-456', orgId: 'org-456', actor: 'Actor' }],
         })
+    })
+
+    test('forwards explicit organization scope and preserves repeated evidence selections', () => {
+        const proxy = readFileSync(new URL('../src/app/api/dwm/_tiProxy.ts', import.meta.url), 'utf8')
+
+        assert.match(proxy, /target\.searchParams\.append\(key, value\)/)
+        assert.match(proxy, /target\.searchParams\.set\('organizationId', storageScope\.organizationId\)/)
+        assert.match(proxy, /target\.searchParams\.set\('orgId', storageScope\.organizationId\)/)
+        assert.match(proxy, /'x-organization-id': storageScope\.organizationId/)
+        assert.doesNotMatch(proxy, /target\.searchParams\.set\(key, value\)/)
     })
 
     test('keeps organization mutations active and role scoped', () => {

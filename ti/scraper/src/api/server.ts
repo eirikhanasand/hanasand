@@ -350,6 +350,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
 function requiresAuthenticatedRequest(pathname: string): boolean {
   return pathname === "/v1/intel/runs"
     || pathname.startsWith("/v1/intel/runs/")
+    || pathname === "/v1/exports/stix"
     || pathname === "/v1/cases"
     || pathname.startsWith("/v1/cases/")
     || pathname.startsWith("/v1/dwm/")

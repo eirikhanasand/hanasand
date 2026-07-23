@@ -1,5 +1,6 @@
 // @ts-nocheck
 import type { RawCapture, StixBundle, StixExportOptions, StixObject } from "../types.ts";
+import { sanitizeDwmCustomerText } from "../product/dwmCustomerDisplay.ts";
 import { indicatorPattern, stixConfidence, stixId } from "./stixIds.ts";
 
 export function identityObject(options: StixExportOptions): StixObject {
@@ -27,11 +28,11 @@ export function relationshipObject(type: string, source_ref: string, target_ref:
 }
 
 export function reportObject(name: string, description: string, refs: string[], at: string, provenance: any[]): StixObject {
-  return { type: "report", spec_version: "2.1", id: stixId("report", name), created: at, modified: at, name, description, report_types: ["threat-report"], object_refs: refs, x_ti_provenance: provenance } as any;
+  return { type: "report", spec_version: "2.1", id: stixId("report", name), created: at, modified: at, published: at, name, description, report_types: ["threat-report"], object_refs: refs, x_ti_provenance: provenance } as any;
 }
 
 export function evidenceObject(capture: RawCapture, at: string): StixObject {
-  return { type: "x-ti-evidence", spec_version: "2.1", id: stixId("x-ti-evidence", capture.id), created: at, modified: at, name: String(capture.metadata?.title ?? capture.id), x_ti_extractable: typeof capture.body === "string", x_ti_capture_id: capture.id, x_ti_source_id: capture.sourceId, x_ti_content_hash: capture.contentHash };
+  return { type: "x-ti-evidence", spec_version: "2.1", id: stixId("x-ti-evidence", capture.id), created: at, modified: at, name: sanitizeDwmCustomerText(capture.metadata?.title, capture.id, 180), x_ti_extractable: typeof capture.body === "string", x_ti_capture_id: capture.id, x_ti_source_id: capture.sourceId, x_ti_content_hash: capture.contentHash };
 }
 
 export function bundle(key: string, objects: Map<string, StixObject>): StixBundle {

@@ -2,6 +2,7 @@ import type { CollectionPlan, CollectionRun, IntelligenceRequest } from "../type
 import { hashContent, nowIso, stableId } from "../utils.ts";
 import { createCollectionPlan } from "../planner/intelligencePlanner.ts";
 import { exportEvidenceBackedStixBundle } from "../export/stix.ts";
+import { validateStixBundle } from "../export/stixValidation.ts";
 import { error, json, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { toSafeCaptureDto } from "./captureDtos.ts";
@@ -75,8 +76,11 @@ export async function exportRunStix(request: Request, options: ApiServerOptions)
   const runCaptureIds = new Set(run.captureIds ?? []);
   const captures = options.store.listCaptures().filter((capture: any) => (!capture.tenantId || capture.tenantId === scope.tenantId) && (runCaptureIds.has(capture.id) || captureRunId(capture) === run.id));
   const bundle = exportEvidenceBackedStixBundle({ captures, options: { producerName: input.producerName ?? "ti-scraper", generatedAt: input.generatedAt ?? nowIso(), bundleKey: run.id, includeDerivedIntelligence: false } });
+  const standardsValidation = validateStixBundle(bundle);
+  if (!standardsValidation.valid) return error("invalid_stix_report", "Generated bundle did not pass STIX 2.1 validation", 500);
   return json({
     bundle,
+    standardsValidation: { standard: "STIX 2.1", valid: true, issues: [] },
     exportPolicy: {
       evidenceOnly: true,
       derivedIntelligenceIncluded: false,

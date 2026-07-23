@@ -54,6 +54,17 @@ export async function queryOnce(query: string, params?: SQLParamType) {
     }
 }
 
+export async function withDatabaseAdvisoryLock<T>(key: string, work: () => Promise<T>): Promise<T> {
+    const client = await pool.connect()
+    try {
+        await client.query('SELECT pg_advisory_lock(hashtextextended($1, 0))', [key])
+        return await work()
+    } finally {
+        await client.query('SELECT pg_advisory_unlock(hashtextextended($1, 0))', [key]).catch(() => {})
+        client.release()
+    }
+}
+
 function isTransientDatabaseError(error: unknown) {
     const err = error as PgError
     const message = err?.message?.toLowerCase() || ''

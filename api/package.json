@@ -40,6 +40,7 @@
     "smoke:automations": "bun scripts/guard-production-smoke.mjs && API_BASE=${API_BASE:-http://127.0.0.1:8080/api} bun scripts/smoke-automations.mjs",
     "smoke:dwm-webhook-contract": "bun scripts/guard-production-smoke.mjs && bun scripts/smoke-dwm-webhook-contract.ts",
     "smoke:dwm-webhooks": "bun scripts/guard-production-smoke.mjs && bun scripts/smoke-dwm-webhooks.ts",
+    "smoke:dwm-report-lineage-postgres": "bun scripts/smoke-dwm-report-lineage-postgres.ts",
     "check:scheduled-job-registry": "bun scripts/check-scheduled-job-registry.ts",
     "smoke:scheduled-job-registry": "bun scripts/smoke-scheduled-job-registry.ts",
     "smoke:onion-session": "bun scripts/smoke-onion-session-broker.ts",

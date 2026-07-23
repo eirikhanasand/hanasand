@@ -1,8 +1,9 @@
 import crypto from 'node:crypto'
+import { canonicalJson, containsUnsafeCustomerOutboundText, sanitizeCustomerOutboundText } from './customerOutputSafety.ts'
 import { lookup } from 'node:dns/promises'
 import { request as httpsRequest } from 'node:https'
 import { isIP, type LookupFunction } from 'node:net'
-import run from '#db'
+import run, { withDatabaseAdvisoryLock } from '#db'
 import { organizationVisibilityDecision, type OrganizationRole, type OrganizationVisibilityDecisionInput } from '#utils/organizations.ts'
 
 export type DwmWebhookKind = 'webhook' | 'discord'
@@ -117,10 +118,137 @@ export type DwmAlertNotificationInput = {
     caseUrl?: unknown
     evidenceCount?: unknown
     sourceFamily?: unknown
+    deliveryId?: unknown
     alert?: Record<string, unknown>
     dryRun?: unknown
     dry_run?: unknown
     live?: unknown
+}
+
+const MAX_THIRD_PARTY_REPORT_BYTES = 256_000
+const MAX_THIRD_PARTY_REPORT_EVIDENCE = 25
+const MAX_DWM_WEBHOOK_DELIVERY_ATTEMPTS = 5
+
+export function validateOutboundThirdPartyReport(value: unknown, binding: {
+    organizationId?: unknown
+    alertId?: unknown
+    dedupeKey?: unknown
+} = {}): {
+    valid: boolean
+    error?: string
+    report?: Record<string, unknown>
+} {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return { valid: false, error: 'report must be an object.' }
+    const report = value as Record<string, unknown>
+    let encoded: string
+    try {
+        encoded = JSON.stringify(report)
+    } catch {
+        return { valid: false, error: 'report must be JSON serializable.' }
+    }
+    if (Buffer.byteLength(encoded, 'utf8') > MAX_THIRD_PARTY_REPORT_BYTES) return { valid: false, error: 'report exceeds the 256000-byte delivery limit.' }
+    if (containsUnsafeReportField(report)) return { valid: false, error: 'report contains raw content, a source locator, or another unsafe field.' }
+    if (containsUnsafeReportText(report)) return { valid: false, error: 'report contains a restricted locator, contact, or credential.' }
+
+    const policy = recordOrEmpty(report.reportPolicy)
+    const format = clean(policy.format)
+    const evidenceIds = cleanList(policy.evidenceIds)
+    const evidenceCount = Number(policy.evidenceCount)
+    const exportChecksum = clean(report.exportChecksum)
+    if (clean(policy.direction) !== 'outbound_third_party') return { valid: false, error: 'reportPolicy.direction must be outbound_third_party.' }
+    if (format !== 'stix-2.1' && format !== 'hanasand-json') return { valid: false, error: 'reportPolicy.format must be stix-2.1 or hanasand-json.' }
+    if (!clean(policy.caseId) || !clean(policy.alertId) || !exportChecksum) return { valid: false, error: 'report caseId, alertId, and exportChecksum are required.' }
+    if (clean(policy.exportChecksum) !== exportChecksum || computeOutboundThirdPartyReportChecksum(report) !== exportChecksum) {
+        return { valid: false, error: 'report checksum does not match the canonical bounded report content.' }
+    }
+    if (binding.organizationId !== undefined && clean(binding.organizationId) !== clean(policy.organizationId)) {
+        return { valid: false, error: 'report organization does not match delivery scope.' }
+    }
+    if (binding.alertId !== undefined && clean(binding.alertId) !== clean(policy.alertId)) {
+        return { valid: false, error: 'report alertId does not match the delivered alert.' }
+    }
+    if (binding.dedupeKey !== undefined && clean(binding.dedupeKey) !== clean(report.exportChecksum)) {
+        return { valid: false, error: 'report delivery dedupeKey must equal exportChecksum.' }
+    }
+    if (!Number.isInteger(evidenceCount) || evidenceCount < 1 || evidenceCount > MAX_THIRD_PARTY_REPORT_EVIDENCE) {
+        return { valid: false, error: 'report evidenceCount must be between 1 and 25.' }
+    }
+    if (evidenceIds.length !== evidenceCount || new Set(evidenceIds).size !== evidenceIds.length) {
+        return { valid: false, error: 'report evidenceIds must be unique and match evidenceCount.' }
+    }
+    if (evidenceIds.some((id, index) => index > 0 && evidenceIds[index - 1] > id)) {
+        return { valid: false, error: 'report evidenceIds must use canonical order.' }
+    }
+
+    if (format === 'stix-2.1') {
+        const validation = recordOrEmpty(report.standardsValidation)
+        const bundle = recordOrEmpty(report.bundle)
+        const objects = Array.isArray(bundle.objects) ? bundle.objects : []
+        const evidenceObjects = objects.filter(item => recordOrEmpty(item).type === 'x-ti-evidence')
+        const reports = objects.filter(item => recordOrEmpty(item).type === 'report')
+        const identities = objects.filter(item => recordOrEmpty(item).type === 'identity')
+        if (validation.valid !== true || clean(validation.standard) !== 'STIX 2.1') return { valid: false, error: 'STIX standards validation proof is required.' }
+        if (bundle.type !== 'bundle' || !/^bundle--[0-9a-f-]{36}$/.test(clean(bundle.id)) || objects.length !== evidenceCount + 2) return { valid: false, error: 'STIX bundle is missing or does not match the bounded object count.' }
+        if (evidenceObjects.length !== evidenceCount || reports.length !== 1 || identities.length !== 1) return { valid: false, error: 'STIX bundle identity, evidence, and report objects must match the selected evidence.' }
+        if (objects.some(item => !['identity', 'x-ti-evidence', 'report'].includes(clean(recordOrEmpty(item).type)) || recordOrEmpty(item).spec_version !== '2.1')) {
+            return { valid: false, error: 'STIX bundle contains an unsupported object or spec version.' }
+        }
+        const evidenceObjectIds = new Set(evidenceObjects.map(item => clean(recordOrEmpty(item).id)))
+        const reportObject = recordOrEmpty(reports[0])
+        const objectRefs = cleanList(reportObject.object_refs)
+        if (!clean(reportObject.published) || Number.isNaN(Date.parse(clean(reportObject.published)))) {
+            return { valid: false, error: 'STIX report published must be a valid timestamp.' }
+        }
+        if (evidenceObjectIds.has('') || objectRefs.length !== evidenceObjectIds.size || objectRefs.some(id => !evidenceObjectIds.has(id))) {
+            return { valid: false, error: 'STIX report object_refs must reference every selected evidence object exactly once.' }
+        }
+        if (evidenceObjects.some(item => {
+            const evidence = recordOrEmpty(item)
+            return !clean(evidence.x_ti_capture_id) || !clean(evidence.x_ti_source_id) || !clean(evidence.x_ti_content_hash)
+        })) return { valid: false, error: 'STIX evidence objects require capture, source, and content-hash provenance.' }
+    } else {
+        if (report.schemaVersion !== 'analyst.case_export.v1') return { valid: false, error: 'JSON report must use analyst.case_export.v1.' }
+        if (!Array.isArray(report.evidence) || report.evidence.length !== evidenceCount) return { valid: false, error: 'JSON report evidence must match the selected evidence.' }
+    }
+    return { valid: true, report }
+}
+
+function containsUnsafeReportField(value: unknown): boolean {
+    if (Array.isArray(value)) return value.some(containsUnsafeReportField)
+    if (!value || typeof value !== 'object') return false
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+        if (/^(?:raw|body|url|sourceUrl|targetUrl|webhookUrl|authorization|cookie|password|token|secret)$/i.test(key)) return true
+        if (containsUnsafeReportField(item)) return true
+    }
+    return false
+}
+
+function containsUnsafeReportText(value: unknown): boolean {
+    return containsUnsafeCustomerOutboundText(value)
+}
+
+export function computeOutboundThirdPartyReportChecksum(value: Record<string, unknown>) {
+    const canonical = { ...value }
+    delete canonical.exportChecksum
+    const reportPolicy = { ...recordOrEmpty(canonical.reportPolicy) }
+    delete reportPolicy.exportChecksum
+    return `case_report_${crypto.createHash('sha256').update(canonicalJson({ ...canonical, reportPolicy })).digest('hex')}`
+}
+
+function outboundReportAuditMetadata(alert: Record<string, unknown>) {
+    if (alert.report === undefined) return {}
+    const validation = validateOutboundThirdPartyReport(alert.report)
+    if (!validation.valid || !validation.report) return { reportValidation: 'invalid' }
+    const policy = recordOrEmpty(validation.report.reportPolicy)
+    return {
+        reportDirection: clean(policy.direction),
+        reportFormat: clean(policy.format),
+        reportCaseId: clean(policy.caseId),
+        reportAlertId: clean(policy.alertId),
+        reportEvidenceCount: Number(policy.evidenceCount),
+        reportExportChecksum: clean(validation.report.exportChecksum),
+        reportValidation: 'valid'
+    }
 }
 
 export type DwmAlertWebhookTriggerOptions = {
@@ -3859,6 +3987,9 @@ export function planDwmWebhookDeliveryRetry({
     if (responseStatus && responseStatus >= 400 && responseStatus < 500 && responseStatus !== 408 && responseStatus !== 429) {
         return { retryable: false, nextRetryAt: null, errorClass, reason: 'non_retryable_http_status' }
     }
+    if (attemptCount >= MAX_DWM_WEBHOOK_DELIVERY_ATTEMPTS) {
+        return { retryable: false, nextRetryAt: null, errorClass, reason: 'retry_limit_reached' }
+    }
 
     const base = attemptedAt ? new Date(attemptedAt) : now
     const retryMs = retryDelayMs(attemptCount)
@@ -6806,7 +6937,7 @@ export async function testDwmWebhookDestination(ownerId: string, id: string, inp
     const destination = await loadDwmWebhookDestination(ownerId, id)
     if (!destination || destination.status === 'archived') return null
 
-    const delivery = await deliverToDwmWebhookDestination({
+    const delivery = await deliverToDwmWebhookDestinationWithLineageGuard({
         ownerId,
         destination,
         eventType: 'dwm.alert.test',
@@ -6819,7 +6950,11 @@ export async function testDwmWebhookDestination(ownerId: string, id: string, inp
     return delivery
 }
 
-export async function deliverDwmAlertNotification(ownerId: string, input: DwmAlertNotificationInput) {
+export async function deliverDwmAlertNotification(
+    ownerId: string,
+    input: DwmAlertNotificationInput,
+    sender: (endpoint: string, body: string) => Promise<{ status: number, body: string }> = postPublicWebhook
+) {
     const dispatch = buildDwmAlertWebhookDispatchPlan({
         ownerId,
         input,
@@ -6864,22 +6999,7 @@ export async function deliverDwmAlertNotification(ownerId: string, input: DwmAle
         }))
     }
     for (const destination of plan.selectedDestinations) {
-        const normalizedAlert = normalizeAlert(plan.alert)
-        const idempotencyKey = buildIdempotencyKey(plan.eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
-        const deliveredDuplicate = live && !dryRun
-            ? await findDeliveredDwmWebhookDelivery(ownerId, destination.org_id, destination.id, idempotencyKey)
-            : null
-        if (deliveredDuplicate) {
-            deliveries.push(await recordSkippedDuplicateDwmWebhookDelivery({
-                ownerId,
-                destination: destination as DwmWebhookDestinationRow,
-                eventType: plan.eventType,
-                alert: plan.alert,
-                priorDelivery: deliveredDuplicate,
-            }))
-            continue
-        }
-        deliveries.push(await deliverToDwmWebhookDestination({
+        deliveries.push(await deliverToDwmWebhookDestinationWithLineageGuard({
             ownerId,
             destination: destination as DwmWebhookDestinationRow,
             eventType: plan.eventType,
@@ -6887,10 +7007,193 @@ export async function deliverDwmAlertNotification(ownerId: string, input: DwmAle
             dryRun,
             live,
             markTested: false,
+            sender,
         }))
     }
 
     return deliveries
+}
+
+export async function retryDwmWebhookDelivery(
+    ownerId: string,
+    orgId: string,
+    deliveryId: string,
+    sender: (endpoint: string, body: string) => Promise<{ status: number, body: string }> = postPublicWebhook
+) {
+    const priorResult = await run(`
+        SELECT *
+        FROM dwm_webhook_deliveries
+        WHERE id = $1
+          AND org_id = $2
+          AND (
+              owner_id = $3
+              OR org_id IN (
+                  SELECT organization_id
+                  FROM organization_members
+                  WHERE user_id = $3
+                    AND status = 'active'
+              )
+          )
+        LIMIT 1
+    `, [deliveryId, orgId, ownerId])
+    const prior = (priorResult.rows as DwmWebhookDeliveryRow[])[0]
+    if (!prior) return { ok: false as const, status: 404, code: 'delivery_not_found', error: 'Delivery not found for this organization.' }
+    if (prior.status !== 'failed' || prior.dry_run) return { ok: false as const, status: 409, code: 'delivery_retry_not_eligible', error: 'Only a failed live delivery can be retried.' }
+    if (!prior.destination_id) return { ok: false as const, status: 409, code: 'delivery_destination_missing', error: 'The persisted delivery has no destination.' }
+
+    const destination = await loadDwmWebhookDestination(ownerId, prior.destination_id)
+    if (!destination || destination.org_id !== orgId || destination.status !== 'active') {
+        return { ok: false as const, status: 409, code: 'delivery_destination_unavailable', error: 'The persisted delivery destination is unavailable.' }
+    }
+    if (process.env.DWM_WEBHOOK_LIVE_DELIVERY !== 'true') {
+        return { ok: false as const, status: 503, code: 'live_delivery_disabled', error: 'Live webhook delivery is disabled.' }
+    }
+    return withDatabaseAdvisoryLock(`dwm-webhook-delivery:${prior.idempotency_key}`, async () => {
+        const lineageOwnerId = prior.owner_id
+        const attemptCount = await countDwmWebhookDeliveryAttempts(orgId, prior.destination_id, prior.idempotency_key)
+        if (attemptCount >= MAX_DWM_WEBHOOK_DELIVERY_ATTEMPTS) {
+            return { ok: false as const, status: 409, code: 'delivery_retry_limit', error: `Delivery retry is limited to ${MAX_DWM_WEBHOOK_DELIVERY_ATTEMPTS} total attempts.` }
+        }
+        const priorRetry = planDwmWebhookDeliveryRetry({
+            status: prior.status,
+            dryRun: prior.dry_run,
+            responseStatus: prior.response_status,
+            error: prior.error,
+            attemptedAt: prior.attempted_at,
+            attemptCount: attemptCount || 1,
+        })
+        if (!priorRetry.retryable) return { ok: false as const, status: 409, code: 'delivery_retry_not_eligible', error: 'The persisted delivery failure is not retryable.' }
+
+        const delivered = await findDeliveredDwmWebhookDelivery(orgId, destination.id, prior.idempotency_key)
+        if (delivered) return { ok: false as const, status: 409, code: 'delivery_already_delivered', error: 'This exact idempotency lineage already has a delivered attempt.' }
+
+        const payload = prior.payload
+        const persistedReport = reportFromPersistedPayload(payload)
+        if (persistedReport) {
+            const checksum = clean(persistedReport.exportChecksum)
+            const validation = validateOutboundThirdPartyReport(persistedReport, {
+                organizationId: orgId,
+                alertId: prior.alert_id,
+                dedupeKey: checksum,
+            })
+            const expectedIdempotencyKey = buildIdempotencyKey(prior.event_type, orgId, destination.id, checksum)
+            if (!validation.valid || prior.idempotency_key !== expectedIdempotencyKey) {
+                return { ok: false as const, status: 409, code: 'persisted_report_invalid', error: validation.error || 'The persisted report idempotency lineage is invalid.' }
+            }
+        }
+
+        const attemptedAt = new Date().toISOString()
+        const payloadBody = JSON.stringify(payload)
+        const payloadHash = hashValue('payload', payloadBody)
+        let responseStatus: number | null = null
+        let responseBody: string | null = null
+        let error: string | null
+        let status: DwmWebhookDeliveryRow['status'] = 'failed'
+        try {
+            const endpoint = decryptWebhookSecret(destination.endpoint_encrypted)
+            const response = await sender(endpoint, payloadBody)
+            responseStatus = response.status
+            responseBody = sanitizeDwmWebhookDeliveryDiagnostic(response.body)
+            status = response.status >= 200 && response.status < 300 ? 'delivered' : 'failed'
+            error = status === 'delivered' ? null : sanitizeDwmWebhookDeliveryDiagnostic(`Webhook returned HTTP ${response.status}.`)
+        } catch (sendError) {
+            error = sanitizeDwmWebhookDeliveryDiagnostic(sendError instanceof Error ? sendError.message : String(sendError))
+        }
+        const completedAt = new Date().toISOString()
+        const nextAttemptCount = attemptCount + 1
+        const retryPlan = planDwmWebhookDeliveryRetry({ status, dryRun: false, responseStatus, error, attemptedAt, attemptCount: nextAttemptCount })
+        const nextId = crypto.randomUUID()
+        const result = await run(`
+        INSERT INTO dwm_webhook_deliveries (
+            id, destination_id, owner_id, org_id, alert_id, event_type, status, dry_run,
+            endpoint_hint, endpoint_hash, payload_hash, payload, response_status, response_body,
+            error, error_class, attempt_count, next_retry_at, idempotency_key, watchlist_id,
+            watchlist_name, route, case_path, attempted_at, completed_at, delivered_at
+        )
+        VALUES (
+            $1, $2, $3, $4, $5, $6, $7, FALSE,
+            $8, $9, $10, $11::JSONB, $12, $13,
+            $14, $15, $16, $17, $18, $19,
+            $20, $21, $22, $23, $24, $25
+        )
+        RETURNING *
+    `, [
+            nextId,
+            destination.id,
+            lineageOwnerId,
+            orgId,
+            prior.alert_id,
+            prior.event_type,
+            status,
+            prior.endpoint_hint,
+            prior.endpoint_hash,
+            payloadHash,
+            JSON.stringify(payload),
+            responseStatus,
+            responseBody,
+            error,
+            retryPlan.errorClass,
+            nextAttemptCount,
+            retryPlan.nextRetryAt,
+            prior.idempotency_key,
+            prior.watchlist_id,
+            prior.watchlist_name,
+            prior.route,
+            prior.case_path,
+            attemptedAt,
+            completedAt,
+            status === 'delivered' ? completedAt : null,
+        ])
+        const row = result.rows[0] as DwmWebhookDeliveryRow
+        if (status === 'delivered') {
+            await run(`
+            UPDATE dwm_webhook_destinations
+               SET last_delivery_at = $2::timestamptz,
+                   updated_at = NOW()
+             WHERE id = $1
+        `, [destination.id, completedAt])
+        }
+        const auditAction = status === 'failed' ? retryPlan.nextRetryAt ? 'delivery.retry_scheduled' : 'delivery.failed' : 'delivery.replayed'
+        const auditEventId = await recordDwmWebhookAudit({
+            ownerId: lineageOwnerId,
+            actorId: ownerId,
+            orgId,
+            destinationId: destination.id,
+            deliveryId: row.id,
+            action: auditAction,
+            metadata: {
+                alertId: row.alert_id,
+                status: row.status,
+                responseStatus: row.response_status,
+                error: row.error,
+                errorClass: row.error_class,
+                attemptCount: row.attempt_count,
+                nextRetryAt: row.next_retry_at,
+                idempotencyKey: row.idempotency_key,
+                payloadHash: row.payload_hash,
+                priorDeliveryId: prior.id,
+                exactPersistedPayload: true,
+                ...outboundReportAuditMetadata({ report: persistedReport }),
+            },
+        })
+        return {
+            ok: true as const,
+            status: 202,
+            delivery: {
+                ...toDwmWebhookDelivery(row),
+                auditEventId,
+                auditAction,
+                auditActorId: ownerId,
+            },
+        }})
+}
+
+function reportFromPersistedPayload(payload: unknown) {
+    const root = recordOrEmpty(payload)
+    const direct = root.report
+    const nested = recordOrEmpty(root._hanasand).report
+    const report = direct ?? nested
+    return report && typeof report === 'object' && !Array.isArray(report) ? report as Record<string, unknown> : undefined
 }
 
 export function buildDwmAlertWebhookNotificationInput(
@@ -7855,6 +8158,9 @@ export function buildDwmAlertDeliveryPayload({
     eventType: DwmAlertEventType
     deliveryId?: string
 }) {
+    const reportValidation = alert.report === undefined ? undefined : validateOutboundThirdPartyReport(alert.report)
+    if (reportValidation && !reportValidation.valid) throw new Error(`Invalid outbound third-party report: ${reportValidation.error}`)
+    const report = reportValidation?.report
     const normalizedAlert = normalizeAlert(alert)
     const watchlist = normalizeWatchlist(alert.watchlist)
     const idempotencyKey = buildIdempotencyKey(eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
@@ -7888,6 +8194,7 @@ export function buildDwmAlertDeliveryPayload({
             name: destination.name,
             kind: destination.kind,
         },
+        report,
         alert: alertContext,
         watchlist,
         delivery: {
@@ -7937,6 +8244,7 @@ export function buildDwmAlertDeliveryPayload({
                     discordField('Source family', normalizedAlert.sourceFamily || 'Unknown', true),
                     normalizedAlert.confidence.label ? discordField('Confidence', [normalizedAlert.confidence.label, normalizedAlert.confidence.reason].filter(Boolean).join(' | '), true) : null,
                     discordField('Evidence count', String(normalizedAlert.evidenceCount), true),
+                    report ? discordField('Report', `${clean(recordOrEmpty(report.reportPolicy).format)} · ${clean(report.exportChecksum)}`, false) : null,
                     discordField('Evidence timestamp', normalizedAlert.evidenceTimestamp, true),
                     normalizedAlert.evidenceSummary ? discordField('Evidence summary', normalizedAlert.evidenceSummary, false) : null,
                     discordField('Route', normalizedAlert.route, true),
@@ -8101,6 +8409,40 @@ export function redactWebhookEndpoint(endpointUrl: string) {
     }
 }
 
+async function deliverToDwmWebhookDestinationWithLineageGuard(input: {
+    ownerId: string
+    destination: DwmWebhookDestinationRow
+    eventType: DwmAlertEventType
+    alert: Record<string, unknown>
+    dryRun: boolean
+    live: boolean
+    markTested: boolean
+    sender?: (endpoint: string, body: string) => Promise<{ status: number, body: string }>
+}) {
+    const normalizedAlert = normalizeAlert(input.alert)
+    const idempotencyKey = buildIdempotencyKey(
+        input.eventType,
+        input.destination.org_id,
+        input.destination.id,
+        normalizedAlert.dedupeKey || normalizedAlert.id
+    )
+    return withDatabaseAdvisoryLock(`dwm-webhook-delivery:${idempotencyKey}`, async () => {
+        const delivered = input.live && !input.dryRun
+            ? await findDeliveredDwmWebhookDelivery(input.destination.org_id, input.destination.id, idempotencyKey)
+            : null
+        if (delivered) {
+            return recordSkippedDuplicateDwmWebhookDelivery({
+                ownerId: input.ownerId,
+                destination: input.destination,
+                eventType: input.eventType,
+                alert: input.alert,
+                priorDelivery: delivered,
+            })
+        }
+        return deliverToDwmWebhookDestination(input)
+    })
+}
+
 async function deliverToDwmWebhookDestination({
     ownerId,
     destination,
@@ -8109,6 +8451,7 @@ async function deliverToDwmWebhookDestination({
     dryRun,
     live,
     markTested,
+    sender = postPublicWebhook,
 }: {
     ownerId: string
     destination: DwmWebhookDestinationRow
@@ -8117,30 +8460,35 @@ async function deliverToDwmWebhookDestination({
     dryRun: boolean
     live: boolean
     markTested: boolean
+    sender?: (endpoint: string, body: string) => Promise<{ status: number, body: string }>
 }) {
     const deliveryId = crypto.randomUUID()
     const payload = buildDwmAlertDeliveryPayload({ destination, alert, eventType, deliveryId })
     const normalizedAlert = normalizeAlert(alert)
     const watchlist = normalizeWatchlist(alert.watchlist)
     const payloadHash = hashValue('payload', JSON.stringify(payload))
-    const shouldSendLive = live && !dryRun && process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true'
+    const liveRequested = live && !dryRun && process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true'
     let status: DwmWebhookDeliveryRow['status'] = dryRun ? 'dry_run' : 'skipped'
     let responseStatus: number | null = null
     let responseBody: string | null = null
     let error: string | null = null
+    const idempotencyKey = buildIdempotencyKey(eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
+    const liveAttemptCount = await countDwmWebhookDeliveryAttempts(destination.org_id, destination.id, idempotencyKey)
+    const shouldSendLive = liveRequested && liveAttemptCount < MAX_DWM_WEBHOOK_DELIVERY_ATTEMPTS
     const attemptedAt = shouldSendLive ? new Date().toISOString() : null
     let completedAt: string | null = null
-    const idempotencyKey = buildIdempotencyKey(eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
-    const attemptCount = await countDwmWebhookDeliveryAttempts(ownerId, destination.org_id, destination.id, idempotencyKey) + 1
+    const attemptCount = liveAttemptCount + (shouldSendLive ? 1 : 0)
 
     if (!dryRun && live && process.env.DWM_WEBHOOK_LIVE_DELIVERY !== 'true') {
         error = 'Live DWM webhook delivery is disabled. Set DWM_WEBHOOK_LIVE_DELIVERY=true and send live=true to enable external calls.'
+    } else if (liveRequested && !shouldSendLive) {
+        error = `Delivery blocked because this idempotency lineage reached the ${MAX_DWM_WEBHOOK_DELIVERY_ATTEMPTS}-attempt limit.`
     }
 
     if (shouldSendLive) {
         try {
             const endpoint = decryptWebhookSecret(destination.endpoint_encrypted)
-            const response = await postPublicWebhook(endpoint, JSON.stringify(payload))
+            const response = await sender(endpoint, JSON.stringify(payload))
             responseStatus = response.status
             responseBody = sanitizeDwmWebhookDeliveryDiagnostic(response.body)
             status = response.status >= 200 && response.status < 300 ? 'delivered' : 'failed'
@@ -8259,6 +8607,7 @@ async function deliverToDwmWebhookDestination({
             watchlistId: delivery.watchlist_id,
             route: delivery.route,
             casePath: delivery.case_path,
+            ...outboundReportAuditMetadata(alert),
         },
     })
 
@@ -8290,7 +8639,7 @@ async function recordSkippedDuplicateDwmWebhookDelivery({
     const payloadHash = hashValue('payload', JSON.stringify(payload))
     const idempotencyKey = buildIdempotencyKey(eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
     const error = 'Delivery skipped because this destination already has a delivered attempt for the same idempotency key.'
-    const attemptCount = await countDwmWebhookDeliveryAttempts(ownerId, destination.org_id, destination.id, idempotencyKey) + 1
+    const attemptCount = await countDwmWebhookDeliveryAttempts(destination.org_id, destination.id, idempotencyKey)
     const errorClass = classifyDeliveryError({ status: 'skipped', dryRun: false, error })
     const result = await run(`
         INSERT INTO dwm_webhook_deliveries (
@@ -8369,6 +8718,7 @@ async function recordSkippedDuplicateDwmWebhookDelivery({
             watchlistId: delivery.watchlist_id,
             route: delivery.route,
             casePath: delivery.case_path,
+            ...outboundReportAuditMetadata(alert),
         },
     })
 
@@ -8400,7 +8750,7 @@ async function recordSkippedSelectionDwmWebhookDelivery({
     const normalizedAlert = normalizeAlert(alert)
     const watchlist = normalizeWatchlist(alert.watchlist)
     const payloadHash = hashValue('payload', JSON.stringify(payload))
-    const attemptCount = await countDwmWebhookDeliveryAttempts(ownerId, destination.org_id, destination.id, intent.idempotencyKey) + 1
+    const attemptCount = await countDwmWebhookDeliveryAttempts(destination.org_id, destination.id, intent.idempotencyKey)
     const errorClass = classifyDeliveryError({ status: 'skipped', dryRun, error: intent.error })
     const result = await run(`
         INSERT INTO dwm_webhook_deliveries (
@@ -8478,6 +8828,7 @@ async function recordSkippedSelectionDwmWebhookDelivery({
             watchlistId: delivery.watchlist_id,
             route: delivery.route,
             casePath: delivery.case_path,
+            ...outboundReportAuditMetadata(alert),
         },
     })
 
@@ -8517,7 +8868,7 @@ async function recordMissingDestinationDwmWebhookDelivery({
         deliveryId,
     })
     const payloadHash = hashValue('payload', JSON.stringify(payload))
-    const attemptCount = await countDwmWebhookDeliveryAttempts(ownerId, intent.orgId, null, intent.idempotencyKey) + 1
+    const attemptCount = await countDwmWebhookDeliveryAttempts(intent.orgId, null, intent.idempotencyKey)
     const errorClass = classifyDeliveryError({ status: 'skipped', dryRun, error: intent.error })
     const result = await run(`
         INSERT INTO dwm_webhook_deliveries (
@@ -8595,6 +8946,7 @@ async function recordMissingDestinationDwmWebhookDelivery({
             watchlistId: delivery.watchlist_id,
             route: delivery.route,
             casePath: delivery.case_path,
+            ...outboundReportAuditMetadata(alert),
         },
     })
 
@@ -8694,7 +9046,6 @@ async function loadDestinationsForOrg(ownerId: string, orgId: string) {
 }
 
 async function findDeliveredDwmWebhookDelivery(
-    ownerId: string,
     orgId: string,
     destinationId: string,
     idempotencyKey: string
@@ -8702,20 +9053,20 @@ async function findDeliveredDwmWebhookDelivery(
     const result = await run(`
         SELECT *
         FROM dwm_webhook_deliveries
-        WHERE owner_id = $1
-          AND org_id = $2
-          AND destination_id = $3
-          AND idempotency_key = $4
+        WHERE org_id = $1
+          AND destination_id = $2
+          AND idempotency_key = $3
           AND status = 'delivered'
+          AND dry_run = FALSE
+          AND attempted_at IS NOT NULL
         ORDER BY attempted_at DESC
         LIMIT 1
-    `, [ownerId, orgId, destinationId, idempotencyKey])
+    `, [orgId, destinationId, idempotencyKey])
 
     return (result.rows as DwmWebhookDeliveryRow[])[0] || null
 }
 
 async function countDwmWebhookDeliveryAttempts(
-    ownerId: string,
     orgId: string,
     destinationId: string | null,
     idempotencyKey: string
@@ -8723,11 +9074,13 @@ async function countDwmWebhookDeliveryAttempts(
     const result = await run(`
         SELECT COUNT(*)::INT AS count
         FROM dwm_webhook_deliveries
-        WHERE owner_id = $1
-          AND org_id = $2
-          AND (($3::TEXT IS NULL AND destination_id IS NULL) OR destination_id = $3)
-          AND idempotency_key = $4
-    `, [ownerId, orgId, destinationId, idempotencyKey])
+        WHERE org_id = $1
+          AND (($2::TEXT IS NULL AND destination_id IS NULL) OR destination_id = $2)
+          AND idempotency_key = $3
+          AND dry_run = FALSE
+          AND attempted_at IS NOT NULL
+          AND status IN ('delivered', 'failed')
+    `, [orgId, destinationId, idempotencyKey])
 
     return Number(result.rows[0]?.count ?? 0)
 }
@@ -9174,8 +9527,8 @@ function severityEmoji(severity: string) {
     return '[INFO]'
 }
 
-function buildIdempotencyKey(eventType: DwmAlertEventType, orgId: string, destinationId: string, alertId: string) {
-    return `${eventType}:${orgId}:${destinationId}:${alertId}`
+function buildIdempotencyKey(eventType: DwmAlertEventType, orgId: string, destinationId: string, dedupeKey: string) {
+    return `${eventType}:${orgId}:${destinationId}:${dedupeKey}`
 }
 
 function deliveryAttemptState(status: DwmWebhookDeliveryPublic['status'], dryRun: boolean): DwmWebhookDeliveryAttemptState {
@@ -9213,6 +9566,7 @@ function classifyDeliveryError({
     const message = clean(error).toLowerCase()
     if (dryRun || status === 'delivered') return null
     if (message.includes('live dwm webhook delivery is disabled')) return 'live_delivery_disabled'
+    if (message.includes('attempt limit')) return 'delivery_attempt_limit'
     if (responseStatus) {
         if (responseStatus === 408) return 'timeout'
         if (responseStatus === 429) return 'rate_limited'
@@ -11360,11 +11714,7 @@ function dedupeFromIdempotencyKey(value: string) {
 }
 
 function redactDeliveryEvidenceText(value: string) {
-    return value
-        .replace(/(discord(?:app)?\.com\/api\/webhooks\/[^/\s"']+\/)[^/\s"']+/gi, '$1...')
-        .replace(/(api\/webhooks\/[^/\s"']+\/)[^/\s"']+/gi, '$1...')
-        .replace(/([?&](?:token|secret|password|key|credential)=)[^&\s"']+/gi, '$1[redacted]')
-        .replace(/((?:token|secret|password|credential)\s*[:=]\s*)[^,\s"'}]+/gi, '$1[redacted]')
+    return sanitizeCustomerOutboundText(value)
 }
 
 export function sanitizeDwmWebhookDeliveryDiagnostic(value: unknown, max = 2000) {

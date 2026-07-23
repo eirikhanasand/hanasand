@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft, BellRing, CheckCircle2, Copy, Loader2, RotateCcw, Send, ShieldCheck, UserRound, XCircle } from 'lucide-react'
 import { safeEvidenceExcerpt } from '@/utils/dwm/display'
 
-const DWM_CASE_EVIDENCE_PREVIEW_ROWS = 6
+const DWM_CASE_REPORT_MAX_EVIDENCE = 25
 const DWM_CASE_TIMELINE_PREVIEW_ROWS = 8
 
 export type CaseDetail = {
@@ -176,6 +176,7 @@ type DeliveryRow = {
     attemptCount?: number | null
     retryCount?: number | null
     nextRetryAt?: string | null
+    retryable?: boolean
 }
 
 type TimelineRow = {
@@ -200,6 +201,7 @@ type TimelineRow = {
 type LoadState = {
     loading: boolean
     error?: string
+    deliveryError?: string
     detail?: CaseDetail
     exportPayload?: CaseExport
 }
@@ -224,6 +226,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
     const [note, setNote] = useState('')
     const [owner, setOwner] = useState(initialDetail?.case?.assignedOwner || initialDetail?.workflowState?.assignedOwner || '')
+    const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([])
 
     const caseRecord = state.detail?.case
     const alert = state.detail?.alert
@@ -244,7 +247,26 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
             const detailPayload = await detailResponse.json().catch(() => ({}))
             const exportPayload = await exportResponse.json().catch(() => ({}))
             if (!detailResponse.ok) throw new Error(detailPayload.error?.message || detailResponse.statusText)
-            setState({ loading: false, detail: detailPayload, exportPayload: exportResponse.ok ? exportPayload : undefined })
+            const scopedOrganizationId = resolvedOrganizationId(detailPayload.case, organizationId)
+            const scopedAlertId = resolvedAlertId(detailPayload.case, detailPayload.alertContext, alertId)
+            let deliveryError: string | undefined
+            let deliveries: DeliveryRow[] = []
+            if (scopedOrganizationId && scopedAlertId) {
+                const deliveryResponse = await fetch(`/api/dwm/webhooks/deliveries${queryString({ organizationId: scopedOrganizationId, alertId: scopedAlertId })}`, { cache: 'no-store' })
+                const deliveryPayload = await deliveryResponse.json().catch(() => ({}))
+                if (deliveryResponse.ok) deliveries = deliveryRowsFromApi(deliveryPayload)
+                else deliveryError = deliveryPayload.error?.message || deliveryPayload.error || 'Canonical delivery history is unavailable.'
+            }
+            const orderedDeliveries = orderCaseDeliveries(deliveries)
+            const detail = {
+                ...detailPayload,
+                deliveries: orderedDeliveries,
+                deliveryContext: deliveryContextFromApi(orderedDeliveries),
+            }
+            const canonicalExport = exportResponse.ok ? { ...exportPayload, deliveryEvidence: orderedDeliveries } : undefined
+            setState({ loading: false, detail, exportPayload: canonicalExport, deliveryError })
+            const availableIds = (detailPayload.evidence || exportPayload.evidenceSummary || []).map((row: EvidenceRow) => row.id).filter(Boolean).slice(0, DWM_CASE_REPORT_MAX_EVIDENCE) as string[]
+            setSelectedEvidenceIds(previous => previous.filter(id => availableIds.includes(id)))
             const nextOwner = detailPayload.case?.assignedOwner || detailPayload.workflowState?.assignedOwner || ''
             setOwner(nextOwner)
         } catch (error) {
@@ -328,9 +350,14 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
     async function sendWebhook(dryRun: boolean) {
         const targetAlertId = resolvedAlertId(caseRecord, alertContext, alertId)
+        const retryDeliveryId = !dryRun && latestDelivery?.status === 'failed' && latestDelivery.retryable === true ? latestDelivery.id : undefined
         const blockedReason = webhookActionBlockedReason(state.detail, targetAlertId)
         if (blockedReason) {
             setMessage({ ok: false, text: blockedReason })
+            return
+        }
+        if (!retryDeliveryId && !selectedEvidenceIds.length) {
+            setMessage({ ok: false, text: 'Select at least one evidence row before creating a third-party report.' })
             return
         }
         setBusy(dryRun ? 'webhook-test' : 'webhook-send')
@@ -339,18 +366,29 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
             const response = await fetch('/api/dwm/webhooks/deliver', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({
+                body: JSON.stringify(retryDeliveryId ? {
+                    organizationId: resolvedOrganizationId(caseRecord, organizationId),
+                    deliveryId: retryDeliveryId,
+                } : {
                     tenantId: resolvedTenantId(caseRecord, tenantId),
                     organizationId: resolvedOrganizationId(caseRecord, organizationId),
                     alertId: targetAlertId,
+                    caseId,
+                    evidenceIds: selectedEvidenceIds,
+                    reportFormat: 'stix',
                     limit: 1,
                     dryRun,
                 }),
             })
             const payload = await response.json().catch(() => ({}))
-            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-            setMessage({ ok: true, text: dryRun ? 'Webhook test recorded.' : 'Webhook delivery sent.' })
+            if (!response.ok) throw new Error(payload.error?.message || payload.error || response.statusText)
+            const delivery = Array.isArray(payload.deliveries) ? payload.deliveries[0] as DeliveryRow | undefined : undefined
+            if (!delivery) throw new Error('No durable delivery result was returned.')
             await load()
+            if (delivery.status === 'failed' || delivery.status === 'skipped') throw new Error(delivery.error || `Report delivery was ${delivery.status}.`)
+            if (dryRun && delivery.status !== 'dry_run') throw new Error(`Expected a dry-run result, received ${delivery.status || 'unknown'}.`)
+            if (!dryRun && delivery.status !== 'delivered') throw new Error(`Report was not delivered; durable status is ${delivery.status || 'unknown'}.`)
+            setMessage({ ok: true, text: dryRun ? 'STIX report dry run recorded.' : 'STIX report delivered to the external receiver.' })
         } catch (error) {
             setMessage({ ok: false, text: error instanceof Error ? error.message : 'Webhook delivery failed.' })
         } finally {
@@ -379,7 +417,8 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     const timeline = state.detail.timeline || state.exportPayload?.timelineSummary || []
     const evidence = state.detail.evidence || state.exportPayload?.evidenceSummary || []
     const deliveries = orderCaseDeliveries(state.detail.deliveries || state.exportPayload?.deliveryEvidence || [])
-    const latestDelivery = state.detail.deliveryContext?.latestDelivery || deliveries[0]
+    const latestDelivery = deliveries[0]
+    const latestDeliveryRetryable = latestDelivery?.status === 'failed' && latestDelivery.retryable === true
     const readOnly = Boolean(state.detail.access?.readOnly || state.detail.workflowActionPolicy?.summary?.readOnly)
     const scopedTenantId = resolvedTenantId(caseRecord, tenantId)
     const scopedOrganizationId = resolvedOrganizationId(caseRecord, organizationId)
@@ -393,6 +432,8 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     const actionBlockers = actionUnavailableReasons(actions, readOnly)
     const webhookBlockedReason = webhookActionBlockedReason(state.detail, scopedAlertId)
     const webhookActionDisabled = Boolean(readOnly || busy !== null || webhookBlockedReason)
+    const reportJsonHref = thirdPartyReportHref(caseRecord.id, scopedTenantId, scopedOrganizationId, scopedAlertId, selectedEvidenceIds, 'json')
+    const reportStixHref = thirdPartyReportHref(caseRecord.id, scopedTenantId, scopedOrganizationId, scopedAlertId, selectedEvidenceIds, 'stix')
     const caseMeta = [
         compactCaseReference(caseRecord.id, 'Case'),
         compactCaseReference(scopedOrganizationId, 'Org') || 'Org pending',
@@ -456,16 +497,24 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
                         <section className='grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]'>
                             <CollapsiblePanel title='Evidence rows' action={`${evidence.length} rows`} defaultOpen={false}>
+                                <div className='mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ui-border bg-ui-canvas p-2'>
+                                    <p className='text-xs text-ui-muted'><span className='font-semibold text-ui-text'>{selectedEvidenceIds.length}</span> of {Math.min(evidence.length, DWM_CASE_REPORT_MAX_EVIDENCE)} selected for the report</p>
+                                    <div className='flex gap-2'>
+                                        <button type='button' onClick={() => setSelectedEvidenceIds(evidence.map(row => row.id).filter(Boolean).slice(0, DWM_CASE_REPORT_MAX_EVIDENCE) as string[])} className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text'>Select all</button>
+                                        <button type='button' onClick={() => setSelectedEvidenceIds([])} className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text'>Clear</button>
+                                    </div>
+                                </div>
                                 <div className='rounded-lg border border-ui-border'>
                                     {evidence.length ? (
                                         <>
                                             <div className='grid gap-2 p-2 md:hidden' data-dwm-case-evidence-mobile-list='true'>
-                                                {evidence.slice(0, DWM_CASE_EVIDENCE_PREVIEW_ROWS).map((row, index) => <EvidenceMobileRow key={row.id || index} row={row} />)}
+                                                {evidence.slice(0, DWM_CASE_REPORT_MAX_EVIDENCE).map((row, index) => <EvidenceMobileRow key={row.id || index} row={row} selected={Boolean(row.id && selectedEvidenceIds.includes(row.id))} onToggle={() => row.id && setSelectedEvidenceIds(toggleSelectedEvidence(selectedEvidenceIds, row.id))} />)}
                                             </div>
                                             <div className='hidden overflow-x-auto md:block'>
                                                 <table className='w-full min-w-190 text-left text-xs' data-dwm-case-evidence-desktop-table='true'>
                                                     <thead className='bg-ui-canvas text-ui-muted'>
                                                         <tr>
+                                                            <th className='px-3 py-2 font-semibold'>Report</th>
                                                             <th className='px-3 py-2 font-semibold'>Source</th>
                                                             <th className='px-3 py-2 font-semibold'>Observed</th>
                                                             <th className='px-3 py-2 font-semibold'>Excerpt</th>
@@ -473,8 +522,9 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                                         </tr>
                                                     </thead>
                                                     <tbody className='divide-y divide-ui-border bg-ui-panel'>
-                                                        {evidence.slice(0, DWM_CASE_EVIDENCE_PREVIEW_ROWS).map((row, index) => (
+                                                        {evidence.slice(0, DWM_CASE_REPORT_MAX_EVIDENCE).map((row, index) => (
                                                             <tr key={row.id || index} className='hover:bg-ui-raised'>
+                                                                <td className='px-3 py-2 align-top'><input type='checkbox' aria-label={`Select ${row.sourceName || row.id || 'evidence'} for third-party report`} checked={Boolean(row.id && selectedEvidenceIds.includes(row.id))} disabled={!row.id} onChange={() => row.id && setSelectedEvidenceIds(toggleSelectedEvidence(selectedEvidenceIds, row.id))} /></td>
                                                                 <td className='px-3 py-2 align-top font-semibold text-ui-text'>{row.sourceName || sourceReferenceState(row)}<p className='text-[11px] font-normal text-ui-muted'>{stateLabel(row.sourceFamily)}</p></td>
                                                                 <td className='px-3 py-2 align-top text-ui-muted'>{relativeTime(row.observedAt || row.collectedAt)}</td>
                                                                 <td className='max-w-xl px-3 py-2 align-top text-ui-text'>{safeCaseEvidenceExcerpt(row)}</td>
@@ -535,7 +585,8 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                             {message ? <p className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${message.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'}`}>{message.text}</p> : null}
                         </section>
 
-                        <Panel title='Webhook delivery' action={state.detail.deliveryContext?.retryable ? 'retryable' : latestDelivery?.status || 'pending'}>
+                        <Panel title='Third-party report delivery' action={state.detail.deliveryContext?.retryable ? 'retryable' : latestDelivery?.status || 'pending'}>
+                            {state.deliveryError ? <p className='mb-3 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-xs text-ui-danger'>{state.deliveryError}</p> : null}
                             {latestDelivery ? (
                                 <div className='grid gap-2 text-xs text-ui-muted'>
                                     <KeyValue label='Status' value={stateLabel(latestDelivery.status)} />
@@ -559,10 +610,10 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                             </div>
                             <div className='mt-3 grid gap-2 sm:grid-cols-2'>
                                 <button type='button' onClick={() => sendWebhook(true)} disabled={webhookActionDisabled} title={webhookBlockedReason || undefined} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
-                                    {busy === 'webhook-test' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RotateCcw className='h-4 w-4' />}Test
+                                    {busy === 'webhook-test' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RotateCcw className='h-4 w-4' />}Test STIX report
                                 </button>
                                 <button type='button' onClick={() => sendWebhook(false)} disabled={webhookActionDisabled} title={webhookBlockedReason || undefined} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
-                                    {busy === 'webhook-send' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}Send
+                                    {busy === 'webhook-send' ? <Loader2 className='h-4 w-4 animate-spin' /> : latestDeliveryRetryable ? <RotateCcw className='h-4 w-4' /> : <Send className='h-4 w-4' />}{latestDeliveryRetryable ? 'Retry exact report' : 'Send STIX report'}
                                 </button>
                             </div>
                             {webhookBlockedReason ? (
@@ -570,13 +621,23 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                             ) : null}
                         </Panel>
 
-                        <Panel title='Case export' action={state.exportPayload?.exportChecksum ? 'ready' : 'pending'}>
+                        <Panel title='Case and evidence report' action={selectedEvidenceIds.length ? `${selectedEvidenceIds.length} selected` : 'selection required'}>
                             <div className='grid gap-2 text-xs text-ui-muted'>
                                 <KeyValue label='Checksum' value={state.exportPayload?.exportChecksum ? 'export checksum linked' : 'not available'} />
                                 <KeyValue label='Dedupe' value={state.exportPayload?.summary?.dedupeKey || alert?.webhookDelivery?.dedupeKey ? 'dedupe linked' : 'pending'} />
+                                <div className='grid gap-2 sm:grid-cols-2'>
+                                    {selectedEvidenceIds.length ? <CommandLink href={reportJsonHref}>Export JSON report</CommandLink> : <span className='inline-flex h-9 items-center rounded-lg border border-ui-border px-3 text-xs font-semibold text-ui-muted opacity-60'>Select evidence for JSON</span>}
+                                    {selectedEvidenceIds.length ? <CommandLink href={reportStixHref}>Export STIX 2.1</CommandLink> : <span className='inline-flex h-9 items-center rounded-lg border border-ui-border px-3 text-xs font-semibold text-ui-muted opacity-60'>Select evidence for STIX</span>}
+                                </div>
                                 <button type='button' onClick={() => copyText(state.exportPayload?.copyText || '')} disabled={!state.exportPayload?.copyText} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
                                     <Copy className='h-4 w-4' />Copy summary
                                 </button>
+                                <div className='rounded-lg border border-ui-border bg-ui-canvas p-3 text-[11px] leading-5 text-ui-muted' data-third-party-report-contract='true'>
+                                    <p className='font-semibold text-ui-text'>Authenticated outbound reporting</p>
+                                    <p>Choose 1–25 evidence rows. JSON uses analyst.case_export.v1; STIX is validated as 2.1 before export or delivery.</p>
+                                    <p>Unknown, cross-organization, provenance-mismatched, unsafe, oversized, and duplicate selections fail explicitly. Raw content, restricted locators, and credentials are withheld.</p>
+                                    <p>Webhook delivery stores the exact report and receipt. Transient failures use the bounded retry ledger; delivered duplicates are skipped by report checksum. Inbound public-advisory intake is separate and does not imply receiver adoption or delivery success.</p>
+                                </div>
                             </div>
                         </Panel>
                     </aside>
@@ -867,13 +928,63 @@ function orderCaseDeliveries(rows: DeliveryRow[]) {
     return [...rows].sort((first, second) => String(second.attemptedAt || '').localeCompare(String(first.attemptedAt || '')))
 }
 
-function EvidenceMobileRow({ row }: { row: EvidenceRow }) {
+function deliveryRowsFromApi(payload: Record<string, unknown>): DeliveryRow[] {
+    const rows = Array.isArray(payload.deliveryLedger) ? payload.deliveryLedger : []
+    return rows
+        .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object' && !Array.isArray(row))
+        .map(row => {
+            const response = row.response && typeof row.response === 'object' && !Array.isArray(row.response) ? row.response as Record<string, unknown> : {}
+            const destination = row.redactedDestination && typeof row.redactedDestination === 'object' && !Array.isArray(row.redactedDestination) ? row.redactedDestination as Record<string, unknown> : {}
+            return {
+                id: String(row.deliveryId || row.requestId || ''),
+                requestId: String(row.requestId || row.deliveryId || ''),
+                auditEventId: stringValue(row.auditEventId),
+                alertId: stringValue(row.alertId),
+                organizationId: stringValue(row.orgId),
+                webhookDestinationId: stringValue(row.destinationId),
+                status: stringValue(row.rawStatus) || stringValue(row.status),
+                attemptedAt: stringValue(row.attemptedAt),
+                endpointHash: stringValue(destination.endpointHash),
+                endpointHint: stringValue(destination.endpointHint) || stringValue(row.redactedEndpointLabel),
+                payloadHash: stringValue(row.payloadHash),
+                dedupeKey: stringValue(row.dedupeKey),
+                dryRun: row.dryRun === true,
+                httpStatus: typeof row.responseStatus === 'number' ? row.responseStatus : typeof response.httpStatus === 'number' ? response.httpStatus : undefined,
+                error: stringValue(row.error),
+                errorClass: stringValue(row.errorClass),
+                attemptCount: typeof row.attemptCount === 'number' ? row.attemptCount : null,
+                nextRetryAt: stringValue(row.nextRetryAt) || null,
+                retryable: row.retryable === true,
+            }
+        })
+        .filter(row => Boolean(row.id))
+}
+
+function deliveryContextFromApi(deliveries: DeliveryRow[]): NonNullable<CaseDetail['deliveryContext']> {
+    const failed = deliveries.filter(delivery => delivery.status === 'failed')
+    return {
+        deliveryCount: deliveries.length,
+        latestDelivery: deliveries[0],
+        delivered: deliveries.some(delivery => delivery.status === 'delivered'),
+        retryable: failed.some(delivery => delivery.retryable === true),
+        failed,
+    }
+}
+
+function stringValue(value: unknown) {
+    return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function EvidenceMobileRow({ row, selected, onToggle }: { row: EvidenceRow, selected: boolean, onToggle: () => void }) {
     return (
         <article className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 text-xs' data-dwm-case-evidence-mobile-row='true'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
-                <div className='min-w-0'>
-                    <p className='truncate text-sm font-semibold text-ui-text'>{row.sourceName || sourceReferenceState(row)}</p>
-                    <p className='mt-1 truncate text-ui-muted'>{stateLabel(row.sourceFamily)}</p>
+                <div className='flex min-w-0 gap-2'>
+                    <input type='checkbox' aria-label={`Select ${row.sourceName || row.id || 'evidence'} for third-party report`} checked={selected} disabled={!row.id} onChange={onToggle} />
+                    <div className='min-w-0'>
+                        <p className='truncate text-sm font-semibold text-ui-text'>{row.sourceName || sourceReferenceState(row)}</p>
+                        <p className='mt-1 truncate text-ui-muted'>{stateLabel(row.sourceFamily)}</p>
+                    </div>
                 </div>
                 <span className='shrink-0 rounded-md border border-ui-border bg-ui-canvas px-2 py-1 font-semibold text-ui-muted'>{relativeTime(row.observedAt || row.collectedAt)}</span>
             </div>
@@ -884,6 +995,18 @@ function EvidenceMobileRow({ row }: { row: EvidenceRow }) {
             </div>
         </article>
     )
+}
+
+function toggleSelectedEvidence(selected: string[], evidenceId: string) {
+    return selected.includes(evidenceId) ? selected.filter(id => id !== evidenceId) : [...selected, evidenceId].slice(0, DWM_CASE_REPORT_MAX_EVIDENCE)
+}
+
+function thirdPartyReportHref(caseId: string, tenantId: string, organizationId: string | undefined, alertId: string | undefined, evidenceIds: string[], format: 'json' | 'stix') {
+    const params = new URLSearchParams({ tenantId, report: 'true', format })
+    if (organizationId) params.set('organizationId', organizationId)
+    if (alertId) params.set('alertId', alertId)
+    for (const evidenceId of evidenceIds) params.append('evidenceId', evidenceId)
+    return `/api/cases/${encodeURIComponent(caseId)}/export?${params.toString()}`
 }
 
 function TimelineItem({ row, compact = false }: { row: TimelineRow, compact?: boolean }) {

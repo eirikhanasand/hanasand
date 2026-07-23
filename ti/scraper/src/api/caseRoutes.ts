@@ -1,6 +1,12 @@
+import { createHash } from "node:crypto";
 import { nowIso, stableId } from "../utils.ts";
 import { buildOrgAlertCaseActionTimeline, type OrgAlertCaseActionTimelineRow } from "../product/orgAlertCaseActionTimeline.ts";
+import { sanitizeDwmCustomerEvidenceExcerpt, sanitizeDwmCustomerText, sanitizeDwmCustomerValue } from "../product/dwmCustomerDisplay.ts";
+import { canonicalJson } from "../../../../api/src/utils/dwm/customerOutputSafety.ts";
 import { buildOrgAlertCaseActionLedgerApiList } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
+import { exportEvidenceBackedStixBundle } from "../export/stix.ts";
+import { reportObject } from "../export/stixObjects.ts";
+import { validateStixBundle } from "../export/stixValidation.ts";
 import { json, readJson } from "./http.ts";
 import { resolveOrganizationScope } from "./organizationRoutes.ts";
 import type { OrganizationMember } from "./organizationRoutes.ts";
@@ -322,6 +328,15 @@ export function exportCaseEvidence(url: URL, options: ApiServerOptions, caseId: 
   if (access.error) return access.error;
   const caseRecord = findCase(options, caseId);
   if (!caseRecord || caseRecord.tenantId !== scope.tenantId || !caseMatchesOrganizationScope(caseRecord, scope.organizationId)) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
+  const reportRequest = thirdPartyReportOptionsFromUrl(url);
+  if (reportRequest?.error) return reportRequest.error;
+  if (reportRequest?.options) {
+    if (!scope.organizationId) return json({ error: { code: "report_organization_required", message: "Third-party reporting requires an explicit organization scope." } }, 400);
+    if (!caseRecord.organizationId || caseRecord.organizationId !== scope.organizationId) {
+      return json({ error: { code: "report_organization_scope_mismatch", message: "The selected case is not owned by the requested organization." } }, 403);
+    }
+    return exportThirdPartyCaseReport(caseRecord, options, scope.organization, reportRequest.options);
+  }
   return json(buildCaseExport(caseRecord, options, scope.organization, access, exportOptionsFromUrl(url)));
 }
 
@@ -709,6 +724,221 @@ type CaseExportOptions = {
   includeNextActionPayloads: boolean;
 };
 
+const MAX_CASE_REPORT_EVIDENCE = 25;
+
+type ThirdPartyReportOptions = {
+  format: "json" | "stix";
+  evidenceIds: string[];
+};
+
+function thirdPartyReportOptionsFromUrl(url: URL): { options?: ThirdPartyReportOptions; error?: Response } | undefined {
+  if (url.searchParams.get("report") !== "true") return undefined;
+  const requestedFormat = url.searchParams.get("format");
+  if (requestedFormat && requestedFormat !== "json" && requestedFormat !== "stix") {
+    return { error: json({ error: { code: "unsupported_report_format", message: "Report format must be json or stix." } }, 400) };
+  }
+  const format = requestedFormat === "json" ? "json" : "stix";
+  const evidenceIds = [...url.searchParams.getAll("evidenceId"), ...url.searchParams.getAll("evidenceIds")]
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (new Set(evidenceIds).size !== evidenceIds.length) {
+    return { error: json({ error: { code: "report_duplicate_evidence_selection", message: "Each evidence row may be selected only once." } }, 400) };
+  }
+  return { options: { format, evidenceIds: evidenceIds.sort() } };
+}
+
+function exportThirdPartyCaseReport(caseRecord: AnalystCase, options: ApiServerOptions, organization: unknown, reportOptions: ThirdPartyReportOptions): Response {
+  const alert = findDwmAlert(options, caseRecord.alertId);
+  if (!alert) return json({ error: { code: "case_alert_not_found", message: "The case has no scoped alert to report." } }, 409);
+  if (alert.tenantId !== caseRecord.tenantId || alert.organizationId !== caseRecord.organizationId) {
+    return json({ error: { code: "report_alert_scope_mismatch", message: "The case alert is not owned by the selected tenant organization." } }, 409);
+  }
+  if (!reportOptions.evidenceIds.length) return json({ error: { code: "report_evidence_required", message: "Select at least one evidence row before creating a report." } }, 400);
+  const availableEvidence = Array.isArray(alert.evidence) ? alert.evidence : [];
+  if (!availableEvidence.length) return json({ error: { code: "report_evidence_required", message: "Select at least one evidence row before creating a report." } }, 409);
+  if (reportOptions.evidenceIds.length > MAX_CASE_REPORT_EVIDENCE) {
+    return json({ error: { code: "report_evidence_limit", message: `A report may contain at most ${MAX_CASE_REPORT_EVIDENCE} evidence rows.` } }, 413);
+  }
+
+  const requestedIds = reportOptions.evidenceIds;
+  const selectedEvidence = requestedIds.map((id) => availableEvidence.find((item: any) => String(item.id ?? "") === id));
+  const missingIds = requestedIds.filter((_, index) => !selectedEvidence[index]);
+  if (missingIds.length) return json({ error: { code: "report_evidence_not_found", message: "One or more selected evidence rows are not attached to this case.", evidenceIds: missingIds } }, 400);
+
+  const captures = selectedEvidence.map((item: any) => reportCaptureForEvidence(item, caseRecord, options));
+  const invalidEvidenceIds = selectedEvidence.filter((_: any, index: number) => !captures[index]).map((item: any) => String(item.id));
+  if (invalidEvidenceIds.length) {
+    return json({
+      error: {
+        code: "report_evidence_provenance_invalid",
+        message: "Selected evidence must resolve to a tenant-scoped capture with matching source and content hash.",
+        evidenceIds: invalidEvidenceIds
+      }
+    }, 409);
+  }
+  const captureIds = captures.map((capture: any) => String(capture.id));
+  if (new Set(captureIds).size !== captureIds.length) {
+    const duplicateEvidenceIds = selectedEvidence
+      .filter((_: any, index: number) => captureIds.indexOf(captureIds[index]) !== index)
+      .map((item: any) => String(item.id));
+    return json({
+      error: {
+        code: "report_duplicate_capture_selection",
+        message: "Each selected evidence row must resolve to a different capture.",
+        evidenceIds: duplicateEvidenceIds
+      }
+    }, 400);
+  }
+
+  const generatedAt = caseRecord.updatedAt || caseRecord.createdAt;
+  const reportPolicy = thirdPartyReportPolicy(caseRecord, alert.id, reportOptions.format, selectedEvidence);
+
+  if (reportOptions.format === "json") {
+    return json(withThirdPartyReportChecksum(sanitizeDwmCustomerValue(
+      buildThirdPartyJsonCaseExport(caseRecord, alert, organization, selectedEvidence, generatedAt, reportPolicy)
+    )));
+  }
+
+  const bundle = exportEvidenceBackedStixBundle({
+    captures: captures as any[],
+    options: {
+      producerName: "Hanasand",
+      generatedAt,
+      bundleKey: `${caseRecord.id}:${reportOptions.evidenceIds.join(",")}`,
+      includeDerivedIntelligence: false
+    }
+  });
+  const evidenceRefs = bundle.objects.filter((object: any) => object.type === "x-ti-evidence").map((object: any) => object.id);
+  bundle.objects.push(reportObject(
+    `Case ${caseRecord.id}: ${sanitizeDwmCustomerText(caseRecord.title, "Evidence-backed case report", 160)}`,
+    sanitizeDwmCustomerText(caseRecord.summary, "Evidence-backed findings selected by an authenticated tenant analyst.", 500) ?? "Evidence-backed findings selected by an authenticated tenant analyst.",
+    evidenceRefs,
+    generatedAt,
+    selectedEvidence.map((item: any) => safeEvidenceProvenance(item))
+  ));
+  const standardsValidation = validateStixBundle(bundle);
+  if (!standardsValidation.valid) {
+    return json({ error: { code: "invalid_stix_report", message: "The generated report did not pass STIX 2.1 validation.", issues: standardsValidation.issues } }, 500);
+  }
+  return json(withThirdPartyReportChecksum(sanitizeDwmCustomerValue({
+    bundle,
+    reportPolicy,
+    standardsValidation: { standard: "STIX 2.1", valid: true, issues: [] }
+  })));
+}
+
+function reportCaptureForEvidence(item: any, caseRecord: AnalystCase, options: ApiServerOptions) {
+  const provenance = item?.provenance && typeof item.provenance === "object" ? item.provenance : {};
+  const captureId = String(provenance.captureId ?? item.captureId ?? "").trim();
+  if (!captureId) return undefined;
+  const capture = options.store.listCaptures().find((row: any) => row.id === captureId);
+  if (!capture || capture.tenantId !== caseRecord.tenantId) return undefined;
+  const sourceId = String(item.sourceId ?? provenance.sourceId ?? "").trim();
+  const contentHash = String(item.contentHash ?? provenance.contentHash ?? "").trim();
+  if (!sourceId || sourceId !== capture.sourceId || !contentHash || contentHash !== capture.contentHash) return undefined;
+  const source = options.store.listSources().find((row: any) => row.id === sourceId);
+  if (!source || source.tenantId !== caseRecord.tenantId) return undefined;
+  return capture;
+}
+
+function buildThirdPartyJsonCaseExport(caseRecord: AnalystCase, alert: any, organization: unknown, selectedEvidence: any[], generatedAt: string, reportPolicy: any) {
+  const evidence = selectedEvidence.map((item: any) => exportEvidenceItem(item, alert));
+  return {
+    schemaVersion: "analyst.case_export.v1",
+    generatedAt,
+    reportPolicy,
+    organization: safeOrganizationReference(organization, caseRecord),
+    summary: {
+      caseId: caseRecord.id,
+      title: sanitizeDwmCustomerText(caseRecord.title, "Evidence-backed case report", 160),
+      summary: sanitizeDwmCustomerText(caseRecord.summary, undefined, 500),
+      status: caseRecord.status,
+      priority: caseRecord.priority,
+      alertId: alert.id,
+      createdAt: caseRecord.createdAt,
+      updatedAt: caseRecord.updatedAt,
+      evidenceCount: evidence.length
+    },
+    alertContext: {
+      id: alert.id,
+      severity: alert.severity ?? caseRecord.priority,
+      assertionKind: "source_claim",
+      observedAt: alert.lastSeenAt ?? alert.firstSeenAt ?? caseRecord.updatedAt
+    },
+    evidence,
+    evidenceSummary: evidence.map((item: any) => ({
+      id: item.id,
+      sourceId: item.sourceId,
+      sourceName: item.sourceName,
+      sourceFamily: item.sourceFamily,
+      observedAt: item.observedAt,
+      contentHash: item.contentHash,
+      redacted: item.redaction.redacted,
+      provenance: item.provenance
+    })),
+    auditSafety: {
+      rawSensitiveEvidenceIncluded: false,
+      restrictedSourceLocatorsIncluded: false,
+      credentialsIncluded: false,
+      redactedEvidenceCount: evidence.filter((item: any) => item.redaction.redacted).length,
+      redactionPolicy: "Raw content, restricted source locators, credentials, and unbounded provenance are excluded."
+    }
+  };
+}
+
+function thirdPartyReportPolicy(caseRecord: AnalystCase, alertId: string, format: ThirdPartyReportOptions["format"], evidence: any[]) {
+  return {
+    direction: "outbound_third_party",
+    format: format === "stix" ? "stix-2.1" : "hanasand-json",
+    schema: format === "stix" ? "STIX 2.1 bundle" : "analyst.case_export.v1",
+    authenticatedTenantSelection: true,
+    caseId: caseRecord.id,
+    alertId,
+    organizationId: caseRecord.organizationId,
+    evidenceIds: evidence.map((item: any) => String(item.id)),
+    evidenceCount: evidence.length,
+    evidenceLimit: MAX_CASE_REPORT_EVIDENCE,
+    derivedIntelligenceIncluded: false,
+    inboundAdvisoryIntakeIncluded: false,
+    redaction: "Raw content, restricted locators, credentials, and unbounded provenance are withheld.",
+    delivery: "Webhook delivery records the exact bounded payload, response, retry state, idempotency key, and audit event.",
+    lawfulUse: "Recipients must be authorized for the selected case evidence and handle it under applicable policy and law."
+  };
+}
+
+function withThirdPartyReportChecksum<T extends Record<string, any>>(report: T): T & { exportChecksum: string } {
+  const canonical = withoutThirdPartyReportChecksum(report);
+  const exportChecksum = `case_report_${createHash("sha256").update(canonicalJson(canonical)).digest("hex")}`;
+  return {
+    ...canonical,
+    exportChecksum,
+    reportPolicy: { ...canonical.reportPolicy, exportChecksum }
+  } as unknown as T & { exportChecksum: string };
+}
+
+function withoutThirdPartyReportChecksum(report: Record<string, any>) {
+  const { exportChecksum: _checksum, ...canonical } = report;
+  const { exportChecksum: _policyChecksum, ...reportPolicy } = canonical.reportPolicy ?? {};
+  return { ...canonical, reportPolicy };
+}
+
+function safeEvidenceProvenance(item: any) {
+  return {
+    captureId: String(item?.provenance?.captureId ?? item?.captureId ?? ""),
+    sourceId: String(item?.sourceId ?? item?.provenance?.sourceId ?? ""),
+    contentHash: String(item?.contentHash ?? item?.provenance?.contentHash ?? ""),
+    observedAt: item?.observedAt ?? item?.firstSeenAt
+  };
+}
+
+function safeOrganizationReference(organization: any, caseRecord: AnalystCase) {
+  return {
+    id: caseRecord.organizationId ?? caseRecord.tenantId,
+    name: sanitizeDwmCustomerText(organization?.name, undefined, 160)
+  };
+}
+
 function exportOptionsFromUrl(url: URL): CaseExportOptions {
   const shape = url.searchParams.get("shape") === "compact" || url.searchParams.get("compact") === "true" ? "compact" : "full";
   return {
@@ -841,9 +1071,9 @@ function exportEvidenceItem(item: any, alert: any) {
       reason: redacted ? "raw_sensitive_or_sensitive_evidence" : "public_safe_excerpt",
       rawIncluded: false
     },
-    excerpt: redacted ? "[redacted: raw sensitive evidence withheld]" : item.excerpt,
+    excerpt: redacted ? "[redacted: raw sensitive evidence withheld]" : sanitizeDwmCustomerEvidenceExcerpt(item.excerpt, item.contentHash),
     contentHash: item.contentHash,
-    provenance: item.provenance,
+    provenance: safeEvidenceProvenance(item),
     safeToCopy: !redacted,
     handling: redacted ? "Use hashes/provenance for audit; retrieve raw evidence only through approved evidence controls." : "Public-safe excerpt can be copied into incident handoff."
   };

@@ -51,8 +51,10 @@ import {
     listDwmWebhookAuditEvents,
     listDwmWebhookDeliveries,
     listDwmWebhookDestinations,
+    retryDwmWebhookDelivery,
     testDwmWebhookDestination,
     updateDwmWebhookDestination,
+    validateOutboundThirdPartyReport,
     type DwmAlertNotificationInput,
     type DwmWebhookDestinationInput,
 } from '#utils/dwm/webhooks.ts'
@@ -996,15 +998,50 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
     const userId = await authenticatedUserId(req, res)
     if (!userId) return
 
-    const input = buildDwmWebhookDeliveryRequestInput(req.body || {})
+    let input = buildDwmWebhookDeliveryRequestInput(req.body || {})
     const orgId = clean(input.orgId) || clean(input.organizationId) || clean(input.tenantId) || userId
     const permissionError = await configurationPermissionError(orgId, userId)
     if (permissionError) {
         return res.status(permissionError.status).send({ error: permissionError.message })
     }
 
+    const retryDeliveryId = clean(req.body?.deliveryId)
+    if (retryDeliveryId) {
+        const retry = await retryDwmWebhookDelivery(userId, orgId, retryDeliveryId)
+        if (!retry.ok) return res.status(retry.status).send({ error: retry.error, code: retry.code })
+        input = { ...input, alertId: retry.delivery.alertId, destinationId: retry.delivery.destinationId }
+        return sendDwmWebhookDeliveryResult(res, userId, orgId, input, [retry.delivery])
+    }
+
+    const submittedReport = req.body?.alert?.report
+    if (submittedReport !== undefined) {
+        const canonical = await canonicalThirdPartyReportForDelivery({
+            submittedReport,
+            organizationId: orgId,
+            alertId: req.body?.alert?.id,
+            dedupeKey: req.body?.alert?.dedupeKey,
+            actorId: userId,
+            authorization: clean(req.headers.authorization),
+        })
+        if (!canonical.report) return res.status(canonical.status).send({ error: canonical.error, code: canonical.code })
+        input = {
+            ...input,
+            dedupeKey: canonical.report.exportChecksum,
+            alert: {
+                ...input.alert,
+                report: canonical.report,
+                dedupeKey: canonical.report.exportChecksum,
+                evidenceCount: Number((canonical.report.reportPolicy as Record<string, unknown>).evidenceCount),
+            },
+        }
+    }
+
     const orgName = orgId === userId ? undefined : await loadOrganizationName(orgId)
     const deliveries = await triggerDwmAlertWebhookNotification(userId, { ...input.alert, ...input, orgId, orgName }, input)
+    return sendDwmWebhookDeliveryResult(res, userId, orgId, input, deliveries)
+}
+
+async function sendDwmWebhookDeliveryResult(res: FastifyReply, userId: string, orgId: string, input: DwmAlertNotificationInput, deliveries: Awaited<ReturnType<typeof triggerDwmAlertWebhookNotification>>) {
     const destinations = await listDwmWebhookDestinations(userId, orgId)
     const ledgerDeliveries = await listDwmWebhookDeliveries(userId, orgId)
     const auditEvents = await listDwmWebhookAuditEvents(userId, orgId)
@@ -1245,6 +1282,102 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
         dryRunDefault: true,
         liveDeliveryEnabled: process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
     })
+}
+
+export async function canonicalThirdPartyReportForDelivery(input: {
+    submittedReport: unknown
+    organizationId: string
+    alertId: unknown
+    dedupeKey: unknown
+    actorId: string
+    authorization?: string
+}, fetcher: typeof fetch = fetch) {
+    const submitted = validateOutboundThirdPartyReport(input.submittedReport, {
+        organizationId: input.organizationId,
+        alertId: input.alertId,
+        dedupeKey: input.dedupeKey,
+    })
+    if (!submitted.valid || !submitted.report) {
+        return { status: 400, code: 'invalid_third_party_report', error: submitted.error || 'The submitted report is invalid.' }
+    }
+
+    const policy = submitted.report.reportPolicy as Record<string, unknown>
+    const caseId = clean(policy.caseId)
+    const alertId = clean(policy.alertId)
+    const evidenceIds = Array.isArray(policy.evidenceIds) ? policy.evidenceIds.map(clean).filter(Boolean) : []
+    const format = clean(policy.format) === 'hanasand-json' ? 'json' : 'stix'
+    const base = process.env.TI_SCRAPER_API_BASE?.replace(/\/$/, '')
+    const token = process.env.TI_SCRAPER_SERVICE_TOKEN
+    if (!base || !token) {
+        return { status: 503, code: 'third_party_report_verification_unavailable', error: 'Canonical report verification is not configured.' }
+    }
+
+    let url: URL
+    try {
+        url = new URL(`${base}/v1/cases/${encodeURIComponent(caseId)}/export`)
+    } catch {
+        return { status: 503, code: 'third_party_report_verification_unavailable', error: 'Canonical report verification is not configured.' }
+    }
+    url.searchParams.set('organizationId', input.organizationId)
+    url.searchParams.set('alertId', alertId)
+    url.searchParams.set('report', 'true')
+    url.searchParams.set('format', format)
+    for (const evidenceId of evidenceIds) url.searchParams.append('evidenceId', evidenceId)
+    let response: Response
+    try {
+        response = await fetcher(url, {
+            method: 'GET',
+            headers: {
+                accept: 'application/json',
+                'x-hanasand-service-token': token,
+                'x-organization-id': input.organizationId,
+                id: input.actorId,
+                ...(input.authorization ? { authorization: input.authorization } : {}),
+            },
+            cache: 'no-store',
+            signal: AbortSignal.timeout(20_000),
+        })
+    } catch {
+        return { status: 503, code: 'third_party_report_verification_unavailable', error: 'Canonical report verification is temporarily unavailable.' }
+    }
+    let payload: Record<string, unknown>
+    try {
+        payload = await response.json() as Record<string, unknown>
+    } catch {
+        return { status: 502, code: 'third_party_report_verification_unavailable', error: 'Canonical report verification returned an invalid response.' }
+    }
+    if (!response.ok) {
+        if (response.status >= 500) {
+            return { status: 502, code: 'third_party_report_verification_unavailable', error: 'Canonical report verification is temporarily unavailable.' }
+        }
+        return {
+            status: response.status >= 400 && response.status < 500 ? response.status : 502,
+            code: 'canonical_third_party_report_rejected',
+            error: 'Canonical report verification rejected the requested case evidence.',
+        }
+    }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        return { status: 502, code: 'third_party_report_verification_unavailable', error: 'Canonical report verification returned an invalid response.' }
+    }
+
+    const canonicalPolicy = payload.reportPolicy as Record<string, unknown>
+    const canonicalChecksum = clean(payload.exportChecksum)
+    const canonical = validateOutboundThirdPartyReport(payload, {
+        organizationId: input.organizationId,
+        alertId,
+        dedupeKey: canonicalChecksum,
+    })
+    const exactSelection = clean(canonicalPolicy.caseId) === caseId
+        && clean(canonicalPolicy.alertId) === alertId
+        && clean(canonicalPolicy.format) === clean(policy.format)
+        && JSON.stringify(canonicalPolicy.evidenceIds) === JSON.stringify(evidenceIds)
+    if (!canonical.valid || !canonical.report || !exactSelection) {
+        return { status: 502, code: 'canonical_third_party_report_invalid', error: canonical.error || 'The canonical report did not match the requested case evidence.' }
+    }
+    if (canonicalChecksum !== clean(submitted.report.exportChecksum)) {
+        return { status: 409, code: 'third_party_report_checksum_mismatch', error: 'The submitted report checksum does not match the canonical case export.' }
+    }
+    return { status: 200, report: canonical.report }
 }
 
 async function authenticatedUserId(req: FastifyRequest, res: FastifyReply) {

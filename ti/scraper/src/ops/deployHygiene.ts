@@ -19,6 +19,13 @@ export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygien
   const scraperDockerfileDockerignore = readIfExists(scraperDockerfileDockerignorePath);
   const backupWrapper = readIfExists(backupWrapperPath);
   const backupScript = readIfExists(backupScriptPath);
+  const allowedApiBuildIncludes = new Set([
+    "!api/",
+    "!api/src/",
+    "!api/src/utils/",
+    "!api/src/utils/dwm/",
+    "!api/src/utils/dwm/customerOutputSafety.ts"
+  ]);
 
   const checks: DeployHygieneCheck[] = [
     check("required.compose", Boolean(compose), "root docker-compose.yml exists"),
@@ -48,7 +55,10 @@ export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygien
     check("dockerignore.root_excludes_secret_material", /\*\*\/\*\.pem/.test(rootDockerignore) && /\*\*\/\*\.key/.test(rootDockerignore) && /\*\*\/\*secret\*/.test(rootDockerignore), "root .dockerignore excludes key and secret-like files"),
     check("dockerignore.root_includes_backup_wrapper", /!ops\/threat-intel-backup\/run-threat-intel-backup\.sh/.test(rootDockerignore), "root .dockerignore includes the backup wrapper required by build checks"),
     check("dockerignore.scraper_build_includes_backup_wrapper", /!ops\/threat-intel-backup\/run-threat-intel-backup\.sh/.test(scraperDockerfileDockerignore), "scraper Dockerfile.dockerignore includes the backup wrapper required by build checks"),
-    check("dockerignore.scraper_build_excludes_unrelated_apps", /^\*$/m.test(scraperDockerfileDockerignore) && !/!frontend|!api/.test(scraperDockerfileDockerignore), "scraper Dockerfile.dockerignore excludes unrelated application trees"),
+    check("dockerignore.scraper_build_excludes_unrelated_apps", /^\*$/m.test(scraperDockerfileDockerignore)
+      && !/!frontend/.test(scraperDockerfileDockerignore)
+      && scraperDockerfileDockerignore.split("\n").filter((line) => line.startsWith("!api")).every((line) => allowedApiBuildIncludes.has(line)),
+    "scraper Dockerfile.dockerignore excludes unrelated application trees"),
     check("dockerignore.scraper_excludes_env", /(^|\n)\.env(\n|$)/.test(scraperDockerignore) && /(^|\n)\.env\.\*(\n|$)/.test(scraperDockerignore), "scraper .dockerignore excludes env files"),
     check("backup.private_permissions", /umask 077/.test(backupWrapper) && /chmod 700 "\$backup_root"/.test(backupWrapper) && /umask 077/.test(backupScript) && /chmod 700 "\$archive"/.test(backupScript), "backup archives use private permissions"),
     check("backup.atomic_completion", /partial="\$archive\.partial\.\$\$"/.test(backupWrapper) && /mv "\$partial" "\$archive"/.test(backupWrapper), "backup archives are published only after verification")

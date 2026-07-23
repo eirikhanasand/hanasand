@@ -1163,27 +1163,12 @@ export default function OrganizationWorkspaceClient() {
 
     const replayDelivery = (delivery: DeliveryRow) => selectedOrganization && runAction('replay-delivery', async () => {
         requireManage()
-        const destinationId = deliveryDestinationIds(delivery, bundle.webhooks)[0]
         if (!canReplayDelivery(delivery, bundle.webhooks)) throw new Error('Delivery replay needs a destination or saved watchlist route.')
         const result = await requestJson<DeliveryResult>('/api/dwm/webhooks/deliver', {
             method: 'POST',
             body: JSON.stringify({
                 organizationId: selectedOrganization.id,
-                orgId: selectedOrganization.id,
-                tenantId: delivery.tenantId || selectedOrganization.tenantId || 'default',
-                destinationId,
-                webhookDestinationId: destinationId,
-                alertId: delivery.alertId,
-                caseId: delivery.caseId,
-                actionId: delivery.actionId,
-                watchlistId: deliveryWatchlistId(delivery),
-                watchlistItemId: delivery.watchlistItemId || delivery.watchlistItemIds?.[0],
-                watchlistIds: delivery.watchlistIds,
-                watchlistItemIds: delivery.watchlistItemIds,
-                dryRun: true,
-                replay: true,
-                idempotencyKey: delivery.dedupeKey,
-                requestId: `org-ui-replay-${Date.now()}`,
+                deliveryId: delivery.id,
             }),
         })
         const nextDelivery = firstDelivery(result)
@@ -4678,9 +4663,7 @@ function escapeRegExp(value: string) {
 }
 
 function canReplayDelivery(delivery: DeliveryRow, destinations: WebhookDestination[] = []) {
-    const watchlistId = deliveryWatchlistId(delivery)
-    return Boolean(deliveryDestinationIds(delivery, destinations)[0] || watchlistId)
-        && Boolean(delivery.alertId || delivery.caseId || watchlistId || delivery.actionId)
+    return delivery.status === 'failed' && Boolean(delivery.id) && Boolean(deliveryDestinationIds(delivery, destinations)[0])
 }
 
 function firstDelivery(result: DeliveryResult) {
