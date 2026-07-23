@@ -414,7 +414,7 @@ export class InMemoryScraperStore implements ScraperStore {
   }
   saveDwmAlert(alert: any) {
     const stored = this.putScoped(this.dwmAlerts, alert);
-    const alertCreated = [["alertCreatedAt", alert.alertCreatedAt], ["createdAt", alert.createdAt], ["savedAt", alert.savedAt]]
+    const alertCreated = [["alertCreatedAt", alert.alertCreatedAt], ["alertCreatedEvent.at", alert.alertCreatedEvent?.at], ["deliveryReadinessContext.alertCreatedAt", alert.deliveryReadinessContext?.alertCreatedAt], ["createdAt", alert.createdAt], ["savedAt", alert.savedAt]]
       .map(([field, value]) => ({ field, timestamp: validIso(value) }))
       .find((candidate) => candidate.timestamp);
     if (alertCreated?.timestamp) {

@@ -80,6 +80,7 @@ test("aggregate alert and delivery events update every linked evidence incident 
 
   store.saveDwmAlert({
     id: "alert_aggregate",
+    alertCreatedEvent: { at: "2026-05-24T10:00:04.000Z" },
     savedAt: "2026-05-24T10:00:04.000Z",
     deliveryState: "pending_review",
     provenance: { captureIds: [first.id] },
@@ -94,8 +95,17 @@ test("aggregate alert and delivery events update every linked evidence incident 
     status: "delivered",
     httpStatus: 204
   });
+  expect(() => store.saveDwmAlert({
+    id: "alert_aggregate",
+    alertCreatedEvent: { at: "2026-05-24T10:00:04.000Z" },
+    savedAt: "2026-05-24T10:02:00.000Z",
+    deliveryState: "delivered",
+    provenance: { captureIds: [first.id] },
+    evidence: [{ provenance: { captureId: second.id } }],
+    workflowContext: { generationEvidenceWindow: { captureIds: [windowOnly.id] } }
+  })).not.toThrow();
 
-  expect(store.getTimelinessRecord(`incident_${first.id}`)).toMatchObject({ alertCreatedAt: "2026-05-24T10:00:04.000Z", alertedAt: "2026-05-24T10:00:04.000Z", alertCreatedProvenance: { evidencePath: "alert.savedAt" }, deliveryAttemptedAt: "2026-05-24T10:01:00.000Z", deliveredAt: "2026-05-24T10:01:02.000Z", latencies: { visibilityToAlertSeconds: 2, reportToAlertSeconds: 5, alertToDeliveryAttemptSeconds: 56, deliveryAttemptToDeliveredSeconds: 2, reportToDeliveredSeconds: 63 } });
+  expect(store.getTimelinessRecord(`incident_${first.id}`)).toMatchObject({ alertCreatedAt: "2026-05-24T10:00:04.000Z", alertedAt: "2026-05-24T10:00:04.000Z", alertCreatedProvenance: { evidencePath: "alert.alertCreatedEvent.at" }, deliveryAttemptedAt: "2026-05-24T10:01:00.000Z", deliveredAt: "2026-05-24T10:01:02.000Z", latencies: { visibilityToAlertSeconds: 2, reportToAlertSeconds: 5, alertToDeliveryAttemptSeconds: 56, deliveryAttemptToDeliveredSeconds: 2, reportToDeliveredSeconds: 63 } });
   expect(store.getTimelinessRecord(`incident_${second.id}`)).toMatchObject({ alertCreatedAt: "2026-05-24T10:00:04.000Z", deliveryAttemptedAt: "2026-05-24T10:01:00.000Z", deliveredAt: "2026-05-24T10:01:02.000Z", latencies: { visibilityToAlertSeconds: 1, reportToDeliveredSeconds: 63 } });
   expect(store.getTimelinessRecord(`incident_${windowOnly.id}`)).toMatchObject({ alertCreatedAt: "2026-05-24T10:00:04.000Z", deliveryAttemptedAt: "2026-05-24T10:01:00.000Z", deliveredAt: "2026-05-24T10:01:02.000Z", latencies: { visibilityToAlertSeconds: 1, reportToDeliveredSeconds: 63 } });
 });
