@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { evaluationLabelsForAdjudication } from "../api/evaluationBenchmarkRoutes.ts";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { buildEvaluationMetrics } from "../pipeline/evaluationMetrics.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
-import type { EvaluationLabelType, EvaluationTaskRecord } from "../storage/evidenceStoreTypes.ts";
+import type { EvaluationBenchmarkRecord, EvaluationLabelType, EvaluationTaskRecord } from "../storage/evidenceStoreTypes.ts";
 import { hashContent } from "../utils.ts";
 import { actorIdentity } from "./apiTestHarness.ts";
 
@@ -19,21 +20,16 @@ describe("durable evaluation metrics", () => {
     }));
     const actor = store.listExtractedEntities().find((entity: any) => entity.type === "actor");
     const falsePositive = store.saveExtractedEntity({ id: "entity_false_positive", tenantId: "tenant_eval", sourceId: "src_eval", captureId: saved.capture.id, type: "ttp", value: "password spraying", extractorVersion: "test-parser", confidence: 0.6 });
-    const labels = [
-      { id: "label_tp", tenantId: "tenant_eval", benchmarkId: "benchmark_eval", taskId: "task_tp", entityId: actor.id, labelType: "actor_extraction", expectedValue: "APT29", observedValue: "APT29", outcome: "true_positive", predictionConfidence: 0.9, datasetSplit: "test", labeledBy: "analyst", labelingMethod: "manual_source_review", independentFromExtractor: true, exhaustiveExpectedValues: true, blinded: true, adjudicationStatus: "adjudicated", labeledAt: at },
-      { id: "label_fp", tenantId: "tenant_eval", benchmarkId: "benchmark_eval", taskId: "task_fp", entityId: falsePositive.id, labelType: "ttp_extraction", observedValue: "password spraying", outcome: "false_positive", predictionConfidence: 0.6, datasetSplit: "test", labeledBy: "analyst", labelingMethod: "manual_source_review", independentFromExtractor: true, exhaustiveExpectedValues: true, blinded: true, adjudicationStatus: "adjudicated", labeledAt: at },
-      { id: "label_fn", tenantId: "tenant_eval", benchmarkId: "benchmark_eval", taskId: "task_fn", captureId: saved.capture.id, labelType: "victim_extraction", expectedValue: "Missing Victim Ltd", outcome: "false_negative", predictionConfidence: 0, datasetSplit: "test", labeledBy: "analyst", labelingMethod: "manual_source_review", independentFromExtractor: true, exhaustiveExpectedValues: true, blinded: true, adjudicationStatus: "adjudicated", labeledAt: at }
+    const tasks = [
+      { ...independentTask(store, "task_tp", saved.capture.id, "actor", ["APT29"]), observedValues: ["APT29"], observedPredictions: [{ entityType: "actor", value: "APT29", confidence: 0.9, extractorVersion: "test-parser" }] },
+      { ...independentTask(store, "task_fp", saved.capture.id, "ttp", []), observedValues: ["password spraying"], observedPredictions: [{ entityType: "ttp", value: "password spraying", confidence: 0.6, extractorVersion: "test-parser" }] },
+      { ...independentTask(store, "task_fn", saved.capture.id, "victim", ["Northwind Health"]), observedValues: [] }
     ];
-    for (const label of labels) store.saveEvaluationLabel(label);
-    store.saveEvaluationBenchmark({ id: "benchmark_eval", tenantId: "tenant_eval", name: "Held-out evaluation", status: "complete", datasetSplit: "test", taskCount: 3, captureIds: [saved.capture.id], manifest: [
-      independentTask(store, "task_tp", saved.capture.id, "actor", ["APT29"]),
-      independentTask(store, "task_fp", saved.capture.id, "ttp", []),
-      independentTask(store, "task_fn", saved.capture.id, "victim", ["Northwind Health"])
-    ], protocol: { version: "ti.independent_extraction_benchmark.v4", testSplitLocked: true, datasetUsage: "locked_final_evaluation" } });
+    const benchmark: EvaluationBenchmarkRecord = { id: "benchmark_eval", tenantId: "tenant_eval", name: "Held-out evaluation", status: "complete", datasetSplit: "test", taskCount: 3, captureIds: [saved.capture.id], manifest: tasks, protocol: { version: "ti.independent_extraction_benchmark.v4", testSplitLocked: true, datasetUsage: "locked_final_evaluation" } };
+    store.saveEvaluationBenchmark(benchmark);
     store.saveEvaluationAnnotation({ id: "annotation_one", tenantId: "tenant_eval", benchmarkId: "benchmark_eval", taskId: "task_tp", reviewerId: "reviewer_one" });
     store.saveEvaluationAnnotation({ id: "annotation_two", tenantId: "tenant_eval", benchmarkId: "benchmark_eval", taskId: "task_tp", reviewerId: "reviewer_two" });
-    const expectedByTask: Record<string, string[]> = { task_tp: ["APT29"], task_fp: [], task_fn: ["Northwind Health"] };
-    for (const taskId of ["task_tp", "task_fp", "task_fn"]) store.saveEvaluationAdjudication({ id: `adjudication_${taskId}`, tenantId: "tenant_eval", benchmarkId: "benchmark_eval", taskId, expectedValues: expectedByTask[taskId], independenceAttested: true });
+    const labels = tasks.flatMap((task) => saveMetricAdjudication(store, benchmark, task, task.authoritativeExpectedValues ?? [], at));
     store.saveEvaluationLabel({ ...labels[0], id: "label_other_tenant", tenantId: "tenant_other", entityId: "entity_other" });
     store.saveTimelinessRecord({ id: saved.incident.id, tenantId: "tenant_eval", sourceId: "src_eval", captureId: saved.capture.id, incidentId: saved.incident.id, alertedAt: "2026-07-20T00:03:00.000Z", latencies: { publicationToCollectionSeconds: 120, collectionToProcessingSeconds: 2, processingToVisibilitySeconds: 1, reportToVisibilitySeconds: 123, visibilityToAlertSeconds: 177, reportToAlertSeconds: 300 }, timestampAnomalies: [] });
     store.saveSourceHealthObservation({ id: "health_eval", tenantId: "tenant_eval", sourceId: "src_eval", checkedAt: at, status: "healthy", success: true, useful: true, itemCount: 4, duplicateCount: 1, legalMode: "public_content" });
@@ -131,6 +127,33 @@ describe("durable evaluation metrics", () => {
     });
   });
 
+  test("rejects tampered, extra, and missing independently flagged labels", () => {
+    for (const variant of ["tampered", "extra", "missing"] as const) {
+      const store = new InMemoryScraperStore();
+      const task = { ...independentTask(store, `task_${variant}`, `capture_${variant}`, "actor", ["APT29"]), observedValues: ["APT29"] };
+      const benchmark: EvaluationBenchmarkRecord = { id: `benchmark_${variant}`, status: "complete", datasetSplit: "test", taskCount: 1, captureIds: [task.captureId!], manifest: [task], protocol: { version: "ti.independent_extraction_benchmark.v4" } };
+      store.saveEvaluationBenchmark(benchmark);
+      const adjudication = {
+        id: `adjudication_${variant}`, benchmarkId: benchmark.id, taskId: task.id, captureId: task.captureId, labelType: task.labelType,
+        expectedValues: ["APT29"], annotationIds: [], method: "independent_reviewer_consensus", adjudicatedBy: "analyst",
+        independenceAttested: true, adjudicatedAt: "2026-07-20T00:00:00.000Z"
+      };
+      store.saveEvaluationAdjudication(adjudication);
+      const expected = evaluationLabelsForAdjudication(store, benchmark, task, adjudication);
+      const labels = variant === "missing"
+        ? []
+        : variant === "extra"
+          ? [...expected, { ...expected[0], id: `${expected[0].id}_extra`, evaluationUnitId: `${expected[0].evaluationUnitId}:extra` }]
+          : [{ ...expected[0], expectedValue: null, observedValue: null, outcome: "true_negative" }];
+      for (const label of labels) store.saveEvaluationLabel(label);
+
+      expect(buildEvaluationMetrics(store, { datasetSplit: "test" }).quality).toMatchObject({
+        evaluatedUnitCount: 0,
+        benchmarkEvidence: { completedBenchmarkCount: 0, completedTaskCount: 0, adjudicationCount: 0 }
+      });
+    }
+  });
+
   test("reports complete source-backed latency by source family, actor, and pipeline stage", () => {
     const store = new InMemoryScraperStore();
     store.saveSource({ id: "src_timing", name: "Publisher feed", type: "rss", url: "https://publisher.example/feed", accessMethod: "public_http", status: "active", risk: "low", trustScore: 0.8, crawlFrequencySeconds: 300, legalNotes: "Public source.", metadata: { sourceFamily: "public_news" }, createdAt: "2026-07-20T09:00:00.000Z", updatedAt: "2026-07-20T09:00:00.000Z" });
@@ -191,13 +214,10 @@ describe("durable evaluation metrics", () => {
     for (const benchmark of benchmarks) {
       const taskId = `task_${benchmark.id}`;
       const expectedValues = benchmark.outcome === "true_positive" ? ["Expected Actor"] : [];
-      store.saveEvaluationBenchmark({ ...benchmark, status: "complete", taskCount: 1, captureIds: [`capture_${benchmark.id}`], manifest: [independentTask(store, taskId, `capture_${benchmark.id}`, "actor", expectedValues)], protocol: { version: "ti.independent_extraction_benchmark.v4" } });
-      store.saveEvaluationAdjudication({ id: `adjudication_${benchmark.id}`, benchmarkId: benchmark.id, taskId, expectedValues, independenceAttested: true });
-      store.saveEvaluationLabel({
-        id: `label_${benchmark.id}`, benchmarkId: benchmark.id, taskId, evaluationUnitId: benchmark.id, captureId: `capture_${benchmark.id}`,
-        labelType: "actor_extraction", outcome: benchmark.outcome, datasetSplit: benchmark.datasetSplit, labeledBy: "consensus", labelingMethod: "manual_source_review",
-        independentFromExtractor: true, exhaustiveExpectedValues: true, blinded: true, adjudicationStatus: "adjudicated", labeledAt: benchmark.completedAt
-      });
+      const task = { ...independentTask(store, taskId, `capture_${benchmark.id}`, "actor", expectedValues), observedValues: expectedValues.length ? expectedValues : ["Unexpected Actor"] };
+      const storedBenchmark = { ...benchmark, status: "complete", taskCount: 1, captureIds: [`capture_${benchmark.id}`], manifest: [task], protocol: { version: "ti.independent_extraction_benchmark.v4" } };
+      store.saveEvaluationBenchmark(storedBenchmark);
+      saveMetricAdjudication(store, storedBenchmark, task, expectedValues, benchmark.completedAt);
     }
 
     const drift = buildEvaluationMetrics(store).quality.drift;
@@ -213,34 +233,25 @@ describe("durable evaluation metrics", () => {
     const manifest = labelTypes.flatMap((labelType, labelTypeIndex) => Array.from({ length: 10 }, (_, index) => ({
       ...independentTask(store, `${labelType}_${index}`, captureIds[(labelTypeIndex * 10 + index) % captureIds.length], labelType, index < 5 ? [`expected_${labelType}_${index}`] : []),
       caseTags: [],
-      observedValues: []
+      observedValues: index < 5 ? [`expected_${labelType}_${index}`] : labelType === "actor" && index === 5 ? ["Unsupported Actor"] : []
     })));
-    store.saveEvaluationBenchmark({ id: "benchmark_stratified", status: "complete", datasetSplit: "test", taskCount: manifest.length, captureIds, manifest, protocol: { version: "ti.independent_extraction_benchmark.v4", testSplitLocked: true, datasetUsage: "locked_final_evaluation" } });
+    const benchmark: EvaluationBenchmarkRecord = { id: "benchmark_stratified", status: "complete", datasetSplit: "test", taskCount: manifest.length, captureIds, manifest, protocol: { version: "ti.independent_extraction_benchmark.v4", testSplitLocked: true, datasetUsage: "locked_final_evaluation" } };
+    store.saveEvaluationBenchmark(benchmark);
     for (const task of manifest) {
       const index = Number(task.id.slice(String(task.labelType).length + 1));
       store.saveEvaluationAnnotation({ id: `review_one_${task.id}`, benchmarkId: "benchmark_stratified", taskId: task.id, reviewerId: "reviewer_one" });
       store.saveEvaluationAnnotation({ id: `review_two_${task.id}`, benchmarkId: "benchmark_stratified", taskId: task.id, reviewerId: "reviewer_two" });
-      store.saveEvaluationAdjudication({ id: `adjudication_${task.id}`, benchmarkId: "benchmark_stratified", taskId: task.id, labelType: task.labelType, captureId: task.captureId, expectedValues: index < 5 ? [`expected_${task.id}`] : [], independenceAttested: true });
+      saveMetricAdjudication(store, benchmark, task, index < 5 ? [`expected_${task.id}`] : [], "2026-07-21T00:00:00.000Z");
     }
-    for (const [labelTypeIndex, labelType] of labelTypes.entries()) for (let index = 0; index < 10; index++) store.saveEvaluationLabel({
-      id: `label_${labelType}_${index}`, benchmarkId: "benchmark_stratified", taskId: `${labelType}_${index}`, evaluationUnitId: `${labelType}_${index}`,
-      captureId: captureIds[(labelTypeIndex * 10 + index) % captureIds.length], labelType: `${labelType}_extraction`, outcome: labelType === "actor" && index === 5 ? "false_positive" : index < 5 ? "true_positive" : "true_negative", predictionConfidence: index < 5 ? 0.8 : 0,
-      datasetSplit: "test", labeledBy: "consensus", labelingMethod: "manual_source_review", independentFromExtractor: true, exhaustiveExpectedValues: true, blinded: true, adjudicationStatus: "adjudicated", labeledAt: "2026-07-21T00:00:00.000Z"
-    });
-    store.saveEvaluationLabel({
-      id: "label_actor_alias", benchmarkId: "benchmark_stratified", taskId: "actor_0", evaluationUnitId: "actor_0:alias",
-      captureId: captureIds[0], labelType: "actor_extraction", outcome: "true_positive", predictionConfidence: 0.8,
-      datasetSplit: "test", labeledBy: "consensus", labelingMethod: "manual_source_review", independentFromExtractor: true, exhaustiveExpectedValues: true, blinded: true, adjudicationStatus: "adjudicated", labeledAt: "2026-07-21T00:00:00.000Z"
-    });
 
     const easyMetrics = buildEvaluationMetrics(store, { datasetSplit: "test" });
     expect(easyMetrics.quality).toMatchObject({ status: "pilot_only", benchmarkEvidence: { validationStatus: "pilot_only", representativeFailureCoverageComplete: false } });
-    const benchmark = store.getEvaluationBenchmark("benchmark_stratified")!;
+    const storedBenchmark = store.getEvaluationBenchmark("benchmark_stratified")!;
     store.saveEvaluationBenchmark({
-      ...benchmark,
-      manifest: benchmark.manifest!.map((task: any) => task.id === "actor_0"
+      ...storedBenchmark,
+      manifest: storedBenchmark.manifest!.map((task: any) => task.id === "actor_0"
         ? { ...task, caseTags: ["parser_failure"] }
-        : task.id === "actor_5" ? { ...task, observedValues: ["Unsupported Actor"] } : task)
+        : task)
     });
     store.saveEvaluationAnnotation({ id: "review_ambiguous_victim", benchmarkId: "benchmark_stratified", taskId: "victim_0", reviewerId: "reviewer_three", decision: "ambiguous", expectedValues: ["expected_victim_0"] });
     const metrics = buildEvaluationMetrics(store, { datasetSplit: "test" });
@@ -317,6 +328,27 @@ function saveMetricTarget(store: InMemoryScraperStore, captureId: string, body: 
   const url = `https://${sourceId.replaceAll("_", "-")}.test/report`;
   store.saveSource({ id: sourceId, name: "Retained target publisher", type: "rss", url, accessMethod: "public_http", status: "active", risk: "low", trustScore: 0.8, crawlFrequencySeconds: 3600, legalNotes: "Public retained target.", metadata: { sourceFamily: "vendor" }, createdAt: "2026-07-20T00:00:00.000Z", updatedAt: "2026-07-20T00:00:00.000Z" });
   return store.saveCapture({ id: captureId, sourceId, url, collectedAt: "2026-07-20T00:00:00.000Z", publishedAt: "2026-07-20T00:00:00.000Z", contentHash: hashContent(body), mediaType: "text/plain", storageKind: "inline_text", body, metadata: { parserVersion: "target-parser:v1" }, sensitive: false });
+}
+
+function saveMetricAdjudication(store: InMemoryScraperStore, benchmark: EvaluationBenchmarkRecord, task: EvaluationTaskRecord, expectedValues: string[], at: string) {
+  const adjudication = {
+    id: `adjudication_${task.id}`,
+    tenantId: benchmark.tenantId,
+    benchmarkId: benchmark.id,
+    taskId: task.id,
+    captureId: task.captureId,
+    labelType: task.labelType,
+    expectedValues,
+    annotationIds: [],
+    method: "independent_reviewer_consensus",
+    adjudicatedBy: "analyst",
+    independenceAttested: true,
+    adjudicatedAt: at
+  };
+  store.saveEvaluationAdjudication(adjudication);
+  const labels = evaluationLabelsForAdjudication(store, benchmark, task, adjudication);
+  for (const label of labels) store.saveEvaluationLabel(label);
+  return labels;
 }
 
 function unresolvedIndependentTask(id: string, captureId: string, labelType: string, authoritativeExpectedValues: string[]) {

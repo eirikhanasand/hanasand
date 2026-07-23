@@ -556,18 +556,18 @@ function saveAdjudication(store: CaptureMetadataStore, benchmark: EvaluationBenc
   const id = stableId("evaluation-adjudication", task.id);
   const existing = completeAdjudication(store.getEvaluationAdjudication(id));
   if (existing) {
-    if (acceptedAdjudication(store, benchmark, task, existing)) for (const label of labelsForAdjudication(store, benchmark, task, existing)) if (!store.getEvaluationLabel(label.id)) store.saveEvaluationLabel(label);
+    if (acceptedAdjudication(store, benchmark, task, existing)) for (const label of evaluationLabelsForAdjudication(store, benchmark, task, existing)) if (!store.getEvaluationLabel(label.id)) store.saveEvaluationLabel(label);
     return existing;
   }
   const adjudication = { id, tenantId: benchmark.tenantId, benchmarkId: benchmark.id, taskId: task.id, captureId: task.captureId, labelType: task.labelType, expectedValues, annotationIds, method, adjudicatedBy, independenceAttested: true, adjudicatedAt, createdAt: adjudicatedAt, updatedAt: adjudicatedAt, ...metadata };
   if (!acceptedAdjudication(store, benchmark, task, adjudication)) throw evaluationFailure("evaluation_truth_not_independent", "Expected values were not grounded in complete retained v4 benchmark truth", false);
   store.saveEvaluationAdjudication(adjudication);
-  for (const label of labelsForAdjudication(store, benchmark, task, adjudication)) store.saveEvaluationLabel(label);
+  for (const label of evaluationLabelsForAdjudication(store, benchmark, task, adjudication)) store.saveEvaluationLabel(label);
   return adjudication;
 }
 
-function labelsForAdjudication(_store: CaptureMetadataStore, benchmark: EvaluationBenchmark, task: EvaluationTask, adjudication: EvaluationAdjudication): EvaluationLabelRecord[] {
-  const expected = valueMap(adjudication.expectedValues);
+export function evaluationLabelsForAdjudication(_store: CaptureMetadataStore, benchmark: EvaluationBenchmarkRecord, task: EvaluationTaskRecord, adjudication: EvaluationAdjudicationRecord): EvaluationLabelRecord[] {
+  const expected = valueMap(adjudication.expectedValues ?? []);
   const observed = valueMap(task.observedValues ?? []);
   const values = unique([...expected.keys(), ...observed.keys()]);
   const units = values.length ? values : ["__none__"];
@@ -605,6 +605,14 @@ function labelsForAdjudication(_store: CaptureMetadataStore, benchmark: Evaluati
       notes: "Prediction-hidden exhaustive source review; labels materialized only after independent consensus or adjudication."
     };
   });
+}
+
+export function acceptedEvaluationLabelSet(store: CaptureMetadataStore, benchmark: EvaluationBenchmarkRecord, task: EvaluationTaskRecord, adjudications: EvaluationAdjudicationRecord[], labels: EvaluationLabelRecord[]) {
+  if (adjudications.length !== 1 || !acceptedEvaluationAdjudication(store, benchmark, task, adjudications[0])) return false;
+  const expected = evaluationLabelsForAdjudication(store, benchmark, task, adjudications[0]);
+  if (labels.length !== expected.length || new Set(labels.map((label) => label.id)).size !== labels.length) return false;
+  const actualById = new Map(labels.map((label) => [label.id, label]));
+  return expected.every((label) => canonicalEvaluationRecord(actualById.get(label.id)) === canonicalEvaluationRecord(label));
 }
 
 function automaticAdjudicationMetadata(annotations: EvaluationAnnotation[]): Partial<EvaluationAdjudication> {
@@ -1704,20 +1712,18 @@ function independentlyAcceptedTaskIds(store: CaptureMetadataStore, benchmark: Ev
     const adjudications = adjudicationsByTask.get(task.id) ?? [];
     if (!labels.length || adjudications.length !== 1 || task.independenceContext?.governedEvidenceComplete !== true || !authoritativeTaskValues(task) || !taskReferenceEvidenceMatches(store, task)) continue;
     const adjudication = adjudications[0];
-    if (!expectedValuesMatchAuthoritativeSet(task, adjudication.expectedValues)
-      || !acceptedEvaluationAdjudication(store, benchmark, task, adjudication)) continue;
-    if (labels.every(independentlyAcceptedLabel)) accepted.add(task.id);
+    if (expectedValuesMatchAuthoritativeSet(task, adjudication.expectedValues)
+      && acceptedEvaluationLabelSet(store, benchmark, task, adjudications, labels)) accepted.add(task.id);
   }
   return accepted;
 }
-function independentlyAcceptedLabel(label: EvaluationLabelRecord) {
-  const automatic = label.labelingMethod === "automatic_model_review";
-  return ["manual_source_review", "automatic_model_review"].includes(label.labelingMethod ?? "")
-    && (!automatic || validAutomaticIndependence(label.independenceContext))
-    && label.independentFromExtractor === true
-    && label.blinded === true
-    && label.exhaustiveExpectedValues === true
-    && label.adjudicationStatus === "adjudicated";
+function canonicalEvaluationRecord(value: unknown): string {
+  const canonical = (candidate: any): any => Array.isArray(candidate)
+    ? candidate.map(canonical)
+    : candidate && typeof candidate === "object"
+      ? Object.fromEntries(Object.keys(candidate).sort().filter((key) => candidate[key] !== undefined).map((key) => [key, canonical(candidate[key])]))
+      : candidate;
+  return JSON.stringify(canonical(value));
 }
 function evaluationHash(value: string) { return createHash("sha256").update(value).digest("hex"); }
 function persistedObjectLineageMatches(path: string, capture: RawCapture) {

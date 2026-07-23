@@ -76,7 +76,9 @@ describe("automatic independent evaluation", () => {
     const annotations = store.listEvaluationAnnotations();
     expect(annotations.every((annotation: any) => annotation.blinded && !annotation.predictionAccessed && annotation.referenceEvidenceHash && annotation.reviewerProvider === "hanasand-ai" && annotation.reviewerModelVersion === "hanasand-v1" && annotation.modelConversationId && annotation.modelResponseId && !("evidenceInput" in annotation))).toBe(true);
     const adjudications = store.listEvaluationAdjudications();
-    expect(adjudications.find((row: any) => row.labelType === "victim")).toMatchObject({ method: "independent_model_adjudicator", disagreementPreserved: true, reviewerModelVersion: "hanasand-v2", reviewerModelVersions: ["hanasand-v1", "hanasand-v2"], modelResponseIds: expect.any(Array) });
+    const victimAdjudication = adjudications.find((row: any) => row.labelType === "victim");
+    expect(victimAdjudication).toMatchObject({ method: "independent_model_adjudicator", disagreementPreserved: true, reviewerModelVersion: "hanasand-v2", reviewerModelVersions: ["hanasand-v1", "hanasand-v2"] });
+    expect(Array.isArray(victimAdjudication?.modelResponseIds)).toBe(true);
     const labels = store.listEvaluationLabels();
     expect(labels.map((label: any) => label.outcome).sort()).toEqual(["false_negative", "false_positive", "true_positive"]);
     expect(labels.every((label: any) => label.labelingMethod === "automatic_model_review" && label.independentFromExtractor && label.referenceEvidenceHash && label.reviewerModelResponseIds?.length && label.labeledAt)).toBe(true);

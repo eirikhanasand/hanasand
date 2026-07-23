@@ -1,4 +1,4 @@
-import { acceptedEvaluationAdjudication } from "../api/evaluationBenchmarkRoutes.ts";
+import { acceptedEvaluationLabelSet } from "../api/evaluationBenchmarkRoutes.ts";
 import type {
   CaptureMetadataStore,
   EvaluationAdjudicationRecord,
@@ -94,17 +94,13 @@ export function buildEvaluationMetrics(store: CaptureMetadataStore, input: { ten
   const completedBenchmarkIds = new Set(completedBenchmarks.map((benchmark) => benchmark.id));
   const completedBenchmarkById = new Map(completedBenchmarks.map((benchmark) => [benchmark.id, benchmark]));
   const benchmarkTasks = new Map<string, EvaluationTaskRecord>(completedBenchmarks.flatMap((benchmark) => (benchmark.manifest ?? []).map((task) => [`${benchmark.id}\u0000${task.id}`, task] as [string, EvaluationTaskRecord])));
-  const adjudicationByTask = new Map<string, EvaluationAdjudicationRecord>(adjudications.filter((adjudication) => adjudication.benchmarkId && completedBenchmarkIds.has(adjudication.benchmarkId)).map((adjudication) => [`${adjudication.benchmarkId}\u0000${adjudication.taskId}`, adjudication]));
-  const independentLabels = labels.filter((label) => {
-    const task = benchmarkTasks.get(`${label.benchmarkId}\u0000${label.taskId}`);
-    const adjudication = adjudicationByTask.get(`${label.benchmarkId}\u0000${label.taskId}`);
-    const benchmark = label.benchmarkId ? completedBenchmarkById.get(label.benchmarkId) : undefined;
-    return Boolean(label.benchmarkId && completedBenchmarkIds.has(label.benchmarkId))
-      && task?.independenceContext?.governedEvidenceComplete === true
-      && task?.independenceContext?.authoritativeReferenceSetComplete === true
-      && Boolean(task?.independenceContext?.truthSnapshotHash)
-      && Boolean(benchmark && task && adjudication && acceptedEvaluationAdjudication(store, benchmark, task, adjudication))
-      && isIndependentEvaluationLabel(label);
+  const groupedAdjudications = recordsByTask(adjudications.filter((adjudication) => adjudication.benchmarkId && completedBenchmarkIds.has(adjudication.benchmarkId)));
+  const groupedLabels = recordsByTask(labelEvents.filter((label) => label.benchmarkId && completedBenchmarkIds.has(label.benchmarkId)));
+  const independentLabels = [...benchmarkTasks].flatMap(([key, task]) => {
+    const benchmark = completedBenchmarkById.get(key.slice(0, key.indexOf("\u0000")));
+    const taskLabels = groupedLabels.get(key) ?? [];
+    const taskAdjudications = groupedAdjudications.get(key) ?? [];
+    return benchmark && acceptedEvaluationLabelSet(store, benchmark, task, taskAdjudications, taskLabels) ? taskLabels : [];
   });
   const diagnosticLabels = labels.filter((label) => !independentLabels.includes(label));
   const rows = independentLabels.map((label) => labelRow(label, subjects, captureById, sourceById));
@@ -323,6 +319,15 @@ function latestLabels(labels: EvaluationLabelRecord[]): EvaluationLabelRecord[] 
     if (!previous || String(label.labeledAt ?? label.id).localeCompare(String(previous.labeledAt ?? previous.id)) > 0) latest.set(key, label);
   }
   return [...latest.values()];
+}
+
+function recordsByTask<T extends { benchmarkId?: string; taskId?: string }>(records: T[]) {
+  const grouped = new Map<string, T[]>();
+  for (const record of records) if (record.benchmarkId && record.taskId) {
+    const key = `${record.benchmarkId}\u0000${record.taskId}`;
+    grouped.set(key, [...(grouped.get(key) ?? []), record]);
+  }
+  return grouped;
 }
 
 function score(rows: EvaluationMetricRow[]) {
