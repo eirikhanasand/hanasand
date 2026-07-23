@@ -126,6 +126,22 @@ describe("public collection boundary", () => {
     });
   });
 
+  test("uses each feed's declared publishing activity window for relevance", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "slow-feed", url: "https://security.example.org/feed.xml", metadata: { productionCollection: true, activityWindowSeconds: 365 * 86_400 } }));
+    const feed = "<rss><channel><item><title>CVE-2026-4242 security advisory</title><link>https://security.example.org/advisories/4242</link><description>A critical vulnerability allows remote attackers to exploit affected systems; the vendor published remediation and detection guidance.</description><pubDate>2026-01-01T00:00:00Z</pubDate></item></channel></rss>";
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => "2026-07-23T12:00:00.000Z",
+      fetch: async () => new Response(feed, { headers: { "content-type": "application/rss+xml" } })
+    });
+
+    expect(cycle).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 0 });
+  });
+
   test("retires low-risk public feeds only after a real activity window without new captures", () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "unproductive", metadata: { productionCollection: true, canaryPortfolio: true }, crawlFrequencySeconds: 86_400 }));

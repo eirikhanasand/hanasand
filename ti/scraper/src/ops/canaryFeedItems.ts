@@ -2,6 +2,7 @@
 import { hashContent } from "../utils.ts";
 import { parseRssItems } from "../adapters/rssXml.ts";
 import { minimizeTelegramPii } from "../adapters/telegramPublicHelpers.ts";
+import { privateTarget } from "../registry/sourceRegistry.ts";
 
 const ITEM_RE = /<item\b[\s\S]*?<\/item>/gi;
 const ENTRY_RE = /<entry\b[\s\S]*?<\/entry>/gi;
@@ -140,11 +141,13 @@ function fallback(source: any, task: any, fetched: string, at: string, metadata:
 
 function row(source: any, task: any, url: string, title: string, rawText: string, at: string, publishedAt: string | undefined, metadata: any, index: number, feedItem: boolean) {
   const key = `${source.id}:${url}:${title}:${hashContent(rawText)}`;
-  const reportTimestamps = publishedAt ? [...(metadata.reportTimestamps ?? []), {
+  const referenceUrl = publicReferenceUrl(url);
+  const reportTimestamps = zonedTimestamp(publishedAt) && referenceUrl ? [...(metadata.reportTimestamps ?? []), {
     role: reporterRole(source),
     timestamp: publishedAt,
     sourceId: source.id,
     sourceName: source.name,
+    referenceUrl,
     evidencePath: timestampEvidencePath(metadata),
     extractionMethod: "source_field",
     parserVersion: metadata.parserVersion
@@ -155,6 +158,22 @@ function row(source: any, task: any, url: string, title: string, rawText: string
     metadata: { ...metadata, reportTimestamps, feedItem, itemIndex: index, sourceName: source.name, sourceUrl: task.targetUrl, extractionProfile: extractionProfile(source, task) },
     sensitive: false
   };
+}
+
+function zonedTimestamp(value: unknown) {
+  const timestamp = typeof value === "string" ? value.trim() : "";
+  return /(?:Z|[+-]\d{2}:\d{2})$/i.test(timestamp) && Number.isFinite(Date.parse(timestamp));
+}
+
+function publicReferenceUrl(value: unknown) {
+  try {
+    const url = new URL(String(value ?? ""));
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || privateTarget(url.hostname) || /(?:\.onion|\.i2p)$/i.test(url.hostname)) return undefined;
+    if ([...url.searchParams.keys()].some((key) => /token|secret|password|authorization|cookie|api[_-]?key|signature/i.test(key))) return undefined;
+    return url.toString();
+  } catch {
+    return undefined;
+  }
 }
 
 function reporterRole(source: any) {

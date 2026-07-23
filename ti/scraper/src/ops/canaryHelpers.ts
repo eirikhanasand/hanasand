@@ -2,7 +2,7 @@
 import { hashContent, stableId } from "../utils.ts";
 import type { CanaryFetch, CanaryLoopState } from "./canaryCollectionTypes.ts";
 import { feedItems } from "./canaryFeedItems.ts";
-import { parseMitreActorCatalog } from "../pipeline/mitreActorCatalog.ts";
+import { normalizeActorLabel, parseMitreActorCatalog } from "../pipeline/mitreActorCatalog.ts";
 import { parseCurrentRansomwareOperations } from "../pipeline/ransomwareOperationCatalog.ts";
 
 export function taskFor(source: any, at: string, runId: string, maxBytes: number, job?: any) {
@@ -65,6 +65,7 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
     if (activityBody.truncated) throw new Error("Ransomware operation activity evidence exceeded the bounded response size.");
     const ransomwareOperationCatalogSnapshot = parseCurrentRansomwareOperations(fetched, activityBody.text, { retrievedAt: at, sourceUrl: task.targetUrl });
     const [groupContentHash, activityContentHash] = ransomwareOperationCatalogSnapshot.evidenceContentHashes;
+    const activityEvidenceByActor = new Map(ransomwareOperationCatalogSnapshot.identities.map((identity: any) => [normalizeActorLabel(identity.canonicalName), identity.activityEvidence ?? []]));
     const groupMetadataItems = feedItems(
       source,
       { ...task, planning: { ...task.planning, extractionProfile: "ransomware_group_metadata" } },
@@ -72,7 +73,11 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
       at,
       metadata,
       Number(source.metadata?.groupMetadataMaxItemsPerFetch ?? 120)
-    ).map((item) => ({ ...item, metadata: { ...item.metadata, catalogEvidenceOnly: true } }));
+    ).map((item) => {
+      const activityEvidence = activityEvidenceByActor.get(normalizeActorLabel(item.metadata?.ransomwareGroup?.actorName ?? "")) ?? [];
+      const observedActivity = activityEvidence.some((evidence: any) => ["recent_public_claim", "reachable_publication_location"].includes(evidence?.kind));
+      return { ...item, metadata: { ...item.metadata, catalogEvidenceOnly: !observedActivity } };
+    });
     const activityMetadata = {
       canaryPortfolio: true,
       fetchMode: mode,

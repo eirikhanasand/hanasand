@@ -15,8 +15,8 @@ describe("canary feed item extraction", () => {
       taskId: "task_feed",
       title: "APT29 phishing campaign",
       url: "https://feed.test/apt29",
-      publishedAt: "Sun, 21 Jun 2026 09:00:00 GMT",
-      metadata: { reportTimestamps: [{ role: "publisher", timestamp: "Sun, 21 Jun 2026 09:00:00 GMT", sourceId: "src_feed", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] },
+      publishedAt: "2026-06-21T09:00:00+02:00",
+      metadata: { reportTimestamps: [{ role: "publisher", timestamp: "2026-06-21T09:00:00+02:00", sourceId: "src_feed", referenceUrl: "https://feed.test/apt29", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] },
       sensitive: false
     });
     expect(items[0].rawText).toContain("phishing infrastructure");
@@ -29,6 +29,14 @@ describe("canary feed item extraction", () => {
 
     expect(verified[0].metadata.reportTimestamps[0].role).toBe("actor");
     expect(unverified[0].metadata.reportTimestamps[0].role).toBe("publisher");
+  });
+
+  test("does not publish unsafe references or unzoned source timestamps", () => {
+    const privateItem = `<rss><channel><item><title>Private</title><link>http://127.0.0.1/report</link><description>private report evidence</description><pubDate>2026-06-21T09:00:00Z</pubDate></item></channel></rss>`;
+    const unzonedItem = `<rss><channel><item><title>Unzoned</title><link>https://feed.test/unzoned</link><description>unzoned report evidence</description><pubDate>2026-06-21T09:00:00</pubDate></item></channel></rss>`;
+
+    expect(feedItems(source, task, privateItem, "2026-06-21T10:00:00.000Z", metadata)[0].metadata.reportTimestamps).toBeUndefined();
+    expect(feedItems(source, task, unzonedItem, "2026-06-21T10:00:00.000Z", metadata)[0].metadata.reportTimestamps).toBeUndefined();
   });
 
   test("parses legacy API sources into structured CISA KEV items", () => {
@@ -81,7 +89,7 @@ function rss() {
   return `<rss><channel>
     <item><title>APT29 phishing campaign</title><link>https://feed.test/apt29</link>
     <description>APT29 targeted ministries with phishing infrastructure.</description>
-    <pubDate>Sun, 21 Jun 2026 09:00:00 GMT</pubDate></item>
+    <pubDate>2026-06-21T09:00:00+02:00</pubDate></item>
     <item><title>Akira ransomware victim</title><link>https://feed.test/akira</link>
     <description>Akira claimed a healthcare victim and dataset.</description></item>
   </channel></rss>`;

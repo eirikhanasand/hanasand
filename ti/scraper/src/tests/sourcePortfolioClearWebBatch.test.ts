@@ -16,8 +16,19 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(12);
-    expect(batch.exclusions).toHaveLength(26);
+    expect(batch.sources).toHaveLength(9);
+    expect(batch.exclusions).toHaveLength(29);
+    expect(batch.sources.map((source: any) => source.name).sort()).toEqual([
+      "CERT/CC Vulnerability Notes",
+      "Drupal Contributed Project Security Advisories",
+      "Drupal Core Security Advisories",
+      "Fortinet PSIRT Advisories",
+      "Gentoo Linux Security Advisories",
+      "LevelBlue SpiderLabs Threat Research",
+      "NCSC Netherlands Security Advisories",
+      "Synology Product Security Advisories",
+      "Ubuntu Security Notices",
+    ]);
 
     const ids = new Set<string>();
     const endpoints = new Set<string>();
