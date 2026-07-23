@@ -125,6 +125,11 @@ describe("automatic independent evaluation", () => {
       { name: "timeout", expectedCode: "model_timeout", fetch: async () => { throw new DOMException("The operation was aborted", "AbortError"); } },
       { name: "malformed", expectedCode: "malformed_model_response", fetch: async () => Response.json({ status: "completed", model: "hanasand", message: "not-json", conversationId: "bad-response" }) },
       { name: "invalid evidence ids", expectedCode: "malformed_model_response", expectedMessage: "(evidence_ids)", fetch: async () => Response.json({ status: "completed", model: "hanasand", message: JSON.stringify({ expectedValues: [], decision: "absent", confidence: 0.9, rationale: "No actor is supported.", evidenceIds: ["not-governed"] }), conversationId: "invalid-evidence-response" }) },
+      { name: "mixed evidence ids", expectedCode: "malformed_model_response", expectedMessage: "(evidence_ids)", fetch: async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const prompt = JSON.parse(String(init?.body)).prompt as string;
+        const evidenceId = prompt.match(/governedEvidence: \[\{"id":"([^"]+)"/)?.[1];
+        return Response.json({ status: "completed", model: "hanasand", message: JSON.stringify({ expectedValues: [], decision: "absent", confidence: 0.9, rationale: "No actor is supported.", evidenceIds: [evidenceId, { id: evidenceId }] }), conversationId: "mixed-evidence-response" });
+      } },
       { name: "versionless", expectedCode: "model_version_missing", fetch: async (_url: RequestInfo | URL, init?: RequestInit) => {
         const prompt = JSON.parse(String(init?.body)).prompt as string;
         const evidenceId = prompt.match(/governedEvidence: \[\{"id":"([^"]+)"/)?.[1];
@@ -173,6 +178,36 @@ describe("automatic independent evaluation", () => {
     expect(recoveredBenchmark.status).toBe("complete");
     expect(recoveredBenchmark.manifest[0].automation.history).toEqual(expect.arrayContaining([expect.objectContaining({ status: "retry_scheduled", failure: expect.objectContaining({ code: "restart_recovery" }) })]));
 
+    const legacyStore = evaluationStore();
+    const legacyPromptVersion = "ti.automatic_evaluation_review.v1";
+    const legacy = automaticActorBenchmark(legacyStore, "legacy v1 restart benchmark", "2026-07-21T12:30:00.000Z");
+    legacyStore.saveEvaluationBenchmark({
+      ...legacy,
+      protocol: { ...legacy.protocol, reviewPromptVersion: legacyPromptVersion },
+      automation: { ...legacy.automation, promptVersion: legacyPromptVersion }
+    });
+    const legacyRequests: any[] = [];
+    const legacyReview = async (request: any) => { legacyRequests.push(request); return successfulActorReview(request); };
+    await runAutomaticEvaluationCycle({ store: legacyStore, autoCreate: false, maxTasks: 1, now: () => "2026-07-21T12:31:00.000Z", review: legacyReview });
+    const interruptedLegacy = legacyStore.getEvaluationBenchmark(legacy.id);
+    legacyStore.saveEvaluationBenchmark({
+      ...interruptedLegacy,
+      manifest: interruptedLegacy.manifest.map((task: any) => ({ ...task, automation: { ...task.automation, status: "running", stage: "reviewer_2", leaseExpiresAt: "2026-07-21T12:31:30.000Z" } }))
+    });
+    const legacyRecovered = await runAutomaticEvaluationCycle({ store: legacyStore, autoCreate: false, maxTasks: 1, now: () => "2026-07-21T12:32:00.000Z", review: legacyReview });
+    expect(legacyRecovered).toMatchObject({ recoveredTaskCount: 1, completedTaskCount: 1 });
+    expect(legacyRequests).toHaveLength(2);
+    expect(legacyRequests.every((request) => request.promptVersion === legacyPromptVersion && request.schemaVersion === "ti.automatic_evaluation_response.v1")).toBe(true);
+    expect(legacyStore.listEvaluationAdjudications()).toEqual([expect.objectContaining({ promptVersion: legacyPromptVersion, schemaVersion: "ti.automatic_evaluation_response.v1" })]);
+    expect(legacyStore.listEvaluationLabels().every((label: any) => label.reviewPromptVersion === legacyPromptVersion && label.reviewSchemaVersion === "ti.automatic_evaluation_response.v1")).toBe(true);
+    const legacyTasksResponse = await handleApiRequest(new Request(`http://local/v1/intel/evaluation/benchmarks/${legacy.id}/tasks`, {
+      headers: { authorization: "Bearer test", id: "evaluation_operator", "x-tenant-id": "tenant_automatic" }
+    }), apiOptions(legacyStore));
+    const legacyTasks = await legacyTasksResponse.json() as any;
+    expect(legacyTasks.tasks[0].protocol).toMatchObject({ promptVersion: legacyPromptVersion, schemaVersion: "ti.automatic_evaluation_response.v1" });
+    expect(legacyTasks.tasks[0].reviewHistory.every((review: any) => review.promptVersion === legacyPromptVersion)).toBe(true);
+    expect(legacyTasks.tasks[0].adjudicationHistory[0].promptVersion).toBe(legacyPromptVersion);
+
     const terminalRestart = automaticActorBenchmark(store, "terminal restart benchmark", "2026-07-21T13:00:00.000Z");
     const terminalTask = terminalRestart.manifest[0];
     store.saveEvaluationBenchmark({ ...terminalRestart, manifest: [{ ...terminalTask, automation: { ...terminalTask.automation, status: "running", stage: "adjudicator", leaseExpiresAt: "2026-07-21T13:00:30.000Z" } }] });
@@ -199,6 +234,18 @@ describe("automatic independent evaluation", () => {
     const stratified = createEvaluationBenchmark(store, { tenantId: "tenant_automatic", sampleSize: 6, labelTypes: ["actor"], datasetSplit: "validation", reviewMode: "automatic_model", createdAt: "2026-07-21T13:00:00.000Z" })!;
     expect(stratified.selectionStrata).toMatchObject({ parser_failure: 1, ambiguous: 1, duplicate: 1, cross_actor_mention: 1, stale: 1, business_mechanism: 1, positive_candidate: 2, negative_candidate: 4, actor_positive_candidate: 1, actor_negative_candidate: 5 });
     expect(stratified.captureIds).not.toContain("cap_truncated_object");
+    const summariesResponse = await handleApiRequest(new Request("http://local/v1/intel/evaluation/benchmarks", {
+      headers: { authorization: "Bearer test", id: "evaluation_operator", "x-tenant-id": "tenant_automatic" }
+    }), apiOptions(store));
+    const summaries = await summariesResponse.json() as any;
+    const publicSummary = summaries.benchmarks.find((benchmark: any) => benchmark.id === stratified.id);
+    expect(publicSummary.selectionStrata).toMatchObject({ parser_failure: 1, ambiguous: 1, duplicate: 1, cross_actor_mention: 1, stale: 1, business_mechanism: 1 });
+    expect(Object.keys(publicSummary.selectionStrata).some((name) => /(?:^|_)(?:positive|negative)_candidate$/.test(name))).toBe(false);
+    const publicTasksResponse = await handleApiRequest(new Request(`http://local/v1/intel/evaluation/benchmarks/${stratified.id}/tasks`, {
+      headers: { authorization: "Bearer test", id: "evaluation_operator", "x-tenant-id": "tenant_automatic" }
+    }), apiOptions(store));
+    const publicTasks = await publicTasksResponse.json() as any;
+    expect(publicTasks.benchmark.selectionStrata).toEqual(publicSummary.selectionStrata);
 
     const coverageStore = new InMemoryScraperStore();
     coverageStore.saveSource(store.getSource("src_automatic")!);
