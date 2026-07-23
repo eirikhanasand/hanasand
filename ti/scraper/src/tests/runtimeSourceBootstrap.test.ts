@@ -98,6 +98,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
 
   test("discovers packaged portfolio batches with a production-configured seed list", () => {
     const previous = Bun.env.TI_SOURCE_SEED_PATHS;
+    const previousRestricted = Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
     const seedDirectory = join(dirname(fileURLToPath(import.meta.url)), "../../seeds");
     const configured = [
       "public_cti_sources.json",
@@ -108,6 +109,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       "restricted_metadata_source_packs.json"
     ].map((name) => join(seedDirectory, name));
     Bun.env.TI_SOURCE_SEED_PATHS = configured.join(",");
+    Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = "true";
 
     try {
       const store = new InMemoryScraperStore();
@@ -117,14 +119,18 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       expect(first.seedPaths.slice(0, configured.length)).toEqual(configured);
       expect(first.seedPaths).toHaveLength(new Set(first.seedPaths).size);
       expect(first.seedPaths.filter((path) => path.endsWith("source_portfolio_clear_web.json"))).toHaveLength(1);
+      expect(first.seedPaths.filter((path) => path.endsWith("source_portfolio_lawful_dark_web.json"))).toHaveLength(1);
       expect(first.seedPaths.filter((path) => path.endsWith("source_portfolio_public_telegram.json"))).toHaveLength(1);
       expect(first.errors.filter((error) => error.path.includes("source_portfolio_"))).toEqual([]);
       expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "clear_web" && source.metadata?.sourcePortfolioVerification)).toHaveLength(9);
+      expect(store.listSources().filter((source: any) => source.type === "tor_metadata" && source.metadata?.sourcePortfolioVerification)).toHaveLength(1);
       expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "telegram_public" && source.metadata?.sourcePortfolioVerification)).toHaveLength(24);
       expect(restarted).toMatchObject({ importedSourceCount: 0, totalSourceCount: first.totalSourceCount });
     } finally {
       if (previous === undefined) delete Bun.env.TI_SOURCE_SEED_PATHS;
       else Bun.env.TI_SOURCE_SEED_PATHS = previous;
+      if (previousRestricted === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
+      else Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = previousRestricted;
     }
   });
 
