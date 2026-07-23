@@ -195,22 +195,22 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
 
     try {
       const store = new InMemoryScraperStore();
-      const first = bootstrapRuntimeSources(store, { generatedAt: "2026-07-23T12:00:00.000Z" });
-      const restarted = bootstrapRuntimeSources(store, { generatedAt: "2026-07-23T12:05:00.000Z" });
+      const first = bootstrapRuntimeSources(store, { generatedAt: "2026-07-23T17:00:00.000Z" });
+      const restarted = bootstrapRuntimeSources(store, { generatedAt: "2026-07-23T17:05:00.000Z" });
 
       expect(first.seedPaths.slice(0, configured.length)).toEqual(configured);
       expect(first.seedPaths).toHaveLength(new Set(first.seedPaths).size);
       expect(first.seedPaths.filter((path) => path.endsWith("source_portfolio_clear_web.json"))).toHaveLength(1);
       expect(first.seedPaths.filter((path) => path.endsWith("source_portfolio_public_telegram.json"))).toHaveLength(1);
       expect(first.errors.filter((error) => error.path.includes("source_portfolio_"))).toEqual([]);
-      expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "clear_web" && source.metadata?.sourcePortfolioVerification)).toHaveLength(16);
+      expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "clear_web" && source.metadata?.sourcePortfolioVerification)).toHaveLength(28);
       expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "telegram_public" && source.metadata?.sourcePortfolioVerification)).toHaveLength(22);
       const importedPortfolio = store.listSources().filter((source: any) => source.metadata?.sourcePortfolioVerification);
       expect(importedPortfolio.every((source: any) => source.status === "candidate"
         && source.metadata.productionCollection === false
         && source.metadata.countsAsCoverage === false
         && source.metadata.sourcePortfolioQualificationState === "pending_sustained_productivity")).toBe(true);
-      expect(new Set(importedPortfolio.map((source: any) => source.metadata.sourceImportedAt))).toEqual(new Set(["2026-07-23T12:00:00.000Z"]));
+      expect(new Set(importedPortfolio.map((source: any) => source.metadata.sourceImportedAt))).toEqual(new Set(["2026-07-23T17:00:00.000Z"]));
       expect(importedPortfolio.filter(isExecutableSource)).toEqual([]);
       expect(restarted).toMatchObject({ importedSourceCount: 0, totalSourceCount: first.totalSourceCount });
     } finally {
