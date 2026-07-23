@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { publicAdvisoryFetcher } from "../api/exposureQueueRoutes.ts";
 import { parseRssItems } from "../adapters/rssXml.ts";
 import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
@@ -8,14 +7,99 @@ import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 import { importSeedBundle, seedDuplicateKey } from "../registry/sourceSeeds.ts";
 import { prepareRuntimeSource } from "../runtime/sourceBootstrap.ts";
 import { publicSourceReferenceUrl } from "../pipeline/sourceFieldReportTimestamp.ts";
+import type { CaptureMetadataStore } from "../storage/evidenceStore.ts";
 import { nowIso, stableId } from "../utils.ts";
+import type { CanaryFetch } from "./canaryCollectionTypes.ts";
 import { feedItems } from "./canaryFeedItems.ts";
 
 const REQUEST_ID = "req_source_feed_discovery";
 const DAY_SECONDS = 86_400;
 const MAX_RESPONSE_BYTES = 512_000;
 
-export async function runSourceFeedDiscoveryCycle(options: any, generatedAt = options.now?.() ?? nowIso()) {
+type DiscoverySource = {
+  id: string;
+  tenantId?: string;
+  status: string;
+  type: string;
+  url: string;
+  accessMethod: string;
+  risk: string;
+  metadata?: Record<string, unknown> & {
+    productionCollection?: boolean;
+    sourcePortfolioVerification?: { outcome?: string };
+    sourceFeedDiscovery?: { workflow?: string; publisherKey?: string; parentSourceId?: string; evidenceCaptureId?: string };
+  };
+  [key: string]: unknown;
+};
+type DiscoveryCapture = {
+  id: string;
+  tenantId?: string | null;
+  sourceId: string;
+  url?: string;
+  collectedAt?: string;
+  sensitive?: boolean;
+  metadata?: { runId?: string; reportTimestamps?: Array<{ referenceUrl?: unknown }> } & Record<string, unknown>;
+};
+type DiscoveryHealth = {
+  tenantId?: string | null;
+  sourceId: string;
+  collectionRunId?: string;
+  success?: boolean;
+  useful?: boolean;
+  captureCount?: number;
+};
+type DiscoveryPlan = {
+  id: string;
+  requestId?: string;
+  publisherKey?: string;
+  nextEligibleAt?: string;
+  attemptCount?: number;
+  consecutiveFailureCount?: number;
+  createdAt?: string;
+  [key: string]: unknown;
+};
+type DiscoveryStore = Pick<CaptureMetadataStore, "saveSource" | "savePlan"> & {
+  listSources(): DiscoverySource[];
+  listCaptures(): DiscoveryCapture[];
+  listSourceHealthObservations(): DiscoveryHealth[];
+  getPlan?(id: string): DiscoveryPlan | undefined;
+  listPlans?(): DiscoveryPlan[];
+};
+type DiscoveryOptions = {
+  store?: DiscoveryStore;
+  tenantId?: string;
+  scheduleSourceFeedDiscovery?: boolean;
+  now?: () => string;
+  fetch?: CanaryFetch;
+  sourceFeedDiscoveryFetch?: CanaryFetch;
+  timeoutMs?: number;
+  sourceFeedDiscoveryTimeoutMs?: number;
+  sourceFeedDiscoveryMaxReferences?: number;
+  sourceFeedDiscoveryMaxConcurrent?: number;
+  sourceFeedDiscoveryMaxFeedsPerReference?: number;
+};
+type PublisherReference = {
+  publisherKey: string;
+  referenceUrl: string;
+  parentSourceId: string;
+  captureId: string;
+  capturedAt?: string;
+};
+type FeedProof = { url: string; feedEndpointKey: string; observedItemCount: number; parserVersion: string };
+type Admission = { outcome: "imported" | "duplicate" | "revalidated"; sourceId: string; feedEndpointKey: string };
+type AttemptResult = {
+  outcome: "feeds_proven" | "no_feed" | "fetch_failed";
+  importedSourceCount: number;
+  duplicateSourceCount: number;
+  revalidatedSourceCount: number;
+  feedEndpointKeys?: string[];
+  sourceIds?: string[];
+  error?: string;
+};
+type ProcessedReference = AttemptResult & { planId: string };
+type FeedItem = { publishedAt?: unknown; metadata?: { parserWarnings?: unknown[]; parserVersion?: string } };
+
+export async function runSourceFeedDiscoveryCycle(options: DiscoveryOptions, generatedAt = options.now?.() ?? nowIso()) {
   if (options.tenantId !== undefined || options.scheduleSourceFeedDiscovery === false) {
     return emptyResult(generatedAt, "disabled_for_tenant_scheduler_lane");
   }
@@ -27,9 +111,9 @@ export async function runSourceFeedDiscoveryCycle(options: any, generatedAt = op
   const selected = retainedPublisherReferences(store);
   const now = Date.parse(generatedAt);
   const due = selected.references
-    .filter((reference: any) => {
+    .filter((reference) => {
       const plan = store.getPlan?.(planId(reference.publisherKey))
-        ?? store.listPlans?.().find((row: any) => row.requestId === REQUEST_ID && row.publisherKey === reference.publisherKey);
+        ?? store.listPlans?.().find((row) => row.requestId === REQUEST_ID && row.publisherKey === reference.publisherKey);
       const next = Date.parse(String(plan?.nextEligibleAt ?? ""));
       return !plan || !Number.isFinite(next) || next <= now;
     })
@@ -43,11 +127,11 @@ export async function runSourceFeedDiscoveryCycle(options: any, generatedAt = op
     };
   }
 
-  const fetcher = publicAdvisoryFetcher(options.sourceFeedDiscoveryFetch ?? options.fetch, positiveInteger(options.sourceFeedDiscoveryTimeoutMs ?? options.timeoutMs, 8_000, 30_000));
+  const fetcher = publicAdvisoryFetcher((options.sourceFeedDiscoveryFetch ?? options.fetch) as typeof fetch | undefined, positiveInteger(options.sourceFeedDiscoveryTimeoutMs ?? options.timeoutMs, 8_000, 30_000));
   const concurrency = positiveInteger(options.sourceFeedDiscoveryMaxConcurrent, 2, 8);
-  const results: any[] = [];
+  const results: ProcessedReference[] = [];
   for (let index = 0; index < due.length; index += concurrency) {
-    results.push(...await Promise.all(due.slice(index, index + concurrency).map((reference: any) =>
+    results.push(...await Promise.all(due.slice(index, index + concurrency).map((reference) =>
       processReference({ store, fetcher, reference, generatedAt, maxFeeds: positiveInteger(options.sourceFeedDiscoveryMaxFeedsPerReference, 4, 8) }))));
   }
   return {
@@ -67,24 +151,31 @@ export async function runSourceFeedDiscoveryCycle(options: any, generatedAt = op
   };
 }
 
-async function processReference(input: any) {
+async function processReference(input: {
+  store: DiscoveryStore;
+  fetcher: CanaryFetch;
+  reference: PublisherReference;
+  generatedAt: string;
+  maxFeeds: number;
+}): Promise<ProcessedReference> {
   const previous = input.store.getPlan?.(planId(input.reference.publisherKey));
   const attemptCount = Number(previous?.attemptCount ?? 0) + 1;
   try {
     const response = await input.fetcher(input.reference.referenceUrl, { headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.8" } });
     const pageUrl = safePublicReference(response.url || input.reference.referenceUrl);
     if (!response.ok) throw new Error(`Public feed discovery returned HTTP ${response.status}.`);
+    if (!pageUrl) throw new Error("Public feed discovery returned an unsafe response URL.");
     const body = await boundedResponseText(response, MAX_RESPONSE_BYTES);
     const direct = feedProof(body, pageUrl, response.headers.get("content-type"), input.generatedAt);
     const advertised = direct ? [direct] : await advertisedFeedProofs(body, pageUrl, input.fetcher, input.generatedAt, input.maxFeeds);
-    const admissions = advertised.map((proof: any) => admitFeed(input.store, input.reference, proof, input.generatedAt));
-    const result = {
+    const admissions = advertised.map((proof) => admitFeed(input.store, input.reference, proof, input.generatedAt));
+    const result: AttemptResult = {
       outcome: advertised.length ? "feeds_proven" : "no_feed",
-      importedSourceCount: admissions.filter((row: any) => row.outcome === "imported").length,
-      duplicateSourceCount: admissions.filter((row: any) => row.outcome === "duplicate").length,
-      revalidatedSourceCount: admissions.filter((row: any) => row.outcome === "revalidated").length,
-      feedEndpointKeys: admissions.map((row: any) => row.feedEndpointKey),
-      sourceIds: admissions.map((row: any) => row.sourceId).filter(Boolean)
+      importedSourceCount: admissions.filter((row) => row.outcome === "imported").length,
+      duplicateSourceCount: admissions.filter((row) => row.outcome === "duplicate").length,
+      revalidatedSourceCount: admissions.filter((row) => row.outcome === "revalidated").length,
+      feedEndpointKeys: admissions.map((row) => row.feedEndpointKey),
+      sourceIds: admissions.map((row) => row.sourceId)
     };
     const nextEligibleAt = addSeconds(input.generatedAt, advertised.length ? 7 * DAY_SECONDS : 30 * DAY_SECONDS);
     const saved = saveAttempt(input.store, input.reference, previous, input.generatedAt, attemptCount, 0, nextEligibleAt, result);
@@ -92,33 +183,39 @@ async function processReference(input: any) {
   } catch (error) {
     const consecutiveFailureCount = Number(previous?.consecutiveFailureCount ?? 0) + 1;
     const backoffSeconds = Math.min(7 * DAY_SECONDS, 3_600 * 2 ** Math.min(7, consecutiveFailureCount - 1));
-    const result = { outcome: "fetch_failed", error: boundedError(error) };
+    const result: AttemptResult = {
+      outcome: "fetch_failed",
+      importedSourceCount: 0,
+      duplicateSourceCount: 0,
+      revalidatedSourceCount: 0,
+      error: boundedError(error)
+    };
     const saved = saveAttempt(input.store, input.reference, previous, input.generatedAt, attemptCount, consecutiveFailureCount, addSeconds(input.generatedAt, backoffSeconds), result);
-    return { planId: saved.id, importedSourceCount: 0, duplicateSourceCount: 0, revalidatedSourceCount: 0, ...result };
+    return { planId: saved.id, ...result };
   }
 }
 
-function retainedPublisherReferences(store: any) {
+function retainedPublisherReferences(store: DiscoveryStore) {
   const sources = new Map(store.listSources()
-    .filter((source: any) => tenantAbsent(source.tenantId) && sourceCollectionLane(source) === "public")
-    .map((source: any) => [source.id, source]));
+    .filter((source) => tenantAbsent(source.tenantId) && sourceCollectionLane(source) === "public")
+    .map((source) => [source.id, source]));
   const usefulRuns = new Set(store.listSourceHealthObservations()
-    .filter((row: any) => tenantAbsent(row.tenantId)
+    .filter((row) => tenantAbsent(row.tenantId)
       && sources.has(row.sourceId)
       && row.success === true
       && row.useful === true
       && Number(row.captureCount ?? 0) > 0
       && String(row.collectionRunId ?? "").trim())
-    .map((row: any) => `${row.sourceId}:${row.collectionRunId}`));
-  const byPublisher = new Map<string, any>();
+    .map((row) => `${row.sourceId}:${row.collectionRunId}`));
+  const byPublisher = new Map<string, PublisherReference>();
   let rejectedReferenceCount = 0;
-  for (const capture of [...store.listCaptures()].sort((left: any, right: any) =>
+  for (const capture of [...store.listCaptures()].sort((left, right) =>
     Date.parse(right.collectedAt ?? "") - Date.parse(left.collectedAt ?? ""))) {
     const runId = String(capture.metadata?.runId ?? "");
     if (!tenantAbsent(capture.tenantId) || capture.sensitive === true || !sources.has(capture.sourceId)
       || !usefulRuns.has(`${capture.sourceId}:${runId}`)) continue;
     const urls = [capture.url, ...(Array.isArray(capture.metadata?.reportTimestamps)
-      ? capture.metadata.reportTimestamps.map((row: any) => row?.referenceUrl)
+      ? capture.metadata.reportTimestamps.map((row) => row?.referenceUrl)
       : [])];
     for (const raw of urls) {
       const referenceUrl = safePublicReference(raw);
@@ -136,12 +233,13 @@ function retainedPublisherReferences(store: any) {
   return { references: [...byPublisher.values()].sort((left, right) => left.publisherKey.localeCompare(right.publisherKey)), rejectedReferenceCount };
 }
 
-async function advertisedFeedProofs(html: string, pageUrl: string, fetcher: typeof fetch, generatedAt: string, maxFeeds: number) {
-  const proofs: any[] = [];
+async function advertisedFeedProofs(html: string, pageUrl: string, fetcher: CanaryFetch, generatedAt: string, maxFeeds: number) {
+  const proofs: FeedProof[] = [];
   for (const url of alternateFeedUrls(html, pageUrl).slice(0, maxFeeds)) {
     const response = await fetcher(url, { headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml" } });
     if (!response.ok) continue;
     const effectiveUrl = safePublicReference(response.url || url);
+    if (!effectiveUrl) continue;
     const body = await boundedResponseText(response, MAX_RESPONSE_BYTES);
     const proof = feedProof(body, effectiveUrl, response.headers.get("content-type"), generatedAt);
     if (proof && !proofs.some((row) => row.feedEndpointKey === proof.feedEndpointKey)) proofs.push(proof);
@@ -149,14 +247,14 @@ async function advertisedFeedProofs(html: string, pageUrl: string, fetcher: type
   return proofs;
 }
 
-function feedProof(body: string, feedUrl: string, mediaType: string | null, generatedAt: string) {
+function feedProof(body: string, feedUrl: string, mediaType: string | null, generatedAt: string): FeedProof | undefined {
   const head = body.slice(0, 1_000);
   if (!/(?:rss|atom|rdf|\bxml\b)/i.test(mediaType ?? "") && !/<(?:rss|feed|rdf:RDF)\b/i.test(head)) return undefined;
   const parsed = parseRssItems(body, feedUrl).slice(0, 150);
   if (!parsed.length) return undefined;
   const probe = { id: "source-feed-discovery-probe", name: "Public intelligence feed", type: "rss", url: feedUrl };
-  const productionRows = feedItems(probe, { id: "source-feed-discovery-probe", targetUrl: feedUrl }, body, generatedAt, {}, 150)
-    .filter((row: any) => !row.metadata?.parserWarnings?.length && currentPublisherTimestamp(row.publishedAt, generatedAt));
+  const productionRows = (feedItems(probe, { id: "source-feed-discovery-probe", targetUrl: feedUrl }, body, generatedAt, {}, 150) as FeedItem[])
+    .filter((row) => !row.metadata?.parserWarnings?.length && currentPublisherTimestamp(row.publishedAt, generatedAt));
   if (!productionRows.length) return undefined;
   return {
     url: feedUrl,
@@ -166,8 +264,8 @@ function feedProof(body: string, feedUrl: string, mediaType: string | null, gene
   };
 }
 
-function admitFeed(store: any, reference: any, proof: any, generatedAt: string) {
-  const existing = store.listSources().find((source: any) => seedDuplicateKey(source) === proof.feedEndpointKey);
+function admitFeed(store: DiscoveryStore, reference: PublisherReference, proof: FeedProof, generatedAt: string): Admission {
+  const existing = store.listSources().find((source) => seedDuplicateKey(source) === proof.feedEndpointKey);
   const verification = {
     outcome: "content_parsed",
     verifiedAt: generatedAt,
@@ -201,7 +299,7 @@ function admitFeed(store: any, reference: any, proof: any, generatedAt: string) 
     return { outcome: "duplicate", sourceId: existing.id, feedEndpointKey: proof.feedEndpointKey };
   }
 
-  const source = {
+  const source: DiscoverySource = {
     id: stableId("src", proof.feedEndpointKey),
     name: `${new URL(proof.url).hostname} public intelligence feed`,
     type: "rss",
@@ -247,8 +345,17 @@ function admitFeed(store: any, reference: any, proof: any, generatedAt: string) 
   return { outcome: "imported", sourceId: saved.id, feedEndpointKey: proof.feedEndpointKey };
 }
 
-function saveAttempt(store: any, reference: any, previous: any, generatedAt: string, attemptCount: number, consecutiveFailureCount: number, nextEligibleAt: string, result: any) {
-  return store.savePlan({
+function saveAttempt(
+  store: DiscoveryStore,
+  reference: PublisherReference,
+  previous: DiscoveryPlan | undefined,
+  generatedAt: string,
+  attemptCount: number,
+  consecutiveFailureCount: number,
+  nextEligibleAt: string,
+  result: AttemptResult
+): DiscoveryPlan {
+  const plan: DiscoveryPlan = {
     ...previous,
     id: planId(reference.publisherKey),
     tenantId: undefined,
@@ -273,7 +380,8 @@ function saveAttempt(store: any, reference: any, previous: any, generatedAt: str
     createdAt: previous?.createdAt ?? generatedAt,
     updatedAt: generatedAt,
     audit: [{ at: generatedAt, outcome: result.outcome }]
-  });
+  };
+  return store.savePlan(plan);
 }
 
 function alternateFeedUrls(html: string, pageUrl: string) {
@@ -341,7 +449,9 @@ function attribute(tag: string, name: string) { return tag.match(new RegExp(`\\b
 function decodeHtml(value: string) { return value.replace(/&amp;/gi, "&").replace(/&quot;/gi, "\"").replace(/&#39;/gi, "'"); }
 function addSeconds(value: string, seconds: number) { return new Date(Date.parse(value) + seconds * 1_000).toISOString(); }
 function boundedError(error: unknown) { return (error instanceof Error ? error.message : String(error)).slice(0, 500); }
-function sum(rows: any[], key: string) { return rows.reduce((total, row) => total + Number(row[key] ?? 0), 0); }
+function sum(rows: ProcessedReference[], key: "importedSourceCount" | "duplicateSourceCount" | "revalidatedSourceCount") {
+  return rows.reduce((total, row) => total + row[key], 0);
+}
 function positiveInteger(value: unknown, fallback: number, maximum: number) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? Math.min(maximum, Math.floor(number)) : fallback;
