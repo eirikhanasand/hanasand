@@ -173,6 +173,8 @@ export function scheduledJobRegistryGuardrailEntries() {
         { id: 'ti-dwm-alert-generation', source: 'ti/scraper/src/api/dwmWorkflowRoutes.ts' },
         { id: 'ti-source-pack-worker', source: 'ti/scraper/src/api/dwmSourceRequestRoute.ts' },
         { id: 'ti-frontier-queue', source: 'ti/scraper/src/frontier/frontier.ts' },
+        { id: 'ti-automatic-review', source: 'ti/scraper/src/api/automaticReviewRoutes.ts' },
+        { id: 'ti-automatic-evaluation', source: 'ti/scraper/src/api/evaluationBenchmarkRoutes.ts' },
     ]
 }
 
@@ -621,7 +623,82 @@ async function listTiScheduledJobs(): Promise<UnifiedScheduledJob[]> {
         tiAlertGenerationJob(alertReadiness, tiTelemetry),
         tiSourcePackWorkerJob(sourcePacks, tiTelemetry),
         tiFrontierQueueJob(frontier, schedulerState, tiTelemetry),
+        tiAutomaticReviewJob(resources, tiTelemetry),
+        tiAutomaticEvaluationJob(resources, tiTelemetry),
     ]
+}
+
+function tiAutomaticReviewJob(result: TiFetchResult, resourceUsage: ScheduledJobTelemetry): UnifiedScheduledJob {
+    const pressure = record(record(record(result.json).pressure).automaticReview)
+    const counts = record(pressure.counts)
+    const backlog = numberValue(pressure.backlog) ?? 0
+    const deadLetters = numberValue(counts.dead_letter) ?? 0
+    const running = (numberValue(counts.running) ?? 0) > 0
+    return {
+        id: 'ti-automatic-review',
+        name: 'Automatic claim and incident review',
+        description: 'Startup-owned Hanasand AI review worker for eligible retained claims and incidents.',
+        category: 'TI / Exposure',
+        source: 'ti/scraper/src/api/automaticReviewRoutes.ts',
+        service: 'ti-scraper',
+        schedule: 'Every minute',
+        cadenceSeconds: 60,
+        enabled: result.ok,
+        running,
+        status: !result.ok ? 'blocked' : running ? 'running' : 'enabled',
+        lastRunAt: null,
+        lastSuccessAt: null,
+        lastFinishedAt: null,
+        nextRunAt: null,
+        currentRunDurationMs: null,
+        averageRuntimeMs: null,
+        failureCount: deadLetters,
+        lastError: deadLetters ? `${deadLetters} automatic review task${deadLetters === 1 ? '' : 's'} in dead letter.` : result.error,
+        logExcerpt: result.ok ? `${pressure.total ?? 0} tasks; ${backlog} queued/running/retrying; ${counts.terminal ?? 0} terminal; ${deadLetters} dead letter.` : result.error,
+        controls: [],
+        controlMode: 'observable_only',
+        resourceUsage: { ...resourceUsage, queueDepth: backlog },
+        costEstimate: costEstimate(75, 'Shares the ti-scraper and configured Hanasand AI service power estimate.'),
+        assumptions: ['This card observes the existing startup-owned worker. Replay remains evidence- and task-scoped through the automatic review API.'],
+    }
+}
+
+function tiAutomaticEvaluationJob(result: TiFetchResult, resourceUsage: ScheduledJobTelemetry): UnifiedScheduledJob {
+    const pressure = record(record(record(result.json).pressure).automaticEvaluation)
+    const counts = record(pressure.counts)
+    const backlog = ['pending', 'queued', 'running', 'retrying', 'retry_scheduled']
+        .reduce((total, state) => total + (numberValue(counts[state]) ?? 0), 0)
+    const deadLetters = numberValue(counts.dead_letter) ?? 0
+    const running = pressure.running === true
+    const enabled = result.ok && pressure.enabled === true
+    const failures = (numberValue(pressure.errorCount) ?? 0) + deadLetters
+    return {
+        id: 'ti-automatic-evaluation',
+        name: 'Independent automatic accuracy evaluation',
+        description: 'Startup-owned prediction-hidden evaluation loop over retained evidence and immutable labels.',
+        category: 'TI / Exposure',
+        source: 'ti/scraper/src/api/evaluationBenchmarkRoutes.ts',
+        service: 'ti-scraper',
+        schedule: secondsSchedule(numberValue(pressure.intervalSeconds) ?? 60),
+        cadenceSeconds: numberValue(pressure.intervalSeconds) ?? 60,
+        enabled,
+        running,
+        status: !result.ok ? 'blocked' : !enabled ? 'paused' : running ? 'running' : 'enabled',
+        lastRunAt: stringValue(pressure.lastCycleAt),
+        lastSuccessAt: stringValue(pressure.lastSuccessAt),
+        lastFinishedAt: stringValue(pressure.lastSuccessAt ?? pressure.lastErrorAt),
+        nextRunAt: enabled ? stringValue(pressure.nextCycleAt) : null,
+        currentRunDurationMs: null,
+        averageRuntimeMs: null,
+        failureCount: failures,
+        lastError: stringValue(pressure.lastError) ?? (failures ? `${pressure.errorCount ?? 0} loop errors; ${deadLetters} evaluation tasks in dead letter.` : result.error),
+        logExcerpt: result.ok ? `${pressure.activeBenchmarkCount ?? 0}/${pressure.benchmarkCount ?? 0} active benchmarks; ${pressure.taskCount ?? 0} tasks; ${backlog} pending/retrying; ${deadLetters} dead letter.` : result.error,
+        controls: [],
+        controlMode: 'observable_only',
+        resourceUsage: { ...resourceUsage, queueDepth: backlog },
+        costEstimate: costEstimate(75, 'Shares the ti-scraper and configured Hanasand AI service power estimate.'),
+        assumptions: ['This card observes the existing startup-owned evaluation loop. Benchmark replay remains scoped through the evaluation API.'],
+    }
 }
 
 function tiRestrictedMetadataJob(result: TiFetchResult, resourceUsage: ScheduledJobTelemetry): UnifiedScheduledJob {
@@ -872,6 +949,8 @@ function tiUnavailableJobs(reason: string): UnifiedScheduledJob[] {
         blockedTiJob('ti-dwm-alert-generation', 'DWM alert generation readiness', 'Alert candidate and case-generation readiness for DWM workflows.', 'ti/scraper/src/api/dwmWorkflowRoutes.ts', ['run_now'], unavailable, 'Alerts'),
         blockedTiJob('ti-source-pack-worker', 'DWM source-pack worker', 'Source-pack and parser-family readiness worker.', 'ti/scraper/src/api/dwmSourceRequestRoute.ts', ['run_now'], unavailable),
         blockedTiJob('ti-frontier-queue', 'TI frontier queue', 'Internal scraper collection task queue.', 'ti/scraper/src/frontier/frontier.ts', [], unavailable),
+        blockedTiJob('ti-automatic-review', 'Automatic claim and incident review', 'Startup-owned Hanasand AI review worker for eligible retained claims and incidents.', 'ti/scraper/src/api/automaticReviewRoutes.ts', [], unavailable),
+        blockedTiJob('ti-automatic-evaluation', 'Independent automatic accuracy evaluation', 'Startup-owned prediction-hidden evaluation loop over retained evidence and immutable labels.', 'ti/scraper/src/api/evaluationBenchmarkRoutes.ts', [], unavailable),
     ]
 }
 

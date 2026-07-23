@@ -20,6 +20,8 @@ assert.ok(byId.has('ti-restricted-metadata-collection'), 'Restricted metadata co
 assert.ok(byId.has('ti-exposure-queue-collection'), 'Exposure queue collection should be registered.')
 assert.ok(byId.has('ti-exposure-parser'), 'Exposure parser should be registered.')
 assert.ok(byId.has('ti-dwm-alert-generation'), 'DWM alert generation should be registered.')
+assert.ok(byId.has('ti-automatic-review'), 'Automatic review should be registered even when TI backend is unavailable.')
+assert.ok(byId.has('ti-automatic-evaluation'), 'Automatic evaluation should be registered even when TI backend is unavailable.')
 assert.ok(byId.has('api-agent-automations'), 'Agent automation dispatcher should be registered.')
 assert.ok(byId.has('api-vulnerability-scanner'), 'Vulnerability image scanner should be registered.')
 assert.ok(byId.has('api-database-backup'), 'Primary database backup scheduler should be registered.')
@@ -118,6 +120,27 @@ const tiMock = Bun.serve({
             service: 'ti-scraper',
             memory: { rssMb: 321, heapUsedMb: 123 },
             queue: { queued: 7 },
+            pressure: {
+                automaticReview: {
+                    total: 120,
+                    backlog: 9,
+                    counts: { queued: 7, running: 2, terminal: 108, dead_letter: 3 },
+                },
+                automaticEvaluation: {
+                    benchmarkCount: 4,
+                    activeBenchmarkCount: 1,
+                    taskCount: 80,
+                    counts: { pending: 5, retry_scheduled: 2, terminal: 72, dead_letter: 1 },
+                    running: true,
+                    enabled: true,
+                    intervalSeconds: 45,
+                    cycleCount: 12,
+                    errorCount: 2,
+                    lastCycleAt: '2026-07-03T09:59:30.000Z',
+                    lastSuccessAt: '2026-07-03T09:59:45.000Z',
+                    nextCycleAt: '2026-07-03T10:00:15.000Z',
+                },
+            },
             workers: [],
         })
         if (url.pathname === '/v1/dwm/source-packs') return json({
@@ -148,6 +171,14 @@ try {
     assert.equal(liveById.get('ti-public-canary-collection')?.resourceUsage.memoryRssMb, 321)
     assert.equal(liveById.get('ti-restricted-metadata-collection')?.status, 'enabled')
     assert.equal(liveById.get('ti-restricted-metadata-collection')?.nextRunAt, '2026-07-03T10:00:30.000Z')
+    assert.equal(liveById.get('ti-automatic-review')?.resourceUsage.queueDepth, 9)
+    assert.equal(liveById.get('ti-automatic-review')?.failureCount, 3)
+    assert.equal(liveById.get('ti-automatic-evaluation')?.status, 'running')
+    assert.equal(liveById.get('ti-automatic-evaluation')?.cadenceSeconds, 45)
+    assert.equal(liveById.get('ti-automatic-evaluation')?.lastSuccessAt, '2026-07-03T09:59:45.000Z')
+    assert.equal(liveById.get('ti-automatic-evaluation')?.nextRunAt, '2026-07-03T10:00:15.000Z')
+    assert.equal(liveById.get('ti-automatic-evaluation')?.resourceUsage.queueDepth, 7)
+    assert.equal(liveById.get('ti-automatic-evaluation')?.failureCount, 3)
 
     const controlDbAvailable = await scheduledJobControlsAvailable()
     if (controlDbAvailable) {

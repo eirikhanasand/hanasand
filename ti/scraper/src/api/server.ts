@@ -412,8 +412,15 @@ function runtimeQueuePressure(options: ApiServerOptions) {
       taskCount: evaluationTasks.length,
       counts: countsBy(evaluationTasks, (task) => task.automation?.status ?? "pending"),
       running: evaluationState?.running ?? false,
+      enabled: evaluationState?.enabled ?? false,
+      intervalSeconds: evaluationState?.intervalSeconds,
       cycleCount: evaluationState?.cycleCount ?? 0,
-      errorCount: evaluationState?.errorCount ?? 0
+      errorCount: evaluationState?.errorCount ?? 0,
+      lastCycleAt: evaluationState?.lastCycleAt,
+      lastSuccessAt: evaluationState?.lastSuccessAt,
+      lastError: evaluationState?.lastError,
+      lastErrorAt: evaluationState?.lastErrorAt,
+      nextCycleAt: evaluationState?.nextCycleAt
     }
   };
 }
