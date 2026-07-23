@@ -2542,22 +2542,20 @@ describe("dwm source requests", () => {
           ".proofArtifacts.publicTiQueryAdapter.parserHealthAlerts.rows | all(has(\"sourceFamily\") and has(\"alertType\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"alertGenerationImpact\") and .safeOutput.liveNetworkScrapeStarted == false)",
           ".proofArtifacts.publicTiQueryAdapter.enrichmentGapQueue.schemaVersion == \"ti.public_actor.enrichment_gap_queue.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.enrichmentGapQueue.items | all(has(\"sourceFamily\") and has(\"gapType\") and has(\"policyStatus\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"freshness\") and has(\"route\") and .safeOutput.liveNetworkScrapeStarted == false)",
-          ".proofArtifacts.publicTiQueryAdapter.sourceGrowthFixturePlan.schemaVersion == \"ti.public_actor.source_growth_fixture_plan.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.sourceGrowthFixturePlan.fixtures | all(has(\"sourceFamily\") and has(\"fixtureKey\") and has(\"parserProfile\") and has(\"policyStatus\") and has(\"activationTest\") and has(\"route\") and .safeOutput.liveNetworkScrapeStarted == false)",
-          ".proofArtifacts.publicTiQueryAdapter.sourceGrowthActivationReceipt.schemaVersion == \"ti.public_actor.source_growth_activation_receipt.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.sourceGrowthActivationReceipt.rows | all(has(\"sourceFamily\") and has(\"activationState\") and has(\"parserStatus\") and has(\"sourceRecordPreview\") and has(\"collectionJobPreview\") and has(\"provenance\") and .safeOutput.liveNetworkScrapeStarted == false)",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.schemaVersion == \"dwm.dashboard.source_operations_adapter.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.rows | all(has(\"sourceOperationsReadiness\") and .safeOutput.liveNetworkScrapeStarted == false)",
           ".proofArtifacts.dashboardSourceReadiness.scraperEnrichmentLifecycle.schemaVersion == \"ti.public_actor.scraper_enrichment_lifecycle.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.parserHealthAlerts.schemaVersion == \"ti.public_actor.parser_health_alerts.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.enrichmentGapQueue.schemaVersion == \"ti.public_actor.enrichment_gap_queue.v1\"",
-          ".proofArtifacts.dashboardSourceReadiness.sourceGrowthFixturePlan.schemaVersion == \"ti.public_actor.source_growth_fixture_plan.v1\"",
-          ".proofArtifacts.dashboardSourceReadiness.sourceGrowthActivationReceipt.schemaVersion == \"ti.public_actor.source_growth_activation_receipt.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
       }
     });
+    expect(actorReadinessBody.proofArtifacts.publicTiQueryAdapter).not.toHaveProperty("sourceGrowthFixturePlan");
+    expect(actorReadinessBody.proofArtifacts.publicTiQueryAdapter).not.toHaveProperty("sourceGrowthActivationReceipt");
+    expect(actorReadinessBody.proofArtifacts.dashboardSourceReadiness).not.toHaveProperty("sourceGrowthFixturePlan");
+    expect(actorReadinessBody.proofArtifacts.dashboardSourceReadiness).not.toHaveProperty("sourceGrowthActivationReceipt");
     expect(actorReadinessBody.actorReadiness.actorSections).toMatchObject({
       overview: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["telegram", "actor_page"]) }),
       infrastructure: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]) }),
@@ -3435,84 +3433,6 @@ describe("dwm source requests", () => {
           summary: expect.objectContaining({
             sourceFamilies: expect.arrayContaining(["darkweb_onion"]),
             actionTypes: expect.arrayContaining([expect.any(String)])
-          }),
-          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-        }),
-        sourceGrowthFixturePlan: expect.objectContaining({
-          schemaVersion: "ti.public_actor.source_growth_fixture_plan.v1",
-          mode: "no_network_fixture",
-          fixtures: expect.arrayContaining([
-            expect.objectContaining({
-              sourceFamily: "darkweb_onion",
-              fixtureKey: expect.stringContaining("/darkweb_onion/"),
-              parserProfile: expect.any(String),
-              policyStatus: expect.objectContaining({
-                metadataOnly: true,
-                liveNetworkFetch: false
-              }),
-              activationTest: expect.objectContaining({
-                canRun: expect.any(Boolean),
-                mode: "no_network_fixture",
-                route: expect.objectContaining({
-                  path: "/v1/dwm/source-requests",
-                  liveNetworkFetch: false,
-                  body: expect.objectContaining({ dryRun: true })
-                })
-              }),
-              validation: expect.objectContaining({
-                ready: expect.any(Boolean),
-                checks: expect.any(Array)
-              }),
-              provenance: expect.objectContaining({
-                gapQueueProofId: expect.any(String),
-                sourceProofIds: expect.any(Array)
-              }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            })
-          ]),
-          summary: expect.objectContaining({
-            sourceFamilies: expect.arrayContaining(["darkweb_onion"]),
-            metadataOnlyFamilies: expect.arrayContaining(["darkweb_onion"])
-          }),
-          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-        }),
-        sourceGrowthActivationReceipt: expect.objectContaining({
-          schemaVersion: "ti.public_actor.source_growth_activation_receipt.v1",
-          mode: "no_network_fixture",
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              sourceFamily: "darkweb_onion",
-              activationState: expect.stringMatching(/ready_to_test|policy_review_required|blocked|queued_for_review/),
-              parserStatus: expect.objectContaining({
-                profile: expect.any(String),
-                state: expect.stringMatching(/fixture_ready|fixture_blocked/)
-              }),
-              sourceRecordPreview: expect.objectContaining({
-                sourceId: expect.any(String),
-                fixtureBacked: true,
-                liveNetworkFetch: false
-              }),
-              collectionJobPreview: expect.objectContaining({
-                jobId: expect.any(String),
-                mode: "no_network_fixture",
-                liveNetworkFetch: false
-              }),
-              route: expect.objectContaining({
-                path: "/v1/dwm/source-requests",
-                liveNetworkFetch: false,
-                body: expect.objectContaining({ dryRun: true })
-              }),
-              provenance: expect.objectContaining({
-                fixturePlanId: expect.any(String),
-                gapQueueProofId: expect.any(String),
-                sourceProofIds: expect.any(Array)
-              }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            })
-          ]),
-          summary: expect.objectContaining({
-            total: expect.any(Number),
-            sourceRecordPreviewIds: expect.arrayContaining([expect.any(String)])
           }),
           safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
         }),
