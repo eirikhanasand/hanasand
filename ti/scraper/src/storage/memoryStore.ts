@@ -786,7 +786,8 @@ function verifiedReportRole(value: unknown, source?: any): string | undefined {
   return ["actor", "victim"].includes(role) && configured === role && source?.metadata?.reporterRoleVerified === true ? role : ["actor", "victim"].includes(role) ? "publisher" : undefined;
 }
 function mergeReportTimeline(previous: any, incoming: any): any {
-  const evidence = uniqueObjects([...(previous?.reportTimestamps ?? []), ...(incoming?.reportTimestamps ?? [])], (item: any) => `${item.role}:${item.timestamp}:${item.sourceId}:${item.captureId}:${item.evidencePath}`);
+  const evidence = uniqueObjects([...(previous?.reportTimestamps ?? []), ...(incoming?.reportTimestamps ?? [])]
+    .sort((left: any, right: any) => Number(Boolean(publicReferenceUrl(right?.referenceUrl))) - Number(Boolean(publicReferenceUrl(left?.referenceUrl)))), (item: any) => `${item.role}:${item.timestamp}:${item.sourceId}:${item.captureId}:${item.evidencePath}`);
   return timelineFromReportEvidence(evidence);
 }
 function timelineFromReportEvidence(reportTimestamps: any[]): any {

@@ -144,6 +144,25 @@ test("publication latency exists only with source-field evidence", () => {
   expect(unverified.timestampAnomalies).not.toContain("unverified_zero:publicationToCollectionSeconds");
 });
 
+test("later producer evidence repairs the matching historical report reference", () => {
+  const store = new InMemoryScraperStore();
+  const publishedAt = "2026-05-24T09:59:59.000Z";
+  const capture = fixtureCapture({
+    id: "cap_repaired_reference",
+    contentHash: "hash_repaired_reference",
+    publishedAt,
+    metadata: { reportTimestamps: [{ role: "publisher", timestamp: publishedAt, referenceUrl: "https://example.test/report", sourceId: "src_fixture", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] }
+  });
+  const incident = { id: "incident_repaired_reference", sourceId: capture.sourceId, captureId: capture.id, title: "Incident", summary: "Summary", firstSeenAt: publishedAt, confidence: 0.5, extractorVersion: "test", reviewState: "unreviewed" };
+  store.saveCapture(capture);
+  store.saveIncident({ ...incident, publishedAt, reportTimestamps: [{ role: "publisher", timestamp: publishedAt, sourceId: capture.sourceId, captureId: capture.id, evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] } as any);
+
+  store.savePipelineResult({ capture, incident, entities: [], indicators: [] });
+
+  expect(store.getIncident(incident.id)?.reportTimestamps).toEqual([expect.objectContaining({ referenceUrl: "https://example.test/report" })]);
+  expect(store.getTimelinessRecord(incident.id)?.reportTimestamps).toEqual([expect.objectContaining({ referenceUrl: "https://example.test/report" })]);
+});
+
 test("restart preserves historical anomalies while rejecting new inverted timelines", () => {
   const directory = mkdtempSync(join(tmpdir(), "ti-timeliness-restart-"));
   const snapshotPath = join(directory, "store.json");
