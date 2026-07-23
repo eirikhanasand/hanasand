@@ -74,6 +74,15 @@ export type PostgresScraperStoreOptions = {
 
 type PendingWrite = { description: string; run: () => Promise<void> };
 type Migration = { version: string; path: string };
+type DatabaseHealth = {
+  ok: boolean;
+  backend: "postgresql";
+  schema: "threat_intel";
+  migrationVersion: string;
+  actorProfileScopeReady?: boolean;
+  pendingWrites: number;
+  lastWriteError?: string;
+};
 
 export class PostgresScraperStore extends InMemoryScraperStore {
   private readonly sql: SQL;
@@ -81,6 +90,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   private readonly pendingWrites: PendingWrite[] = [];
   private draining?: Promise<void>;
   private lastWriteError?: Error;
+  private lastDatabaseHealth?: DatabaseHealth;
+  private databaseHealthCheckedAt = 0;
+  private databaseHealthRefresh?: Promise<void>;
   private pipelineDepth = 0;
 
   private constructor(sql: SQL, migrations: Migration[]) {
@@ -102,6 +114,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       await store.migrate();
       await store.hydrate();
       await store.backfillSourceOperationalKeys();
+      await store.databaseHealth();
       return store;
     } catch (error) {
       await sql.close({ timeout: 1 }).catch(() => undefined);
@@ -132,7 +145,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     await this.sql.close({ timeout: 5 });
   }
 
-  async databaseHealth() {
+  async databaseHealth(): Promise<DatabaseHealth> {
+    let health: DatabaseHealth;
     try {
       const [row] = await this.sql<{ schema_ready: boolean; migration_ready: boolean; actor_profile_scope_ready: boolean }[]>`
         SELECT
@@ -188,7 +202,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
               )
           ) AS actor_profile_scope_ready
       `;
-      return {
+      health = {
         ok: Boolean(row?.schema_ready && row?.migration_ready && row?.actor_profile_scope_ready),
         backend: "postgresql",
         schema: "threat_intel",
@@ -198,7 +212,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         lastWriteError: this.lastWriteError?.message
       };
     } catch (error) {
-      return {
+      health = {
         ok: false,
         backend: "postgresql",
         schema: "threat_intel",
@@ -207,6 +221,30 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         lastWriteError: error instanceof Error ? error.message : String(error)
       };
     }
+    this.lastDatabaseHealth = health;
+    this.databaseHealthCheckedAt = Date.now();
+    return health;
+  }
+
+  databaseHealthSnapshot(): DatabaseHealth {
+    if (!this.databaseHealthRefresh && Date.now() - this.databaseHealthCheckedAt >= 30_000) {
+      this.databaseHealthRefresh = this.databaseHealth()
+        .then(() => undefined)
+        .finally(() => { this.databaseHealthRefresh = undefined; });
+    }
+    const health = this.lastDatabaseHealth ?? {
+      ok: !this.lastWriteError,
+      backend: "postgresql" as const,
+      schema: "threat_intel" as const,
+      migrationVersion: LATEST_MIGRATION_VERSION,
+      pendingWrites: this.pendingWrites.length
+    };
+    return {
+      ...health,
+      ok: health.ok && !this.lastWriteError,
+      pendingWrites: this.pendingWrites.length,
+      lastWriteError: this.lastWriteError?.message ?? health.lastWriteError
+    };
   }
 
   async queryStructuredRecords(collection: keyof typeof structuredTables, input: { tenantId?: string; query?: string; limit?: number; offset?: number } = {}) {

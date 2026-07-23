@@ -75,7 +75,9 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (orgAlertCaseActionLedgerResponse) return orgAlertCaseActionLedgerResponse;
 
     if (url.pathname === "/v1/health") {
-      const storage = await (options.store as any).databaseHealth?.() ?? { ok: true, backend: "memory" };
+      const storage = (options.store as any).databaseHealthSnapshot?.()
+        ?? await (options.store as any).databaseHealth?.()
+        ?? { ok: true, backend: "memory" };
       const runtime = runtimeResourceSnapshot(options);
       return json({ ok: storage.ok !== false, service: "ti-scraper", version: "v1", storage, collection: { public: (options.canaryLoop as any)?.getState?.(), publicDefault: (options.defaultCanaryLoop as any)?.getState?.(), restrictedMetadata: (options.restrictedMetadataLoop as any)?.getState?.() }, ...runtime, generatedAt: nowIso() }, storage.ok === false ? 503 : 200);
     }
