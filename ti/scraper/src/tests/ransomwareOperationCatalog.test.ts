@@ -256,7 +256,7 @@ test("collects both real indexes as hash-only evidence without retaining restric
   expect(result).toMatchObject({ queuedTaskCount: 1, completedTaskCount: 1, failedTaskCount: 0, insertedCaptureCount: 28, incidentCount: 0 });
   expect(fetchedUrls).toEqual(["https://data.ransomware.live/groups.json", "https://data.ransomware.live/victims.json"]);
   expect(store.listActorIdentities()).toHaveLength(25);
-  expect(store.listActorProfiles()).toHaveLength(25);
+  expect(store.listActorProfiles()).toHaveLength(0);
   expect(store.listIncidents()).toHaveLength(0);
   expect(store.listCaptures().slice(0, 2).every((capture: any) => capture.sensitive && capture.storageKind === "metadata_only" && capture.body === undefined)).toBe(true);
   expect(store.listCaptures().filter((capture: any) => capture.metadata?.extractionProfile === "ransomware_group_metadata")).toHaveLength(26);

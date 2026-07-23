@@ -72,7 +72,7 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
       at,
       metadata,
       Number(source.metadata?.groupMetadataMaxItemsPerFetch ?? 120)
-    );
+    ).map((item) => ({ ...item, metadata: { ...item.metadata, catalogEvidenceOnly: true } }));
     const activityMetadata = {
       canaryPortfolio: true,
       fetchMode: mode,
@@ -103,10 +103,12 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
       sourceId: source.id,
       taskId: task.id,
       url: activityUrl,
-      title: `Ransomware.live activity evidence through ${ransomwareOperationCatalogSnapshot.activityWatermarkAt}`,
+      title: ransomwareOperationCatalogSnapshot.activityWatermarkAt
+        ? `Ransomware.live activity evidence through ${ransomwareOperationCatalogSnapshot.activityWatermarkAt}`
+        : "Ransomware.live activity evidence",
       rawText: activityBody.text,
       collectedAt: at,
-      publishedAt: ransomwareOperationCatalogSnapshot.activityWatermarkAt,
+      ...(ransomwareOperationCatalogSnapshot.activityWatermarkAt ? { publishedAt: ransomwareOperationCatalogSnapshot.activityWatermarkAt } : {}),
       contentHash: activityContentHash,
       links: [],
       metadata: activityMetadata,
@@ -119,7 +121,6 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
       title: `${ransomwareOperationCatalogSnapshot.catalogName} ${ransomwareOperationCatalogSnapshot.catalogVersion}`,
       rawText: fetched,
       collectedAt: at,
-      publishedAt: ransomwareOperationCatalogSnapshot.catalogModifiedAt,
       contentHash: groupContentHash,
       links: [],
       metadata: { ...metadata, extractionProfile: "ransomware_operation_catalog", ransomwareOperationCatalogSnapshot, parserVersion: "ransomware-live-current-operations:v1" },
