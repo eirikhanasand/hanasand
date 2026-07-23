@@ -48,7 +48,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "027_reconcile_delivery_latencies", path: fileURLToPath(new URL("../../migrations/027_reconcile_delivery_latencies.sql", import.meta.url)) },
   { version: "028_remove_generic_business_labels", path: fileURLToPath(new URL("../../migrations/028_remove_generic_business_labels.sql", import.meta.url)) },
   { version: "029_scope_capture_dedupe_by_tenant", path: fileURLToPath(new URL("../../migrations/029_scope_capture_dedupe_by_tenant.sql", import.meta.url)) },
-  { version: "030_reconcile_actor_profiles", path: fileURLToPath(new URL("../../migrations/030_reconcile_actor_profiles.sql", import.meta.url)) }
+  { version: "030_reconcile_actor_profiles", path: fileURLToPath(new URL("../../migrations/030_reconcile_actor_profiles.sql", import.meta.url)) },
+  { version: "031_preserve_unknown_delivery_completion", path: fileURLToPath(new URL("../../migrations/031_preserve_unknown_delivery_completion.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -1231,6 +1232,11 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         confidence = EXCLUDED.confidence,
         review_state = EXCLUDED.review_state,
         delivery_state = EXCLUDED.delivery_state,
+        first_seen_at = CASE
+          WHEN threat_intel.alerts.first_seen_at IS NULL THEN EXCLUDED.first_seen_at
+          WHEN EXCLUDED.first_seen_at IS NULL THEN threat_intel.alerts.first_seen_at
+          ELSE LEAST(threat_intel.alerts.first_seen_at, EXCLUDED.first_seen_at)
+        END,
         last_seen_at = EXCLUDED.last_seen_at,
         alerted_at = COALESCE(threat_intel.alerts.alerted_at, EXCLUDED.alerted_at),
         updated_at = EXCLUDED.updated_at,

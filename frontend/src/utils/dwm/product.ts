@@ -19,6 +19,14 @@ export type DwmAlert = {
     sourceCount: number
     firstSeenAt: string
     lastSeenAt?: string
+    matchTiming?: {
+        kind: 'new_evidence' | 'historical_backfill'
+        firstObservedAt: string
+        lastObservedAt: string
+        firstCollectedAt?: string
+        lastCollectedAt?: string
+        historicalEvidenceCount: number
+    }
     assertionKind?: 'source_claim'
     observedMatchSummary?: string
     claimSummary: string
@@ -66,6 +74,8 @@ export type DwmAlert = {
         provenance?: {
             captureId: string
             sourceId: string
+            publishedAt?: string
+            collectedAt?: string
             sourceType?: string
             collector?: string
             captureMode: 'public_message' | 'metadata_only' | 'public_report' | 'unknown'

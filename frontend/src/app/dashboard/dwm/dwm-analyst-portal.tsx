@@ -561,6 +561,7 @@ export function DwmAnalystPortal({
                                         <span>{stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)}</span>
                                         <span className={alert.routingContext?.urgency === 'immediate' || alert.severity === 'critical' ? 'font-semibold text-ui-danger' : ''}>{stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))}</span>
                                         <span>{alert.evidenceSummary?.evidenceCount ?? alert.evidence.length} evidence</span>
+                                        {alert.matchTiming?.kind === 'historical_backfill' && <span className='font-semibold text-ui-warning'>Historical match</span>}
                                         <span>{relativeTimeLabel(alert.lastSeenAt || alert.evidenceSummary?.lastObservedAt || alert.firstSeenAt)}</span>
                                     </span>
                                 </button>
@@ -1637,6 +1638,8 @@ function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEv
                         <div className='mt-3 grid gap-2 text-[11px] text-ui-muted sm:grid-cols-2'>
                             <p><span className='font-semibold text-ui-muted'>Evidence:</span> {evidenceReferenceState(selectedEvidence)}</p>
                             <p><span className='font-semibold text-ui-muted'>Source:</span> {sourceReferenceState(selectedEvidence)}</p>
+                            <p><span className='font-semibold text-ui-muted'>Published:</span> {selectedEvidence.provenance?.publishedAt ? shortTime(selectedEvidence.provenance.publishedAt) : 'not retained'}</p>
+                            <p><span className='font-semibold text-ui-muted'>Collected:</span> {selectedEvidence.provenance?.collectedAt ? shortTime(selectedEvidence.provenance.collectedAt) : 'not retained'}</p>
                             <p><span className='font-semibold text-ui-muted'>State:</span> {stateLabel(selectedEvidence.redactionState)}</p>
                             <p className='flex flex-wrap items-center gap-2'>
                                 <span><span className='font-semibold text-ui-muted'>Hash:</span> {evidenceHashState(selectedEvidence.contentHash, copiedHash)}</span>
@@ -2652,6 +2655,7 @@ function filterAlerts(alerts: PortalAlert[], filter: QueueFilter, query: string)
 }
 
 function isFreshAlert(alert: PortalAlert) {
+    if (alert.matchTiming?.kind === 'historical_backfill') return false
     const value = alert.lastSeenAt || alert.evidenceSummary?.lastObservedAt || alert.firstSeenAt
     const timestamp = new Date(value).getTime()
     if (Number.isNaN(timestamp)) return false

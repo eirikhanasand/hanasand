@@ -306,11 +306,12 @@ export async function testOrganizationWebhook(request: Request, options: ApiServ
       body: JSON.stringify(payload)
     });
     const ok = response.status >= 200 && response.status < 300;
-    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: ok ? "delivered" : "failed", httpStatus: response.status });
+    const completedAt = nowIso();
+    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: ok ? "delivered" : "failed", httpStatus: response.status, completedAt, deliveredAt: ok ? completedAt : undefined });
     (options.store as any).saveWebhookDestination({ ...destination, lastTestedAt: generatedAt, lastTestStatus: ok ? "delivered" : "failed", updatedAt: generatedAt });
     return json({ testedAt: generatedAt, ok, delivery }, ok ? 200 : 502);
   } catch (error) {
-    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "failed", httpStatus: 0, error: error instanceof Error ? error.message : String(error) });
+    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "failed", httpStatus: 0, completedAt: nowIso(), error: error instanceof Error ? error.message : String(error) });
     (options.store as any).saveWebhookDestination({ ...destination, lastTestedAt: generatedAt, lastTestStatus: "failed", updatedAt: generatedAt });
     return json({ testedAt: generatedAt, ok: false, delivery }, 502);
   }

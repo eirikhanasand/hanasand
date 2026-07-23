@@ -1,4 +1,4 @@
-import { classifySourceFamily, normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
+import { captureEvidenceTiming, classifySourceFamily, matchTimingForEvidence, normalizeWatchlist, type DwmSourceFamily, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationReadiness, buildDwmAlertRetentionAudit, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts, type RuntimeDwmWatchlist } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
 import { buildDwmCustomerAlertSummary, sanitizeDwmApiPayload, sanitizeDwmCustomerEvidenceExcerpt } from "../product/dwmCustomerDisplay.ts";
@@ -737,12 +737,13 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
         body: JSON.stringify(requestBody)
       });
       const ok = response.status >= 200 && response.status < 300;
-      const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: ok ? "delivered" : "failed", httpStatus: response.status });
+      const completedAt = nowIso();
+      const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: ok ? "delivered" : "failed", httpStatus: response.status, completedAt, deliveredAt: ok ? completedAt : undefined });
       deliveries.push(delivery);
       const nextAlert = ok ? { ...alert, deliveryState: "delivered", deliveredAt: delivery.deliveredAt } : alert;
       refreshAlertDeliveryReadiness(options, nextAlert, { ...scope, organizationId: deliveryOrgId }, [delivery], delivery.updatedAt ?? generatedAt);
     } catch (error) {
-      const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "failed", httpStatus: 0, error: error instanceof Error ? error.message : String(error) });
+      const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "failed", httpStatus: 0, completedAt: nowIso(), error: error instanceof Error ? error.message : String(error) });
       deliveries.push(delivery);
       refreshAlertDeliveryReadiness(options, alert, { ...scope, organizationId: deliveryOrgId }, [delivery], generatedAt);
     }
@@ -827,10 +828,11 @@ export async function testDwmWebhook(request: Request, options: ApiServerOptions
       body: JSON.stringify(requestBody)
     });
     const ok = response.status >= 200 && response.status < 300;
-    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, id: stableId("dwm_delivery", `${deliveryId}:${response.status}`), status: ok ? "delivered" : "failed", httpStatus: response.status });
+    const completedAt = nowIso();
+    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, id: stableId("dwm_delivery", `${deliveryId}:${response.status}`), status: ok ? "delivered" : "failed", httpStatus: response.status, completedAt, deliveredAt: ok ? completedAt : undefined });
     return json({ visibilityDecision: access.visibilityDecision, testedAt: generatedAt, ok, delivery: withDwmWebhookOperatorDeliveryTrace(delivery) }, ok ? 200 : 502);
   } catch (error) {
-    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, id: stableId("dwm_delivery", `${deliveryId}:network_error`), status: "failed", httpStatus: 0, error: error instanceof Error ? error.message : String(error) });
+    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, id: stableId("dwm_delivery", `${deliveryId}:network_error`), status: "failed", httpStatus: 0, completedAt: nowIso(), error: error instanceof Error ? error.message : String(error) });
     return json({ visibilityDecision: access.visibilityDecision, testedAt: generatedAt, ok: false, delivery: withDwmWebhookOperatorDeliveryTrace(delivery) }, 502);
   }
 }
@@ -1625,6 +1627,7 @@ async function ensureExposureQueueDwmAlerts(options: ApiServerOptions, scope: { 
       const claimTenantId = String((claim as any).tenantId ?? scope.tenantId ?? "default");
       if (claimTenantId !== scope.tenantId) continue;
       const alert = buildExposureQueueDwmAlert(options, claim, scope, generatedAt);
+      if (!alert) continue;
       const existing = existingAlerts.find((row: any) =>
         row.id === alert.id
         || row.dedupeKey === alert.dedupeKey
@@ -1646,14 +1649,41 @@ async function ensureExposureQueueDwmAlerts(options: ApiServerOptions, scope: { 
 function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope: { tenantId: string; organizationId?: string }, generatedAt: string) {
   const source = (options.store as any).getSource?.(claim.sourceId);
   const sourceFamily = exposureAlertSourceFamily(claim, source);
-  const observedAt = String(claim.collectedAt ?? claim.claimTime ?? generatedAt);
-  const firstSeenAt = String(claim.claimTime ?? claim.collectedAt ?? generatedAt);
+  const timing = captureEvidenceTiming({ publishedAt: claim.publishedAt, collectedAt: claim.collectedAt }, generatedAt);
+  const observedAt = timing.publishedAt ?? validExposureQueueTimestamp(claim.observedAt);
+  if (!observedAt) return undefined;
+  const firstSeenAt = observedAt;
   const confidence = confidencePercent(claim.confidence);
   const dedupeKey = stableId("dwm_dedupe", `${scope.tenantId}:${scope.organizationId ?? "default"}:exposure_queue:${claim.id}`);
   const evidenceId = String(claim.id ?? stableId("exposure_claim", `${claim.actor}:${claim.company}:${firstSeenAt}`));
   const sourceId = String(claim.sourceId ?? source?.id ?? stableId("src_exposure", claim.sourceName ?? claim.actor ?? "unknown"));
   const sourceName = String(claim.sourceName ?? source?.name ?? `${claim.actor ?? "Unknown actor"} exposure source`);
   const safeExcerpt = safeExposureAlertExcerpt(claim.summary || `${claim.actor} claimed ${claim.company}. ${claim.claimedData ?? "New victim claim."}`);
+  const evidence = {
+    id: evidenceId,
+    sourceId,
+    sourceName,
+    sourceFamily,
+    url: claim.url,
+    firstSeenAt,
+    observedAt,
+    captureMode: "metadata_only" as const,
+    redactionState: claim.metadataOnly === false ? "redacted" as const : "metadata_only" as const,
+    contentHash: String(claim.provenanceHash ?? stableId("exposure_claim_hash", evidenceId)),
+    excerpt: safeExcerpt,
+    provenance: {
+      captureId: evidenceId,
+      sourceId,
+      publishedAt: timing.publishedAt,
+      collectedAt: timing.collectedAt,
+      sourceType: String(source?.type ?? ""),
+      collector: "exposure_queue",
+      captureMode: "metadata_only" as const,
+      retentionClass: "leak_metadata",
+      storageKind: "metadata_only",
+      metadataOnly: claim.metadataOnly !== false
+    }
+  };
   return {
     id: stableId("dwm_alert", dedupeKey),
     tenantId: scope.tenantId,
@@ -1669,6 +1699,7 @@ function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope
     sourceCount: 1,
     firstSeenAt,
     lastSeenAt: observedAt,
+    matchTiming: matchTimingForEvidence([evidence], generatedAt),
     claimSummary: `${claim.actor ?? "Unknown actor"} exposure claim for ${claim.company ?? "Unknown company"}: ${claim.claimedData ?? "new victim claim"}.`,
     matchContext: {
       normalizedTerm: String(claim.company ?? "").toLowerCase(),
@@ -1688,7 +1719,7 @@ function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope
       queue: "exposure_alert",
       urgency: "same_day",
       customerVisibleEvidence: claim.metadataOnly === false ? "redacted_excerpt" : "metadata_only",
-      reason: "Fresh exposure queue claim was promoted into the DWM alert workflow."
+      reason: "Persisted exposure-queue evidence was promoted into the DWM alert workflow."
     },
     confidenceReasoning: [
       "Alert was generated from the persisted exposure queue, not from a demo case.",
@@ -1711,29 +1742,7 @@ function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope
     deliveryState: "pending_review",
     recommendedAction: "Open the exposure claim, verify the victim match, then assign or route to case/webhook.",
     recommendedRoute: "exposure_alert",
-    evidence: [{
-      id: evidenceId,
-      sourceId,
-      sourceName,
-      sourceFamily,
-      url: claim.url,
-      firstSeenAt,
-      observedAt,
-      captureMode: "metadata_only",
-      redactionState: claim.metadataOnly === false ? "redacted" : "metadata_only",
-      contentHash: String(claim.provenanceHash ?? stableId("exposure_claim_hash", evidenceId)),
-      excerpt: safeExcerpt,
-      provenance: {
-        captureId: evidenceId,
-        sourceId,
-        sourceType: String(source?.type ?? ""),
-        collector: "exposure_queue",
-        captureMode: "metadata_only",
-        retentionClass: "leak_metadata",
-        storageKind: "metadata_only",
-        metadataOnly: claim.metadataOnly !== false
-      }
-    }],
+    evidence: [evidence],
     webhookDelivery: {
       recommendedRoute: "exposure_alert",
       payloadHash: stableId("dwm_payload", dedupeKey),
@@ -1755,7 +1764,7 @@ function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope
   };
 }
 
-function exposureAlertSourceFamily(claim: any, source: any): string {
+function exposureAlertSourceFamily(claim: any, source: any): DwmSourceFamily {
   const raw = String(claim.sourceFamily ?? source?.metadata?.sourceFamily ?? source?.type ?? "").toLowerCase();
   if (raw.includes("telegram")) return "telegram_public";
   if (raw.includes("advisory") || raw.includes("news") || raw.includes("public_report")) return "public_advisory";
@@ -1768,6 +1777,11 @@ function confidencePercent(value: unknown): number {
   const numeric = Number(value ?? 0.74);
   if (!Number.isFinite(numeric)) return 74;
   return Math.max(1, Math.min(99, Math.round(numeric <= 1 ? numeric * 100 : numeric)));
+}
+
+function validExposureQueueTimestamp(value: unknown): string | undefined {
+  const timestamp = Date.parse(String(value ?? ""));
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined;
 }
 
 function safeExposureAlertExcerpt(value: unknown): string {

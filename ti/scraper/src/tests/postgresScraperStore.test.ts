@@ -200,6 +200,143 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await admin?.close({ timeout: 2 });
   });
 
+  test("repairs an alert's canonical first-seen time and rehydrates it after restart", async () => {
+    const alertId = "alert_first_seen_repair";
+    const incorrectCollectedAt = "2026-07-20T12:00:00.000Z";
+    const retainedPublishedAt = "2025-07-09T08:00:00.000Z";
+    const first = await PostgresScraperStore.create({ databaseUrl });
+    first.saveDwmAlert({
+      id: alertId,
+      tenantId: "tenant_first_seen_repair",
+      dedupeKey: "first-seen-repair",
+      severity: "medium",
+      confidence: 80,
+      reviewState: "needs_review",
+      deliveryState: "pending_review",
+      firstSeenAt: incorrectCollectedAt,
+      lastSeenAt: incorrectCollectedAt,
+      updatedAt: incorrectCollectedAt
+    });
+    await first.flush();
+    first.saveDwmAlert({
+      ...first.getDwmAlert(alertId),
+      firstSeenAt: retainedPublishedAt,
+      updatedAt: "2026-07-20T12:05:00.000Z"
+    });
+    await first.flush();
+
+    const [persisted] = await admin<{ first_seen_at: Date | string; record_first_seen_at: string }[]>`
+      SELECT first_seen_at, record->>'firstSeenAt' AS record_first_seen_at
+      FROM threat_intel.alerts
+      WHERE id = ${alertId}
+    `;
+    expect(new Date(persisted.first_seen_at).toISOString()).toBe(retainedPublishedAt);
+    expect(persisted.record_first_seen_at).toBe(retainedPublishedAt);
+    await first.close();
+
+    const restarted = await PostgresScraperStore.create({ databaseUrl });
+    expect(restarted.getDwmAlert(alertId)?.firstSeenAt).toBe(retainedPublishedAt);
+    await restarted.close();
+  });
+
+  test("keeps delivered webhook completion unknown across PostgreSQL restart", async () => {
+    const deliveryId = "delivery_missing_response_completion";
+    const projectedDeliveryId = "delivery_projection_missing_response_completion";
+    const attemptedAt = "2026-07-22T12:00:00.000Z";
+    const first = await PostgresScraperStore.create({ databaseUrl });
+    first.saveDwmWebhookDelivery({
+      id: deliveryId,
+      tenantId: "tenant_delivery_completion",
+      alertId: "alert_delivery_completion",
+      status: "delivered",
+      attemptedAt
+    });
+    await first.flush();
+    const projectedDelivery = {
+      id: projectedDeliveryId,
+      org_id: "tenant_delivery_completion",
+      alert_id: "alert_delivery_completion",
+      status: "delivered",
+      dry_run: false,
+      attempted_at: attemptedAt,
+      created_at: attemptedAt,
+      updated_at: attemptedAt
+    };
+    await admin`SELECT threat_intel.persist_public_dwm_delivery(${projectedDelivery}::jsonb)`;
+    await admin.unsafe(`
+      DROP TABLE IF EXISTS public.dwm_webhook_deliveries;
+      CREATE TABLE public.dwm_webhook_deliveries (
+        id TEXT PRIMARY KEY,
+        status TEXT NOT NULL,
+        attempted_at TIMESTAMPTZ,
+        completed_at TIMESTAMPTZ,
+        delivered_at TIMESTAMPTZ
+      );
+    `);
+    const fabricatedProjectionId = "delivery_fabricated_projection";
+    const legitimateProjectionId = "delivery_legitimate_projection";
+    const completedAt = "2026-07-22T12:00:02.000Z";
+    await admin`
+      INSERT INTO public.dwm_webhook_deliveries (id, status, attempted_at, completed_at, delivered_at)
+      VALUES
+        (${fabricatedProjectionId}, 'delivered', ${attemptedAt}, ${attemptedAt}, ${attemptedAt}),
+        (${legitimateProjectionId}, 'delivered', ${attemptedAt}, ${completedAt}, ${completedAt})
+    `;
+    await admin`
+      INSERT INTO threat_intel.workflow_records (record_type, id, tenant_id, created_at, updated_at, record)
+      VALUES
+        ('dwm_webhook_delivery', ${fabricatedProjectionId}, 'tenant_delivery_completion', ${attemptedAt}, ${attemptedAt}, ${{
+          id: fabricatedProjectionId,
+          status: "delivered",
+          attemptedAt,
+          completedAt: attemptedAt,
+          deliveredAt: attemptedAt
+        }}::jsonb),
+        ('dwm_webhook_delivery', ${legitimateProjectionId}, 'tenant_delivery_completion', ${attemptedAt}, ${completedAt}, ${{
+          id: legitimateProjectionId,
+          status: "delivered",
+          attemptedAt,
+          completedAt,
+          deliveredAt: completedAt
+        }}::jsonb)
+    `;
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '031_preserve_unknown_delivery_completion'`;
+    await first.close();
+
+    const [persisted] = await admin<{ status: string; attempted_at: string; completed_at: string | null; delivered_at: string | null }[]>`
+      SELECT
+        record->>'status' AS status,
+        record->>'attemptedAt' AS attempted_at,
+        record->>'completedAt' AS completed_at,
+        record->>'deliveredAt' AS delivered_at
+      FROM threat_intel.workflow_records
+      WHERE record_type = 'dwm_webhook_delivery' AND id = ${deliveryId}
+    `;
+    expect(persisted).toEqual({ status: "delivered", attempted_at: attemptedAt, completed_at: null, delivered_at: null });
+    expect((await admin<{ completed_at: string | null; delivered_at: string | null }[]>`
+      SELECT record->>'completedAt' AS completed_at, record->>'deliveredAt' AS delivered_at
+      FROM threat_intel.workflow_records
+      WHERE record_type = 'dwm_webhook_delivery' AND id = ${projectedDeliveryId}
+    `)[0]).toEqual({ completed_at: null, delivered_at: null });
+
+    const restarted = await PostgresScraperStore.create({ databaseUrl });
+    expect(restarted.getDwmWebhookDelivery(deliveryId)).toMatchObject({ status: "delivered", attemptedAt, completedAt: null, deliveredAt: null });
+    const projectedAfterRestart = restarted.getDwmWebhookDelivery(projectedDeliveryId);
+    expect(projectedAfterRestart?.status).toBe("delivered");
+    expect(new Date(projectedAfterRestart?.attemptedAt).toISOString()).toBe(attemptedAt);
+    expect(projectedAfterRestart?.deliveredAt).toBeUndefined();
+    expect((await admin<{ completed_at: Date; delivered_at: Date }[]>`
+      SELECT completed_at, delivered_at FROM public.dwm_webhook_deliveries WHERE id = ${fabricatedProjectionId}
+    `)[0]).toEqual({ completed_at: new Date(attemptedAt), delivered_at: new Date(attemptedAt) });
+    expect((await admin<{ fabricated_delivered_at: string | null; legitimate_delivered_at: string | null }[]>`
+      SELECT
+        (SELECT record->>'deliveredAt' FROM threat_intel.workflow_records WHERE record_type = 'dwm_webhook_delivery' AND id = ${fabricatedProjectionId}) AS fabricated_delivered_at,
+        (SELECT record->>'deliveredAt' FROM threat_intel.workflow_records WHERE record_type = 'dwm_webhook_delivery' AND id = ${legitimateProjectionId}) AS legitimate_delivered_at
+    `)[0]).toEqual({ fabricated_delivered_at: null, legitimate_delivered_at: completedAt });
+    await restarted.close();
+    await admin`DROP TABLE public.dwm_webhook_deliveries`;
+  });
+
   test("durably reconciles organization privacy purge failures through the real route", async () => {
     const organizationId = "org_privacy_postgres";
     const serviceToken = "privacy-postgres-service";

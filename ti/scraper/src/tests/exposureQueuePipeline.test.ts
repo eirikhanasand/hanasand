@@ -284,7 +284,19 @@ describe("DWM exposure queue pipeline", () => {
     store.saveCapture(fixtureCapture({ id: "cap_candidate_match", tenantId: "tenant_candidate", sourceId: "src_candidate_publisher", url: "https://candidate.example/match", body: "Candidate Corp reports a supplier cyberattack and data breach.", collectedAt: "2025-02-02T00:00:00.000Z", publishedAt: "2025-02-01T00:00:00.000Z", metadata: { organizationId: "org_candidate", sourceFamily: "public_advisory" } }));
     const retained = await (await rebuild()).json() as any;
     expect(retained.savedAlertCount).toBe(1);
-    expect(retained.alerts[0]).toMatchObject({ organizationId: "org_candidate", sourceFamily: "public_advisory", firstSeenAt: "2025-02-02T00:00:00.000Z", evidence: [expect.objectContaining({ id: "cap_candidate_match", firstSeenAt: "2025-02-02T00:00:00.000Z" })] });
+    expect(retained.alerts[0]).toMatchObject({
+      organizationId: "org_candidate",
+      sourceFamily: "public_advisory",
+      firstSeenAt: "2025-02-01T00:00:00.000Z"
+    });
+    expect(retained.alerts[0].evidence[0]).toMatchObject({
+      id: "cap_candidate_match",
+      firstSeenAt: "2025-02-01T00:00:00.000Z"
+    });
+    expect(retained.alerts[0].evidence[0].provenance).toMatchObject({
+      publishedAt: "2025-02-01T00:00:00.000Z",
+      collectedAt: "2025-02-02T00:00:00.000Z"
+    });
   });
 
   test("ingests parsed actor claims into the queue and shared TI search index", async () => {
@@ -374,6 +386,16 @@ describe("DWM exposure queue pipeline", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ items: [claim] })
     }), options);
+    await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ items: [{
+        sourceName: "Example actor leak monitor",
+        title: "Akira has just published a new victim: Unknown Time Company",
+        text: "Akira victim: Unknown Time Company. Publication time was not retained.",
+        url: "https://news.example.test/unknown-time-company"
+      }] })
+    }), options);
 
     const first = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/alerts?sourceFamily=darkweb_metadata"), options);
     const firstBody = await first.json() as any;
@@ -387,15 +409,26 @@ describe("DWM exposure queue pipeline", () => {
       workflowStatus: "new",
       workflowContext: {
         source: "exposure_queue"
-      }
+      },
+      firstSeenAt: claim.publishedAt,
+      lastSeenAt: claim.publishedAt,
+      matchTiming: { kind: "historical_backfill", historicalEvidenceCount: 1 }
     });
+    expect(firstBody.alerts.some((alert: any) => alert.company === "Unknown Time Company")).toBe(false);
     expect(exposureAlert.caseId).toBeUndefined();
     expect(exposureAlert.caseHandoff.identity.caseIdCandidate).toMatch(/^case_/);
     expect(exposureAlert.evidence[0]).toMatchObject({
       sourceName: "Example actor leak monitor",
+      observedAt: claim.publishedAt,
       captureMode: "metadata_only",
-      provenance: { collector: "exposure_queue", metadataOnly: true }
+      provenance: {
+        collector: "exposure_queue",
+        publishedAt: claim.publishedAt,
+        collectedAt: expect.any(String),
+        metadataOnly: true
+      }
     });
+    expect(exposureAlert.routingContext.reason).not.toContain("Fresh");
 
     const second = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/alerts?sourceFamily=darkweb_metadata"), options);
     const secondBody = await second.json() as any;

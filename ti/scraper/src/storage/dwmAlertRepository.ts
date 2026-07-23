@@ -1,4 +1,4 @@
-import { buildDwmProductSnapshot, classifySourceFamily, matchableCaptureText, type DwmAlert, type DwmWatchTerm } from "../product/dwmProduct.ts";
+import { buildDwmProductSnapshot, captureEvidenceTiming, classifySourceFamily, matchableCaptureText, matchTimingForEvidence, type DwmAlert, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { stableId, uniqueStrings } from "../utils.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 import type { TiSourceProvenancePublicTiSourceOpsProjection } from "../product/sourceProvenanceTiPageContract.ts";
@@ -923,6 +923,8 @@ export type DwmAlertGenerationCaptureRef = {
   sourceFamily: string;
   contentHash?: string;
   observedAt?: string;
+  publishedAt?: string;
+  collectedAt?: string;
 };
 
 export type DwmAlertGenerationSuppressedCaptureRef = DwmAlertGenerationCaptureRef & {
@@ -4851,6 +4853,7 @@ function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, so
   const route = sourceFamily === "public_advisory" || sourceFamily === "clear_web" ? "analyst_review" : "brand_protection";
   const dedupeSeed = candidate.dedupeKeyCandidate || stableId("dwm_dedupe_candidate", `${input.tenantId}:${input.organizationId ?? ""}:${candidate.normalizedTerm}:${sourceFamily}`);
   const dedupeKey = stableId("dwm_dedupe", `${dedupeSeed}:${artifactType}:${sourceFamily}`);
+  const generatedAt = nowFromEvidence(input);
 
   return {
     id: stableId("dwm_alert", dedupeKey),
@@ -4862,8 +4865,9 @@ function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, so
     artifactType,
     sourceFamily,
     sourceCount,
-    firstSeenAt: observed[0] ?? nowFromEvidence(input),
-    lastSeenAt: observed.at(-1) ?? nowFromEvidence(input),
+    firstSeenAt: observed[0] ?? generatedAt,
+    lastSeenAt: observed.at(-1) ?? generatedAt,
+    matchTiming: matchTimingForEvidence(evidence, generatedAt),
     assertionKind: "source_claim",
     observedMatchSummary: generatedObservedMatchSummary(candidate.term.value, evidence.length, sourceCount),
     claimSummary: `${sourceFamily.replaceAll("_", " ")} evidence matched ${candidate.term.value} across ${evidence.length} capture${evidence.length === 1 ? "" : "s"}.`,
@@ -4878,8 +4882,8 @@ function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, so
       sourceFamilyCounts: evidence.reduce((counts, item) => ({ ...counts, [item.sourceFamily]: Number(counts[item.sourceFamily] ?? 0) + 1 }), {} as Record<string, number>),
       metadataOnlyCount: evidence.filter((item) => item.provenance.metadataOnly).length,
       publicSafeCount: evidence.filter((item) => !item.provenance.metadataOnly).length,
-      firstObservedAt: observed[0] ?? nowFromEvidence(input),
-      lastObservedAt: observed.at(-1) ?? nowFromEvidence(input)
+      firstObservedAt: observed[0] ?? generatedAt,
+      lastObservedAt: observed.at(-1) ?? generatedAt
     },
     routingContext: {
       queue: route,
@@ -4893,7 +4897,7 @@ function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, so
       `Source families: ${sourceFamilies.join(", ") || "unknown"}.`
     ],
     provenance: {
-      generatedAt: nowFromEvidence(input),
+      generatedAt,
       matchBasis: "watchlist_capture_text",
       matchedEvidenceIds: evidence.map((item) => item.id),
       sourceFamilies,
@@ -4920,7 +4924,14 @@ function evidenceFromGenerationCaptureRef(ref: DwmAlertGenerationCaptureRef, cap
   const text = capture ? matchableCaptureText(capture) : "";
   const captureId = String(ref.captureId);
   const sourceId = String(ref.sourceId ?? (capture as any)?.sourceId ?? (source as any)?.id ?? "unknown");
-  const observedAt = ref.observedAt || String((capture as any)?.collectedAt ?? nowFromEvidence(input));
+  const fallback = nowFromEvidence(input);
+  const timing = capture
+    ? captureEvidenceTiming(capture, fallback)
+    : {
+        observedAt: ref.publishedAt || ref.observedAt || ref.collectedAt || fallback,
+        publishedAt: ref.publishedAt,
+        collectedAt: ref.collectedAt || ref.observedAt || fallback
+      };
   const contentHash = ref.contentHash || String((capture as any)?.contentHash ?? stableId("capture_hash", captureId));
   const captureMode = sourceFamily === "telegram_public" ? "public_message" : sourceFamily === "public_advisory" || sourceFamily === "clear_web" ? "public_report" : "metadata_only";
   return {
@@ -4929,8 +4940,8 @@ function evidenceFromGenerationCaptureRef(ref: DwmAlertGenerationCaptureRef, cap
     sourceName: String((source as any)?.name ?? sourceFamily.replaceAll("_", " ")),
     sourceFamily,
     url: String((capture as any)?.url ?? (source as any)?.url ?? "") || undefined,
-    firstSeenAt: observedAt,
-    observedAt,
+    firstSeenAt: timing.observedAt,
+    observedAt: timing.observedAt,
     captureMode,
     redactionState: captureMode === "metadata_only" ? "metadata_only" : "redacted",
     contentHash,
@@ -4938,6 +4949,8 @@ function evidenceFromGenerationCaptureRef(ref: DwmAlertGenerationCaptureRef, cap
     provenance: {
       captureId,
       sourceId,
+      publishedAt: timing.publishedAt,
+      collectedAt: timing.collectedAt,
       sourceType: String((source as any)?.type ?? "") || undefined,
       collector: String((capture as any)?.metadata?.adapter ?? "") || undefined,
       captureMode,
@@ -4979,6 +4992,7 @@ function mergeGeneratedAlert(current: DwmAlert, next: DwmAlert): DwmAlert {
     sourceCount: sourceIds.length,
     firstSeenAt: observed[0] ?? current.firstSeenAt ?? next.firstSeenAt,
     lastSeenAt: observed.at(-1) ?? next.lastSeenAt ?? current.lastSeenAt,
+    matchTiming: matchTimingForEvidence(evidence, current.provenance.generatedAt),
     assertionKind: "source_claim",
     observedMatchSummary: generatedObservedMatchSummary(current.matchedTerm.value, evidence.length, sourceIds.length),
     confidence: Math.max(Number(current.confidence ?? 0), Number(next.confidence ?? 0)),
@@ -5035,12 +5049,15 @@ function captureRefsForTermWithSuppression(input: { term: DwmWatchTerm; sources:
     .filter((capture) => termMatchesText(matchableCaptureText(capture), input.term.value))
     .map((capture) => {
       const source = input.sources.find((row) => row.id === capture.sourceId);
+      const timing = captureEvidenceTiming(capture);
       return {
         captureId: capture.id,
         sourceId: capture.sourceId,
         sourceFamily: sourceFamilyFor(source, capture),
         contentHash: capture.contentHash,
-        observedAt: capture.collectedAt
+        observedAt: timing.observedAt,
+        publishedAt: timing.publishedAt,
+        collectedAt: timing.collectedAt
       };
     });
   const byIdentity = new Map<string, DwmAlertGenerationCaptureRef>();

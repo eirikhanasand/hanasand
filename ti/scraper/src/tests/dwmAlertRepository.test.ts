@@ -279,6 +279,54 @@ const orgBActorCapture: RawCapture = {
 } as RawCapture;
 
 describe("dwm alert repository", () => {
+  test("persists original publisher and collection times for historical research-monitor evidence", () => {
+    const store = new InMemoryScraperStore();
+    const source = {
+      ...publicAdvisorySource,
+      id: "src_repo_ntnu_advisory",
+      name: "NTNU public incident advisory",
+      url: "https://nyheter.ntnu.no/en/ntnu-hit-by-cyberattack-no-personal-data-stolen/"
+    } as SourceRecord;
+    store.saveSource(source);
+    store.saveCapture({
+      ...publicAdvisoryCapture,
+      id: "cap_repo_ntnu_advisory",
+      sourceId: source.id,
+      url: source.url,
+      publishedAt: "2025-07-09T11:02:00.000Z",
+      collectedAt: "2026-07-23T09:05:00.000Z",
+      contentHash: "hash-repo-ntnu-advisory",
+      body: "NTNU public notice: the university was affected by a cyberattack against supplier Extend AS."
+    } as RawCapture);
+    (store as any).saveDwmWatchlist({
+      id: "watch_repo_ntnu",
+      tenantId: "org_repo_ntnu",
+      organizationId: "org_repo_ntnu",
+      name: "Hanasand Research Monitor — NTNU (not a customer)",
+      terms: [{ id: "term_repo_ntnu", value: "NTNU", kind: "company" }],
+      status: "active"
+    });
+
+    const rebuilt = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "org_repo_ntnu", organizationId: "org_repo_ntnu" });
+
+    expect(rebuilt.savedAlertCount).toBe(1);
+    expect((store as any).listDwmAlerts()[0]).toMatchObject({
+      firstSeenAt: "2025-07-09T11:02:00.000Z",
+      matchTiming: {
+        kind: "historical_backfill",
+        firstCollectedAt: "2026-07-23T09:05:00.000Z",
+        historicalEvidenceCount: 1
+      },
+      evidence: [expect.objectContaining({
+        observedAt: "2025-07-09T11:02:00.000Z",
+        provenance: expect.objectContaining({
+          publishedAt: "2025-07-09T11:02:00.000Z",
+          collectedAt: "2026-07-23T09:05:00.000Z"
+        })
+      })]
+    });
+  });
+
   test("matches shared and exact-tenant evidence but excludes foreign tenant and organization captures", () => {
     const globalSource = { ...publicAdvisorySource, id: "src_scope_global" } as SourceRecord;
     const ownSource = { ...publicAdvisorySource, id: "src_scope_own", tenantId: "tenant_scope", metadata: { organizationId: "org_scope" } } as SourceRecord;
