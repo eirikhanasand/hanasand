@@ -25,6 +25,7 @@ const capture: RawCapture = {
   id: "cap_case_acme",
   sourceId: source.id,
   url: "https://t.me/case_public/19",
+  publishedAt: "2026-06-28T13:03:00.000Z",
   collectedAt: "2026-06-28T13:04:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",

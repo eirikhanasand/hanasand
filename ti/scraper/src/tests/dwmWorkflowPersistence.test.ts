@@ -23,6 +23,7 @@ const capture: RawCapture = {
   id: "cap_workflow_acme",
   sourceId: source.id,
   url: "https://t.me/workflow_public/42",
+  publishedAt: "2026-06-27T21:01:00.000Z",
   collectedAt: "2026-06-27T21:02:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -36,6 +37,7 @@ const followupCapture: RawCapture = {
   id: "cap_workflow_acme_followup",
   sourceId: source.id,
   url: "https://t.me/workflow_public/43",
+  publishedAt: "2026-06-27T21:06:00.000Z",
   collectedAt: "2026-06-27T21:07:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -49,6 +51,7 @@ const duplicateCapture: RawCapture = {
   ...capture,
   id: "cap_workflow_acme_duplicate",
   url: "https://t.me/workflow_public/42?mirror=1",
+  publishedAt: "2026-06-27T21:01:00.000Z",
   collectedAt: "2026-06-27T21:09:00.000Z"
 } as RawCapture;
 
@@ -69,6 +72,7 @@ const darkwebCapture: RawCapture = {
   id: "cap_workflow_onion_acme",
   sourceId: darkwebSource.id,
   url: "http://workflow-example.onion/acme",
+  publishedAt: "2026-06-27T21:03:00.000Z",
   collectedAt: "2026-06-27T21:04:00.000Z",
   mediaType: "text/plain",
   storageKind: "metadata_only",
@@ -89,6 +93,7 @@ const darkwebFollowupCapture: RawCapture = {
   ...darkwebCapture,
   id: "cap_workflow_onion_acme_followup",
   url: "http://workflow-example.onion/acme-followup",
+  publishedAt: "2026-06-27T21:11:00.000Z",
   collectedAt: "2026-06-27T21:12:00.000Z",
   contentHash: "hash-workflow-onion-acme-followup",
   metadata: {
@@ -119,6 +124,7 @@ const actorCapture: RawCapture = {
   id: "cap_workflow_actor_beta",
   sourceId: actorSource.id,
   url: "https://intel.example/actors/workflow-actor#beta",
+  publishedAt: "2026-06-27T21:05:00.000Z",
   collectedAt: "2026-06-27T21:06:00.000Z",
   mediaType: "text/plain",
   storageKind: "metadata_only",
@@ -281,8 +287,8 @@ describe("dwm workflow persistence", () => {
       expect(secondRebuild.alerts[0].workflowContext.evidenceCount).toBe(2);
       expect(secondRebuild.alerts[0].workflowContext.generationEvidenceWindow).toMatchObject({
         captureIds: expect.arrayContaining(["cap_workflow_acme", "cap_workflow_acme_followup"]),
-        firstObservedAt: "2026-06-27T21:02:00.000Z",
-        lastObservedAt: "2026-06-27T21:07:00.000Z"
+        firstObservedAt: "2026-06-27T21:01:00.000Z",
+        lastObservedAt: "2026-06-27T21:06:00.000Z"
       });
       expect(secondRebuild.alerts[0].evidence.map((item: any) => item.id)).toContain("cap_workflow_acme_followup");
       expect(secondRebuild.alerts[0].provenance.captureIds).toContain("cap_workflow_acme_followup");
@@ -466,14 +472,14 @@ describe("dwm workflow persistence", () => {
       casePath: `/v1/cases/case_workflow_live?alertId=${alert.id}`
     });
     expect(triage.alert.evidenceFreshness).toMatchObject({
-      newestEvidenceAt: "2026-06-27T21:02:00.000Z",
+      newestEvidenceAt: "2026-06-27T21:01:00.000Z",
       evidenceCount: 1,
       captureIds: ["cap_workflow_acme"],
       generationEvidenceWindow: {
         captureIds: ["cap_workflow_acme"],
         sourceFamilies: ["telegram_public"],
-        firstObservedAt: "2026-06-27T21:02:00.000Z",
-        lastObservedAt: "2026-06-27T21:02:00.000Z"
+        firstObservedAt: "2026-06-27T21:01:00.000Z",
+        lastObservedAt: "2026-06-27T21:01:00.000Z"
       }
     });
     expect(triage.alert.provenanceFreshness).toMatchObject({
@@ -482,7 +488,7 @@ describe("dwm workflow persistence", () => {
       dedupeKey: alert.dedupeKey,
       generationEvidenceWindow: {
         contentHashes: ["hash-workflow-acme"],
-        firstObservedAt: "2026-06-27T21:02:00.000Z"
+        firstObservedAt: "2026-06-27T21:01:00.000Z"
       }
     });
 
@@ -753,7 +759,7 @@ describe("dwm workflow persistence", () => {
     });
     expect(detail.evidenceFreshness).toMatchObject({
       evidenceCount: 1,
-      newestEvidenceAt: "2026-06-27T21:02:00.000Z",
+      newestEvidenceAt: "2026-06-27T21:01:00.000Z",
       generationEvidenceWindow: {
         captureIds: ["cap_workflow_acme"],
         sourceFamilies: ["telegram_public"]
@@ -763,8 +769,8 @@ describe("dwm workflow persistence", () => {
       matchBasis: "watchlist_capture_text",
       captureIds: ["cap_workflow_acme"],
       generationEvidenceWindow: {
-        firstObservedAt: "2026-06-27T21:02:00.000Z",
-        lastObservedAt: "2026-06-27T21:02:00.000Z"
+        firstObservedAt: "2026-06-27T21:01:00.000Z",
+        lastObservedAt: "2026-06-27T21:01:00.000Z"
       }
     });
   });

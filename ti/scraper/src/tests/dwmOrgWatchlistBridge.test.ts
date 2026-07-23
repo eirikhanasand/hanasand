@@ -49,6 +49,7 @@ const telegramCapture: RawCapture = {
   id: "cap_org_bridge_tg_acme",
   sourceId: telegramSource.id,
   url: "https://t.me/org_bridge/7",
+  publishedAt: "2026-06-28T18:04:00.000Z",
   collectedAt: "2026-06-28T18:05:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -68,6 +69,7 @@ const darkwebCapture: RawCapture = {
   id: "cap_org_bridge_onion_acme",
   sourceId: darkwebSource.id,
   url: "http://org-bridge.example.onion/acme",
+  publishedAt: "2026-06-28T18:07:00.000Z",
   collectedAt: "2026-06-28T18:08:00.000Z",
   mediaType: "text/plain",
   storageKind: "metadata_only",
@@ -88,6 +90,7 @@ const actorPageCapture: RawCapture = {
   id: "cap_org_bridge_actor_page_acme",
   sourceId: actorPageSource.id,
   url: "https://intel.example/actors/akira#acme",
+  publishedAt: "2026-06-28T18:11:00.000Z",
   collectedAt: "2026-06-28T18:12:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -101,6 +104,7 @@ const nonmatchCapture: RawCapture = {
   id: "cap_org_bridge_nonmatch",
   sourceId: telegramSource.id,
   url: "https://t.me/org_bridge/8",
+  publishedAt: "2026-06-28T18:14:00.000Z",
   collectedAt: "2026-06-28T18:15:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -964,7 +968,7 @@ describe("DWM org watchlist bridge", () => {
       id: telegramAlert.id,
       workflowStatus: "closed",
       deliveryReadiness: { state: "closed" },
-      evidenceFreshness: { newestEvidenceAt: "2026-06-28T18:05:00.000Z" },
+      evidenceFreshness: { newestEvidenceAt: "2026-06-28T18:04:00.000Z" },
       provenanceFreshness: { matchBasis: "watchlist_capture_text", captureIds: ["cap_org_bridge_tg_acme"] }
     });
   });

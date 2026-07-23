@@ -380,6 +380,7 @@ describe("dwm entitlement policy", () => {
         id: "cap_rebuild_rate_acme",
         sourceId: source.id,
         url: "https://t.me/rebuild_rate/42",
+        publishedAt: "2026-06-29T10:04:00.000Z",
         collectedAt: "2026-06-29T10:05:00.000Z",
         mediaType: "text/plain",
         storageKind: "inline_text",

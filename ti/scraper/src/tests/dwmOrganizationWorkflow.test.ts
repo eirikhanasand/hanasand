@@ -21,6 +21,7 @@ const capture: RawCapture = {
   id: "cap_org_acme",
   sourceId: source.id,
   url: "https://t.me/org_public/77",
+  publishedAt: "2026-06-28T12:04:00.000Z",
   collectedAt: "2026-06-28T12:05:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
@@ -205,7 +206,7 @@ describe("organization shared DWM workflow", () => {
       expect(discordFields.find((field: any) => field.name === "Matched term")).toMatchObject({ value: "acme.com" });
       expect(discordFields.find((field: any) => field.name === "Organization")).toMatchObject({ value: organizationId });
       expect(discordFields.find((field: any) => field.name === "Source family")).toMatchObject({ value: "telegram_public" });
-      expect(discordFields.find((field: any) => field.name === "Evidence")).toMatchObject({ value: "1 item; latest 2026-06-28T12:05:00.000Z" });
+      expect(discordFields.find((field: any) => field.name === "Evidence")).toMatchObject({ value: "1 item; latest 2026-06-28T12:04:00.000Z" });
       expect(discordFields.find((field: any) => field.name === "Evidence excerpt")?.value).toContain("Lumma C2");
       expect(discordFields.find((field: any) => field.name === "Confidence")?.value).toStartWith("92%");
       expect(discordFields.find((field: any) => field.name === "Case")?.value).toContain("/v1/cases/");

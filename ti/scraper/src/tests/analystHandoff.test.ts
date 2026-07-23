@@ -38,6 +38,7 @@ const capture: RawCapture = {
   sourceId: source.id,
   tenantId: "tenant_acme",
   url: "https://t.me/handoff_public/99",
+  publishedAt: "2026-06-28T16:02:00.000Z",
   collectedAt: "2026-06-28T16:03:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",

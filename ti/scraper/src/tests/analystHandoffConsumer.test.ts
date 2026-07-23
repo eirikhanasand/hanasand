@@ -49,6 +49,7 @@ const capture: RawCapture = {
   sourceId: source.id,
   tenantId: "tenant_acme",
   url: "https://t.me/consumer_contract/11",
+  publishedAt: "2026-06-29T00:02:00.000Z",
   collectedAt: "2026-06-29T00:03:00.000Z",
   mediaType: "text/plain",
   storageKind: "inline_text",
