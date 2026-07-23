@@ -4,7 +4,7 @@
 
 This is the authoritative ordered execution contract for completing the remaining production, thesis, and maintainability work after `goal.md`, `goal2.md`, and `goal3.md`.
 
-Work through the numbered gates in order. Earlier goal files remain binding where they add stricter evidence, safety, tenant-isolation, or research requirements. A gate is complete only when its production behavior and persisted results are verified; code, tests, UI labels, fixtures, or agent claims alone do not count.
+Work through the numbered goals in order. Earlier goal files remain binding where they add stricter evidence, safety, tenant-isolation, or research requirements. A goal is complete only when its production behavior and persisted results are verified; code, tests, UI labels, fixtures, or agent claims alone do not count.
 
 The product must operate automatically end to end. Ambiguous or low-quality input may be quarantined, rejected, retried, or withheld from promotion, but the pipeline must not wait indefinitely for a human. Hanasand AI may perform review and adjudication only when its exact model/version, evidence input, decision, confidence, and evaluation result are persisted and reproducible.
 
@@ -18,7 +18,7 @@ Every production claim must trace through:
 
 `public output -> automated review -> analytical claim -> extracted field -> immutable capture -> current source -> timestamps -> parser/model version -> confidence -> independence -> validation state`
 
-For every gate:
+For every goal:
 
 - Inspect runtime reachability before adding or deleting code.
 - Fix the shared production path, not a UI symptom or one caller.
@@ -29,7 +29,7 @@ For every gate:
 - Persist failures and negative outcomes; automatic review must include false-positive, false-negative, true-positive, and true-negative cases.
 - Deploy from `/home/hanasand/hanasand`, probe the live API/UI/database, and preserve legal, retention, redaction, and tenant boundaries.
 
-## Ordered Acceptance Gates
+## Ordered Acceptance Goals
 
 ### 1. Complete Actor And APT Corpus Coverage
 
@@ -106,7 +106,7 @@ Acceptance:
 
 - All eligible production claims/incidents reach a terminal automatic review state or explicit retry/dead-letter state.
 - Incident actor fields are populated only when evidence supports attribution; negative cases remain unattributed/rejected rather than guessed.
-- Random success and failure samples are inspected against source evidence and meet the independently measured quality gate in section 5.
+- Random success and failure samples are inspected against source evidence and meet the independently measured quality requirements in section 5.
 - The queue drains and resumes across restart, endpoint failure, malformed response, model timeout, and model version upgrade.
 
 ### 5. Establish Independent, Fully Automatic Accuracy Evaluation
@@ -173,7 +173,26 @@ Acceptance:
 - No production-reachable page imports or renders sample DWM data.
 - The canonical DWM workspace operates on real tenant-scoped persistence and live alerts/deliveries.
 
-### 9. Remove Stale Fixtures, Untyped Evaluation Code, Dead Paths, And Excess Complexity
+### 9. Complete Third-Party Reporting
+
+The thesis describes third-party reporting as optional, but it is mandatory for the intended high-grade submission. Existing evidence-linked STIX export, tenant-scoped case export, JSON APIs, webhook delivery, and authenticated public-advisory intake are foundations, not sufficient completion by themselves.
+
+Required implementation:
+
+- Define and document at least one canonical end-to-end production workflow in which an authenticated tenant selects evidence-backed findings or a case, produces a bounded standards-based report, delivers or exports it to an external recipient/system, and retains the exact delivery result.
+- Reuse the existing case, `/v1/exports/stix`, JSON API, webhook, and advisory-intake paths. Do not create a parallel reporting service, duplicate contracts, sample report generator, or generic unbounded submission endpoint.
+- Enforce tenant/organization scope, authentication, evidence provenance, redaction, retention, idempotency, bounded retry, and durable failure/audit history throughout the workflow.
+- Clearly distinguish outbound customer reporting from authenticated inbound public-advisory submission. Never imply customer adoption or successful external receipt without retained production evidence.
+- Document the supported report format, authentication, schema/version, errors, retry behavior, evidence limitations, and lawful-use boundary through the existing developer/product surfaces.
+
+Acceptance:
+
+- A live authenticated DB/API/browser/receiver run proves evidence selection, report generation, standards-valid output, external delivery or export, receipt/result persistence, retry/idempotency, and restart survival.
+- The delivered report resolves every material claim to retained evidence and exposes no restricted locator, stolen content, credential, or cross-tenant data.
+- Invalid, unauthorized, duplicate, oversized, unsafe, or failed submissions remain explicit failures and are never converted into success or generic empty output.
+- Production contains no sample report, fabricated delivery, hardcoded recipient, or reporting UI that is disconnected from the real workflow.
+
+### 10. Remove Stale Fixtures, Untyped Evaluation Code, Dead Paths, And Excess Complexity
 
 Required implementation:
 
@@ -195,6 +214,6 @@ Acceptance:
 
 ## Completion Rule
 
-Do not mark `goal4.md` or the persistent Codex goal complete until all nine gates pass in order on the live system and `goal.md`, `goal2.md`, and `goal3.md` have been reconciled against the resulting production state.
+Do not mark `goal4.md` or the persistent Codex goal complete until all ten goals pass in order on the live system and `goal.md`, `goal2.md`, and `goal3.md` have been reconciled against the resulting production state.
 
 Completion requires exact final production counts, current authoritative coverage reconciliation, automatic AI review/evaluation evidence, real source/alert/delivery histories, a clean reachability audit, and explicit disclosure of any lawful or technical exclusion. If a requirement cannot be completed without fabricating data, violating source terms, exposing restricted material, impersonating a customer, or circularly evaluating the model, change the product/thesis claim honestly instead of simulating success.
