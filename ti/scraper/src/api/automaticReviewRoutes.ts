@@ -9,16 +9,17 @@ import { sanitizeDwmCustomerEvidenceExcerpt } from "../product/dwmCustomerDispla
 import { minimizeTelegramPii } from "../adapters/telegramPublicHelpers.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
 
-export const AUTOMATIC_REVIEW_PROMPT_VERSION = "ti.automatic_intelligence_review.prompt.v4";
+export const AUTOMATIC_REVIEW_PROMPT_VERSION = "ti.automatic_intelligence_review.prompt.v5";
 export const AUTOMATIC_REVIEW_RESPONSE_SCHEMA = "ti.automatic_intelligence_review.response.v1";
-const REQUEST_SCHEMA = "ti.automatic_intelligence_review.request.v4";
-const REPLACEABLE_PROMPT_VERSION = "ti.automatic_intelligence_review.prompt.v3";
+const REQUEST_SCHEMA = "ti.automatic_intelligence_review.request.v5";
+const REPLACEABLE_PROMPT_VERSION = "ti.automatic_intelligence_review.prompt.v4";
 const TASK_SCHEMA = "ti.automatic_intelligence_review.task.v1";
 const EVIDENCE_PROJECTION_SCHEMA = "ti.automatic_intelligence_review.evidence_projection.v2";
 const TASK_KIND = "automatic_intelligence_review_task";
 const EVENT_KIND = "automatic_intelligence_review_event";
 const DEFAULT_MAX_ATTEMPTS = 3;
 const FALSE_POSITIVE_REASON_ERROR = "A non-supported decision requires a structured false-positive reason";
+const FALSE_POSITIVE_REASON_CORRECTION = "false_positive_reasons_required";
 const FALSE_POSITIVE_REASON_RETRY = "The prior response omitted mandatory falsePositiveReasons. For a non-supported decision, the model must return at least one non-empty, evidence-grounded falsePositiveReasons entry; do not copy this instruction as the reason.";
 const FALSE_POSITIVE_REASON_FINAL_RETRY = "The prior corrected response still omitted mandatory falsePositiveReasons. For this non-supported decision, the model must now return at least one non-empty, evidence-grounded falsePositiveReasons entry derived from the supplied governed evidence; do not copy this instruction as the reason.";
 const DECISION_KEYS = ["schemaVersion", "promptVersion", "modelVersion", "subject", "action", "claimValidity", "actorAttribution", "supportingEvidenceIds", "contradictoryEvidenceIds", "uncertainty", "falsePositiveReasons", "rationale", "confidence", "calibrationContext"];
@@ -350,7 +351,7 @@ async function processTask(options: ApiServerOptions, original: AutomaticReviewT
   const refreshedEvidence = governedEvidence(index, task.subject);
   const linkedRecords = eligibleLinkedEvidence(index, task.subject);
   const linkedCounts = linkedEvidenceCounts(index, linkedRecords);
-  const retryCorrection = retryCorrectionFeedback(task.lastError, task.attempt);
+  const retryCorrection = retryCorrectionFeedback(task, index.events);
   task = saveTask(store, task, {
     state: "running",
     attempt: task.attempt + 1,
@@ -407,11 +408,12 @@ async function processTask(options: ApiServerOptions, original: AutomaticReviewT
     return { taskId: task.id, state: task.state, action: decision.action };
   } catch (caught) {
     const message = safeError(caught);
+    const contractCorrection = caught instanceof ModelOutputError && caught.message === FALSE_POSITIVE_REASON_ERROR ? FALSE_POSITIVE_REASON_CORRECTION : undefined;
     const failedAt = executionTime(input);
     const exhausted = task.attempt >= task.maxAttempts;
     const nextAttemptAt = exhausted ? task.nextAttemptAt : new Date(Date.parse(failedAt) + retryDelayMs(task.attempt)).toISOString();
     task = saveTask(store, task, { state: exhausted ? "dead_letter" : "retrying", completedAt: exhausted ? failedAt : undefined, nextAttemptAt, updatedAt: failedAt, leaseExpiresAt: undefined, lastError: message });
-    saveEvent(store, task, task.state, failedAt);
+    saveEvent(store, task, task.state, failedAt, undefined, contractCorrection);
     return { taskId: task.id, state: task.state, error: message };
   }
 }
@@ -995,7 +997,7 @@ function saveTask(store: any, task: AutomaticReviewTask, changes: Partial<Automa
   return store.saveAnalystMetadataReviewTask({ ...idsOnly, unsafeMaterialAccessed: false });
 }
 
-function saveEvent(store: any, task: AutomaticReviewTask, state: string, occurredAt: string, decision?: AutomaticReviewDecision) {
+function saveEvent(store: any, task: AutomaticReviewTask, state: string, occurredAt: string, decision?: AutomaticReviewDecision, contractCorrection?: typeof FALSE_POSITIVE_REASON_CORRECTION) {
   const id = stableId("automatic-review-event", `${task.id}:${task.replayCount}:${task.attempt}:${state}`);
   const existing = store.getAnalystMetadataReviewTask?.(id);
   if (existing) return existing;
@@ -1021,6 +1023,7 @@ function saveEvent(store: any, task: AutomaticReviewTask, state: string, occurre
     requestSha256: task.requestSha256,
     decision,
     error: task.lastError,
+    contractCorrection,
     unsafeMaterialAccessed: false,
     createdAt: occurredAt,
     updatedAt: occurredAt
@@ -1113,8 +1116,9 @@ function finiteScore(value: unknown) { const score = Number(value); return Numbe
 function validIso(value: unknown) { const parsed = Date.parse(String(value ?? "")); return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined; }
 function executionTime(input: CycleInput) { return validIso(input.clock?.()) ?? nowIso(); }
 function retryDelayMs(attempt: number) { return Math.min(15 * 60_000, 60_000 * (2 ** Math.max(0, attempt - 1))); }
-function retryCorrectionFeedback(value: unknown, attempt: number) {
-  return value === FALSE_POSITIVE_REASON_ERROR ? attempt >= 2 ? FALSE_POSITIVE_REASON_FINAL_RETRY : FALSE_POSITIVE_REASON_RETRY : undefined;
+function retryCorrectionFeedback(task: AutomaticReviewTask, events: any[]) {
+  const needsCorrection = events.some((event) => event.taskId === task.id && ["retrying", "dead_letter"].includes(event.state) && event.contractCorrection === FALSE_POSITIVE_REASON_CORRECTION);
+  return needsCorrection ? task.attempt >= 2 ? FALSE_POSITIVE_REASON_FINAL_RETRY : FALSE_POSITIVE_REASON_RETRY : undefined;
 }
 function boundedInteger(value: unknown, fallback: number, min: number, max: number) { const parsed = Number(value); return Number.isInteger(parsed) ? Math.max(min, Math.min(max, parsed)) : fallback; }
 function plainRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }

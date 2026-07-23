@@ -70,7 +70,7 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(JSON.stringify(first.toolsRequest)).not.toMatch(/\.onion|\.i2p|analyst@|\+47|t\.me|@ops_channel|123456789:|api[_-]?key|password\s*=|12 hours left/i);
     expect(first.toolsRequest.prompt.length).toBeLessThanOrEqual(16_000);
     expect(first.request.subject).toEqual({ type: "claim", id: "claim_one" });
-    expect(first.request.schemaVersion).toBe("ti.automatic_intelligence_review.request.v4");
+    expect(first.request.schemaVersion).toBe("ti.automatic_intelligence_review.request.v5");
     expect(first.request.evidence.every((item: any) => first.request.evidence.some((allowed: any) => allowed.id === item.id))).toBe(true);
 
     const task = store.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task" && item.subject.id === "claim_one");
@@ -159,7 +159,7 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(automaticReviewSnapshot(store, "default").tasks[0]).toMatchObject({ state: "retrying", lastError: "Hanasand AI returned malformed structured output" });
   });
 
-  test("strengthens only the allowlisted validator correction on the final retry and completes idempotently", async () => {
+  test("keeps the allowlisted correction through an unsafe retry and completes idempotently", async () => {
     const store = seededClaimStore();
     const requests: any[] = [];
     const prompts: string[] = [];
@@ -169,7 +169,8 @@ describe("automatic Hanasand AI intelligence review", () => {
       prompts.push(toolsRequest.prompt);
       requests.push(request);
       const decision = negativeDecision(request);
-      if (requests.length < 3) decision.falsePositiveReasons = [];
+      if (requests.length === 1) decision.falsePositiveReasons = [];
+      if (requests.length === 2) return completedTools(request, { ...decision, calibrationContext: { ...decision.calibrationContext, sourceDiversity: "https://t.me/unsafe_contact" } });
       return completedTools(request, decision);
     };
     let clock = firstAt;
@@ -178,7 +179,7 @@ describe("automatic Hanasand AI intelligence review", () => {
     clock = "2026-07-22T10:01:00.000Z";
     await runAutomaticReviewCycle(options(store), { now: clock, clock: () => clock, allTenants: true, limit: 1, modelVersion: "hanasand", fetcher });
     const secondRequestSha = automaticReviewSnapshot(store, "default").tasks[0]!.requestSha256;
-    expect(automaticReviewSnapshot(store, "default").tasks[0]).toMatchObject({ state: "retrying", attempt: 2, lastError: "A non-supported decision requires a structured false-positive reason" });
+    expect(automaticReviewSnapshot(store, "default").tasks[0]).toMatchObject({ state: "retrying", attempt: 2, lastError: "Hanasand AI returned unsafe calibration context" });
     clock = "2026-07-22T10:03:00.000Z";
     await runAutomaticReviewCycle(options(store), { now: clock, clock: () => clock, allTenants: true, limit: 1, modelVersion: "hanasand", fetcher });
     const completed = store.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task");
@@ -193,27 +194,67 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(prompts[1].endsWith(requests[1].retryCorrection)).toBe(true);
     expect(prompts[2].endsWith(requests[2].retryCorrection)).toBe(true);
     expect(prompts.slice(1).every((prompt) => !prompt.includes("A non-supported decision requires a structured false-positive reason"))).toBe(true);
+    expect(prompts.every((prompt) => !prompt.includes("unsafe_contact"))).toBe(true);
     expect(prompts.every((prompt) => prompt.length <= 12_000)).toBe(true);
     expect(secondRequestSha).not.toBe(thirdRequestSha);
     expect(automaticReviewSnapshot(store, "default").tasks[0]).toMatchObject({ state: "terminal", outcome: "decided", attempt: 3, decision: { action: "reject", falsePositiveReasons: ["The claimed actor is not supported by the retained report"] }, history: expect.arrayContaining([expect.objectContaining({ state: "restart_reconciled" })]) });
     expect(requests).toHaveLength(3);
   });
 
-  test("rolls only v3 nonterminals into v4 and preserves every prior terminal state idempotently", async () => {
+  test("does not trust a generic error that copies the validator message", async () => {
+    const store = seededClaimStore();
+    const originalGetClaim = store.getIntelligenceClaim.bind(store);
+    let throwCopiedMessage = true;
+    store.getIntelligenceClaim = (id: string) => {
+      if (throwCopiedMessage) {
+        throwCopiedMessage = false;
+        throw new Error("A non-supported decision requires a structured false-positive reason");
+      }
+      return originalGetClaim(id);
+    };
+    const corrections: unknown[] = [];
+    const fetcher = directFetcher((request) => { corrections.push(request.retryCorrection); return supportedDecision(request); });
+    let clock = firstAt;
+
+    await runAutomaticReviewCycle(options(store), { now: clock, clock: () => clock, allTenants: true, limit: 1, modelVersion: "hanasand", fetcher, aiBase: "http://ai.test" });
+    clock = "2026-07-22T10:01:00.000Z";
+    await runAutomaticReviewCycle(options(store), { now: clock, clock: () => clock, allTenants: true, limit: 1, modelVersion: "hanasand", fetcher, aiBase: "http://ai.test" });
+
+    const task = automaticReviewSnapshot(store, "default").tasks[0] as any;
+    expect(corrections).toEqual([undefined, undefined]);
+    expect(task).toMatchObject({ state: "terminal", attempt: 2 });
+    expect(task.history.find((event: any) => event.error === "A non-supported decision requires a structured false-positive reason")?.contractCorrection).toBeUndefined();
+  });
+
+  test("rolls only v4 nonterminals into v5 and preserves all older history idempotently", async () => {
     const templateStore = seededClaimStore();
     syncAutomaticReviewQueue(options(templateStore), { allTenants: true, now: firstAt, modelVersion: "old-model" });
     const legacy = templateStore.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task");
     const store = seededClaimStore();
-    for (const state of ["queued", "running", "retrying"] as const) store.saveAnalystMetadataReviewTask({ ...legacy, id: `v3-${state}`, state, promptVersion: "ti.automatic_intelligence_review.prompt.v3" });
-    store.saveAnalystMetadataReviewTask({ ...legacy, id: "v4-stale-model", state: "queued", promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION, requestedModelVersion: "old-model" });
-    for (const version of ["v1", "v2", "v3"]) {
+    for (const version of ["v1", "v2", "v3", "v4"]) {
+      for (const state of ["queued", "running", "retrying"] as const) store.saveAnalystMetadataReviewTask({ ...legacy, id: `${version}-${state}`, state, promptVersion: `ti.automatic_intelligence_review.prompt.${version}` });
       store.saveAnalystMetadataReviewTask({ ...legacy, id: `${version}-terminal`, state: "terminal", outcome: "decided", decision: { preserved: version }, promptVersion: `ti.automatic_intelligence_review.prompt.${version}` });
       store.saveAnalystMetadataReviewTask({ ...legacy, id: `${version}-quarantined`, state: "quarantined", lastError: "preserved quarantine", decision: { preserved: version }, promptVersion: `ti.automatic_intelligence_review.prompt.${version}` });
+      store.saveAnalystMetadataReviewTask({ ...legacy, id: `${version}-dead`, state: "dead_letter", lastError: "preserved failure", decision: { preserved: version }, promptVersion: `ti.automatic_intelligence_review.prompt.${version}` });
     }
-    const liveDeadIds = ["automatic-review_2f3bd715505504bf", "automatic-review_9e1ea6f7117c4006", "automatic-review_aaf7977665acb1a0"];
-    for (const id of liveDeadIds) store.saveAnalystMetadataReviewTask({ ...legacy, id, state: "dead_letter", attempt: 3, lastError: "preserved failure", promptVersion: "ti.automatic_intelligence_review.prompt.v3" });
-    for (const version of ["v1", "v2"]) store.saveAnalystMetadataReviewTask({ ...legacy, id: `${version}-queued`, state: "queued", promptVersion: `ti.automatic_intelligence_review.prompt.${version}` });
-    const protectedIds = [...["v1", "v2", "v3"].flatMap((version) => [`${version}-terminal`, `${version}-quarantined`]), ...liveDeadIds, "v1-queued", "v2-queued"];
+    store.saveAnalystMetadataReviewTask({ ...legacy, id: "v5-stale-model", state: "queued", promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION, requestedModelVersion: "old-model" });
+    const liveFailures = [
+      ["automatic-review_a577d7c0ef3f1dbe", "claim_003131ca03249d78f6f707bd81743443", "v4"],
+      ["automatic-review_ce09abcd574b0e29", "claim_00a50b5c71f5f4c06b33032f9f74329", "v4"],
+      ["automatic-review_2f3bd715505504bf", "claim_v3_dead_1", "v3"],
+      ["automatic-review_9e1ea6f7117c4006", "claim_v3_dead_2", "v3"],
+      ["automatic-review_aaf7977665acb1a0", "claim_v3_dead_3", "v3"]
+    ] as const;
+    for (const [taskId, claimId, version] of liveFailures) {
+      seedClaim(store, claimId, `APT29 targeted ${claimId}.`);
+      store.saveClaimEvidence(claimEvidence(`evidence_${claimId}`, claimId, "capture_source_a", "source_a", 0.8));
+      store.saveAnalystMetadataReviewTask({ ...legacy, id: taskId, subject: { type: "claim", id: claimId, claimId }, state: "dead_letter", attempt: 3, lastError: "preserved failure", promptVersion: `ti.automatic_intelligence_review.prompt.${version}` });
+    }
+    const protectedIds = [
+      ...["v1", "v2", "v3"].flatMap((version) => ["queued", "running", "retrying"].map((state) => `${version}-${state}`)),
+      ...["v1", "v2", "v3", "v4"].flatMap((version) => [`${version}-terminal`, `${version}-quarantined`, `${version}-dead`]),
+      ...liveFailures.map(([id]) => id)
+    ];
     const protectedBefore = new Map(protectedIds.map((id) => [id, JSON.stringify(store.getAnalystMetadataReviewTask(id))]));
     const fetchedVersions: string[] = [];
     const fetcher = async (_input: string | URL | Request, init?: RequestInit) => {
@@ -222,15 +263,12 @@ describe("automatic Hanasand AI intelligence review", () => {
       return completedDirect(request, supportedDecision(request, { actorAttribution: { canonicalName: null, aliases: [] } }));
     };
     const cycle = await runAutomaticReviewCycle(options(store), { now: firstAt, allTenants: true, modelVersion: "hanasand", fetcher, aiBase: "http://ai.test" });
-    const tasks = automaticReviewSnapshot(store, "default", 30).tasks as any[];
-    const stale = tasks.filter((task) => task.promptVersion.endsWith(".v3"));
-    const current = tasks.find((task) => task.promptVersion === AUTOMATIC_REVIEW_PROMPT_VERSION);
-    expect(cycle).toMatchObject({ superseded: 4, queued: 1, attempted: 1 });
-    expect(fetchedVersions).toEqual([AUTOMATIC_REVIEW_PROMPT_VERSION]);
-    expect(stale.filter((task) => task.outcome === "superseded")).toHaveLength(3);
-    expect(stale.filter((task) => task.outcome === "superseded").every((task) => task.history.some((event: any) => event.state === "superseded"))).toBe(true);
-    expect(tasks.find((task) => task.id === "v4-stale-model")).toMatchObject({ state: "terminal", outcome: "superseded" });
-    expect(current).toMatchObject({ state: "terminal", outcome: "decided" });
+    const tasks = automaticReviewSnapshot(store, "default", 100).tasks as any[];
+    const replaced = ["v4-queued", "v4-running", "v4-retrying", "v5-stale-model"].map((id) => tasks.find((task) => task.id === id));
+    expect(cycle).toMatchObject({ superseded: 4, queued: 6, attempted: 6 });
+    expect(fetchedVersions).toEqual(Array(6).fill(AUTOMATIC_REVIEW_PROMPT_VERSION));
+    expect(replaced.every((task) => task?.state === "terminal" && task.outcome === "superseded" && task.history.some((event: any) => event.state === "superseded"))).toBe(true);
+    expect(tasks.filter((task) => task.promptVersion === AUTOMATIC_REVIEW_PROMPT_VERSION && task.outcome === "decided").map((task) => task.subject.id)).toEqual(expect.arrayContaining(["claim_actor", ...liveFailures.map(([, claimId]) => claimId)]));
     for (const id of protectedIds) expect(JSON.stringify(store.getAnalystMetadataReviewTask(id))).toBe(protectedBefore.get(id)!);
     const repeated = await runAutomaticReviewCycle(options(store), { now: "2026-07-22T10:01:00.000Z", allTenants: true, modelVersion: "hanasand", fetcher: async () => { throw new Error("must not fetch after rollover"); }, aiBase: "http://ai.test" });
     expect(repeated).toMatchObject({ superseded: 0, queued: 0, attempted: 0 });
@@ -528,6 +566,71 @@ postgresDescribe("automatic review PostgreSQL persistence", () => {
     expect(restarted.getIncident("incident_pg")).toMatchObject({ reviewState: "confirmed", actorAttribution: { identityId: "actor_apt29" }, automaticReview: { configuredModelVersion: "hanasand-v2" } });
     await restarted.close();
   });
+
+  test("hydrates the trusted correction latch without rewriting prior version history", async () => {
+    let store = await PostgresScraperStore.create({ databaseUrl });
+    seedSource(store, "source_a", "APT29 targeted Northwind.");
+    seedActorCatalog(store, [identity("actor_apt29", "G0016", "APT29", ["Midnight Blizzard"])]);
+    seedClaim(store, "claim_actor", "APT29 targeted Northwind.");
+    store.saveClaimEvidence(claimEvidence("evidence_actor", "claim_actor", "capture_source_a", "source_a", 0.9));
+    syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" });
+    const current = store.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task");
+    const protectedIds: string[] = [];
+    for (const version of ["v1", "v2", "v3", "v4"]) {
+      for (const state of ["terminal", "quarantined", "dead_letter"] as const) {
+        const id = `pg-${version}-${state}`;
+        protectedIds.push(id);
+        store.saveAnalystMetadataReviewTask({ ...current, id, state, outcome: state === "terminal" ? "decided" : undefined, completedAt: firstAt, lastError: state === "terminal" ? undefined : `preserved-${state}`, promptVersion: `ti.automatic_intelligence_review.prompt.${version}` });
+      }
+    }
+    store.saveAnalystMetadataReviewTask({ ...current, id: "pg-v4-retrying", state: "retrying", attempt: 1, promptVersion: "ti.automatic_intelligence_review.prompt.v4" });
+
+    const corrections: unknown[] = [];
+    let requestSha: string | undefined;
+    const run = async (at: string, response: (request: any) => any) => {
+      await runAutomaticReviewCycle(options(store), {
+        now: at,
+        clock: () => at,
+        allTenants: true,
+        limit: 1,
+        modelVersion: "hanasand",
+        aiBase: "http://ai.test",
+        fetcher: directFetcher((request) => { corrections.push(request.retryCorrection); return response(request); })
+      });
+      requestSha = store.getAnalystMetadataReviewTask(current.id)?.requestSha256;
+      await store.flush();
+    };
+
+    await run(firstAt, (request) => ({ ...negativeDecision(request), falsePositiveReasons: [] }));
+    const firstSha = requestSha;
+    await store.close();
+    store = await PostgresScraperStore.create({ databaseUrl });
+    const protectedBefore = new Map(protectedIds.map((id) => [id, JSON.stringify(store.getAnalystMetadataReviewTask(id))]));
+
+    await run("2026-07-22T10:01:00.000Z", (request) => ({ ...negativeDecision(request), calibrationContext: { sourceCount: 1, channel: "https://t.me/unsafe_contact" } }));
+    const secondSha = requestSha;
+    await store.close();
+    store = await PostgresScraperStore.create({ databaseUrl });
+
+    await run("2026-07-22T10:03:00.000Z", negativeDecision);
+    const thirdSha = requestSha;
+    await store.close();
+    store = await PostgresScraperStore.create({ databaseUrl });
+
+    const task = store.getAnalystMetadataReviewTask(current.id);
+    const events = store.listAnalystMetadataReviewTasks().filter((item: any) => item.recordKind === "automatic_intelligence_review_event" && item.taskId === current.id);
+    expect(corrections[0]).toBeUndefined();
+    expect(corrections[1]).toContain("The prior response omitted mandatory falsePositiveReasons");
+    expect(corrections[2]).toContain("The prior corrected response still omitted mandatory falsePositiveReasons");
+    expect(JSON.stringify(corrections)).not.toContain("unsafe_contact");
+    expect(new Set([firstSha, secondSha, thirdSha]).size).toBe(3);
+    expect(task).toMatchObject({ state: "terminal", outcome: "decided", attempt: 3, decision: { falsePositiveReasons: ["The claimed actor is not supported by the retained report"] } });
+    expect(events.map((event: any) => event.error).filter(Boolean)).toEqual(["A non-supported decision requires a structured false-positive reason", "Hanasand AI returned unsafe calibration context"]);
+    expect(events.map((event: any) => event.contractCorrection).filter(Boolean)).toEqual(["false_positive_reasons_required"]);
+    for (const id of protectedIds) expect(JSON.stringify(store.getAnalystMetadataReviewTask(id))).toBe(protectedBefore.get(id)!);
+    expect(store.listAnalystMetadataReviewTasks().filter((item: any) => item.recordKind === "automatic_intelligence_review_event" && item.taskId === "pg-v4-retrying" && item.state === "superseded")).toHaveLength(1);
+    await store.close();
+  });
 });
 
 function seededClaimStore() {
@@ -540,7 +643,7 @@ function seededClaimStore() {
 }
 
 function seedClaim(store: InMemoryScraperStore, id: string, summary: string) {
-  store.saveIntelligenceClaim({ id, tenantId: "default", claimType: "actor", subjectType: "entity", subjectId: `${id}_entity`, reviewState: "unreviewed", summary, value: { actor: "APT29", assertion: summary }, extractorVersion: "claim-parser-v4", sourceIds: ["source_a"], captureIds: ["capture_source_a"] });
+  store.saveIntelligenceClaim({ id, tenantId: "default", claimType: "actor", subjectType: "entity", subjectId: `${id}_entity`, reviewState: "unreviewed", summary, value: { actor: "APT29", assertion: summary }, confidence: 0.9, evidenceStage: "captured_page", extractionMethod: "source_field", extractorVersion: "claim-parser-v4", corroborationState: "single_source", sourceCount: 1, evidenceCount: 1, firstSeenAt: firstAt, lastSeenAt: firstAt, sourceIds: ["source_a"], captureIds: ["capture_source_a"] });
 }
 
 function seedSource(store: InMemoryScraperStore, sourceId: string, excerpt: string, tenant: string | null = "default") {
