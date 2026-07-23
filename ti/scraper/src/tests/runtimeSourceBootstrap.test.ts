@@ -204,7 +204,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       expect(first.seedPaths.filter((path) => path.endsWith("source_portfolio_public_telegram.json"))).toHaveLength(1);
       expect(first.errors.filter((error) => error.path.includes("source_portfolio_"))).toEqual([]);
       expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "clear_web" && source.metadata?.sourcePortfolioVerification)).toHaveLength(28);
-      expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "telegram_public" && source.metadata?.sourcePortfolioVerification)).toHaveLength(22);
+      expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "telegram_public" && source.metadata?.sourcePortfolioVerification)).toHaveLength(25);
       const importedPortfolio = store.listSources().filter((source: any) => source.metadata?.sourcePortfolioVerification);
       expect(importedPortfolio.every((source: any) => source.status === "candidate"
         && source.metadata.productionCollection === false
