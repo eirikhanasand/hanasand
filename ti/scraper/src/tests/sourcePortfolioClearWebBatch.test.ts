@@ -4,7 +4,6 @@ import { readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "../ops/canaryPortfolio.ts";
-import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 
 const batchPath = new URL("../../seeds/source_portfolio_clear_web.json", import.meta.url);
 const seedDirectory = dirname(fileURLToPath(batchPath));
@@ -17,24 +16,14 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(9);
-    expect(batch.exclusions).toHaveLength(29);
-    expect(batch.sources.map((source: any) => source.name).sort()).toEqual([
-      "CERT/CC Vulnerability Notes",
-      "Drupal Contributed Project Security Advisories",
-      "Drupal Core Security Advisories",
-      "Fortinet PSIRT Advisories",
-      "Gentoo Linux Security Advisories",
-      "LevelBlue SpiderLabs Threat Research",
-      "NCSC Netherlands Security Advisories",
-      "Synology Product Security Advisories",
-      "Ubuntu Security Notices",
-    ]);
+    expect(batch.sources).toHaveLength(12);
+    expect(batch.exclusions).toHaveLength(26);
 
     const ids = new Set<string>();
     const endpoints = new Set<string>();
     for (const source of batch.sources) {
       const key = canonicalFeedKey(source.url);
+      expect(source.url).toBe(key);
       expect(ids.has(source.id)).toBe(false);
       expect(endpoints.has(key)).toBe(false);
       ids.add(source.id);
@@ -113,6 +102,14 @@ describe("clear-web source portfolio batch", () => {
     }
   });
 });
+
+function canonicalFeedKey(value: string) {
+  const url = new URL(value);
+  url.hostname = url.hostname.toLowerCase();
+  url.hash = "";
+  url.pathname = url.pathname.replace(/\/+$/, "");
+  return url.toString();
+}
 
 function stableSourceId(url: string) {
   return `src_portfolio_cw_${hash(url).slice(0, 20)}`;

@@ -197,6 +197,102 @@
       }
     },
     {
+      "id": "src_portfolio_cw_d09b28cc77df050f6905",
+      "name": "Jenkins Security Advisories",
+      "type": "rss",
+      "url": "https://www.jenkins.io/security/advisories/rss.xml",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.9,
+      "language": "en",
+      "crawlFrequencySeconds": 86400,
+      "legalNotes": "Public unauthenticated Jenkins Security Advisories feed; retain published defensive advisory/research metadata and safe excerpts under the publisher's public site terms.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvalScope": "safe_public_auto",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T09:56:30Z",
+        "approvedBy": "source-portfolio-clear-web-verifier",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "clear_web",
+        "activityWindowSeconds": 7776000,
+        "maxItemsPerFetch": 40,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T09:56:30Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 100,
+          "httpStatus": 200,
+          "contentType": "text/xml",
+          "adapter": "rss",
+          "publisherReference": "https://www.jenkins.io/security/advisories/",
+          "legalBasisVerifiedAt": "2026-07-23T09:56:30Z",
+          "latestPublishedAt": "2026-06-24T12:00:00Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "clear-web:www.jenkins.io:77df050f6905",
+        "publisher": {
+          "name": "Jenkins Security Team",
+          "country": "US",
+          "homepage": "https://www.jenkins.io/security/advisories/",
+          "trustBasis": "project"
+        },
+        "tier": "tier_1",
+        "approvalScope": "safe_public_auto",
+        "license": "Public publisher feed metadata and bounded safe excerpts; publisher site terms apply.",
+        "legalBasis": "Public unauthenticated Jenkins Security Advisories feed; retain published defensive advisory/research metadata and safe excerpts under the publisher's public site terms.",
+        "reliability": 0.9,
+        "intelligenceValue": 0.87,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "security advisory",
+            "CVE",
+            "Jenkins core",
+            "Jenkins plugin"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "software",
+            "technology",
+            "devops"
+          ],
+          "regions": [
+            "global"
+          ],
+          "countries": [
+            "US"
+          ],
+          "languages": [
+            "en"
+          ],
+          "queryPatterns": [
+            "security advisory",
+            "CVE",
+            "Jenkins core",
+            "Jenkins plugin"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 86400,
+          "collectionSlaSeconds": 86400,
+          "budgetClass": "low",
+          "crawlCadenceSeconds": 86400
+        },
+        "adapterCompatibility": [
+          "rss"
+        ],
+        "rollback": {}
+      }
+    },
+    {
       "id": "src_portfolio_cw_37ae1314bac6274240cc",
       "name": "Drupal Core Security Advisories",
       "type": "rss",
@@ -508,7 +604,7 @@
       "metadata": {
         "productionCollection": true,
         "sourceFamily": "clear_web",
-        "activityWindowSeconds": 31536000,
+        "activityWindowSeconds": 15811200,
         "maxItemsPerFetch": 40,
         "sourcePortfolioVerification": {
           "verifiedAt": "2026-07-23T09:56:30Z",
@@ -668,6 +764,197 @@
           "collectionSlaSeconds": 21600,
           "budgetClass": "normal",
           "crawlCadenceSeconds": 21600
+        },
+        "adapterCompatibility": [
+          "rss"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_cw_572628833c5e1a1316f3",
+      "name": "Oracle CSAF Security Alert Feed",
+      "type": "rss",
+      "url": "https://www.oracle.com/a/tech/docs/security-alerts/oracle-cpu-csaf-rss.xml",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.93,
+      "language": "en",
+      "crawlFrequencySeconds": 86400,
+      "legalNotes": "Public unauthenticated Oracle CSAF Security Alert Feed feed; retain published defensive advisory/research metadata and safe excerpts under the publisher's public site terms.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvalScope": "safe_public_auto",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T09:56:30Z",
+        "approvedBy": "source-portfolio-clear-web-verifier",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "clear_web",
+        "activityWindowSeconds": 15811200,
+        "maxItemsPerFetch": 40,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T09:56:30Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 26,
+          "httpStatus": 200,
+          "contentType": "text/xml; charset=UTF-8",
+          "adapter": "rss",
+          "publisherReference": "https://www.oracle.com/security-alerts/",
+          "legalBasisVerifiedAt": "2026-07-23T09:56:30Z",
+          "latestPublishedAt": "2026-07-21T12:30:54Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "clear-web:www.oracle.com:3c5e1a1316f3",
+        "publisher": {
+          "name": "Oracle Product Security",
+          "country": "US",
+          "homepage": "https://www.oracle.com/security-alerts/",
+          "trustBasis": "vendor"
+        },
+        "tier": "tier_1",
+        "approvalScope": "safe_public_auto",
+        "license": "Public publisher feed metadata and bounded safe excerpts; publisher site terms apply.",
+        "legalBasis": "Public unauthenticated Oracle CSAF Security Alert Feed feed; retain published defensive advisory/research metadata and safe excerpts under the publisher's public site terms.",
+        "reliability": 0.93,
+        "intelligenceValue": 0.9,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "critical patch update",
+            "CSAF",
+            "CVE",
+            "product security advisory"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "enterprise",
+            "technology",
+            "database"
+          ],
+          "regions": [
+            "global"
+          ],
+          "countries": [
+            "US"
+          ],
+          "languages": [
+            "en"
+          ],
+          "queryPatterns": [
+            "critical patch update",
+            "CSAF",
+            "CVE",
+            "product security advisory"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 86400,
+          "collectionSlaSeconds": 86400,
+          "budgetClass": "low",
+          "crawlCadenceSeconds": 86400
+        },
+        "adapterCompatibility": [
+          "rss"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_cw_e1e744ed64569a9e939e",
+      "name": "Juniper Mist Security Alerts",
+      "type": "rss",
+      "url": "https://www.mist.com/documentation/category/security-alerts/feed",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.87,
+      "language": "en",
+      "crawlFrequencySeconds": 86400,
+      "legalNotes": "Public unauthenticated Juniper Mist Security Alerts feed; retain published defensive advisory/research metadata and safe excerpts under the publisher's public site terms.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvalScope": "safe_public_auto",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T09:56:30Z",
+        "approvedBy": "source-portfolio-clear-web-verifier",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "clear_web",
+        "activityWindowSeconds": 31536000,
+        "maxItemsPerFetch": 40,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T09:56:30Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 10,
+          "httpStatus": 200,
+          "contentType": "application/rss+xml; charset=UTF-8",
+          "adapter": "rss",
+          "publisherReference": "https://www.juniper.net/documentation/us/en/software/mist/mist-management/shared-content/topics/task/subscribe-alerts.html",
+          "legalBasisVerifiedAt": "2026-07-23T09:56:30Z",
+          "latestPublishedAt": "2026-03-13T02:34:53Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "clear-web:www.mist.com:64569a9e939e",
+        "publisher": {
+          "name": "Juniper Networks Mist PSIRT",
+          "country": "US",
+          "homepage": "https://www.juniper.net/documentation/us/en/software/mist/mist-management/shared-content/topics/task/subscribe-alerts.html",
+          "trustBasis": "vendor"
+        },
+        "tier": "tier_2",
+        "approvalScope": "safe_public_auto",
+        "license": "Public publisher feed metadata and bounded safe excerpts; publisher site terms apply.",
+        "legalBasis": "Public unauthenticated Juniper Mist Security Alerts feed; retain published defensive advisory/research metadata and safe excerpts under the publisher's public site terms.",
+        "reliability": 0.87,
+        "intelligenceValue": 0.84,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "product security alert",
+            "wireless security",
+            "vulnerability",
+            "remediation"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "networking",
+            "enterprise"
+          ],
+          "regions": [
+            "global"
+          ],
+          "countries": [
+            "US"
+          ],
+          "languages": [
+            "en"
+          ],
+          "queryPatterns": [
+            "product security alert",
+            "wireless security",
+            "vulnerability",
+            "remediation"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 86400,
+          "collectionSlaSeconds": 86400,
+          "budgetClass": "low",
+          "crawlCadenceSeconds": 86400
         },
         "adapterCompatibility": [
           "rss"
@@ -996,21 +1283,6 @@
     {
       "idOrUrlHash": "cc051f2b02598ba6c870c3df",
       "reason": "http_404",
-      "verifiedAt": "2026-07-23T09:56:30Z"
-    },
-    {
-      "idOrUrlHash": "d09b28cc77df050f69053363",
-      "reason": "production_no_useful_intelligence",
-      "verifiedAt": "2026-07-23T09:56:30Z"
-    },
-    {
-      "idOrUrlHash": "572628833c5e1a1316f37784",
-      "reason": "production_http_403",
-      "verifiedAt": "2026-07-23T09:56:30Z"
-    },
-    {
-      "idOrUrlHash": "e1e744ed64569a9e939e6959",
-      "reason": "production_no_useful_intelligence",
       "verifiedAt": "2026-07-23T09:56:30Z"
     }
   ]
