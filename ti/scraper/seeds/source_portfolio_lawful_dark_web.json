@@ -254,7 +254,8 @@
         "status": "candidate",
         "risk": "restricted",
         "trustScore": 0.82,
-        "crawlFrequencySeconds": 3600,
+        "crawlFrequencySeconds": 86400,
+        "countsAsCoverage": false,
         "legalNotes": "Collect public victim-post titles and publication metadata only. Never authenticate, interact, follow payload links, or retain page bodies, credentials, or leaked content.",
         "governance": {
             "approvalRequired": true,
@@ -273,26 +274,61 @@
             ],
             "discoveryAuthorityUrl": "https://ransomwhere.org/data",
             "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/ms13089",
-            "discoveryCheckedAt": "2026-07-23T10:20:56.065Z",
+            "discoveryCheckedAt": "2026-07-23T10:36:58.280Z",
             "discoveryAvailability": "reported_available",
-            "discoveryObservedAt": "2026-07-23T10:20:56.065Z",
-            "productionCollectionVerifiedAt": "2026-07-23T10:20:56.065Z",
+            "discoveryObservedAt": "2026-07-23T10:36:58.280Z",
+            "discoveryAuthorityChain": [
+                {
+                    "name": "Ransomware.live",
+                    "role": "upstream_group_and_victim_source",
+                    "url": "https://www.ransomware.live/"
+                },
+                {
+                    "name": "Ransomwhere",
+                    "role": "derived_public_research_inventory",
+                    "url": "https://ransomwhere.org/data",
+                    "recordUrl": "https://ransomwhere.org/api/groups/ms13089"
+                }
+            ],
+            "productionCollectionVerifiedAt": "2026-07-23T10:36:58.280Z",
             "productionCollectionOutcome": "metadata_only_parser_verified",
-            "parserProfile": "post_title_victim_listing",
+            "parserProfile": "darknet-metadata-v2",
+            "parserShape": "generic_post_title",
             "reportedVictimCount": 4,
+            "observedParsedItemCount": 3,
             "lastReportedVictimAt": "2026-05-05T11:53:39.404Z",
             "expectedPageRole": "victim_listing",
             "collectionScope": "metadata_only",
             "retainRawContent": false,
             "retentionDays": 30,
-            "attribution": "Ransomwhere.org public research inventory plus approved-proxy metadata-only parser verification",
+            "attribution": "Ransomware.live upstream group/victim records via the Ransomwhere public research inventory, independently replayed through the approved metadata-only proxy boundary",
+            "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+            "supersedesCandidateRefs": [
+                "feat/tor-1000@b3dc212894ac69504e9e2ff3f1f25ec4b606615e"
+            ],
             "sourcePortfolioVerification": {
-                "verifiedAt": "2026-07-23T10:20:56.065Z",
+                "verifiedAt": "2026-07-23T10:36:58.280Z",
                 "outcome": "content_parsed",
+                "endpointSha256": "16650efde859c502b7ca98eb490a85a65cf3c3c436fd6f510dad944802fdc990",
+                "contentType": "text/html",
+                "byteBound": 64000,
+                "responseBytes": 10787,
+                "responseSha256": "6b883791a922ad392f4d7796d1cf2ddfef854e2e1e3e54d726efae0240ed0812",
+                "responseTruncated": false,
+                "parserVersion": "darknet-metadata-v2",
+                "parserShape": "generic_post_title",
                 "observedItemCount": 3,
+                "parsedItemFingerprints": [
+                    "6c2d817791d416c2c0fe3c9fdb2e63cc5489699ed5b0a194e381001c11b04bcd",
+                    "f8164ab854ca95a6f6a7cfcaaac51349e5e89caa93abc10ae7e909875e63647d",
+                    "9e713fb283c2a9efaae9e149c76de4e55caedb9c77bbdf320f37d06c0185ccbb"
+                ],
+                "parsedSourceTimestamp": null,
+                "authorityReportedVictimCount": 4,
+                "authorityLatestReportedAt": "2026-05-05T11:53:39.404Z",
                 "httpStatus": 200,
                 "adapter": "tor_metadata",
-                "legalBasisVerifiedAt": "2026-07-23T10:20:56.065Z"
+                "legalBasisVerifiedAt": "2026-07-23T10:36:58.280Z"
             }
         }
     }
