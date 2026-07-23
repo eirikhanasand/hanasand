@@ -73,7 +73,7 @@ export function qualifySourcePortfolio(input: {
       successfulCheckCount: successes.length,
       usefulCheckCount: productive.length,
       productiveCheckCount: productive.length,
-      latestCheckUseful: Number(latest?.captureCount ?? 0) > 0,
+      latestCheckUseful: latest?.useful === true && Number(latest.captureCount ?? 0) > 0,
       retainedCaptureCount: captures.length,
       lastCheckedAt,
       lastSuccessAt,

@@ -392,6 +392,12 @@ export default function TiScraperControlClient() {
                             <SidePanel title='Coverage' icon={<GitBranch className='h-4 w-4' />}>
                                 <div className='grid grid-cols-2 gap-2'>
                                     <Info label='Candidates' value={String(sourceGrowth.candidates)} />
+                                    <Info label='Active' value={String(scheduler.activeSources)} />
+                                    <Info label='Checked' value={String(scheduler.checkedSources)} />
+                                    <Info label='Successful' value={String(scheduler.successfulSources)} />
+                                    <Info label='Useful now' value={String(scheduler.usefulSources)} />
+                                    <Info label='Capture-producing' value={String(scheduler.captureProducingSources)} />
+                                    <Info label='Recently seen' value={String(scheduler.recentlySeenSources)} />
                                     <Info label='Daily covered' value={`${scheduler.dailyCovered}/${scheduler.dailySources}`} />
                                     <Info label='Qualified' value={`${scheduler.qualifyingSources}/6,100`} />
                                     <Info label='Clear web' value={`${scheduler.qualifyingClearWeb}/5,000`} />
@@ -800,6 +806,12 @@ function schedulerKpis(snapshot: ControlSnapshot | null) {
     const reviewExposureCount = numberFrom(parser.reviewExposureCount) ?? 0
     return {
         totalSources: numberFrom(coverage.totalSourceCount) ?? 0,
+        activeSources: numberFrom(coverage.activeSourceCount) ?? 0,
+        checkedSources: numberFrom(coverage.checkedSourceCount) ?? 0,
+        successfulSources: numberFrom(coverage.successfulSourceCount) ?? 0,
+        usefulSources: numberFrom(coverage.usefulSourceCount) ?? 0,
+        captureProducingSources: numberFrom(coverage.captureProducingSourceCount) ?? 0,
+        recentlySeenSources: numberFrom(coverage.recentlySeenSourceCount) ?? 0,
         dailySources: numberFrom(coverage.dailySourceCount) ?? 0,
         dailyAttempted: numberFrom(coverage.dailyAttemptedCount) ?? 0,
         dailyCovered: numberFrom(coverage.dailyCoveredCount) ?? 0,

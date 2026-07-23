@@ -89,6 +89,65 @@ describe("public collection boundary", () => {
     expect(store.getSource("c")?.health?.checkedAt).toBeUndefined();
   });
 
+  test("supersedes an unleased queued task after a competing run covers the same source job", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "covered", url: "https://example.test/covered.xml", crawlFrequencySeconds: 900 }));
+    const strandedFrontier = new FocusedFrontier();
+    const lease = strandedFrontier.next.bind(strandedFrontier);
+    let leaseUnavailable = true;
+    strandedFrontier.next = ((...args: any[]) => {
+      if (leaseUnavailable) {
+        leaseUnavailable = false;
+        return undefined;
+      }
+      return lease(...args);
+    }) as any;
+    let networkExecutionCount = 0;
+    const feed = "<rss><channel><item><title>APT29 malware campaign</title><link>https://example.test/report</link><description>APT29 targeted government victims with malware and command infrastructure.</description><pubDate>Thu, 23 Jul 2026 12:00:00 GMT</pubDate></item></channel></rss>";
+
+    const loop = startCanaryCollectionLoop({
+      store,
+      frontier: strandedFrontier,
+      enabled: false,
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => "2026-07-23T12:00:00.000Z",
+      fetch: async () => { throw new Error("deferred task must not fetch"); }
+    });
+    loop.setEnabled(true, { approvedBy: "source-accounting-test" });
+    await loop.runOnce();
+    const deferred = loop.getState().latestResult;
+    expect(loop.getState()).toMatchObject({ successCount: 0, errorCount: 0, deferredCount: 1, latestResult: { status: "queued" } });
+    await loop.stop();
+    const competing = await runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => "2026-07-23T12:01:00.000Z",
+      fetch: async () => {
+        networkExecutionCount++;
+        return new Response(feed, { headers: { "content-type": "application/rss+xml" } });
+      }
+    });
+    const reconciled = await runCanaryCollectionCycle({
+      store,
+      frontier: strandedFrontier,
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => "2026-07-23T12:02:00.000Z",
+      fetch: async () => { throw new Error("covered task must not refetch"); }
+    });
+
+    expect(deferred).toMatchObject({ status: "queued", queuedTaskCount: 1, leasedTaskCount: 0, completedTaskCount: 0, failedTaskCount: 0, remainingQueuedTaskCount: 1 });
+    expect(store.getRun(deferred.runId)).toMatchObject({ status: "superseded", completedTaskCount: 0, supersededTaskCount: 1 });
+    expect(competing).toMatchObject({ status: "completed", completedTaskCount: 1, insertedCaptureCount: 1, remainingQueuedTaskCount: 0 });
+    expect(reconciled).toMatchObject({ status: "completed", supersededTaskCount: 1, queuedTaskCount: 0, remainingQueuedTaskCount: 0 });
+    expect(networkExecutionCount).toBe(1);
+    expect(strandedFrontier.snapshot()).toHaveLength(0);
+    expect(Date.parse(store.getSource("covered")!.crawlState!.nextEligibleAt!)).toBeGreaterThan(Date.parse("2026-07-23T12:02:00.000Z"));
+  });
+
   test("defers due sources instead of overflowing a saturated queue", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "due", url: "https://example.test/due.xml" }));

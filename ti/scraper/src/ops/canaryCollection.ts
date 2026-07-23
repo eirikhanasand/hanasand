@@ -22,27 +22,56 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const activation = options.activateSources ? activatePublicCanarySources({ ...options, now: generatedAt }) : { activated: [], alreadyActive: [], rejected: [] };
   const maxSources = Math.max(1, options.maxSources ?? 10), maxTasks = Math.max(1, options.maxTasks ?? 5), maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
   const selectedSourceIds = new Set(options.sourceIds ?? []);
+  const supersededTaskCount = supersedeCoveredQueuedTasks(options, generatedAt, selectedSourceIds);
+  const queuedTasks = options.frontier.snapshot().map(frontierTask).filter((task: any) => taskInScope(options, task, selectedSourceIds));
+  const leasedTasks = options.frontier.leasedSnapshot().filter((task: any) => taskInScope(options, task, selectedSourceIds));
+  const pendingJobKeys = new Set([...queuedTasks, ...leasedTasks].map(sourceJobKey));
+  const resumedRunId = queuedTasks.find((task: any) => (!task.availableAt || Date.parse(task.availableAt) <= Date.parse(generatedAt)) && task.runId)?.runId;
+  const resumedTasks = resumedRunId ? queuedTasks.filter((task: any) => task.runId === resumedRunId).slice(0, maxTasks) : [];
+  const resumedRun = resumedRunId ? options.store.getRun?.(resumedRunId) : undefined;
   const allDue = options.store.listSources()
     .filter((s: any) => inCollectionScope(s, options.tenantId, options.includeSharedSources) && (!selectedSourceIds.size || selectedSourceIds.has(s.id)) && isProductionCollectionSource(s, generatedAt))
     .sort((left: any, right: any) => sourceScheduleTime(left) - sourceScheduleTime(right) || String(left.id).localeCompare(String(right.id)));
   const due = allDue.slice(0, maxSources);
-  const planId = stableId("canary-plan", `${options.tenantId ?? "global"}:${generatedAt}`), runId = stableId("canary-run", planId);
+  const generatedPlanId = stableId("canary-plan", `${options.tenantId ?? "global"}:${generatedAt}`);
+  const planId = resumedRun?.planId ?? resumedTasks[0]?.planId ?? generatedPlanId;
+  const runId = resumedRunId ?? stableId("canary-run", planId);
   const queueLimit = Math.max(1, Number(options.queueLimit ?? 500));
   const availableQueueSlots = Math.max(0, queueLimit - Number(options.frontier.size?.() ?? options.frontier.snapshot?.().length ?? 0));
-  const tasks = due.flatMap((s: any) => tasksForSource(s, generatedAt, runId, maxBytes)).slice(0, Math.min(maxTasks, availableQueueSlots));
+  const tasks = resumedTasks.length
+    ? resumedTasks
+    : due.flatMap((s: any) => tasksForSource(s, generatedAt, runId, maxBytes).map((task: any) => ({ ...task, planId })))
+      .filter((task: any) => !pendingJobKeys.has(sourceJobKey(task)))
+      .slice(0, Math.min(maxTasks, availableQueueSlots));
   const scheduledSourceIds = new Set(tasks.map((task: any) => task.sourceId));
   const backpressureState = availableQueueSlots >= maxTasks ? "accepting" : "throttled";
-  options.store.savePlan?.({ id: planId, tenantId: options.tenantId, requestId: "req_public_canary", createdAt: generatedAt, tasks, request: { query: canaryQueries }, reviewRequired: [], rejected: activation.rejected, audit: [] });
-  options.store.saveRun?.({ id: runId, tenantId: options.tenantId, planId, requestId: "req_public_canary", status: "running", createdAt: generatedAt, startedAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, reviewTaskCount: 0, rejectedSourceCount: activation.rejected.length, captureCount: 0, incidentCount: 0 });
-  for (const task of tasks) options.frontier.enqueueTask(task);
-  const counters: any = { leasedTaskCount: 0, completedTaskCount: 0, failedTaskCount: 0, insertedCaptureCount: 0, duplicateCaptureCount: 0, incidentCount: 0, exposureClaimCount: 0, skippedLowValueCount: 0, retryScheduledCount: 0, retryExhaustedCount: 0 };
+  if (!resumedTasks.length) {
+    options.store.savePlan?.({ id: planId, tenantId: options.tenantId, requestId: "req_public_canary", createdAt: generatedAt, tasks, request: { query: canaryQueries }, reviewRequired: [], rejected: activation.rejected, audit: [] });
+    options.store.saveRun?.({ id: runId, tenantId: options.tenantId, planId, requestId: "req_public_canary", status: "running", createdAt: generatedAt, startedAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, reviewTaskCount: 0, rejectedSourceCount: activation.rejected.length, captureCount: 0, incidentCount: 0 });
+    for (const task of tasks) options.frontier.enqueueTask(task);
+  } else {
+    options.store.saveRun?.({ ...resumedRun, id: runId, tenantId: resumedRun?.tenantId ?? options.tenantId, planId, requestId: "req_public_canary", status: "running", createdAt: resumedRun?.createdAt ?? generatedAt, startedAt: resumedRun?.startedAt ?? generatedAt, updatedAt: generatedAt });
+  }
+  const counters: any = {
+    leasedTaskCount: Number(resumedRun?.leasedTaskCount ?? 0),
+    completedTaskCount: Number(resumedRun?.completedTaskCount ?? 0),
+    failedTaskCount: Number(resumedRun?.failedTaskCount ?? 0),
+    insertedCaptureCount: Number(resumedRun?.captureCount ?? 0),
+    duplicateCaptureCount: Number(resumedRun?.duplicateCaptureCount ?? 0),
+    incidentCount: Number(resumedRun?.incidentCount ?? 0),
+    exposureClaimCount: Number(resumedRun?.exposureClaimCount ?? 0),
+    skippedLowValueCount: Number(resumedRun?.skippedLowValueCount ?? 0),
+    retryScheduledCount: Number(resumedRun?.retryScheduledCount ?? 0),
+    retryExhaustedCount: Number(resumedRun?.retryExhaustedCount ?? 0)
+  };
   const latestCaptureIds: string[] = [], errors: any[] = [];
   const concurrency = Math.max(1, Math.min(tasks.length || 1, Number(options.maxConcurrentTasks ?? 5)));
   for (let done = 0; done < tasks.length; done += concurrency) await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length - done) }, () => runLeasedTask(options, runId, generatedAt, fetcher, mode, maxBytes, counters, latestCaptureIds, errors)));
-  const runStatus = counters.failedTaskCount && counters.completedTaskCount ? "degraded" : counters.failedTaskCount ? "failed" : "completed";
+  const remainingQueuedTaskCount = options.frontier.snapshot().map(frontierTask).filter((task: any) => task.runId === runId).length;
+  const runStatus = remainingQueuedTaskCount ? "queued" : counters.failedTaskCount && counters.completedTaskCount ? "degraded" : counters.failedTaskCount ? "failed" : "completed";
   const completedAt = options.now?.() ?? nowIso();
-  options.store.saveRun?.({ id: runId, tenantId: options.tenantId, planId, requestId: "req_public_canary", status: runStatus, createdAt: generatedAt, startedAt: generatedAt, completedAt, updatedAt: completedAt, taskCount: tasks.length, sourceCount: scheduledSourceIds.size, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, duplicateCaptureCount: counters.duplicateCaptureCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, retryScheduledCount: counters.retryScheduledCount, retryExhaustedCount: counters.retryExhaustedCount, error: errors[0]?.message });
-  return { generatedAt, tenantId: options.tenantId, mode: "production_canary", runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, retiredSourceCount: productivity.retired.length, activeSourceCount: scheduledSourceIds.size, deferredDueSourceCount: allDue.length - scheduledSourceIds.size, queuedTaskCount: tasks.length, queueLimit, availableQueueSlots, backpressureState, ...counters, remainingQueuedTaskCount: options.frontier.snapshot().filter((i: any) => i.task.runId === runId).length, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
+  options.store.saveRun?.({ ...resumedRun, id: runId, tenantId: resumedRun?.tenantId ?? options.tenantId, planId, requestId: "req_public_canary", status: runStatus, createdAt: resumedRun?.createdAt ?? generatedAt, startedAt: resumedRun?.startedAt ?? generatedAt, completedAt: runStatus === "queued" ? undefined : completedAt, updatedAt: completedAt, taskCount: resumedRun?.taskCount ?? tasks.length, sourceCount: resumedRun?.sourceCount ?? scheduledSourceIds.size, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, duplicateCaptureCount: counters.duplicateCaptureCount, leasedTaskCount: counters.leasedTaskCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, retryScheduledCount: counters.retryScheduledCount, retryExhaustedCount: counters.retryExhaustedCount, error: errors[0]?.message });
+  return { generatedAt, tenantId: options.tenantId, mode: "production_canary", status: runStatus, runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, retiredSourceCount: productivity.retired.length, supersededTaskCount, activeSourceCount: scheduledSourceIds.size, deferredDueSourceCount: allDue.length - scheduledSourceIds.size, queuedTaskCount: tasks.length, queueLimit, availableQueueSlots, backpressureState, ...counters, remainingQueuedTaskCount, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
 }
 export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { enabled?: boolean; intervalSeconds?: number; queueLimit?: number; onCycle?: (r: any) => void; onError?: (e: unknown) => void }): CanaryCollectionLoopHandle {
   const state = detachedState(options.now?.() ?? nowIso(), options.queueLimit ?? 500), intervalMs = Math.max(5, options.intervalSeconds ?? 300) * 1000; let timer: Timer | undefined, startupTimer: Timer | undefined, active: Promise<void> | undefined;
@@ -56,7 +85,15 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
           : await scheduleWatchlistDiscoveryRuns(options, options.now?.() ?? nowIso());
         const result = await runCanaryCollectionCycle(options);
         result.watchlistDiscovery = watchlistDiscovery;
-        state.latestResult = result; state.successCount++; state.lastSuccessAt = result.generatedAt; options.onCycle?.(result);
+        state.latestResult = result;
+        if (["completed", "degraded"].includes(result.status)) {
+          state.successCount++; state.consecutiveErrorCount = 0; state.lastSuccessAt = result.generatedAt;
+        } else if (result.status === "queued") {
+          state.deferredCount = Number(state.deferredCount ?? 0) + 1; state.lastDeferredAt = result.generatedAt;
+        } else {
+          state.errorCount++; state.consecutiveErrorCount++; state.lastError = result.errors?.[0]?.message ?? `collection run ${result.status}`; state.lastErrorAt = result.generatedAt;
+        }
+        options.onCycle?.(result);
       }
       catch (e) { state.errorCount++; state.consecutiveErrorCount++; state.lastError = e instanceof Error ? e.message : String(e); state.lastErrorAt = nowIso(); options.onError?.(e); }
       finally { state.running = false; state.cycleCount++; state.nextCycleAt = state.enabled ? new Date(Date.now() + intervalMs).toISOString() : undefined; active = undefined; }
@@ -224,6 +261,7 @@ function sourceHealthObservation(source: any, task: any, runId: string, checkedA
     sourceId: source.id,
     collectionRunId: runId,
     taskId: task.id,
+    sourceJobId: task.planning?.sourceJobId ?? "default",
     checkedAt,
     status: outcome.success ? metrics.parserWarningCount ? "degraded" : "healthy" : "failed",
     success: outcome.success,
@@ -272,6 +310,45 @@ function currentProductiveCycles(store: any, source: any, generatedAt: string) {
     if (!byRun.has(runId) || checkedAt > Date.parse(byRun.get(runId).checkedAt)) byRun.set(runId, row);
   }
   return [...byRun.values()].sort((left, right) => Date.parse(left.checkedAt) - Date.parse(right.checkedAt));
+}
+function supersedeCoveredQueuedTasks(options: any, generatedAt: string, selectedSourceIds: Set<string>) {
+  const observations = options.store.listSourceHealthObservations?.() ?? [];
+  const affectedRuns = new Map<string, number>();
+  for (const item of options.frontier.snapshot()) {
+    const task = frontierTask(item);
+    if (!taskInScope(options, task, selectedSourceIds)) continue;
+    const source = options.store.getSource?.(task.sourceId);
+    if (!source || Date.parse(source.crawlState?.nextEligibleAt ?? "") <= Date.parse(generatedAt)) continue;
+    const covered = observations.some((row: any) =>
+      row.sourceId === task.sourceId
+      && row.tenantId === task.tenantId
+      && row.success === true
+      && Date.parse(row.checkedAt) > Date.parse(task.queuedAt)
+      && sourceJobKey(row) === sourceJobKey(task));
+    if (!covered) continue;
+    options.frontier.cancel(task, "superseded by a newer successful source-job collection");
+    if (task.runId) affectedRuns.set(task.runId, (affectedRuns.get(task.runId) ?? 0) + 1);
+  }
+  for (const [runId, count] of affectedRuns) {
+    const run = options.store.getRun?.(runId);
+    if (!run) continue;
+    const remaining = [...options.frontier.snapshot().map(frontierTask), ...options.frontier.leasedSnapshot()].some((task: any) => task.runId === runId);
+    options.store.saveRun?.({
+      ...run,
+      status: remaining ? "queued" : "superseded",
+      supersededTaskCount: Number(run.supersededTaskCount ?? 0) + count,
+      ...(remaining ? {} : { completedAt: generatedAt }),
+      updatedAt: generatedAt
+    });
+  }
+  return [...affectedRuns.values()].reduce((total, count) => total + count, 0);
+}
+function frontierTask(item: any) { return item?.task ?? item; }
+function sourceJobKey(task: any) { return `${task.tenantId ?? "global"}:${task.sourceId}:${task.sourceJobId ?? task.planning?.sourceJobId ?? "default"}`; }
+function taskInScope(options: any, task: any, selectedSourceIds: Set<string>) {
+  if (!task || selectedSourceIds.size && !selectedSourceIds.has(task.sourceId)) return false;
+  const source = options.store.getSource?.(task.sourceId);
+  return Boolean(source && inCollectionScope(source, options.tenantId, options.includeSharedSources));
 }
 function inCollectionScope(source: any, tenantId?: string, includeSharedSources = true) {
   const sourceTenantId = String(source.tenantId ?? "").trim() || undefined;

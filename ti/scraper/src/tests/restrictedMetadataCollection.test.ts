@@ -51,18 +51,26 @@ describe("restricted metadata collection", () => {
   test("stores official transport canary metadata without creating threat intelligence", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource({
-      ...source({ id: "src_transport_canary", type: "tor_metadata", url: `http://${"b".repeat(56)}.onion/`, accessMethod: "approved_proxy", status: "active", risk: "high", legalNotes: "Official onion transport canary metadata only.", governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-07-20T09:00:00.000Z", approvedBy: "reviewer" }, metadata: { transportCanary: true } }),
+      ...source({ id: "src_transport_canary", type: "tor_metadata", url: `http://${"b".repeat(56)}.onion/`, accessMethod: "approved_proxy", status: "active", risk: "high", legalNotes: "Official onion transport canary metadata only.", governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-07-20T09:00:00.000Z", approvedBy: "reviewer" }, metadata: { transportCanary: true, countsAsCoverage: true, sourcePortfolioQualificationState: "pending_sustained_productivity", sourcePortfolioProductiveCheckCount: 1 } }),
       tenantId: "tenant_restricted"
     });
     const boundary = new TorMetadataHttpBoundary({ proxyUrl: "http://onion-tor:8118", fetcher: async () => new Response("<title>Official transport canary</title><meta name=\"description\" content=\"Safe metadata\">", { headers: { "content-type": "text/html" } }) });
 
-    const result = await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-20T10:05:00.000Z" });
+    const first = await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-20T10:05:00.000Z" });
+    const second = await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-20T11:05:00.000Z" });
+    const saved = store.getSource("src_transport_canary")!;
 
-    expect(result).toMatchObject({ status: "completed", intelligenceSourceCount: 0, transportProbeCount: 1, captureCount: 1, incidentCount: 0 });
+    expect(first).toMatchObject({ status: "completed", intelligenceSourceCount: 0, transportProbeCount: 1, captureCount: 1, incidentCount: 0 });
+    expect(second).toMatchObject({ status: "completed", intelligenceSourceCount: 0, transportProbeCount: 1, duplicateCount: 1, incidentCount: 0 });
+    expect(saved).toMatchObject({ status: "active", countsAsCoverage: false, metadata: { transportCanary: true, countsAsCoverage: false } });
+    expect(saved.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
+    expect(saved.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
+    expect(saved.metadata).not.toHaveProperty("sourcePortfolioLastProductiveAt");
     expect(store.listCaptures()).toHaveLength(1);
     expect(store.listIncidents()).toHaveLength(0);
     expect(store.listExtractedEntities()).toHaveLength(0);
-    expect(store.listSourceHealthObservations()[0]).toMatchObject({ useful: false, observedActorCount: 0 });
+    expect(store.listSourceHealthObservations()).toHaveLength(2);
+    expect(store.listSourceHealthObservations().every((observation) => observation.useful === false && observation.observedActorCount === 0)).toBe(true);
   });
 
   test("extracts current SafePay and Space Bears victim-card metadata without retaining locators or dynamic page text", async () => {
@@ -225,7 +233,9 @@ describe("restricted metadata collection", () => {
   test("reports only collectable intelligence coverage and redacts restricted locators", () => {
     const store = new InMemoryScraperStore();
     const make = (id: string, status: string, metadata: Record<string, unknown>, governance: Record<string, unknown> = { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-07-22T09:00:00.000Z", approvedBy: "reviewer" }) => source({ id, type: "tor_metadata", url: `http://${id[0].repeat(56)}.onion/`, accessMethod: "approved_proxy", status, risk: "restricted", legalNotes: "Metadata-only source with explicit public research approval.", governance, metadata });
-    store.saveSource({ ...make("active", "active", { actorName: "SafePay" }), health: { lastUsefulAt: "2026-07-22T09:55:00.000Z" }, crawlState: { backoffUntil: "2026-07-22T10:15:00.000Z" } });
+    store.saveSource({ ...make("active", "active", { actorName: "SafePay" }), crawlState: { backoffUntil: "2026-07-22T10:15:00.000Z" } });
+    store.saveSourceHealthObservation({ id: "health_active_useful", sourceId: "active", checkedAt: "2026-07-22T09:50:00.000Z", status: "healthy", success: true, useful: true, captureCount: 1, legalMode: "metadata_only" });
+    store.saveSourceHealthObservation({ id: "health_active_latest", sourceId: "active", checkedAt: "2026-07-22T09:55:00.000Z", status: "healthy", success: true, useful: false, captureCount: 0, legalMode: "metadata_only" });
     store.saveSource(make("candidate", "candidate", { actorName: "Candidate" }));
     store.saveSource(make("rejected", "rejected", { actorName: "Rejected" }, { approvalRequired: true, approvalState: "rejected", metadataOnly: true }));
     store.saveSource(make("transport", "active", { transportCanary: true }));
@@ -234,7 +244,7 @@ describe("restricted metadata collection", () => {
     const json = JSON.stringify(response.body);
 
     expect(response.body.status.sourceCount).toBe(1);
-    expect(response.body.coverage).toMatchObject({ intelligenceSourceCount: 1, usefulSourceCount: 1, backedOffSourceCount: 1, candidateSourceCount: 1, rejectedSourceCount: 1, transportProbeCount: 1 });
+    expect(response.body.coverage).toMatchObject({ intelligenceSourceCount: 1, everUsefulSourceCount: 1, usefulSourceCount: 0, latestUsefulSourceCount: 0, usefulWithin24hSourceCount: 1, backedOffSourceCount: 1, candidateSourceCount: 1, rejectedSourceCount: 1, transportProbeCount: 1 });
     expect(response.body.status.liveSearch.tasks[0].targetUrl).toBeUndefined();
     expect(json).not.toContain(".onion");
   });

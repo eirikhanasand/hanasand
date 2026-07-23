@@ -25,6 +25,10 @@ export function buildRestrictedMetadataStatusRouteResponse(input: RestrictedMeta
   const generatedAt = options.generatedAt ?? nowIso(), sources = selected(options.store, input.sourceIds);
   const intelligenceSources = sources.filter((source: SourceRecord) => source.metadata?.transportCanary !== true && isExecutableSource(source));
   const sourceIds = new Set(intelligenceSources.map((source: SourceRecord) => source.id));
+  const observations = (options.store.listSourceHealthObservations?.() ?? [])
+    .filter((observation: any) => sourceIds.has(observation.sourceId))
+    .sort((left: any, right: any) => String(left.checkedAt).localeCompare(String(right.checkedAt)));
+  const latestBySource = new Map<string, any>(observations.map((observation: any) => [observation.sourceId, observation]));
   const captures = options.store.listCaptures().filter((capture: any) => sourceIds.has(capture.sourceId));
   const backedOffSourceCount = intelligenceSources.filter((source: SourceRecord) => {
     const until = source.crawlState?.backoffUntil;
@@ -34,7 +38,12 @@ export function buildRestrictedMetadataStatusRouteResponse(input: RestrictedMeta
     status: redactRestrictedOutput(buildRestrictedMetadataOperationsStatus({ sources: intelligenceSources, captures, proxyBoundaries: proxyBoundariesForSources(intelligenceSources), generatedAt, operatorId: input.operatorId, runId: input.runId })),
     coverage: {
       intelligenceSourceCount: intelligenceSources.length,
-      usefulSourceCount: intelligenceSources.filter((source: SourceRecord) => Boolean(source.health?.lastUsefulAt)).length,
+      everUsefulSourceCount: intelligenceSources.filter((source: SourceRecord) => observations.some((observation: any) => observation.sourceId === source.id && usefulObservation(observation))).length,
+      usefulSourceCount: intelligenceSources.filter((source: SourceRecord) => usefulObservation(latestBySource.get(source.id))).length,
+      latestUsefulSourceCount: intelligenceSources.filter((source: SourceRecord) => usefulObservation(latestBySource.get(source.id))).length,
+      usefulWithin24hSourceCount: intelligenceSources.filter((source: SourceRecord) => observations.some((observation: any) =>
+        observation.sourceId === source.id && usefulObservation(observation) && within24h(observation.checkedAt, generatedAt)
+      )).length,
       backedOffSourceCount,
       candidateSourceCount: sources.filter((source: SourceRecord) => source.metadata?.transportCanary !== true && source.status === "candidate").length,
       rejectedSourceCount: sources.filter((source: SourceRecord) => source.status === "rejected" || source.status === "retired").length,
@@ -49,6 +58,8 @@ function apiSafe(plan: RestrictedMetadataApplyPlan): RestrictedMetadataApplyPlan
 function proxyBoundariesForSources(sources: readonly SourceRecord[]): Partial<Record<DarknetNetwork, ApprovedProxyBoundary>> { return Object.fromEntries([...new Set(sources.map(networkForSource).filter(Boolean) as DarknetNetwork[])].map((network) => [network, boundary(network)])); }
 function boundary(network: DarknetNetwork): ApprovedProxyBoundary { const config = DARKNET_METADATA_NETWORK_CONFIGS[network], id = `${network}-approved-metadata-proxy`; return { id, network, accessMethod: "approved_proxy", config: { ...config, proxyBoundaryId: id }, health: { boundaryId: id, network, proxyType: config.proxyType, isolationId: `${network}:${id}:metadata-only`, healthy: true, checkedAt: nowIso(), timeoutClass: config.timeoutClass, resolutionFailure: "none", fetchFailure: "none", screenshotHashMode: config.screenshotHashMode }, async fetchMetadata() { return {}; } }; }
 function networkForSource(source: SourceRecord): DarknetNetwork | undefined { return source.type === "tor_metadata" ? "tor" : source.type === "i2p_metadata" ? "i2p" : source.type === "freenet_metadata" ? "freenet" : undefined; }
+function usefulObservation(observation: any) { return observation?.useful === true && Number(observation.captureCount ?? 0) > 0; }
+function within24h(checkedAt: string, generatedAt: string) { const age = Date.parse(generatedAt) - Date.parse(checkedAt); return Number.isFinite(age) && age >= 0 && age <= 86_400_000; }
 function redactRestrictedOutput(value: any): any {
   if (Array.isArray(value)) return value.map(redactRestrictedOutput);
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([key]) => key !== "targetUrl" && key !== "url").map(([key, child]) => [key, redactRestrictedOutput(child)]));

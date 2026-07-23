@@ -62,7 +62,7 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
         ? ratio(observedFalsePositiveRates.reduce((sum: number, value: number) => sum + value, 0), observedFalsePositiveRates.length)
         : null;
     const qualification = qualificationBySource.get(source.id);
-    const lastUsefulAt = qualification?.lastUsefulAt;
+    const lastUsefulAt = timeOf(sourceObservations.filter((row: any) => row.useful === true && Number(row.captureCount ?? 0) > 0).at(-1), "checkedAt");
     const duplicateCount = sum(sourceObservations, "duplicateCount");
     const captureCount = sum(sourceObservations, "captureCount");
 
@@ -151,6 +151,7 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
       observedSourceCount: executableRows.filter((row: any) => row.health.observationCount > 0).length,
       checkedSourceCount: executableRows.filter((row: any) => row.health.observationCount > 0).length,
       successfulSourceCount: executableRows.filter((row: any) => Boolean(row.health.lastSuccessAt)).length,
+      everUsefulSourceCount: executableRows.filter((row: any) => Boolean(row.health.lastUsefulItemAt)).length,
       usefulSourceCount: executableRows.filter((row: any) => row.qualification?.latestCheckUseful === true).length,
       latestUsefulSourceCount: executableRows.filter((row: any) => row.qualification?.latestCheckUseful === true).length,
       sustainedUsefulSourceCount: executableRows.filter((row: any) => row.coverage.sustainedProductive).length,
@@ -202,8 +203,9 @@ function operationalQuerySnapshot(result: any, input: any, generatedAt: string) 
       observedSourceCount: Number(totals.observedSourceCount ?? 0),
       checkedSourceCount: Number(totals.checkedSourceCount ?? 0),
       successfulSourceCount: Number(totals.successfulSourceCount ?? 0),
+      everUsefulSourceCount: Number(totals.everUsefulSourceCount ?? totals.usefulSourceCount ?? 0),
       usefulSourceCount: Number(totals.usefulSourceCount ?? 0),
-      latestUsefulSourceCount: Number(totals.usefulSourceCount ?? 0),
+      latestUsefulSourceCount: Number(totals.latestUsefulSourceCount ?? 0),
       sustainedUsefulSourceCount: Number(totals.sustainedUsefulSourceCount ?? 0),
       checkedWithin24hSourceCount: Number(totals.checkedWithin24hSourceCount ?? 0),
       successfulWithin24hSourceCount: Number(totals.successfulWithin24hSourceCount ?? 0),
@@ -298,7 +300,7 @@ function operationalQueryRow(row: any, generatedAt: string) {
     usefulCheckCount,
     productiveCheckCount: usefulCheckCount,
     retainedCaptureCount: captureCount,
-    latestCheckUseful: Number(latest.captureCount ?? 0) > 0,
+    latestCheckUseful: latest.useful === true && Number(latest.captureCount ?? 0) > 0,
     lastCheckedAt,
     lastSuccessAt,
     lastContentAt,

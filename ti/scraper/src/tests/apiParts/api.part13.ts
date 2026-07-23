@@ -95,11 +95,12 @@ describe("api v1", () => {
       },
     });
     expect(store.listRuns()[0]).toMatchObject({
-      status: "failed",
+      status: "queued",
       taskCount: 1,
       captureCount: 0,
       incidentCount: 0,
     });
+    expect(store.listRuns()[0].completedAt).toBeUndefined();
     expect(frontier.snapshot()).toHaveLength(1);
     const failedSourceId = (run.canaryRun as { errors: Array<{ sourceId: string }> }).errors[0]?.sourceId;
     expect(store.getSource(failedSourceId)?.health?.status).toBe("degraded");

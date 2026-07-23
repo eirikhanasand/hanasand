@@ -61,7 +61,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "030_reconcile_actor_profiles", path: fileURLToPath(new URL("../../migrations/030_reconcile_actor_profiles.sql", import.meta.url)) },
   { version: "031_archive_inactive_actor_profiles", path: fileURLToPath(new URL("../../migrations/031_archive_inactive_actor_profiles.sql", import.meta.url)) },
   { version: "032_reconcile_actor_profile_scope_lineage", path: fileURLToPath(new URL("../../migrations/032_reconcile_actor_profile_scope_lineage.sql", import.meta.url)) },
-  { version: "033_bound_source_operations", path: fileURLToPath(new URL("../../migrations/033_bound_source_operations.sql", import.meta.url)) }
+  { version: "033_bound_source_operations", path: fileURLToPath(new URL("../../migrations/033_bound_source_operations.sql", import.meta.url)) },
+  { version: "034_reconcile_incomplete_collection_runs", path: fileURLToPath(new URL("../../migrations/034_reconcile_incomplete_collection_runs.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -304,7 +305,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             'observedFalsePositiveRate', avg(h.false_positive_rate),
             'latest', (array_agg(h.record ORDER BY h.checked_at DESC))[1],
             'lastSuccessAt', max(h.checked_at) FILTER (WHERE h.success),
-            'lastUsefulAt', max(h.checked_at) FILTER (WHERE h.collection_run_id IS NOT NULL AND h.capture_count > 0),
+            'lastUsefulAt', max(h.checked_at) FILTER (WHERE h.useful AND h.capture_count > 0),
             'lastFailure', (array_agg(h.record ORDER BY h.checked_at DESC) FILTER (WHERE NOT h.success))[1]
           ) AS stats
           FROM threat_intel.source_health h
@@ -359,23 +360,16 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             source.canonical_feed_key, source.record,
             health.observation_count, health.last_checked_at, health.last_success_at,
             health.last_useful_at, health.successful_cycles, health.useful_cycles,
-            health.latest_success, health.latest_status, health.latest_parser_warning_count,
+            health.latest_success, health.latest_useful, health.latest_status, health.latest_parser_warning_count,
             captures.capture_count, captures.last_content_at
           FROM scoped source
           CROSS JOIN LATERAL (
             SELECT count(*) AS observation_count,
               max(checked_at) AS last_checked_at,
               max(checked_at) FILTER (WHERE success) AS last_success_at,
-              max(checked_at) FILTER (
-                WHERE collection_run_id IS NOT NULL AND capture_count > 0
-                  AND EXISTS (
-                    SELECT 1 FROM threat_intel.captures retained
-                    WHERE retained.source_id = source.id
-                      AND retained.tenant_id IS NOT DISTINCT FROM source.tenant_id
-                      AND retained.record->'metadata'->>'runId' = source_health.collection_run_id
-                  )
-              ) AS last_useful_at,
+              max(checked_at) FILTER (WHERE useful AND capture_count > 0) AS last_useful_at,
               (array_agg(success ORDER BY checked_at DESC))[1] AS latest_success,
+              (array_agg(useful AND capture_count > 0 ORDER BY checked_at DESC))[1] AS latest_useful,
               (array_agg(status ORDER BY checked_at DESC))[1] AS latest_status,
               (array_agg(parser_warning_count ORDER BY checked_at DESC))[1] AS latest_parser_warning_count,
               count(DISTINCT collection_run_id) FILTER (
@@ -454,7 +448,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           'observedSourceCount', count(*) FILTER (WHERE collection_executable AND observation_count > 0),
           'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND observation_count > 0),
           'successfulSourceCount', count(*) FILTER (WHERE collection_executable AND last_success_at IS NOT NULL),
-          'usefulSourceCount', count(*) FILTER (WHERE collection_executable AND last_useful_at IS NOT NULL),
+          'everUsefulSourceCount', count(*) FILTER (WHERE collection_executable AND last_useful_at IS NOT NULL),
+          'usefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_useful),
+          'latestUsefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_useful),
           'sustainedUsefulSourceCount', count(*) FILTER (WHERE collection_executable AND useful_cycles >= 2 AND capture_count > 0),
           'checkedWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND last_checked_at >= $4::timestamptz - interval '24 hours'),
           'successfulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND last_success_at >= $4::timestamptz - interval '24 hours'),
@@ -1328,7 +1324,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         idempotency_key = EXCLUDED.idempotency_key,
         status = EXCLUDED.status,
         started_at = LEAST(threat_intel.collection_runs.started_at, EXCLUDED.started_at),
-        completed_at = COALESCE(EXCLUDED.completed_at, threat_intel.collection_runs.completed_at),
+        completed_at = CASE
+          WHEN EXCLUDED.status IN ('queued', 'running') THEN NULL
+          ELSE COALESCE(EXCLUDED.completed_at, threat_intel.collection_runs.completed_at)
+        END,
         updated_at = EXCLUDED.updated_at,
         task_count = EXCLUDED.task_count,
         source_count = EXCLUDED.source_count,

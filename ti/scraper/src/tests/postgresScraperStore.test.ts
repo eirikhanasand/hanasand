@@ -1513,7 +1513,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     `;
     expect(integrity).toEqual({ cross_scope_profiles: 0, cross_scope_evidence: 0, cross_scope_aliases: 0, unresolved_workflows: 0 });
     expect(await immutableSnapshot()).toEqual(immutableBefore);
-    expect(await migrated.databaseHealth()).toMatchObject({ ok: true, migrationVersion: "033_bound_source_operations", actorProfileScopeReady: true });
+    expect(await migrated.databaseHealth()).toMatchObject({ ok: true, migrationVersion: "034_reconcile_incomplete_collection_runs", actorProfileScopeReady: true });
     await migrated.close();
 
     const restarted = await PostgresScraperStore.create({ databaseUrl });
@@ -2805,6 +2805,50 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(await admin`SELECT status, last_seen_at, updated_at, record FROM threat_intel.sources ORDER BY id`).toEqual(snapshot);
   });
 
+  test("keeps deferred collection runs nonterminal and reconciles historical false successes", async () => {
+    const store = await PostgresScraperStore.create({ databaseUrl });
+    const completedAt = "2026-07-23T15:00:00.000Z";
+    store.saveRun({ id: "run_deferred_runtime", requestId: "req_public_canary", status: "completed", startedAt: completedAt, completedAt, updatedAt: completedAt, taskCount: 1, completedTaskCount: 1 } as any);
+    await store.flush();
+    store.saveRun({ id: "run_deferred_runtime", requestId: "req_public_canary", status: "queued", startedAt: completedAt, updatedAt: "2026-07-23T15:01:00.000Z", taskCount: 1, completedTaskCount: 0, completedAt: undefined } as any);
+    store.saveRun({ id: "run_false_completed", requestId: "req_public_canary", status: "completed", startedAt: completedAt, completedAt, updatedAt: completedAt, taskCount: 2, completedTaskCount: 0, failedTaskCount: 0 } as any);
+    store.saveRun({ id: "run_false_degraded", requestId: "req_public_canary", status: "degraded", startedAt: completedAt, completedAt, updatedAt: completedAt, taskCount: 3, completedTaskCount: 1, failedTaskCount: 1 } as any);
+    store.saveRun({ id: "run_truthful_degraded", requestId: "req_public_canary", status: "degraded", startedAt: completedAt, completedAt, updatedAt: completedAt, taskCount: 2, completedTaskCount: 1, failedTaskCount: 1 } as any);
+    await store.close();
+
+    expect((await admin<{ completed_at: Date | null; record: any }[]>`
+      SELECT completed_at, record FROM threat_intel.collection_runs WHERE id = 'run_deferred_runtime'
+    `)[0]).toEqual({ completed_at: null, record: expect.not.objectContaining({ completedAt: expect.anything() }) });
+
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '034_reconcile_incomplete_collection_runs'`;
+    const migrated = await PostgresScraperStore.create({ databaseUrl });
+    expect(await migrated.databaseHealth()).toMatchObject({ ok: true, migrationVersion: "034_reconcile_incomplete_collection_runs" });
+    await migrated.close();
+
+    const reconciled = await admin<{ id: string; status: string; error: string | null; record: any }[]>`
+      SELECT id, status, error, record
+      FROM threat_intel.collection_runs
+      WHERE id LIKE 'run_false_%' OR id = 'run_truthful_degraded'
+      ORDER BY id
+    `;
+    expect(reconciled).toEqual([
+      expect.objectContaining({ id: "run_false_completed", status: "failed", error: "incomplete collection run reconciled: planned tasks did not reach a terminal state", record: expect.objectContaining({ status: "failed", sourceAccountingReconciledAt: expect.any(String) }) }),
+      expect.objectContaining({ id: "run_false_degraded", status: "failed", error: "incomplete collection run reconciled: planned tasks did not reach a terminal state", record: expect.objectContaining({ status: "failed", sourceAccountingReconciledAt: expect.any(String) }) }),
+      expect.objectContaining({ id: "run_truthful_degraded", status: "degraded", error: null })
+    ]);
+    expect(await admin`
+      SELECT id FROM threat_intel.collection_runs
+      WHERE request_id = 'req_public_canary'
+        AND status IN ('completed', 'degraded')
+        AND task_count > COALESCE((record->>'completedTaskCount')::integer, 0) + failed_task_count
+    `).toHaveLength(0);
+
+    const snapshot = await admin`SELECT id, status, completed_at, updated_at, error, record FROM threat_intel.collection_runs ORDER BY id`;
+    const restarted = await PostgresScraperStore.create({ databaseUrl });
+    await restarted.close();
+    expect(await admin`SELECT id, status, completed_at, updated_at, error, record FROM threat_intel.collection_runs ORDER BY id`).toEqual(snapshot);
+  });
+
   test("bounds operational reads with exact totals and page-scoped evidence beyond source 6,100", async () => {
     const store = await PostgresScraperStore.create({ databaseUrl });
     await admin.unsafe(`
@@ -2870,6 +2914,19 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         legalMode: "public_content"
       });
     }
+    store.saveRun({ id: "run_bound_latest", tenantId: "tenant_bound", requestId: "req_public_canary", status: "completed", startedAt: "2026-07-23T12:30:00.000Z", completedAt: "2026-07-23T12:30:00.000Z", updatedAt: "2026-07-23T12:30:00.000Z" } as any);
+    store.saveSourceHealthObservation({
+      id: "health_bound_latest",
+      tenantId: "tenant_bound",
+      sourceId,
+      collectionRunId: "run_bound_latest",
+      checkedAt: "2026-07-23T12:30:00.000Z",
+      status: "healthy",
+      success: true,
+      useful: false,
+      captureCount: 0,
+      legalMode: "public_content"
+    });
     store.saveExtractedEntity({ id: "entity_bound", tenantId: "tenant_bound", sourceId, captureId: "capture_bound_2", type: "actor", value: "APT29", normalizedValue: "apt29" });
     store.saveEvaluationLabel({
       id: "label_bound",
@@ -2897,15 +2954,23 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(page).toMatchObject({ total: 6_101, nextCursor: undefined });
     expect(page.rows[0]).toMatchObject({
       record: { id: sourceId },
-      health_stats: { usefulCycleCount: 2 },
+      health_stats: { usefulCycleCount: 2, latest: { useful: false } },
       capture_stats: { captureCount: 2 },
       actor_stats: { count: 1 },
       label_stats: { classified: 1 }
     });
     expect(direct).toMatchObject({
       total: 1,
-      totals: { qualifyingClearWebSourceCount: 1 }
+      totals: {
+        everUsefulSourceCount: 1,
+        usefulSourceCount: 0,
+        latestUsefulSourceCount: 0,
+        usefulWithin24hSourceCount: 1,
+        sustainedUsefulSourceCount: 1,
+        qualifyingClearWebSourceCount: 1
+      }
     });
+    expect(direct.rows[0]).toMatchObject({ health_stats: { latest: { useful: false } } });
     await store.close();
   });
 });

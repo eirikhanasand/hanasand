@@ -24,7 +24,7 @@ describe("source operations", () => {
     const payload = await response.json() as any;
 
     expect(response.status).toBe(200);
-    expect(payload.summary).toMatchObject({ sourceCount: 1, retainedSourceCount: 1, checkedSourceCount: 1, successfulSourceCount: 1, usefulSourceCount: 0, sustainedUsefulSourceCount: 0, captureProducingSourceCount: 1, observedSourceCount: 1, failedSourceCount: 1, falsePositiveMeasuredSourceCount: 1 });
+    expect(payload.summary).toMatchObject({ sourceCount: 1, retainedSourceCount: 1, checkedSourceCount: 1, successfulSourceCount: 1, everUsefulSourceCount: 1, usefulSourceCount: 0, latestUsefulSourceCount: 0, usefulWithin24hSourceCount: 1, sustainedUsefulSourceCount: 0, captureProducingSourceCount: 1, observedSourceCount: 1, failedSourceCount: 1, falsePositiveMeasuredSourceCount: 1 });
     expect(payload.sources[0]).toMatchObject({
       id: "src_ops_a",
       family: "vendor_blog",
