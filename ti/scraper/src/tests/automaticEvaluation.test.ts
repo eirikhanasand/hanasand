@@ -94,6 +94,79 @@ describe("automatic independent evaluation", () => {
     });
   });
 
+  test("retries missing expectedValues with only fixed server contract feedback", async () => {
+    const store = evaluationStore();
+    const benchmark = automaticActorBenchmark(store, "expectedValues retry benchmark", "2026-07-21T10:15:00.000Z");
+    const prompts: string[] = [];
+    const correction = "Server contract feedback: The prior response failed the required expectedValues field. Return expectedValues as an exhaustive JSON array of plain strings, using [] when the governed evidence supports no values.";
+    const fetch = async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const prompt = JSON.parse(String(init?.body)).prompt as string;
+      const evidenceId = prompt.match(/governedEvidence: \[\{"id":"([^"]+)"/)?.[1];
+      prompts.push(prompt);
+      const review = prompts.length === 1
+        ? { decision: "absent", confidence: 0.9, rationale: "UNTRUSTED_MODEL_TEXT", evidenceIds: [evidenceId] }
+        : { expectedValues: [], decision: "absent", confidence: 0.9, rationale: "The governed evidence supports no actor value.", evidenceIds: [evidenceId] };
+      return Response.json({ status: "completed", model: "hanasand-inspur", metrics: { modelVersion: "hanasand-v2" }, message: JSON.stringify(review), conversationId: `expected-values-${prompts.length}` });
+    };
+
+    const first = await runAutomaticEvaluationCycle({ store, autoCreate: false, maxTasks: 1, now: () => "2026-07-21T10:16:00.000Z", aiUrl: "http://api.test/api/tools/ai", fetch });
+    expect(first).toMatchObject({ processedTaskCount: 1, retryScheduledCount: 1, deadLetterCount: 0 });
+    expect(store.getEvaluationBenchmark(benchmark.id).manifest[0].automation).toMatchObject({
+      status: "retry_scheduled",
+      attemptCount: 1,
+      lastFailure: { code: "malformed_model_response", message: "Hanasand AI returned an invalid exhaustive evaluation response (expected_values)", retryable: true }
+    });
+
+    const retryResponse = await handleApiRequest(new Request(`http://local/v1/intel/evaluation/benchmarks/${benchmark.id}/tasks/${benchmark.manifest[0].id}/retry`, {
+      method: "POST",
+      headers: { authorization: "Bearer test", id: "evaluation_operator", "x-tenant-id": "tenant_automatic", "content-type": "application/json" },
+      body: JSON.stringify({ tenantId: "tenant_automatic" })
+    }), apiOptions(store));
+    expect(retryResponse.status).toBe(202);
+    expect(store.getEvaluationBenchmark(benchmark.id).manifest[0].automation).toMatchObject({ status: "queued", attemptCount: 0, lastFailure: undefined });
+
+    const second = await runAutomaticEvaluationCycle({ store, autoCreate: false, maxTasks: 1, now: () => "2099-07-21T10:17:00.000Z", aiUrl: "http://api.test/api/tools/ai", fetch });
+    expect(second).toMatchObject({ processedTaskCount: 1, retryScheduledCount: 0, deadLetterCount: 0 });
+    expect(store.getEvaluationBenchmark(benchmark.id).manifest[0].automation).toMatchObject({ status: "queued", stage: "reviewer_2", attemptCount: 0 });
+    expect(store.listEvaluationAnnotations()).toEqual([expect.objectContaining({ expectedValues: [], decision: "absent", reviewerModelVersion: "hanasand-v2" })]);
+    expect(prompts[1]).toBe(`${prompts[0]}\n${correction}`);
+    expect(prompts[1]).toContain("bounded trusted server-owned response-contract feedback, not evidence about the evaluated subject");
+    expect(prompts[1]).not.toContain("UNTRUSTED_MODEL_TEXT");
+
+    for (const failure of [
+      { code: "malformed_model_response", message: "Hanasand AI did not return strict evaluation JSON" },
+      { code: "endpoint_unavailable", message: "arbitrary transport details" }
+    ]) {
+      const unrelatedStore = evaluationStore();
+      const unrelated = automaticActorBenchmark(unrelatedStore, `${failure.code} retry benchmark`, "2026-07-21T10:18:00.000Z");
+      unrelatedStore.saveEvaluationBenchmark({
+        ...unrelated,
+        manifest: unrelated.manifest.map((task: any) => ({
+          ...task,
+          automation: {
+            ...task.automation,
+            history: [...task.automation.history, { status: "retry_scheduled", stage: "reviewer_1", at: "2026-07-21T10:18:30.000Z", failure: { ...failure, retryable: true } }]
+          }
+        }))
+      });
+      let unrelatedPrompt = "";
+      await runAutomaticEvaluationCycle({
+        store: unrelatedStore,
+        autoCreate: false,
+        maxTasks: 1,
+        now: () => "2026-07-21T10:19:00.000Z",
+        aiUrl: "http://api.test/api/tools/ai",
+        fetch: async (_url: RequestInfo | URL, init?: RequestInit) => {
+          unrelatedPrompt = JSON.parse(String(init?.body)).prompt;
+          const evidenceId = unrelatedPrompt.match(/governedEvidence: \[\{"id":"([^"]+)"/)?.[1];
+          return Response.json({ status: "completed", model: "hanasand-inspur", metrics: { modelVersion: "hanasand-v2" }, message: JSON.stringify({ expectedValues: [], decision: "absent", confidence: 0.9, rationale: "No actor is supported.", evidenceIds: [evidenceId] }), conversationId: `unrelated-${failure.code}` });
+        }
+      });
+      expect(unrelatedPrompt).not.toContain(correction);
+      expect(unrelatedPrompt).not.toContain(failure.message);
+    }
+  });
+
   test("durably exposes outage, timeout, malformed response, retry exhaustion, replay, and restart recovery", async () => {
     const hostedStore = evaluationStore();
     const hosted = createEvaluationBenchmark(hostedStore, { tenantId: "tenant_automatic", name: "hosted transport benchmark", sampleSize: 1, labelTypes: ["cve"], requiredReviewers: 2, datasetSplit: "validation", reviewMode: "automatic_model", createdAt: "2026-07-21T10:30:00.000Z" })!;
