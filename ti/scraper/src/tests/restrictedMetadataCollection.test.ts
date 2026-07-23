@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { TorMetadataHttpBoundary } from "../adapters/torMetadataBoundary.ts";
 import { buildRestrictedMetadataStatusRouteResponse } from "../api/restrictedMetadataRoutes.ts";
 import { runRestrictedMetadataCollectionCycle } from "../ops/restrictedMetadataCollection.ts";
+import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { importRestrictedMetadataSeedBundle } from "../registry/restrictedSourceSeeds.ts";
+import { bootstrapRuntimeSources } from "../runtime/sourceBootstrap.ts";
+import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
 
@@ -174,6 +179,55 @@ describe("restricted metadata collection", () => {
     const leaked = JSON.parse(readFileSync(new URL("../../seeds/restricted_metadata_source_packs.json", import.meta.url), "utf8"));
     leaked.reviewedRejectedCandidates[0].locator = `http://${"z".repeat(56)}.onion/`;
     expect(importRestrictedMetadataSeedBundle(leaked, "2026-07-22T13:00:00.000Z").errors.some((error) => error.message.includes("must not retain a restricted locator"))).toBe(true);
+  });
+
+  test("bootstraps and schedules all five verified services without restart churn or locator leakage", async () => {
+    const previous = Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
+    Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = "true";
+    const dir = mkdtempSync(join(tmpdir(), "hanasand-verified-tor-pack-"));
+    const seedPath = new URL("../../seeds/restricted_metadata_source_packs.json", import.meta.url).pathname;
+    const store = new FileBackedScraperStore({ snapshotPath: join(dir, "store.json") });
+    const pages: Record<string, string> = {
+      SafePay: '<title>SafePay</title><h5 class="card-title">SafePay Victim</h5>',
+      "Space Bears": '<title>Space Bears</title><div class="companies-list__item"><div class="name">Space Bears Victim</div></div>',
+      Qilin: '<title>Qilin</title><div class="item_box"><h3 class="item_box-title">Qilin Victim</h3></div>',
+      Nova: '<title>Nova</title><div class="post-card"><a class="logo">Nova Victim</a></div>',
+      Interlock: '<title>Interlock</title><div class="advert_item"><div class="advert_info_title">Interlock Victim</div></div>'
+    };
+
+    try {
+      const bootstrapped = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-23T12:00:00.000Z" });
+      const intelligence = store.listSources().filter((item) => item.metadata?.transportCanary !== true);
+      expect(bootstrapped).toMatchObject({ importedSourceCount: 6, activeSourceCount: 6, totalSourceCount: 6, errors: [] });
+      expect(intelligence.map((item) => item.metadata?.actorName)).toEqual(["SafePay", "Space Bears", "Qilin", "Nova", "Interlock"]);
+      expect(intelligence.every((item) => item.status === "active" && item.metadata?.productionCollection === true && sourceCollectionLane(item) === "restricted_metadata")).toBe(true);
+
+      const boundary = new TorMetadataHttpBoundary({
+        proxyUrl: "http://onion-tor:8118",
+        fetcher: async (url) => {
+          const actor = store.listSources().find((item) => new URL(item.url).href === String(url))?.metadata?.actorName;
+          return new Response(actor ? pages[String(actor)] : "<title>Tor transport</title><meta name=\"description\" content=\"Transport available\">", { headers: { "content-type": "text/html" } });
+        }
+      });
+      const first = await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-23T13:00:00.000Z" });
+      const second = await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-23T13:01:00.000Z" });
+      const third = await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-23T13:02:00.000Z" });
+      expect(first.completedSourceCount + second.completedSourceCount + third.completedSourceCount).toBe(6);
+      expect(first.failedSourceCount + second.failedSourceCount + third.failedSourceCount).toBe(0);
+
+      const restarted = new FileBackedScraperStore({ snapshotPath: join(dir, "store.json") });
+      const restart = bootstrapRuntimeSources(restarted, { seedPaths: [seedPath], generatedAt: "2026-07-23T13:03:00.000Z" });
+      const status = buildRestrictedMetadataStatusRouteResponse({}, { store: restarted, generatedAt: "2026-07-23T13:03:00.000Z" });
+      expect(restart).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 6, activeSourceCount: 6, totalSourceCount: 6, errors: [] });
+      expect(restarted.listCaptures().filter((capture) => capture.sourceId !== "restricted_tor_project_transport_canary")).toHaveLength(5);
+      expect(restarted.listCaptures().every((capture) => capture.storageKind === "metadata_only" && !capture.body && !capture.objectRef)).toBe(true);
+      expect(status.body.coverage).toMatchObject({ intelligenceSourceCount: 5, usefulSourceCount: 5, transportProbeCount: 1 });
+      expect(JSON.stringify(status.body)).not.toContain(".onion");
+    } finally {
+      if (previous === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
+      else Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = previous;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("reports only collectable intelligence coverage and redacts restricted locators", () => {
