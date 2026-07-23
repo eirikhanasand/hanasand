@@ -17,19 +17,31 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
       const result = await new DarknetMetadataAdapter(source.type, options.boundary).collect(source, task);
       if (!result.items.length) throw new Error(result.warnings?.[0] ?? "restricted metadata parser returned no records");
       if (!source.metadata?.transportCanary && !result.items.some(hasUsefulVictimMetadata)) throw new Error("restricted metadata parser returned no useful victim metadata");
-      let useful = false;
+      let useful = false, sourceCaptureCount = 0, sourceDuplicateCount = 0;
+      const productiveContentTimes: string[] = [];
       for (const item of result.items) {
         item.tenantId = source.tenantId;
         const pipeline = processCollectedItem(item, { actorIdentities: options.store.listActorIdentities?.() ?? [] });
         const duplicate = options.store.findDuplicateCapture?.(pipeline.capture);
         const saved = source.metadata?.transportCanary ? { capture: options.store.saveCapture(pipeline.capture) } : options.store.savePipelineResult(pipeline);
-        if (duplicate) counters.duplicateCount++; else { counters.captureCount++; useful ||= !source.metadata?.transportCanary && hasUsefulVictimMetadata(item); }
+        if (duplicate) {
+          counters.duplicateCount++;
+          sourceDuplicateCount++;
+        } else {
+          counters.captureCount++;
+          sourceCaptureCount++;
+          useful ||= !source.metadata?.transportCanary && hasUsefulVictimMetadata(item);
+          if (item.publishedAt ?? item.collectedAt) productiveContentTimes.push(item.publishedAt ?? item.collectedAt);
+        }
         if (saved.incident) counters.incidentCount++;
       }
       counters.completedSourceCount++;
       const checkedAt = options.now?.() ?? nowIso();
-      options.store.saveSourceHealthObservation?.(observation(source, runId, task.id, checkedAt, Date.now() - started, true, useful, result.items.length));
-      options.store.saveSource({ ...source, lastSeenAt: checkedAt, health: { ...(source.health ?? {}), status: "healthy", checkedAt, lastSuccessAt: checkedAt, lastUsefulAt: useful ? checkedAt : source.health?.lastUsefulAt, consecutiveFailures: 0, lastError: undefined }, crawlState: { ...(source.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + cadence(source) * 1_000).toISOString(), lastError: undefined, backoffUntil: undefined }, updatedAt: checkedAt });
+      const lastContentAt = useful
+        ? productiveContentTimes.sort().at(-1) ?? checkedAt
+        : source.health?.lastContentAt;
+      options.store.saveSourceHealthObservation?.(observation(source, runId, task.id, checkedAt, Date.now() - started, true, useful, result.items.length, undefined, undefined, sourceCaptureCount, sourceDuplicateCount));
+      options.store.saveSource({ ...source, lastSeenAt: lastContentAt ?? source.lastSeenAt, health: { ...(source.health ?? {}), status: "healthy", checkedAt, lastSuccessAt: checkedAt, lastContentAt, lastUsefulAt: useful ? checkedAt : source.health?.lastUsefulAt, consecutiveFailures: 0, lastError: undefined }, crawlState: { ...(source.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + cadence(source) * 1_000).toISOString(), lastError: undefined, backoffUntil: undefined }, updatedAt: checkedAt });
     } catch (caught) {
       counters.failedSourceCount++;
       const checkedAt = options.now?.() ?? nowIso(), message = safeError(caught), retryCount = (source.crawlState?.retryCount ?? 0) + 1;
@@ -76,6 +88,6 @@ function due(source: any, generatedAt: string) {
 }
 function cadence(source: any) { return Math.max(900, Number(source.crawlFrequencySeconds ?? (source.crawlFrequencyMinutes ?? 60) * 60)); }
 function hasUsefulVictimMetadata(item: any) { const leakSite = item.metadata?.leakSite; return typeof leakSite?.victimName === "string" && leakSite.victimName.trim().length > 1 || Array.isArray(leakSite?.victimNames) && leakSite.victimNames.some((name: unknown) => typeof name === "string" && name.trim().length > 1); }
-function observation(source: any, runId: string, taskId: string, checkedAt: string, latencyMs: number, success: boolean, useful: boolean, itemCount: number, failureReason?: string, httpStatus?: number) { const category = success ? undefined : failureCategory(failureReason); return { id: stableId("source-health", `${runId}:${taskId}`), tenantId: source.tenantId, sourceId: source.id, collectionRunId: runId, taskId, checkedAt, status: success ? "healthy" : "failed", success, useful, httpStatus: Number.isInteger(httpStatus) ? httpStatus : undefined, latencyMs: Math.max(0, latencyMs), itemCount, captureCount: success && useful ? itemCount : 0, incidentCount: 0, duplicateCount: success && !useful ? itemCount : 0, parserWarningCount: category === "parser_failure" ? 1 : 0, observedActorCount: source.metadata?.transportCanary ? 0 : source.metadata?.actorName || source.metadata?.actors?.length ? 1 : 0, adapterFailureCategory: category, failureReason, legalMode: "metadata_only" }; }
+function observation(source: any, runId: string, taskId: string, checkedAt: string, latencyMs: number, success: boolean, useful: boolean, itemCount: number, failureReason?: string, httpStatus?: number, captureCount = 0, duplicateCount = 0) { const category = success ? undefined : failureCategory(failureReason); return { id: stableId("source-health", `${runId}:${taskId}`), tenantId: source.tenantId, sourceId: source.id, collectionRunId: runId, taskId, checkedAt, status: success ? "healthy" : "failed", success, useful, httpStatus: Number.isInteger(httpStatus) ? httpStatus : undefined, latencyMs: Math.max(0, latencyMs), itemCount, captureCount, incidentCount: 0, duplicateCount, parserWarningCount: category === "parser_failure" ? 1 : 0, observedActorCount: source.metadata?.transportCanary ? 0 : source.metadata?.actorName || source.metadata?.actors?.length ? 1 : 0, adapterFailureCategory: category, failureReason, legalMode: "metadata_only" }; }
 function failureCategory(message?: string) { return !message ? undefined : /timeout|abort/i.test(message) ? "timeout" : /HTTP 429/i.test(message) ? "rate_limited" : /HTTP 5\d\d/i.test(message) ? "upstream_failure" : /HTTP 4\d\d/i.test(message) ? "source_rejected" : /parser|record/i.test(message) ? "parser_failure" : /proxy|onion|policy|target/i.test(message) ? "policy_blocked" : "collection_failure"; }
 function safeError(caught: unknown) { return (caught instanceof Error ? caught.message : String(caught)).replace(/\bhttps?:\/\/\S+/gi, "[redacted-url]").replace(/\b[a-z2-7]{56}\.onion\b/gi, "[restricted-host]").slice(0, 500); }

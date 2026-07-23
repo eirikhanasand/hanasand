@@ -2,7 +2,6 @@ export {
   buildActorSourceCoverageMatrix,
   buildEnterpriseSourceCoverageRadar,
   buildPublicFreshnessGapRemediation,
-  buildPublicIntelligenceCoveragePlan,
   buildPublicIntelligenceQueryMatrix,
   buildPublicSourceFamilyBenchmarks,
   buildPublicSourcePackExpansion

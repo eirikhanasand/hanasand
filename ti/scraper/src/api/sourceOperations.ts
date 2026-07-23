@@ -1,5 +1,6 @@
 import { nowIso } from "../utils.ts";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
+import { qualifySourcePortfolio } from "../ops/sourcePortfolioQualification.ts";
 
 export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: string; generatedAt?: string } = {}) {
   const generatedAt = input.generatedAt ?? nowIso();
@@ -10,37 +11,44 @@ export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: st
   const entities = records(store, "listExtractedEntities").filter(inTenant);
   const labels = records(store, "listEvaluationLabels").filter(inTenant);
   const sourceIdsByLabel = labelSourceIndex(store, captures, input.tenantId);
+  const observationsBySource = groupBySource(observations);
+  const capturesBySource = groupBySource(captures);
+  const entitiesBySource = groupBySource(entities);
+  const labelCountsBySource = new Map<string, { falsePositive: number; classified: number }>();
+  for (const label of labels) for (const sourceId of sourceIdsByLabel(label)) {
+    const counts = labelCountsBySource.get(sourceId) ?? { falsePositive: 0, classified: 0 };
+    if (label.outcome === "false_positive") counts.falsePositive += 1;
+    if (["true_positive", "false_positive"].includes(label.outcome)) counts.classified += 1;
+    labelCountsBySource.set(sourceId, counts);
+  }
+  const portfolio = qualifySourcePortfolio({ sources, observations, captures, generatedAt });
+  const qualificationBySource = new Map(portfolio.sources.map((source) => [source.sourceId, source]));
 
   const rows = sources.map((source: any) => {
-    const sourceObservations = observations.filter((row: any) => row.sourceId === source.id).sort(byTime("checkedAt"));
-    const sourceCaptures = captures.filter((row: any) => row.sourceId === source.id).sort(byTime("collectedAt"));
+    const sourceObservations = [...(observationsBySource.get(source.id) ?? [])].sort(byTime("checkedAt"));
+    const sourceCaptures = [...(capturesBySource.get(source.id) ?? [])].sort(byTime("collectedAt"));
     const latest = sourceObservations.at(-1);
     const successes = sourceObservations.filter((row: any) => row.success === true);
     const parserAttempts = successes;
     const parserSuccesses = parserAttempts.filter((row: any) => Number(row.parserWarningCount ?? 0) === 0);
     const lastFailure = sourceObservations.filter((row: any) => row.success === false).at(-1);
     const lastCapture = sourceCaptures.at(-1);
-    const lastUsefulObservation = sourceObservations.filter((row: any) => row.useful === true).at(-1);
     const lastSuccessAt = timeOf(successes.at(-1), "checkedAt");
     const staleAfterSeconds = freshnessTargetSeconds(source);
     const stale = lastSuccessAt ? Date.parse(generatedAt) - Date.parse(lastSuccessAt) > staleAfterSeconds * 1_000 : false;
-    const actors = unique(entities
-      .filter((entity: any) => entity.sourceId === source.id && ["actor", "ransomware_family"].includes(entity.type))
+    const actors = unique((entitiesBySource.get(source.id) ?? [])
+      .filter((entity: any) => ["actor", "ransomware_family"].includes(entity.type))
       .map((entity: any) => String(entity.normalizedValue ?? entity.value ?? "").trim())
       .filter(Boolean));
-    const labelCounts = labels.reduce((counts: any, label: any) => {
-      if (!sourceIdsByLabel(label).includes(source.id)) return counts;
-      if (label.outcome === "false_positive") counts.falsePositive += 1;
-      if (["true_positive", "false_positive"].includes(label.outcome)) counts.classified += 1;
-      return counts;
-    }, { falsePositive: 0, classified: 0 });
+    const labelCounts = labelCountsBySource.get(source.id) ?? { falsePositive: 0, classified: 0 };
     const observedFalsePositiveRates = sourceObservations.map((row: any) => finiteRate(row.falsePositiveRate)).filter((value: number | undefined): value is number => value !== undefined);
     const falsePositiveRate = labelCounts.classified
       ? ratio(labelCounts.falsePositive, labelCounts.classified)
       : observedFalsePositiveRates.length
         ? ratio(observedFalsePositiveRates.reduce((sum: number, value: number) => sum + value, 0), observedFalsePositiveRates.length)
         : null;
-    const lastUsefulAt = latestIso(timeOf(lastUsefulObservation, "checkedAt"), timeOf(lastCapture, "collectedAt"));
+    const qualification = qualificationBySource.get(source.id);
+    const lastUsefulAt = qualification?.lastUsefulAt;
     const duplicateCount = sum(sourceObservations, "duplicateCount");
     const captureCount = sum(sourceObservations, "captureCount");
 
@@ -65,13 +73,12 @@ export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: st
         lastAttemptAt: timeOf(latest, "checkedAt"),
         lastSuccessAt,
         lastUsefulItemAt: lastUsefulAt,
-        lastUsefulCaptureId: lastCapture && timeOf(lastCapture, "collectedAt") === lastUsefulAt ? lastCapture.id : undefined,
         lastFailureAt: timeOf(lastFailure, "checkedAt"),
         lastFailureCategory: lastFailure?.adapterFailureCategory,
         lastFailureReason: safeFailureReason(lastFailure?.failureReason),
         consecutiveFailures: consecutiveFailures(sourceObservations),
         collectionSuccessRate: ratio(successes.length, sourceObservations.length),
-        usefulYieldRate: ratio(sourceObservations.filter((row: any) => row.useful === true).length, successes.length),
+        usefulYieldRate: ratio(sourceObservations.filter((row: any) => Number(row.captureCount ?? 0) > 0).length, successes.length),
         freshnessLagSeconds: finiteNumber(latest?.freshnessLagSeconds),
         staleAfterSeconds
       },
@@ -91,8 +98,12 @@ export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: st
       coverage: {
         observedActorCount: actors.length,
         observedActors: actors.slice(0, 50),
-        captureCount: sourceCaptures.length
-      }
+        captureCount: sourceCaptures.length,
+        lastContentAt: qualification?.lastContentAt,
+        usefulCheckCount: qualification?.usefulCheckCount ?? 0,
+        sustainedProductive: (qualification?.usefulCheckCount ?? 0) >= 2 && sourceCaptures.length > 0
+      },
+      qualification
     };
   }).sort((left: any, right: any) => left.name.localeCompare(right.name));
   const executableRows = rows.filter((row: any) => row.executable);
@@ -110,12 +121,14 @@ export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: st
       observedSourceCount: executableRows.filter((row: any) => row.health.observationCount > 0).length,
       checkedSourceCount: executableRows.filter((row: any) => row.health.observationCount > 0).length,
       successfulSourceCount: executableRows.filter((row: any) => Boolean(row.health.lastSuccessAt)).length,
-      usefulSourceCount: executableRows.filter((row: any) => Boolean(row.health.lastUsefulItemAt)).length,
+      usefulSourceCount: executableRows.filter((row: any) => row.qualification?.latestCheckUseful === true).length,
+      latestUsefulSourceCount: executableRows.filter((row: any) => row.qualification?.latestCheckUseful === true).length,
+      sustainedUsefulSourceCount: executableRows.filter((row: any) => row.coverage.sustainedProductive).length,
       checkedWithin24hSourceCount: executableRows.filter((row: any) => recent(row.health.lastAttemptAt, generatedAt)).length,
       successfulWithin24hSourceCount: executableRows.filter((row: any) => recent(row.health.lastSuccessAt, generatedAt)).length,
       usefulWithin24hSourceCount: executableRows.filter((row: any) => recent(row.health.lastUsefulItemAt, generatedAt)).length,
       captureProducingSourceCount: executableRows.filter((row: any) => row.coverage.captureCount > 0).length,
-      recentlySeenSourceCount: sources.filter((source: any) => isExecutableSource(source) && recent(source.lastSeenAt, generatedAt)).length,
+      recentlySeenSourceCount: executableRows.filter((row: any) => recent(row.coverage.lastContentAt, generatedAt)).length,
       backoffSourceCount: sources.filter((source: any) => isExecutableSource(source) && Date.parse(String(source.crawlState?.backoffUntil ?? "")) > Date.parse(generatedAt)).length,
       neverObservedSourceCount: executableRows.filter((row: any) => row.health.observationCount === 0).length,
       healthySourceCount: executableRows.filter((row: any) => row.health.state === "healthy").length,
@@ -123,6 +136,13 @@ export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: st
       failedSourceCount: executableRows.filter((row: any) => row.health.state === "failed").length,
       unobservedSourceCount: executableRows.filter((row: any) => row.health.state === "not_observed").length,
       falsePositiveMeasuredSourceCount: executableRows.filter((row: any) => row.quality.falsePositiveRate !== null).length
+    },
+    qualification: {
+      schemaVersion: portfolio.schemaVersion,
+      baseline: portfolio.baseline,
+      counts: portfolio.counts,
+      gaps: portfolio.gaps,
+      baselineMet: portfolio.baselineMet
     },
     sources: rows,
     safeOutput: { sourceUrlsExposed: false, rawCapturesExposed: false, restrictedPayloadsExposed: false }
@@ -132,6 +152,16 @@ export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: st
 function recent(value: unknown, generatedAt: string) {
   const at = Date.parse(String(value ?? ""));
   return Number.isFinite(at) && Date.parse(generatedAt) - at <= 86_400_000;
+}
+
+function groupBySource(records: any[]) {
+  const grouped = new Map<string, any[]>();
+  for (const record of records) {
+    const rows = grouped.get(record.sourceId);
+    if (rows) rows.push(record);
+    else grouped.set(record.sourceId, [record]);
+  }
+  return grouped;
 }
 
 function labelSourceIndex(store: any, captures: any[], tenantId?: string) {

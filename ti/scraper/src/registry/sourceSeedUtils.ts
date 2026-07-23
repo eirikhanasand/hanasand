@@ -8,6 +8,8 @@ export function canonicalUrl(value: string) {
   try {
     const url = new URL(value);
     url.hash = "";
+    url.hostname = url.hostname.toLowerCase();
+    if (url.hostname === "t.me" || url.hostname === "telegram.me") url.pathname = url.pathname.toLowerCase();
     url.pathname = url.pathname.replace(/\/$/, "");
     url.searchParams.sort();
     return url.toString();
@@ -15,3 +17,5 @@ export function canonicalUrl(value: string) {
     return value.trim().toLowerCase();
   }
 }
+
+export const canonicalFeedKey = canonicalUrl;

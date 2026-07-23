@@ -7,6 +7,7 @@ import { importRestrictedMetadataSeedBundle, isRestrictedMetadataSeedBundle } fr
 import type { SourceRecord } from "../types.ts";
 import { nowIso } from "../utils.ts";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
+import { validateSourcePortfolioBatch } from "../registry/sourcePortfolioBatch.ts";
 
 export type RuntimeSourceBootstrapResult = {
   generatedAt: string;
@@ -32,6 +33,7 @@ type RuntimeSourceBootstrapInput = {
   batched?: boolean;
 };
 
+const seedDirectory = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "seeds");
 const defaultSeedPaths = [
   "public_cti_sources.json",
   "verified_long_lived_sources.json",
@@ -39,7 +41,12 @@ const defaultSeedPaths = [
   "public_cti_starter_pack.json",
   "public_telegram_channel_packs.json",
   "restricted_metadata_source_packs.json"
-].map((name) => join(dirname(fileURLToPath(import.meta.url)), "..", "..", "seeds", name));
+].map((name) => join(seedDirectory, name));
+const optionalPortfolioSeedPaths = [
+  "source_portfolio_clear_web.json",
+  "source_portfolio_lawful_dark_web.json",
+  "source_portfolio_public_telegram.json"
+].map((name) => join(seedDirectory, name));
 
 export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSourceBootstrapInput = {}): RuntimeSourceBootstrapResult {
   if (!input.batched && typeof store.batch === "function") {
@@ -48,7 +55,11 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
 
   const generatedAt = input.generatedAt ?? nowIso();
   const seedPaths = input.seedPaths ?? configuredSeedPaths();
-  const existingByKey = new Map(store.listSources().map((source) => [seedDuplicateKey(source), source]));
+  const existingByKey = new Map<string, SourceRecord>();
+  for (const source of store.listSources().sort(existingCanonicalOwnerOrder)) {
+    const key = seedDuplicateKey(source);
+    if (!existingByKey.has(key)) existingByKey.set(key, source);
+  }
   const errors: RuntimeSourceBootstrapResult["errors"] = [];
   let importedSourceCount = 0;
   let updatedSourceCount = 0;
@@ -67,6 +78,11 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
       errors.push({ path, message: error instanceof Error ? error.message : String(error) });
       continue;
     }
+    const portfolioValidation = validateSourcePortfolioBatch(bundle, generatedAt);
+    if (!portfolioValidation.valid) {
+      errors.push(...portfolioValidation.errors.map((error) => ({ path, message: `${error.sourceId ?? "unknown"}: ${error.message}` })));
+      continue;
+    }
 
     const restricted = isRestrictedMetadataSeedBundle(bundle);
     const report = restricted
@@ -75,7 +91,7 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
     const rejectedSourceIds = new Set((report.errors ?? []).map((error: any) => error.sourceId).filter(Boolean));
     const verifiedJsonApiExceptions = new Set((report.accepted as SourceRecord[])
       .filter((source) => source.type === "json_api"
-        && isVerifiedProductionSource(source)
+        && isVerifiedProductionSource(source, generatedAt)
         && (report.errors ?? []).filter((error: any) => error.sourceId === source.id).every((error: any) => error.message === "source must be safe public CTI"))
       .map((source) => source.id));
     for (const source of report.accepted as SourceRecord[]) {
@@ -126,7 +142,8 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
 
 function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord, generatedAt: string): SourceRecord | undefined {
   const restricted = verified.type === "tor_metadata" && verified.metadata?.transportCanary !== true;
-  if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) : isVerifiedProductionSource(verified) && isSafeUpgradeTarget(existing))) return undefined;
+  const expiredPortfolio = Boolean(verified.metadata?.sourcePortfolioVerification) && !isCurrentPortfolioVerification(verified, generatedAt);
+  if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) : expiredPortfolio ? isSafeUpgradeTarget(existing) : isVerifiedProductionSource(verified, generatedAt) && isSafeUpgradeTarget(existing))) return undefined;
   const sameSource = existing.metadata?.verifiedSourceId === verified.id || restricted && existing.id === verified.id;
   const metadata = {
     ...(existing.metadata ?? {}),
@@ -149,15 +166,21 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
     health: existing.health,
     crawlState: existing.crawlState
   };
+  if (expiredPortfolio) {
+    reconciled.status = "candidate";
+    reconciled.metadata.productionCollection = false;
+    reconciled.metadata.sourcePortfolioStatus = "verification_expired";
+  }
   return isDeepStrictEqual(managedSourceConfiguration(existing), managedSourceConfiguration(reconciled)) ? undefined : reconciled;
 }
 
-function isVerifiedProductionSource(source: SourceRecord) {
+function isVerifiedProductionSource(source: SourceRecord, generatedAt?: string) {
   return source.status === "active"
     && source.risk === "low"
     && source.accessMethod === "public_http"
     && source.governance?.approvalState === "approved"
     && source.metadata?.productionCollection === true
+    && (!source.metadata?.sourcePortfolioVerification || isCurrentPortfolioVerification(source, generatedAt ?? nowIso()))
     && Boolean(source.legalNotes?.trim())
     && !unsafeAutomaticUpgrade(source);
 }
@@ -239,7 +262,7 @@ function managedSourceConfiguration(source: SourceRecord) {
 
 function configuredSeedPaths() {
   const configured = Bun.env.TI_SOURCE_SEED_PATHS?.split(",").map((item) => item.trim()).filter(Boolean);
-  return configured?.length ? configured : defaultSeedPaths;
+  return configured?.length ? configured : [...defaultSeedPaths, ...optionalPortfolioSeedPaths.filter(existsSync)];
 }
 
 function shouldImportSource(source: SourceRecord) {
@@ -250,7 +273,8 @@ function shouldImportSource(source: SourceRecord) {
 }
 
 function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedAt: string, restricted = false): SourceRecord {
-  const activate = !restricted && Bun.env.TI_SOURCE_SEED_ACTIVATE !== "false" && source.risk !== "medium" && source.risk !== "high" && source.risk !== "restricted";
+  const portfolioVerified = !source.metadata?.sourcePortfolioVerification || isCurrentPortfolioVerification(source, generatedAt);
+  const activate = !restricted && portfolioVerified && Bun.env.TI_SOURCE_SEED_ACTIVATE !== "false" && source.risk !== "medium" && source.risk !== "high" && source.risk !== "restricted";
   const transportCanary = restricted && source.metadata?.transportCanary === true;
   const verifiedRestricted = restricted && isVerifiedRestrictedProductionSource(source, generatedAt);
   return {
@@ -260,7 +284,7 @@ function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedA
     updatedAt: generatedAt,
     metadata: {
       ...(source.metadata ?? {}),
-      productionCollection: !restricted || transportCanary || verifiedRestricted,
+      productionCollection: !restricted ? portfolioVerified : transportCanary || verifiedRestricted,
       canaryPortfolio: !restricted,
       ...(restricted && !transportCanary && !verifiedRestricted ? { restrictedMetadataCandidate: true } : {}),
       ...(verifiedRestricted ? { verifiedSourceId: source.metadata?.verifiedSourceId ?? source.id } : {}),
@@ -272,4 +296,33 @@ function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedA
       retryCount: source.crawlState?.retryCount ?? 0
     }
   };
+}
+
+function isCurrentPortfolioVerification(source: SourceRecord, generatedAt: string) {
+  const verification = source.metadata?.sourcePortfolioVerification;
+  const now = Date.parse(generatedAt);
+  const verifiedAt = Date.parse(String(verification?.verifiedAt ?? ""));
+  const legalBasisVerifiedAt = Date.parse(String(verification?.legalBasisVerifiedAt ?? ""));
+  return verification?.outcome === "content_parsed"
+    && Number(verification?.observedItemCount ?? 0) > 0
+    && Number.isFinite(now)
+    && Number.isFinite(verifiedAt)
+    && Number.isFinite(legalBasisVerifiedAt)
+    && verifiedAt <= now + 5 * 60_000
+    && legalBasisVerifiedAt <= now + 5 * 60_000
+    && now - verifiedAt <= 7 * 86_400_000
+    && now - legalBasisVerifiedAt <= 7 * 86_400_000;
+}
+
+function existingCanonicalOwnerOrder(left: SourceRecord, right: SourceRecord) {
+  return Number(isExecutableSource(right)) - Number(isExecutableSource(left))
+    || lifecyclePriority(left.status) - lifecyclePriority(right.status)
+    || String(left.createdAt ?? "").localeCompare(String(right.createdAt ?? ""))
+    || String(left.id).localeCompare(String(right.id));
+}
+
+function lifecyclePriority(status: string) {
+  const priority = ["active", "degraded", "probation", "canary", "candidate", "paused", "disabled", "retired", "rejected"];
+  const index = priority.indexOf(status);
+  return index === -1 ? priority.length : index;
 }

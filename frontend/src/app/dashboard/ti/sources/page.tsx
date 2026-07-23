@@ -26,6 +26,10 @@ export default async function TiSourcesPage() {
     const reviewCount = sources.filter(source => source.aiReview?.status === 'needs_human' || source.status === 'candidate' || source.status === 'review').length
     const aiReviewedCount = sources.filter(source => source.aiReview).length
     const restrictedCount = sources.filter(source => source.risk === 'restricted').length
+    const qualifyingCount = sources.filter(source => source.qualifiesForBaseline).length
+    const qualifyingClearWeb = sources.filter(source => source.qualifiesForBaseline && source.baselineFamily === 'clear_web').length
+    const qualifyingDarkWeb = sources.filter(source => source.qualifiesForBaseline && source.baselineFamily === 'lawful_dark_web').length
+    const qualifyingTelegram = sources.filter(source => source.qualifiesForBaseline && source.baselineFamily === 'public_telegram').length
     const nextDue = [...sourceRows].sort((a, b) => new Date(a.source.nextRunAt).getTime() - new Date(b.source.nextRunAt).getTime())[0]
 
     return (
@@ -49,8 +53,9 @@ export default async function TiSourcesPage() {
                         <ChevronDown className='h-4 w-4 transition group-open:rotate-180' />
                     </span>
                 </summary>
-                <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-5' data-ti-source-inventory-metrics>
+                <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-6' data-ti-source-inventory-metrics>
                     <Metric title='Active' value={`${activeCount}/${sources.length}`} detail='collecting sources' tone='ok' />
+                    <Metric title='Qualified' value={`${qualifyingCount}/6,100`} detail={`${qualifyingClearWeb}/5,000 web · ${qualifyingDarkWeb}/1,000 Tor · ${qualifyingTelegram}/100 Telegram`} tone={qualifyingCount >= 6100 && qualifyingClearWeb >= 5000 && qualifyingDarkWeb >= 1000 && qualifyingTelegram >= 100 ? 'ok' : 'warn'} />
                     <Metric title='Reviewed' value={String(aiReviewedCount)} detail={reviewCount ? `${reviewCount} in review` : 'ready for monitoring'} tone={reviewCount ? 'warn' : 'ok'} />
                     <Metric title='Stale' value={String(staleCount)} detail='late or not collecting' tone={staleCount ? 'warn' : 'ok'} />
                     <Metric title='Sensitive' value={String(restrictedCount)} detail='safe-field sources' tone='hold' />
@@ -82,9 +87,9 @@ export default async function TiSourcesPage() {
                                 <HealthBadge state={row.health.state} label={row.health.label} />
                             </div>
                             <div className='mt-3 grid grid-cols-2 gap-2 text-xs'>
-                                <MobileFact label='Last seen' value={relativeAge(row.source.lastRunAt)} />
+                                <MobileFact label='Last content' value={relativeAge(row.source.lastContentAt)} />
                                 <MobileFact label='Due' value={relativeUntil(row.source.nextRunAt)} />
-                                <MobileFact label='Findings' value={`${row.avgRows}/run`} />
+                                <MobileFact label='Productive' value={`${row.source.productiveCycleCount} cycles`} />
                                 <MobileFact label='Risk' value={row.source.risk} />
                             </div>
                             <div className='mt-3 flex flex-wrap gap-1.5'>
@@ -103,7 +108,7 @@ export default async function TiSourcesPage() {
                             <span>Source</span>
                             <span>Status</span>
                             <span>Findings</span>
-                            <span>Last seen</span>
+                            <span>Last content</span>
                             <span>Due</span>
                             <span>Matches</span>
                             <span>Risk</span>
@@ -125,12 +130,12 @@ export default async function TiSourcesPage() {
                                     <p className='mt-1 line-clamp-1 text-xs text-ui-muted'>{row.health.detail}</p>
                                 </div>
                                 <div className='text-ui-text'>
-                                    <p className='font-semibold'>{row.avgRows}/run</p>
-                                    <p className='mt-1 text-xs text-ui-muted'>{row.avgCaptures} captures · {row.sourceCaptures.length} stored</p>
+                                    <p className='font-semibold'>{row.source.productiveCycleCount} productive</p>
+                                    <p className='mt-1 text-xs text-ui-muted'>{row.source.retainedEvidenceCount} retained · {row.source.qualifiesForBaseline ? 'qualifies' : row.source.qualificationReasons[0]?.replaceAll('_', ' ') || 'not qualified'}</p>
                                 </div>
                                 <div>
-                                    <p className='font-semibold text-ui-text'>{relativeAge(row.source.lastRunAt)}</p>
-                                    <p className='mt-1 text-xs text-ui-muted'>{formatTiDate(row.source.lastRunAt)}</p>
+                                    <p className='font-semibold text-ui-text'>{relativeAge(row.source.lastContentAt)}</p>
+                                    <p className='mt-1 text-xs text-ui-muted'>{formatTiDate(row.source.lastContentAt)}</p>
                                 </div>
                                 <div>
                                     <p className='font-semibold text-ui-text'>{relativeUntil(row.source.nextRunAt)}</p>

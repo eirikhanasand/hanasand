@@ -5,6 +5,7 @@ import { nowIso } from "../utils.ts";
 import { authenticateOperatorRequest } from "./requestAuthentication.ts";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
+import { qualifySourcePortfolio, SOURCE_PORTFOLIO_BASELINE } from "../ops/sourcePortfolioQualification.ts";
 
 export function collectionSchedulerStatus(options: ApiServerOptions, lastControlAction?: Record<string, unknown>, tenantId?: string) {
   const generatedAt = nowIso();
@@ -13,6 +14,8 @@ export function collectionSchedulerStatus(options: ApiServerOptions, lastControl
   const sourceIds = new Set(sources.map((source: any) => source.id));
   const observations = (options.store.listSourceHealthObservations?.() ?? []).filter((record: any) => sourceIds.has(record.sourceId));
   const captures = (options.store.listCaptures?.() ?? []).filter((record: any) => sourceIds.has(record.sourceId));
+  const portfolio = qualifySourcePortfolio({ sources, observations, captures, generatedAt });
+  const qualificationBySource = new Map(portfolio.sources.map((source) => [source.sourceId, source]));
   const runs = (options.store.listRuns?.() ?? []).filter(inScope);
   const latestRun = [...runs].filter((run: any) => run.requestId === "req_public_canary").sort((a: any, b: any) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0];
   const successfulRuns = runs.filter((run: any) => run.requestId === "req_public_canary" && ["completed", "degraded"].includes(run.status));
@@ -39,7 +42,13 @@ export function collectionSchedulerStatus(options: ApiServerOptions, lastControl
   });
   const totalSourceCount = sources.length;
   const deadLetters = options.frontier.deadLetterSnapshot?.() ?? [];
-  const sourceRows = activeSources.map((source: any) => describeSource(source, generatedAt, observationsBySource.get(source.id) ?? [], capturesBySource.get(source.id) ?? []));
+  const queuedTaskCount = options.frontier.size?.() ?? options.frontier.snapshot?.().length ?? 0;
+  const queueLimit = canaryState?.queueLimit ?? Number(Bun.env.TI_CANARY_MAX_QUEUE_SIZE ?? "500");
+  const maxTasks = canaryState?.maxTasks ?? Number(Bun.env.TI_CANARY_MAX_TASKS ?? "25");
+  const maxSources = canaryState?.maxSources ?? Number(Bun.env.TI_CANARY_MAX_SOURCES ?? "50");
+  const scheduledCheckCapacityPerDay = Math.floor(86_400 / Math.max(5, intervalSeconds)) * Math.min(maxTasks, maxSources);
+  const requiredChecksPerDay = activeSources.reduce((total: number, source: any) => total + Math.max(1, Math.ceil(86_400 / Math.max(300, positiveNumber(source.crawlFrequencySeconds, 86_400)))), 0);
+  const sourceRows = activeSources.map((source: any) => describeSource(source, generatedAt, observationsBySource.get(source.id) ?? [], capturesBySource.get(source.id) ?? [], qualificationBySource.get(source.id)));
   const control = schedulerControls({ schedulerEnabled, canaryLoop: options.canaryLoop, activeSourceCount: activeSources.length });
   const operationalBlockers = schedulerBlockers({
     activeSourceCount: activeSources.length,
@@ -67,23 +76,36 @@ export function collectionSchedulerStatus(options: ApiServerOptions, lastControl
       activeSourceCount: activeSources.length,
       checkedSourceCount: activeSources.filter((source: any) => (observationsBySource.get(source.id)?.length ?? 0) > 0).length,
       successfulSourceCount: activeSources.filter((source: any) => observationsBySource.get(source.id)?.some((row: any) => row.success === true)).length,
-      usefulSourceCount: activeSources.filter((source: any) => observationsBySource.get(source.id)?.some((row: any) => row.useful === true)).length,
+      usefulSourceCount: activeSources.filter((source: any) => qualificationBySource.get(source.id)?.latestCheckUseful === true).length,
+      latestUsefulSourceCount: activeSources.filter((source: any) => qualificationBySource.get(source.id)?.latestCheckUseful === true).length,
+      sustainedUsefulSourceCount: activeSources.filter((source: any) => (qualificationBySource.get(source.id)?.usefulCheckCount ?? 0) >= 2 && (qualificationBySource.get(source.id)?.retainedCaptureCount ?? 0) > 0).length,
       captureProducingSourceCount: activeSources.filter((source: any) => (capturesBySource.get(source.id)?.length ?? 0) > 0).length,
-      recentlySeenSourceCount: activeSources.filter((source: any) => withinDailyWindow(source.lastSeenAt, generatedAt)).length,
+      recentlySeenSourceCount: activeSources.filter((source: any) => withinDailyWindow(qualificationBySource.get(source.id)?.lastContentAt, generatedAt)).length,
       backoffSourceCount: activeSources.filter((source: any) => Date.parse(String(source.crawlState?.backoffUntil ?? "")) > Date.parse(generatedAt)).length,
       neverObservedSourceCount: activeSources.filter((source: any) => (observationsBySource.get(source.id)?.length ?? 0) === 0).length,
       dailySourceCount: dailySources.length,
       dailyAttemptedCount: dailyAttempted.length,
       dailyAttemptCoverageRatio: dailySources.length ? dailyAttempted.length / dailySources.length : 0,
       dailyCoveredCount: dailyCovered.length,
-      dailyCoverageRatio: dailySources.length ? dailyCovered.length / dailySources.length : 0
+      dailyCoverageRatio: dailySources.length ? dailyCovered.length / dailySources.length : 0,
+      qualifyingSourceCount: portfolio.counts.total,
+      qualifyingClearWebSourceCount: portfolio.counts.clearWeb,
+      qualifyingLawfulDarkWebSourceCount: portfolio.counts.lawfulDarkWeb,
+      qualifyingPublicTelegramSourceCount: portfolio.counts.publicTelegram
+    },
+    sourceQualification: {
+      schemaVersion: portfolio.schemaVersion,
+      baseline: portfolio.baseline,
+      counts: portfolio.counts,
+      gaps: portfolio.gaps,
+      baselineMet: portfolio.baselineMet
     },
     scheduler: {
       enabled: schedulerEnabled,
       running: canaryState?.running ?? false,
       intervalSeconds,
-      maxSources: canaryState?.maxSources ?? Number(Bun.env.TI_CANARY_MAX_SOURCES ?? "50"),
-      maxTasks: canaryState?.maxTasks ?? Number(Bun.env.TI_CANARY_MAX_TASKS ?? "25"),
+      maxSources,
+      maxTasks,
       maxConcurrentTasks: canaryState?.maxConcurrentTasks ?? Number(Bun.env.TI_CANARY_MAX_CONCURRENT_TASKS ?? "16"),
       maxItemsPerTask: canaryState?.maxItemsPerTask ?? Number(Bun.env.TI_CANARY_MAX_ITEMS_PER_TASK ?? "4"),
       timeoutMs: canaryState?.timeoutMs ?? Number(Bun.env.TI_CANARY_TIMEOUT_MS ?? Bun.env.SCRAPER_DEFAULT_TIMEOUT_MS ?? "12000"),
@@ -91,9 +113,20 @@ export function collectionSchedulerStatus(options: ApiServerOptions, lastControl
       lastSuccessfulRun,
       nextRunAt,
       queue: {
-        queued: options.frontier.size?.() ?? options.frontier.snapshot?.().length ?? 0,
+        queued: queuedTaskCount,
         leased: options.frontier.leasedSnapshot?.().length ?? 0,
-        deadLetterCount: deadLetters.length
+        deadLetterCount: deadLetters.length,
+        limit: queueLimit,
+        utilization: queueLimit ? Math.round(queuedTaskCount / queueLimit * 10_000) / 10_000 : 0,
+        backpressureState: queueLimit && queuedTaskCount / queueLimit >= 0.8 ? "throttled" : "accepting"
+      },
+      capacity: {
+        scheduledCheckCapacityPerDay,
+        requiredChecksPerDay,
+        baselineMinimumChecksPerDay: SOURCE_PORTFOLIO_BASELINE.total,
+        headroomChecksPerDay: scheduledCheckCapacityPerDay - requiredChecksPerDay,
+        sufficientForCurrentFleet: scheduledCheckCapacityPerDay >= requiredChecksPerDay,
+        sufficientForMinimumBaseline: scheduledCheckCapacityPerDay >= SOURCE_PORTFOLIO_BASELINE.total
       }
     },
     operatorActions: control.actions,
@@ -185,7 +218,7 @@ function nextSchedulerRunAt(input: { generatedAt: string; enabled: boolean; inte
   return new Date(Date.parse(input.generatedAt) + intervalMs).toISOString();
 }
 
-function describeSource(source: any, generatedAt: string, observations: any[], captures: any[]) {
+function describeSource(source: any, generatedAt: string, observations: any[], captures: any[], qualification?: any) {
   const latest = [...observations].sort((a, b) => String(b.checkedAt).localeCompare(String(a.checkedAt)))[0];
   const lastCollectedAt = [...observations].filter((row) => row.success === true).map((row) => row.checkedAt).sort().at(-1) ?? source.crawlState?.lastCollectedAt;
   const lastFailure = [...observations].filter((row) => row.success === false).sort((a, b) => String(b.checkedAt).localeCompare(String(a.checkedAt)))[0];
@@ -216,9 +249,14 @@ function describeSource(source: any, generatedAt: string, observations: any[], c
     parserStatus: source.health?.parserStatus ?? source.metadata?.parserStatus ?? "unknown",
     lastCheckedAt: latest?.checkedAt,
     lastSuccessAt: lastCollectedAt,
-    lastUsefulAt: [...observations].filter((row) => row.useful === true).map((row) => row.checkedAt).sort().at(-1),
+    lastUsefulAt: qualification?.lastUsefulAt,
     lastSeenAt: source.lastSeenAt,
     captureCount: captures.length,
+    lastContentAt: qualification?.lastContentAt,
+    usefulCheckCount: qualification?.usefulCheckCount ?? 0,
+    qualifiesForBaseline: qualification?.qualifies === true,
+    qualificationReasons: qualification?.reasons ?? [],
+    baselineFamily: qualification?.family,
     lastCollectedAt,
     lastFailureAt,
     lastFailureReason,
@@ -229,6 +267,10 @@ function describeSource(source: any, generatedAt: string, observations: any[], c
     dailyCovered,
     dailyAttempted
   };
+}
+
+function latestObservation(observations: any[] | undefined) {
+  return [...(observations ?? [])].sort((left, right) => String(right.checkedAt).localeCompare(String(left.checkedAt)))[0];
 }
 
 function nextSourceAction(input: { healthState: string; backoffUntil?: string; lastFailureReason?: string }) {
@@ -273,10 +315,19 @@ function schedulerBlockers(input: { activeSourceCount: number; lastSuccessfulRun
 
 function groupBySource(records: any[]) {
   const grouped = new Map<string, any[]>();
-  for (const record of records) grouped.set(record.sourceId, [...(grouped.get(record.sourceId) ?? []), record]);
+  for (const record of records) {
+    const rows = grouped.get(record.sourceId);
+    if (rows) rows.push(record);
+    else grouped.set(record.sourceId, [record]);
+  }
   return grouped;
 }
 
 function blocker(code: string, severity: "blocker" | "warning", nextAction: string) {
   return { code, severity, nextAction };
+}
+
+function positiveNumber(value: unknown, fallback: number) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
 }

@@ -1,6 +1,6 @@
 import type { SourceRecord } from "../types.ts";
 import { nowIso } from "../utils.ts";
-import { ACTORS, FAMILIES } from "./sourceSeedConstants.ts";
+import { ACTORS } from "./sourceSeedConstants.ts";
 import { sourceSummary } from "./sourceSeedUtils.ts";
 
 export function buildSourceActivationReport(query: string, sources: SourceRecord[], generatedAt = nowIso()) {
@@ -21,11 +21,6 @@ export function buildSourceActivationApiResponse(input: any, sourcesArg?: Source
 export function buildSourceActivationBatchApiResponse(input: any): any {
   const queries = input.queries ?? [];
   return { generatedAt: input.generatedAt ?? nowIso(), queries: queries.map((query: string) => buildSourceActivationApiResponse({ ...input, query })) };
-}
-
-export function buildSourceCoveragePlanApiResponse(input: any): any {
-  const queries = input.queries ?? ACTORS;
-  return { generatedAt: input.generatedAt ?? nowIso(), queries: queries.map((query: string) => ({ query, sourceTarget: 10, priority: query === "APT29" ? "high" : "normal" })), verticals: FAMILIES };
 }
 
 export function buildSourceCoverageCloseoutApiResponse(input: any): any {

@@ -16,6 +16,16 @@ export type TiAdminSource = {
     monitoredSince: string
     cadenceMinutes: number
     usefulRows: number
+    retainedEvidenceCount: number
+    productiveCycleCount: number
+    qualifiesForBaseline: boolean
+    qualificationReasons: string[]
+    baselineFamily: string
+    healthState: string
+    lastCheckedAt: string
+    lastContentAt: string
+    lastUsefulAt: string
+    backoffUntil?: string
     domains: string[]
     resultTypes: string[]
     buyerValue: string
@@ -101,7 +111,11 @@ export async function getTiAdminOverview(tenantId = 'default'): Promise<TiAdminO
     const rawCaptures = captureResult.records
     const operationsBySource = new Map(operationsResult.records.map(row => [stringValue(row.id), row]))
     const captures = rawCaptures.map(toCapture).filter((row): row is TiAdminCapture => Boolean(row))
-    const sources = sourceResult.records.map(row => toSource(row, operationsBySource.get(stringValue(row.id)), captures)).filter((row): row is TiAdminSource => Boolean(row))
+    const registryBySource = new Map(sourceResult.records.map(row => [stringValue(row.id), row]))
+    const sourceRows = operationsResult.records.length
+        ? operationsResult.records.map(operations => ({ ...operations, ...registryBySource.get(stringValue(operations.id)) }))
+        : sourceResult.records
+    const sources = sourceRows.map(row => toSource(row, operationsBySource.get(stringValue(row.id)), captures)).filter((row): row is TiAdminSource => Boolean(row))
     const sourceById = new Map(sources.map(source => [source.id, source]))
     const runs = runResult.records.map(row => toRun(row, sourceById)).filter((row): row is TiAdminRun => Boolean(row))
 
@@ -179,6 +193,7 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
     const operatingMode = objectValue(record.operatingMode)
     const health = objectValue(operations?.health)
     const coverage = objectValue(operations?.coverage)
+    const qualification = objectValue(operations?.qualification)
     const cadenceMinutes = Math.max(1, Math.round(numberValue(collection.cadenceSeconds, 3600) / 60))
     const monitoredSince = isoValue(collection.createdAt, collection.updatedAt)
     const lastRunAt = isoValue(health.lastAttemptAt, health.lastSuccessAt, collection.updatedAt, monitoredSince)
@@ -192,7 +207,7 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
         family: textValue(operations?.family, record.type, 'unknown'),
         type: textValue(record.type, 'unknown'),
         accessMethod: textValue(operatingMode.accessMethod, 'not recorded'),
-        status: sourceStatus(record.status),
+        status: sourceStatus(record.status ?? operations?.lifecycleStatus),
         risk: sourceRisk(operatingMode.risk ?? record.risk),
         owner: textValue(record.owner, 'source-ops'),
         url,
@@ -202,6 +217,16 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
         monitoredSince,
         cadenceMinutes,
         usefulRows: numberValue(coverage.captureCount, sourceCaptures.length),
+        retainedEvidenceCount: numberValue(coverage.captureCount, sourceCaptures.length),
+        productiveCycleCount: numberValue(qualification.productiveCheckCount, qualification.usefulCheckCount),
+        qualifiesForBaseline: qualification.qualifies === true,
+        qualificationReasons: listValue(qualification.reasons).map(stringValue).filter(Boolean),
+        baselineFamily: textValue(qualification.family, 'not qualifying'),
+        healthState: textValue(health.state, 'not observed'),
+        lastCheckedAt: isoValue(qualification.lastCheckedAt, health.lastAttemptAt),
+        lastContentAt: isoValue(qualification.lastContentAt),
+        lastUsefulAt: isoValue(qualification.lastUsefulAt),
+        backoffUntil: optionalIso(qualification.backoffUntil),
         domains: unique(sourceCaptures.map(capture => capture.domain).filter(domain => domain !== 'unresolved')),
         resultTypes: unique(sourceCaptures.map(capture => capture.pageType).filter(Boolean)),
         buyerValue: sourceCaptures.length ? `${sourceCaptures.length} stored capture${sourceCaptures.length === 1 ? '' : 's'} available for evidence review.` : 'No accepted captures are stored for this source.',

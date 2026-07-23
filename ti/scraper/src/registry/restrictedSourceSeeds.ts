@@ -90,7 +90,8 @@ export function importRestrictedMetadataSeedBundle(bundle: unknown, importedAt: 
         collectionScope: "metadata_only",
         retainRawContent: false,
         retentionDays: raw.metadata.retentionDays,
-        attribution: raw.metadata.attribution
+        attribution: raw.metadata.attribution,
+        sourcePortfolioVerification: raw.metadata.sourcePortfolioVerification
       }
     } as SourceRecord);
   }

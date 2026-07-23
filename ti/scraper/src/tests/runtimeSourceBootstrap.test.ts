@@ -57,6 +57,45 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
+  test("imports current verified portfolio batches and withdraws them idempotently after verification expires", () => {
+    const store = new InMemoryScraperStore();
+    const dir = mkdtempSync(join(tmpdir(), "hanasand-source-portfolio-bootstrap-"));
+    const seedPath = join(dir, "portfolio.json");
+    writeFileSync(seedPath, JSON.stringify({
+      schemaVersion: "ti.source_portfolio_batch.v1",
+      family: "clear_web",
+      version: 1,
+      name: "verified clear web",
+      generatedAt: "2026-07-23T10:00:00.000Z",
+      sources: [{
+        ...source("src_portfolio_current", "https://security.example.test/current.xml"),
+        governance: { approvalRequired: false, approvalState: "approved", approvedAt: "2026-07-23T10:00:00.000Z", approvedBy: "source-review" },
+        metadata: {
+          productionCollection: true,
+          sourcePortfolioVerification: {
+            verifiedAt: "2026-07-23T10:00:00.000Z",
+            legalBasisVerifiedAt: "2026-07-23T10:00:00.000Z",
+            outcome: "content_parsed",
+            observedItemCount: 2
+          }
+        }
+      }]
+    }));
+
+    try {
+      const current = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-23T12:00:00.000Z" });
+      const expired = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-01T12:00:00.000Z" });
+      const restarted = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-01T13:00:00.000Z" });
+
+      expect(current).toMatchObject({ importedSourceCount: 1, activeSourceCount: 1 });
+      expect(expired).toMatchObject({ updatedSourceCount: 1, activeSourceCount: 0 });
+      expect(store.getSource("src_portfolio_current")).toMatchObject({ status: "candidate", metadata: { productionCollection: false, sourcePortfolioStatus: "verification_expired" } });
+      expect(restarted).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 1, activeSourceCount: 0, totalSourceCount: 1 });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("imports disabled public Telegram candidate packs as reviewed-off candidates", () => {
     const store = new InMemoryScraperStore();
     const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-telegram-"));
@@ -127,7 +166,6 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       name: "verified source",
       sources: [{
         id: "src_verified_reference",
-        tenantId: "default",
         name: "Verified public channel",
         type: "telegram_public",
         url: "https://t.me/example_verified",
@@ -147,6 +185,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       expect(result).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 1, skippedSourceCount: 0, activeSourceCount: 1, totalSourceCount: 1 });
       expect(store.listSources()[0]).toMatchObject({
         id: "src_catalog_candidate",
+        tenantId: "default",
         name: "Verified public channel",
         status: "active",
         risk: "low",
@@ -545,7 +584,8 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     expect(cycle.queuedTaskCount).toBe(1);
     const task = store.listRuns().find((run: any) => run.id === cycle.runId);
     expect(task?.failedTaskCount).toBe(0);
-    expect(store.getSource("src_google_news_threat_search")?.lastSeenAt).toBe("2026-07-22T00:00:00.000Z");
+    expect(store.getSource("src_google_news_threat_search")).toMatchObject({ health: { checkedAt: "2026-07-22T00:00:00.000Z" } });
+    expect(store.getSource("src_google_news_threat_search")?.lastSeenAt).toBeUndefined();
   });
 
   test("collection scheduler status exposes source coverage, durable run state, parser state, and per-source freshness", async () => {

@@ -217,6 +217,7 @@ export default function TiScraperControlClient() {
                         <MiniMetric label='Queue' value={String(queueCount)} />
                         <MiniMetric label='Daily' value={`${scheduler.dailyCovered}/${scheduler.dailySources}`} />
                         <MiniMetric label='Sources' value={String(scheduler.totalSources || sources.length)} />
+                        <MiniMetric label='Qualified' value={`${scheduler.qualifyingSources}/6,100`} />
                         <MiniMetric label='Alerts' value={String(sourceGrowth.alertsGenerated)} />
                     </div>
                     <form onSubmit={submit} className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]'>
@@ -392,6 +393,10 @@ export default function TiScraperControlClient() {
                                 <div className='grid grid-cols-2 gap-2'>
                                     <Info label='Candidates' value={String(sourceGrowth.candidates)} />
                                     <Info label='Daily covered' value={`${scheduler.dailyCovered}/${scheduler.dailySources}`} />
+                                    <Info label='Qualified' value={`${scheduler.qualifyingSources}/6,100`} />
+                                    <Info label='Clear web' value={`${scheduler.qualifyingClearWeb}/5,000`} />
+                                    <Info label='Lawful Tor' value={`${scheduler.qualifyingDarkWeb}/1,000`} />
+                                    <Info label='Public Telegram' value={`${scheduler.qualifyingTelegram}/100`} />
                                     <Info label='AI parser' value={scheduler.aiStatus} />
                                     <Info label='Active Telegram' value={String(sourceGrowth.activeTelegram)} />
                                     <Info label='Darkweb/onion' value={String(sourceGrowth.activeDarkweb)} />
@@ -781,6 +786,8 @@ function schedulerKpis(snapshot: ControlSnapshot | null) {
     const schedulerRoot = asRecord(snapshot?.scheduler)
     const scheduler = asRecord(schedulerRoot.scheduler)
     const coverage = asRecord(schedulerRoot.sourceCoverage)
+    const qualification = asRecord(schedulerRoot.sourceQualification)
+    const qualifyingCounts = asRecord(qualification.counts)
     const parser = asRecord(schedulerRoot.parser)
     const parserHealth = asRecord(snapshot?.exposureParser)
     const lastRun = asRecord(scheduler.lastRun)
@@ -796,6 +803,10 @@ function schedulerKpis(snapshot: ControlSnapshot | null) {
         dailySources: numberFrom(coverage.dailySourceCount) ?? 0,
         dailyAttempted: numberFrom(coverage.dailyAttemptedCount) ?? 0,
         dailyCovered: numberFrom(coverage.dailyCoveredCount) ?? 0,
+        qualifyingSources: numberFrom(qualifyingCounts.total) ?? numberFrom(coverage.qualifyingSourceCount) ?? 0,
+        qualifyingClearWeb: numberFrom(qualifyingCounts.clearWeb) ?? numberFrom(coverage.qualifyingClearWebSourceCount) ?? 0,
+        qualifyingDarkWeb: numberFrom(qualifyingCounts.lawfulDarkWeb) ?? numberFrom(coverage.qualifyingLawfulDarkWebSourceCount) ?? 0,
+        qualifyingTelegram: numberFrom(qualifyingCounts.publicTelegram) ?? numberFrom(coverage.qualifyingPublicTelegramSourceCount) ?? 0,
         aiReady,
         aiStatus: aiReady ? 'Connected' : aiConfigured ? 'Needs setup' : 'Fallback',
         aiDetail: blocker || `${acceptedExposureCount} accepted, ${reviewExposureCount} review${latency !== undefined ? `, ${latency}ms` : ''}`,

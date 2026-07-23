@@ -2,7 +2,7 @@
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.ts";
 import { nowIso, stableId } from "../utils.ts";
-import { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts";
+import { activatePublicCanarySources, pausePublicCanarySources, reconcilePublicSourceProductivity } from "./canaryActivation.ts";
 import { canaryQueries, PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 import { detachedState, externalize, fetchItems, health, maxItemsFor, tasksForSource } from "./canaryHelpers.ts";
 import { isSellableIntelText, sellableReason } from "../value/sellableIntel.ts";
@@ -16,24 +16,31 @@ import type { CanaryCollectionCycleResult, CanaryCollectionLoopHandle, CanaryCol
 export async function runCanaryCollectionCycle(options: CanaryCollectionOptions): Promise<CanaryCollectionCycleResult> {
   if (options.store.batch && !options.batched) return options.store.batch(() => runCanaryCollectionCycle({ ...options, batched: true }));
   const generatedAt = options.now?.() ?? nowIso(), fetcher = options.fetch ?? fetch, mode = options.fetch ? "injected_proof_fetch" : "native_live_http";
+  const productivity = reconcilePublicSourceProductivity({ ...options, now: generatedAt });
   const activation = options.activateSources ? activatePublicCanarySources({ ...options, now: generatedAt }) : { activated: [], alreadyActive: [], rejected: [] };
   const maxSources = Math.max(1, options.maxSources ?? 10), maxTasks = Math.max(1, options.maxTasks ?? 5), maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
   const selectedSourceIds = new Set(options.sourceIds ?? []);
   const due = options.store.listSources()
     .filter((s: any) => inCollectionScope(s, options.tenantId) && (!selectedSourceIds.size || selectedSourceIds.has(s.id)) && isProductionCollectionSource(s, generatedAt))
+    .sort((left: any, right: any) => sourceScheduleTime(left) - sourceScheduleTime(right) || String(left.id).localeCompare(String(right.id)))
     .slice(0, maxSources);
-  const planId = stableId("canary-plan", `${options.tenantId ?? "global"}:${generatedAt}`), runId = stableId("canary-run", planId), tasks = due.flatMap((s: any) => tasksForSource(s, generatedAt, runId, maxBytes));
+  const planId = stableId("canary-plan", `${options.tenantId ?? "global"}:${generatedAt}`), runId = stableId("canary-run", planId);
+  const queueLimit = Math.max(1, Number(options.queueLimit ?? 500));
+  const availableQueueSlots = Math.max(0, queueLimit - Number(options.frontier.size?.() ?? options.frontier.snapshot?.().length ?? 0));
+  const tasks = due.flatMap((s: any) => tasksForSource(s, generatedAt, runId, maxBytes)).slice(0, Math.min(maxTasks, availableQueueSlots));
+  const scheduledSourceIds = new Set(tasks.map((task: any) => task.sourceId));
+  const backpressureState = availableQueueSlots >= maxTasks ? "accepting" : "throttled";
   options.store.savePlan?.({ id: planId, tenantId: options.tenantId, requestId: "req_public_canary", createdAt: generatedAt, tasks, request: { query: canaryQueries }, reviewRequired: [], rejected: activation.rejected, audit: [] });
   options.store.saveRun?.({ id: runId, tenantId: options.tenantId, planId, requestId: "req_public_canary", status: "running", createdAt: generatedAt, startedAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, reviewTaskCount: 0, rejectedSourceCount: activation.rejected.length, captureCount: 0, incidentCount: 0 });
   for (const task of tasks) options.frontier.enqueueTask(task);
   const counters: any = { leasedTaskCount: 0, completedTaskCount: 0, failedTaskCount: 0, insertedCaptureCount: 0, duplicateCaptureCount: 0, incidentCount: 0, exposureClaimCount: 0, skippedLowValueCount: 0, retryScheduledCount: 0, retryExhaustedCount: 0 };
   const latestCaptureIds: string[] = [], errors: any[] = [];
-  const concurrency = Math.max(1, Math.min(maxTasks, Number(options.maxConcurrentTasks ?? 5)));
-  for (let done = 0; done < maxTasks; done += concurrency) await Promise.all(Array.from({ length: Math.min(concurrency, maxTasks - done) }, () => runLeasedTask(options, runId, generatedAt, fetcher, mode, maxBytes, counters, latestCaptureIds, errors)));
+  const concurrency = Math.max(1, Math.min(tasks.length || 1, Number(options.maxConcurrentTasks ?? 5)));
+  for (let done = 0; done < tasks.length; done += concurrency) await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length - done) }, () => runLeasedTask(options, runId, generatedAt, fetcher, mode, maxBytes, counters, latestCaptureIds, errors)));
   const runStatus = counters.failedTaskCount && counters.completedTaskCount ? "degraded" : counters.failedTaskCount ? "failed" : "completed";
   const completedAt = options.now?.() ?? nowIso();
-  options.store.saveRun?.({ id: runId, tenantId: options.tenantId, planId, requestId: "req_public_canary", status: runStatus, createdAt: generatedAt, startedAt: generatedAt, completedAt, updatedAt: completedAt, taskCount: tasks.length, sourceCount: due.length, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, duplicateCaptureCount: counters.duplicateCaptureCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, retryScheduledCount: counters.retryScheduledCount, retryExhaustedCount: counters.retryExhaustedCount, error: errors[0]?.message });
-  return { generatedAt, tenantId: options.tenantId, mode: "production_canary", runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, activeSourceCount: due.length, queuedTaskCount: tasks.length, ...counters, remainingQueuedTaskCount: options.frontier.snapshot().filter((i: any) => i.task.runId === runId).length, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
+  options.store.saveRun?.({ id: runId, tenantId: options.tenantId, planId, requestId: "req_public_canary", status: runStatus, createdAt: generatedAt, startedAt: generatedAt, completedAt, updatedAt: completedAt, taskCount: tasks.length, sourceCount: scheduledSourceIds.size, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, duplicateCaptureCount: counters.duplicateCaptureCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, retryScheduledCount: counters.retryScheduledCount, retryExhaustedCount: counters.retryExhaustedCount, error: errors[0]?.message });
+  return { generatedAt, tenantId: options.tenantId, mode: "production_canary", runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, retiredSourceCount: productivity.retired.length, activeSourceCount: scheduledSourceIds.size, deferredDueSourceCount: due.length - scheduledSourceIds.size, queuedTaskCount: tasks.length, queueLimit, availableQueueSlots, backpressureState, ...counters, remainingQueuedTaskCount: options.frontier.snapshot().filter((i: any) => i.task.runId === runId).length, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
 }
 export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { enabled?: boolean; intervalSeconds?: number; queueLimit?: number; onCycle?: (r: any) => void; onError?: (e: unknown) => void }): CanaryCollectionLoopHandle {
   const state = detachedState(options.now?.() ?? nowIso(), options.queueLimit ?? 500), intervalMs = Math.max(5, options.intervalSeconds ?? 300) * 1000; let timer: Timer | undefined, startupTimer: Timer | undefined, active: Promise<void> | undefined;
@@ -70,7 +77,7 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
 export async function runLeasedTask(options: any, runId: string, generatedAt: string, fetcher: any, mode: string, maxBytes: number, counters: any, latestCaptureIds: string[], errors: any[]) {
   const leased = options.frontier.next(new Date(generatedAt), (task: any) => task.runId === runId); if (!leased) return;
   const task = leased.task, source = options.store.getSource?.(task.sourceId), startedMs = Date.now(); counters.leasedTaskCount++;
-  const taskMetrics: any = { itemCount: 0, captureCount: 0, incidentCount: 0, duplicateCount: 0, parserWarningCount: 0, actorIds: new Set<string>(), publishedAt: [] };
+  const taskMetrics: any = { itemCount: 0, captureCount: 0, incidentCount: 0, duplicateCount: 0, parserWarningCount: 0, actorIds: new Set<string>(), publishedAt: [], productivePublishedAt: [] };
   try {
     if (!source) throw new Error("source missing");
     if (task.planning?.watchlistDiscovery) {
@@ -105,7 +112,11 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
         const evidenceCaptureIds = options.store.listCaptures().filter((capture: any) => actorIdentityCatalogSnapshot.evidenceContentHashes?.includes(capture.contentHash)).map((capture: any) => capture.id);
         options.store.replaceActorIdentityCatalog({ ...actorIdentityCatalogSnapshot, ...(evidenceCaptureIds.length ? { evidenceCaptureIds } : {}) }, { sourceId: source.id, captureId: saved.capture.id, importedAt: generatedAt });
       }
-      if (duplicate) { counters.duplicateCaptureCount++; taskMetrics.duplicateCount++; } else { counters.insertedCaptureCount++; taskMetrics.captureCount++; }
+      if (duplicate) { counters.duplicateCaptureCount++; taskMetrics.duplicateCount++; } else {
+        counters.insertedCaptureCount++;
+        taskMetrics.captureCount++;
+        if (collected.publishedAt) taskMetrics.productivePublishedAt.push(collected.publishedAt);
+      }
       if (saved.incident) { counters.incidentCount++; taskMetrics.incidentCount++; }
       if (task.planning?.watchlistDiscovery && collected.sourceId !== source.id) recordWatchlistEvidenceHealth(options.store, collected, task, runId, generatedAt, Boolean(duplicate), Boolean(saved.incident));
       for (const entity of pipeline.entities ?? []) if (["actor", "ransomware_family"].includes(entity.type)) taskMetrics.actorIds.add(String(entity.normalizedValue ?? entity.value));
@@ -113,9 +124,10 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
       latestCaptureIds.push(saved.capture.id);
     }
     counters.completedTaskCount++; options.frontier.complete(task);
-    const checkedAt = options.now?.() ?? nowIso(), useful = taskMetrics.captureCount > 0 || taskMetrics.incidentCount > 0;
+    const checkedAt = options.now?.() ?? nowIso(), useful = taskMetrics.captureCount > 0;
+    const lastContentAt = useful ? latestTimestamp(taskMetrics.productivePublishedAt) ?? checkedAt : source.health?.lastContentAt;
     options.store.saveSourceHealthObservation?.(sourceHealthObservation(source, task, runId, checkedAt, Date.now() - startedMs, taskMetrics, { success: true, useful }));
-    options.store.saveSource({ ...source, lastSeenAt: checkedAt, health: { ...(source.health ?? {}), status: taskMetrics.parserWarningCount ? "degraded" : "healthy", checkedAt, lastSuccessAt: checkedAt, lastUsefulAt: useful ? checkedAt : source.health?.lastUsefulAt, consecutiveFailures: 0, errorRate: 0, parserStatus: taskMetrics.parserWarningCount ? "warnings" : "healthy", lastError: undefined }, crawlState: { ...(source.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + (source.crawlFrequencySeconds ?? 3600) * 1000).toISOString(), backoffUntil: undefined, lastError: undefined }, metadata: { ...(source.metadata ?? {}), lastCanaryFetchMode: mode }, updatedAt: checkedAt });
+    options.store.saveSource({ ...source, lastSeenAt: lastContentAt ?? source.lastSeenAt, health: { ...(source.health ?? {}), status: taskMetrics.parserWarningCount ? "degraded" : "healthy", checkedAt, lastSuccessAt: checkedAt, lastContentAt, lastUsefulAt: useful ? checkedAt : source.health?.lastUsefulAt, consecutiveFailures: 0, errorRate: 0, parserStatus: taskMetrics.parserWarningCount ? "warnings" : "healthy", lastError: undefined }, crawlState: { ...(source.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + (source.crawlFrequencySeconds ?? 3600) * 1000).toISOString(), backoffUntil: undefined, lastError: undefined }, metadata: { ...(source.metadata ?? {}), lastCanaryFetchMode: mode }, updatedAt: checkedAt });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error); taskMetrics.httpStatus = Number.isInteger((error as any)?.httpStatus) ? (error as any).httpStatus : taskMetrics.httpStatus; counters.failedTaskCount++; errors.push({ taskId: task.id, sourceId: task.sourceId, message });
     const ack = options.frontier.fail(task, new Date(generatedAt), message); if (ack?.status === "retry_scheduled") counters.retryScheduledCount++; if (ack?.status === "retry_exhausted") counters.retryExhaustedCount++;
@@ -143,6 +155,8 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
 function recordWatchlistEvidenceHealth(store: any, collected: any, task: any, runId: string, checkedAt: string, duplicate: boolean, incident: boolean) {
   const evidenceSource = store.getSource?.(collected.sourceId);
   if (!evidenceSource) return;
+  const useful = !duplicate;
+  const lastContentAt = useful ? collected.publishedAt ?? checkedAt : evidenceSource.health?.lastContentAt;
   store.saveSourceHealthObservation?.({
     id: stableId("source-health", `${runId}:${task.id}:${evidenceSource.id}:${collected.contentHash}`),
     tenantId: collected.tenantId,
@@ -152,7 +166,7 @@ function recordWatchlistEvidenceHealth(store: any, collected: any, task: any, ru
     checkedAt,
     status: "healthy",
     success: true,
-    useful: !duplicate || incident,
+    useful,
     itemCount: 1,
     captureCount: duplicate ? 0 : 1,
     incidentCount: incident ? 1 : 0,
@@ -163,8 +177,8 @@ function recordWatchlistEvidenceHealth(store: any, collected: any, task: any, ru
   });
   store.saveSource({
     ...evidenceSource,
-    lastSeenAt: checkedAt,
-    health: { ...(evidenceSource.health ?? {}), status: "healthy", checkedAt, lastSuccessAt: checkedAt, lastUsefulAt: !duplicate || incident ? checkedAt : evidenceSource.health?.lastUsefulAt, consecutiveFailures: 0, errorRate: 0, parserStatus: "healthy", lastError: undefined },
+    lastSeenAt: lastContentAt ?? evidenceSource.lastSeenAt,
+    health: { ...(evidenceSource.health ?? {}), status: "healthy", checkedAt, lastSuccessAt: checkedAt, lastContentAt, lastUsefulAt: useful ? checkedAt : evidenceSource.health?.lastUsefulAt, consecutiveFailures: 0, errorRate: 0, parserStatus: "healthy", lastError: undefined },
     crawlState: { ...(evidenceSource.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + (evidenceSource.crawlFrequencySeconds ?? 86_400) * 1000).toISOString(), backoffUntil: undefined, lastError: undefined },
     updatedAt: checkedAt
   });
@@ -210,4 +224,10 @@ function inCollectionScope(source: any, tenantId?: string) {
   const sourceTenantId = String(source.tenantId ?? "").trim() || undefined;
   const shared = sourceTenantId === undefined || sourceTenantId === "global";
   return tenantId ? shared || sourceTenantId === tenantId : shared;
+}
+function sourceScheduleTime(source: any) {
+  return Date.parse(source.health?.checkedAt ?? source.crawlState?.lastCollectedAt ?? source.updatedAt ?? source.createdAt ?? "") || 0;
+}
+function latestTimestamp(values: unknown[]) {
+  return values.map((value) => Date.parse(String(value ?? ""))).filter(Number.isFinite).sort((left, right) => right - left).map((value) => new Date(value).toISOString())[0];
 }

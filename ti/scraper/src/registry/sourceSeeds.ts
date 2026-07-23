@@ -14,7 +14,6 @@ export {
   buildSourceActivationBatchApiResponse,
   buildSourceActivationReport,
   buildSourceCoverageCloseoutApiResponse,
-  buildSourceCoveragePlanApiResponse,
   buildSourceRuntimeSlaApiResponse
 } from "./sourceSeedsActivation.ts";
 export {

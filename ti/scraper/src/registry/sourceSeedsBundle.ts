@@ -1,7 +1,7 @@
 import type { SourceRecord } from "../types.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { ACTORS, SAFE_ACCESS, SAFE_TYPES } from "./sourceSeedConstants.ts";
-import { canonicalUrl } from "./sourceSeedUtils.ts";
+import { canonicalFeedKey } from "./sourceSeedUtils.ts";
 
 export function validateSeedBundle(bundle: any, options: any = {}): any {
   return buildSeedImportReport(bundle, options);
@@ -16,7 +16,7 @@ export function exportSeedBundle(sources: SourceRecord[], name: string, generate
 }
 
 export function seedDuplicateKey(source: { tenantId?: string; type: string; url?: string }): any {
-  return `${source.tenantId ?? "global"}:${source.type}:${canonicalUrl(source.url ?? "")}`;
+  return canonicalFeedKey(source.url ?? "");
 }
 
 export function buildSafePublicSourcePackInstallPlan(bundle: any, mode: any = "dry_run"): any {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
+import { reconcilePublicSourceProductivity } from "../ops/canaryActivation.ts";
 import { fetchItems } from "../ops/canaryHelpers.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
@@ -56,6 +57,96 @@ describe("public collection boundary", () => {
 
     expect(cycle.activeSourceCount).toBe(1);
     expect(fetched).toEqual(["https://example.test/selected.xml"]);
+  });
+
+  test("caps tasks before enqueue so completed runs leave no orphan queue", async () => {
+    const store = new InMemoryScraperStore();
+    for (const id of ["a", "b", "c"]) store.saveSource(source({ id, url: `https://example.test/${id}.xml` }));
+    const frontier = new FocusedFrontier();
+    const fetched: string[] = [];
+
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier,
+      maxSources: 3,
+      maxTasks: 2,
+      now: () => "2026-07-23T12:00:00.000Z",
+      fetch: async (url: string) => {
+        fetched.push(url);
+        return new Response("<rss><channel></channel></rss>", { headers: { "content-type": "application/rss+xml" } });
+      }
+    });
+
+    expect(cycle).toMatchObject({ activeSourceCount: 2, queuedTaskCount: 2, leasedTaskCount: 2, completedTaskCount: 2, remainingQueuedTaskCount: 0 });
+    expect(fetched).toHaveLength(2);
+    expect(frontier.snapshot()).toHaveLength(0);
+    expect(store.getSource("c")?.health?.checkedAt).toBeUndefined();
+  });
+
+  test("defers due sources instead of overflowing a saturated queue", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "due", url: "https://example.test/due.xml" }));
+    const frontier = new FocusedFrontier({ maxQueueSize: 2 });
+    for (const id of ["existing-a", "existing-b"]) frontier.enqueueTask({ id, sourceId: id, sourceType: "rss", targetUrl: `https://example.test/${id}`, queuedAt: "2026-07-23T10:00:00.000Z", retryCount: 0 });
+    let fetchCount = 0;
+
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier,
+      queueLimit: 2,
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => "2026-07-23T12:00:00.000Z",
+      fetch: async () => {
+        fetchCount++;
+        return new Response("<rss><channel></channel></rss>", { headers: { "content-type": "application/rss+xml" } });
+      }
+    });
+
+    expect(cycle).toMatchObject({ activeSourceCount: 0, deferredDueSourceCount: 1, queuedTaskCount: 0, availableQueueSlots: 0, backpressureState: "throttled" });
+    expect(fetchCount).toBe(0);
+    expect(frontier.snapshot().map((item: any) => item.id).sort()).toEqual(["existing-a", "existing-b"]);
+  });
+
+  test("does not refresh useful or content timestamps for duplicate-only checks", async () => {
+    const store = new InMemoryScraperStore();
+    const feed = "<rss><channel><item><title>APT29 campaign report</title><link>https://example.test/report</link><description>APT29 targeted government victims with malware and command infrastructure.</description><pubDate>Wed, 22 Jul 2026 10:00:00 GMT</pubDate></item></channel></rss>";
+    store.saveSource(source({ id: "truthful", url: "https://example.test/truthful.xml" }));
+    const first = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, now: () => "2026-07-22T12:00:00.000Z", fetch: async () => new Response(feed, { headers: { "content-type": "application/rss+xml" } }) });
+    const firstSource = structuredClone(store.getSource("truthful"));
+    const second = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, now: () => "2026-07-23T12:00:00.000Z", fetch: async () => new Response(feed, { headers: { "content-type": "application/rss+xml" } }) });
+    const observations = store.listSourceHealthObservations().filter((row: any) => row.sourceId === "truthful");
+
+    expect(first.insertedCaptureCount).toBe(1);
+    expect(second.duplicateCaptureCount).toBe(1);
+    expect(observations.map((row: any) => [row.captureCount, row.useful])).toEqual([[1, true], [0, false]]);
+    expect(store.getSource("truthful")).toMatchObject({
+      lastSeenAt: firstSource?.lastSeenAt,
+      health: { lastContentAt: firstSource?.health?.lastContentAt, lastUsefulAt: firstSource?.health?.lastUsefulAt }
+    });
+  });
+
+  test("retires low-risk public feeds only after a real activity window without new captures", () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "unproductive", metadata: { productionCollection: true, canaryPortfolio: true }, crawlFrequencySeconds: 86_400 }));
+    for (let index = 0; index < 11; index++) {
+      store.saveSourceHealthObservation({
+        id: `unproductive-${index}`,
+        sourceId: "unproductive",
+        checkedAt: new Date(Date.parse("2026-06-01T00:00:00.000Z") + index * 3 * 86_400_000).toISOString(),
+        status: "healthy",
+        success: true,
+        useful: true,
+        captureCount: 0
+      });
+    }
+
+    const first = reconcilePublicSourceProductivity({ store, now: "2026-07-23T12:00:00.000Z" });
+    const second = reconcilePublicSourceProductivity({ store, now: "2026-07-23T13:00:00.000Z" });
+
+    expect(first.retired).toEqual([{ sourceId: "unproductive", attemptCount: 11, productiveCheckCount: 0 }]);
+    expect(store.getSource("unproductive")).toMatchObject({ status: "retired", metadata: { sourcePortfolioStatus: "retired_unproductive" } });
+    expect(second.retired).toEqual([]);
   });
 
   test("runs shared and exact-tenant sources while preserving tenant run scope", async () => {
