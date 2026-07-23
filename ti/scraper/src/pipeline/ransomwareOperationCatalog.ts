@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { normalizeActorLabel } from "./mitreActorCatalog.ts";
+import { actorLookupPolicy, normalizeActorLabel } from "./mitreActorCatalog.ts";
 
 const CURRENT_WINDOW_MS = 90 * 86_400_000;
 const LOCATION_FRESHNESS_MS = 7 * 86_400_000;
@@ -15,8 +15,10 @@ export type RansomwareOperationIdentity = {
   associatedNames: string[];
   relatedOperationNames: string[];
   status: "current";
+  lookupPolicy: "text_safe" | "structured_only";
   aptNumberDesignationPresent: false;
   identityKind: "ransomware_operation";
+  lineageRelations: Array<{ relationship: "evolved_from"; name: string; targetIdentityId?: string }>;
   createdAt: string;
   modifiedAt: string;
   sourceUrl: string;
@@ -24,12 +26,20 @@ export type RansomwareOperationIdentity = {
   catalogModifiedAt: string;
   bundleSha256: string;
   retrievedAt: string;
-  currentEvidence: {
-    recentClaimCount: number;
-    latestClaimPublishedAt: string;
-    liveLocationCount: number;
-    latestLocationCheckedAt: string;
-  };
+};
+
+export type RansomwareOperationActivityEvidence = {
+  actorIdentityId: string;
+  externalId: string;
+  evidenceKinds: Array<"recent_public_claim" | "reachable_publication_location">;
+  recentClaimCount: number;
+  latestClaimPublishedAt: string;
+  liveLocationCount: number;
+  latestLocationCheckedAt: string;
+  latestObservedAt: string;
+  captureContentHashes: string[];
+  catalogVersion: string;
+  retrievedAt: string;
 };
 
 export type RansomwareOperationCatalogSnapshot = {
@@ -58,13 +68,34 @@ export type RansomwareOperationCatalogSnapshot = {
     recentClaimGroupCount: number;
     liveLocationGroupCount: number;
     unreliableExcludedCount: number;
+    invalidIdentityLabelExcludedCount: number;
+    generatedIdentityLabelExcludedCount: number;
+    invalidAliasLabelExcludedCount: number;
+    noRecentClaimExcludedCount: number;
+    noReachableLocationExcludedCount: number;
+    noCurrentEvidenceExcludedCount: number;
     unmatchedRecentClaimGroupCount: number;
+    identityActivityEvidenceCount: number;
+    sourceVictimRecordCount: number;
+    restrictedLocatorFieldCount: number;
   };
   identities: RansomwareOperationIdentity[];
+  activityEvidence: RansomwareOperationActivityEvidence[];
   aliasCollisions: Array<{ normalizedLabel: string; label: string; externalIds: string[] }>;
   exclusions: {
     unreliableGroupNames: string[];
+    invalidIdentityLabels: string[];
+    generatedIdentityLabels: string[];
+    invalidAliasLabels: string[];
+    groupNamesWithoutRecentClaims: string[];
+    groupNamesWithoutReachableLocations: string[];
+    groupNamesWithoutCurrentEvidence: string[];
     recentClaimNamesMissingFromGroupCatalog: string[];
+  };
+  governance: {
+    identityRegistrationSource: "authoritative_group_catalog_only";
+    activityEvidenceSource: "aggregate_public_claim_and_reachability_indexes";
+    excludedDataClasses: string[];
   };
 };
 
@@ -95,29 +126,56 @@ export function parseCurrentRansomwareOperations(
     }
   }
 
+  const groupContentHash = createHash("sha256").update(groupsBody).digest("hex");
+  const activityContentHash = createHash("sha256").update(victimsBody).digest("hex");
   const bundleSha256 = createHash("sha256").update(groupsBody).update("\0").update(victimsBody).digest("hex");
   const sourceUrl = input.sourceUrl ?? "https://data.ransomware.live/groups.json";
   const groupNames = new Set(groups.map((group) => normalizeActorLabel(text(group.name))).filter(Boolean));
   const unreliableGroupNames: string[] = [];
+  const invalidIdentityLabels: string[] = [];
+  const generatedIdentityLabels: string[] = [];
+  const invalidAliasLabels: string[] = [];
+  const groupNamesWithoutRecentClaims: string[] = [];
+  const groupNamesWithoutReachableLocations: string[] = [];
+  const groupNamesWithoutCurrentEvidence: string[] = [];
+  const activityEvidence: RansomwareOperationActivityEvidence[] = [];
   let liveLocationGroupCount = 0;
-  const identities = groups.flatMap((group): RansomwareOperationIdentity[] => {
+  const baseIdentities = groups.flatMap((group): RansomwareOperationIdentity[] => {
     const canonicalName = text(group.name);
     if (!canonicalName) return [];
     if (UNRELIABLE.test(text(group.description))) {
       unreliableGroupNames.push(canonicalName);
       return [];
     }
+    const labelExclusion = identityLabelExclusion(canonicalName);
+    if (labelExclusion === "invalid") {
+      invalidIdentityLabels.push(canonicalName);
+      return [];
+    }
+    if (labelExclusion === "generated") {
+      generatedIdentityLabels.push(canonicalName);
+      return [];
+    }
     const liveLocations = array(group.locations ?? [], `${canonicalName} locations`).filter((location) => liveLocation(location, retrievedMs));
     if (liveLocations.length) liveLocationGroupCount++;
     const claims = recentClaims.get(normalizeActorLabel(canonicalName));
+    if (!claims && !liveLocations.length) groupNamesWithoutCurrentEvidence.push(canonicalName);
+    else if (!claims) groupNamesWithoutRecentClaims.push(canonicalName);
+    else if (!liveLocations.length) groupNamesWithoutReachableLocations.push(canonicalName);
     if (!claims || !liveLocations.length) return [];
     const latestLocationCheckedAt = new Date(Math.min(retrievedMs, Math.max(...liveLocations.map(locationTime)))).toISOString();
     const createdAt = Number.isFinite(Date.parse(text(group.date))) ? new Date(Date.parse(text(group.date))).toISOString() : claims.latestAt;
     const modifiedAt = new Date(Math.max(Date.parse(claims.latestAt), Date.parse(latestLocationCheckedAt))).toISOString();
-    const associatedNames = uniqueCaseInsensitive(values(group.altname));
+    const associatedNames = uniqueCaseInsensitive(values(group.altname)).filter((name) => {
+      if (identityLabelExclusion(name)) {
+        invalidAliasLabels.push(name);
+        return false;
+      }
+      return normalizeActorLabel(name) !== normalizeActorLabel(canonicalName);
+    });
     const relatedOperationNames = uniqueCaseInsensitive(values(group.lineage));
     const slug = normalizeActorLabel(canonicalName).replace(/\s+/g, "-");
-    return [{
+    const identity: RansomwareOperationIdentity = {
       id: `ransomware-live-current-operations:${slug}`,
       catalogId: "ransomware-live-current-operations",
       externalId: `ransomwarelive:${slug}`,
@@ -126,18 +184,45 @@ export function parseCurrentRansomwareOperations(
       associatedNames,
       relatedOperationNames,
       status: "current",
+      lookupPolicy: actorLookupPolicy(canonicalName),
       aptNumberDesignationPresent: false,
       identityKind: "ransomware_operation",
+      lineageRelations: [],
       createdAt,
       modifiedAt,
       sourceUrl,
       catalogVersion: new Date(latestClaimMs).toISOString().slice(0, 10),
       catalogModifiedAt: new Date(Math.max(latestClaimMs, Date.parse(latestLocationCheckedAt))).toISOString(),
       bundleSha256,
-      retrievedAt,
-      currentEvidence: { recentClaimCount: claims.count, latestClaimPublishedAt: claims.latestAt, liveLocationCount: liveLocations.length, latestLocationCheckedAt }
-    }];
-  }).sort((left, right) => left.normalizedCanonicalName.localeCompare(right.normalizedCanonicalName));
+      retrievedAt
+    };
+    activityEvidence.push({
+      actorIdentityId: identity.id,
+      externalId: identity.externalId,
+      evidenceKinds: ["recent_public_claim", "reachable_publication_location"],
+      recentClaimCount: claims.count,
+      latestClaimPublishedAt: claims.latestAt,
+      liveLocationCount: liveLocations.length,
+      latestLocationCheckedAt,
+      latestObservedAt: modifiedAt,
+      captureContentHashes: [activityContentHash, groupContentHash],
+      catalogVersion: identity.catalogVersion,
+      retrievedAt
+    });
+    return [identity];
+  });
+  const identities = baseIdentities.map((identity) => ({
+    ...identity,
+    lineageRelations: identity.relatedOperationNames.map((name) => {
+      const matches = baseIdentities.filter((candidate) => [candidate.canonicalName, ...candidate.associatedNames]
+        .some((label) => normalizeActorLabel(label) === normalizeActorLabel(name)));
+      return {
+        relationship: "evolved_from" as const,
+        name,
+        ...(matches.length === 1 && matches[0].id !== identity.id ? { targetIdentityId: matches[0].id } : {})
+      };
+    })
+  })).sort((left, right) => left.normalizedCanonicalName.localeCompare(right.normalizedCanonicalName));
 
   const minimum = input.minimumCurrentIdentities ?? 25;
   if (identities.length < minimum) throw new Error(`Ransomware operation catalog is incomplete: ${identities.length} current identities, expected at least ${minimum}.`);
@@ -156,7 +241,7 @@ export function parseCurrentRansomwareOperations(
     bundleSha256,
     retrievedAt,
     activityWatermarkAt: new Date(latestClaimMs).toISOString(),
-    evidenceContentHashes: [createHash("sha256").update(groupsBody).digest("hex"), createHash("sha256").update(victimsBody).digest("hex")],
+    evidenceContentHashes: [groupContentHash, activityContentHash],
     counts: {
       totalIdentityCount: identities.length,
       currentIdentityCount: identities.length,
@@ -171,11 +256,35 @@ export function parseCurrentRansomwareOperations(
       recentClaimGroupCount: recentClaims.size,
       liveLocationGroupCount,
       unreliableExcludedCount: unreliableGroupNames.length,
-      unmatchedRecentClaimGroupCount: missingRecent.length
+      invalidIdentityLabelExcludedCount: invalidIdentityLabels.length,
+      generatedIdentityLabelExcludedCount: generatedIdentityLabels.length,
+      invalidAliasLabelExcludedCount: invalidAliasLabels.length,
+      noRecentClaimExcludedCount: groupNamesWithoutRecentClaims.length,
+      noReachableLocationExcludedCount: groupNamesWithoutReachableLocations.length,
+      noCurrentEvidenceExcludedCount: groupNamesWithoutCurrentEvidence.length,
+      unmatchedRecentClaimGroupCount: missingRecent.length,
+      identityActivityEvidenceCount: activityEvidence.length,
+      sourceVictimRecordCount: victims.length,
+      restrictedLocatorFieldCount: groups.reduce((count, group) => count + array(group.locations ?? [], "locations").filter((location) => text(location?.fqdn) || text(location?.slug)).length, 0)
     },
     identities,
+    activityEvidence: activityEvidence.sort((left, right) => left.actorIdentityId.localeCompare(right.actorIdentityId)),
     aliasCollisions,
-    exclusions: { unreliableGroupNames: unreliableGroupNames.sort(), recentClaimNamesMissingFromGroupCatalog: missingRecent }
+    exclusions: {
+      unreliableGroupNames: unreliableGroupNames.sort(),
+      invalidIdentityLabels: invalidIdentityLabels.sort(),
+      generatedIdentityLabels: generatedIdentityLabels.sort(),
+      invalidAliasLabels: invalidAliasLabels.sort(),
+      groupNamesWithoutRecentClaims: groupNamesWithoutRecentClaims.sort(),
+      groupNamesWithoutReachableLocations: groupNamesWithoutReachableLocations.sort(),
+      groupNamesWithoutCurrentEvidence: groupNamesWithoutCurrentEvidence.sort(),
+      recentClaimNamesMissingFromGroupCatalog: missingRecent
+    },
+    governance: {
+      identityRegistrationSource: "authoritative_group_catalog_only",
+      activityEvidenceSource: "aggregate_public_claim_and_reachability_indexes",
+      excludedDataClasses: ["victim names as identities", "raw leak bodies", "stolen data", "credentials", "restricted locators"]
+    }
   };
 }
 
@@ -192,6 +301,13 @@ function locationTime(location: any): number {
 
 function claimTime(victim: any): number {
   return Date.parse(text(victim?.published) || text(victim?.discovered));
+}
+
+function identityLabelExclusion(value: string): "invalid" | "generated" | undefined {
+  const normalized = normalizeActorLabel(value);
+  if (["actor", "group", "malware", "ransomware", "ransomware live", "ransomware live victim feed", "unknown", "unknown group", "victim", "victim feed"].includes(normalized)) return "invalid";
+  if (/^(?:actor|demo|fixture|group|operation|sample|test)\s*\d+$/.test(normalized)) return "generated";
+  return undefined;
 }
 
 function collisions(identities: RansomwareOperationIdentity[]) {

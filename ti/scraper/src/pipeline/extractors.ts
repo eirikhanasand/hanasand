@@ -1,7 +1,7 @@
 import type { ExtractedEntity, ExtractionProvenance, Indicator } from "../types.ts";
 import { normalizeWhitespace } from "../utils.ts";
 import { ACTOR_ALIAS_RECORDS } from "./actorAliases.ts";
-import { resolveMitreActorIdentity, type ActorIdentityRecord } from "./mitreActorCatalog.ts";
+import { actorLookupPolicy, resolveMitreActorIdentity, type ActorIdentityRecord } from "./mitreActorCatalog.ts";
 
 export const EXTRACTOR_VERSION = "ti-extractor-v2";
 export type ExtractionContext = { sourceId: string; captureId: string; url: string; collectedAt: string; contentHash: string; language?: string };
@@ -21,11 +21,14 @@ export function extractIndicators(text: string, context: ExtractionContext): Ind
 export function extractEntities(text: string, context: ExtractionContext, actorIdentities?: ActorIdentityRecord[]): ExtractedEntity[] {
   const rows: ExtractedEntity[] = [], lower = text.toLowerCase();
   if (actorIdentities) {
-    const labels = [...new Set(actorIdentities.filter((record) => record.status === "current").flatMap((identity) => [identity.canonicalName, ...identity.associatedNames]))];
+    const labels = [...new Set(actorIdentities
+      .filter((record) => record.status === "current")
+      .flatMap((identity) => [identity.canonicalName, ...identity.associatedNames])
+      .filter((label) => actorLookupPolicy(label) !== "structured_only"))];
     for (const label of labels) {
       const index = phraseIndex(lower, label);
       if (index < 0) continue;
-      const resolution = resolveMitreActorIdentity(label, actorIdentities);
+      const resolution = resolveMitreActorIdentity(label, actorIdentities, { allowStructuredOnly: false });
       const exact = !resolution.ambiguous && resolution.candidates.length === 1 && resolution.candidates[0].matchKinds.includes("canonical");
       const value = exact ? resolution.candidates[0].identity.canonicalName : label;
       rows.push({
