@@ -3137,7 +3137,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceEnrichmentProfileContract.requiredFields | index(\"sourceEnrichmentProfile.fields[].provenance\")",
       ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsContract.requiredFields | index(\"sourceOperationsReadiness.rows[].proofId\")",
       ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.schemaVersion == \"ti.public_actor.downstream_source_operations_readiness.v1\"",
-      ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.rows | all(has(\"sourceFamily\") and has(\"state\") and has(\"parserStatus\") and has(\"provenance\") and has(\"fixtureReadiness\") and .safeOutput.liveNetworkScrapeStarted == false)",
+      ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.rows | all(has(\"sourceFamily\") and has(\"state\") and has(\"parserStatus\") and has(\"provenance\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.publicTiQueryAdapter.sourceFamilyCoverageMatrix.schemaVersion == \"ti.public_actor.source_family_coverage_matrix.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourcePackActivationPreview.schemaVersion == \"ti.public_actor.source_pack_activation_preview.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger.schemaVersion == \"ti.public_actor.source_enrichment_freshness_ledger.v1\"",
@@ -3441,7 +3441,6 @@ function sourceActorDashboardSourceOperationsAdapter(input: {
         parserStatus: sourceOperationsReadiness.parserStatus,
         freshness: sourceOperationsReadiness.freshness,
         candidateIntake: sourceOperationsReadiness.candidateIntake,
-        fixtureReadiness: sourceOperationsReadiness.fixtureReadiness,
         operatorActionTypes: uniqueSourceReadinessStrings((sourceOperationsReadiness.operatorActions ?? []).map((action: any) => action.type)),
         alertability: sourceOperationsReadiness.alertability,
         blockers: sourceOperationsReadiness.blockers ?? [],
@@ -3495,9 +3494,6 @@ function sourceActorDashboardSourceOperationsAdapter(input: {
       sourceOperationsReadyFamilies: input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.summary?.readyFamilies ?? [],
       sourceOperationsActionableFamilies: input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.summary?.actionableFamilies ?? [],
       candidateIntakeFamilies: input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.summary?.candidateIntakeFamilies ?? [],
-      fixtureReadyFamilies: input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.summary?.fixtureReadyFamilies ?? [],
-      fixtureTestableFamilies: input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.summary?.fixtureTestableFamilies ?? [],
-      fixtureMetadataApprovalFamilies: input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.summary?.fixtureMetadataApprovalFamilies ?? [],
       nextActionTypes: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.nextActions.map((action: any) => action.action))),
       recoveryStates: uniqueSourceReadinessStrings(rows.map((row: any) => row.operationalRecovery?.state).filter(Boolean)),
       recoveryActionFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.operationalRecovery?.nextActionTypes?.length > 0).map((row) => row.sourceFamily)),
@@ -4931,7 +4927,6 @@ function sourceActorPublicTiDownstreamFixtureExport(input: {
         "sourceOperationsReadiness.rows[].provenance",
         "sourceOperationsReadiness.rows[].operatorActions",
         "sourceOperationsReadiness.rows[].candidateIntake",
-        "sourceOperationsReadiness.rows[].fixtureReadiness",
         "sourceOperationsReadiness.rows[].safeOutput"
       ],
       consumerRoutes: {
@@ -4993,18 +4988,15 @@ function sourceActorPublicTiDownstreamSourceOperationsReadiness(input: {
     }
   }
   const intakeByFamily = new Map<string, Record<string, any>>((input.sourcePackIntakeHandoff.candidates ?? []).map((candidate: any) => [String(candidate.family), candidate]));
-  const fixtureReadinessByFamily = new Map<string, Record<string, any>>((input.sourcePackIntakeHandoff.fixtureManifest?.fixtureReadiness ?? []).map((fixture: any) => [String(fixture.family), fixture]));
   const familyNames = uniqueSourceReadinessStrings([
     ...input.rows.map((row) => row.sourceFamily),
     ...Array.from(operationsByFamily.keys()),
-    ...Array.from(intakeByFamily.keys()),
-    ...Array.from(fixtureReadinessByFamily.keys())
+    ...Array.from(intakeByFamily.keys())
   ]);
   const rows = familyNames.map((family) => {
     const proof = input.rows.find((row) => row.sourceFamily === family);
     const operations = operationsByFamily.get(family) ?? [];
     const intake = intakeByFamily.get(family);
-    const fixtureReadiness = fixtureReadinessByFamily.get(family);
     const blockers = dedupeBlockers([
       ...(proof?.blockers ?? []),
       ...operations.flatMap((operation) => operation.blockers ?? []),
@@ -5046,21 +5038,6 @@ function sourceActorPublicTiDownstreamSourceOperationsReadiness(input: {
         available: false,
         liveNetworkFetch: false
       },
-      fixtureReadiness: fixtureReadiness ? {
-        available: true,
-        proofId: fixtureReadiness.proofId,
-        fixtureKey: fixtureReadiness.fixtureKey,
-        parserProfile: fixtureReadiness.parserProfile,
-        expectedCaptureType: fixtureReadiness.expectedCaptureType,
-        validation: fixtureReadiness.validation,
-        testRun: fixtureReadiness.testRun,
-        activation: fixtureReadiness.activation,
-        provenance: fixtureReadiness.provenance,
-        liveNetworkFetch: false
-      } : {
-        available: false,
-        liveNetworkFetch: false
-      },
       operatorActions: operations.map((operation) => ({
         operationId: operation.operationId,
         type: operation.type,
@@ -5093,9 +5070,6 @@ function sourceActorPublicTiDownstreamSourceOperationsReadiness(input: {
       readyFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.state === "ready").map((row: any) => row.sourceFamily)),
       actionableFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.state === "actionable").map((row: any) => row.sourceFamily)),
       candidateIntakeFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.candidateIntake.available).map((row: any) => row.sourceFamily)),
-      fixtureReadyFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.fixtureReadiness.available && row.fixtureReadiness.validation?.ready === true).map((row: any) => row.sourceFamily)),
-      fixtureTestableFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.fixtureReadiness.testRun?.canRun === true).map((row: any) => row.sourceFamily)),
-      fixtureMetadataApprovalFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.fixtureReadiness.activation?.requiresMetadataOnlyApproval === true).map((row: any) => row.sourceFamily)),
       policyReadyFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.candidateIntake.policyResult?.allowed === true).map((row: any) => row.sourceFamily)),
       blockedFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.blockers.length > 0 || row.state === "blocked").map((row: any) => row.sourceFamily)),
       operationTypes: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.operatorActions.map((action: any) => action.type))),
@@ -5440,7 +5414,6 @@ function sourceActorPublicTiSourcePackIntakeHandoff(input: {
     route: intake.route,
     validationSummary: intake.validationSummary,
     policyValidation: intake.policyValidation,
-    fixtureManifest: intake.fixtureManifest,
     candidates: previews.map((preview: any) => ({
       schemaVersion: "ti.public_actor.source_pack_intake_candidate.v1",
       proofId: preview.proofId,
@@ -6903,140 +6876,10 @@ function sourceActorCandidateIntakeContract(query: string, actorReadiness: Recor
       metadataOnly: candidatePreviews.filter((preview: any) => preview.policyResult.metadataOnly === true).length,
       publicOnly: candidatePreviews.filter((preview: any) => preview.policyResult.publicOnly === true).length
     },
-    fixtureManifest: sourceActorCandidateFixtureManifest(query, sourcePackId, candidatePreviews),
     candidatePreviews,
     candidateGaps: actorReadiness.candidateGaps,
     safeOutput: actorReadiness.safeOutput
   };
-}
-
-function sourceActorCandidateFixtureManifest(query: string, sourcePackId: string, candidatePreviews: Array<Record<string, any>>) {
-  const fixtures = candidatePreviews.map((preview) => {
-    const family = preview.family as SourceGrowthFamily;
-    return {
-      schemaVersion: "dwm.actor_source_candidate_fixture.v1",
-      fixtureId: stableId("dwm_actor_source_candidate_fixture", `${query}:${sourcePackId}:${family}:${preview.proofId}`),
-      sourcePackId,
-      query,
-      family,
-      candidateProofId: preview.proofId,
-      fixtureKey: sourceActorCandidateFixtureKey(query, family),
-      parserProfile: preview.parserExpectation?.profile ?? parserProfileForFamily(family),
-      parserExpectation: preview.parserExpectation,
-      expectedCaptureType: preview.parserExpectation?.expectedCaptureType ?? expectedCaptureTypeForFamily(family),
-      policyBoundary: preview.policyResult?.boundary,
-      metadataOnly: preview.policyResult?.metadataOnly === true,
-      publicOnly: preview.policyResult?.publicOnly === true,
-      alertableFields: preview.alertability?.alertableFields ?? [],
-      loadPlan: {
-        mode: "no_network_fixture",
-        method: "POST",
-        path: "/v1/dwm/source-requests",
-        body: {
-          action: "pack_worker_run",
-          sourcePackId,
-          candidateProofId: preview.proofId,
-          fixtureKey: sourceActorCandidateFixtureKey(query, family),
-          dryRun: true
-        },
-        liveNetworkFetch: false
-      },
-      validationChecks: [
-        "policy_boundary_present",
-        "parser_profile_present",
-        "expected_capture_type_present",
-        "raw_restricted_payload_not_stored",
-        "live_network_fetch_disabled"
-      ],
-      safeOutput: {
-        rawTargetsExposed: false,
-        restrictedMetadataLeaked: false,
-        privateTelegramContentExposed: false,
-        liveNetworkScrapeStarted: false
-      }
-    };
-  });
-  const fixtureReadiness = fixtures.map((fixture) => ({
-    schemaVersion: "dwm.actor_source_candidate_fixture_readiness.v1",
-    proofId: stableId("dwm_actor_source_candidate_fixture_readiness", `${query}:${sourcePackId}:${fixture.family}:${fixture.fixtureId}`),
-    sourcePackId,
-    query,
-    family: fixture.family,
-    fixtureKey: fixture.fixtureKey,
-    parserProfile: fixture.parserProfile,
-    parserExpectation: fixture.parserExpectation,
-    expectedCaptureType: fixture.expectedCaptureType,
-    policyBoundary: fixture.policyBoundary,
-    metadataOnly: fixture.metadataOnly,
-    publicOnly: fixture.publicOnly,
-    validation: {
-      ready: fixture.validationChecks.includes("policy_boundary_present")
-        && fixture.validationChecks.includes("parser_profile_present")
-        && fixture.validationChecks.includes("expected_capture_type_present"),
-      checks: fixture.validationChecks,
-      route: fixture.loadPlan,
-      liveNetworkFetch: false
-    },
-    testRun: {
-      mode: "no_network_fixture",
-      canRun: true,
-      expectedOutcome: "parser_contract_verified",
-      retryable: true,
-      liveNetworkFetch: false
-    },
-    activation: {
-      canCreateCandidate: true,
-      canAutoActivate: fixture.publicOnly && !fixture.metadataOnly,
-      requiresOperatorApproval: true,
-      requiresMetadataOnlyApproval: fixture.metadataOnly,
-      nextAction: fixture.metadataOnly ? "approve_metadata_only_candidate" : "validate_candidate",
-      liveNetworkFetch: false
-    },
-    provenance: {
-      candidateProofId: fixture.candidateProofId,
-      fixtureId: fixture.fixtureId,
-      sourceFamily: fixture.family
-    },
-    safeOutput: fixture.safeOutput
-  }));
-  return {
-    schemaVersion: "dwm.actor_source_candidate_fixture_manifest.v1",
-    proofId: stableId("dwm_actor_source_candidate_fixture_manifest", `${query}:${sourcePackId}:${fixtures.map((fixture) => `${fixture.family}:${fixture.fixtureKey}`).join(",")}`),
-    query,
-    sourcePackId,
-    mode: "no_network_fixture",
-    fixtures,
-    fixtureReadiness,
-    summary: {
-      totalFixtures: fixtures.length,
-      families: uniqueSourceReadinessStrings(fixtures.map((fixture) => fixture.family)),
-      metadataOnlyFamilies: uniqueSourceReadinessStrings(fixtures.filter((fixture) => fixture.metadataOnly).map((fixture) => fixture.family)),
-      publicOnlyFamilies: uniqueSourceReadinessStrings(fixtures.filter((fixture) => fixture.publicOnly).map((fixture) => fixture.family)),
-      parserProfiles: uniqueSourceReadinessStrings(fixtures.map((fixture) => fixture.parserProfile)),
-      expectedCaptureTypes: uniqueSourceReadinessStrings(fixtures.map((fixture) => fixture.expectedCaptureType)),
-      fixtureReadinessRows: fixtureReadiness.length,
-      validationReadyFamilies: uniqueSourceReadinessStrings(fixtureReadiness.filter((row) => row.validation.ready).map((row) => row.family)),
-      autoActivationEligibleFamilies: uniqueSourceReadinessStrings(fixtureReadiness.filter((row) => row.activation.canAutoActivate).map((row) => row.family)),
-      metadataApprovalRequiredFamilies: uniqueSourceReadinessStrings(fixtureReadiness.filter((row) => row.activation.requiresMetadataOnlyApproval).map((row) => row.family))
-    },
-    policyBoundary: {
-      liveNetworkFetch: false,
-      rawRestrictedPayloadStorage: false,
-      metadataOnlyRestrictedSources: true,
-      publicTelegramOnly: true
-    },
-    safeOutput: {
-      rawTargetsExposed: false,
-      restrictedMetadataLeaked: false,
-      privateTelegramContentExposed: false,
-      liveNetworkScrapeStarted: false
-    }
-  };
-}
-
-function sourceActorCandidateFixtureKey(query: string, family: SourceGrowthFamily) {
-  const normalized = query.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "actor";
-  return `fixture://ti-source-pack/${normalized}/${family}/${parserProfileForFamily(family)}`;
 }
 
 function sourceActorCandidateIntakeWorkflow(query: string, sourcePackId: string, candidatePreviews: Array<Record<string, any>>) {

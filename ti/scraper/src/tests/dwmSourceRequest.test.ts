@@ -1975,12 +1975,6 @@ describe("dwm source requests", () => {
               liveNetworkFetch: false,
               rawRestrictedPayloadStorage: false
             }),
-            fixtureManifest: expect.objectContaining({
-              schemaVersion: "dwm.actor_source_candidate_fixture_manifest.v1",
-              mode: "no_network_fixture",
-              fixtures: [],
-              summary: expect.objectContaining({ totalFixtures: 0 })
-            }),
             safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
           },
           alertability: expect.objectContaining({
@@ -2158,7 +2152,6 @@ describe("dwm source requests", () => {
                 "sourceOperationsReadiness.rows[].provenance",
                 "sourceOperationsReadiness.rows[].operatorActions",
                 "sourceOperationsReadiness.rows[].candidateIntake",
-                "sourceOperationsReadiness.rows[].fixtureReadiness",
                 "sourceOperationsReadiness.rows[].safeOutput"
               ]),
               consumerRoutes: expect.objectContaining({
@@ -2530,7 +2523,7 @@ describe("dwm source requests", () => {
           ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceEnrichmentProfileContract.requiredFields | index(\"sourceEnrichmentProfile.fields[].provenance\")",
           ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsContract.requiredFields | index(\"sourceOperationsReadiness.rows[].proofId\")",
           ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.schemaVersion == \"ti.public_actor.downstream_source_operations_readiness.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.rows | all(has(\"sourceFamily\") and has(\"state\") and has(\"parserStatus\") and has(\"provenance\") and has(\"fixtureReadiness\") and .safeOutput.liveNetworkScrapeStarted == false)",
+          ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.rows | all(has(\"sourceFamily\") and has(\"state\") and has(\"parserStatus\") and has(\"provenance\") and .safeOutput.liveNetworkScrapeStarted == false)",
           ".proofArtifacts.publicTiQueryAdapter.sourceFamilyCoverageMatrix.schemaVersion == \"ti.public_actor.source_family_coverage_matrix.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.sourcePackActivationPreview.schemaVersion == \"ti.public_actor.source_pack_activation_preview.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger.schemaVersion == \"ti.public_actor.source_enrichment_freshness_ledger.v1\"",
@@ -2556,6 +2549,7 @@ describe("dwm source requests", () => {
     expect(actorReadinessBody.proofArtifacts.publicTiQueryAdapter).not.toHaveProperty("sourceGrowthActivationReceipt");
     expect(actorReadinessBody.proofArtifacts.dashboardSourceReadiness).not.toHaveProperty("sourceGrowthFixturePlan");
     expect(actorReadinessBody.proofArtifacts.dashboardSourceReadiness).not.toHaveProperty("sourceGrowthActivationReceipt");
+    expect(actorReadinessBody.proofArtifacts.publicTiQueryAdapter.sourcePackIntakeHandoff).not.toHaveProperty("fixtureManifest");
     expect(actorReadinessBody.actorReadiness.actorSections).toMatchObject({
       overview: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["telegram", "actor_page"]) }),
       infrastructure: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]) }),
@@ -3061,108 +3055,6 @@ describe("dwm source requests", () => {
         metadataOnly: expect.any(Number),
         publicOnly: expect.any(Number)
       },
-      fixtureManifest: expect.objectContaining({
-        schemaVersion: "dwm.actor_source_candidate_fixture_manifest.v1",
-        mode: "no_network_fixture",
-        fixtures: expect.arrayContaining([
-          expect.objectContaining({
-            family: "darkweb_onion",
-            fixtureKey: expect.stringContaining("/darkweb_onion/"),
-            parserProfile: "restricted_metadata",
-            expectedCaptureType: "darkweb_onion_metadata_observation",
-            metadataOnly: true,
-            loadPlan: expect.objectContaining({
-              path: "/v1/dwm/source-requests",
-              liveNetworkFetch: false,
-              body: expect.objectContaining({ action: "pack_worker_run", dryRun: true })
-            }),
-            validationChecks: expect.arrayContaining(["raw_restricted_payload_not_stored", "live_network_fetch_disabled"]),
-            safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
-          }),
-          expect.objectContaining({
-            family: "actor_page",
-            fixtureKey: expect.stringContaining("/actor_page/"),
-            parserProfile: "actor_page_metadata",
-            expectedCaptureType: "actor_page_metadata",
-            publicOnly: true
-          }),
-          expect.objectContaining({
-            family: "public_advisory",
-            parserProfile: "public_advisory",
-            expectedCaptureType: "public_advisory_metadata"
-          }),
-          expect.objectContaining({
-            family: "clear_web",
-            parserProfile: "clear_web",
-            expectedCaptureType: "clear_web_metadata"
-          })
-        ]),
-        fixtureReadiness: expect.arrayContaining([
-          expect.objectContaining({
-            family: "darkweb_onion",
-            parserProfile: "restricted_metadata",
-            expectedCaptureType: "darkweb_onion_metadata_observation",
-            validation: expect.objectContaining({
-              ready: true,
-              route: expect.objectContaining({
-                path: "/v1/dwm/source-requests",
-                liveNetworkFetch: false,
-                body: expect.objectContaining({ action: "pack_worker_run", dryRun: true })
-              }),
-              liveNetworkFetch: false
-            }),
-            testRun: expect.objectContaining({
-              mode: "no_network_fixture",
-              canRun: true,
-              expectedOutcome: "parser_contract_verified",
-              liveNetworkFetch: false
-            }),
-            activation: expect.objectContaining({
-              canCreateCandidate: true,
-              canAutoActivate: false,
-              requiresOperatorApproval: true,
-              requiresMetadataOnlyApproval: true,
-              nextAction: "approve_metadata_only_candidate",
-              liveNetworkFetch: false
-            }),
-            provenance: expect.objectContaining({
-              candidateProofId: expect.any(String),
-              fixtureId: expect.any(String),
-              sourceFamily: "darkweb_onion"
-            }),
-            safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
-          }),
-          expect.objectContaining({
-            family: "public_advisory",
-            parserProfile: "public_advisory",
-            activation: expect.objectContaining({
-              canAutoActivate: true,
-              requiresMetadataOnlyApproval: false,
-              nextAction: "validate_candidate",
-              liveNetworkFetch: false
-            })
-          }),
-          expect.objectContaining({
-            family: "clear_web",
-            expectedCaptureType: "clear_web_metadata",
-            testRun: expect.objectContaining({ canRun: true, liveNetworkFetch: false })
-          })
-        ]),
-        summary: expect.objectContaining({
-          totalFixtures: 5,
-          families: expect.arrayContaining(["darkweb_onion", "darkweb_metadata", "actor_page", "public_advisory", "clear_web"]),
-          metadataOnlyFamilies: expect.arrayContaining(["darkweb_onion", "darkweb_metadata"]),
-          parserProfiles: expect.arrayContaining(["restricted_metadata", "actor_page_metadata", "public_advisory", "clear_web"]),
-          fixtureReadinessRows: 5,
-          validationReadyFamilies: expect.arrayContaining(["darkweb_onion", "actor_page", "public_advisory", "clear_web"]),
-          autoActivationEligibleFamilies: expect.arrayContaining(["actor_page", "public_advisory", "clear_web"]),
-          metadataApprovalRequiredFamilies: expect.arrayContaining(["darkweb_onion", "darkweb_metadata"])
-        }),
-        policyBoundary: expect.objectContaining({
-          liveNetworkFetch: false,
-          metadataOnlyRestrictedSources: true
-        })
-      }),
       candidatePreviews: expect.arrayContaining([
         expect.objectContaining({
           schemaVersion: "dwm.actor_source_candidate_intake_preview.v1",
@@ -3204,6 +3096,11 @@ describe("dwm source requests", () => {
         })
       ])
     });
+    expect(body.candidateIntakeContract).not.toHaveProperty("fixtureManifest");
+    expect(body.proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.rows
+      .some((row: Record<string, unknown>) => "fixtureReadiness" in row)).toBe(false);
+    expect(body.proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.summary)
+      .not.toHaveProperty("fixtureReadyFamilies");
     const partialFreshnessLedger = body.proofArtifacts.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger;
     expect(partialFreshnessLedger.rows).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -3285,24 +3182,6 @@ describe("dwm source requests", () => {
             totalCandidates: expect.any(Number),
             accepted: expect.any(Number),
             metadataOnly: expect.any(Number)
-          }),
-          fixtureManifest: expect.objectContaining({
-            schemaVersion: "dwm.actor_source_candidate_fixture_manifest.v1",
-            mode: "no_network_fixture",
-            fixtures: expect.arrayContaining([
-              expect.objectContaining({
-                family: "darkweb_onion",
-                parserProfile: "restricted_metadata",
-                loadPlan: expect.objectContaining({ liveNetworkFetch: false })
-              }),
-              expect.objectContaining({
-                family: "actor_page",
-                parserProfile: "actor_page_metadata"
-              })
-            ]),
-            summary: expect.objectContaining({
-              families: expect.arrayContaining(["darkweb_onion", "actor_page"])
-            })
           }),
           sourcePackWorkflow: expect.objectContaining({
             schemaVersion: "dwm.actor_source_candidate_intake_workflow.v1",
@@ -3568,24 +3447,6 @@ describe("dwm source requests", () => {
                   }),
                   liveNetworkFetch: false
                 }),
-                fixtureReadiness: expect.objectContaining({
-                  available: true,
-                  parserProfile: "restricted_metadata",
-                  expectedCaptureType: "darkweb_onion_metadata_observation",
-                  validation: expect.objectContaining({
-                    ready: true,
-                    route: expect.objectContaining({ path: "/v1/dwm/source-requests", liveNetworkFetch: false }),
-                    liveNetworkFetch: false
-                  }),
-                  testRun: expect.objectContaining({ mode: "no_network_fixture", canRun: true, liveNetworkFetch: false }),
-                  activation: expect.objectContaining({
-                    canCreateCandidate: true,
-                    canAutoActivate: false,
-                    requiresMetadataOnlyApproval: true,
-                    nextAction: "approve_metadata_only_candidate",
-                    liveNetworkFetch: false
-                  })
-                }),
                 operatorActions: expect.arrayContaining([
                   expect.objectContaining({
                     type: "request_candidate",
@@ -3598,9 +3459,6 @@ describe("dwm source requests", () => {
             summary: expect.objectContaining({
               actionableFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
               candidateIntakeFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-              fixtureReadyFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-              fixtureTestableFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-              fixtureMetadataApprovalFamilies: expect.arrayContaining(["darkweb_onion"]),
               policyReadyFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"])
             })
           }),
@@ -3833,19 +3691,6 @@ describe("dwm source requests", () => {
                   available: true,
                   policyResult: expect.objectContaining({ metadataOnly: true, liveNetworkFetch: false })
                 }),
-                fixtureReadiness: expect.objectContaining({
-                  available: true,
-                  parserProfile: "restricted_metadata",
-                  expectedCaptureType: "darkweb_onion_metadata_observation",
-                  validation: expect.objectContaining({ ready: true, liveNetworkFetch: false }),
-                  testRun: expect.objectContaining({ mode: "no_network_fixture", canRun: true, liveNetworkFetch: false }),
-                  activation: expect.objectContaining({
-                    canAutoActivate: false,
-                    requiresMetadataOnlyApproval: true,
-                    nextAction: "approve_metadata_only_candidate",
-                    liveNetworkFetch: false
-                  })
-                }),
                 operatorActionTypes: expect.arrayContaining(["request_candidate"]),
                 safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
               }),
@@ -3857,9 +3702,6 @@ describe("dwm source requests", () => {
             gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
             sourceOperationsActionableFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
             candidateIntakeFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-            fixtureReadyFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-            fixtureTestableFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-            fixtureMetadataApprovalFamilies: expect.arrayContaining(["darkweb_onion"]),
             nextActionTypes: expect.arrayContaining(["request_candidate"])
           })
         }),
@@ -4304,24 +4146,6 @@ describe("dwm source requests", () => {
           expect.objectContaining({
             sourceFamily: "telegram",
             state: "actionable",
-            fixtureReadiness: expect.objectContaining({
-              available: true,
-              parserProfile: "public_channel_handoff",
-              expectedCaptureType: "telegram_public_message_preview",
-              validation: expect.objectContaining({ ready: true, liveNetworkFetch: false }),
-              testRun: expect.objectContaining({
-                mode: "no_network_fixture",
-                canRun: true,
-                expectedOutcome: "parser_contract_verified",
-                liveNetworkFetch: false
-              }),
-              activation: expect.objectContaining({
-                canAutoActivate: true,
-                requiresMetadataOnlyApproval: false,
-                nextAction: "validate_candidate",
-                liveNetworkFetch: false
-              })
-            }),
             operatorActions: expect.arrayContaining([
               expect.objectContaining({ type: "retry_parser" }),
               expect.objectContaining({ type: "retry_capture" })
