@@ -230,6 +230,15 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     await this.batch(() => {
       for (const source of snapshot.sources ?? []) this.saveSource(normalizeLegacySourceForImport(source));
       for (const capture of snapshot.captures ?? []) this.saveCapture(capture);
+      for (const identity of snapshot.actorIdentities ?? []) this.hydrateActorIdentitySnapshot(identity);
+      for (const catalog of snapshot.actorIdentityCatalogs ?? []) this.replaceActorIdentityCatalog({
+        ...catalog,
+        identities: (catalog.identityIds ?? []).map((id: string) => this.getActorIdentity(id)).filter(Boolean)
+      }, {
+        sourceId: catalog.sourceId,
+        captureId: catalog.captureId,
+        importedAt: catalog.importedAt ?? catalog.retrievedAt
+      });
       for (const incident of snapshot.incidents ?? []) {
         const capture = this.getCapture(incident.captureId);
         if (capture) this.savePipelineResult({ capture, incident, entities: incident.entities ?? [], indicators: incident.indicators ?? [] });

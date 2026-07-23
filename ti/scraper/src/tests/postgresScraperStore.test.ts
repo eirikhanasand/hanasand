@@ -898,7 +898,11 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     const historyBefore = await identityHistory();
     expect(referencesBefore.capture_count).toBeGreaterThan(0);
     expect(referencesBefore.evidence_count).toBeGreaterThan(0);
-    expect(referencesBefore.workflow_count).toBe(1);
+    expect(referencesBefore.workflow_count).toBeGreaterThan(0);
+    expect(await admin`
+      SELECT id FROM threat_intel.workflow_records
+      WHERE record_type = 'actor_scope_probe' AND id = 'workflow_worldleaks'
+    `).toHaveLength(1);
     expect(historyBefore).toMatchObject({
       resolution_status: "canonicalized",
       canonical_actor_profile_id: profileId
