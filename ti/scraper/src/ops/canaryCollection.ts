@@ -6,6 +6,7 @@ import { activatePublicCanarySources, pausePublicCanarySources, reconcilePublicS
 import { canaryQueries, PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 import { detachedState, externalize, fetchItems, health, maxItemsFor, tasksForSource } from "./canaryHelpers.ts";
 import { isSellableIntelText, sellableReason } from "../value/sellableIntel.ts";
+import { sourceActivityWindowDays, sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
 import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { buildRawCapture } from "../pipeline/pipelineCapture.ts";
 import { activeWatchlistDiscoveryTerms, collectWatchlistDiscoveryEvidence, scheduleWatchlistDiscoveryRuns } from "./watchlistDiscovery.ts";
@@ -101,7 +102,7 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
     taskMetrics.httpStatus = collectedItems[0]?.metadata?.fetchProvenance?.httpStatus;
     taskMetrics.parserWarningCount = collectedItems.reduce((total: number, item: any) => total + (Array.isArray(item.metadata?.parserWarnings) ? item.metadata.parserWarnings.length : 0), 0);
     taskMetrics.publishedAt = collectedItems.map((item: any) => item.publishedAt).filter(Boolean);
-    const sellableItems = task.planning?.watchlistDiscovery ? collectedItems : collectedItems.filter((collected: any) => ["cisa_kev", "ransomware_group_metadata", "mitre_actor_catalog", "ransomware_operation_catalog", "ransomware_operation_activity_evidence"].includes(collected.metadata?.extractionProfile) || isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt, maxAgeDays: activityWindowDays(source) }));
+    const sellableItems = task.planning?.watchlistDiscovery ? collectedItems : collectedItems.filter((collected: any) => ["cisa_kev", "ransomware_group_metadata", "mitre_actor_catalog", "ransomware_operation_catalog", "ransomware_operation_activity_evidence"].includes(collected.metadata?.extractionProfile) || isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt, maxAgeDays: sourceActivityWindowDays(source) }));
     counters.skippedLowValueCount += collectedItems.length - sellableItems.length;
     for (const collected of sellableItems.slice(0, itemLimit(source, options, task))) {
       collected.tenantId = task.tenantId ?? collected.tenantId ?? source.tenantId;
@@ -245,10 +246,6 @@ function failureCategory(message?: string) { return !message ? undefined : /time
 function itemLimit(source: any, options: any, task?: any) {
   return maxItemsFor(source, task) ?? Math.max(1, Math.min(Number(options.maxItemsPerTask ?? 40), Number(source.metadata?.maxItemsPerProcess ?? Infinity)));
 }
-function activityWindowDays(source: any) {
-  const declaredSeconds = Number(source.metadata?.activityWindowSeconds);
-  return Number.isFinite(declaredSeconds) && declaredSeconds > 0 ? Math.max(30, Math.ceil(declaredSeconds / 86_400)) : source.metadata?.queryClass === "threat-intel" ? 365 : 30;
-}
 function isProductionCollectionSource(source: any, generatedAt: string) {
   if (sourceCollectionLane(source) !== "public" && !governedPortfolioCandidate(source, generatedAt)) return false;
   const nextEligibleAt = source.crawlState?.nextEligibleAt;
@@ -266,7 +263,7 @@ function governedPortfolioCandidate(source: any, generatedAt: string) {
 }
 function currentProductiveCycles(store: any, source: any, generatedAt: string) {
   const now = Date.parse(generatedAt);
-  const windowSeconds = Math.max(3 * positiveNumber(source.crawlFrequencySeconds, 86_400), positiveNumber(source.metadata?.activityWindowSeconds, 30 * 86_400));
+  const windowSeconds = sourceMonitoringWindowSeconds(source);
   const byRun = new Map<string, any>();
   for (const row of store.listSourceHealthObservations?.() ?? []) {
     const checkedAt = Date.parse(row.checkedAt), runId = String(row.collectionRunId ?? "");

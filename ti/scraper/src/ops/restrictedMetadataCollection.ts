@@ -4,6 +4,7 @@ import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { reconcilePublicSourceProductivity } from "./canaryActivation.ts";
 import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
+import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
 
 export async function runRestrictedMetadataCollectionCycle(options: any) {
   const generatedAt = options.now?.() ?? nowIso();
@@ -119,7 +120,7 @@ function governedCandidate(source: any, generatedAt: string) {
 }
 function currentProductiveCycles(store: any, source: any, generatedAt: string) {
   const now = Date.parse(generatedAt);
-  const windowSeconds = Math.max(3 * cadence(source), Number(source.metadata?.activityWindowSeconds ?? 30 * 86_400));
+  const windowSeconds = sourceMonitoringWindowSeconds(source);
   const byRun = new Map<string, any>();
   for (const row of store.listSourceHealthObservations?.() ?? []) {
     if (row.sourceId === source.id

@@ -7,7 +7,7 @@ import { importRestrictedMetadataSeedBundle, isRestrictedMetadataSeedBundle } fr
 import type { SourceRecord } from "../types.ts";
 import { nowIso } from "../utils.ts";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
-import { isCurrentSourcePortfolioVerification, validateSourcePortfolioBatch } from "../registry/sourcePortfolioBatch.ts";
+import { expandSourcePortfolioBatch, isCurrentSourcePortfolioVerification, validateSourcePortfolioBatch } from "../registry/sourcePortfolioBatch.ts";
 import { qualifySourcePortfolio } from "../ops/sourcePortfolioQualification.ts";
 
 export type RuntimeSourceBootstrapResult = {
@@ -77,6 +77,7 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
     let bundle: any;
     try {
       bundle = JSON.parse(readFileSync(path, "utf8"));
+      bundle = expandSourcePortfolioBatch(bundle);
     } catch (error) {
       errors.push({ path, message: error instanceof Error ? error.message : String(error) });
       continue;
@@ -149,7 +150,7 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
   const expiredPortfolio = Boolean(verified.metadata?.sourcePortfolioVerification) && !isCurrentSourcePortfolioVerification(verified, generatedAt);
   const runtimeAdmission = portfolio && hasCurrentRuntimeEvidence(existing, generatedAt, store);
   if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) : portfolio ? isSafePortfolioUpgradeTarget(existing) : isVerifiedProductionSource(verified, generatedAt) && isSafeUpgradeTarget(existing))) return undefined;
-  const sameSource = existing.metadata?.verifiedSourceId === verified.id || restricted && existing.id === verified.id;
+  const sameSource = existing.id === verified.id || existing.metadata?.verifiedSourceId === verified.id;
   const metadata = {
     ...(existing.metadata ?? {}),
     ...(verified.metadata ?? {}),
@@ -275,6 +276,7 @@ function shouldImportSource(source: SourceRecord) {
 
 function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedAt: string, restricted = false): SourceRecord {
   const portfolioCandidate = Boolean(source.metadata?.sourcePortfolioVerification);
+  const clearWebPortfolio = portfolioCandidate && ["rss", "api", "json_api", "blog"].includes(source.type);
   const portfolioVerified = !source.metadata?.sourcePortfolioVerification || isCurrentSourcePortfolioVerification(source, generatedAt);
   const activate = !restricted && !portfolioCandidate && portfolioVerified && Bun.env.TI_SOURCE_SEED_ACTIVATE !== "false" && source.risk !== "medium" && source.risk !== "high" && source.risk !== "restricted";
   const transportCanary = restricted && source.metadata?.transportCanary === true;
@@ -285,6 +287,7 @@ function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedA
     updatedAt: generatedAt,
     metadata: {
       ...(source.metadata ?? {}),
+      ...(clearWebPortfolio && !source.metadata?.queryClass ? { queryClass: "threat-intel" } : {}),
       productionCollection: portfolioCandidate ? false : !restricted ? portfolioVerified : transportCanary,
       ...(portfolioCandidate ? {
         countsAsCoverage: false,

@@ -68,4 +68,40 @@ describe('TI admin bounded source operations', () => {
 
         assert.deepEqual(requested, ['/v1/intel/source-operations'])
     })
+
+    test('keeps bounded capture and run source labels when their source is outside the operations page', async () => {
+        process.env.HANASAND_TI_SCRAPER_LOCAL_BASE = 'https://scraper.example.test'
+        globalThis.fetch = (async (input: RequestInfo | URL) => {
+            const url = new URL(String(input))
+            if (url.pathname.endsWith('/source-operations')) return Response.json({
+                total: 6_100,
+                summary: { activeSourceCount: 6_100 },
+                qualification: { counts: { total: 0, clearWeb: 0, lawfulDarkWeb: 0, publicTelegram: 0 } },
+                sources: []
+            })
+            if (url.pathname.endsWith('/captures')) return Response.json({ captures: [{
+                id: 'cap_beyond_page',
+                sourceId: 'src_06100',
+                sourceName: 'Beyond page one',
+                sourceFamily: 'rss',
+                collectedAt: '2026-07-23T10:00:00Z',
+                metadata: { title: 'Current advisory' }
+            }], total: 1 })
+            return Response.json({ collectionRuns: [{
+                id: 'run_beyond_page',
+                sourceId: 'src_06100',
+                sourceName: 'Beyond page one',
+                sourceFamily: 'rss',
+                status: 'completed',
+                startedAt: '2026-07-23T10:00:00Z'
+            }], total: 1 })
+        }) as typeof fetch
+
+        const overview = await getTiAdminOverview()
+
+        assert.equal(overview.sources.length, 0)
+        assert.equal(overview.captures[0]?.sourceName, 'Beyond page one')
+        assert.equal(overview.runs[0]?.sourceName, 'Beyond page one')
+        assert.equal(overview.sourceTotals.active, 6_100)
+    })
 })

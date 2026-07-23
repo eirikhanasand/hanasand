@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
+import { bootstrapRuntimeSources } from "../runtime/sourceBootstrap.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 
 test("catalog registration captures identities without activity profiles while real activity advances one profile", async () => {
@@ -41,29 +42,19 @@ test("catalog registration captures identities without activity profiles while r
   expect(store.listActorIdentityCatalogs()[0].evidenceCaptureIds).toHaveLength(2);
 
   const activityAt = "2026-07-23T11:00:00.000Z";
-  const activitySource = {
-    id: "src_real_victim_activity",
-    name: "Real public victim activity",
-    type: "rss",
-    url: "https://evidence.example.test/victims.xml",
-    accessMethod: "public_http",
-    status: "active",
-    risk: "low",
-    trustScore: 0.9,
-    crawlFrequencySeconds: 3600,
-    legalNotes: "Public victim activity evidence collected without authentication.",
-    metadata: { productionCollection: true, extractionProfile: "ransomware_victim_blog", reporterRole: "actor", reporterRoleVerified: true }
-  };
-  store.saveSource(activitySource as any);
+  const victimSeedPath = new URL("../../seeds/public_cti_starter_pack.json", import.meta.url).pathname;
+  bootstrapRuntimeSources(store, { seedPaths: [victimSeedPath], generatedAt: activityAt });
+  const activitySource = store.getSource("src_seed_ransomwarelive_victims");
+  expect(activitySource).toMatchObject({ status: "active", metadata: { productionCollection: true, extractionProfile: "ransomware_victim_blog" } });
   const activityCycle = await runCanaryCollectionCycle({
     store,
     frontier: new FocusedFrontier(),
-    sourceIds: [activitySource.id],
+    sourceIds: [activitySource!.id],
     maxSources: 1,
     maxTasks: 1,
     now: () => activityAt,
     fetch: async () => new Response(
-      `<rss><channel><item><title>Akira has just published a new victim: Northwind Health</title><link>https://evidence.example.test/victims/akira-northwind</link><description>Public victim claim metadata.</description><pubDate>${activityAt}</pubDate></item></channel></rss>`,
+      `<rss><channel><item><title>Akira has just published a new victim: Northwind Health</title><link>https://www.ransomware.live/id/akira-northwind</link><description>Public victim claim metadata with governed publisher timestamp and no leaked payload.</description><pubDate>${activityAt}</pubDate></item></channel></rss>`,
       { headers: { "content-type": "application/rss+xml" } }
     )
   } as any);
@@ -72,7 +63,7 @@ test("catalog registration captures identities without activity profiles while r
   const activityEvidence = store.listCaptures().find((capture: any) => capture.metadata?.exposureClaim === true);
   expect(activityEvidence).toMatchObject({
     tenantId: "default",
-    sourceId: activitySource.id,
+    sourceId: activitySource!.id,
     publishedAt: activityAt,
     metadata: { leakSite: { actorName: "Akira", victimName: "Northwind Health" } }
   });

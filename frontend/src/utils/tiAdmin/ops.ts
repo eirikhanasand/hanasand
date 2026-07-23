@@ -57,6 +57,8 @@ export type TiAdminAiReview = {
 export type TiAdminCapture = {
     id: string
     sourceId: string
+    sourceName: string
+    sourceFamily: string
     domain: string
     actor: string
     title: string
@@ -75,6 +77,8 @@ export type TiAdminCapture = {
 export type TiAdminRun = {
     id: string
     sourceId: string
+    sourceName: string
+    sourceFamily: string
     status: 'completed' | 'queued' | 'running' | 'failed'
     startedAt: string
     finishedAt?: string
@@ -307,6 +311,8 @@ function toCapture(record: ApiPayload): TiAdminCapture | undefined {
     return {
         id,
         sourceId,
+        sourceName: textValue(record.sourceName, sourceId),
+        sourceFamily: textValue(record.sourceFamily, 'source'),
         domain,
         actor,
         title,
@@ -332,6 +338,8 @@ function toRun(record: ApiPayload, sources: Map<string, TiAdminSource>): TiAdmin
     return {
         id,
         sourceId,
+        sourceName: textValue(record.sourceName, source?.name, sourceId),
+        sourceFamily: textValue(record.sourceFamily, source?.family, 'source'),
         status: runStatus(record.status),
         startedAt,
         finishedAt: optionalIso(record.finishedAt, record.completedAt, record.updatedAt),

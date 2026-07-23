@@ -39,6 +39,17 @@ describe("canary feed item extraction", () => {
     expect(feedItems(source, task, unzonedItem, "2026-06-21T10:00:00.000Z", metadata)[0].metadata.reportTimestamps).toBeUndefined();
   });
 
+  test("retains namespaced Dublin Core dates without accepting unrelated date fields", () => {
+    const dated = `<rdf:RDF><item><title>JVN vulnerability advisory</title><link>https://feed.test/jvn</link><description>CVE-2026-4242 vulnerability remediation.</description><dc:date>2026-07-23T08:30:00+09:00</dc:date></item></rdf:RDF>`;
+    const unrelated = dated.replace("<dc:date>", "<vendor:date>").replace("</dc:date>", "</vendor:date>");
+
+    expect(feedItems(source, task, dated, "2026-07-23T10:00:00Z", metadata)[0]).toMatchObject({
+      publishedAt: "2026-07-23T08:30:00+09:00",
+      metadata: { reportTimestamps: [{ referenceUrl: "https://feed.test/jvn", timestamp: "2026-07-23T08:30:00+09:00" }] }
+    });
+    expect(feedItems(source, task, unrelated, "2026-07-23T10:00:00Z", metadata)[0].publishedAt).toBeUndefined();
+  });
+
   test("parses legacy API sources into structured CISA KEV items", () => {
     const cisa = {
       ...source,

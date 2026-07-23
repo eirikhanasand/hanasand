@@ -4,6 +4,7 @@ import type { CanaryActivationResult, CanaryDeactivationResult } from "./canaryC
 import { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
+import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
 
 const MIN_PRODUCTIVITY_CHECKS = 10;
 const CATALOG_PROFILES = new Set(["mitre_actor_catalog", "ransomware_operation_catalog"]);
@@ -23,7 +24,7 @@ export function reconcilePublicSourceProductivity(input: any) {
       || source.metadata?.transportCanary === true
       || CATALOG_PROFILES.has(source.metadata?.extractionProfile)) continue;
     const monitoringWindowSeconds = Math.max(
-      positiveNumber(source.metadata?.activityWindowSeconds, 30 * 86_400),
+      sourceMonitoringWindowSeconds(source),
       positiveNumber(source.crawlFrequencySeconds, 86_400) * MIN_PRODUCTIVITY_CHECKS
     );
     const now = Date.parse(generatedAt), cadenceSeconds = positiveNumber(source.crawlFrequencySeconds, 86_400);

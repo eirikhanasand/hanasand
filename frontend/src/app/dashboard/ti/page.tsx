@@ -25,7 +25,6 @@ export default async function TiAdminPage() {
     const nextRun = [...sources].sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
     const latestRun = [...runs].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0]
     const latestCapture = [...captures].sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime())[0]
-    const currentSource = latestRun ? sourceById(overview, latestRun.sourceId) : nextRun
     const actorRows = [...enrichment.updatedActors, ...enrichment.queuedActors]
     const activeActorRun = enrichment.pipeline?.latestRuns.find(run => run.status === 'running') || enrichment.pipeline?.latestRuns[0]
     const currentActor = actorRows.find(actor => activeActorRun && (sameKey(actor.name) === sameKey(activeActorRun.actor_name) || sameKey(actor.id) === sameKey(activeActorRun.actor_key))) || actorRows[0]
@@ -50,7 +49,7 @@ export default async function TiAdminPage() {
                     icon={<DatabaseZap className='h-4 w-4' />}
                     state={operationalStateLabel(latestRun?.status || 'scheduled')}
                     stateTone={latestRun?.status === 'failed' ? 'bad' : latestRun?.status === 'running' || latestRun?.status === 'queued' ? 'watch' : 'ok'}
-                    primary={currentSource?.name || 'Selecting source'}
+                    primary={latestRun?.sourceName || nextRun?.name || 'Selecting source'}
                     secondary={latestRun ? `${latestRun.rows} rows, ${latestRun.captures} captures, ${latestRun.screenshots} screenshots` : `Next due ${nextRun ? shortTime(nextRun.nextRunAt) : 'as soon as a source lease opens'}`}
                     footer={latestRun ? `Started ${shortTime(latestRun.startedAt)}` : 'Scheduler is selecting the next source'}
                 />
@@ -77,10 +76,10 @@ export default async function TiAdminPage() {
             </section>
 
             <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-6'>
-                <Metric title='Active sources' value={`${activeSources.length}/${sources.length}`} icon={<DatabaseZap className='h-4 w-4' />} />
+                <Metric title='Active sources' value={`${overview.sourceTotals.active}/${overview.sourcePage.total}`} icon={<DatabaseZap className='h-4 w-4' />} />
                 <Metric title='Items to review' value={`${reviewDomains.length + candidateSources.length + failedRuns.length}`} tone={reviewDomains.length || candidateSources.length || failedRuns.length ? 'watch' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
                 <Metric title='Stale sources' value={`${staleSources.length}`} tone={staleSources.length ? 'bad' : 'ok'} icon={<Clock3 className='h-4 w-4' />} />
-                <Metric title='Captures' value={`${captures.length}`} icon={<Camera className='h-4 w-4' />} />
+                <Metric title='Recent capture sample' value={`${captures.length}`} icon={<Camera className='h-4 w-4' />} />
                 <Metric title='Actor worker' value={operationalStateLabel(enrichment.worker.state)} tone={enrichment.worker.state === 'running' ? 'ok' : enrichment.worker.state === 'error' || enrichment.worker.state === 'unavailable' ? 'bad' : 'watch'} icon={<Radar className='h-4 w-4' />} />
                 <Metric title='Next run' value={nextRun ? shortTime(nextRun.nextRunAt) : 'Selecting'} icon={<PlayCircle className='h-4 w-4' />} />
             </div>
@@ -237,7 +236,7 @@ export default async function TiAdminPage() {
                                             <p className='mt-1 text-xs text-ui-muted'>{capture.domain}</p>
                                         </td>
                                         <td className='px-4 py-3 font-semibold text-ui-text'>{capture.actor}</td>
-                                        <td className='px-4 py-3 text-ui-muted'>{sourceById(overview, capture.sourceId)?.name || capture.sourceId}</td>
+                                        <td className='px-4 py-3 text-ui-muted'>{capture.sourceName}</td>
                                         <td className='whitespace-nowrap px-4 py-3 text-ui-muted'>{formatTiDate(capture.capturedAt)}</td>
                                     </tr>
                                 ))}

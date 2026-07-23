@@ -6,7 +6,17 @@ const TYPES = {
   lawful_dark_web: new Set(["tor_metadata", "darkweb_metadata"]),
   public_telegram: new Set(["telegram_public"])
 } as const;
+
+export function expandSourcePortfolioBatch(bundle: any) {
+  if (bundle?.schemaVersion !== "ti.source_portfolio_batch.v1" || !bundle.defaults) return bundle;
+  return {
+    ...bundle,
+    sources: (bundle.sources ?? []).map((source: any) => merge(bundle.defaults, source))
+  };
+}
+
 export function validateSourcePortfolioBatch(bundle: any, generatedAt: string) {
+  bundle = expandSourcePortfolioBatch(bundle);
   if (bundle?.schemaVersion !== "ti.source_portfolio_batch.v1") return { recognized: false, valid: true, errors: [] as Array<{ sourceId?: string; message: string }> };
   const errors: Array<{ sourceId?: string; message: string }> = [];
   const family = String(bundle.family ?? "") as keyof typeof TYPES;
@@ -43,6 +53,16 @@ export function validateSourcePortfolioBatch(bundle: any, generatedAt: string) {
     if (source?.url) keys.add(key);
   }
   return { recognized: true, valid: errors.length === 0, errors };
+}
+
+function merge(defaults: any, source: any): any {
+  if (!defaults || typeof defaults !== "object" || Array.isArray(defaults)) return source;
+  const result = { ...defaults, ...source };
+  for (const key of Object.keys(defaults)) {
+    if (defaults[key] && source?.[key] && typeof defaults[key] === "object" && typeof source[key] === "object"
+      && !Array.isArray(defaults[key]) && !Array.isArray(source[key])) result[key] = merge(defaults[key], source[key]);
+  }
+  return result;
 }
 
 export function isCurrentSourcePortfolioVerification(source: any, generatedAt: string) {

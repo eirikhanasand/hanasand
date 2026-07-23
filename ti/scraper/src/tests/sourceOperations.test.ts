@@ -36,6 +36,9 @@ describe("source operations", () => {
     expect(JSON.stringify(payload)).not.toContain("secretexample.onion");
     expect(JSON.stringify(payload)).not.toContain("token=unsafe");
 
+    const captures = await (await handleApiRequest(api("/v1/intel/captures", { headers: { "x-tenant-id": "tenant_a" } }), options)).json() as any;
+    expect(captures.captures[0]).toMatchObject({ sourceId: "src_ops_a", sourceName: "Security RSS", sourceFamily: "vendor_blog" });
+
     const global = await handleApiRequest(authenticatedApi("/v1/intel/source-operations"), options);
     expect(await global.json() as any).toMatchObject({ tenantId: "global", summary: { sourceCount: 0, retainedSourceCount: 0 } });
 

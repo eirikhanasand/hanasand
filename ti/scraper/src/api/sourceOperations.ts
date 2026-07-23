@@ -3,6 +3,7 @@ import { isExecutableSource } from "../policy/collectionPolicy.ts";
 import { qualifySourcePortfolio, SOURCE_PORTFOLIO_BASELINE } from "../ops/sourcePortfolioQualification.ts";
 import { toSafeSourceDto } from "./sourceRoutes.ts";
 import { inTenantScope } from "./tenantScope.ts";
+import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
 
 export async function buildSourceOperationsSnapshot(store: any, input: { tenantId?: string; generatedAt?: string; limit?: number; cursor?: number; sourceId?: string; executableOnly?: boolean } = {}) {
   const generatedAt = input.generatedAt ?? nowIso();
@@ -267,22 +268,44 @@ function operationalQueryRow(row: any, generatedAt: string) {
     ? ratio(Number(labels.falsePositive ?? 0), falsePositiveSampleSize)
     : observedFalsePositiveRate ?? null;
   const duplicateCount = Number(health.duplicateCount ?? 0);
+  const family = baselineFamily(source);
+  const cadenceSeconds = positiveNumber(source.crawlFrequencySeconds, 86_400);
+  const checkWindowSeconds = Math.max(86_400, cadenceSeconds * 3);
+  const activityWindowSeconds = sourceMonitoringWindowSeconds(source);
+  const lastCheckedAt = timeOf(latest, "checkedAt");
+  const lastContentAt = timeOf(capture, "lastContentAt");
+  const lastUsefulAt = timeOf(health, "lastUsefulAt");
+  const reasons: string[] = [];
+  if (row.collection_executable !== true) reasons.push("not_executable");
+  if (!family) reasons.push("not_an_intelligence_feed");
+  if (!String(source.legalNotes ?? "").trim()) reasons.push("missing_legal_basis");
+  if (row.canonical_owner_id && row.canonical_owner_id !== source.id) reasons.push("duplicate_feed");
+  if (family === "lawful_dark_web" && !(source.governance?.metadataOnly === true || source.metadata?.captureMode === "metadata_only")) reasons.push("dark_web_not_metadata_only");
+  if (successfulCheckCount < 2) reasons.push("insufficient_successful_checks");
+  if (usefulCheckCount < 2) reasons.push("insufficient_productive_cycles");
+  if (captureCount < 1) reasons.push("no_retained_evidence");
+  if (!lastContentAt) reasons.push("missing_content_update_time");
+  if (!lastUsefulAt) reasons.push("missing_useful_intelligence_time");
+  if (!recentWithin(lastCheckedAt, generatedAt, checkWindowSeconds)) reasons.push("check_overdue");
+  if (!recentWithin(lastContentAt, generatedAt, activityWindowSeconds)) reasons.push("content_stale_for_activity_window");
   const qualification = {
     sourceId: source.id,
-    family: baselineFamily(source),
-    qualifies: row.collection_executable === true && usefulCheckCount >= 2 && successfulCheckCount >= 2 && captureCount > 0,
-    reasons: [],
+    family,
+    qualifies: reasons.length === 0,
+    reasons,
     scheduledCheckCount: observationCount,
     successfulCheckCount,
     usefulCheckCount,
     productiveCheckCount: usefulCheckCount,
     retainedCaptureCount: captureCount,
     latestCheckUseful: Number(latest.captureCount ?? 0) > 0,
-    lastCheckedAt: timeOf(latest, "checkedAt"),
+    lastCheckedAt,
     lastSuccessAt,
-    lastContentAt: timeOf(capture, "lastContentAt"),
-    lastUsefulAt: timeOf(health, "lastUsefulAt"),
-    backoffUntil: timeOf(source.crawlState, "backoffUntil")
+    lastContentAt,
+    lastUsefulAt,
+    backoffUntil: timeOf(source.crawlState, "backoffUntil"),
+    checkWindowSeconds,
+    activityWindowSeconds
   };
   const safeSource = toSafeSourceDto(source);
   return {
@@ -355,6 +378,12 @@ function operationalQueryRow(row: any, generatedAt: string) {
 function recent(value: unknown, generatedAt: string) {
   const at = Date.parse(String(value ?? ""));
   return Number.isFinite(at) && Date.parse(generatedAt) - at <= 86_400_000;
+}
+
+function recentWithin(value: unknown, generatedAt: string, windowSeconds: number) {
+  const at = Date.parse(String(value ?? ""));
+  const age = Date.parse(generatedAt) - at;
+  return Number.isFinite(age) && age >= 0 && age <= windowSeconds * 1_000;
 }
 
 function groupBySource(records: any[]) {
@@ -431,6 +460,7 @@ function timeOf(record: any, field: string): string | undefined { return record 
 function latestIso(...values: Array<string | undefined>): string | undefined { return values.filter(Boolean).sort().at(-1); }
 function finiteNumber(value: unknown): number | undefined { const number = Number(value); return Number.isFinite(number) && number >= 0 ? number : undefined; }
 function finiteRate(value: unknown): number | undefined { const number = Number(value); return Number.isFinite(number) && number >= 0 && number <= 1 ? number : undefined; }
+function positiveNumber(value: unknown, fallback: number): number { const number = Number(value); return Number.isFinite(number) && number > 0 ? number : fallback; }
 function ratio(numerator: number, denominator: number): number | null { return denominator > 0 ? Math.round(numerator / denominator * 10_000) / 10_000 : null; }
 function sum(rows: any[], field: string): number { return rows.reduce((total, row) => total + (finiteNumber(row?.[field]) ?? 0), 0); }
 function unique(values: string[]): string[] { return [...new Set(values)]; }

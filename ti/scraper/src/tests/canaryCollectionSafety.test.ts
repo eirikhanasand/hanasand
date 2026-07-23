@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FocusedFrontier } from "../frontier/frontier.ts";
+import { findSearchCaptures } from "../api/searchCaptureIndex.ts";
 import { runCanaryCollectionCycle, startCanaryCollectionLoop } from "../ops/canaryCollection.ts";
 import { reconcilePublicSourceProductivity } from "../ops/canaryActivation.ts";
 import { fetchItems } from "../ops/canaryHelpers.ts";
@@ -145,6 +146,45 @@ describe("public collection boundary", () => {
     });
 
     expect(cycle).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 0 });
+  });
+
+  test("keeps current low-cadence multilingual intelligence in collection and search", async () => {
+    const store = new InMemoryScraperStore();
+    const publishedAt = "2026-01-15T00:00:00Z";
+    const items = new Map([
+      ["fi", ["CVE-2026-4101 haavoittuvuus tietoturvapäivityksessä", "Vakava haavoittuvuus mahdollistaa etähyökkäyksen, ja toimittaja julkaisi korjauksen sekä suojautumisohjeet."]],
+      ["sv", ["CVE-2026-4102 sårbarhet och säkerhetsbrist", "En kritisk sårbarhet möjliggör fjärrangrepp mot berörda system; leverantören har publicerat uppdatering och skyddsåtgärder."]],
+      ["pl", ["CVE-2026-4103 podatność w komponencie sieciowym", "Krytyczna podatność umożliwia zdalny cyberatak na systemy; producent opublikował poprawkę oraz zalecenia bezpieczeństwa."]],
+      ["fr", ["CVE-2026-4104 vulnérabilité critique", "Cette vulnérabilité permet une cyberattaque à distance contre les systèmes concernés; le fournisseur publie un correctif et des mesures de protection."]],
+      ["nl", ["CVE-2026-4105 kwetsbaarheid in netwerkdienst", "Een kritieke kwetsbaarheid maakt een cyberaanval op getroffen systemen mogelijk; de leverancier publiceerde een update en beschermingsadvies."]]
+    ]);
+    for (const language of items.keys()) {
+      store.saveSource(source({
+        id: `multilingual-${language}`,
+        tenantId: "default",
+        url: `https://security.example.org/${language}.xml`,
+        metadata: { productionCollection: true, queryClass: "threat-intel", sourceFamily: "clear_web" }
+      }));
+    }
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      tenantId: "default",
+      maxSources: items.size,
+      maxTasks: items.size,
+      now: () => "2026-07-23T12:00:00.000Z",
+      fetch: async (url: string) => {
+        const language = url.match(/\/([a-z]{2})\.xml$/)?.[1] ?? "";
+        const [title, description] = items.get(language) ?? [];
+        return new Response(`<rss><channel><item><title>${title}</title><link>${url}/advisory</link><description>${description}</description><pubDate>${publishedAt}</pubDate></item></channel></rss>`, { headers: { "content-type": "application/rss+xml" } });
+      }
+    });
+
+    expect(cycle).toMatchObject({ insertedCaptureCount: 5, skippedLowValueCount: 0 });
+    for (const [title] of items.values()) {
+      const cve = title.match(/CVE-\d{4}-\d+/)?.[0] ?? "";
+      expect(findSearchCaptures(store, cve, 1, "default")).toHaveLength(1);
+    }
   });
 
   test("retires public Telegram and Tor feeds only after a full scheduled activity window without new captures", () => {

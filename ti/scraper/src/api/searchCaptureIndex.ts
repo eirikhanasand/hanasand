@@ -2,6 +2,7 @@
 import { isSellableIntelText } from "../value/sellableIntel.ts";
 import { derivedHints } from "./searchDerivedHints.ts";
 import { termRegex } from "./searchTerm.ts";
+import { sourceActivityWindowDays } from "../policy/sourceActivityWindow.ts";
 type SearchDoc = { capture: any; text: string; title: string; collectedAt: string };
 const cache = new WeakMap<object, { signature: string; docs: SearchDoc[] }>();
 const norm = (value: unknown) => String(value ?? "").toLowerCase();
@@ -35,7 +36,8 @@ function docsForStore(store: any): SearchDoc[] {
   const incidents = store.listIncidents?.() ?? [];
   const sources = new Map((store.listSources?.() ?? []).map((source: any) => [source.id, source]));
   const incidentTitles = new Map(incidents.map((incident: any) => [incident.captureId, incident.title]));
-  const signature = `${captures.length}:${captures.at(-1)?.id ?? ""}:${captures.at(-1)?.contentHash ?? ""}:${incidents.length}:${incidents.at(-1)?.id ?? ""}:${sources.size}`;
+  const latestSourceUpdate = [...sources.values()].reduce((latest, source: any) => String(source.updatedAt ?? "") > latest ? String(source.updatedAt) : latest, "");
+  const signature = `${captures.length}:${captures.at(-1)?.id ?? ""}:${captures.at(-1)?.contentHash ?? ""}:${incidents.length}:${incidents.at(-1)?.id ?? ""}:${sources.size}:${latestSourceUpdate}`;
   const previous = cache.get(store);
   if (previous?.signature === signature) return previous.docs;
   const docs = captures.filter((capture: any) => sellableCapture(capture, sources.get(capture.sourceId)))
@@ -57,7 +59,7 @@ function docFor(capture: any, source: any): SearchDoc {
 }
 function sellableCapture(capture: any, source: any) {
   if (capture?.metadata?.exposureClaim || capture?.metadata?.leakSite) return true;
-  return isSellableIntelText({ text: searchableText(capture), title: capture.title, sourceId: capture.sourceId, publishedAt: capture.publishedAt, collectedAt: capture.collectedAt, maxAgeDays: source?.metadata?.queryClass === "threat-intel" ? 365 : 30 });
+  return isSellableIntelText({ text: searchableText(capture), title: capture.title, sourceId: capture.sourceId, publishedAt: capture.publishedAt, collectedAt: capture.collectedAt, maxAgeDays: sourceActivityWindowDays(source) });
 }
 function searchableText(capture: any) {
   const leak = capture.metadata?.leakSite ?? {};

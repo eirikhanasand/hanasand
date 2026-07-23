@@ -239,18 +239,40 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         )
         SELECT page.record,
           page.collection_executable,
+          canonical_owner.id AS canonical_owner_id,
           health.stats AS health_stats,
           captures.stats AS capture_stats,
           actors.stats AS actor_stats,
           labels.stats AS label_stats
         FROM page
         LEFT JOIN LATERAL (
+          SELECT candidate.id
+          FROM threat_intel.sources candidate
+          LEFT JOIN LATERAL (
+            SELECT count(*) AS capture_count
+            FROM threat_intel.captures candidate_capture
+            WHERE candidate_capture.source_id = candidate.id
+              AND candidate_capture.tenant_id IS NOT DISTINCT FROM candidate.tenant_id
+          ) candidate_captures ON TRUE
+          WHERE candidate.tenant_id IS NOT DISTINCT FROM page.tenant_id
+            AND (page.canonical_feed_key IS NULL AND candidate.id = page.id
+              OR page.canonical_feed_key IS NOT NULL AND candidate.canonical_feed_key = page.canonical_feed_key)
+          ORDER BY candidate_captures.capture_count DESC,
+            COALESCE(candidate.record->>'createdAt', ''),
+            candidate.id
+          LIMIT 1
+        ) canonical_owner ON TRUE
+        LEFT JOIN LATERAL (
           SELECT jsonb_build_object(
             'observationCount', count(*),
             'successCount', count(*) FILTER (WHERE h.success),
             'usefulCycleCount', count(DISTINCT h.collection_run_id) FILTER (
               WHERE h.collection_run_id IS NOT NULL AND h.capture_count > 0
-                AND h.checked_at >= $6::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((page.record->'metadata'->>'activityWindowSeconds')::int, 2592000)))
+                AND h.checked_at >= $6::timestamptz - make_interval(secs => GREATEST(
+                  86400,
+                  COALESCE((page.record->>'crawlFrequencySeconds')::int, 86400) * 3,
+                  COALESCE((page.record->'metadata'->>'activityWindowSeconds')::int, 2592000)
+                ))
                 AND EXISTS (
                   SELECT 1 FROM threat_intel.captures retained
                   WHERE retained.source_id = page.id
@@ -260,7 +282,11 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             ),
             'successfulCycleCount', count(DISTINCT h.collection_run_id) FILTER (
               WHERE h.collection_run_id IS NOT NULL AND h.success
-                AND h.checked_at >= $6::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((page.record->'metadata'->>'activityWindowSeconds')::int, 2592000)))
+                AND h.checked_at >= $6::timestamptz - make_interval(secs => GREATEST(
+                  86400,
+                  COALESCE((page.record->>'crawlFrequencySeconds')::int, 86400) * 3,
+                  COALESCE((page.record->'metadata'->>'activityWindowSeconds')::int, 2592000)
+                ))
             ),
             'parserAttemptCount', count(*) FILTER (WHERE h.success),
             'parserSuccessCount', count(*) FILTER (WHERE h.success AND h.parser_warning_count = 0),
@@ -346,11 +372,19 @@ export class PostgresScraperStore extends InMemoryScraperStore {
               (array_agg(parser_warning_count ORDER BY checked_at DESC))[1] AS latest_parser_warning_count,
               count(DISTINCT collection_run_id) FILTER (
                 WHERE collection_run_id IS NOT NULL AND success
-                  AND checked_at >= $4::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((source.record->'metadata'->>'activityWindowSeconds')::int, 2592000)))
+                  AND checked_at >= $4::timestamptz - make_interval(secs => GREATEST(
+                    86400,
+                    COALESCE((source.record->>'crawlFrequencySeconds')::int, 86400) * 3,
+                    COALESCE((source.record->'metadata'->>'activityWindowSeconds')::int, 2592000)
+                  ))
               ) AS successful_cycles,
               count(DISTINCT collection_run_id) FILTER (
                 WHERE collection_run_id IS NOT NULL AND capture_count > 0
-                  AND checked_at >= $4::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((source.record->'metadata'->>'activityWindowSeconds')::int, 2592000)))
+                  AND checked_at >= $4::timestamptz - make_interval(secs => GREATEST(
+                    86400,
+                    COALESCE((source.record->>'crawlFrequencySeconds')::int, 86400) * 3,
+                    COALESCE((source.record->'metadata'->>'activityWindowSeconds')::int, 2592000)
+                  ))
                   AND EXISTS (
                     SELECT 1 FROM threat_intel.captures retained
                     WHERE retained.source_id = source.id
@@ -370,7 +404,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         ), ranked AS (
           SELECT per_source.*,
             row_number() OVER (
-              PARTITION BY canonical_feed_key
+              PARTITION BY COALESCE(canonical_feed_key, 'source:' || id)
               ORDER BY capture_count DESC, COALESCE(record->>'createdAt', ''), id
             ) AS canonical_rank,
             collection_executable
@@ -379,8 +413,16 @@ export class PostgresScraperStore extends InMemoryScraperStore {
               AND useful_cycles >= 2
               AND capture_count > 0
               AND last_checked_at >= $4::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((record->>'crawlFrequencySeconds')::int, 86400) * 3))
-              AND last_useful_at >= $4::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((record->'metadata'->>'activityWindowSeconds')::int, 2592000)))
-              AND last_content_at >= $4::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((record->'metadata'->>'activityWindowSeconds')::int, 2592000)))
+              AND last_useful_at >= $4::timestamptz - make_interval(secs => GREATEST(
+                86400,
+                COALESCE((record->>'crawlFrequencySeconds')::int, 86400) * 3,
+                COALESCE((record->'metadata'->>'activityWindowSeconds')::int, 2592000)
+              ))
+              AND last_content_at >= $4::timestamptz - make_interval(secs => GREATEST(
+                86400,
+                COALESCE((record->>'crawlFrequencySeconds')::int, 86400) * 3,
+                COALESCE((record->'metadata'->>'activityWindowSeconds')::int, 2592000)
+              ))
               AS runtime_qualifies
           FROM per_source
         ), latest_run AS (

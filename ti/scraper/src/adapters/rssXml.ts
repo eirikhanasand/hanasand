@@ -7,7 +7,7 @@ export function parseRssItems(xml: string, feedUrl = "https://example.invalid/fe
     title: decodeXmlTag(block, "title"),
     link: normalizeFeedLink(decodeXmlTag(block, "link") || decodeLinkHref(block), feedUrl),
     description: decodeXmlTag(block, "description") || decodeXmlTag(block, "summary") || decodeXmlTag(block, "content"),
-    publishedAt: decodeXmlTag(block, "pubDate") || decodeXmlTag(block, "updated") || decodeXmlTag(block, "published") || undefined
+    publishedAt: decodeXmlTag(block, "pubDate") || decodeXmlTag(block, "updated") || decodeXmlTag(block, "published") || decodeXmlTag(block, "dc:date") || undefined
   }));
 }
 

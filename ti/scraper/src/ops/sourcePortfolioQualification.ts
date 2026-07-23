@@ -1,5 +1,6 @@
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
+import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
 
 export const SOURCE_PORTFOLIO_BASELINE = {
   clearWeb: 5_000,
@@ -31,7 +32,7 @@ export function qualifySourcePortfolio(input: {
     const captures = [...(capturesBySource.get(source.id) ?? [])].sort(byCaptureTime);
     const cadenceSeconds = positiveNumber(source.crawlFrequencySeconds, 86_400);
     const checkWindowSeconds = Math.max(86_400, cadenceSeconds * 3);
-    const activityWindowSeconds = Math.max(checkWindowSeconds, positiveNumber(source.metadata?.activityWindowSeconds, 30 * 86_400));
+    const activityWindowSeconds = sourceMonitoringWindowSeconds(source);
     const scheduled = observations.filter((row) => typeof row.collectionRunId === "string" && row.collectionRunId.trim());
     const retainedCaptureRunIds = new Set(captures.map((capture) => capture.metadata?.runId).filter((runId): runId is string => typeof runId === "string" && runId.trim().length > 0));
     const currentScheduled = summarizeScheduledCycles(

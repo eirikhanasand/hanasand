@@ -101,7 +101,8 @@ describe("api v1", () => {
       incidentCount: 0,
     });
     expect(frontier.snapshot()).toHaveLength(1);
-    expect(store.listSources()[0]?.health?.status).toBe("degraded");
+    const failedSourceId = (run.canaryRun as { errors: Array<{ sourceId: string }> }).errors[0]?.sourceId;
+    expect(store.getSource(failedSourceId)?.health?.status).toBe("degraded");
 
     const operator = await body(
       await handleApiRequest(api("/v1/ops/canary"), options),

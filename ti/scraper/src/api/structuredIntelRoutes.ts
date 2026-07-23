@@ -129,13 +129,13 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
   const databaseQuery = (options.store as any).queryStructuredRecords;
   if (typeof databaseQuery === "function") {
     const result = await databaseQuery.call(options.store, responseKey, { tenantId, query, limit, offset });
-    return json({ [responseKey]: result.records.map((record: any) => apiRecord(responseKey, record, url, tenantId)), total: result.total, nextCursor: result.nextCursor });
+    return json({ [responseKey]: result.records.map((record: any) => apiRecord(responseKey, record, url, tenantId, options.store)), total: result.total, nextCursor: result.nextCursor });
   }
 
   const records = typeof (options.store as any)[memoryMethod] === "function" ? (options.store as any)[memoryMethod]() : [];
   const filtered = records
     .filter((record: any) => globalCatalogCollection(responseKey) ? !record.tenantId || inTenantScope(record, tenantId) : inTenantScope(record, tenantId))
-    .map((record: any) => apiRecord(responseKey, record, url, tenantId))
+    .map((record: any) => apiRecord(responseKey, record, url, tenantId, options.store))
     .filter((record: any) => !query || JSON.stringify(record).toLowerCase().includes(query));
   return json({ [responseKey]: filtered.slice(offset, offset + limit), total: filtered.length, nextCursor: offset + limit < filtered.length ? String(offset + limit) : undefined });
 }
@@ -372,9 +372,19 @@ async function authenticateAnalystRequest(request: Request, options: ApiServerOp
 }
 function exportEligible(claim: any) { return claim.reviewState === "confirmed" && claim.corroborationState !== "contradicted" && !claim.legalHold; }
 
-function apiRecord(collection: string, record: any, url: URL, tenantId?: string): any {
+function apiRecord(collection: string, record: any, url: URL, tenantId?: string, store?: any): any {
   if (collection === "sources") return toSafeSourceDto(record);
-  if (collection === "captures") return toSafeCaptureDto(record, { tenantId, includeBody: booleanQuery(url.searchParams.get("includeBody")) === true });
+  const sourceId = record.sourceId ?? record.sourceIds?.[0];
+  const source = sourceId && typeof store?.getSource === "function" ? store.getSource(sourceId) : undefined;
+  const sourceSummary = source && inTenantScope(source, tenantId) ? {
+    sourceName: source.name,
+    sourceFamily: source.metadata?.sourceFamily ?? source.metadata?.sourceGrowthFamily ?? source.type
+  } : {};
+  if (collection === "captures") return {
+    ...toSafeCaptureDto(record, { tenantId, includeBody: booleanQuery(url.searchParams.get("includeBody")) === true }),
+    ...sourceSummary
+  };
+  if (collection === "collectionRuns") return { ...sanitizeDwmApiPayload(record), ...sourceSummary };
   if (collection === "incidents") return safeIncidentDto(record);
   if (collection === "alerts") return safeAlertDto(record);
   return sanitizeDwmApiPayload(record);

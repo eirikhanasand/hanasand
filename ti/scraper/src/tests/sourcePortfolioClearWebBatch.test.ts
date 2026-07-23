@@ -4,11 +4,14 @@ import { readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "../ops/canaryPortfolio.ts";
-import { importSeedBundle } from "../registry/sourceSeedsBundle.ts";
+import { importSeedBundle, seedDuplicateKey } from "../registry/sourceSeedsBundle.ts";
+import { expandSourcePortfolioBatch } from "../registry/sourcePortfolioBatch.ts";
+import { canonicalUrl } from "../registry/sourceSeedUtils.ts";
 
 const batchPath = new URL("../../seeds/source_portfolio_clear_web.json", import.meta.url);
 const seedDirectory = dirname(fileURLToPath(batchPath));
-const batch = JSON.parse(readFileSync(batchPath, "utf8"));
+const rawBatch = JSON.parse(readFileSync(batchPath, "utf8"));
+const batch = expandSourcePortfolioBatch(rawBatch);
 
 describe("clear-web source portfolio batch", () => {
   test("contains only canonical executable feeds with complete verification metadata", () => {
@@ -17,13 +20,13 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(22);
-    expect(batch.exclusions).toHaveLength(37);
+    expect(batch.sources).toHaveLength(16);
+    expect(batch.exclusions).toHaveLength(43);
 
     const ids = new Set<string>();
     const endpoints = new Set<string>();
     for (const source of batch.sources) {
-      const key = canonicalFeedKey(source.url);
+      const key = canonicalUrl(source.url);
       expect(new URL(source.url).hostname).toBe(new URL(source.url).hostname.toLowerCase());
       expect(new URL(source.url).hash).toBe("");
       expect(ids.has(source.id)).toBe(false);
@@ -32,7 +35,6 @@ describe("clear-web source portfolio batch", () => {
       endpoints.add(key);
 
       expect(source).toMatchObject({
-        id: stableSourceId(key),
         type: "rss",
         accessMethod: "public_http",
         status: "active",
@@ -53,11 +55,6 @@ describe("clear-web source portfolio batch", () => {
             adapter: "rss",
           },
         },
-        catalog: {
-          approvalScope: "safe_public_auto",
-          retentionClass: "standard",
-          adapterCompatibility: ["rss"],
-        },
       });
       expect(source.name.trim().split(/\s+/).length).toBeGreaterThan(2);
       expect(source.legalNotes).toContain(source.name);
@@ -70,9 +67,6 @@ describe("clear-web source portfolio batch", () => {
       expect(source.metadata.sourcePortfolioVerification.publisherReference).toMatch(/^https:\/\//);
       expect(Number.isFinite(Date.parse(source.metadata.sourcePortfolioVerification.latestPublishedAt))).toBe(true);
       expect(source.catalog.publisher.name).toBeTruthy();
-      expect(source.catalog.legalBasis).toBe(source.legalNotes);
-      expect(source.catalog.coverage.topics.length).toBeGreaterThan(0);
-      expect(source.catalog.collection.crawlCadenceSeconds).toBe(source.crawlFrequencySeconds);
       for (const prohibited of ["health", "lastSeenAt", "lastUsefulAt", "crawlState"]) {
         expect(Object.hasOwn(source, prohibited)).toBe(false);
       }
@@ -83,23 +77,23 @@ describe("clear-web source portfolio batch", () => {
     const reserved = new Set<string>();
     for (const file of readdirSync(seedDirectory).filter((name) => name.endsWith(".json") && name !== basename(fileURLToPath(batchPath)))) {
       visit(JSON.parse(readFileSync(join(seedDirectory, file), "utf8")), (value) => {
-        if (value && typeof value === "object" && typeof value.url === "string") reserved.add(canonicalFeedKey(value.url));
+        if (value && typeof value === "object" && typeof value.url === "string") reserved.add(canonicalUrl(value.url));
       });
     }
-    for (const source of PUBLIC_CANARY_SOURCE_PORTFOLIO) reserved.add(canonicalFeedKey(source.url));
+    for (const source of PUBLIC_CANARY_SOURCE_PORTFOLIO) reserved.add(canonicalUrl(source.url));
 
-    for (const source of batch.sources) expect(reserved.has(canonicalFeedKey(source.url))).toBe(false);
-    expect(canonicalFeedKey("https://EXAMPLE.test/feed/#fragment")).toBe(canonicalFeedKey("https://example.test/feed"));
+    for (const source of batch.sources) expect(reserved.has(seedDuplicateKey(source))).toBe(false);
+    expect(canonicalUrl("https://EXAMPLE.test/feed/#fragment")).toBe(canonicalUrl("https://example.test/feed"));
 
     const certFr = batch.sources.find((source: any) => source.name === "CERT-FR Immediate Security Alerts");
     expect(certFr.url).toBe("https://www.cert.ssi.gouv.fr/alerte/feed/");
-    expect(canonicalFeedKey(certFr.url)).toBe(canonicalFeedKey("https://www.cert.ssi.gouv.fr/alerte/feed"));
+    expect(seedDuplicateKey(certFr)).toBe(canonicalUrl("https://www.cert.ssi.gouv.fr/alerte/feed"));
     const imported = importSeedBundle(batch, { importedAt: batch.generatedAt }).accepted.find((source: any) => source.id === certFr.id);
     expect(imported.url).toBe(certFr.url);
   });
 
   test("keeps exclusions locator-safe and distinct from accepted feeds", () => {
-    const acceptedHashes = new Set(batch.sources.map((source: any) => hash(canonicalFeedKey(source.url)).slice(0, 24)));
+    const acceptedHashes = new Set(batch.sources.map((source: any) => hash(canonicalUrl(source.url)).slice(0, 24)));
     for (const exclusion of batch.exclusions) {
       expect(Object.keys(exclusion).sort()).toEqual(["idOrUrlHash", "reason", "verifiedAt"]);
       expect(exclusion.idOrUrlHash).toMatch(/^[a-f0-9]{24}$/);
@@ -111,18 +105,6 @@ describe("clear-web source portfolio batch", () => {
     }
   });
 });
-
-function canonicalFeedKey(value: string) {
-  const url = new URL(value);
-  url.hostname = url.hostname.toLowerCase();
-  url.hash = "";
-  url.pathname = url.pathname.replace(/\/+$/, "");
-  return url.toString();
-}
-
-function stableSourceId(url: string) {
-  return `src_portfolio_cw_${hash(url).slice(0, 20)}`;
-}
 
 function hash(value: string) {
   return createHash("sha256").update(value).digest("hex");

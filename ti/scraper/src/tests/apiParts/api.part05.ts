@@ -102,7 +102,8 @@ describe("api v1", () => {
       failedTaskCount: 0,
       retryScheduledCount: 0,
       retryExhaustedCount: 0,
-      remainingQueuedTaskCount: 1,
+      deferredDueSourceCount: expect.any(Number),
+      remainingQueuedTaskCount: 0,
       insertedCaptureCount: 1,
       health: {
         freshnessSeconds: 0,
@@ -132,7 +133,7 @@ describe("api v1", () => {
     expect(canaryRunRecord?.id).toBe(canaryRunId);
     expect(canaryRunRecord).toMatchObject({
       status: "completed",
-      taskCount: 2,
+      taskCount: 1,
       captureCount: 1,
       incidentCount: 1,
     });
@@ -144,7 +145,7 @@ describe("api v1", () => {
     expect(operatorView.latestRun).toMatchObject({
       id: canaryRunRecord?.id,
       status: "completed",
-      taskCount: 2,
+      taskCount: 1,
       captureCount: 1,
       incidentCount: 1,
     });
