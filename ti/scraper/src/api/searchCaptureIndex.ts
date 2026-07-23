@@ -71,14 +71,17 @@ function sourceHints(source: any) {
 }
 function scoreDoc(doc: SearchDoc, terms: string[]) {
   let score = 0;
+  let matched = 0;
   for (const term of terms) {
     if (term === "loader" && /\b(spec loader|classloader|class loader|bootloader|preloader)\b/i.test(doc.text)) continue;
     const re = termRegex(term);
-    if (re.test(doc.title)) score += 6;
-    if (re.test(doc.text)) score += 2;
-    if (doc.capture.sourceId?.toLowerCase().includes(term)) score += 1;
+    const termScore = (re.test(doc.title) ? 6 : 0)
+      + (re.test(doc.text) ? 2 : 0)
+      + (doc.capture.sourceId?.toLowerCase().includes(term) ? 1 : 0);
+    if (termScore) matched++;
+    score += termScore;
   }
-  return score;
+  return matched === terms.length ? score : 0;
 }
 
 function scoreIdentityDoc(doc: SearchDoc, terms: string[]) {
