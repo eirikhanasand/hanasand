@@ -242,6 +242,10 @@ describe("dwm product snapshot", () => {
     expect(body.schemaVersion).toBe("dwm.product.v1");
     expect(body.alerts).toHaveLength(2);
     expect(body.sourceCoverage.find((row: any) => row.family === "telegram_public").activeCount).toBe(1);
+    expect(body.alerts.find((alert: any) => alert.sourceFamily === "darkweb_metadata").evidence[0].url).toBeUndefined();
+    expect(body.alerts.find((alert: any) => alert.sourceFamily === "darkweb_metadata").evidence[0].urlHash).toBeTruthy();
+    expect(JSON.stringify(body)).not.toContain(".onion");
+    expect(store.getCapture("cap_darkweb_1")?.url).toBe(darkwebCapture.url);
   });
 
   test("keeps persisted workflow alerts out of the derived product snapshot", async () => {

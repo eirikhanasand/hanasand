@@ -3,6 +3,7 @@ import { getOrganizationEntitlementReadiness, getOrganizationEntitlements, upser
 import { buildDwmSourcePackWorkerReadinessSnapshot, createDwmSourceRequest } from "./dwmSourceRequestRoute.ts";
 import { authorizeDwmWorkflowAccess, createDwmWatchlist, deliverDwmWebhooks, disableDwmWatchlist, getDwmAlertDetail, getDwmAlertGenerationReadiness, getDwmWatchlistDetail, listDwmAlerts, listDwmWatchlists, listDwmWebhookDeliveries, rebuildDwmAlerts, replayDwmAlert, storedWatchlistTerms, testDwmWebhook, updateDwmAlert, updateDwmWatchlist } from "./dwmWorkflowRoutes.ts";
 import { buildDwmProductSnapshot, normalizeWatchlist } from "../product/dwmProduct.ts";
+import { sanitizeDwmApiPayload } from "../product/dwmCustomerDisplay.ts";
 import { buildDwmOperationsSnapshot } from "../product/dwmOperations.ts";
 import { buildDwmSourceInventory } from "../product/dwmSourceInventory.ts";
 import { nowIso } from "../utils.ts";
@@ -185,12 +186,12 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       if (access.error) return access.error;
       const tenantId = scope.tenantId;
       const explicitWatchlist = parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? url.searchParams.get("q") ?? "");
-      return json(buildDwmProductSnapshot({
+      return json(sanitizeDwmApiPayload(buildDwmProductSnapshot({
         tenantId,
         watchlist: explicitWatchlist.length ? explicitWatchlist : storedWatchlistTerms(options, tenantId),
         sources: options.store.listSources(),
         captures: options.store.listCaptures()
-      }));
+      })));
     }
     if ((url.pathname === "/v1/dwm/product" || url.pathname === "/api/dwm/product") && request.method === "POST") {
       const body = await readJson(request);
@@ -199,12 +200,12 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       const access = authorizeDwmWorkflowAccess({ options, scope, request, url, body, mode: "read" });
       if (access.error) return access.error;
       const tenantId = scope.tenantId;
-      return json(buildDwmProductSnapshot({
+      return json(sanitizeDwmApiPayload(buildDwmProductSnapshot({
         tenantId,
         watchlist: Array.isArray(body.watchlist) ? body.watchlist : parseWatchlistParam(String(body.watchlist ?? body.terms ?? "")),
         sources: options.store.listSources(),
         captures: options.store.listCaptures()
-      }));
+      })));
     }
     if ((url.pathname === "/v1/dwm/operations" || url.pathname === "/api/dwm/operations") && request.method === "GET") {
       const scope = resolveOrganizationScope({ url, request }, options);
