@@ -136,8 +136,7 @@ export class InMemoryScraperStore implements ScraperStore {
   saveActorProfile(profile: any) {
     const stored = this.putScoped(this.actorProfiles, profile);
     const aliases = activeActorProfile(profile) ? unique([...(profile.aliases ?? []), profile.canonicalName]) : [];
-    const active = new Set(aliases.map((alias) => alias.toLowerCase()));
-    for (const [id, record] of this.actorAliases) if (record.actorProfileId === profile.id && !active.has(record.normalizedAlias)) this.actorAliases.delete(id);
+    for (const [id, record] of this.actorAliases) if (record.actorProfileId === profile.id) this.actorAliases.delete(id);
     for (const alias of aliases) {
       const normalizedAlias = alias.toLowerCase();
       const id = stableId("actor-alias", `${profile.id}:${normalizedAlias}`);
@@ -462,7 +461,7 @@ function actorProfileResolution(store: any, capture: any, entity: any): ActorPro
     actorIdentityIds: [identity.id]
   };
 }
-function publicActorTenant(tenantId: unknown): string | undefined { return !tenantId || tenantId === "default" ? undefined : String(tenantId); }
+function publicActorTenant(tenantId: unknown): string | undefined { return tenantId ? String(tenantId) : undefined; }
 function reconcileCrossCatalogActorIdentities(identities: any[]): any[] {
   const mitre = identities.filter((identity) => identity.catalogId === "mitre-attack-enterprise" && identity.status === "current");
   return identities.filter((identity) => identity.catalogId === "ransomware-live-current-operations").map((identity) => {

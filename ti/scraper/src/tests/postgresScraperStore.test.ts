@@ -169,6 +169,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
   beforeEach(async () => {
     await admin.unsafe(`
       TRUNCATE TABLE
+        threat_intel.actor_profile_scope_lineage,
         threat_intel.actor_profile_identity_history,
         threat_intel.actor_identity_aliases,
         threat_intel.actor_identities,
@@ -1050,6 +1051,358 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       WHERE actor_profile_id = ${profile.id}
     `)[0].row_hash).toBe(history.row_hash);
     expect(await admin`SELECT id FROM threat_intel.actor_aliases WHERE actor_profile_id = ${profile.id}`).toHaveLength(0);
+  });
+
+  test("reconciles actor profile scope and historical workflow lineage without rewriting immutable evidence", async () => {
+    const seed = await PostgresScraperStore.create({ databaseUrl });
+    const sourceScopes = [
+      ["src_scope_catalog", undefined],
+      ["src_scope_global", undefined],
+      ["src_scope_default", "default"],
+      ["src_scope_default_only", "default"],
+      ["src_scope_identity", "tenant_customer"],
+      ["src_scope_unresolved", "tenant_customer"]
+    ] as const;
+    for (const [id, tenantId] of sourceScopes) {
+      seed.saveSource(source({ id, tenantId, url: `https://example.test/${id}` }));
+    }
+    seed.saveCapture(catalogCapture("cap_scope_catalog", "scope-catalog", "src_scope_catalog"));
+    seed.replaceActorIdentityCatalog(actorCatalog([
+      actorIdentity("G0059", "Magic Hound", ["Charming Kitten"]),
+      actorIdentity("G0016", "APT29", ["Cozy Bear"])
+    ], "scope-catalog"), {
+      sourceId: "src_scope_catalog",
+      captureId: "cap_scope_catalog",
+      importedAt: collectedAt
+    });
+    const governed = (sourceId: string, actorName: string, victimName: string, tenantId?: string) => {
+      const result = processCollectedItem({
+        sourceId,
+        url: `https://example.test/${sourceId}`,
+        collectedAt,
+        rawText: `${actorName} claimed ${victimName}.`,
+        contentHash: hashContent(`${sourceId}:${actorName}:${victimName}`),
+        links: [],
+        metadata: { extractionProfile: "ransomware_victim_blog", leakSite: { actorName, victimName } },
+        sensitive: false
+      }, { actorIdentities: seed.listActorIdentities() });
+      return tenantId ? { ...result, capture: { ...result.capture, tenantId } } : result;
+    };
+    const globalResult = seed.savePipelineResult(governed("src_scope_global", "Charming Kitten", "Global Systems"));
+    const defaultResult = seed.savePipelineResult(governed("src_scope_default", "Charming Kitten", "Default Systems", "default"));
+    const defaultOnlyResult = seed.savePipelineResult(governed("src_scope_default_only", "APT29", "Default Only Systems", "default"));
+    seed.saveCapture(actorProfileCapture("cap_scope_identity", "src_scope_identity", "tenant_customer"));
+    seed.saveCapture(actorProfileCapture("cap_scope_unresolved", "src_scope_unresolved", "tenant_customer"));
+    seed.saveExtractedEntity({
+      id: "entity_scope_identity",
+      tenantId: "tenant_customer",
+      sourceId: "src_scope_identity",
+      captureId: "cap_scope_identity",
+      type: "actor",
+      value: "Magic Hound",
+      normalizedValue: "magic hound",
+      actorIdentityIds: ["mitre-attack-enterprise:G0059"],
+      confidence: 0.8,
+      extractorVersion: "test",
+      provenance: []
+    });
+    const seededProfiles = seed.listActorProfiles();
+    const globalMagic = seededProfiles.find((profile: any) => profile.canonicalName === "Magic Hound" && !profile.tenantId)!;
+    const defaultMagic = seededProfiles.find((profile: any) => profile.canonicalName === "Magic Hound" && profile.tenantId === "default")!;
+    const defaultOnly = seededProfiles.find((profile: any) => profile.canonicalName === "APT29" && profile.tenantId === "default")!;
+    expect([globalMagic, defaultMagic, defaultOnly].every(Boolean)).toBe(true);
+    await seed.close();
+
+    const mixedRecord = {
+      ...globalMagic,
+      sourceIds: ["src_scope_default", "src_scope_global"],
+      captureIds: [defaultResult.capture.id, globalResult.capture.id].sort(),
+      evidenceCount: 2
+    };
+    await admin`
+      UPDATE threat_intel.actor_profiles
+      SET evidence_count = 2, record = ${JSON.stringify(mixedRecord)}::text::jsonb
+      WHERE id = ${globalMagic.id}
+    `;
+    await admin`
+      UPDATE threat_intel.evidence_links
+      SET subject_id = ${globalMagic.id}, record = jsonb_set(record, '{subjectId}', to_jsonb(${globalMagic.id}::text))
+      WHERE subject_type = 'actor_profile' AND subject_id = ${defaultMagic.id}
+    `;
+    await admin`DELETE FROM threat_intel.actor_aliases WHERE actor_profile_id = ${defaultMagic.id}`;
+    await admin`DELETE FROM threat_intel.actor_profiles WHERE id = ${defaultMagic.id}`;
+    await admin`
+      UPDATE threat_intel.actor_profiles
+      SET tenant_id = NULL, record = record - 'tenantId'
+      WHERE id = ${defaultOnly.id}
+    `;
+    await admin`
+      UPDATE threat_intel.actor_aliases
+      SET tenant_id = NULL, record = record - 'tenantId'
+      WHERE actor_profile_id = ${defaultOnly.id}
+    `;
+
+    const archivedProfile = {
+      ...legacyActorProfile("actor_scope_archived", undefined, "Archived Group", [], [], []),
+      normalizedName: "archived:actor_scope_archived",
+      evidenceCount: 1,
+      identityResolutionState: "archived",
+      identityResolutionReason: "unresolved"
+    };
+    await admin`
+      INSERT INTO threat_intel.actor_profiles (
+        id, tenant_id, canonical_name, normalized_name, actor_type, confidence,
+        first_seen_at, last_seen_at, evidence_count, updated_at, record
+      ) VALUES (
+        ${archivedProfile.id}, NULL, ${archivedProfile.canonicalName}, ${archivedProfile.normalizedName},
+        ${archivedProfile.actorType}, ${archivedProfile.confidence}, ${archivedProfile.firstSeenAt},
+        ${archivedProfile.lastSeenAt}, ${archivedProfile.evidenceCount}, ${archivedProfile.updatedAt}, ${JSON.stringify(archivedProfile)}::text::jsonb
+      )
+    `;
+    for (const profileId of [globalMagic.id, defaultOnly.id]) {
+      await admin`
+        INSERT INTO threat_intel.actor_profile_identity_history (
+          id, actor_profile_id, canonical_actor_profile_id, reconciliation_key,
+          resolution_status, original_tenant_id, original_record, reference_snapshot, reconciled_at
+        )
+        SELECT
+          ${`actor-profile-history-scope-${profileId}`},
+          profile.id,
+          profile.id,
+          ${`:identity:${profileId}`},
+          'canonicalized',
+          profile.tenant_id,
+          profile.record,
+          jsonb_build_object('fixture', 'pre-032', 'profileId', profile.id),
+          ${collectedAt}
+        FROM threat_intel.actor_profiles profile
+        WHERE profile.id = ${profileId}
+      `;
+    }
+    const insertWorkflow = async (
+      id: string,
+      subjectId: string,
+      tenantId: string | undefined,
+      captureIds: string[],
+      recordType = "evidence_delta"
+    ) => {
+      const record = {
+        id,
+        tenantId,
+        subjectType: "actor_profile",
+        subjectId,
+        captureIds,
+        observedAt: collectedAt
+      };
+      await admin`
+        INSERT INTO threat_intel.workflow_records (record_type, id, tenant_id, created_at, updated_at, record)
+        VALUES (
+          ${recordType}, ${id}, ${tenantId ?? null}, ${collectedAt}, ${collectedAt},
+          ${JSON.stringify(record)}::text::jsonb
+        )
+        ON CONFLICT (record_type, id) DO UPDATE SET record = EXCLUDED.record
+      `;
+    };
+    await insertWorkflow("workflow_scope_mixed_default", globalMagic.id, "default", [defaultResult.capture.id]);
+    await insertWorkflow("workflow_scope_evidence_missing", "actor_scope_missing_evidence", "default", [defaultResult.capture.id]);
+    await insertWorkflow("workflow_scope_identity_missing", "actor_scope_missing_identity", "tenant_customer", ["cap_scope_identity"]);
+    await insertWorkflow("workflow_scope_unresolved_missing", "actor_scope_missing_unresolved", "tenant_customer", ["cap_scope_unresolved"]);
+    await insertWorkflow("workflow_scope_archived", archivedProfile.id, undefined, [], "actor_scope_probe");
+
+    await admin`
+      INSERT INTO threat_intel.intelligence_claims (
+        id, tenant_id, claim_type, subject_type, subject_id, claim_value, summary, confidence,
+        evidence_stage, extraction_method, extractor_version, review_state, corroboration_state,
+        source_count, evidence_count, first_seen_at, last_seen_at, reviewed_by, reviewed_at, record
+      ) VALUES (
+        'claim_scope_guard', NULL, 'actor', 'actor_profile', ${globalMagic.id}, '{"value":"Magic Hound"}'::jsonb,
+        'Protected actor profile scope claim', 0.8, 'extracted', 'source_specific', 'test', 'confirmed',
+        'single_source', 1, 1, ${collectedAt}, ${collectedAt}, 'reviewer_scope', ${collectedAt},
+        ${JSON.stringify({ id: "claim_scope_guard", subjectType: "actor_profile", subjectId: globalMagic.id, reviewState: "confirmed" })}::text::jsonb
+      )
+    `;
+    await admin`
+      INSERT INTO threat_intel.claim_evidence (
+        id, tenant_id, claim_id, capture_id, source_id, subject_type, subject_id,
+        relationship, evidence_stage, confidence, extractor_version, provenance, record
+      ) VALUES (
+        'claim_evidence_scope_guard', NULL, 'claim_scope_guard', ${globalResult.capture.id}, 'src_scope_global',
+        'actor_profile', ${globalMagic.id}, 'supports', 'extracted', 0.8, 'test',
+        ${JSON.stringify({ sourceId: "src_scope_global", captureId: globalResult.capture.id })}::text::jsonb,
+        ${JSON.stringify({ id: "claim_evidence_scope_guard", claimId: "claim_scope_guard", subjectType: "actor_profile", subjectId: globalMagic.id })}::text::jsonb
+      )
+    `;
+    await admin`
+      INSERT INTO threat_intel.claim_reviews (
+        id, tenant_id, claim_id, action, previous_state, next_state,
+        reviewer_id, reason, reviewed_at, record
+      ) VALUES (
+        'review_scope_guard', NULL, 'claim_scope_guard', 'confirm', 'needs_review', 'confirmed',
+        'reviewer_scope', 'Protected review must block scope mutation.', ${collectedAt},
+        ${JSON.stringify({ id: "review_scope_guard", claimId: "claim_scope_guard", action: "confirm" })}::text::jsonb
+      )
+    `;
+    const immutableSnapshot = async () => (await admin<{
+      source_hash: string;
+      capture_hash: string;
+      workflow_hash: string;
+      identity_history_hash: string;
+    }[]>`
+      SELECT
+        md5(COALESCE((SELECT jsonb_agg(to_jsonb(source) ORDER BY source.id)::text FROM threat_intel.sources source), '[]')) AS source_hash,
+        md5(COALESCE((SELECT jsonb_agg(to_jsonb(capture) ORDER BY capture.id)::text FROM threat_intel.captures capture), '[]')) AS capture_hash,
+        md5(COALESCE((SELECT jsonb_agg(to_jsonb(workflow) ORDER BY workflow.record_type, workflow.id)::text FROM threat_intel.workflow_records workflow), '[]')) AS workflow_hash,
+        md5(COALESCE((SELECT jsonb_agg(to_jsonb(history) ORDER BY history.actor_profile_id)::text FROM threat_intel.actor_profile_identity_history history), '[]')) AS identity_history_hash
+    `)[0];
+    const immutableBefore = await immutableSnapshot();
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '032_reconcile_actor_profile_scope_lineage'`;
+    await admin.unsafe("DROP TABLE threat_intel.actor_profile_scope_lineage");
+    await expect(PostgresScraperStore.create({ databaseUrl })).rejects.toThrow(
+      "actor profile scope migration blocked: an affected profile has claim, evidence, or review state"
+    );
+    expect(await immutableSnapshot()).toEqual(immutableBefore);
+    expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '032_reconcile_actor_profile_scope_lineage'`).toHaveLength(0);
+    expect((await admin<{ relation: string | null }[]>`SELECT to_regclass('threat_intel.actor_profile_scope_lineage')::text AS relation`)[0].relation).toBeNull();
+
+    await admin`DELETE FROM threat_intel.claim_reviews WHERE claim_id = 'claim_scope_guard'`;
+    await admin`DELETE FROM threat_intel.claim_evidence WHERE claim_id = 'claim_scope_guard'`;
+    await admin`DELETE FROM threat_intel.intelligence_claims WHERE id = 'claim_scope_guard'`;
+    const migrated = await PostgresScraperStore.create({ databaseUrl });
+    const lineage = await admin<{
+      source_actor_profile_id: string;
+      scope_key: string;
+      target_actor_profile_id: string | null;
+      actor_identity_id: string | null;
+      resolution_status: string;
+      record: any;
+    }[]>`
+      SELECT
+        source_actor_profile_id, scope_key, target_actor_profile_id,
+        actor_identity_id, resolution_status, record
+      FROM threat_intel.actor_profile_scope_lineage
+      ORDER BY source_actor_profile_id, scope_key
+    `;
+    const split = lineage.find((row) => row.source_actor_profile_id === globalMagic.id && row.resolution_status === "scope_split")!;
+    expect(split.target_actor_profile_id).toBeString();
+    expect(split.target_actor_profile_id).not.toBe(globalMagic.id);
+    expect(lineage).toEqual(expect.arrayContaining([
+      expect.objectContaining({ source_actor_profile_id: globalMagic.id, target_actor_profile_id: globalMagic.id, resolution_status: "scope_preserved" }),
+      expect.objectContaining({ source_actor_profile_id: defaultOnly.id, target_actor_profile_id: defaultOnly.id, resolution_status: "scope_moved" }),
+      expect.objectContaining({ source_actor_profile_id: "actor_scope_missing_evidence", target_actor_profile_id: split.target_actor_profile_id, resolution_status: "evidence_resolved" }),
+      expect.objectContaining({ source_actor_profile_id: "actor_scope_missing_identity", target_actor_profile_id: null, actor_identity_id: "mitre-attack-enterprise:G0059", resolution_status: "identity_resolved" }),
+      expect.objectContaining({ source_actor_profile_id: "actor_scope_missing_unresolved", target_actor_profile_id: null, actor_identity_id: null, resolution_status: "archived_unresolved" }),
+      expect.objectContaining({ source_actor_profile_id: archivedProfile.id, target_actor_profile_id: null, resolution_status: "archived_unresolved" })
+    ]));
+    expect(lineage.find((row) => row.source_actor_profile_id === "actor_scope_missing_unresolved")?.record).toMatchObject({
+      evidenceCaptureIds: ["cap_scope_unresolved"],
+      workflowReferenceIds: ["workflow_scope_unresolved_missing"]
+    });
+
+    expect(migrated.listActorProfiles()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: globalMagic.id, tenantId: null, canonicalName: "Magic Hound", captureIds: [globalResult.capture.id] }),
+      expect.objectContaining({ id: split.target_actor_profile_id, tenantId: "default", canonicalName: "Magic Hound", captureIds: [defaultResult.capture.id] }),
+      expect.objectContaining({ id: defaultOnly.id, tenantId: "default", canonicalName: "APT29", captureIds: [defaultOnlyResult.capture.id] })
+    ]));
+    expect(await migrated.queryStructuredRecords("actorProfiles", { limit: 20 })).toMatchObject({
+      total: 1,
+      records: [expect.objectContaining({ id: globalMagic.id, canonicalName: "Magic Hound" })]
+    });
+    expect(await migrated.queryStructuredRecords("actorProfiles", { tenantId: "default", limit: 20 })).toMatchObject({
+      total: 2,
+      records: expect.arrayContaining([
+        expect.objectContaining({ id: split.target_actor_profile_id, canonicalName: "Magic Hound" }),
+        expect.objectContaining({ id: defaultOnly.id, canonicalName: "APT29" })
+      ])
+    });
+    expect(await migrated.queryStructuredRecords("actorProfiles", { tenantId: "tenant_customer", limit: 20 })).toMatchObject({ total: 0, records: [] });
+    const [integrity] = await admin<{
+      cross_scope_profiles: number;
+      cross_scope_evidence: number;
+      cross_scope_aliases: number;
+      unresolved_workflows: number;
+    }[]>`
+      SELECT
+        (
+          SELECT count(*)::int
+          FROM threat_intel.actor_profiles profile
+          CROSS JOIN LATERAL jsonb_array_elements_text(
+            CASE WHEN jsonb_typeof(profile.record->'captureIds') = 'array' THEN profile.record->'captureIds' ELSE '[]'::jsonb END
+          ) capture_id
+          JOIN threat_intel.captures capture ON capture.id = capture_id
+          WHERE COALESCE(profile.record->>'identityResolutionState', 'active') <> 'archived'
+            AND profile.tenant_id IS DISTINCT FROM capture.tenant_id
+        ) AS cross_scope_profiles,
+        (
+          SELECT count(*)::int
+          FROM threat_intel.evidence_links link
+          JOIN threat_intel.captures capture ON capture.id = link.capture_id
+          LEFT JOIN threat_intel.actor_profiles profile ON profile.id = link.subject_id
+          WHERE link.subject_type = 'actor_profile'
+            AND (profile.id IS NULL OR profile.tenant_id IS DISTINCT FROM capture.tenant_id)
+        ) AS cross_scope_evidence,
+        (
+          SELECT count(*)::int
+          FROM threat_intel.actor_aliases alias
+          JOIN threat_intel.actor_profiles profile ON profile.id = alias.actor_profile_id
+          WHERE alias.tenant_id IS DISTINCT FROM profile.tenant_id
+        ) AS cross_scope_aliases,
+        (
+          SELECT count(*)::int
+          FROM threat_intel.workflow_records workflow
+          WHERE workflow.record->>'subjectType' = 'actor_profile'
+            AND NULLIF(workflow.record->>'subjectId', '') IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM threat_intel.actor_profiles profile
+              WHERE profile.id = workflow.record->>'subjectId'
+                AND profile.tenant_id IS NOT DISTINCT FROM workflow.tenant_id
+                AND COALESCE(profile.record->>'identityResolutionState', 'active') <> 'archived'
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM threat_intel.actor_profile_scope_lineage scope_lineage
+              LEFT JOIN threat_intel.actor_profiles target ON target.id = scope_lineage.target_actor_profile_id
+              WHERE scope_lineage.source_actor_profile_id = workflow.record->>'subjectId'
+                AND scope_lineage.scope_key = CASE WHEN workflow.tenant_id IS NULL THEN 'global' ELSE 'tenant:' || md5(workflow.tenant_id) END
+                AND (scope_lineage.target_actor_profile_id IS NULL OR target.tenant_id IS NOT DISTINCT FROM workflow.tenant_id)
+            )
+        ) AS unresolved_workflows
+    `;
+    expect(integrity).toEqual({ cross_scope_profiles: 0, cross_scope_evidence: 0, cross_scope_aliases: 0, unresolved_workflows: 0 });
+    expect(await immutableSnapshot()).toEqual(immutableBefore);
+    expect(await migrated.databaseHealth()).toMatchObject({ ok: true, migrationVersion: "032_reconcile_actor_profile_scope_lineage", actorProfileScopeReady: true });
+    await migrated.close();
+
+    const restarted = await PostgresScraperStore.create({ databaseUrl });
+    restarted.saveSource(source({ id: "src_scope_default_repeat", tenantId: "default", url: "https://example.test/src_scope_default_repeat" }));
+    const repeated = processCollectedItem({
+      sourceId: "src_scope_default_repeat",
+      url: "https://example.test/src_scope_default_repeat",
+      collectedAt: "2026-07-20T00:00:00.000Z",
+      rawText: "Charming Kitten claimed Repeated Systems.",
+      contentHash: hashContent("scope-default-repeat"),
+      links: [],
+      metadata: { extractionProfile: "ransomware_victim_blog", leakSite: { actorName: "Charming Kitten", victimName: "Repeated Systems" } },
+      sensitive: false
+    }, { actorIdentities: restarted.listActorIdentities() });
+    restarted.savePipelineResult({ ...repeated, capture: { ...repeated.capture, tenantId: "default" } });
+    const repeatedDefaultProfiles = restarted.listActorProfiles().filter((profile: any) => profile.tenantId === "default" && profile.canonicalName === "Magic Hound");
+    expect(repeatedDefaultProfiles).toHaveLength(1);
+    expect(repeatedDefaultProfiles[0]).toMatchObject({ id: split.target_actor_profile_id, evidenceCount: 2 });
+    expect(restarted.listActorAliases().filter((alias: any) => alias.actorProfileId === split.target_actor_profile_id && alias.normalizedAlias === "magic hound")).toHaveLength(1);
+    await restarted.close();
+
+    const stableProfiles = await admin`SELECT id, tenant_id, record FROM threat_intel.actor_profiles ORDER BY id`;
+    const stableLineage = await admin`SELECT * FROM threat_intel.actor_profile_scope_lineage ORDER BY source_actor_profile_id, scope_key`;
+    const stableImmutable = await immutableSnapshot();
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '032_reconcile_actor_profile_scope_lineage'`;
+    const rerun = await PostgresScraperStore.create({ databaseUrl });
+    expect(await rerun.databaseHealth()).toMatchObject({ ok: true, actorProfileScopeReady: true });
+    await rerun.close();
+    expect(await admin`SELECT id, tenant_id, record FROM threat_intel.actor_profiles ORDER BY id`).toEqual(stableProfiles);
+    expect(await admin`SELECT * FROM threat_intel.actor_profile_scope_lineage ORDER BY source_actor_profile_id, scope_key`).toEqual(stableLineage);
+    expect(await immutableSnapshot()).toEqual(stableImmutable);
+    expect(stableImmutable.identity_history_hash).toBe(immutableBefore.identity_history_hash);
   });
 
   test("reconciles canonical actor profiles per tenant and archives unresolved identities idempotently", async () => {
