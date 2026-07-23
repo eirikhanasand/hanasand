@@ -2,7 +2,7 @@ import type { SQL } from "bun";
 import { normalizeActorLabel } from "../pipeline/mitreActorCatalog.ts";
 import { stableId } from "../utils.ts";
 
-export async function persistActorIdentityCatalog(sql: SQL, catalog: any, identities: any[]): Promise<void> {
+export async function persistActorIdentityCatalog(sql: SQL, catalog: any, identities: any[], afterPersist?: (transaction: SQL) => Promise<void>): Promise<void> {
   const identityIds = catalog.identityIds ?? [];
   const currentIdentities = identityIds.map((id: string) => identities.find((identity) => identity.id === id));
   if (new Set(identityIds).size !== identityIds.length || currentIdentities.some((identity: any) => !identity) || currentIdentities.length !== catalog.counts?.totalIdentityCount) {
@@ -89,6 +89,7 @@ export async function persistActorIdentityCatalog(sql: SQL, catalog: any, identi
         `;
       }
     }
+    await afterPersist?.(transaction);
   });
 }
 

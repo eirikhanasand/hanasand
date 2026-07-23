@@ -661,15 +661,33 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
   test("persists global actor identity catalogs across refresh and restart without fabricating activity", async () => {
     const first = await PostgresScraperStore.create({ databaseUrl });
     first.saveSource(source({ id: "src_actor_catalog", name: "Authoritative actor catalog" }));
+    first.saveSource(source({ id: "src_actor_observation", name: "Public actor observation", url: "https://example.test/beta-group-feed" }));
     first.saveCapture(catalogCapture("cap_actor_catalog_v1", "catalog-v1"));
     first.replaceActorIdentityCatalog(actorCatalog([actorIdentity("G0001", "Alpha Group", ["Alpha Alias"]), actorIdentity("G0002", "Beta Group", ["Beta Alias"])]), {
       sourceId: "src_actor_catalog",
       captureId: "cap_actor_catalog_v1",
       importedAt: collectedAt
     });
+    const betaObservation = processCollectedItem({
+      sourceId: "src_actor_observation",
+      url: "https://example.test/beta-group",
+      collectedAt,
+      rawText: "Beta Group was named in a public report.",
+      contentHash: hashContent("beta-group-observation"),
+      links: [],
+      metadata: { extractionProfile: "ransomware_group_metadata", ransomwareGroup: { actorName: "Beta Group" } },
+      sensitive: false
+    }, { actorIdentities: first.listActorIdentities() });
+    first.savePipelineResult(betaObservation);
     await first.flush();
 
-    expect(first.listActorProfiles()).toEqual([]);
+    const betaProfile = first.listActorProfiles()[0];
+    expect(betaProfile).toMatchObject({
+      canonicalName: "Beta Group",
+      identityResolutionState: "canonical",
+      actorIdentityIds: ["mitre-attack-enterprise:G0002"],
+      captureIds: [betaObservation.capture.id]
+    });
     expect(first.listIncidents()).toEqual([]);
     const tenantResponse = await handleApiRequest(api("/v1/intel/actor-identities?tenantId=tenant_catalog"), { store: first, frontier: new FocusedFrontier() });
     expect(await tenantResponse.json()).toMatchObject({ total: 2, actorIdentities: [{ catalogId: "mitre-attack-enterprise" }, { catalogId: "mitre-attack-enterprise" }] });
@@ -684,6 +702,27 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       captureId: "cap_actor_catalog_v2",
       importedAt: "2026-07-20T12:00:00.000Z"
     });
+    expect(second.listActorProfiles()).toEqual([]);
+    expect(second.getActorProfile(betaProfile.id)).toMatchObject({
+      id: betaProfile.id,
+      normalizedName: `archived:${betaProfile.id}`,
+      identityResolutionState: "archived",
+      identityResolutionReason: "inactive_identity",
+      actorIdentityIds: ["mitre-attack-enterprise:G0002"],
+      captureIds: [betaObservation.capture.id]
+    });
+    const afterRetirement = processCollectedItem({
+      sourceId: "src_actor_observation",
+      url: "https://example.test/beta-group-after-retirement",
+      collectedAt: "2026-07-20T12:01:00.000Z",
+      rawText: "Beta Group was named after its catalog identity retired.",
+      contentHash: hashContent("beta-group-after-retirement"),
+      links: [],
+      metadata: { extractionProfile: "ransomware_group_metadata", ransomwareGroup: { actorName: "Beta Group" } },
+      sensitive: false
+    }, { actorIdentities: second.listActorIdentities() });
+    second.savePipelineResult(afterRetirement);
+    expect(second.listActorProfiles()).toEqual([]);
     await second.close();
 
     const third = await PostgresScraperStore.create({ databaseUrl });
@@ -693,13 +732,38 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     ]);
     expect(third.listActorProfiles()).toEqual([]);
     expect(third.listIncidents()).toEqual([]);
-    const [counts] = await admin<{ versions: number; current_version_identities: number; aliases: number }[]>`
+    expect(await third.listActorProfilesForOwnership()).toContainEqual(expect.objectContaining({
+      id: betaProfile.id,
+      identityResolutionState: "archived",
+      actorIdentityIds: ["mitre-attack-enterprise:G0002"],
+      captureIds: [betaObservation.capture.id]
+    }));
+    expect(third.listCaptures()).toContainEqual(expect.objectContaining({ id: betaObservation.capture.id, sourceId: "src_actor_observation" }));
+    expect(third.listCaptures()).toContainEqual(expect.objectContaining({ id: afterRetirement.capture.id, sourceId: "src_actor_observation" }));
+    expect(third.listEvidenceLinks()).toContainEqual(expect.objectContaining({ captureId: betaObservation.capture.id, subjectType: "actor_profile", subjectId: betaProfile.id }));
+    expect(third.listEvidenceLinks().some((link: any) => link.captureId === afterRetirement.capture.id && link.subjectType === "actor_profile")).toBe(false);
+    const rerun = third.replaceActorIdentityCatalog(actorCatalog([actorIdentity("G0001", "Alpha Group", ["Alpha Current Alias"])], "catalog-v2"), {
+      sourceId: "src_actor_catalog",
+      captureId: "cap_actor_catalog_v2",
+      importedAt: "2026-07-20T12:02:00.000Z"
+    });
+    expect(rerun.archivedActorProfileIds).toEqual([]);
+    await third.flush();
+    const [counts] = await admin<{ versions: number; current_version_identities: number; aliases: number; bad_active: number }[]>`
       SELECT
         (SELECT count(*)::int FROM threat_intel.actor_identity_catalog_versions) AS versions,
         (SELECT jsonb_array_length(record->'identities')::int FROM threat_intel.actor_identity_catalog_versions WHERE bundle_sha256 = 'catalog-v2') AS current_version_identities,
-        (SELECT count(*)::int FROM threat_intel.actor_identity_aliases) AS aliases
+        (SELECT count(*)::int FROM threat_intel.actor_identity_aliases) AS aliases,
+        (
+          SELECT count(*)::int
+          FROM threat_intel.actor_profiles profile
+          CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(profile.record->'actorIdentityIds', '[]'::jsonb)) identity_id
+          LEFT JOIN threat_intel.actor_identities identity ON identity.id = identity_id
+          WHERE COALESCE(profile.record->>'identityResolutionState', 'active') <> 'archived'
+            AND (identity.id IS NULL OR identity.status <> 'current')
+        ) AS bad_active
     `;
-    expect(counts).toMatchObject({ versions: 2, current_version_identities: 1, aliases: 4 });
+    expect(counts).toMatchObject({ versions: 2, current_version_identities: 1, aliases: 4, bad_active: 0 });
     await third.close();
   });
 
