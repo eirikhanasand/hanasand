@@ -63,12 +63,19 @@ test("catalog registration captures identities without activity profiles while r
     maxTasks: 1,
     now: () => activityAt,
     fetch: async () => new Response(
-      `<rss><channel><item><title>Akira claimed Northwind Health</title><link>https://evidence.example.test/victims/akira-northwind</link><description>Akira has just published a new victim: Northwind Health.</description><pubDate>${activityAt}</pubDate></item></channel></rss>`,
+      `<rss><channel><item><title>Akira has just published a new victim: Northwind Health</title><link>https://evidence.example.test/victims/akira-northwind</link><description>Public victim claim metadata.</description><pubDate>${activityAt}</pubDate></item></channel></rss>`,
       { headers: { "content-type": "application/rss+xml" } }
     )
   } as any);
 
-  expect(activityCycle).toMatchObject({ completedTaskCount: 1, failedTaskCount: 0, insertedCaptureCount: 1 });
+  expect(activityCycle).toMatchObject({ completedTaskCount: 1, failedTaskCount: 0, insertedCaptureCount: 1, exposureClaimCount: 1 });
+  const activityEvidence = store.listCaptures().find((capture: any) => capture.metadata?.exposureClaim === true);
+  expect(activityEvidence).toMatchObject({
+    tenantId: "default",
+    sourceId: activitySource.id,
+    publishedAt: activityAt,
+    metadata: { leakSite: { actorName: "Akira", victimName: "Northwind Health" } }
+  });
   expect(store.listActorProfiles()).toHaveLength(1);
-  expect(store.listActorProfiles()[0]).toMatchObject({ canonicalName: "Akira", lastSeenAt: activityAt, evidenceCount: 1 });
+  expect(store.listActorProfiles()[0]).toMatchObject({ tenantId: "default", canonicalName: "Akira", lastSeenAt: activityAt, evidenceCount: 1, captureIds: [activityEvidence.id] });
 });
