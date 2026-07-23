@@ -41,9 +41,13 @@ export function importRestrictedMetadataSeedBundle(bundle: unknown, importedAt: 
   }
 
   const accepted: SourceRecord[] = [];
+  const sourceEndpoints = new Set<string>();
   for (const raw of sources) {
     const sourceId = isRecord(raw) && nonEmpty(raw.id) ? raw.id : undefined;
     const sourceErrors = validateSource(raw);
+    const endpoint = isRecord(raw) ? restrictedEndpoint(raw.url) : undefined;
+    if (endpoint && sourceEndpoints.has(endpoint)) sourceErrors.push("restricted source endpoint must be unique");
+    if (endpoint) sourceEndpoints.add(endpoint);
     errors.push(...sourceErrors.map((message) => ({ sourceId, message })));
     if (sourceErrors.length || !isRecord(raw) || !isRecord(raw.governance) || !isRecord(raw.metadata)) continue;
 
@@ -172,6 +176,14 @@ function isV3OnionUrl(value: unknown): boolean {
     return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password && /^[a-z2-7]{56}\.onion$/i.test(url.hostname);
   } catch {
     return false;
+  }
+}
+
+function restrictedEndpoint(value: unknown): string | undefined {
+  try {
+    return new URL(String(value)).hostname.toLowerCase();
+  } catch {
+    return undefined;
   }
 }
 
