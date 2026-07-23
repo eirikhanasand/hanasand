@@ -371,7 +371,7 @@ async function processTask(options: ApiServerOptions, original: AutomaticReviewT
   saveEvent(store, task, "running", startedAt);
 
   if (!refreshedEvidence.length) {
-    const decision = policyQuarantineDecision(task, "missing_governed_evidence", "No source-backed governed evidence was available");
+    const decision = policyQuarantineDecision(task, "missing_governed_evidence", "No governed evidence was available");
     const completedAt = executionTime(input);
     persistSubjectDecision(store, index, task, decision, completedAt, undefined, "hanasand-ai:policy:governed-evidence-gate", "policy");
     task = saveTask(store, task, { state: "quarantined", decision, completedAt, updatedAt: completedAt, leaseExpiresAt: undefined, lastError: "No governed evidence is linked to this subject" });
@@ -670,7 +670,7 @@ function persistSubjectDecision(store: any, index: ReviewIndex, task: AutomaticR
   index.incidentsById.set(updated.id, updated);
 }
 
-function policyQuarantineDecision(task: AutomaticReviewTask, policyGate = "missing_governed_evidence", reason = "No source-backed governed evidence was available"): AutomaticReviewDecision {
+function policyQuarantineDecision(task: AutomaticReviewTask, policyGate = "missing_governed_evidence", reason = "No governed evidence was available"): AutomaticReviewDecision {
   return {
     schemaVersion: AUTOMATIC_REVIEW_RESPONSE_SCHEMA,
     promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION,
