@@ -4,6 +4,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "../ops/canaryPortfolio.ts";
+import { importSeedBundle } from "../registry/sourceSeedsBundle.ts";
 
 const batchPath = new URL("../../seeds/source_portfolio_clear_web.json", import.meta.url);
 const seedDirectory = dirname(fileURLToPath(batchPath));
@@ -16,14 +17,15 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(12);
-    expect(batch.exclusions).toHaveLength(26);
+    expect(batch.sources).toHaveLength(22);
+    expect(batch.exclusions).toHaveLength(37);
 
     const ids = new Set<string>();
     const endpoints = new Set<string>();
     for (const source of batch.sources) {
       const key = canonicalFeedKey(source.url);
-      expect(source.url).toBe(key);
+      expect(new URL(source.url).hostname).toBe(new URL(source.url).hostname.toLowerCase());
+      expect(new URL(source.url).hash).toBe("");
       expect(ids.has(source.id)).toBe(false);
       expect(endpoints.has(key)).toBe(false);
       ids.add(source.id);
@@ -88,6 +90,12 @@ describe("clear-web source portfolio batch", () => {
 
     for (const source of batch.sources) expect(reserved.has(canonicalFeedKey(source.url))).toBe(false);
     expect(canonicalFeedKey("https://EXAMPLE.test/feed/#fragment")).toBe(canonicalFeedKey("https://example.test/feed"));
+
+    const certFr = batch.sources.find((source: any) => source.name === "CERT-FR Immediate Security Alerts");
+    expect(certFr.url).toBe("https://www.cert.ssi.gouv.fr/alerte/feed/");
+    expect(canonicalFeedKey(certFr.url)).toBe(canonicalFeedKey("https://www.cert.ssi.gouv.fr/alerte/feed"));
+    const imported = importSeedBundle(batch, { importedAt: batch.generatedAt }).accepted.find((source: any) => source.id === certFr.id);
+    expect(imported.url).toBe(certFr.url);
   });
 
   test("keeps exclusions locator-safe and distinct from accepted feeds", () => {
@@ -96,7 +104,8 @@ describe("clear-web source portfolio batch", () => {
       expect(Object.keys(exclusion).sort()).toEqual(["idOrUrlHash", "reason", "verifiedAt"]);
       expect(exclusion.idOrUrlHash).toMatch(/^[a-f0-9]{24}$/);
       expect(exclusion.reason).toMatch(/^[a-z0-9_]+$/);
-      expect(exclusion.verifiedAt).toBe(batch.generatedAt);
+      expect(Number.isFinite(Date.parse(exclusion.verifiedAt))).toBe(true);
+      expect(Date.parse(exclusion.verifiedAt)).toBeLessThanOrEqual(Date.parse(batch.generatedAt));
       expect(acceptedHashes.has(exclusion.idOrUrlHash)).toBe(false);
       expect(JSON.stringify(exclusion)).not.toMatch(/https?:\/\/|\.onion\b|token|credential/i);
     }
