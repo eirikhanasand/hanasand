@@ -25,6 +25,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
 
   const generatedAt = nowIso();
   const entityType = searchEntityType(query, body.entityType ?? url.searchParams.get("entityType"), options.store, scope.tenantId);
+  const actorQuery = entityType === "actor";
   const sourcesInScope = options.store.listSources().filter((source: any) => !source.tenantId || source.tenantId === scope.tenantId);
   const liveSearch = createLiveSearchPlan({
     request: { query, entityType, tenantId: scope.tenantId, createdAt: generatedAt },
@@ -47,13 +48,13 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const captureIds = new Set(rows.map((row) => row.id));
   const sourceIds = new Set(rows.map((row) => row.sourceId));
   const records = searchRecords(options.store, scope.tenantId, captureIds, sourceIds);
-  const assessment = assess(rows, records);
+  const assessment = assess(rows, records, generatedAt);
   const eventRows = rows.filter(isIncidentRow);
   const activityRows = entityType === "actor" ? eventRows : rows;
   const lastSeen = latest(activityRows.map((row) => row.publishedAt));
-  const profile = actorProfileForQuery(records, identity);
-  const aliases = actorAliases(records, rows, profile, identity);
-  const recentActivity = activityRows.map((row) => activity(row, records, assessment.confidence));
+  const profile = actorQuery ? actorProfileForQuery(records, identity) : undefined;
+  const aliases = actorQuery ? actorAliases(records, rows, profile, identity) : [];
+  const recentActivity = activityRows.map((row) => activity(row, records, assessment.confidence, generatedAt));
   const victimActivity = recentActivity.filter((item) => item.victimName);
   const victimTargetSectors = unique(victimActivity.flatMap((item) => item.affectedSectors));
   const victimGeographies = unique(victimActivity.flatMap((item) => item.countries));
@@ -85,23 +86,23 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     sourceFamily: row.sourceFamily ?? "source_capture",
     parserStatus: hasParsedRecord(row.id, records) ? "parsed" : "partial",
     lastCollectedAt: row.collectedAt,
-    confidence: rowConfidence(row.id, records, assessment.confidence),
+    confidence: rowConfidence(row.id, records, assessment.confidence, generatedAt),
     shownBecause: `${row.sourceName} contains captured evidence matching ${query}.`
   }));
-  const sectors = entityValues(records.entities, "sector");
-  const countries = entityValues(records.entities, "country");
+  const sectors = entityValues(characterizationEntities(records, "sector", generatedAt), "sector");
+  const countries = entityValues(characterizationEntities(records, "country", generatedAt), "country");
   const victims = unique([...entityValues(records.entities, "victim"), ...rows.map((row) => row.victimName)]);
-  const actor = profile?.canonicalName
+  const actor = !actorQuery ? undefined : profile?.canonicalName
     ?? records.entities.find((entity) => ["actor", "ransomware_family"].includes(entity.type) && identity.normalizedTerms.has(normalizeActorName(entity.value)))?.value
     ?? rows.find((row) => row.actor && identity.normalizedTerms.has(normalizeActorName(row.actor)))?.actor
     ?? (identity.catalogCandidates.length === 1 && identity.catalogCandidates[0].matchKinds.includes("canonical") ? identity.catalogCandidates[0].canonicalName : undefined);
   const eventCaptureIds = new Set(eventRows.map((row) => row.id));
   const publicIncidents = records.incidents.filter((incident) => eventCaptureIds.has(incident.captureId));
   const campaigns = unique(publicIncidents.map((incident) => safeText(incident.title ?? incident.summary, 180)));
-  const malwareTools = entityValues(records.entities, "malware");
+  const malwareTools = entityValues(characterizationEntities(records, "malware", generatedAt), "malware");
   const indicators = safeIndicators(records.indicators);
   const infrastructure = safeIndicators(records.indicators.filter((indicator) => ["domain", "hostname", "ipv4", "ipv6", "url"].includes(indicator.type)));
-  const ttps = records.entities.filter((entity) => entity.type === "ttp").map((entity) => ({
+  const ttps = characterizationEntities(records, "ttp", generatedAt).map((entity) => ({
     name: safeText(entity.value, 160),
     attackId: typeof entity.attackId === "string" ? entity.attackId : undefined,
     tactic: safeText(entity.tactic, 80) || "Unmapped",
@@ -109,23 +110,25 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     confidence: confidence(entity.confidence),
     sourceIds: [entity.sourceId].filter(Boolean),
     captureIds: [entity.captureId].filter(Boolean),
-    reviewState: entity.reviewReasons?.length ? "needs_review" : "unreviewed"
+    reviewState: entity.reviewReasons?.length || entity.extractionMethod === "deterministic_fallback" ? "needs_review" : "unreviewed",
+    extractionMethod: entity.extractionMethod,
+    extractorVersion: entity.extractorVersion
   }));
   const summary = searchSummary(query, rows.length, assessment);
-  const watchlistCandidates = unique([
-    ...victims,
-    ...records.indicators.filter((indicator) => indicator.type === "domain").map((indicator) => indicator.value)
-  ]).map((value) => ({
+  const watchlistCandidates = uniqueBy([
+    ...queryWatchlistCandidates(query, entityType),
+    ...unique([...victims, ...records.indicators.filter((indicator) => indicator.type === "domain").map((indicator) => indicator.value)]).map((value) => ({
     kind: /^([a-z0-9-]+\.)+[a-z]{2,}$/i.test(value) ? "domain" : "company",
     value,
     reason: "Extracted from captured public-intelligence evidence; analyst confirmation is required before alerting.",
     confidence: Math.min(assessment.confidence, 0.69)
-  }));
-  const missing = missingFields({ actor, victims, sectors, countries, ttps, records, rows });
-  const businessModel = businessModelAssessment(records.businessEntities, records.businessClaims, records.businessClaimEvidence);
+    }))
+  ], (candidate) => `${candidate.kind}:${candidate.value.toLowerCase()}`);
+  const missing = missingFields({ query, entityType, actor, victims, sectors, countries, ttps, records, generatedAt });
+  const businessModel = actorQuery ? businessModelAssessment(records.businessEntities, records.businessClaims, records.businessClaimEvidence) : undefined;
   const attributionEvidence = actor ? actorAttribution(rows, unique([actor, ...aliases, ...identity.terms])) : undefined;
   const attribution = attributionEvidence?.statement;
-  const actorIntelligence = {
+  const actorIntelligence = actorQuery ? {
     actorClass: profile?.actorType ?? (rows.length && actor ? "observed_threat_actor" : identity.catalogCandidates.length ? "cataloged_threat_group" : "unclassified_query"),
     attribution,
     firstSeen: earliest(activityRows.map((row) => row.publishedAt)),
@@ -150,24 +153,27 @@ export async function searchResponse(request: Request, options: ApiServerOptions
       captureId: attributionEvidence.row.id,
     } : undefined,
     missingFields: missing
-  };
-  const claims = records.claims.map((claim) => ({
-    id: claim.id,
-    claimType: claim.claimType,
-    value: safeClaimValue(claim.value),
-    summary: safeText(claim.summary, 500),
-    confidence: confidence(claim.confidence),
-    reviewState: claim.reviewState ?? "unreviewed",
-    corroborationState: claim.corroborationState ?? "single_source",
-    sourceCount: Number(claim.sourceCount ?? claim.sourceIds?.length ?? 0),
-    evidenceCount: Number(claim.evidenceCount ?? claim.captureIds?.length ?? 0),
-    evidenceStage: claim.evidenceStage,
-    extractionMethod: claim.extractionMethod,
-    extractorVersion: claim.extractorVersion,
-    firstSeenAt: claim.firstSeenAt,
-    lastSeenAt: claim.lastSeenAt,
-    uncertaintyReasons: claim.uncertaintyReasons ?? []
-  }));
+  } : undefined;
+  const claims = records.claims.map((claim) => {
+    const eligible = eligibleSupportClaim(claim, generatedAt);
+    return {
+      id: claim.id,
+      claimType: claim.claimType,
+      value: safeClaimValue(claim.value),
+      summary: safeText(claim.summary, 500),
+      confidence: confidence(claim.confidence),
+      reviewState: staleAt(claim, generatedAt) ? "stale" : claim.reviewState ?? "unreviewed",
+      corroborationState: claim.corroborationState === "contradicted" ? "contradicted" : eligible ? claim.corroborationState ?? "single_source" : "single_source",
+      sourceCount: Number(claim.sourceCount ?? claim.sourceIds?.length ?? 0),
+      evidenceCount: Number(claim.evidenceCount ?? claim.captureIds?.length ?? 0),
+      evidenceStage: claim.evidenceStage,
+      extractionMethod: claim.extractionMethod,
+      extractorVersion: claim.extractorVersion,
+      firstSeenAt: claim.firstSeenAt,
+      lastSeenAt: claim.lastSeenAt,
+      uncertaintyReasons: claim.uncertaintyReasons ?? []
+    };
+  });
   const incidents = publicIncidents.map((incident) => ({
     id: incident.id,
     title: safeText(incident.title, 180),
@@ -204,17 +210,17 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     datasets: entityValues(records.entities, "dataset").map((name) => ({ name, type: "advertised_dataset", coverage: `${records.sourceCount} source(s)`, status: assessment.ready ? "reviewed_or_corroborated" : "needs_review" })),
     sources,
     notes: [...assessment.reasons, ...missing.map((field) => `Missing: ${field}.`)],
-    rows: rows.map((row) => ({ ...row, confidence: rowConfidence(row.id, records, assessment.confidence), assertions: assertionsFor(row.id, records), reviewState: reviewStateFor(row.id, records) })),
-    results: rows.map((row) => ({ ...row, confidence: rowConfidence(row.id, records, assessment.confidence), assertions: assertionsFor(row.id, records), reviewState: reviewStateFor(row.id, records) })),
+    rows: rows.map((row) => ({ ...row, confidence: rowConfidence(row.id, records, assessment.confidence, generatedAt), assertions: assertionsFor(row.id, records), reviewState: reviewStateFor(row.id, records, generatedAt) })),
+    results: rows.map((row) => ({ ...row, confidence: rowConfidence(row.id, records, assessment.confidence, generatedAt), assertions: assertionsFor(row.id, records), reviewState: reviewStateFor(row.id, records, generatedAt) })),
     claims,
     incidents,
-    actorProfile: { query, actor, aliases, datasets: { evidenceStageCounts: stageCounts(records.claims), sourceCount: records.sourceCount }, provenance: structuredProvenance },
-    actorIdentity: {
+    actorProfile: actorQuery ? { query, actor, aliases, datasets: { evidenceStageCounts: stageCounts(records.claims), sourceCount: records.sourceCount }, provenance: structuredProvenance } : undefined,
+    actorIdentity: actorQuery ? {
       catalogMatched: identity.catalogCandidates.length > 0,
       ambiguous: identity.catalogAmbiguous,
       candidates: identity.catalogCandidates,
       activityEvidenceAvailable: rows.length > 0
-    },
+    } : undefined,
     actorIntelligence,
     actionability: {
       schemaVersion: "ti.query.actionability.v1",
@@ -226,7 +232,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
       enrichmentGaps: missing.map((field) => ({ id: `missing:${field}`, title: `Missing ${field}`, severity: "medium", detail: `Attach evidence for ${field} before promoting the profile.`, dependency: field })),
       handoffs: { watchlist: { method: "POST", endpoint: "/v1/dwm/watchlists", payloads: watchlistCandidates.map(({ kind, value, reason }) => ({ kind, value, notes: reason })), missing: ["authenticated organization context", "analyst confirmation"] } }
     },
-    evidenceAssessment: { ...assessment, claimCounts: claimCounts(records.claims), missingFields: missing },
+    evidenceAssessment: { ...assessment, claimCounts: claimCounts(records.claims, generatedAt), missingFields: missing },
     publicTiAnswer: {
       route: { canonicalPath: "/api/ti/search", publicWrapperPath: "/api/ti/search", publicWrapperMethod: "POST" },
       status,
@@ -346,7 +352,9 @@ function searchRecords(store: any, tenantId: string | undefined, captureIds: Set
     const actorBusinessClaim = actorBusinessClaims.get(record.id);
     if (actorBusinessClaim) return actorBusinessClaim;
     const visibleSourceIds = unique([...(record.sourceIds ?? []), record.sourceId].filter((sourceId) => sourceIds.has(sourceId)));
-    return { ...record, sourceIds: visibleSourceIds, sourceCount: visibleSourceIds.length, corroborationState: record.corroborationState === "corroborated" && visibleSourceIds.length < 2 ? "single_source" : record.corroborationState };
+    const visibleCaptureIds = (record.captureIds ?? []).filter((captureId: string) => captureIds.has(captureId));
+    const sourceIndependence = evidenceIndependence(store, visibleCaptureIds);
+    return { ...record, sourceIds: visibleSourceIds, sourceCount: sourceIndependence.groupCount, sourceIndependence, corroborationState: record.corroborationState === "corroborated" && sourceIndependence.groupCount < 2 ? "single_source" : record.corroborationState };
   });
   const businessClaims = [...actorBusinessClaims.values()];
   const evidencedBusinessEntityIds = new Set(businessClaimEvidence.map((record: any) => record.subjectId));
@@ -355,7 +363,8 @@ function searchRecords(store: any, tenantId: string | undefined, captureIds: Set
   const profileIds = new Set(profiles.map((profile: any) => profile.id));
   const aliases = scoped("listActorAliases").filter((record: any) => profileIds.has(record.actorProfileId));
   const validations = scoped("listValidationRecords").filter((record: any) => captureIds.has(record.captureId) || incidents.some((incident: any) => incident.id === record.incidentId));
-  return { entities, businessEntities, businessClaims, businessClaimEvidence, indicators, incidents, claims, profiles, aliases, validations, sourceCount: sourceIds.size };
+  const sourceIndependence = evidenceIndependence(store, [...captureIds]);
+  return { entities, businessEntities, businessClaims, businessClaimEvidence, indicators, incidents, claims, profiles, aliases, validations, sourceCount: captureIds.size ? sourceIndependence.groupCount : 0, sourceIndependence };
 }
 
 const SOURCE_BACKED_BUSINESS_TYPES = new Set([
@@ -530,14 +539,17 @@ function safeUrl(value: unknown): string | undefined {
   }
 }
 
-function assess(rows: any[], records: ReturnType<typeof searchRecords>) {
+function assess(rows: any[], records: ReturnType<typeof searchRecords>, generatedAt: string) {
   const contradicted = records.claims.filter((claim: any) => claim.reviewState === "contradicted" || claim.corroborationState === "contradicted").length;
-  const confirmed = records.claims.filter((claim: any) => claim.reviewState === "confirmed").length;
-  const corroborated = records.claims.filter((claim: any) => claim.corroborationState === "corroborated" && supportsActivityCorroboration(claim)).length;
+  const rejected = records.claims.filter((claim: any) => claim.reviewState === "rejected").length;
+  const stale = records.claims.filter((claim: any) => staleAt(claim, generatedAt)).length;
+  const eligibleClaims = records.claims.filter((claim: any) => eligibleSupportClaim(claim, generatedAt));
+  const confirmed = eligibleClaims.filter((claim: any) => claim.reviewState === "confirmed").length;
+  const corroborated = eligibleClaims.filter((claim: any) => claim.corroborationState === "corroborated" && supportsActivityCorroboration(claim)).length;
   const validated = records.validations.filter((record: any) => ["supported", "confirmed", "validated"].includes(record.status)).length;
-  const signals = [...records.claims, ...records.entities, ...records.indicators].map((record: any) => confidence(record.confidence)).filter((value) => value > 0);
+  const signals = [...eligibleClaims, ...records.entities, ...records.indicators].map((record: any) => confidence(record.confidence)).filter((value) => value > 0);
   let score = signals.length ? signals.reduce((sum, value) => sum + value, 0) / signals.length : rows.length ? 0.35 : 0;
-  if (records.sourceCount < 2 && confirmed === 0 && validated === 0) score = Math.min(score, 0.69);
+  if (records.sourceCount < 2) score = Math.min(score, 0.69);
   if (rows.length && rows.every((row) => row.metadataOnly)) score = Math.min(score, 0.6);
   if (contradicted) score = Math.min(score, 0.35);
   const ready = rows.length > 0 && contradicted === 0 && (confirmed > 0 || corroborated > 0 || validated > 0);
@@ -548,40 +560,43 @@ function assess(rows: any[], records: ReturnType<typeof searchRecords>) {
     confirmed ? `${confirmed} claim(s) are analyst-confirmed.` : "No claim is analyst-confirmed.",
     corroborated ? `${corroborated} activity or victim claim(s) are corroborated across sources.` : "No activity or victim claim is cross-source corroborated.",
     validated ? `${validated} independent validation record(s) support the evidence.` : "No supporting validation record is attached.",
-    contradicted ? `${contradicted} contradicted claim(s) prevent promotion.` : "No stored contradiction is attached."
+    contradicted ? `${contradicted} contradicted claim(s) prevent promotion.` : "No stored contradiction is attached.",
+    rejected ? `${rejected} claim(s) were rejected by review and are not used as support.` : "",
+    stale ? `${stale} claim(s) passed their stored stale-after timestamp.` : ""
   ]);
-  return { ready, confidence: Number(score.toFixed(3)), sourceCount: records.sourceCount, captureCount: rows.length, confirmedClaimCount: confirmed, corroboratedClaimCount: corroborated, validationCount: validated, contradictedClaimCount: contradicted, metadataOnly: rows.length > 0 && rows.every((row) => row.metadataOnly), reasons };
+  return { ready, confidence: Number(score.toFixed(3)), sourceCount: records.sourceCount, captureCount: rows.length, confirmedClaimCount: confirmed, corroboratedClaimCount: corroborated, validationCount: validated, contradictedClaimCount: contradicted, rejectedClaimCount: rejected, staleClaimCount: stale, metadataOnly: rows.length > 0 && rows.every((row) => row.metadataOnly), reasons };
 }
 
-function activity(row: any, records: ReturnType<typeof searchRecords>, fallbackConfidence: number) {
+function activity(row: any, records: ReturnType<typeof searchRecords>, fallbackConfidence: number, generatedAt: string) {
   const rowClaims = records.claims.filter((claim: any) => claim.captureIds?.includes(row.id));
   const activityClaims = rowClaims.filter(supportsActivityCorroboration);
-  const corroboratingSourceIds = unique(activityClaims
-    .flatMap((claim: any) => claim.sourceIds ?? [])
-    .filter((sourceId) => sourceId !== row.sourceId));
+  const eligibleActivityClaims = activityClaims.filter((claim: any) => eligibleSupportClaim(claim, generatedAt));
+  const independence = eligibleActivityClaims.map((claim: any) => claim.sourceIndependence).filter(Boolean).sort((left: any, right: any) => right.groupCount - left.groupCount)[0];
+  const independentGroups = independence?.groups ?? [];
+  const corroboratingSourceIds = independentGroups.filter((group: any) => !group.sourceIds.includes(row.sourceId)).map((group: any) => group.sourceIds[0]).filter(Boolean);
   const contradictingSourceIds = unique(activityClaims.flatMap((claim: any) => claim.contradictingSourceIds ?? []));
   return {
     date: row.publishedAt,
     title: row.title,
     detail: row.summary,
-    confidence: rowConfidence(row.id, records, fallbackConfidence),
+    confidence: rowConfidence(row.id, records, fallbackConfidence, generatedAt),
     sourceIds: [row.sourceId],
     url: row.url,
     claimType: row.victimName ? "victim_claim" : row.tags?.some((tag: string) => /cve|exploit/i.test(tag)) ? "vulnerability_exploitation" : row.tags?.some((tag: string) => /malware|ransomware/i.test(tag)) ? "malware_activity" : "general_activity",
     victimName: row.victimName,
-    affectedSectors: entityValues(records.entities.filter((entity: any) => entity.captureId === row.id), "sector"),
-    countries: entityValues(records.entities.filter((entity: any) => entity.captureId === row.id), "country"),
-    impact: entityValues(records.entities.filter((entity: any) => entity.captureId === row.id), "impact").join(", ") || undefined,
+    affectedSectors: entityValues(characterizationEntities(records, "sector", generatedAt).filter((entity: any) => entity.captureId === row.id), "sector"),
+    countries: entityValues(characterizationEntities(records, "country", generatedAt).filter((entity: any) => entity.captureId === row.id), "country"),
+    impact: entityValues(characterizationEntities(records, "impact", generatedAt).filter((entity: any) => entity.captureId === row.id), "impact").join(", ") || undefined,
     firstReportedAt: row.publishedAt,
     lastReportedAt: row.publishedAt,
-    publisherCount: 1 + corroboratingSourceIds.length,
+    publisherCount: Math.max(1, independentGroups.length),
     corroboratingSourceIds,
     contradictingSourceIds,
     assertionKind: "source_claim",
-    reviewState: reviewStateFor(row.id, records),
+    reviewState: reviewStateFor(row.id, records, generatedAt),
     corroborationState: activityClaims.some((claim: any) => claim.corroborationState === "contradicted")
       ? "contradicted"
-      : activityClaims.some((claim: any) => claim.corroborationState === "corroborated")
+      : eligibleActivityClaims.some((claim: any) => claim.corroborationState === "corroborated")
         ? "corroborated"
         : "single_source",
     observationSummary: `A captured source record matched the query. This confirms the source mention, not the underlying activity.`
@@ -601,6 +616,12 @@ function supportsActivityCorroboration(claim: any) {
   return claim.claimType === "incident" || claim.claimType === "victim";
 }
 
+function eligibleSupportClaim(claim: any, generatedAt: string) {
+  return !["rejected", "contradicted", "needs_review"].includes(claim.reviewState)
+    && claim.corroborationState !== "contradicted"
+    && !staleAt(claim, generatedAt);
+}
+
 function qualityPayload(query: string, rows: any[], records: ReturnType<typeof searchRecords>, assessment: ReturnType<typeof assess>) {
   return {
     query,
@@ -613,7 +634,9 @@ function qualityPayload(query: string, rows: any[], records: ReturnType<typeof s
       records.sourceCount < 2 && "single_source",
       assessment.metadataOnly && "metadata_only",
       !assessment.confirmedClaimCount && "unreviewed",
-      assessment.contradictedClaimCount && "contradicted"
+      assessment.contradictedClaimCount && "contradicted",
+      assessment.rejectedClaimCount && "rejected",
+      assessment.staleClaimCount && "stale"
     ]),
     analystActions: rows.length ? [{ kind: "review_claims", label: "Review claims", manualOnly: true, evidenceIds: rows.map((row) => row.id) }] : [{ kind: "request_more_capture_evidence", label: "Collect evidence", manualOnly: false, evidenceIds: [] }]
   };
@@ -623,17 +646,20 @@ function assertionsFor(captureId: string, records: ReturnType<typeof searchRecor
   return records.entities.filter((entity: any) => entity.captureId === captureId).map((entity: any) => ({ id: entity.id, type: entity.type, value: safeText(entity.value, 240), confidence: confidence(entity.confidence), assertionKind: entity.assertionKind ?? "extracted", extractionMethod: entity.extractionMethod, extractorVersion: entity.extractorVersion, reviewReasons: entity.reviewReasons ?? [] }));
 }
 
-function reviewStateFor(captureId: string, records: ReturnType<typeof searchRecords>) {
+function reviewStateFor(captureId: string, records: ReturnType<typeof searchRecords>, generatedAt: string) {
   const claims = records.claims.filter((claim: any) => claim.captureIds?.includes(captureId));
   if (claims.some((claim: any) => claim.reviewState === "contradicted")) return "contradicted";
+  if (claims.some((claim: any) => claim.reviewState === "rejected")) return "rejected";
+  if (claims.some((claim: any) => staleAt(claim, generatedAt))) return "stale";
   if (claims.some((claim: any) => claim.reviewState === "confirmed")) return "confirmed";
   if (claims.some((claim: any) => claim.reviewState === "needs_review")) return "needs_review";
   return "unreviewed";
 }
 
-function rowConfidence(captureId: string, records: ReturnType<typeof searchRecords>, fallback: number) {
+function rowConfidence(captureId: string, records: ReturnType<typeof searchRecords>, fallback: number, generatedAt: string) {
   const values = [...records.entities, ...records.indicators, ...records.claims]
     .filter((record: any) => record.captureId === captureId || record.captureIds?.includes(captureId))
+    .filter((record: any) => !record.reviewState || eligibleSupportClaim(record, generatedAt))
     .map((record: any) => confidence(record.confidence));
   return values.length ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(3)) : Math.min(fallback, 0.4);
 }
@@ -658,6 +684,7 @@ function searchEntityType(query: string, requested: unknown, store: any, tenantI
   if (/^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(query)) return "domain";
   if (/^(?:https?:\/\/|(?:\d{1,3}\.){3}\d{1,3}$|[a-f0-9]{32,128}$)/i.test(query)) return "indicator";
   if (/^apt\d+$/i.test(query) || actorIdentity(store, tenantId, query).matched) return "actor";
+  if ((store.listExtractedEntities?.() ?? []).some((entity: any) => (entity.tenantId || undefined) === tenantId && entity.type === "victim" && normalizeActorName(entity.value) === normalizeActorName(query))) return "organization";
   return query.includes(" ") ? "organization" : "free_text";
 }
 
@@ -692,7 +719,7 @@ function actorIdentity(store: any, tenantId: string | undefined, query: string) 
     query,
     dictionary?.canonical,
     ...(dictionary?.aliases ?? []),
-    ...(catalogResolution.ambiguous ? [] : catalogResolution.candidates.flatMap((candidate) => candidate.matchKinds.includes("canonical") ? [candidate.identity.canonicalName] : [])),
+    ...(catalogResolution.ambiguous ? [] : catalogResolution.candidates.flatMap((candidate) => [candidate.identity.canonicalName, ...candidate.identity.associatedNames])),
     ...matchedProfiles.flatMap((profile: any) => [profile.canonicalName, ...(profile.aliases ?? [])]),
     ...aliases.filter((alias: any) => matchedProfileIds.has(alias.actorProfileId)).map((alias: any) => alias.alias)
   ]);
@@ -756,16 +783,29 @@ function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function missingFields(input: { actor?: string; victims: string[]; sectors: string[]; countries: string[]; ttps: any[]; records: ReturnType<typeof searchRecords>; rows: any[] }) {
+function missingFields(input: { query: string; entityType: SearchEntityType; actor?: string; victims: string[]; sectors: string[]; countries: string[]; ttps: any[]; records: ReturnType<typeof searchRecords>; generatedAt: string }) {
+  const normalizedQuery = normalizeActorName(input.query);
+  const common = [
+    input.records.sourceCount >= 2 ? "" : "independent corroborating source",
+    input.records.claims.some((claim: any) => claim.reviewState === "confirmed" && eligibleSupportClaim(claim, input.generatedAt)) ? "" : "analyst-confirmed claim",
+    input.records.validations.length ? "" : "independent validation"
+  ];
+  if (input.entityType !== "actor") {
+    const typedMatch = input.entityType === "organization"
+      ? input.victims.some((victim) => normalizeActorName(victim) === normalizedQuery)
+      : input.entityType === "domain" || input.entityType === "indicator" || input.entityType === "cve"
+        ? input.records.indicators.some((indicator: any) => normalizeActorName(indicator.value) === normalizedQuery)
+          || input.records.entities.some((entity: any) => normalizeActorName(entity.value) === normalizedQuery)
+        : true;
+    return [typedMatch ? "" : `${input.entityType} evidence`, ...common].filter(Boolean);
+  }
   return [
     input.actor ? "" : "actor",
     input.victims.length ? "" : "victim",
     input.sectors.length ? "" : "sector",
     input.countries.length ? "" : "country",
     input.ttps.length ? "" : "TTP",
-    input.records.sourceCount >= 2 ? "" : "independent corroborating source",
-    input.records.claims.some((claim: any) => claim.reviewState === "confirmed") ? "" : "analyst-confirmed claim",
-    input.records.validations.length ? "" : "independent validation"
+    ...common
   ].filter(Boolean);
 }
 
@@ -783,8 +823,24 @@ function stageCounts(claims: any[]) {
   }, {});
 }
 
-function claimCounts(claims: any[]) {
-  return { total: claims.length, confirmed: claims.filter((claim) => claim.reviewState === "confirmed").length, needsReview: claims.filter((claim) => ["unreviewed", "needs_review"].includes(claim.reviewState)).length, contradicted: claims.filter((claim) => claim.reviewState === "contradicted" || claim.corroborationState === "contradicted").length, corroborated: claims.filter((claim) => claim.corroborationState === "corroborated").length };
+function claimCounts(claims: any[], generatedAt: string) {
+  return { total: claims.length, confirmed: claims.filter((claim) => claim.reviewState === "confirmed" && eligibleSupportClaim(claim, generatedAt)).length, needsReview: claims.filter((claim) => ["unreviewed", "needs_review"].includes(claim.reviewState)).length, rejected: claims.filter((claim) => claim.reviewState === "rejected").length, stale: claims.filter((claim) => staleAt(claim, generatedAt)).length, contradicted: claims.filter((claim) => claim.reviewState === "contradicted" || claim.corroborationState === "contradicted").length, corroborated: claims.filter((claim) => claim.corroborationState === "corroborated" && eligibleSupportClaim(claim, generatedAt)).length };
+}
+
+function characterizationEntities(records: ReturnType<typeof searchRecords>, type: string, generatedAt: string) {
+  const confirmedEntityIds = new Set(records.claims.filter((claim: any) => claim.subjectType === "entity" && claim.reviewState === "confirmed" && eligibleSupportClaim(claim, generatedAt)).map((claim: any) => claim.subjectId));
+  return records.entities.filter((entity: any) => entity.type === type && (entity.extractionMethod !== "deterministic_fallback" || confirmedEntityIds.has(entity.id)));
+}
+
+function queryWatchlistCandidates(query: string, entityType: SearchEntityType): Array<{ kind: "domain" | "company"; value: string; reason: string; confidence: number }> {
+  if (entityType === "domain") return [{ kind: "domain", value: query.toLowerCase(), reason: "Exact domain supplied by the user; no activity is inferred from the query itself.", confidence: 1 }];
+  if (entityType === "organization") return [{ kind: "company", value: query, reason: "Exact organization supplied by the user; no activity is inferred from the query itself.", confidence: 1 }];
+  return [];
+}
+
+function staleAt(claim: any, generatedAt: string) {
+  const staleAfter = Date.parse(String(claim.staleAfter ?? ""));
+  return Number.isFinite(staleAfter) && staleAfter <= Date.parse(generatedAt);
 }
 
 function safeIndicators(indicators: any[]) {

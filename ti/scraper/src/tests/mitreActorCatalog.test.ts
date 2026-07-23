@@ -158,7 +158,9 @@ describe("MITRE actor identity catalog", () => {
     expect(structured.entities).toContainEqual(expect.objectContaining({ type: "ransomware_family", value: "Charming Kitten", actorIdentityIds: ["mitre-attack-enterprise:G0059"] }));
 
     const plan = createLiveSearchPlan({ request: { query: "Charming Kitten", entityType: "actor", createdAt: "2026-07-21T00:00:00.000Z" }, actorIdentities: catalog.identities, sources: [source({ id: "src_actor_reports", type: "rss" })] });
-    expect(plan.dto.queryTerms).toEqual(["Charming Kitten"]);
+    expect(plan.dto.queryTerms).toEqual(expect.arrayContaining(["Charming Kitten", "Magic Hound", "APT35"]));
+    expect(plan.dto.reuseKey).toBe(createLiveSearchPlan({ request: { query: "Magic Hound", entityType: "actor", createdAt: "2026-07-21T00:00:00.000Z" }, actorIdentities: catalog.identities, sources: [source({ id: "src_actor_reports", type: "rss" })] }).dto.reuseKey);
+    expect(createLiveSearchPlan({ request: { query: "Thrip", entityType: "actor", createdAt: "2026-07-21T00:00:00.000Z" }, actorIdentities: catalog.identities, sources: [source({ id: "src_actor_reports", type: "rss" })] }).dto.queryTerms).toEqual(["Thrip"]);
 
     const beforeRefresh = processCollectedItem({ sourceId: "src_before_catalog", url: "https://example.test/before", collectedAt: "2026-07-21T00:00:00.000Z", rawText: "APT29 was named.", contentHash: hashContent("before-catalog"), links: [], metadata: {}, sensitive: false }, { actorIdentities: [] });
     expect(beforeRefresh.entities.some((entity: any) => entity.type === "actor")).toBe(false);

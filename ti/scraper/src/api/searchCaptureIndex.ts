@@ -14,7 +14,7 @@ export function findSearchCaptures(store: any, query: string, limit: number, ten
   return docs
     .map((doc) => ({ doc, score: scoreDoc(doc, terms) }))
     .filter((hit) => hit.score > 0)
-    .sort((a, b) => b.score - a.score || b.doc.collectedAt.localeCompare(a.doc.collectedAt))
+    .sort((a, b) => b.score - a.score || b.doc.collectedAt.localeCompare(a.doc.collectedAt) || String(a.doc.capture.id).localeCompare(String(b.doc.capture.id)))
     .slice(0, limit)
     .map((hit) => hit.doc.capture);
 }
@@ -26,7 +26,7 @@ export function findActorSearchCaptures(store: any, identities: string[], limit:
   return docs
     .map((doc) => ({ doc, score: scoreIdentityDoc(doc, terms) }))
     .filter((hit) => hit.score > 0)
-    .sort((a, b) => b.score - a.score || b.doc.collectedAt.localeCompare(a.doc.collectedAt))
+    .sort((a, b) => b.score - a.score || b.doc.collectedAt.localeCompare(a.doc.collectedAt) || String(a.doc.capture.id).localeCompare(String(b.doc.capture.id)))
     .slice(0, limit)
     .map((hit) => hit.doc.capture);
 }
@@ -40,7 +40,7 @@ function docsForStore(store: any): SearchDoc[] {
   if (previous?.signature === signature) return previous.docs;
   const docs = captures.filter((capture: any) => sellableCapture(capture, sources.get(capture.sourceId)))
     .map((capture: any) => docFor(withLegacyIncidentTitle(capture, incidentTitles.get(capture.id)), sources.get(capture.sourceId)))
-    .sort((a, b) => b.collectedAt.localeCompare(a.collectedAt));
+    .sort((a, b) => b.collectedAt.localeCompare(a.collectedAt) || String(a.capture.id).localeCompare(String(b.capture.id)));
   cache.set(store, { signature, docs });
   return docs;
 }

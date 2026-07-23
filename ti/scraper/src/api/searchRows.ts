@@ -80,6 +80,7 @@ function safePublicUrl(url: unknown, metadata: any) {
   try {
     const parsed = new URL(value);
     if (parsed.username || parsed.password || [...parsed.searchParams.keys()].some((key) => /(?:token|secret|password|authorization|cookie|api[_-]?key|signature)/i.test(key))) return undefined;
+    if (parsed.hostname === "news.google.com" && /^\/(?:rss\/)?articles\//.test(parsed.pathname)) return undefined;
     return parsed.toString();
   } catch {
     return undefined;
