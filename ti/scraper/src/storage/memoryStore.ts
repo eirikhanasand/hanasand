@@ -8,7 +8,8 @@ import { InMemoryObjectEvidenceStore } from "./memoryObjectEvidenceStore.ts";
 import { installMemoryStoreReplayMethods } from "./memoryStoreReplayMethods.ts";
 import { canonicalizeUrl, captureDedupeKey, dedupeIndexKeys, enforceSensitiveMetadataOnly, prepareCapture } from "./memoryStoreHelpers.ts";
 import { nowIso, stableId } from "../utils.ts";
-import { canonicalActorIdentity, resolveMitreActorIdentity, type ActorIdentityRecord, type MitreActorCatalogSnapshot, type MitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
+import { canonicalActorIdentity, normalizeActorLabel, resolveMitreActorIdentity, type ActorIdentityRecord, type MitreActorCatalogSnapshot } from "../pipeline/mitreActorCatalog.ts";
+import type { RansomwareOperationCatalogSnapshot } from "../pipeline/ransomwareOperationCatalog.ts";
 export interface RawEvidenceStore extends CaptureMetadataStore {} export interface ScraperStore extends CaptureMetadataStore {}
 const mapValues = <T>(map: Map<string, T>) => [...map.values()];
 const put = <T extends { id: string }>(map: Map<string, T>, item: T) => (map.set(item.id, item), item);
@@ -200,14 +201,14 @@ export class InMemoryScraperStore implements ScraperStore {
     if (!this.actorIdentities.size) return identityIds.length === 0;
     return identityIds.length > 0 && identityIds.every((id) => this.actorIdentities.get(id)?.status === "current");
   }
-  replaceActorIdentityCatalog(snapshot: MitreActorCatalogSnapshot, provenance: { sourceId: string; captureId: string; importedAt?: string }) {
+  replaceActorIdentityCatalog(snapshot: MitreActorCatalogSnapshot | RansomwareOperationCatalogSnapshot, provenance: { sourceId: string; captureId: string; importedAt?: string }) {
     this.assertOrganizationWritable(snapshot);
     const incomingIds = new Set(snapshot.identities.map((identity) => identity.id));
     if (incomingIds.size !== snapshot.identities.length || snapshot.counts.totalIdentityCount !== snapshot.identities.length) throw new Error("Actor identity catalog count mismatch.");
     const importedAt = provenance.importedAt ?? snapshot.retrievedAt;
     const previous = this.actorIdentityCatalogs.get(snapshot.catalogId);
-    const retired = this.listActorIdentities().filter((identity: any) => identity.catalogId === snapshot.catalogId && !incomingIds.has(identity.id)).map((identity: any) => ({ ...identity, status: "retired", retiredAt: importedAt, updatedAt: importedAt }));
-    const identities = snapshot.identities.map((identity: MitreActorIdentity) => ({ ...identity, sourceId: provenance.sourceId, captureId: provenance.captureId, importedAt, updatedAt: importedAt }));
+    const retired = this.listActorIdentities().filter((identity: any) => identity.catalogId === snapshot.catalogId && !incomingIds.has(identity.id)).map((identity: any) => ({ ...identity, status: "retired", retiredAt: identity.retiredAt ?? importedAt, updatedAt: importedAt }));
+    const identities = snapshot.identities.map((identity: ActorIdentityRecord) => ({ ...identity, sourceId: provenance.sourceId, captureId: provenance.captureId, importedAt, updatedAt: importedAt }));
     const { identities: _omitted, ...catalog } = snapshot;
     put(this.actorIdentityCatalogs, {
       ...catalog,
@@ -220,6 +221,7 @@ export class InMemoryScraperStore implements ScraperStore {
       identityIds: identities.map((identity) => identity.id)
     });
     for (const identity of [...identities, ...retired]) put(this.actorIdentities, identity);
+    for (const identity of reconcileCrossCatalogActorIdentities(this.listActorIdentities())) put(this.actorIdentities, identity);
     const archivedActorProfileIds = this.archiveInactiveActorProfiles(importedAt, snapshot.catalogId);
     return { catalogId: snapshot.catalogId, currentIdentityCount: snapshot.counts.currentIdentityCount, retainedHistoricalIdentityCount: retired.length, archivedActorProfileIds, bundleSha256: snapshot.bundleSha256 };
   }
@@ -404,6 +406,7 @@ function normalized(record: any): string { return String(record.normalizedValue 
 function activeActorProfile(profile: any): boolean { return Boolean(profile && profile.identityResolutionState !== "archived"); }
 type ActorProfileResolution = { profileId: string; tenantId?: string; canonicalName: string; normalizedName: string; aliases: string[]; actorIdentityIds: string[] };
 function actorProfileResolution(store: any, capture: any, entity: any): ActorProfileResolution | undefined {
+  if (entity.assertionKind === "mention") return undefined;
   const identities = (store.listActorIdentities?.() ?? []) as ActorIdentityRecord[];
   const explicitIds = unique(entity.actorIdentityIds ?? []);
   let identity: ActorIdentityRecord | undefined;
@@ -431,6 +434,34 @@ function actorProfileResolution(store: any, capture: any, entity: any): ActorPro
   };
 }
 function publicActorTenant(tenantId: unknown): string | undefined { return !tenantId || tenantId === "default" ? undefined : String(tenantId); }
+function reconcileCrossCatalogActorIdentities(identities: any[]): any[] {
+  const mitre = identities.filter((identity) => identity.catalogId === "mitre-attack-enterprise" && identity.status === "current");
+  return identities.filter((identity) => identity.catalogId === "ransomware-live-current-operations").map((identity) => {
+    const { canonicalIdentityId: _canonicalIdentityId, canonicalIdentityEvidence: _canonicalIdentityEvidence, ...unmapped } = identity;
+    const labels = [identity.canonicalName, ...(identity.associatedNames ?? [])];
+    const matches = mitre.flatMap((candidate) => {
+      const targetLabels = [candidate.canonicalName, ...(candidate.associatedNames ?? [])];
+      const matchedLabel = labels.find((label) => targetLabels.some((target) => normalizeActorLabel(target) === normalizeActorLabel(label)));
+      return matchedLabel ? [{ candidate, matchedLabel }] : [];
+    });
+    if (matches.length !== 1 || !identity.captureId || !matches[0].candidate.captureId) return unmapped;
+    const { candidate, matchedLabel } = matches[0];
+    return {
+      ...unmapped,
+      canonicalIdentityId: candidate.id,
+      canonicalIdentityEvidence: {
+        relationship: "same_as",
+        matchedLabel,
+        sourceCatalogId: identity.catalogId,
+        sourceCatalogVersion: identity.catalogVersion,
+        sourceCaptureId: identity.captureId,
+        targetCatalogId: candidate.catalogId,
+        targetCatalogVersion: candidate.catalogVersion,
+        targetCaptureId: candidate.captureId
+      }
+    };
+  });
+}
 function actorProfileMatches(store: any, profile: any, resolution: ActorProfileResolution): boolean {
   if (publicActorTenant(profile.tenantId) !== resolution.tenantId) return false;
   const identities = (store.listActorIdentities?.() ?? []) as ActorIdentityRecord[];

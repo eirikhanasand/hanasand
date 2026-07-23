@@ -344,7 +344,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       this.pipelineDepth--;
     }
     const catalog = structuredClone(this.getActorIdentityCatalog(snapshot.catalogId));
-    const identities = structuredClone(this.listActorIdentities().filter((identity: any) => identity.catalogId === snapshot.catalogId));
+    const identities = structuredClone(this.listActorIdentities());
     const archivedProfiles = result.archivedActorProfileIds.map((id: string) => structuredClone(this.getActorProfile(id)));
     this.enqueue(`actor-identity-catalog:${catalog.id}`, () => persistActorIdentityCatalog(
       this.sql,
