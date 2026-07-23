@@ -191,7 +191,20 @@ export class InMemoryScraperStore implements ScraperStore {
       identityIds: identities.map((identity) => identity.id)
     });
     for (const identity of [...identities, ...retired]) put(this.actorIdentities, identity);
-    return { catalogId: snapshot.catalogId, currentIdentityCount: snapshot.counts.currentIdentityCount, retainedHistoricalIdentityCount: retired.length, bundleSha256: snapshot.bundleSha256 };
+    const archivedActorProfileIds = this.listActorProfiles()
+      .filter((profile: any) => {
+        const identityIds = unique(profile.actorIdentityIds ?? []);
+        return !identityIds.length || identityIds.some((id) => this.actorIdentities.get(id)?.status !== "current");
+      })
+      .map((profile: any) => this.saveActorProfile({
+        ...profile,
+        normalizedName: `archived:${profile.id}`,
+        aliases: [],
+        identityResolutionState: "archived",
+        identityResolutionReason: "inactive_identity",
+        updatedAt: importedAt
+      }).id);
+    return { catalogId: snapshot.catalogId, currentIdentityCount: snapshot.counts.currentIdentityCount, retainedHistoricalIdentityCount: retired.length, archivedActorProfileIds, bundleSha256: snapshot.bundleSha256 };
   }
   protected hydrateActorIdentityCatalogSnapshot(catalog: any) { return put(this.actorIdentityCatalogs, catalog); }
   protected hydrateActorIdentitySnapshot(identity: any) { return put(this.actorIdentities, identity); }

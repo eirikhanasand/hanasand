@@ -335,10 +335,24 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   override replaceActorIdentityCatalog(snapshot: any, provenance: any): any {
-    const result = super.replaceActorIdentityCatalog(snapshot, provenance);
+    this.pipelineDepth++;
+    let result;
+    try {
+      result = super.replaceActorIdentityCatalog(snapshot, provenance);
+    } finally {
+      this.pipelineDepth--;
+    }
     const catalog = structuredClone(this.getActorIdentityCatalog(snapshot.catalogId));
     const identities = structuredClone(this.listActorIdentities().filter((identity: any) => identity.catalogId === snapshot.catalogId));
-    this.enqueue(`actor-identity-catalog:${catalog.id}`, () => persistActorIdentityCatalog(this.sql, catalog, identities));
+    const archivedProfiles = result.archivedActorProfileIds.map((id: string) => structuredClone(this.getActorProfile(id)));
+    this.enqueue(`actor-identity-catalog:${catalog.id}`, () => persistActorIdentityCatalog(
+      this.sql,
+      catalog,
+      identities,
+      async (transaction) => {
+        for (const profile of archivedProfiles) await this.persistActorProfile(profile, transaction);
+      }
+    ));
     return result;
   }
 
