@@ -2,8 +2,8 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "public_telegram",
   "version": 1,
-  "name": "public-telegram-independent-publisher-batch-1",
-  "generatedAt": "2026-07-23T09:59:47.042Z",
+  "name": "public-telegram-independent-publisher-batch-2",
+  "generatedAt": "2026-07-23T10:08:48.409Z",
   "disabledByDefault": false,
   "sources": [
     {
@@ -23,7 +23,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -41,7 +41,7 @@
         "activityWindowSeconds": 5625900,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 20,
           "observedCadenceSeconds": 93765,
@@ -50,7 +50,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://cisoclub.ru/about/",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -129,7 +129,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -147,7 +147,7 @@
         "activityWindowSeconds": 7776000,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 20,
           "observedCadenceSeconds": 194571,
@@ -156,7 +156,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://tomhunter.ru/",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -235,7 +235,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -253,7 +253,7 @@
         "activityWindowSeconds": 2592000,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 20,
           "observedCadenceSeconds": 31552,
@@ -262,7 +262,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://www.itb.spb.ru/",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -341,7 +341,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -359,7 +359,7 @@
         "activityWindowSeconds": 7366980,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 20,
           "observedCadenceSeconds": 122783,
@@ -368,7 +368,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://www.luntry.ru/",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -447,7 +447,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -465,7 +465,7 @@
         "activityWindowSeconds": 5804820,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 15,
           "observedCadenceSeconds": 128996,
@@ -474,7 +474,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://www.garda.ai/",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -553,7 +553,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -571,7 +571,7 @@
         "activityWindowSeconds": 7776000,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 14,
           "observedCadenceSeconds": 453147,
@@ -580,7 +580,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://x.com/ArchieScorp",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -659,7 +659,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -677,7 +677,7 @@
         "activityWindowSeconds": 6821874,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 18,
           "observedCadenceSeconds": 126331,
@@ -686,7 +686,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://www.ussc.ru/",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -765,7 +765,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -783,7 +783,7 @@
         "activityWindowSeconds": 7776000,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 14,
           "observedCadenceSeconds": 366025,
@@ -792,7 +792,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://searchinform.ru/",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -871,7 +871,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -889,7 +889,7 @@
         "activityWindowSeconds": 7776000,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 14,
           "observedCadenceSeconds": 445232,
@@ -898,7 +898,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://www.youtube.com/@awillix_security?cbrd=1&ucbcb=1",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -977,7 +977,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -995,7 +995,7 @@
         "activityWindowSeconds": 3868662,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 14,
           "observedCadenceSeconds": 92111,
@@ -1004,7 +1004,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://innostage-group.ru/",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -1083,7 +1083,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -1101,7 +1101,7 @@
         "activityWindowSeconds": 7776000,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 14,
           "observedCadenceSeconds": 412877,
@@ -1110,7 +1110,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://ksb-soft.ru/",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -1189,7 +1189,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -1207,7 +1207,7 @@
         "activityWindowSeconds": 7776000,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 20,
           "observedCadenceSeconds": 186344,
@@ -1216,7 +1216,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://3side.org/index",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -1295,7 +1295,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -1313,7 +1313,7 @@
         "activityWindowSeconds": 2592000,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 20,
           "observedCadenceSeconds": 31386,
@@ -1322,7 +1322,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://securitymedia.org/",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -1401,7 +1401,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -1419,7 +1419,7 @@
         "activityWindowSeconds": 7776000,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 15,
           "observedCadenceSeconds": 628900,
@@ -1428,7 +1428,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://radcop.online/",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -1507,7 +1507,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -1525,7 +1525,7 @@
         "activityWindowSeconds": 7776000,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 10,
           "observedCadenceSeconds": 2947723,
@@ -1534,7 +1534,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://lab.deiteriy.com/",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -1613,7 +1613,7 @@
         "approvalState": "approved",
         "approvalScope": "official_public_web_preview",
         "metadataOnly": false,
-        "approvedAt": "2026-07-23T09:59:47.042Z",
+        "approvedAt": "2026-07-23T10:08:48.409Z",
         "approvedBy": "source-review:official-publisher-backlink",
         "policyVersion": "collection-policy:v1"
       },
@@ -1631,7 +1631,7 @@
         "activityWindowSeconds": 7776000,
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T09:59:47.042Z",
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
           "outcome": "content_parsed",
           "observedItemCount": 20,
           "observedCadenceSeconds": 1773721,
@@ -1640,7 +1640,7 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://soxoj.com/",
-          "legalBasisVerifiedAt": "2026-07-23T09:59:47.042Z"
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
         }
       },
       "catalog": {
@@ -1701,838 +1701,1646 @@
         ],
         "rollback": {}
       }
+    },
+    {
+      "id": "src_portfolio_tg_ptswarm",
+      "name": "PT SWARM offensive security research",
+      "type": "telegram_public",
+      "url": "https://t.me/ptswarm",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.9,
+      "language": "ru",
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Public text posts from Positive Technologies's channel independently linked by https://dbugs.ptsecurity.com/vulnerability/PT-2025-28587. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, leak bodies, or credentials.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:08:48.409Z",
+        "approvedBy": "source-review:official-publisher-backlink",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "vendor_research",
+          "vulnerability_reporting",
+          "actor_reporting"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "channelHandle": "ptswarm",
+        "activityWindowSeconds": 7776000,
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedCadenceSeconds": 2133799,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://dbugs.ptsecurity.com/vulnerability/PT-2025-28587",
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:ptswarm:telegram",
+        "publisher": {
+          "name": "Positive Technologies",
+          "country": "RU",
+          "homepage": "https://global.ptsecurity.com/",
+          "trustBasis": "official publisher or researcher page links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel collected for defensive security research.",
+        "reliability": 0.9,
+        "intelligenceValue": 0.92,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "vulnerability research",
+            "exploitation",
+            "malware",
+            "threat actors"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [
+            "RU"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "vulnerability research",
+            "exploitation",
+            "malware",
+            "threat actors"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 3600,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 3600
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_tg_gis_cybersec",
+      "name": "Gazinformservice cybersecurity research",
+      "type": "telegram_public",
+      "url": "https://t.me/gis_cybersec",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.86,
+      "language": "ru",
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Public text posts from Gazinformservice's channel independently linked by https://www.gaz-is.ru/. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, leak bodies, or credentials.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:08:48.409Z",
+        "approvedBy": "source-review:official-publisher-backlink",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "vendor_research",
+          "vulnerability_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "channelHandle": "gis_cybersec",
+        "activityWindowSeconds": 3663198,
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 14,
+          "observedCadenceSeconds": 87219,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.gaz-is.ru/",
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:gis_cybersec:telegram",
+        "publisher": {
+          "name": "Gazinformservice",
+          "country": "RU",
+          "homepage": "https://www.gaz-is.ru/",
+          "trustBasis": "official publisher or researcher page links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel collected for defensive security research.",
+        "reliability": 0.86,
+        "intelligenceValue": 0.84,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "cyber threats",
+            "vulnerabilities",
+            "incident analysis",
+            "security research"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [
+            "RU"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "cyber threats",
+            "vulnerabilities",
+            "incident analysis",
+            "security research"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 3600,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 3600
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_tg_echeloneyes",
+      "name": "Echelon Eyes threat reporting",
+      "type": "telegram_public",
+      "url": "https://t.me/echeloneyes",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.86,
+      "language": "ru",
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Public text posts from Echelon Group's channel independently linked by https://npo-echelon.ru/. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, leak bodies, or credentials.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:08:48.409Z",
+        "approvedBy": "source-review:official-publisher-backlink",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "vendor_research",
+          "vulnerability_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "channelHandle": "echeloneyes",
+        "activityWindowSeconds": 2592000,
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedCadenceSeconds": 40171,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://npo-echelon.ru/",
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:echeloneyes:telegram",
+        "publisher": {
+          "name": "Echelon Group",
+          "country": "RU",
+          "homepage": "https://npo-echelon.ru/",
+          "trustBasis": "official publisher or researcher page links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel collected for defensive security research.",
+        "reliability": 0.86,
+        "intelligenceValue": 0.84,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "cyber threats",
+            "vulnerabilities",
+            "incidents",
+            "data breaches"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [
+            "RU"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "cyber threats",
+            "vulnerabilities",
+            "incidents",
+            "data breaches"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 3600,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 3600
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_tg_antph",
+      "name": "Start X phishing and human-risk research",
+      "type": "telegram_public",
+      "url": "https://t.me/antph",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.86,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public text posts from Start X's channel independently linked by https://startx.team/. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, leak bodies, or credentials.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:08:48.409Z",
+        "approvedBy": "source-review:official-publisher-backlink",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "vendor_research",
+          "phishing_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "channelHandle": "antph",
+        "activityWindowSeconds": 7776000,
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedCadenceSeconds": 381411,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://startx.team/",
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:antph:telegram",
+        "publisher": {
+          "name": "Start X",
+          "country": "RU",
+          "homepage": "https://startx.team/",
+          "trustBasis": "official publisher or researcher page links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel collected for defensive security research.",
+        "reliability": 0.86,
+        "intelligenceValue": 0.88,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "phishing",
+            "social engineering",
+            "credential theft",
+            "digital fraud"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [
+            "RU"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "phishing",
+            "social engineering",
+            "credential theft",
+            "digital fraud"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_tg_ap_security",
+      "name": "AP Security laboratory reporting",
+      "type": "telegram_public",
+      "url": "https://t.me/ap_security",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.84,
+      "language": "ru",
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Public text posts from AP Security's channel independently linked by https://apsecurity.ru/. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, leak bodies, or credentials.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:08:48.409Z",
+        "approvedBy": "source-review:official-publisher-backlink",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "vendor_research",
+          "vulnerability_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "channelHandle": "ap_security",
+        "activityWindowSeconds": 7776000,
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedCadenceSeconds": 201977,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://apsecurity.ru/",
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:ap_security:telegram",
+        "publisher": {
+          "name": "AP Security",
+          "country": "RU",
+          "homepage": "https://apsecurity.ru/",
+          "trustBasis": "official publisher or researcher page links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel collected for defensive security research.",
+        "reliability": 0.84,
+        "intelligenceValue": 0.84,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "vulnerabilities",
+            "threat research",
+            "cyber incidents",
+            "exploitation"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [
+            "RU"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "vulnerabilities",
+            "threat research",
+            "cyber incidents",
+            "exploitation"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 3600,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 3600
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_tg_avleonovrus",
+      "name": "Alexander Leonov vulnerability analysis",
+      "type": "telegram_public",
+      "url": "https://t.me/avleonovrus",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.87,
+      "language": "ru",
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Public text posts from Alexander Leonov's channel independently linked by https://avleonov.com/. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, leak bodies, or credentials.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:08:48.409Z",
+        "approvedBy": "source-review:official-publisher-backlink",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "independent_research",
+          "vulnerability_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "channelHandle": "avleonovrus",
+        "activityWindowSeconds": 3556710,
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 10,
+          "observedCadenceSeconds": 118557,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://avleonov.com/",
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:avleonovrus:telegram",
+        "publisher": {
+          "name": "Alexander Leonov",
+          "country": "RU",
+          "homepage": "https://avleonov.com/",
+          "trustBasis": "official publisher or researcher page links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel collected for defensive security research.",
+        "reliability": 0.87,
+        "intelligenceValue": 0.9,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "vulnerability management",
+            "CVE analysis",
+            "exploitation",
+            "security automation"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [
+            "RU"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "vulnerability management",
+            "CVE analysis",
+            "exploitation",
+            "security automation"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 3600,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 3600
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_tg_it_law_security",
+      "name": "RTM Group cyber incident and legal analysis",
+      "type": "telegram_public",
+      "url": "https://t.me/it_law_security",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.83,
+      "language": "ru",
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Public text posts from RTM Group's channel independently linked by https://rtmtech.ru/. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, leak bodies, or credentials.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:08:48.409Z",
+        "approvedBy": "source-review:official-publisher-backlink",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "incident_response",
+          "cybercrime_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "channelHandle": "it_law_security",
+        "activityWindowSeconds": 4914240,
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedCadenceSeconds": 81904,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://rtmtech.ru/",
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:it_law_security:telegram",
+        "publisher": {
+          "name": "RTM Group",
+          "country": "RU",
+          "homepage": "https://rtmtech.ru/",
+          "trustBasis": "official publisher or researcher page links the exact public Telegram handle"
+        },
+        "tier": "tier_3",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel collected for defensive security research.",
+        "reliability": 0.83,
+        "intelligenceValue": 0.82,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "cyber incidents",
+            "data breaches",
+            "digital forensics",
+            "security regulation"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [
+            "RU"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "cyber incidents",
+            "data breaches",
+            "digital forensics",
+            "security regulation"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 3600,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 3600
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_portfolio_tg_alukatsky",
+      "name": "Alexey Lukatsky cybersecurity analysis",
+      "type": "telegram_public",
+      "url": "https://t.me/alukatsky",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.86,
+      "language": "ru",
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Public text posts from Alexey Lukatsky's channel independently linked by https://lukatsky.blogspot.com/. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, leak bodies, or credentials.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T10:08:48.409Z",
+        "approvedBy": "source-review:official-publisher-backlink",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "productionCollection": true,
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "independent_research",
+          "threat_research",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "channelHandle": "alukatsky",
+        "activityWindowSeconds": 2592000,
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T10:08:48.409Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 16,
+          "observedCadenceSeconds": 20544,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://lukatsky.blogspot.com/",
+          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:alukatsky:telegram",
+        "publisher": {
+          "name": "Alexey Lukatsky",
+          "country": "RU",
+          "homepage": "https://lukatsky.blogspot.com/",
+          "trustBasis": "official publisher or researcher page links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel collected for defensive security research.",
+        "reliability": 0.86,
+        "intelligenceValue": 0.86,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "cyber threats",
+            "security operations",
+            "vulnerabilities",
+            "security policy"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [
+            "RU"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "cyber threats",
+            "security operations",
+            "vulnerabilities",
+            "security policy"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 3600,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 3600
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
     }
   ],
   "exclusions": [
     {
       "idOrUrlHash": "050f33c8830facd72fe3ddb2c46e2e8a4d1f04651d01a74d7cc14dcc5ffbe7f8",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "05fea98c585c2f7dbbae0a61f5f99d3712474c901687712717331f65618a071b",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "064dab9e89976a2cff6ea07f4b07703dff8e847a7ac44194c3ea374411070fb3",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "079105fe29d99d337a2d4592190051f9b8f99f36de4f424512ff7a0f02ad9b48",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
-    },
-    {
-      "idOrUrlHash": "0802d7541ba0361a9bb2f404f44ef0ade9a9e7ba63996abf4717c1d78e0ed79c",
-      "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "0941b3ed349ecb027d95bc19c493d3a1ca409b68bff7b985539d4aa451f5f90f",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "0b5015fd7b86b2e35ec1d4d776a60c0bb0009a256d70ec931620b17545b65250",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "0f5274f10e79af1fec3bc3fdc3d5daa0aff56fd0368771f2d7cbdb450203cefd",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
-    },
-    {
-      "idOrUrlHash": "1460027b40fc830fc48792a1d7c80ca15fcb66a60a9232c860b6dec88a6c313a",
-      "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "14cf4d822dbbd81e2a93b02e6e4200d759144e1b976af4670e00977e0da27e65",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "162fde3abbdeb295ec3b6cd0820978b02b9611d0ceba9233a4216092e96d209d",
       "reason": "insufficient_independent_cti_usefulness",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "17ba98775cf446aa52ca787869bc209c13b8ce9a0419d4012aa9ad247b23a92f",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "18783213d13550bb7789d8b003126804eb2501647147113f1db74276c7f119de",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "19407abc82202f55065433a86eca45488e5ff68cce25f56a41e94f1938a32362",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "19c3d63e1d56958d6ff9f16ff9e997168e54331e0d64ac4e81c62db80d77d7af",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "1a06e2b916e6ad71679a8fd938b1d70cb5741b386d7e6bd1e1d9c4328cef1147",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "1f71847ee02c4f05367547b2cad04b1b105b661ce4e15137f53c29b6261892d1",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "20671c7f202814f50ebc9fa3234bf4bead8821ad2848456447215465c418ab40",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "20be0e05f1d07163e1bfb2a6456e0408caa972fbb87833180120ecfdf8938672",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "22d1b69d52b0ffe77ea52753f9b1028071aa29d03ce757b3750914de13270dcf",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "246c5b167a85d0aeddc896215005f1f98d763ab0748d2df0f53755ae2f7cb317",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "26c3043a4d001bf71f425de440fdfe01ef8598b22561c7f7bb5d4607f8fa32ae",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "280f64082f58a1151a0776615e561da379f16f68eb4e5a040b9bba7240c1d761",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "2bbae5dfb642ad39ac4bc7e548e5cbaf28cbe7cb7dfa900c0b70c8765deabaed",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "2dd4df6e5d4b5f8a2d84602abf71f10c70a05b0b5ccf7197cebbc43e426c67be",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "2f9323ad33db26677c59d39aa33635a797d259987cd1272a85c7fc94064ea69c",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "3476d07f3374de9beafabe2e9a783f0c4996eeb289f1346112b7c3393e7d42d5",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "34a7aa2f17c14c6033802a9e017aa68dd2aae1f5504d4b97f09964537a533d0b",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "366fa74b8d990c00a192eda393594f2eeace28eba4c4fde67d190d20979c6fa1",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "388dca2c020b29dedc74142f91bb3cf74fc7eb92e18ff6e36790be2805498c0a",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
-    },
-    {
-      "idOrUrlHash": "39da4e71c8e0083728bb53d5885c606b68e9cc3db4c2bd35125978ce1ccf6ecd",
-      "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "3a48797f910ef31bf279f2e6dc05bb9de0e40ce8e4448af96e7f473b33a8bd04",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "3b7e9649e512e4084efc82e08d8c5f19d6d3c4055c2b6d9a870680d7c6cc043b",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "3c2426e46e8cd94ee24887718f3ae81248c0e771878f20976db787f102ac90c5",
       "reason": "insufficient_independent_cti_usefulness",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "3edc76a11243a95afc317ae760609af643f4a87be783c2d928f769c2119a1b91",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "3f005f0267ca126f09107fdeac25b5954d1073ba6ee88d613b2e2aceaddaca69",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "410b22a5a3c0a25319e22dfe749fd5e384c06f0a3bb6a2bd7fb34a958db3e86f",
-      "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "reason": "insufficient_independent_cti_usefulness",
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "417ea4ad47157b162109ae80b1e2da3fd0798eb16110a523d8610426b706c7d3",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "42fb2660a008789752bd2beee3783ccdd5c8f3ebab5ba35c22a094af2b3aea23",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "45b78c1e858d92a5357133136daef7add7688d8c4436dd40ec1fed864049cacc",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "48326b03abe937a06f2407cba991859b3a24ab89b67b3710db8865f1bc5c4876",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "484ab5bfc4185566a7b01e113038ec8466b826b9cf5df7e96b0fa607af44a59a",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "4859a5e3751667c7951a09b8c9c89bdd185ff2e466c0e659de5f9bccc9e038d6",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "496d4ef4c19e0b4fd743992022d4027031140c612d3197ec211ad23cb97a0b55",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "4a90918ef724cb5d27acb9462df71c52feaad94aefa4ea97a02e62f05ead4ddd",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "4bf6b21ca97a0886deec67f845bde45e009e811fe808049bb875f2a7207a6040",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "4ea5a3383fede76d248c904a415f2a2db540c1e8226e985dfa7667aef202135f",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "4eb51427391af8ea4b84c376b9fc7fbe10acff85150ad7b1187f6103dbc642c1",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "552c04ce47432c461039d155f5159991512f4f77ec2b198580ac97ec21d4cf70",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "55a3a95ae987c6047b17765fe62d6e06c10c6331137e8a18e6bbfe33f91e9450",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "55e38d2f7fb8d0df9539ce0467bd5454a7677d15af9cff3fb93e3512cc924fda",
       "reason": "duplicate_existing_endpoint",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "590ea8807373d992c9c6e2a8a12c8cee07db3c856589d878c5682bd93248caaf",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "5b819a97135ad3c984b888cb64c0b5505c7c6f558f2f12ea1fce336a3e5e2439",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "5c3aec018479354855f01ec98c9b022dd412dc985c638489e345df7a4fc3119c",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "5e508be60daf610e8e9c20673350ffcf9410f5f812f5d24b8d254b8e1d9d932b",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "600ddfb3868008538038cf8608a6f839de71d84b3b38eb259633631a7225ea95",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "60c52f3c3741cae127e9130065f213e5cfbd320f544840c0eebb96ff9ea916f0",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "63f38d4636171f16c03c3aed5fa2644698d0b788053eb8c3079b81f91f81e236",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "64b25793dc91d8e5fd785b6f42f020824523e0362a3d85a567c85356ca849ff8",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "65fe92e30dd39c40bac95ae243a191f3987b5fd1fb2b996a11f1ede97a315eac",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "6656a377d96852d59807089c3146cc00b4a2e5ee0e80bb1cd1e103bd87973812",
       "reason": "insufficient_independent_cti_usefulness",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "679c8cabf8dc3ba0ec5af90c92e99450c596aa187d8edd529ba3cff68e9a63a7",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "687ef3a5cffa0f4fd14cabda0f171efc68f00910e821b75ebf3f9df55081a593",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "69c958a51044098dbc376ae21751ab4dbd4b5b6751094a839c524c9ed4f7a89e",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "6adde811979aafc9a26723c96c492c0e09750e8a4adab192cb408d2c2cf72c4e",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "6c06dbdd7189e0ac4a76b1dfb35dde0bf4d0424e761036d76c852bed0c0862ed",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "6df9f3337ceadac24c091fac7514ac0bdf9dc74b343f0109401a4ae8b9f13afe",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "6f198e42e0696b24983d07d4a64b2867a53d6b70f74d06b84db91e8e4682b377",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "6f97d676e02f94daf20aa2c5e4a7fec39b0dab4f176fd3758a16cb456c0e4adf",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "70fb44ea60a61718766b712b54ef6163fffc883dc442e3bc25595b64e78c2448",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "7594ae2591fffc37d5ce277adf0c6f05659fae02deb8582c36d145757bb713f2",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
-    },
-    {
-      "idOrUrlHash": "769af4b608a82bbceb9c15e306bd2c35855952c85a785693c9517e55e8a5bf8b",
-      "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "777913e31d04fcebe988ff43050c5fec48ed8a46dcf973113fb65d7a6be5631c",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "78074231283ce94a4b0b7e1841e3df460486907402c8044bf50d37b71e575544",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "7993f1d393f8dfdc558ceb1c1741b3671e14e5d06101a2baebe4734fb845593f",
       "reason": "insufficient_independent_cti_usefulness",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "7ffb4ee776d7e9182cf57c1dbd10e8bf26005c02b8c71c5b8475921b6383cdb9",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "80c6970383c299c425385b43e0f0188af8b31aeffac8073aa63668ee98dbebcb",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "80ea0afcce0b15e33ef0ac5dd5eee6a035c60b05ab6fce3b8a494266e802367a",
       "reason": "duplicate_existing_endpoint",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "817d92efdf65be31ca3c702f9524962a24de4ef98bdc5a8954536019d2408cd3",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "85b87c92ecf122e84a08018e1d09fac41430c1bbadf848e648e6984fd5373561",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "86ff029db61dacfc46bf44626afdc504587bf098fbdc23c02eff52ae2ea68484",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "88db17e591b2c9605d88f079904e17255a363b9bb10a4b94362875a90d7f66cc",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "8912ceec7a187a5cc395a8b8063005db5f3d2fea7dfb27e633b857a256c74e59",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "8a787482268c5464415610b0ab592c30771cb84c062553291f2b04393f4dc9a0",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "8c343e86061ea7d92bd7f3d8610cc2df1150bb2012f98bb1e90e1db229b9ce04",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "8c52ff837760321d7488d65ddcd0cdb513f74be47efd0837a5bdffb4f2a73eaf",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "8ee9d38fa6b9f3a3f7b24c2a3ae74a33bba33fb81022759124542b31803eb942",
-      "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "reason": "insufficient_independent_cti_usefulness",
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "8f2c55c2c9910bb72e40471f8a8f4179279ee7b911b50bb368d0bac461a80e90",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "8f2eb3f31b258babfe24ee9220fcb622a206e14b34dcaaec45c18fc4dd0c6a23",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "945c4e8f311160dcefe64362a1b48347648c90751e25b87dd95fd4521d938014",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "978d1ff54ca2b5e7873bddcdfb51b1305af44400db572e56b6963755c053d15c",
       "reason": "insufficient_independent_cti_usefulness",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "989fe8bdf1a845f53e21a134cf6756b9cb34f311934171e2fcdad8eeef6308dc",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "9a5eb252c3f6814326326925f8677eac302c71465f799985b5654421ac12b6e6",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "9adf23978ec04fb240e0bf4afb32b78ee8adfd5e46d733b5d254e7e6eb1a30b2",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "9b217b5e98b2245a4c7f6871070f093ed930cd8f2a789e53ada47136e43b9409",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "9c5eda8de1d2451cf301f36b000c7b4b4bc5b3117574c2e5fb96c23d8188a0c7",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "9d4cb2fe1dcd41f2c21abb0c5b6d36cc559500423a4a3dc64f698b3a615ddc90",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "a689b7a0236ce4618ad52ee089f5087eb8844370a4c25b088b874a0429430203",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "a8e0c4e3ad8458d32cbcac31ff6cb74761491710de89e414d65f707ad8eca5fd",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "a9cba3119ede8c9169721e8698e87e1e4bfae37905cec9303eb0c39531142ece",
       "reason": "insufficient_independent_cti_usefulness",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "ac0eff21386d62eac7406d1d17eff1d51957cb81c896c1af9d7599f8a5433444",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "b0b8e330394cdad5c57163ff69eceddb4299b765d4fd7736f2ccdc8ce82d71ee",
       "reason": "insufficient_independent_cti_usefulness",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "b0c1172e3fb3ceb823345329c48634c061dad87d82d4271159c28935f27ff086",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "b0eff978984288b6f52077d6d11613d18b138613eed5474ee2da522b3c789045",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "b31b7308bb9b72190f375c128e294ddc06037edef8dec105711134a51811cfde",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "b3bd3389fecbd34d58e72576057c1022bde2adc5926ce0455d844ac39af4b66c",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "b5e5b44061c282c400afaf2be5c6800e0c3717e0b2b18e61d5ff8342e7a90b77",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "b5ea6552e972af133320cfd5bf0eadb061203f56f369d65421a9921565e1be8d",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "b878f914de80c46a8f9ac648ba983efbb3ec20fa3b420ae03bb8ed523d4f02ba",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "ba7c228476a828363dac5ecfc9ae4f2f2ad88e541a4f952841efe5907a31ea37",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "bb96a9ceab43703fe875dbf924f3a9fd04acfe627697421ec80b98ca70b92258",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "bd91d2e9a4f0f660e750d3e9baf584f38c54eec595114a03a53aed7790e23312",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "bde2840304c8096b2a325ac0858c02d1cbaa61b5e19ace020f9110a1e56d58c6",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "bdfa0bea494fb6cefaa62745d48a13e7b63913b4df967e9dc3483ce9c722c68a",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "be1439f866244427896bb729c2295b5f385bded972c482a51ce00282f45d9132",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "bee6cb788ae4b692642531dfef01490193cd33719f0c7b24e3995e3a70723a33",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "bfb1a696ec03e394b6bb4975059efe553dbdf2c86ed68ea01dee66d12f6b0fd0",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "c26d91d2566afad0e41b5210f3987336989a1d9d8f888a1fd144421f7ed05559",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
-    },
-    {
-      "idOrUrlHash": "c2a08026bbbfaebddc0c3dc7e1246ad427e3ba51d9bfb97e6c8222fe3da73849",
-      "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "c2ff17811a8aa0bffac3533f82ff1dfcae6c91b7a7b140ec340a774c8b2f3fff",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "c3de06f3190158f242aa9d6c8145e9d206e1c9e429d6b67be1e6744c8f82112c",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "c3e610c0a92ff9c893200713d8326b7715c964b6ec85557c0b7738f08932a770",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "c63f69ea3c6c190c0ed4f87278724ec5414d8183e3924e3f07d356f063046b8c",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
-    },
-    {
-      "idOrUrlHash": "c7689cf62295ef766795f5a4abde533a7ca3b5459f324bd3b3151d68d391cb07",
-      "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "c7ba56b910ba254d3471f80c0bc63795d6a2417573e1a505ff558efc7e7af7a2",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "c963512bae1565b6d5f192a50e82c664c613fa3464a7b65c894c99125a59a91a",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "cb42266d4ee2b667d2ccf34fa0c50cf47a666a9bda629bf306d6a7a9b30b7b7b",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "cd99d9516b69b2967102c69a5eaec5ea7d129669471d8d100575f6225b11fd66",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "cf53040ce38cdb7ef0af028385220e6c1f049fb5f107ca5cb499e6c0e9092a57",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "d08e5db2b67d538af9d0bfde5fed46ab7db0d4158e5113edd12bbd759e0c2ed2",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "d37eccf9e3f8ca5a9326ed4dade9a1d1c463bd8993dcf74cdca80ed8890ca629",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
-    },
-    {
-      "idOrUrlHash": "d3a22bc48df1403f5ecdba636b970fb54fb351f3230df94f4a3b97cb492468f5",
-      "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "d4fb1dd189471569e2d66754b37266448a1aa64ea988f20e0c6964e475f31a53",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "d52e84cc93bc2d4b35a670ccb77becf761536cea71538702491055bbe8306aa3",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "d6149b7bf43641221657b95a6ea14372f0a0fc12aecf5670478d09caa955e151",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "d7549c302ce959488e8b975bfcaa1efd589f845e99d8e2162e86c42fc9518b69",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "d7bc33a046b6eff47c605cfc820eac8b3fd63745e430cfabc4a2a98e1087f2f6",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "da26ffa72c9353393cb20e702e12d53ae27b5b058a631330e88dfee5534a2d10",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "df1468eceda698f3cab895aece25084bc3088715e54bb37c97c2864a8937b4d2",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "e059f951feffe8e94b86b37561beceb2e72697039881cb2577967056bdb921a8",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "e1c6f9621b844cb52cb5a21507b17ec401e3bbd71bb44d7b5f4977373d8c496b",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "e1de06736eae6cdf3db70f2701ff13de1e7a6fb045a93fc25b586c035443471f",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "e1e73cbe8889203962665c9822e242ed7eb7c3067414a1c1062e7dfe203ec9ef",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "e4062c8b77a0c4153099e3cb8cfbd2ec8a78bbad196d6ded994b6609fa4c14e9",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "e6612d851f1ec58c6e8d2cb653208ead474219963fabba9641eebd0b4214764f",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "e6cc657ab88e4a53ebea86b08cd4a34890bdf11ce95142a61d7105a9654bbe87",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "e8c205fad77c88dcab05f5c0e1fe77903f4663f98eea1922ea7f70255ee2ad57",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "e99aaf5ea6941354bfb90b8e20693cf9a7eca854d9e1766ef71be86456ba3b78",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "e9d1790d60c13656e3de3223514c839f3c6798e6035ae49d069eb0c21f6e2016",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "ec91c1c0276ab8f3953f0e1333cad9c97feb02f85a973b60a856bc1281d96d82",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "f00b29a5645224edb8d611e57f85278eedb55db8290e6365fd1bd807e8d47c6f",
       "reason": "insufficient_independent_cti_usefulness",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "f0f805d77085de5a589e5fd22acd745accf10c0735f4ba853f8c97f81da5e817",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "f3f8629f93cc07a1a4f0689102417cd65cc3345d2de3029a143de2317df96056",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "f525a03a4048119171641abb914c75a32f6d624df1495fc553f9fabb0c70ee1b",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "f5be503c35440b58c1c1d47bbffd5b1ea87d65a95ae0f9823fd48df44ccff513",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "f5c6debcf3848cb0158b89013eb413b81c8982ddbdf8d261415c2161cbe6ee09",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "f6b493ead152d835d76f89a7485913a906ea7c25773146f1dedf3b41b835fa61",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "f866f06d8f71d9450fba1d05fb0c2a903b2a7da4a5865587e516407814306525",
-      "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "reason": "insufficient_independent_cti_usefulness",
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "f869fd3ba0cd183d70b3b2737f1185708e0e05cd41591b475a36139e3a633ff1",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "f8ebf562f72019d0ff31f35560b4099ab1cc3ecf0b04847e139ce13dbc1c3e0d",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "f93a7a30d3a69794dfd141cf83e673696e63adbc213f1a1d3d155b4881a2e4af",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "faa94e2691a55b0cedcbca10204d2a787b72da5405a93d7d71a2c957d38fa70b",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "fb650f35e5cad36142720a336812d8e723ff4b9c5cd4b712af8b810a95145403",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "fcaa5ee83aafa97a13f735e2f16e8cb1f6aac9bcd7eb7aa3cb6f47a50bdb4049",
       "reason": "unreachable_or_no_current_cti_content",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
       "idOrUrlHash": "fcb66b9a6bb91ff8d6125402b4002fb17d38bf31251f8c94d95c9569940cf4f8",
       "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
-    },
-    {
-      "idOrUrlHash": "ff31d4b594d143e50e28c26712b7444d99aedc90a7280dce1846ed23fdd92333",
-      "reason": "publisher_identity_not_independently_verified",
-      "verifiedAt": "2026-07-23T09:59:47.042Z"
+      "verifiedAt": "2026-07-23T10:08:48.409Z"
     }
   ]
 }
