@@ -1,11 +1,43 @@
 import { describe, expect, test } from "bun:test";
 import { FocusedFrontier } from "../frontier/frontier.ts";
-import { runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
+import { activatePublicCanarySources, runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
 import { fetchItems } from "../ops/canaryHelpers.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
 
 describe("public collection boundary", () => {
+  test("reconciles corrected portfolio configuration without erasing runtime evidence", () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource({
+      ...source({
+        id: "src_reconciled", name: "Old name", url: "https://old.example.test/feed", status: "active",
+        legalNotes: "Old notes", metadata: { productionCollection: true, lastCanaryFetchMode: "native_live_http" }
+      }),
+      health: { status: "healthy", checkedAt: "2026-07-22T12:00:00.000Z", lastUsefulAt: "2026-07-22T12:00:00.000Z" },
+      crawlState: { retryCount: 0, nextEligibleAt: "2026-07-22T13:00:00.000Z" }
+    });
+
+    const result = activatePublicCanarySources({
+      store,
+      now: "2026-07-23T00:00:00.000Z",
+      portfolio: [{
+        id: "src_reconciled", name: "Correct publisher feed", url: "https://publisher.example.test/feed", status: "paused",
+        type: "rss", accessMethod: "public_http", risk: "low", trustScore: 0.9, crawlFrequencySeconds: 3600,
+        legalNotes: "Publisher-operated public feed",
+        metadata: { productionCollection: true, canaryPortfolio: true, publisherReference: "https://publisher.example.test" }
+      }]
+    });
+
+    expect(result.alreadyActive).toEqual(["src_reconciled"]);
+    expect(store.getSource("src_reconciled")).toMatchObject({
+      name: "Correct publisher feed", url: "https://publisher.example.test/feed", status: "active",
+      legalNotes: "Publisher-operated public feed",
+      metadata: { lastCanaryFetchMode: "native_live_http", publisherReference: "https://publisher.example.test" },
+      health: { checkedAt: "2026-07-22T12:00:00.000Z", lastUsefulAt: "2026-07-22T12:00:00.000Z" },
+      crawlState: { retryCount: 0, nextEligibleAt: "2026-07-22T13:00:00.000Z" }
+    });
+  });
+
   test("never routes restricted or private-network targets through public fetch", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "restricted", type: "tor_metadata", url: "http://metadata-listing.onion", status: "active", risk: "restricted", governance: { metadataOnly: true } }));
