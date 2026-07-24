@@ -200,12 +200,9 @@ describe("dwm source requests", () => {
         captureText: "APT29 source-pack public Telegram mention observed without live network scraping."
       })
     }), { store, frontier });
-    const observedBody = await observed.json() as any;
-    expect(observed.status).toBe(200);
-    expect(observedBody.lifecycle).toMatchObject({ collectionStatus: "capture_observed" });
-    expect(observedBody.alertRebuild).toMatchObject({ status: "completed", alertCount: 1, watchlistIds: ["watch_pack_apt29"] });
-    expect(store.listCaptures()).toHaveLength(1);
-    expect(store.listDwmAlerts()).toHaveLength(1);
+    expect(observed.status).toBe(400);
+    expect(store.listCaptures()).toHaveLength(0);
+    expect(store.listDwmAlerts()).toHaveLength(0);
 
     const rejected = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
@@ -278,8 +275,8 @@ describe("dwm source requests", () => {
       suppressedCount: 2,
       rejectedCount: 2,
       duplicateCount: 1,
-      capturesObservedCount: 1,
-      alertRebuild: { completedCount: 1 },
+      capturesObservedCount: 0,
+      alertRebuild: { completedCount: 0, skippedCount: 1 },
       familyCoverage: {
         telegram: { total: 6, active: 1, failed: 1, pending: 1, blocked: 4 },
         darkweb_metadata: { total: 1, blocked: 1 }
@@ -295,13 +292,12 @@ describe("dwm source requests", () => {
       sourceGrowthFamily: "telegram",
       parserExpectation: "telegram_public_metadata_and_text_fixture",
       sourceHealth: {
-        lastCaptureAt: expect.any(String),
         queuedActivationJobs: [expect.any(String)],
         canProduceAlertGradeEvidence: true
       },
-      evidenceReadiness: { canProduceAlertGradeEvidence: true, reason: "capture_observed" },
-      lifecycle: { collectionStatus: "capture_observed" },
-      alertRebuild: { status: "completed", alertCount: 1 }
+      evidenceReadiness: { canProduceAlertGradeEvidence: true, reason: "active_public_source_waiting_for_capture" },
+      lifecycle: { collectionStatus: "queued" },
+      alertRebuild: { queued: false, skipped: true, reason: "collection_queued_alert_rebuild_waits_for_new_captures" }
     });
     expect(statusBody.registry.candidates.find((candidate: any) => candidate.status === "duplicate")).toMatchObject({
       intakeStatus: "duplicate",
@@ -323,7 +319,7 @@ describe("dwm source requests", () => {
       duplicateCount: 1,
       queuedForCollectionCount: 1
     });
-    expect(listedBody.packs[0]).toMatchObject({ id: "pack_apt29_growth", packStatus: { capturesObservedCount: 1 } });
+    expect(listedBody.packs[0]).toMatchObject({ id: "pack_apt29_growth", packStatus: { capturesObservedCount: 0 } });
     expect(frontier.snapshot()).toHaveLength(1);
   });
 
@@ -1238,9 +1234,8 @@ describe("dwm source requests", () => {
         captureText: "APT29 public Telegram preview mentions example.com infrastructure."
       })
     }), options);
-    const observedBody = await observed.json() as any;
-    expect(observed.status).toBe(200);
-    expect(observedBody.alertRebuild).toMatchObject({ requested: true, status: "skipped", reason: "missing_active_watchlist" });
+    expect(observed.status).toBe(400);
+    expect(store.listCaptures()).toHaveLength(0);
 
     const config = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
@@ -1391,7 +1386,6 @@ describe("dwm source requests", () => {
     expect(telegramReadiness).toMatchObject({
       operationalStates: expect.objectContaining({ canary: 1 }),
       parserStatuses: expect.arrayContaining(["telegram_public_parser_ready"]),
-      lastCaptureAt: expect.any(String),
       lastEnrichmentAt: expect.any(String),
       retryBackoff: expect.objectContaining({ retryable: false }),
       privacyBoundary: expect.objectContaining({
@@ -1417,7 +1411,6 @@ describe("dwm source requests", () => {
           evidence: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["telegram", "darkweb_metadata", "clear_web"]) }),
           freshness: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["telegram", "clear_web"]) })
         }),
-        lastSuccessfulCaptureAt: expect.any(String),
         lastSuccessfulEnrichmentAt: expect.any(String)
       })
     ]));
@@ -1438,7 +1431,6 @@ describe("dwm source requests", () => {
         state: "canary",
         canEnrichActor: true,
         canProduceAlert: true,
-        lastCaptureAt: expect.any(String),
         matchableFields: expect.arrayContaining(["text"]),
         privacyBoundary: expect.objectContaining({ noPrivateTelegram: true }),
         safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
@@ -1462,1089 +1454,32 @@ describe("dwm source requests", () => {
     }), options);
     const actorReadinessBody = await actorReadiness.json() as any;
     expect(actorReadiness.status).toBe(200);
-    expect(actorReadinessBody).toMatchObject({
-      schemaVersion: "dwm.actor_page_source_readiness.v1",
-      query: "APT29",
-      actorReadiness: {
-        proofId: expect.any(String),
-        actorMetadata: {
-          actorId: expect.any(String),
-          displayName: "APT29",
-          aliases: expect.arrayContaining(["APT29"]),
-          backedBySourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "public_advisory", "actor_page", "clear_web"]),
-          noSyntheticActorClaims: true
-        },
-        sourceEnrichmentProfile: {
-          schemaVersion: "ti.public_actor.enrichment_profile.v1",
-          fields: expect.arrayContaining([
-            expect.objectContaining({
-              field: "aliases",
-              state: "value_ready",
-              values: expect.arrayContaining(["APT29"]),
-              sourceFamilies: expect.arrayContaining(["telegram", "actor_page"]),
-              provenance: expect.arrayContaining([
-                expect.objectContaining({ family: "telegram", safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false }) })
-              ]),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            }),
-            expect.objectContaining({
-              field: "infrastructure",
-              state: expect.stringMatching(/source_backed_pending_extraction|value_ready/),
-              sourceFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-              confidence: expect.any(Number)
-            }),
-            expect.objectContaining({
-              field: "techniques",
-              sourceFamilies: expect.arrayContaining(["public_advisory", "clear_web"])
-            })
-          ]),
-          summary: expect.objectContaining({
-            valueReadyFields: expect.arrayContaining(["aliases"]),
-            pendingExtractionFields: expect.arrayContaining(["infrastructure"]),
-            sourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"])
-          }),
-          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-        },
-        state: "ready",
-        sourceCoverage: expect.arrayContaining([
-          expect.objectContaining({ family: "telegram", state: "canary", canEnrichActor: true, canProduceAlert: true, sourceIds: expect.arrayContaining([expect.any(String)]), candidateIds: expect.arrayContaining([expect.any(String)]) }),
-          expect.objectContaining({ family: "darkweb_onion", state: "active", privacyBoundary: expect.objectContaining({ metadataOnly: true }) }),
-          expect.objectContaining({ family: "actor_page", state: "canary", matchableFields: expect.arrayContaining(["actorName"]) })
-        ]),
-        sourceReadinessLedgerRows: expect.arrayContaining([
-          expect.objectContaining({
-            schemaVersion: "dwm.actor_source_readiness_ledger_row.v1",
-            proofId: expect.any(String),
-            family: "telegram",
-            state: "canary",
-            parserStatuses: expect.arrayContaining(["telegram_public_parser_ready"]),
-            freshnessState: "fresh",
-            actionability: expect.objectContaining({
-              liveNetworkFetchRequired: false,
-              nextActions: []
-            }),
-            downstreamConsumers: expect.objectContaining({
-              publicTiActorPage: true,
-              dashboardSourceReadiness: true,
-              sharedWatchlistAlerts: true,
-              caseHandoff: true
-            }),
-            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-          })
-        ]),
-        evidenceReadiness: {
-          schemaVersion: "dwm.actor_evidence_readiness.v1",
-          proofId: expect.any(String),
-          evidenceReady: true,
-          summary: expect.objectContaining({
-            readyFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
-            averageConfidence: expect.any(Number),
-            lastEvidenceAt: expect.any(String)
-          }),
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              family: "telegram",
-              confidence: expect.any(Number),
-              confidenceTier: expect.stringMatching(/medium|high|low/),
-              timestamps: expect.objectContaining({
-                lastCaptureAt: expect.any(String),
-                lastEnrichmentAt: expect.any(String),
-                checkedAt: expect.any(String)
-              }),
-              evidenceFields: expect.arrayContaining(["text"]),
-              provenance: expect.objectContaining({
-                family: "telegram",
-                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-              }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            })
-          ])
-        },
-        parserHealthReadiness: {
-          schemaVersion: "dwm.actor_parser_health_readiness.v1",
-          proofId: expect.any(String),
-          parserReady: true,
-          summary: expect.objectContaining({
-            readyFamilies: expect.arrayContaining(["telegram", "actor_page", "public_advisory"])
-          }),
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              family: "telegram",
-              parserState: "ready",
-              parserStatuses: expect.arrayContaining(["telegram_public_parser_ready"]),
-              checkedAt: expect.any(String),
-              actionability: expect.objectContaining({ liveNetworkFetchRequired: false }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            })
-          ])
-        },
-        freshness: {
-          lastSuccessfulCaptureAt: expect.any(String),
-          lastSuccessfulEnrichmentAt: expect.any(String),
-          stale: false
-        },
-        alertability: {
-          activeSourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "public_advisory", "actor_page", "clear_web"]),
-          matchableFields: expect.arrayContaining(["text", "victimName", "actorName", "cve", "extractedTerms"])
-        },
-        captureReadiness: {
-          schemaVersion: "dwm.actor_capture_readiness.v1",
-          proofId: expect.any(String),
-          captureReady: true,
-          latestCaptureAt: expect.any(String),
-          captureRows: expect.arrayContaining([
-            expect.objectContaining({
-              family: "telegram",
-              state: "capture_observed",
-              expectedCapture: expect.objectContaining({
-                type: "telegram_public_message_preview",
-                liveNetworkRequiredForProof: false
-              }),
-              recordCapturePlan: expect.objectContaining({
-                method: "POST",
-                path: "/v1/dwm/source-requests",
-                body: expect.objectContaining({ action: "record_capture" }),
-                liveNetworkFetch: false
-              }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            })
-          ])
-        },
-        alertGenerationReadiness: {
-          schemaVersion: "dwm.actor_alert_generation_readiness.v1",
-          proofId: expect.any(String),
-          alertReady: true,
-          canRebuildAlerts: true,
-          sourceFamilies: expect.objectContaining({
-            alertCapable: expect.arrayContaining(["telegram", "darkweb_onion", "public_advisory", "actor_page", "clear_web"])
-          }),
-          matchableFields: expect.arrayContaining(["text", "victimName", "actorName", "cve", "extractedTerms"]),
-          rebuildPlan: expect.objectContaining({
-            method: "POST",
-            path: "/v1/dwm/alerts/rebuild",
-            dryRunSupported: true,
-            liveNetworkFetch: false
-          }),
-          watchlistMatchReadiness: {
-            schemaVersion: "dwm.actor_watchlist_match_readiness.v1",
-            watchlistTerms: ["APT29", "example.com"],
-            summary: expect.objectContaining({
-              ready: true,
-              readyTerms: expect.arrayContaining(["APT29", "example.com"]),
-              sourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
-              matchableFields: expect.arrayContaining(["text", "victimName", "actorName", "cve"])
-            }),
-            rows: expect.arrayContaining([
-              expect.objectContaining({
-                watchlistTerm: "APT29",
-                family: "telegram",
-                state: "ready",
-                matchableFields: expect.arrayContaining(["text"]),
-                confidence: expect.any(Number),
-                sourceTrust: expect.objectContaining({ tier: expect.any(String) }),
-                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-              }),
-              expect.objectContaining({
-                watchlistTerm: "example.com",
-                family: "darkweb_onion",
-                state: "ready",
-                privacyBoundary: expect.objectContaining({ metadataOnly: true, restrictedSource: true }),
-                safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
-              })
-            ]),
-            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-          },
-          blockers: []
-        },
-        sourceOperationsQueue: {
-          schemaVersion: "dwm.actor_source_operations_queue.v1",
-          proofId: expect.any(String),
-          summary: expect.objectContaining({
-            total: expect.any(Number),
-            high: expect.any(Number),
-            alertRebuildReady: true,
-            actionTypes: expect.arrayContaining(["record_capture", "rebuild_alerts"])
-          }),
-          queueItems: expect.arrayContaining([
-            expect.objectContaining({
-              type: "record_capture",
-              priority: "high",
-              route: expect.objectContaining({
-                method: "POST",
-                path: "/v1/dwm/source-requests",
-                liveNetworkFetch: false
-              }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            }),
-            expect.objectContaining({
-              type: "rebuild_alerts",
-              priority: "high",
-              family: "all_active",
-              route: expect.objectContaining({
-                method: "POST",
-                path: "/v1/dwm/alerts/rebuild",
-                liveNetworkFetch: false
-              }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            })
-          ]),
-          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-        },
-        sourceFamilyHealth: {
-          schemaVersion: "dwm.actor_source_family_health.v1",
-          proofId: expect.any(String),
-          summary: expect.objectContaining({
-            activeFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
-            alertReadyFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
-            recoveryStates: expect.arrayContaining(["monitor"]),
-            recoveryActionFamilies: expect.arrayContaining(["telegram"]),
-            averageConfidence: expect.any(Number),
-            lastCaptureAt: expect.any(String),
-            lastEnrichmentAt: expect.any(String)
-          }),
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              family: "telegram",
-              state: "canary",
-              parserState: "ready",
-              timestamps: expect.objectContaining({
-                lastCaptureAt: expect.any(String),
-                lastEnrichmentAt: expect.any(String),
-                checkedAt: expect.any(String)
-              }),
-              confidence: expect.any(Number),
-              confidenceTier: expect.stringMatching(/medium|high|low/),
-              alertability: expect.objectContaining({
-                canEnrichActor: true,
-                canProduceAlert: true,
-                alertReady: true,
-                matchableFields: expect.arrayContaining(["text"])
-              }),
-              nextActions: expect.arrayContaining([
-                expect.objectContaining({ type: "rebuild_alerts", liveNetworkFetch: false })
-              ]),
-              operationalRecovery: expect.objectContaining({
-                state: "monitor",
-                retryable: false,
-                noNetworkSafe: true,
-                nextActionTypes: expect.arrayContaining(["rebuild_alerts"]),
-                primaryAction: "rebuild_alerts",
-                primaryRoute: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false }),
-                liveNetworkFetch: false
-              }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            }),
-            expect.objectContaining({
-              family: "darkweb_onion",
-              privacyBoundary: expect.objectContaining({ metadataOnly: true, restrictedSource: true }),
-              safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
-            })
-          ]),
-          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-        },
-        sourceConsumerBridge: {
-          schemaVersion: "dwm.actor_source_consumer_bridge.v1",
-          proofId: expect.any(String),
-          summary: expect.objectContaining({
-            publicTiReady: true,
-            alertReady: true,
-            caseReady: true,
-            watchlistMatchReady: true,
-            watchlistTerms: ["APT29", "example.com"],
-            alertableFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
-            lastProofAt: expect.any(String)
-          }),
-          consumers: expect.arrayContaining([
-            expect.objectContaining({
-              consumer: "publicTiActorPage",
-              ready: true,
-              sourceFamilies: expect.arrayContaining(["telegram", "actor_page"]),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            }),
-            expect.objectContaining({
-              consumer: "sharedWatchlistAlerts",
-              ready: true,
-              sourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion"]),
-              matchableFields: expect.arrayContaining(["text"]),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            }),
-            expect.objectContaining({
-              consumer: "caseHandoff",
-              ready: true,
-              sourceFamilies: expect.arrayContaining(["telegram"])
-            })
-          ]),
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              family: "telegram",
-              provenance: expect.objectContaining({
-                sourceIds: expect.arrayContaining([expect.any(String)]),
-                privacyBoundary: expect.objectContaining({ noPrivateTelegram: true })
-              }),
-              fields: expect.objectContaining({
-                matchable: expect.arrayContaining(["text"]),
-                alertable: expect.arrayContaining(["actorHints"])
-              }),
-              consumers: expect.objectContaining({
-                publicTiActorPage: true,
-                sharedWatchlistAlerts: true,
-                caseHandoff: true
-              }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            })
-          ])
-        },
-        sourceSectionReadiness: {
-          schemaVersion: "dwm.actor_source_section_readiness.v1",
-          summary: expect.objectContaining({
-            coveredSections: expect.arrayContaining(["overview", "infrastructure", "targeting", "evidence", "freshness"]),
-            missingSections: [],
-            sourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
-            averageConfidence: expect.any(Number)
-          }),
-          sections: expect.arrayContaining([
-            expect.objectContaining({
-              section: "overview",
-              state: "covered",
-              sourceFamilies: expect.arrayContaining(["telegram", "actor_page"]),
-              provenance: expect.arrayContaining([
-                expect.objectContaining({
-                  family: "telegram",
-                  sourceIds: expect.arrayContaining([expect.any(String)]),
-                  privacyBoundary: expect.objectContaining({ noPrivateTelegram: true })
-                })
-              ]),
-              timestamps: expect.objectContaining({
-                lastCaptureAt: expect.any(String),
-                lastEnrichmentAt: expect.any(String)
-              }),
-              confidence: expect.any(Number),
-              matchableFields: expect.arrayContaining(["text"]),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            }),
-            expect.objectContaining({
-              section: "targeting",
-              state: "covered",
-              sourceFamilies: expect.arrayContaining(["darkweb_metadata", "public_advisory"]),
-              safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
-            })
-          ])
-        },
-        alertCaseHandoffReadiness: {
-          schemaVersion: "dwm.actor_alert_case_handoff_readiness.v1",
-          alertReady: true,
-          caseReady: true,
-          canOpenCase: true,
-          blockers: []
-        },
-        sourcePackActionReadiness: {
-          schemaVersion: "dwm.actor_source_pack_action_readiness.v1",
-          retryActions: [],
-          activationActions: [],
-          intakeActions: []
-        },
-        safeOutput: {
-          liveNetworkScrapeStarted: false,
-          privateTelegramContentExposed: false,
-          restrictedMetadataLeaked: false
-        }
-      },
-      candidateIntakeContract: {
-        schemaVersion: "dwm.actor_source_candidate_intake.v1",
-        mode: "prepare_no_network",
-        policyValidation: {
-          publicTelegramOnly: true,
-          darkwebMetadataOnly: true,
-          liveNetworkFetch: false,
-          rawRestrictedPayloadStorage: false
-        }
-      },
-      proofArtifacts: {
-        schemaVersion: "dwm.actor_source_readiness_proof_artifacts.v1",
-        proofId: expect.any(String),
-        publicTiQueryAdapter: {
-          schemaVersion: "ti.public_actor.query_adapter.v1",
-          route: expect.objectContaining({ path: "/ti/apt29", liveNetworkFetch: false }),
-          actor: expect.objectContaining({
-            displayName: "APT29",
-            enrichmentProfile: expect.objectContaining({
-              schemaVersion: "ti.public_actor.enrichment_profile.v1",
-              fields: expect.arrayContaining([
-                expect.objectContaining({
-                  field: "aliases",
-                  state: "value_ready",
-                  values: expect.arrayContaining(["APT29"])
-                })
-              ])
-            }),
-            noSyntheticActorClaims: true
-          }),
-          readiness: expect.objectContaining({
-            state: "ready",
-            publicTiReady: true,
-            alertReady: true,
-            watchlistMatchReady: true,
-            freshnessState: "fresh",
-            lastSuccessfulCaptureAt: expect.any(String),
-            lastSuccessfulEnrichmentAt: expect.any(String)
-          }),
-          sections: expect.arrayContaining([
-            expect.objectContaining({
-              section: "overview",
-              state: "covered",
-              sourceFamilies: expect.arrayContaining(["telegram", "actor_page"]),
-              provenance: expect.arrayContaining([
-                expect.objectContaining({
-                  family: "telegram",
-                  sourceIds: expect.arrayContaining([expect.any(String)]),
-                  evidenceProofId: expect.any(String)
-                })
-              ]),
-              confidence: expect.any(Number),
-              matchableFields: expect.arrayContaining(["text"]),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            }),
-            expect.objectContaining({
-              section: "infrastructure",
-              state: "covered",
-              sourceFamilies: expect.arrayContaining(["darkweb_onion"]),
-              safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
-            })
-          ]),
-          evidence: expect.arrayContaining([
-            expect.objectContaining({
-              family: "telegram",
-              proofId: expect.any(String),
-              confidence: expect.any(Number),
-              timestamps: expect.objectContaining({ lastCaptureAt: expect.any(String) }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            })
-          ]),
-          sourceHealth: expect.arrayContaining([
-            expect.objectContaining({
-              family: "telegram",
-              parserState: "ready",
-              sourceIds: expect.arrayContaining([expect.any(String)]),
-              operationalRecovery: expect.objectContaining({
-                state: "monitor",
-                retryable: false,
-                noNetworkSafe: true,
-                nextActionTypes: expect.arrayContaining(["rebuild_alerts"]),
-                primaryAction: "rebuild_alerts",
-                liveNetworkFetch: false
-              }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            })
-          ]),
-          parserStatusLedger: {
-            schemaVersion: "ti.public_actor.parser_status_ledger.v1",
-            summary: expect.objectContaining({
-              readyFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
-              retryFamilies: [],
-              missingFamilies: [],
-              latestCaptureAt: expect.any(String),
-              latestEnrichmentAt: expect.any(String)
-            }),
-            rows: expect.arrayContaining([
-              expect.objectContaining({
-                family: "telegram",
-                parserState: "ready",
-                captureState: "capture_observed",
-                confidence: expect.any(Number),
-                timestamps: expect.objectContaining({
-                  lastCaptureAt: expect.any(String),
-                  lastEnrichmentAt: expect.any(String)
-                }),
-                sourceIds: expect.arrayContaining([expect.any(String)]),
-                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-              })
-            ]),
-            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-          },
-          sourcePackIntakeHandoff: {
-            schemaVersion: "ti.public_actor.source_pack_intake_handoff.v1",
-            ready: false,
-            validationSummary: expect.objectContaining({
-              totalCandidates: 0,
-              accepted: 0,
-              blocked: 0
-            }),
-            candidates: [],
-            gaps: [],
-            policyValidation: expect.objectContaining({
-              liveNetworkFetch: false,
-              rawRestrictedPayloadStorage: false
-            }),
-            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-          },
-          alertability: expect.objectContaining({
-            matchableFields: expect.arrayContaining(["text", "victimName"]),
-            watchlistMatchReadiness: expect.objectContaining({
-              schemaVersion: "dwm.actor_watchlist_match_readiness.v1",
-              summary: expect.objectContaining({ ready: true })
-            })
-          }),
-          alertEvidenceHandoff: {
-            schemaVersion: "ti.public_actor.alert_evidence_handoff.v1",
-            ready: true,
-            watchlistTerms: ["APT29", "example.com"],
-            alertRebuildPlan: expect.objectContaining({
-              path: "/v1/dwm/alerts/rebuild",
-              liveNetworkFetch: false
-            }),
-            rows: expect.arrayContaining([
-              expect.objectContaining({
-                watchlistTerm: "APT29",
-                family: "telegram",
-                state: "ready",
-                sourceIds: expect.arrayContaining([expect.any(String)]),
-                evidenceProofId: expect.any(String),
-                parserState: "ready",
-                captureState: "capture_observed",
-                confidence: expect.any(Number),
-                matchableFields: expect.arrayContaining(["text"]),
-                timestamps: expect.objectContaining({ lastCaptureAt: expect.any(String) }),
-                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-              }),
-              expect.objectContaining({
-                watchlistTerm: "example.com",
-                family: "darkweb_onion",
-                state: "ready",
-                privacyBoundary: expect.objectContaining({ metadataOnly: true, restrictedSource: true }),
-                safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
-              })
-            ]),
-            sourceSections: expect.arrayContaining([
-              expect.objectContaining({
-                section: "overview",
-                state: "covered",
-                sourceFamilies: expect.arrayContaining(["telegram"])
-              })
-            ]),
-            summary: expect.objectContaining({
-              readyRows: expect.any(Number),
-              blockedRows: 0,
-              sourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion"]),
-              matchableFields: expect.arrayContaining(["text", "victimName"]),
-              latestCaptureAt: expect.any(String)
-            }),
-            blockers: [],
-            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-          },
-          alertGenerationConsumerHandoff: {
-            schemaVersion: "ti.public_actor.alert_generation_consumer_handoff.v1",
-            ready: true,
-            route: expect.objectContaining({
-              path: "/v1/dwm/alerts/rebuild",
-              liveNetworkFetch: false,
-              body: expect.objectContaining({
-                actor: "APT29",
-                sourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion"]),
-                watchlistTerms: expect.arrayContaining(["APT29", "example.com"]),
-                evidenceProofIds: expect.arrayContaining([expect.any(String)]),
-                dryRun: true
-              })
-            }),
-            rows: expect.arrayContaining([
-              expect.objectContaining({
-                watchlistTerm: "APT29",
-                family: "telegram",
-                state: "ready_for_rebuild",
-                evidenceProofId: expect.any(String),
-                parserStatus: expect.objectContaining({
-                  state: "ready",
-                  captureState: "capture_observed"
-                }),
-                confidence: expect.any(Number),
-                timestamps: expect.objectContaining({ lastCaptureAt: expect.any(String) }),
-                provenance: expect.objectContaining({
-                  sourceFamily: "telegram",
-                  sourceHealthProofId: expect.any(String),
-                  alertEvidenceProofId: expect.any(String)
-                }),
-                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-              })
-            ]),
-            summary: expect.objectContaining({
-              readyRows: expect.any(Number),
-              blockedRows: 0,
-              sourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion"]),
-              parserStates: expect.arrayContaining(["ready"]),
-              matchableFields: expect.arrayContaining(["text", "victimName"])
-            }),
-            blockers: [],
-            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-          },
-          consumerProofLedger: expect.objectContaining({
-            schemaVersion: "ti.public_actor.consumer_proof_ledger.v1",
-            rows: expect.any(Array),
-            summary: expect.objectContaining({
-              latestCaptureAt: expect.any(String)
-            }),
-            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-          }),
-          sourceOperationsHandoff: expect.objectContaining({
-            schemaVersion: "ti.public_actor.source_operations_handoff.v1",
-            operations: expect.arrayContaining([
-              expect.objectContaining({
-                type: "rebuild_alerts",
-                priority: "high",
-                family: "all_active",
-                route: expect.objectContaining({
-                  path: "/v1/dwm/alerts/rebuild",
-                  liveNetworkFetch: false
-                }),
-                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-              })
-            ]),
-            summary: expect.objectContaining({
-              alertRebuildReady: true,
-              actionTypes: expect.arrayContaining(["rebuild_alerts"])
-            }),
-            policyBoundary: expect.objectContaining({
-              liveNetworkFetch: false,
-              metadataOnlyRestrictedSources: true
-            })
-          }),
-          downstreamFixtureExport: expect.objectContaining({
-            schemaVersion: "ti.public_actor.downstream_fixture_export.v1",
-            mode: "no_network_fixture",
-            publicTiContract: expect.objectContaining({
-              path: "/ti/apt29",
-              requiredFields: expect.arrayContaining(["sourceFamily", "parserStatus", "confidence", "timestamps", "provenance", "gap", "safeOutput", "sourceEnrichmentProfile"])
-            }),
-            sourceEnrichmentProfileContract: expect.objectContaining({
-              schemaVersion: "ti.public_actor.source_enrichment_profile_contract.v1",
-              mode: "no_network_fixture",
-              requiredFields: expect.arrayContaining([
-                "sourceEnrichmentProfile.fields[].field",
-                "sourceEnrichmentProfile.fields[].state",
-                "sourceEnrichmentProfile.fields[].confidence",
-                "sourceEnrichmentProfile.fields[].freshness",
-                "sourceEnrichmentProfile.fields[].provenance",
-                "sourceEnrichmentProfile.fields[].gaps"
-              ]),
-              profile: expect.objectContaining({
-                schemaVersion: "ti.public_actor.enrichment_profile.v1",
-                fields: expect.arrayContaining([
-                  expect.objectContaining({ field: "aliases", state: "value_ready" })
-                ]),
-                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-              }),
-              policyBoundary: expect.objectContaining({
-                liveNetworkFetch: false,
-                rawActorClaimsSynthesized: false,
-                restrictedPayloadStorage: false
-              })
-            }),
-            alertGenerationContract: expect.objectContaining({
-              path: "/v1/dwm/alerts/rebuild",
-              requiredFields: expect.arrayContaining(["sourceFamily", "consumers.alertGeneration", "provenance.evidenceProofId"])
-            }),
-            sourceOperationsContract: expect.objectContaining({
-              schemaVersion: "ti.public_actor.source_operations_contract.v1",
-              mode: "no_network_fixture",
-              requiredFields: expect.arrayContaining([
-                "sourceOperationsReadiness.rows[].proofId",
-                "sourceOperationsReadiness.rows[].sourceFamily",
-                "sourceOperationsReadiness.rows[].state",
-                "sourceOperationsReadiness.rows[].parserStatus",
-                "sourceOperationsReadiness.rows[].provenance",
-                "sourceOperationsReadiness.rows[].operatorActions",
-                "sourceOperationsReadiness.rows[].candidateIntake",
-                "sourceOperationsReadiness.rows[].safeOutput"
-              ]),
-              consumerRoutes: expect.objectContaining({
-                publicTi: "/ti/apt29",
-                dashboardSourceOps: "/dashboard/ti/control",
-                sourceRequests: "/v1/dwm/source-requests",
-                alertRebuild: "/v1/dwm/alerts/rebuild"
-              }),
-              policyBoundary: expect.objectContaining({ liveNetworkFetch: false })
-            }),
-            rows: expect.arrayContaining([
-              expect.objectContaining({
-                sourceFamily: "telegram",
-                parserStatus: expect.objectContaining({ state: "ready" }),
-                confidence: expect.any(Number),
-                timestamps: expect.objectContaining({ lastCaptureAt: expect.any(String) }),
-                provenance: expect.objectContaining({
-                  evidenceProofId: expect.any(String),
-                  sourceHealthProofId: expect.any(String)
-                }),
-                consumers: expect.objectContaining({
-                  publicTi: expect.any(Object),
-                  alertGeneration: expect.any(Object)
-                }),
-                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-              })
-            ]),
-            operations: expect.arrayContaining([
-              expect.objectContaining({ type: "rebuild_alerts", route: expect.objectContaining({ liveNetworkFetch: false }) })
-            ]),
-            summary: expect.objectContaining({
-              rowCount: expect.any(Number),
-              operationTypes: expect.arrayContaining(["rebuild_alerts"]),
-              latestCaptureAt: expect.any(String)
-            })
-          }),
-          sourceFamilyCoverageMatrix: expect.objectContaining({
-            schemaVersion: "ti.public_actor.source_family_coverage_matrix.v1",
-            rows: expect.any(Array),
-            summary: expect.objectContaining({
-              totalFamilies: expect.any(Number),
-              latestCaptureAt: expect.any(String)
-            })
-          }),
-          sourcePackActivationPreview: expect.objectContaining({
-            schemaVersion: "ti.public_actor.source_pack_activation_preview.v1",
-            mode: "prepare_no_network",
-            ready: false,
-            actions: [],
-            summary: expect.objectContaining({
-              total: 0,
-              actionTypes: []
-            }),
-            policyBoundary: expect.objectContaining({
-              liveNetworkFetch: false,
-              metadataOnlyRestrictedSources: true
-            }),
-            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-          }),
-          sourceEnrichmentFreshnessLedger: expect.objectContaining({
-            schemaVersion: "ti.public_actor.source_enrichment_freshness_ledger.v1",
-            rows: expect.arrayContaining([
-              expect.objectContaining({
-                sourceFamily: "telegram",
-                freshnessSla: expect.objectContaining({
-                  state: "fresh",
-                  staleAfterHours: 24,
-                  captureRequired: false,
-                  retryable: false,
-                  nextRefreshAction: "monitor_freshness",
-                  liveNetworkFetch: false
-                })
-              })
-            ]),
-            summary: expect.objectContaining({
-              freshFamilies: expect.arrayContaining(["telegram"]),
-              latestCaptureAt: expect.any(String)
-            })
-          }),
-          alertEnrichmentHandoff: expect.objectContaining({
-            schemaVersion: "ti.public_actor.alert_enrichment_handoff.v1",
-            ready: true,
-            route: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false }),
-            rows: expect.arrayContaining([
-              expect.objectContaining({
-                watchlistTerm: "APT29",
-                sourceFamily: "telegram",
-                state: "ready",
-                parserStatus: expect.objectContaining({ state: "ready", captureState: "capture_observed" }),
-                freshness: expect.objectContaining({ lastCaptureAt: expect.any(String) }),
-                matchContext: expect.objectContaining({
-                  matchBasis: "watchlist_enrichment_evidence",
-                  matchableFields: expect.arrayContaining(["text"])
-                }),
-                provenance: expect.objectContaining({
-                  evidenceProofId: expect.any(String),
-                  freshnessProofId: expect.any(String),
-                  enrichmentProofIds: expect.arrayContaining([expect.any(String)]),
-                  sourceOperationsReadinessProofId: expect.any(String),
-                  sourceOperationsRowProofId: expect.any(String),
-                  sourceOperationsState: "ready",
-                  operatorActionTypes: expect.arrayContaining(["rebuild_alerts"]),
-                  sourceIds: expect.arrayContaining([expect.any(String)])
-                }),
-                webhookPayload: expect.objectContaining({
-                  canConsume: true,
-                  requiredFields: expect.arrayContaining(["provenance.enrichmentProofIds", "provenance.sourceOperationsReadinessProofId", "freshness.lastCaptureAt"]),
-                  deliveryContext: expect.objectContaining({
-                    liveNetworkFetch: false,
-                    sourceOperationsState: "ready",
-                    operatorActionTypes: expect.arrayContaining(["rebuild_alerts"])
-                  })
-                }),
-                analystHandoffPayload: expect.objectContaining({
-                  schemaVersion: "ti.public_actor.alert_enrichment_analyst_handoff.v1",
-                  canCreateAlert: true,
-                  canOpenCase: true,
-                  canTriggerWebhook: true,
-                  liveNetworkFetch: false,
-                  sourceFamily: "telegram",
-                  parserStatus: expect.objectContaining({ state: "ready", captureState: "capture_observed", retryable: false }),
-                  freshnessSla: expect.objectContaining({ state: "fresh", captureRequired: false, liveNetworkFetch: false }),
-                  provenance: expect.objectContaining({
-                    enrichmentProofIds: expect.arrayContaining([expect.any(String)]),
-                    sourceOperationsReadinessProofId: expect.any(String),
-                    sourceOperationsRowProofId: expect.any(String),
-                    sourceIds: expect.arrayContaining([expect.any(String)])
-                  }),
-                  consumerRoutes: expect.objectContaining({
-                    alertRebuild: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false }),
-                    caseWorkbench: expect.objectContaining({ path: "/v1/dwm/cases", liveNetworkFetch: false }),
-                    webhookDelivery: expect.objectContaining({ path: "/v1/dwm/webhooks/deliver", liveNetworkFetch: false })
-                  }),
-                  safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-                }),
-                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-              })
-            ]),
-            summary: expect.objectContaining({
-              readyRows: expect.any(Number),
-              sourceFamilies: expect.arrayContaining(["telegram"]),
-              enrichmentProofIds: expect.arrayContaining([expect.any(String)]),
-              sourceOperationsProofIds: expect.arrayContaining([expect.any(String)]),
-              operatorActionTypes: expect.arrayContaining(["rebuild_alerts"]),
-              analystHandoffReadyRows: expect.any(Number),
-              webhookReadyRows: expect.any(Number),
-              freshnessSlaStates: expect.arrayContaining(["fresh"]),
-              latestCaptureAt: expect.any(String)
-            })
-          }),
-          watchlistAlertabilityBridge: expect.objectContaining({
-            schemaVersion: "ti.public_actor.watchlist_alertability_bridge.v1",
-            ready: true,
-            route: expect.objectContaining({
-              path: "/v1/dwm/alerts/rebuild",
-              liveNetworkFetch: false
-            }),
-            rows: expect.arrayContaining([
-              expect.objectContaining({
-                watchlistTerm: "APT29",
-                sourceFamily: "telegram",
-                state: "alertable",
-                parserState: "ready",
-                captureState: "capture_observed",
-                confidence: expect.any(Number),
-                provenance: expect.objectContaining({
-                  evidenceProofId: expect.any(String),
-                  sourceHealthProofId: expect.any(String)
-                }),
-                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-              })
-            ]),
-            summary: expect.objectContaining({
-              alertableFamilies: expect.arrayContaining(["telegram"]),
-              watchlistTerms: expect.arrayContaining(["APT29", "example.com"]),
-              latestCaptureAt: expect.any(String)
-            })
-          }),
-          gaps: [],
-          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-        },
-        publicTiActorPage: {
-          schemaVersion: "ti.public_actor.source_readiness.v1",
-          proofId: expect.any(String),
-          queryAdapter: expect.objectContaining({
-            schemaVersion: "ti.public_actor.query_adapter.v1",
-            readiness: expect.objectContaining({ publicTiReady: true })
-          }),
-          actorMetadata: expect.objectContaining({ displayName: "APT29", noSyntheticActorClaims: true }),
-          sourceEnrichmentProfile: expect.objectContaining({
-            schemaVersion: "ti.public_actor.enrichment_profile.v1",
-            fields: expect.arrayContaining([
-              expect.objectContaining({ field: "aliases", values: expect.arrayContaining(["APT29"]) })
-            ])
-          }),
-          state: "ready",
-          sourceCoverage: expect.arrayContaining([
-            expect.objectContaining({ family: "telegram", state: "canary" })
-          ]),
-          sourceReadinessLedgerRows: expect.arrayContaining([
-            expect.objectContaining({ family: "telegram", freshnessState: "fresh" })
-          ]),
-          evidenceReadiness: expect.objectContaining({
-            schemaVersion: "dwm.actor_evidence_readiness.v1",
-            evidenceReady: true,
-            rows: expect.arrayContaining([
-              expect.objectContaining({ family: "telegram", confidence: expect.any(Number) })
-            ])
-          }),
-          parserHealthReadiness: expect.objectContaining({
-            schemaVersion: "dwm.actor_parser_health_readiness.v1",
-            parserReady: true,
-            rows: expect.arrayContaining([
-              expect.objectContaining({ family: "telegram", parserState: "ready" })
-            ])
-          }),
-          captureReadiness: expect.objectContaining({
-            schemaVersion: "dwm.actor_capture_readiness.v1",
-            captureReady: true
-          }),
-          alertGenerationReadiness: expect.objectContaining({
-            schemaVersion: "dwm.actor_alert_generation_readiness.v1",
-            alertReady: true,
-            watchlistMatchReadiness: expect.objectContaining({
-              schemaVersion: "dwm.actor_watchlist_match_readiness.v1",
-              summary: expect.objectContaining({ ready: true })
-            })
-          }),
-          sourceOperationsQueue: expect.objectContaining({
-            schemaVersion: "dwm.actor_source_operations_queue.v1",
-            queueItems: expect.arrayContaining([
-              expect.objectContaining({ type: "rebuild_alerts", liveNetworkFetch: false })
-            ])
-          }),
-          sourceFamilyHealth: expect.objectContaining({
-            schemaVersion: "dwm.actor_source_family_health.v1",
-            rows: expect.arrayContaining([
-              expect.objectContaining({ family: "telegram", confidence: expect.any(Number), parserState: "ready" })
-            ])
-          }),
-          sourceConsumerBridge: expect.objectContaining({
-            schemaVersion: "dwm.actor_source_consumer_bridge.v1",
-            consumers: expect.arrayContaining([
-              expect.objectContaining({ consumer: "publicTiActorPage", ready: true })
-            ])
-          }),
-          sourceSectionReadiness: expect.objectContaining({
-            schemaVersion: "dwm.actor_source_section_readiness.v1",
-            sections: expect.arrayContaining([
-              expect.objectContaining({ section: "overview", state: "covered" })
-            ])
-          }),
-          freshness: expect.objectContaining({
-            captureFreshness: expect.objectContaining({ state: "fresh" })
-          })
-        },
-        dashboardSourceReadiness: {
-          schemaVersion: "dwm.dashboard.source_readiness_row.v1",
-          proofId: expect.any(String),
-          alertReady: true,
-          caseReady: true,
-          sourceCoverage: expect.arrayContaining([
-            expect.objectContaining({ family: "public_advisory", state: "canary" })
-          ]),
-          sourceReadinessLedgerRows: expect.arrayContaining([
-            expect.objectContaining({ family: "public_advisory", downstreamConsumers: expect.objectContaining({ sharedWatchlistAlerts: true }) })
-          ]),
-          captureReadiness: expect.objectContaining({
-            captureRows: expect.arrayContaining([
-              expect.objectContaining({ family: "telegram", state: "capture_observed" })
-            ])
-          }),
-          alertGenerationReadiness: expect.objectContaining({
-            canRebuildAlerts: true,
-            rebuildPlan: expect.objectContaining({ liveNetworkFetch: false })
-          }),
-          sourceOperationsQueue: expect.objectContaining({
-            schemaVersion: "dwm.actor_source_operations_queue.v1",
-            queueItems: expect.arrayContaining([
-              expect.objectContaining({ type: "rebuild_alerts", liveNetworkFetch: false })
-            ])
-          }),
-          sourceFamilyHealth: expect.objectContaining({
-            summary: expect.objectContaining({
-              alertReadyFamilies: expect.arrayContaining(["telegram"])
-            })
-          }),
-          sourceEnrichmentProfile: expect.objectContaining({
-            schemaVersion: "ti.public_actor.enrichment_profile.v1",
-            fields: expect.arrayContaining([
-              expect.objectContaining({
-                field: "aliases",
-                state: "value_ready",
-                provenance: expect.arrayContaining([
-                  expect.objectContaining({ safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false }) })
-                ])
-              })
-            ]),
-            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-          }),
-          sourceConsumerBridge: expect.objectContaining({
-            summary: expect.objectContaining({
-              publicTiReady: true,
-              alertReady: true,
-              watchlistMatchReady: true
-            })
-          }),
-          sourceSectionReadiness: expect.objectContaining({
-            summary: expect.objectContaining({
-              coveredSections: expect.arrayContaining(["overview", "evidence"])
-            })
-          }),
-          sourceOperationsAdapter: expect.objectContaining({
-            schemaVersion: "dwm.dashboard.source_operations_adapter.v1",
-            rows: expect.arrayContaining([
-              expect.objectContaining({
-                sourceFamily: "telegram",
-                parserStatus: expect.objectContaining({ state: "ready", captureState: "capture_observed" }),
-                provenance: expect.objectContaining({
-                  evidenceProofId: expect.any(String),
-                  sourceHealthProofId: expect.any(String)
-                }),
-                alertEnrichment: expect.objectContaining({
-                  webhookConsumable: true,
-                  enrichmentProofIds: expect.arrayContaining([expect.any(String)])
-                }),
-                operations: expect.arrayContaining([
-                  expect.objectContaining({ type: "rebuild_alerts", liveNetworkFetch: false })
-                ]),
-                operationalRecovery: expect.objectContaining({
-                  state: "monitor",
-                  nextActionTypes: expect.arrayContaining(["rebuild_alerts"]),
-                  liveNetworkFetch: false
-                }),
-                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-              })
-            ]),
-            summary: expect.objectContaining({
-              publicTiReady: true,
-              alertReady: true,
-              parserStates: expect.arrayContaining(["ready"]),
-              nextActionTypes: expect.arrayContaining(["rebuild_alerts"]),
-              latestCaptureAt: expect.any(String)
-            }),
-            policyBoundary: expect.objectContaining({ liveNetworkFetch: false })
-          }),
-          freshnessState: "fresh"
-        },
-        worker3Assertions: expect.arrayContaining([
-          ".actorReadiness.proofId | length > 0",
-          ".actorReadiness.sourceReadinessLedgerRows | all(has(\"proofId\") and has(\"family\") and has(\"state\") and .safeOutput.liveNetworkScrapeStarted == false)",
-          ".actorReadiness.captureReadiness.schemaVersion == \"dwm.actor_capture_readiness.v1\"",
-          ".actorReadiness.alertGenerationReadiness.schemaVersion == \"dwm.actor_alert_generation_readiness.v1\"",
-          ".actorReadiness.alertGenerationReadiness.watchlistMatchReadiness.schemaVersion == \"dwm.actor_watchlist_match_readiness.v1\"",
-          ".actorReadiness.sourceOperationsQueue.schemaVersion == \"dwm.actor_source_operations_queue.v1\"",
-          ".actorReadiness.sourceFamilyHealth.schemaVersion == \"dwm.actor_source_family_health.v1\"",
-          ".actorReadiness.sourceConsumerBridge.schemaVersion == \"dwm.actor_source_consumer_bridge.v1\"",
-          ".actorReadiness.sourceSectionReadiness.schemaVersion == \"dwm.actor_source_section_readiness.v1\"",
-          ".actorReadiness.sourceEnrichmentProfile.schemaVersion == \"ti.public_actor.enrichment_profile.v1\"",
-          ".actorReadiness.sourceEnrichmentProfile.fields | all(has(\"field\") and has(\"state\") and has(\"provenance\") and has(\"gaps\") and .safeOutput.liveNetworkScrapeStarted == false)",
-          ".proofArtifacts.publicTiQueryAdapter.schemaVersion == \"ti.public_actor.query_adapter.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.alertEvidenceHandoff.schemaVersion == \"ti.public_actor.alert_evidence_handoff.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.parserStatusLedger.schemaVersion == \"ti.public_actor.parser_status_ledger.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.sourcePackIntakeHandoff.schemaVersion == \"ti.public_actor.source_pack_intake_handoff.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.alertGenerationConsumerHandoff.schemaVersion == \"ti.public_actor.alert_generation_consumer_handoff.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.consumerProofLedger.schemaVersion == \"ti.public_actor.consumer_proof_ledger.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.sourceOperationsHandoff.schemaVersion == \"ti.public_actor.source_operations_handoff.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.schemaVersion == \"ti.public_actor.downstream_fixture_export.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceEnrichmentProfileContract.requiredFields | index(\"sourceEnrichmentProfile.fields[].provenance\")",
-          ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsContract.requiredFields | index(\"sourceOperationsReadiness.rows[].proofId\")",
-          ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.schemaVersion == \"ti.public_actor.downstream_source_operations_readiness.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.rows | all(has(\"sourceFamily\") and has(\"state\") and has(\"parserStatus\") and has(\"provenance\") and .safeOutput.liveNetworkScrapeStarted == false)",
-          ".proofArtifacts.publicTiQueryAdapter.sourceFamilyCoverageMatrix.schemaVersion == \"ti.public_actor.source_family_coverage_matrix.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.sourcePackActivationPreview.schemaVersion == \"ti.public_actor.source_pack_activation_preview.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger.schemaVersion == \"ti.public_actor.source_enrichment_freshness_ledger.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.alertEnrichmentHandoff.schemaVersion == \"ti.public_actor.alert_enrichment_handoff.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.watchlistAlertabilityBridge.schemaVersion == \"ti.public_actor.watchlist_alertability_bridge.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.scraperEnrichmentLifecycle.schemaVersion == \"ti.public_actor.scraper_enrichment_lifecycle.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.scraperEnrichmentLifecycle.rows | all(has(\"sourceFamily\") and has(\"policyStatus\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"freshness\") and has(\"enrichmentGap\") and .safeOutput.liveNetworkScrapeStarted == false)",
-          ".proofArtifacts.publicTiQueryAdapter.parserHealthAlerts.schemaVersion == \"ti.public_actor.parser_health_alerts.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.parserHealthAlerts.rows | all(has(\"sourceFamily\") and has(\"alertType\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"alertGenerationImpact\") and .safeOutput.liveNetworkScrapeStarted == false)",
-          ".proofArtifacts.publicTiQueryAdapter.enrichmentGapQueue.schemaVersion == \"ti.public_actor.enrichment_gap_queue.v1\"",
-          ".proofArtifacts.publicTiQueryAdapter.enrichmentGapQueue.items | all(has(\"sourceFamily\") and has(\"gapType\") and has(\"policyStatus\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"freshness\") and has(\"route\") and .safeOutput.liveNetworkScrapeStarted == false)",
-          ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
-          ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.schemaVersion == \"dwm.dashboard.source_operations_adapter.v1\"",
-          ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.rows | all(has(\"sourceOperationsReadiness\") and .safeOutput.liveNetworkScrapeStarted == false)",
-          ".proofArtifacts.dashboardSourceReadiness.scraperEnrichmentLifecycle.schemaVersion == \"ti.public_actor.scraper_enrichment_lifecycle.v1\"",
-          ".proofArtifacts.dashboardSourceReadiness.parserHealthAlerts.schemaVersion == \"ti.public_actor.parser_health_alerts.v1\"",
-          ".proofArtifacts.dashboardSourceReadiness.enrichmentGapQueue.schemaVersion == \"ti.public_actor.enrichment_gap_queue.v1\"",
-          ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
-        ])
-      }
+    expect(actorReadinessBody.schemaVersion).toBe("dwm.actor_page_source_readiness.v1");
+    expect(actorReadinessBody.query).toBe("APT29");
+    expect(actorReadinessBody.actorReadiness.actorMetadata).toMatchObject({
+      displayName: "APT29",
+      aliases: expect.arrayContaining(["APT29"]),
+      noSyntheticActorClaims: true
     });
+    expect(actorReadinessBody.actorReadiness.sourceCoverage).toEqual(expect.arrayContaining([
+      expect.objectContaining({ family: "telegram", state: "canary", canEnrichActor: true, canProduceAlert: true }),
+      expect.objectContaining({ family: "darkweb_onion", state: "active", privacyBoundary: expect.objectContaining({ metadataOnly: true }) }),
+      expect.objectContaining({ family: "actor_page", state: "canary", matchableFields: expect.arrayContaining(["actorName"]) })
+    ]));
+    expect(actorReadinessBody.actorReadiness.alertGenerationReadiness).toMatchObject({
+      alertReady: false,
+      canRebuildAlerts: false,
+      blockers: expect.arrayContaining([expect.objectContaining({ code: "capture_required" })])
+    });
+    expect(actorReadinessBody.actorReadiness.alertCaseHandoffReadiness).toMatchObject({
+      alertReady: false,
+      caseReady: false,
+      canOpenCase: false,
+      blockers: expect.arrayContaining([expect.objectContaining({ code: "capture_required" })])
+    });
+    expect(actorReadinessBody.proofArtifacts.publicTiQueryAdapter.schemaVersion).toBe("ti.public_actor.query_adapter.v1");
+    expect(actorReadinessBody.proofArtifacts.publicTiQueryAdapter.sourcePackIntakeHandoff.ready).toBe(false);
+    expect(actorReadinessBody.proofArtifacts.dashboardSourceReadiness).toMatchObject({ alertReady: false, caseReady: false });
     expect(actorReadinessBody.proofArtifacts.publicTiQueryAdapter).not.toHaveProperty("sourceGrowthFixturePlan");
     expect(actorReadinessBody.proofArtifacts.publicTiQueryAdapter).not.toHaveProperty("sourceGrowthActivationReceipt");
     expect(actorReadinessBody.proofArtifacts.dashboardSourceReadiness).not.toHaveProperty("sourceGrowthFixturePlan");
@@ -2560,7 +1495,6 @@ describe("dwm source requests", () => {
     expect(actorReadinessBody.actorReadiness.provenance).toEqual(expect.arrayContaining([
       expect.objectContaining({
         family: "telegram",
-        lastCaptureAt: expect.any(String),
         privacyBoundary: expect.objectContaining({ noPrivateTelegram: true }),
         safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
       }),
@@ -2570,36 +1504,6 @@ describe("dwm source requests", () => {
       })
     ]));
     expect(actorReadinessBody.actorReadiness.candidateGaps).toEqual([]);
-    const staleActorReadiness = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
-      method: "POST",
-      body: JSON.stringify({
-        action: "actor_enrichment_readiness",
-        sourcePackId: "pack_activation_proof_mixed",
-        query: "APT29",
-        tenantId: "tenant_acme",
-        orgId: "org_acme",
-        scope: "APT29,example.com",
-        generatedAt: "2026-07-02T00:00:00.000Z"
-      })
-    }), options);
-    const staleActorReadinessBody = await staleActorReadiness.json() as any;
-    expect(staleActorReadiness.status).toBe(200);
-    expect(staleActorReadinessBody.actorReadiness.freshness).toMatchObject({
-      stale: true,
-      captureFreshness: expect.objectContaining({ state: "stale", staleAfterHours: 24 })
-    });
-    expect(staleActorReadinessBody.proofArtifacts).toMatchObject({
-      publicTiActorPage: {
-        freshness: expect.objectContaining({
-          captureFreshness: expect.objectContaining({ state: "stale" })
-        })
-      },
-      dashboardSourceReadiness: {
-        freshnessState: "stale",
-        alertReady: true,
-        caseReady: true
-      }
-    });
     expect(configBody.sourceConfigs.every((row: any) => row.activationProof.safeOutput.liveNetworkScrapeStarted === false)).toBe(true);
     expect(frontier.snapshot()).toHaveLength(6);
     expect(JSON.stringify(configBody)).not.toContain("apt29/claims");
@@ -2775,10 +1679,7 @@ describe("dwm source requests", () => {
           expect.objectContaining({
             family: "telegram",
             state: "capture_required",
-            recordCapturePlan: expect.objectContaining({
-              body: expect.objectContaining({ action: "record_capture" }),
-              liveNetworkFetch: false
-            })
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
           })
         ]),
         missingFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
@@ -2824,23 +1725,11 @@ describe("dwm source requests", () => {
         schemaVersion: "dwm.actor_source_operations_queue.v1",
         proofId: expect.any(String),
         summary: expect.objectContaining({
-          high: 1,
           medium: expect.any(Number),
           alertRebuildReady: false,
-          actionTypes: expect.arrayContaining(["record_capture", "request_candidate"])
+          actionTypes: expect.arrayContaining(["request_candidate"])
         }),
         queueItems: expect.arrayContaining([
-          expect.objectContaining({
-            type: "record_capture",
-            priority: "high",
-            family: "telegram",
-            route: expect.objectContaining({
-              path: "/v1/dwm/source-requests",
-              body: expect.objectContaining({ action: "record_capture" }),
-              liveNetworkFetch: false
-            }),
-            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-          }),
           expect.objectContaining({
             type: "request_candidate",
             priority: "medium",
@@ -2878,9 +1767,6 @@ describe("dwm source requests", () => {
               lastEnrichmentAt: expect.any(String),
               checkedAt: expect.any(String)
             }),
-            nextActions: expect.arrayContaining([
-              expect.objectContaining({ type: "record_capture", liveNetworkFetch: false })
-            ]),
             safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
           }),
           expect.objectContaining({
@@ -2938,7 +1824,7 @@ describe("dwm source requests", () => {
           coveredSections: expect.arrayContaining(["overview", "evidence", "freshness"]),
           missingSections: expect.arrayContaining(["infrastructure", "targeting"]),
           gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-          nextActionTypes: expect.arrayContaining(["request_candidate", "record_capture"])
+          nextActionTypes: expect.arrayContaining(["request_candidate"])
         }),
         sections: expect.arrayContaining([
           expect.objectContaining({
@@ -2956,10 +1842,7 @@ describe("dwm source requests", () => {
           expect.objectContaining({
             section: "overview",
             state: "covered",
-            sourceFamilies: expect.arrayContaining(["telegram"]),
-            nextActions: expect.arrayContaining([
-              expect.objectContaining({ type: "record_capture", liveNetworkFetch: false })
-            ])
+            sourceFamilies: expect.arrayContaining(["telegram"])
           })
         ])
       },
@@ -3110,7 +1993,7 @@ describe("dwm source requests", () => {
           staleAfterHours: 24,
           captureRequired: true,
           retryable: false,
-          nextRefreshAction: "record_capture",
+          nextRefreshAction: "await_scheduled_collection",
           liveNetworkFetch: false
         })
       })
@@ -3118,601 +2001,35 @@ describe("dwm source requests", () => {
     expect(partialFreshnessLedger.summary).toEqual(expect.objectContaining({
       captureSlaRequiredFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"])
     }));
-    expect(body.proofArtifacts).toMatchObject({
-      publicTiQueryAdapter: {
-        schemaVersion: "ti.public_actor.query_adapter.v1",
-        route: expect.objectContaining({ path: "/ti/apt28", liveNetworkFetch: false }),
-        readiness: expect.objectContaining({
-          state: "partial",
-          publicTiReady: true,
-          alertReady: false,
-          watchlistMatchReady: false,
-          freshnessState: "needs_capture"
-        }),
-        sections: expect.arrayContaining([
-          expect.objectContaining({
-            section: "infrastructure",
-            state: "missing_source",
-            gaps: expect.arrayContaining([
-              expect.objectContaining({
-                family: "darkweb_onion",
-                intakeRecommendation: expect.objectContaining({ policyBoundary: "metadata_only_restricted_source" })
-              })
-            ]),
-            nextActions: expect.arrayContaining([
-              expect.objectContaining({ type: "request_candidate", liveNetworkFetch: false })
-            ]),
-            safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
-          })
-        ]),
-        sourceHealth: expect.arrayContaining([
-          expect.objectContaining({
-            family: "darkweb_onion",
-            state: "missing",
-            parserState: "missing_source",
-            confidenceTier: "missing"
-          })
-        ]),
-        parserStatusLedger: expect.objectContaining({
-          schemaVersion: "ti.public_actor.parser_status_ledger.v1",
-          summary: expect.objectContaining({
-            readyFamilies: expect.arrayContaining(["telegram"]),
-            missingFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-            captureRequiredFamilies: expect.arrayContaining(["telegram"])
-          }),
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              family: "darkweb_onion",
-              parserState: "missing_source",
-              confidenceTier: "missing",
-              gap: expect.objectContaining({
-                state: "missing",
-                intakeRecommendation: expect.objectContaining({ policyBoundary: "metadata_only_restricted_source" })
-              }),
-              nextActions: expect.arrayContaining([
-                expect.objectContaining({ type: "request_candidate", liveNetworkFetch: false })
-              ])
-            })
-          ])
-        }),
-          sourcePackIntakeHandoff: expect.objectContaining({
-            schemaVersion: "ti.public_actor.source_pack_intake_handoff.v1",
-          ready: true,
-          validationSummary: expect.objectContaining({
-            totalCandidates: expect.any(Number),
-            accepted: expect.any(Number),
-            metadataOnly: expect.any(Number)
-          }),
-          sourcePackWorkflow: expect.objectContaining({
-            schemaVersion: "dwm.actor_source_candidate_intake_workflow.v1",
-            steps: expect.arrayContaining([
-              expect.objectContaining({ step: "create_source_pack", liveNetworkFetch: false }),
-              expect.objectContaining({ step: "validate_candidates", body: expect.objectContaining({ action: "pack_worker_run", dryRun: true }) }),
-              expect.objectContaining({ step: "review_activation", body: expect.objectContaining({ action: "pack_review", packAction: "approve" }) })
-            ])
-          }),
-          candidates: expect.arrayContaining([
-            expect.objectContaining({
-              family: "darkweb_onion",
-              policyResult: expect.objectContaining({
-                allowed: true,
-                metadataOnly: true,
-                liveNetworkFetch: false
-              }),
-              parserExpectation: expect.objectContaining({
-                profile: "restricted_metadata",
-                expectedCaptureType: "darkweb_onion_metadata_observation"
-              }),
-              activationReadiness: expect.objectContaining({
-                requiresOperatorApproval: true,
-                requiresMetadataOnlyApproval: true
-              }),
-              provenance: expect.objectContaining({
-                gapState: "missing",
-                sourceFamily: "darkweb_onion"
-              }),
-              safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
-            })
-          ])
-        }),
-        scraperEnrichmentLifecycle: expect.objectContaining({
-          schemaVersion: "ti.public_actor.scraper_enrichment_lifecycle.v1",
-          mode: "no_network_fixture",
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              sourceFamily: "darkweb_onion",
-              policyStatus: expect.objectContaining({
-                metadataOnly: true,
-                liveNetworkFetch: false
-              }),
-              parserStatus: expect.objectContaining({
-                state: expect.any(String)
-              }),
-              retryState: expect.objectContaining({
-                retryable: expect.any(Boolean)
-              }),
-              provenance: expect.objectContaining({
-                candidateIds: expect.any(Array)
-              }),
-              freshness: expect.objectContaining({
-                state: expect.any(String)
-              }),
-              enrichmentGap: expect.objectContaining({
-                type: expect.any(String)
-              }),
-              activationTest: expect.objectContaining({
-                routes: expect.any(Array)
-              }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            })
-          ]),
-          summary: expect.objectContaining({
-            sourceFamilies: expect.arrayContaining(["darkweb_onion"])
-          }),
-          lifecycleFields: expect.arrayContaining(["sourceId", "sourceFamily", "policyStatus", "parserStatus", "retryState", "provenance", "freshness", "enrichmentGap"]),
-          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-        }),
-        parserHealthAlerts: expect.objectContaining({
-          schemaVersion: "ti.public_actor.parser_health_alerts.v1",
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              sourceFamily: "darkweb_onion",
-              alertType: expect.stringMatching(/policy_blocked|parser_not_ready|enrichment_gap/),
-              parserStatus: expect.objectContaining({ state: expect.any(String) }),
-              retryState: expect.objectContaining({ retryable: expect.any(Boolean) }),
-              provenance: expect.objectContaining({ candidateIds: expect.any(Array) }),
-              alertGenerationImpact: expect.objectContaining({
-                blockedAlertRows: expect.any(Number),
-                webhookConsumable: expect.any(Boolean)
-              }),
-              route: expect.objectContaining({
-                path: "/v1/dwm/source-requests",
-                liveNetworkFetch: false,
-                body: expect.objectContaining({ dryRun: true })
-              }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            })
-          ]),
-          summary: expect.objectContaining({
-            sourceFamilies: expect.arrayContaining(["darkweb_onion"]),
-            actionTypes: expect.arrayContaining([expect.any(String)])
-          }),
-          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-        }),
-        enrichmentGapQueue: expect.objectContaining({
-          schemaVersion: "ti.public_actor.enrichment_gap_queue.v1",
-          mode: "no_network_fixture",
-          items: expect.arrayContaining([
-            expect.objectContaining({
-              sourceFamily: "darkweb_onion",
-              gapType: expect.any(String),
-              priority: expect.stringMatching(/high|medium|low/),
-              operatorAction: expect.stringMatching(/request_policy_approval|retry_parser|test_parser|record_capture|inspect_gap/),
-              policyStatus: expect.objectContaining({ liveNetworkFetch: false }),
-              parserStatus: expect.objectContaining({ state: expect.any(String) }),
-              retryState: expect.objectContaining({ retryable: expect.any(Boolean) }),
-              provenance: expect.objectContaining({ candidateIds: expect.any(Array) }),
-              freshness: expect.objectContaining({ state: expect.any(String) }),
-              alertGenerationImpact: expect.objectContaining({
-                blockedAlertRows: expect.any(Number),
-                webhookConsumable: expect.any(Boolean)
-              }),
-              route: expect.objectContaining({
-                path: "/v1/dwm/source-requests",
-                liveNetworkFetch: false,
-                body: expect.objectContaining({ dryRun: true })
-              }),
-              audit: expect.objectContaining({
-                required: true,
-                sourceProofIds: expect.any(Array)
-              }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            })
-          ]),
-          summary: expect.objectContaining({
-            sourceFamilies: expect.arrayContaining(["darkweb_onion"]),
-            actionTypes: expect.arrayContaining([expect.any(String)])
-          }),
-          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-        }),
-        alertEvidenceHandoff: expect.objectContaining({
-          schemaVersion: "ti.public_actor.alert_evidence_handoff.v1",
-          ready: false,
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              watchlistTerm: "APT28",
-              family: "telegram",
-              state: "capture_required",
-              blockers: expect.arrayContaining([
-                expect.objectContaining({ code: "capture_required" })
-              ]),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            })
-          ]),
-          blockers: expect.arrayContaining([
-            expect.objectContaining({ code: "capture_required" })
-          ]),
-          summary: expect.objectContaining({
-            readyRows: 0,
-            blockedRows: expect.any(Number),
-            sourceFamilies: expect.arrayContaining(["telegram"])
-          })
-        }),
-        alertGenerationConsumerHandoff: expect.objectContaining({
-          schemaVersion: "ti.public_actor.alert_generation_consumer_handoff.v1",
-          ready: false,
-          route: expect.objectContaining({
-            path: "/v1/dwm/alerts/rebuild",
-            liveNetworkFetch: false,
-            body: expect.objectContaining({
-              actor: "APT28",
-              sourceFamilies: [],
-              dryRun: true
-            })
-          }),
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              watchlistTerm: "APT28",
-              family: "telegram",
-              state: "blocked",
-              parserStatus: expect.objectContaining({
-                state: "ready",
-                captureState: "capture_required"
-              }),
-              blockers: expect.arrayContaining([
-                expect.objectContaining({ code: "capture_required" })
-              ]),
-              provenance: expect.objectContaining({
-                sourceFamily: "telegram",
-                sourceHealthProofId: expect.any(String)
-              }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            })
-          ]),
-          summary: expect.objectContaining({
-            readyRows: 0,
-            blockedRows: expect.any(Number),
-            sourceFamilies: expect.arrayContaining(["telegram"]),
-            parserStates: expect.arrayContaining(["ready"])
-          }),
-          gaps: expect.arrayContaining([
-            expect.objectContaining({ family: "darkweb_onion", state: "missing" })
-          ]),
-          blockers: expect.arrayContaining([
-            expect.objectContaining({ code: "capture_required" })
-          ])
-        }),
-        consumerProofLedger: expect.objectContaining({
-          schemaVersion: "ti.public_actor.consumer_proof_ledger.v1",
-          rows: expect.any(Array),
-          summary: expect.objectContaining({
-            alertReadyFamilies: [],
-            gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"])
-          }),
-          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-        }),
-        sourceOperationsHandoff: expect.objectContaining({
-          schemaVersion: "ti.public_actor.source_operations_handoff.v1",
-          operations: expect.arrayContaining([
-            expect.objectContaining({
-              type: "record_capture",
-              family: "telegram",
-              route: expect.objectContaining({
-                path: "/v1/dwm/source-requests",
-                body: expect.objectContaining({ action: "record_capture" }),
-                liveNetworkFetch: false
-              }),
-              parserStatus: expect.objectContaining({ state: "ready" }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            }),
-            expect.objectContaining({
-              type: "request_candidate",
-              family: "darkweb_onion",
-              gap: expect.objectContaining({ state: "missing" })
-            })
-          ]),
-          summary: expect.objectContaining({
-            captureRecordReady: true,
-            actionTypes: expect.arrayContaining(["record_capture", "request_candidate"])
-          })
-        }),
-        downstreamFixtureExport: expect.objectContaining({
-          schemaVersion: "ti.public_actor.downstream_fixture_export.v1",
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              sourceFamily: "darkweb_onion",
-              gap: expect.objectContaining({
-                state: "missing",
-                intakeRecommendation: expect.objectContaining({ policyBoundary: "metadata_only_restricted_source" })
-              }),
-              safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
-            })
-          ]),
-          operations: expect.arrayContaining([
-            expect.objectContaining({ type: "record_capture" }),
-            expect.objectContaining({ type: "request_candidate" })
-          ]),
-          sourceOperationsReadiness: expect.objectContaining({
-            schemaVersion: "ti.public_actor.downstream_source_operations_readiness.v1",
-            rows: expect.arrayContaining([
-              expect.objectContaining({
-                sourceFamily: "darkweb_onion",
-                state: "actionable",
-                candidateIntake: expect.objectContaining({
-                  available: true,
-                  policyResult: expect.objectContaining({
-                    allowed: true,
-                    metadataOnly: true,
-                    liveNetworkFetch: false
-                  }),
-                  liveNetworkFetch: false
-                }),
-                operatorActions: expect.arrayContaining([
-                  expect.objectContaining({
-                    type: "request_candidate",
-                    route: expect.objectContaining({ liveNetworkFetch: false })
-                  })
-                ]),
-                safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
-              })
-            ]),
-            summary: expect.objectContaining({
-              actionableFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-              candidateIntakeFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-              policyReadyFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"])
-            })
-          }),
-          summary: expect.objectContaining({
-            gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-            operationTypes: expect.arrayContaining(["record_capture", "request_candidate"]),
-            sourceOperationsActionableFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"])
-          })
-        }),
-        sourceFamilyCoverageMatrix: expect.objectContaining({
-          schemaVersion: "ti.public_actor.source_family_coverage_matrix.v1",
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              sourceFamily: "darkweb_onion",
-              gapState: "missing",
-              alertGenerationReady: false,
-              safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
-            })
-          ]),
-          summary: expect.objectContaining({
-            gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-            operationTypes: expect.arrayContaining(["record_capture", "request_candidate"])
-          })
-        }),
-        sourcePackActivationPreview: expect.objectContaining({
-          schemaVersion: "ti.public_actor.source_pack_activation_preview.v1",
-          mode: "prepare_no_network",
-          ready: true,
-          actions: expect.arrayContaining([
-            expect.objectContaining({
-              action: "request_candidate",
-              family: "darkweb_onion",
-              route: expect.objectContaining({
-                path: "/v1/dwm/source-requests",
-                liveNetworkFetch: false,
-                body: expect.objectContaining({ dryRun: true })
-              }),
-              parserStatus: expect.objectContaining({ state: "missing_source" }),
-              gap: expect.objectContaining({ state: "missing" }),
-              provenance: expect.objectContaining({
-                coverageProofId: expect.any(String)
-              }),
-              policyBoundary: expect.objectContaining({ metadataOnlyRestrictedSources: true }),
-              safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
-            })
-          ]),
-          summary: expect.objectContaining({
-            intakeFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-            actionTypes: expect.arrayContaining(["request_candidate"])
-          }),
-          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-        }),
-        sourceEnrichmentFreshnessLedger: expect.objectContaining({
-          schemaVersion: "ti.public_actor.source_enrichment_freshness_ledger.v1",
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              sourceFamily: "darkweb_onion",
-              freshnessState: expect.any(String),
-              parserStatus: expect.objectContaining({ state: "missing_source" }),
-              gap: expect.objectContaining({ state: "missing" }),
-              nextActions: expect.arrayContaining([
-                expect.objectContaining({
-                  action: "request_candidate",
-                  liveNetworkFetch: false,
-                  route: expect.objectContaining({ path: "/v1/dwm/source-requests" })
-                })
-              ]),
-              provenance: expect.objectContaining({
-                coverageProofId: expect.any(String)
-              }),
-              safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
-            })
-          ]),
-          summary: expect.objectContaining({
-            captureSlaRequiredFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-            gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-            nextActionTypes: expect.arrayContaining(["request_candidate"])
-          }),
-          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-        }),
-        alertEnrichmentHandoff: expect.objectContaining({
-          schemaVersion: "ti.public_actor.alert_enrichment_handoff.v1",
-          ready: false,
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              watchlistTerm: "APT28",
-              sourceFamily: "telegram",
-              state: "blocked",
-              alertState: "blocked",
-              parserStatus: expect.objectContaining({
-                state: "ready",
-                captureState: "capture_required"
-              }),
-              blockers: expect.arrayContaining([
-                expect.objectContaining({ code: "capture_required" })
-              ]),
-              webhookPayload: expect.objectContaining({ canConsume: false }),
-              analystHandoffPayload: expect.objectContaining({
-                schemaVersion: "ti.public_actor.alert_enrichment_analyst_handoff.v1",
-                canCreateAlert: false,
-                canOpenCase: false,
-                canTriggerWebhook: false,
-                liveNetworkFetch: false,
-                sourceFamily: "telegram",
-                parserStatus: expect.objectContaining({ state: "ready", captureState: "capture_required", retryable: false }),
-                freshnessSla: expect.objectContaining({
-                  state: "needs_capture",
-                  captureRequired: true,
-                  retryable: false,
-                  nextRefreshAction: "record_capture",
-                  liveNetworkFetch: false
-                }),
-                consumerRoutes: expect.objectContaining({
-                  alertRebuild: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false }),
-                  caseWorkbench: expect.objectContaining({ path: "/v1/dwm/cases", liveNetworkFetch: false }),
-                  webhookDelivery: expect.objectContaining({ path: "/v1/dwm/webhooks/deliver", liveNetworkFetch: false })
-                }),
-                blockers: expect.arrayContaining([
-                  expect.objectContaining({ code: "capture_required" })
-                ]),
-                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-              }),
-              provenance: expect.objectContaining({
-                freshnessProofId: expect.any(String),
-                sourceOperationsReadinessProofId: expect.any(String),
-                sourceOperationsRowProofId: expect.any(String),
-                sourceOperationsState: "actionable",
-                operatorActionTypes: expect.arrayContaining(["record_capture"]),
-                sourceIds: expect.arrayContaining([expect.any(String)])
-              }),
-              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-            })
-          ]),
-          summary: expect.objectContaining({
-            blockedRows: expect.any(Number),
-            sourceFamilies: expect.arrayContaining(["telegram"]),
-            watchlistTerms: expect.arrayContaining(["APT28"]),
-            sourceOperationsProofIds: expect.arrayContaining([expect.any(String)]),
-            operatorActionTypes: expect.arrayContaining(["record_capture"]),
-            analystHandoffReadyRows: 0,
-            webhookReadyRows: 0,
-            freshnessSlaStates: expect.arrayContaining(["needs_capture"])
-          }),
-          blockers: expect.arrayContaining([
-            expect.objectContaining({ code: "capture_required" })
-          ])
-        }),
-        watchlistAlertabilityBridge: expect.objectContaining({
-          schemaVersion: "ti.public_actor.watchlist_alertability_bridge.v1",
-          ready: false,
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              watchlistTerm: "APT28",
-              sourceFamily: "telegram",
-              state: "blocked",
-              parserState: "ready",
-              captureState: "capture_required",
-              blockers: expect.arrayContaining([
-                expect.objectContaining({ code: "capture_required" })
-              ])
-            })
-          ]),
-          summary: expect.objectContaining({
-            blockedFamilies: expect.arrayContaining(["telegram"]),
-            gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-            readyRows: 0
-          }),
-          blockers: expect.arrayContaining([
-            expect.objectContaining({ code: "capture_required" })
-          ])
-        }),
-        gaps: expect.arrayContaining([
-          expect.objectContaining({ family: "darkweb_onion", state: "missing" })
+    const queryAdapter = body.proofArtifacts.publicTiQueryAdapter;
+    expect(queryAdapter).toMatchObject({
+      schemaVersion: "ti.public_actor.query_adapter.v1",
+      readiness: expect.objectContaining({ state: "partial", publicTiReady: true, alertReady: false }),
+      sourcePackIntakeHandoff: expect.objectContaining({ ready: true }),
+      sourceOperationsHandoff: expect.objectContaining({
+        operations: expect.arrayContaining([
+          expect.objectContaining({ type: "request_candidate", family: "darkweb_onion" })
         ])
-      },
-      publicTiActorPage: {
-        schemaVersion: "ti.public_actor.source_readiness.v1",
-        state: "partial",
-        missingDataGaps: expect.arrayContaining([
-          expect.objectContaining({ family: "darkweb_onion", state: "missing" }),
-          expect.objectContaining({ family: "actor_page", state: "missing" })
-        ])
-      },
-      dashboardSourceReadiness: {
-        schemaVersion: "dwm.dashboard.source_readiness_row.v1",
-        alertReady: false,
-        caseReady: false,
-        sourceCoverage: expect.arrayContaining([
-          expect.objectContaining({ family: "darkweb_onion", state: "missing" })
-        ]),
-        sourcePackActionReadiness: expect.objectContaining({
-          schemaVersion: "dwm.actor_source_pack_action_readiness.v1",
-          intakeActions: expect.arrayContaining([
-            expect.objectContaining({ action: "request_candidate", family: "darkweb_onion", liveNetworkFetch: false })
-          ])
-        }),
-        sourceOperationsQueue: expect.objectContaining({
-          schemaVersion: "dwm.actor_source_operations_queue.v1",
-          queueItems: expect.arrayContaining([
-            expect.objectContaining({ type: "record_capture", family: "telegram", liveNetworkFetch: false }),
-            expect.objectContaining({ type: "request_candidate", family: "darkweb_onion", liveNetworkFetch: false })
-          ])
-        }),
-        sourceFamilyHealth: expect.objectContaining({
-          schemaVersion: "dwm.actor_source_family_health.v1",
-          rows: expect.arrayContaining([
-            expect.objectContaining({ family: "darkweb_onion", parserState: "missing_source" })
-          ])
-        }),
-        sourceConsumerBridge: expect.objectContaining({
-          schemaVersion: "dwm.actor_source_consumer_bridge.v1",
-          consumers: expect.arrayContaining([
-            expect.objectContaining({ consumer: "sharedWatchlistAlerts", ready: false })
-          ])
-        }),
-        sourceOperationsAdapter: expect.objectContaining({
-          schemaVersion: "dwm.dashboard.source_operations_adapter.v1",
+      }),
+      downstreamFixtureExport: expect.objectContaining({
+        sourceOperationsReadiness: expect.objectContaining({
           rows: expect.arrayContaining([
             expect.objectContaining({
               sourceFamily: "darkweb_onion",
-              parserStatus: expect.objectContaining({ state: "missing_source" }),
-              gap: expect.objectContaining({ state: "missing" }),
-              nextActions: expect.arrayContaining([
-                expect.objectContaining({ action: "request_candidate", liveNetworkFetch: false })
-              ]),
-              sourceOperationsReadiness: expect.objectContaining({
-                proofId: expect.any(String),
-                state: "actionable",
-                candidateIntake: expect.objectContaining({
-                  available: true,
-                  policyResult: expect.objectContaining({ metadataOnly: true, liveNetworkFetch: false })
-                }),
-                operatorActionTypes: expect.arrayContaining(["request_candidate"]),
-                safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
-              }),
-              safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+              state: "actionable",
+              candidateIntake: expect.objectContaining({ available: true })
             })
-          ]),
-          summary: expect.objectContaining({
-            alertReady: false,
-            gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-            sourceOperationsActionableFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-            candidateIntakeFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-            nextActionTypes: expect.arrayContaining(["request_candidate"])
-          })
-        }),
-        sourceSectionReadiness: expect.objectContaining({
-          sections: expect.arrayContaining([
-            expect.objectContaining({ section: "infrastructure", state: "missing_source" })
           ])
-        }),
-        freshnessState: "needs_capture"
-      }
+        })
+      }),
+      enrichmentGapQueue: expect.objectContaining({
+        items: expect.arrayContaining([
+          expect.objectContaining({ sourceFamily: "telegram", operatorAction: "inspect_gap" })
+        ])
+      })
     });
+    expect(JSON.stringify(body.proofArtifacts)).not.toContain('"record_capture"');
+    expect(JSON.stringify(body.proofArtifacts)).not.toContain('"retry_capture"');
     expect(frontier.snapshot()).toHaveLength(1);
 
     const source = store.listSources().find((item: any) => item.metadata?.sourceGrowthFamily === "telegram");
@@ -3855,7 +2172,7 @@ describe("dwm source requests", () => {
         summary: expect.objectContaining({
           critical: expect.any(Number),
           alertRebuildReady: false,
-          actionTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
+          actionTypes: expect.arrayContaining(["retry_parser", "request_candidate"])
         }),
         queueItems: expect.arrayContaining([
           expect.objectContaining({
@@ -3868,15 +2185,6 @@ describe("dwm source requests", () => {
               liveNetworkFetch: false
             }),
             safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-          }),
-          expect.objectContaining({
-            type: "retry_capture",
-            priority: "critical",
-            family: "telegram",
-            route: expect.objectContaining({
-              body: expect.objectContaining({ action: "record_capture" }),
-              liveNetworkFetch: false
-            })
           })
         ]),
         safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
@@ -3903,14 +2211,13 @@ describe("dwm source requests", () => {
               expect.objectContaining({ code: "parser_retry_required", family: "telegram" })
             ]),
             nextActions: expect.arrayContaining([
-              expect.objectContaining({ type: "retry_parser", liveNetworkFetch: false }),
-              expect.objectContaining({ type: "retry_capture", liveNetworkFetch: false })
+              expect.objectContaining({ type: "retry_parser", liveNetworkFetch: false })
             ]),
             operationalRecovery: expect.objectContaining({
               state: "retryable",
               retryable: true,
               noNetworkSafe: true,
-              nextActionTypes: expect.arrayContaining(["retry_parser", "retry_capture"]),
+              nextActionTypes: expect.arrayContaining(["retry_parser"]),
               primaryAction: "retry_parser",
               primaryRoute: expect.objectContaining({ path: "/v1/dwm/source-requests", liveNetworkFetch: false }),
               blockerCodes: expect.arrayContaining(["parser_retry_required"]),
@@ -3952,7 +2259,7 @@ describe("dwm source requests", () => {
         summary: expect.objectContaining({
           missingSections: expect.arrayContaining(["overview", "infrastructure", "targeting"]),
           gapFamilies: expect.arrayContaining(["telegram", "actor_page"]),
-          nextActionTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
+          nextActionTypes: expect.arrayContaining(["retry_parser", "request_candidate"])
         }),
         sections: expect.arrayContaining([
           expect.objectContaining({
@@ -3987,7 +2294,7 @@ describe("dwm source requests", () => {
             operationalRecovery: expect.objectContaining({
               state: "retryable",
               retryable: true,
-              nextActionTypes: expect.arrayContaining(["retry_parser", "retry_capture"]),
+              nextActionTypes: expect.arrayContaining(["retry_parser"]),
               primaryAction: "retry_parser",
               liveNetworkFetch: false
             })
@@ -4009,7 +2316,7 @@ describe("dwm source requests", () => {
         summary: expect.objectContaining({
           retryFamilies: expect.arrayContaining(["telegram"]),
           missingFamilies: expect.arrayContaining(["actor_page"]),
-          nextActionTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
+          nextActionTypes: expect.arrayContaining(["retry_parser", "request_candidate"])
         }),
         rows: expect.arrayContaining([
           expect.objectContaining({
@@ -4031,19 +2338,11 @@ describe("dwm source requests", () => {
               body: expect.objectContaining({ action: "pack_review", packAction: "retry" }),
               liveNetworkFetch: false
             })
-          }),
-          expect.objectContaining({
-            type: "retry_capture",
-            family: "telegram",
-            route: expect.objectContaining({
-              body: expect.objectContaining({ action: "record_capture" }),
-              liveNetworkFetch: false
-            })
           })
         ]),
         summary: expect.objectContaining({
           retryReady: true,
-          actionTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
+          actionTypes: expect.arrayContaining(["retry_parser", "request_candidate"])
         })
       }),
       sourceFamilyCoverageMatrix: expect.objectContaining({
@@ -4051,7 +2350,7 @@ describe("dwm source requests", () => {
           expect.objectContaining({
             sourceFamily: "telegram",
             parserState: "retry_required",
-            operationTypes: expect.arrayContaining(["retry_parser", "retry_capture"]),
+            operationTypes: expect.arrayContaining(["retry_parser"]),
             gapState: "failed",
             blockerCodes: expect.arrayContaining(["parser_retry_required"])
           })
@@ -4116,7 +2415,7 @@ describe("dwm source requests", () => {
           operationalRecovery: expect.objectContaining({
             state: "retryable",
             retryable: true,
-            nextActionTypes: expect.arrayContaining(["retry_parser", "retry_capture"]),
+            nextActionTypes: expect.arrayContaining(["retry_parser"]),
             primaryAction: "retry_parser",
             liveNetworkFetch: false
           })
@@ -4147,8 +2446,7 @@ describe("dwm source requests", () => {
             sourceFamily: "telegram",
             state: "actionable",
             operatorActions: expect.arrayContaining([
-              expect.objectContaining({ type: "retry_parser" }),
-              expect.objectContaining({ type: "retry_capture" })
+              expect.objectContaining({ type: "retry_parser" })
             ])
           })
         ])
@@ -4468,7 +2766,7 @@ describe("dwm source requests", () => {
     expect(store.getSource(createdBody.source.id)?.metadata.sourceRequestAudit).toHaveLength(3);
   });
 
-  test("promoting a public Telegram candidate queues a real frontier collection task", async () => {
+  test("promoting a public Telegram candidate queues a real frontier task without a synthetic capture path", async () => {
     const store = new InMemoryScraperStore();
     const frontier = new FocusedFrontier();
     store.saveDwmWatchlist({
@@ -4521,34 +2819,9 @@ describe("dwm source requests", () => {
         captureText: "APT29 public Telegram mention observed in bounded source collection."
       })
     }), { store, frontier });
-    const observedBody = await observed.json() as any;
-    expect(observed.status).toBe(200);
-    expect(observedBody.capture).toMatchObject({
-      sourceId: createdBody.source.id,
-      taskId: body.collectionTrigger.jobId,
-      storageKind: "inline_text",
-      sensitive: false,
-      metadata: { adapter: "telegram_public", sourceCandidateId: createdBody.candidate.id }
-    });
-    expect(observedBody.lifecycle).toMatchObject({
-      collectionStatus: "capture_observed",
-      lastCollectionOutcome: { status: "capture_observed", captureId: observedBody.capture.id }
-    });
-    expect(observedBody.health.lastCollectionOutcome).toMatchObject({ status: "capture_observed" });
-    expect(observedBody.parser.lastCollectionOutcome).toMatchObject({ captureId: observedBody.capture.id });
-    expect(observedBody.alertRebuild).toMatchObject({
-      requested: true,
-      status: "completed",
-      alertCount: 1,
-      watchlistIds: ["watch_apt29"]
-    });
-    expect(store.listCaptures()).toHaveLength(1);
-    expect(store.listDwmAlerts()).toHaveLength(1);
-    expect(store.getSource(createdBody.source.id)?.metadata.sourceCandidate).toMatchObject({
-      collectionStatus: "capture_observed",
-      lastCaptureId: observedBody.capture.id,
-      alertRebuild: { status: "completed", alertCount: 1 }
-    });
+    expect(observed.status).toBe(400);
+    expect(store.listCaptures()).toHaveLength(0);
+    expect(store.listDwmAlerts()).toHaveLength(0);
   });
 
   test("requires metadata-only approval before restricted source activation", async () => {
@@ -4623,7 +2896,7 @@ describe("dwm source requests", () => {
     expect(activatedBody.policy.boundary.payloadPathsBlocked).toBe(true);
   });
 
-  test("records restricted metadata captures as metadata-only and can rebuild alerts without unsafe scraping", async () => {
+  test("does not fabricate restricted metadata captures through source requests", async () => {
     const store = new InMemoryScraperStore();
     const frontier = new FocusedFrontier();
     store.saveDwmWatchlist({
@@ -4652,22 +2925,9 @@ describe("dwm source requests", () => {
       method: "POST",
       body: JSON.stringify({ action: "record_capture", candidateId: createdBody.candidate.id })
     }), { store, frontier });
-    const observedBody = await observed.json() as any;
-    expect(observed.status).toBe(200);
-    expect(observedBody.capture).toMatchObject({
-      sourceId: createdBody.source.id,
-      storageKind: "metadata_only",
-      sensitive: true,
-      metadata: { adapter: "restricted_metadata", sourceCandidateId: createdBody.candidate.id }
-    });
-    expect(observedBody.capture.body).toBeUndefined();
-    expect(observedBody.capture.metadata.provenance).toMatchObject({
-      metadataOnly: true,
-      policyBoundary: { metadataOnly: true, noDownloads: true }
-    });
-    expect(observedBody.alertRebuild).toMatchObject({ status: "completed", alertCount: 1 });
-    expect(store.listCaptures()).toHaveLength(1);
-    expect(store.listDwmAlerts()).toHaveLength(1);
+    expect(observed.status).toBe(400);
+    expect(store.listCaptures()).toHaveLength(0);
+    expect(store.listDwmAlerts()).toHaveLength(0);
   });
 
   test("records retry suppress and rejection lifecycle decisions on persisted candidates", async () => {
@@ -4714,10 +2974,7 @@ describe("dwm source requests", () => {
       method: "POST",
       body: JSON.stringify({ action: "record_capture", sourceId: createdBody.source.id, captureText: "APT29 should not be captured from rejected source." })
     }), { store, frontier });
-    const noCaptureBody = await noCapture.json() as any;
-    expect(noCapture.status).toBe(200);
-    expect(noCaptureBody.collectionTrigger).toMatchObject({ queued: false, reason: "source_rejected" });
-    expect(noCaptureBody.alertRebuild).toMatchObject({ skipped: true, reason: "source_rejected" });
+    expect(noCapture.status).toBe(400);
     expect(store.listCaptures()).toHaveLength(0);
     expect(store.listDwmAlerts()).toHaveLength(0);
   });

@@ -24,9 +24,9 @@ for (const token of [
 }
 
 for (const token of [
-    'proxyTiRequest',
+    'proxyApiTiRequest',
     'force-dynamic',
-    '/api/ti/search',
+    "'/ti/search'",
     'POST',
 ]) {
     assert.ok(tiSearchProxySource.includes(token), `TI search proxy missing token: ${token}`)
@@ -80,7 +80,7 @@ globalThis.fetch = async (input: RequestInfo | URL) => {
                         alertReadyFamilies: ['vendor_disclosure'],
                         gapFamilies: [],
                         retryFamilies: [],
-                        operationTypes: ['record_capture', 'request_candidate'],
+                        operationTypes: ['request_candidate'],
                         latestCaptureAt: '2026-06-29T09:05:00.000Z',
                     },
                 },
@@ -109,7 +109,7 @@ try {
     assert.equal(readyPayload.publicTiProvenance.sourceFamilyCoverageCount, 2)
     assert.equal(readyPayload.publicTiProvenance.publicTiReadyFamilyCount, 2)
     assert.equal(readyPayload.publicTiProvenance.alertReadyFamilyCount, 1)
-    assert.equal(readyPayload.publicTiProvenance.sourceFamilyOperationTypeCount, 2)
+    assert.equal(readyPayload.publicTiProvenance.sourceFamilyOperationTypeCount, 1)
     assert.equal(readyPayload.publicTiProvenance.backendProofContractVersion, 'ti.search.public_answer.v1 + ti.query.actionability.v1 + ti.public_actor.source_family_coverage_matrix.v1')
     assert.equal(readyPayload.publicTiProvenance.unavailableReason, undefined)
 

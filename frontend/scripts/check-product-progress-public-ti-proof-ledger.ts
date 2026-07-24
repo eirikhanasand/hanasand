@@ -147,7 +147,7 @@ function publicTiProofLedger(query: string) {
                         alertReadyFamilies: ['vendor_disclosure'],
                         gapFamilies: [],
                         retryFamilies: [],
-                        operationTypes: ['record_capture', 'request_candidate'],
+                        operationTypes: ['request_candidate'],
                         latestCaptureAt: '2026-06-29T17:59:00.000Z',
                     },
                 },

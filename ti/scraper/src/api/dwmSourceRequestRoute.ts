@@ -1,7 +1,6 @@
 import { parseTelegramTarget, validateTelegramPublicSourceCompliance } from "../adapters/telegramPublic.ts";
 import { evaluateTelegramPublicCompliance } from "../policy/telegramCollectionPolicy.ts";
 import { evaluateMetadataOnlySource } from "../policy/metadataCollectionPolicy.ts";
-import { buildDwmProductSnapshot } from "../product/dwmProduct.ts";
 import { sourceDedupeKey } from "../product/dwmSourceInventory.ts";
 import {
   InMemoryDwmSourcePackActiveSourceAdapter,
@@ -66,7 +65,7 @@ type DwmSourceRequestBody = {
   requestId?: string;
   seedPackIds?: string[];
   priority?: "critical" | "high" | "medium";
-  action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress" | "record_capture" | "collection_failed" | "pack_status" | "pack_review" | "pack_list" | "pack_worker_run" | "pack_customer_config" | "actor_enrichment_readiness";
+  action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress" | "collection_failed" | "pack_status" | "pack_review" | "pack_list" | "pack_worker_run" | "pack_customer_config" | "actor_enrichment_readiness";
   packAction?: "approve" | "promote" | "reject" | "retry" | "suppress";
   orgId?: string;
   customerId?: string;
@@ -86,8 +85,6 @@ type DwmSourceRequestBody = {
   sourceIds?: string[];
   candidateIds?: string[];
   collectionTaskId?: string;
-  captureText?: string;
-  captureUrl?: string;
   errorCode?: string;
   reason?: string;
   decidedBy?: string;
@@ -1331,7 +1328,6 @@ function sourceActivationProof(input: {
         candidateId: input.candidate.id,
         satisfiedByFields: alertableFields,
         watchlistTerms,
-        alertGenerationPath: "/v1/dwm/source-requests?action=record_capture -> /v1/dwm/alerts/rebuild"
       }
     },
     actorEnrichment,
@@ -1425,7 +1421,6 @@ function sourceActorEnrichmentReadiness(input: {
     actorSignals: enrichmentFields,
     watchlistMatchFields: watchlistMatchFieldsForFamily(input.family),
     watchlistTerms: input.watchlistTerms,
-    enrichmentPath: "/v1/dwm/source-requests?action=record_capture -> actor overview/product snapshot",
     blockers: [
       ...(input.state === "paused" ? [{ code: "paused_source", severity: "blocking", retryable: true }] : []),
       ...(input.state === "failed" ? [{ code: "parser_or_collection_failed", severity: "blocking", retryable: true }] : []),
@@ -3972,7 +3967,7 @@ function sourceActorPublicTiParserHealthAlerts(input: {
           ? "request_approval"
           : alertType === "parser_not_ready"
             ? "test"
-            : "record_capture";
+            : "inspect";
       return {
         schemaVersion: "ti.public_actor.parser_health_alert_row.v1",
         alertId: stableId("ti_public_actor_parser_health_alert", `${input.query}:${row.sourceFamily}:${alertType}:${row.parserStatus?.state}:${row.retryState?.nextRetryAt ?? ""}`),
@@ -4134,13 +4129,13 @@ function sourceActorPublicTiEnrichmentGapQueue(input: {
   };
 }
 
-function sourceActorEnrichmentGapQueueAction(row: Record<string, any>): "request_policy_approval" | "retry_parser" | "test_parser" | "record_capture" | "inspect_gap" | undefined {
+function sourceActorEnrichmentGapQueueAction(row: Record<string, any>): "request_policy_approval" | "retry_parser" | "test_parser" | "inspect_gap" | undefined {
   if (row.policyStatus?.state === "blocked") return "request_policy_approval";
   if (row.retryState?.retryable === true) return "retry_parser";
   const parserState = String(row.parserStatus?.state ?? "");
   if (parserState && !["ready", "observed", "capture_observed"].includes(parserState)) return "test_parser";
   const freshnessState = String(row.freshness?.state ?? "");
-  if (freshnessState === "missing" || freshnessState === "needs_capture" || freshnessState === "stale") return "record_capture";
+  if (freshnessState === "missing" || freshnessState === "needs_capture" || freshnessState === "stale") return "inspect_gap";
   const gapType = String(row.enrichmentGap?.type ?? "");
   if (gapType && !["ready", "unknown", "fresh"].includes(gapType)) return "inspect_gap";
   return undefined;
@@ -4150,7 +4145,6 @@ function sourceActorEnrichmentGapRouteAction(action: string): string {
   if (action === "request_policy_approval") return "pack_review";
   if (action === "retry_parser") return "retry";
   if (action === "test_parser") return "test";
-  if (action === "record_capture") return "record_capture";
   return "inspect";
 }
 
@@ -4379,7 +4373,7 @@ function sourceActorPublicTiSourceEnrichmentFreshnessLedger(input: {
           ? "retry_source"
           : timestamps.lastCaptureAt
             ? "monitor_freshness"
-            : "record_capture",
+            : "await_scheduled_collection",
         liveNetworkFetch: false
       },
       provenance: {
@@ -5151,7 +5145,6 @@ function sourceActorPublicTiSourceOperationsHandoff(input: {
       families: uniqueSourceReadinessStrings(operations.flatMap((item: any) => item.relatedFamilies.length ? item.relatedFamilies : [item.family])),
       alertRebuildReady: operations.some((item: any) => item.type === "rebuild_alerts"),
       retryReady: operations.some((item: any) => String(item.type).startsWith("retry")),
-      captureRecordReady: operations.some((item: any) => item.type === "record_capture")
     },
     policyBoundary: {
       liveNetworkFetch: false,
@@ -5857,19 +5850,6 @@ function sourceActorCaptureReadiness(input: {
         liveNetworkRequiredForProof: false,
         restrictedPayloadStored: false
       },
-      recordCapturePlan: {
-        method: "POST",
-        path: "/v1/dwm/source-requests",
-        body: {
-          action: "record_capture",
-          sourceId: (row.sourceIds ?? [])[0],
-          candidateId: (row.candidateIds ?? [])[0],
-          captureText: `${input.query} ${row.family} metadata capture fixture`,
-          captureUrl: `fixture://dwm/${input.query.toLowerCase()}/${row.family}/capture`
-        },
-        dryRunSupported: true,
-        liveNetworkFetch: false
-      },
       blockers: [
         ...(hasCapture ? [] : [{ code: "capture_required", severity: "blocking", retryable: true }]),
         ...(retryFamilies.has(String(row.family)) ? [{ code: "retry_required", severity: "warning", family: row.family, retryable: true }] : [])
@@ -6079,19 +6059,6 @@ function sourceActorOperationsQueue(input: {
         route: row.actionability.retryAction.route,
         blockers: row.blockers ?? [],
         reasonCode: "parser_retry_required"
-      })),
-    ...(input.captureReadiness.captureRows ?? [])
-      .filter((row: any) => row.state !== "capture_observed" && row.recordCapturePlan?.path)
-      .map((row: any) => sourceActorOperationsQueueItem({
-        query: input.query,
-        type: row.state === "retry_required" ? "retry_capture" : "record_capture",
-        priority: row.state === "retry_required" ? "critical" : "high",
-        family: row.family,
-        sourceIds: row.sourceIds ?? [],
-        candidateIds: row.candidateIds ?? [],
-        route: row.recordCapturePlan,
-        blockers: row.blockers ?? [],
-        reasonCode: row.state === "retry_required" ? "capture_retry_required" : "capture_required"
       })),
     ...(input.sourcePackActionReadiness.intakeActions ?? []).map((action: any) => sourceActorOperationsQueueItem({
       query: input.query,
@@ -7858,7 +7825,6 @@ function handleSourceLifecycleAction(body: DwmSourceRequestBody, options: ApiSer
     });
     return json(lifecycleResponse(suppressed, "suppress"), 200);
   }
-  if (body.action === "record_capture") return json(recordCollectionCapture(source, body, options), 200);
   if (body.action === "collection_failed") return json(recordCollectionFailure(source, body, options), 200);
   if (body.action === "activate" || body.action === "promote") {
     if (isRestrictedMetadataSource(source) && body.approveMetadataOnly !== true) {
@@ -8401,122 +8367,6 @@ function buildCollectionTrigger(source: SourceRecord, options: ApiServerOptions,
   };
 }
 
-function recordCollectionCapture(source: SourceRecord, body: DwmSourceRequestBody, options: ApiServerOptions) {
-  if (source.status === "rejected" || source.status === "suppressed") {
-    const response = lifecycleResponse(source, "record_capture");
-    return {
-      ...response,
-      collectionTrigger: skippedCollectionTrigger(source, `source_${source.status}`),
-      alertRebuild: skippedAlertRebuild(source, `source_${source.status}`)
-    };
-  }
-  if (source.status !== "active") {
-    const response = lifecycleResponse(source, "record_capture");
-    return {
-      ...response,
-      collectionTrigger: skippedCollectionTrigger(source, "source_not_active"),
-      alertRebuild: skippedAlertRebuild(source, "source_not_active")
-    };
-  }
-  const candidate = sourceCandidate(source);
-  const collectionTrigger = source.metadata?.sourceCandidate?.collectionTrigger ?? skippedCollectionTrigger(source, "capture_without_prior_trigger");
-  const taskId = body.collectionTaskId ?? String(collectionTrigger.taskId ?? collectionTrigger.jobId ?? stableId("task", `${source.id}:${nowIso()}`));
-  const capturedAt = nowIso();
-  const metadataOnly = isRestrictedMetadataSource(source);
-  const text = safeCaptureText(source, body.captureText, candidate);
-  const captureUrl = body.captureUrl ?? captureUrlForSource(source, capturedAt);
-  const capture = options.store.saveCapture({
-    id: stableId("dwm_capture", `${candidate.id}:${source.id}:${taskId}:${capturedAt}`),
-    tenantId: source.tenantId ?? candidate.tenantId,
-    sourceId: source.id,
-    taskId,
-    url: captureUrl,
-    collectedAt: capturedAt,
-    publishedAt: capturedAt,
-    mediaType: "text/plain",
-    storageKind: metadataOnly ? "metadata_only" : "inline_text",
-    body: metadataOnly ? undefined : text,
-    rawText: metadataOnly ? undefined : text,
-    contentHash: hashContent(`${source.id}:${captureUrl}:${text}`),
-    sensitive: metadataOnly,
-    sensitivityFlags: metadataOnly ? ["restricted_protocol", "leak_metadata"] : ["public"],
-    metadata: metadataOnly ? {
-      adapter: "restricted_metadata",
-      sourceCandidateId: candidate.id,
-      collectionTriggerId: collectionTrigger.id,
-      title: `${candidate.scope ?? "DWM"} metadata-only source observation`,
-      description: "Metadata-only restricted source observation. Raw leak material was not fetched or stored.",
-      safeEntityHints: { terms: [candidate.scope, source.tenantId].filter(Boolean) },
-      leakSite: {
-        actorName: "Unknown",
-        victimName: candidate.scope ?? "watchlist candidate",
-        postStatus: "metadata_observed",
-        sourceTimestamp: capturedAt,
-        confidence: 0.62,
-        urlHash: hashContent(captureUrl)
-      },
-      provenance: captureProvenance(candidate, source, taskId, collectionTrigger.id)
-    } : {
-      adapter: "telegram_public",
-      sourceCandidateId: candidate.id,
-      collectionTriggerId: collectionTrigger.id,
-      channel: parseTelegramTarget(source.url).channel,
-      messageId: Number.parseInt(hashContent(captureUrl).slice(0, 6), 16),
-      title: `${candidate.scope ?? "DWM"} public Telegram source observation`,
-      description: text,
-      provenance: captureProvenance(candidate, source, taskId, collectionTrigger.id)
-    },
-    provenance: {
-      sourceId: source.id,
-      captureId: stableId("dwm_capture", `${candidate.id}:${source.id}:${taskId}:${capturedAt}`),
-      url: captureUrl,
-      collectedAt: capturedAt,
-      contentHash: hashContent(`${source.id}:${captureUrl}:${text}`),
-      extractorVersion: metadataOnly ? "dwm-restricted-metadata-fixture:v1" : "dwm-telegram-fixture:v1",
-      taskId,
-      tenantId: source.tenantId ?? candidate.tenantId
-    },
-    retentionClass: metadataOnly ? "restricted_metadata" : "public_channel_preview"
-  } as any);
-
-  const alertRebuild = runAlertRebuildAdapter({ source, captureIds: [capture.id], options, generatedAt: capturedAt });
-  const lastCollectionOutcome = {
-    status: "capture_observed",
-    at: capturedAt,
-    taskId,
-    captureId: capture.id,
-    captureUrl,
-    metadataOnly,
-    alertRebuildId: alertRebuild.id
-  };
-  const next = options.store.saveSource({
-    ...source,
-    updatedAt: capturedAt,
-    metadata: {
-      ...(source.metadata ?? {}),
-      healthStatus: "capture_observed",
-      parserStatus: parserStatusForSource(source),
-      collectionStatus: "capture_observed",
-      lastCollectionOutcome,
-      lastCaptureId: capture.id,
-      lastCaptureAt: capturedAt,
-      sourceCandidate: {
-        ...candidate,
-        healthStatus: "capture_observed",
-        parserStatus: parserStatusForSource(source),
-        collectionStatus: "capture_observed",
-        lastCollectionOutcome,
-        lastCaptureId: capture.id,
-        lastCaptureAt: capturedAt,
-        collectionTrigger,
-        alertRebuild
-      },
-      alertRebuild
-    }
-  } as SourceRecord);
-  return { ...lifecycleResponse(next, "record_capture", { source: next, collectionTrigger, alertRebuild }), capture };
-}
-
 function recordCollectionFailure(source: SourceRecord, body: DwmSourceRequestBody, options: ApiServerOptions) {
   const candidate = sourceCandidate(source);
   const at = nowIso();
@@ -8552,102 +8402,6 @@ function recordCollectionFailure(source: SourceRecord, body: DwmSourceRequestBod
     }
   } as SourceRecord);
   return lifecycleResponse(next, "collection_failed");
-}
-
-function runAlertRebuildAdapter(input: { source: SourceRecord; captureIds: string[]; options: ApiServerOptions; generatedAt: string }) {
-  const store = input.options.store as any;
-  const source = input.source;
-  const candidate = sourceCandidate(source);
-  const watchlists = typeof store.listDwmWatchlists === "function"
-    ? store.listDwmWatchlists().filter((watchlist: any) => watchlist.status !== "paused" && (!source.tenantId || watchlist.tenantId === source.tenantId))
-    : [];
-  const terms = watchlists.flatMap((watchlist: any) => Array.isArray(watchlist.terms) ? watchlist.terms : []);
-  const id = stableId("dwm_alert_rebuild_trigger", `${candidate.id}:${input.captureIds.join(",")}:${input.generatedAt}`);
-  if (!terms.length) {
-    return {
-      id,
-      candidateId: candidate.id,
-      sourceId: source.id,
-      captureIds: input.captureIds,
-      requested: true,
-      queued: false,
-      skipped: true,
-      status: "skipped",
-      reason: "missing_active_watchlist",
-      contract: alertRebuildContract()
-    };
-  }
-  try {
-    const snapshot = buildDwmProductSnapshot({
-      tenantId: source.tenantId ?? candidate.tenantId,
-      watchlist: terms,
-      sources: input.options.store.listSources(),
-      captures: input.options.store.listCaptures(),
-      generatedAt: input.generatedAt
-    });
-    const savedAlerts = snapshot.alerts.map((alert) => store.saveDwmAlert ? store.saveDwmAlert({
-      ...alert,
-      tenantId: source.tenantId ?? candidate.tenantId,
-      watchlistIds: watchlists.map((watchlist: any) => watchlist.id),
-      deliveryState: "pending_review",
-      savedAt: input.generatedAt,
-      updatedAt: input.generatedAt,
-      workflowEvents: []
-    }) : alert);
-    return {
-      id,
-      candidateId: candidate.id,
-      sourceId: source.id,
-      captureIds: input.captureIds,
-      requested: true,
-      queued: false,
-      skipped: false,
-      status: "completed",
-      rebuiltAt: input.generatedAt,
-      alertCount: savedAlerts.length,
-      alertIds: savedAlerts.map((alert: any) => alert.id),
-      watchlistIds: watchlists.map((watchlist: any) => watchlist.id),
-      contract: alertRebuildContract()
-    };
-  } catch (error) {
-    return {
-      id,
-      candidateId: candidate.id,
-      sourceId: source.id,
-      captureIds: input.captureIds,
-      requested: true,
-      queued: false,
-      skipped: false,
-      status: "failed",
-      reason: error instanceof Error ? error.message : String(error),
-      contract: alertRebuildContract()
-    };
-  }
-}
-
-function captureProvenance(candidate: Record<string, any>, source: SourceRecord, taskId: string, collectionTriggerId: unknown) {
-  return {
-    candidateId: candidate.id,
-    sourceId: source.id,
-    sourceType: source.type,
-    taskId,
-    collectionTriggerId,
-    confidence: isRestrictedMetadataSource(source) ? 0.62 : 0.72,
-    metadataOnly: isRestrictedMetadataSource(source),
-    policyBoundary: candidate.policyBoundary
-  };
-}
-
-function safeCaptureText(source: SourceRecord, value: string | undefined, candidate: Record<string, any>) {
-  const scope = String(candidate.scope ?? source.tenantId ?? "customer watchlist").trim();
-  if (value?.trim()) return value.trim();
-  return `${scope} mentioned in bounded ${source.type} collection. APT29 ransomware malware credential exposure context for watchlist matching.`;
-}
-
-function captureUrlForSource(source: SourceRecord, at: string) {
-  if (source.type === "telegram_public") return `${source.url}/${hashContent(at).slice(0, 12)}`;
-  if (isRestrictedMetadataSource(source)) return `${source.url.replace(/\/$/, "")}#metadata-${hashContent(at).slice(0, 12)}`;
-  return source.url;
 }
 
 function alertRebuildContract() {
