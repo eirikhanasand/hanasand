@@ -326,7 +326,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             ),
             'successCount', count(*) FILTER (WHERE h.success),
             'usefulCycleCount', count(DISTINCT h.collection_run_id) FILTER (
-              WHERE h.collection_run_id IS NOT NULL AND h.useful AND h.capture_count > 0
+              WHERE h.collection_run_id IS NOT NULL AND h.success AND h.useful AND h.capture_count > 0
                 AND h.checked_at >= $6::timestamptz - make_interval(secs => GREATEST(
                   86400,
                   COALESCE((page.record->>'crawlFrequencySeconds')::int, 86400) * 3,
@@ -356,7 +356,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             'latest', (array_agg(h.record ORDER BY h.checked_at DESC))[1],
             'lastSuccessAt', max(h.checked_at) FILTER (WHERE h.success),
             'lastUsefulAt', max(h.checked_at) FILTER (
-              WHERE h.useful AND h.capture_count > 0
+              WHERE h.success AND h.useful AND h.capture_count > 0
                 AND EXISTS (
                   SELECT 1 FROM threat_intel.captures retained
                   WHERE retained.source_id = page.id
@@ -365,7 +365,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                 )
             ),
             'latestUseful', COALESCE((
-              SELECT bool_or(latest_observation.useful AND latest_observation.capture_count > 0)
+              SELECT bool_or(latest_observation.success AND latest_observation.useful AND latest_observation.capture_count > 0)
               FROM threat_intel.source_health latest_observation
               WHERE latest_observation.source_id = page.id
                 AND latest_observation.tenant_id IS NOT DISTINCT FROM page.tenant_id
@@ -474,7 +474,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
               max(checked_at) AS last_checked_at,
               max(checked_at) FILTER (WHERE success) AS last_success_at,
               max(checked_at) FILTER (
-                WHERE useful AND capture_count > 0
+                WHERE success AND useful AND capture_count > 0
                   AND EXISTS (
                     SELECT 1 FROM threat_intel.captures retained
                     WHERE retained.source_id = source.id
@@ -484,7 +484,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
               ) AS last_useful_at,
               (array_agg(success ORDER BY checked_at DESC))[1] AS latest_success,
               COALESCE((
-                SELECT bool_or(latest_observation.useful AND latest_observation.capture_count > 0)
+                SELECT bool_or(latest_observation.success AND latest_observation.useful AND latest_observation.capture_count > 0)
                 FROM threat_intel.source_health latest_observation
                 WHERE latest_observation.source_id = source.id
                   AND latest_observation.tenant_id IS NOT DISTINCT FROM source.tenant_id
@@ -525,7 +525,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                   ))
               ) AS successful_cycles,
               count(DISTINCT collection_run_id) FILTER (
-                WHERE collection_run_id IS NOT NULL AND useful AND capture_count > 0
+                WHERE collection_run_id IS NOT NULL AND success AND useful AND capture_count > 0
                   AND checked_at >= $4::timestamptz - make_interval(secs => GREATEST(
                     86400,
                     COALESCE((source.record->>'crawlFrequencySeconds')::int, 86400) * 3,

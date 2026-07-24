@@ -46,9 +46,9 @@ export type TiAdminDomain = {
 
 export type TiAdminAiReview = {
     reviewer: 'hanasand-ai'
-    status: 'approved' | 'monitoring' | 'needs_human'
+    status: 'approved' | 'rejected' | 'stale' | 'needs_human' | 'pending'
     reviewedAt: string
-    qualityScore: number
+    confidencePercent: number
     summary: string
     checks: string[]
 }
@@ -300,14 +300,30 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
 function toAiReview(review: ApiPayload): TiAdminAiReview | undefined {
     const state = stringValue(review.state)
     if (!state) return undefined
-    const status = state === 'approved' ? 'approved' : state === 'needs_review' ? 'needs_human' : 'monitoring'
+    const status = state === 'approved'
+        ? 'approved'
+        : state === 'rejected'
+            ? 'rejected'
+            : state === 'stale'
+                ? 'stale'
+                : state === 'needs_review'
+                    ? 'needs_human'
+                    : 'pending'
     const confidence = Math.max(0, Math.min(1, numberValue(review.confidence)))
     return {
         reviewer: 'hanasand-ai',
         status,
         reviewedAt: isoValue(review.reviewedAt),
-        qualityScore: Math.round(confidence * 100),
-        summary: state === 'approved' ? 'Approved from retained source evidence.' : state === 'needs_review' ? 'Automatic review needs human follow-up.' : 'Automatic review did not approve this source.',
+        confidencePercent: Math.round(confidence * 100),
+        summary: state === 'approved'
+            ? 'Approved from retained source evidence.'
+            : state === 'rejected'
+                ? 'Rejected from retained source evidence.'
+                : state === 'stale'
+                    ? 'The approved review no longer matches retained evidence.'
+                    : state === 'needs_review'
+                        ? 'Automatic review needs human follow-up.'
+                        : 'Automatic review is pending.',
         checks: [textValue(review.claimValidity), textValue(review.modelVersion)].filter(Boolean),
     }
 }

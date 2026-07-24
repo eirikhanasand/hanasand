@@ -94,7 +94,7 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
                     icon={<Zap className='h-4 w-4' />}
                     title='Active source'
                     value={hotSource?.name || 'source queue'}
-                    detail={hotSource ? `last checked ${shortAge(hotSource.lastRunAt)}; next lease ${shortAge(hotSource.nextRunAt)}` : 'source registry is checking coverage'}
+                    detail={hotSource ? `last checked ${shortAge(hotSource.lastRunAt)}; next check ${shortAge(hotSource.nextRunAt)}` : 'source registry is checking coverage'}
                     tone={staleSources.length ? 'watch' : 'ok'}
                 />
                 <OperationCard
@@ -175,7 +175,7 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
                                     </div>
                                     <div className='mt-3 grid gap-2 text-sm sm:grid-cols-2'>
                                         <Inline label='Checked' value={shortAge(source.lastRunAt)} />
-                                        <Inline label='Lease due' value={shortAge(source.nextRunAt)} />
+                                        <Inline label='Next check' value={shortAge(source.nextRunAt)} />
                                         <Inline label='Interval' value={`${source.cadenceMinutes}m`} />
                                         <Inline label='Added here' value={`${sourceCaptures.length}`} />
                                     </div>

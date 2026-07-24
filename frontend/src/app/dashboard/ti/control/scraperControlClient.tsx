@@ -209,7 +209,7 @@ export default function TiScraperControlClient() {
         <div className='source-ops-workbench grid gap-2'>
             {error ? <Notice tone='bad' title='Scraper control needs attention' body={error} /> : null}
             {actionResult ? <Notice tone={actionResult.ok ? 'ok' : 'bad'} title={actionResult.ok ? 'Action completed' : 'Action failed'} body={actionSummary(actionResult)} /> : null}
-            {!snapshot?.baseConfigured && !loading ? <Notice tone='bad' title='Source stream connecting' body='Connect the scraper so source leases, queue depth, and worker actions stay live here.' /> : null}
+            {!snapshot?.baseConfigured && !loading ? <Notice tone='bad' title='Source stream connecting' body='Connect the scraper so source schedules, queue depth, and worker actions stay live here.' /> : null}
 
             <section className='overflow-hidden rounded-md border border-ui-border bg-ui-panel shadow-sm'>
                 <div className='grid gap-2 border-b border-ui-border bg-ui-panel p-2 text-ui-text xl:grid-cols-[auto_minmax(0,1fr)_auto] xl:items-center'>
@@ -281,7 +281,7 @@ export default function TiScraperControlClient() {
                                     </button>
                                 )
                             })}
-                            {!workItems.length ? <p className='rounded-md border border-dashed border-ui-border bg-ui-panel p-3 text-sm text-ui-muted'>Live and clear. Leases, reviews, and worker issues stream in here.</p> : null}
+                            {!workItems.length ? <p className='rounded-md border border-dashed border-ui-border bg-ui-panel p-3 text-sm text-ui-muted'>Live and clear. Scheduled checks, reviews, and worker issues stream in here.</p> : null}
                         </div>
                     </aside>
 
@@ -359,7 +359,7 @@ export default function TiScraperControlClient() {
                                 </section>
                             </div>
                         ) : (
-                            <div className='grid min-h-64 place-items-center rounded-md border border-dashed border-ui-border bg-ui-panel p-6 text-center text-sm text-ui-muted'>Connecting to the scraper feed. Worker checks and source leases refresh here.</div>
+                            <div className='grid min-h-64 place-items-center rounded-md border border-dashed border-ui-border bg-ui-panel p-6 text-center text-sm text-ui-muted'>Connecting to the scraper feed. Worker checks and source schedules refresh here.</div>
                         )}
                     </main>
 
@@ -632,7 +632,7 @@ function workItemsFor(snapshot: ControlSnapshot | null, sources: SourceRow[], ta
             id: 'frontier-queue',
             kind: 'run',
             title: `${queued} queued frontier tasks`,
-            subtitle: 'Queue pressure is building; worker rows stream in as they are leased.',
+            subtitle: 'Queue pressure is building; worker rows stream in as work starts.',
             queue: 'Scheduler',
             severity: queued > 200 ? 'high' : 'medium',
             status: 'queued',
@@ -750,7 +750,7 @@ function timelineFor(snapshot: ControlSnapshot | null, actionResult: ActionResul
     if (snapshot?.query) {
         items.push({ id: 'query', title: 'Query in operation', at: formatTime(snapshot.generatedAt), body: `${snapshot.query} is driving checks, sources, reviews, and runs.` })
     }
-    return items.length ? items : [{ id: 'snapshot-pending', title: 'Connecting collection', at: 'Now', body: 'Health, source leases, and collection depth update here when the scraper responds.' }]
+    return items.length ? items : [{ id: 'snapshot-pending', title: 'Connecting collection', at: 'Now', body: 'Health, source schedules, and collection depth update here when the scraper responds.' }]
 }
 
 function publicImpactFor(item: WorkItem, query: string) {

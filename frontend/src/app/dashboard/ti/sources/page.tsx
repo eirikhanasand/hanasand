@@ -34,9 +34,9 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
         return { source, sourceCaptures, sourceRuns, lastRun, avgRows, avgCaptures, minutesSinceRun, health }
     }).sort((a, b) => healthWeight(b.health.state) - healthWeight(a.health.state) || new Date(a.source.nextRunAt).getTime() - new Date(b.source.nextRunAt).getTime())
 
-    const activeCount = overview.sourceTotals.active
+    const executableCount = overview.sourceTotals.executable
     const staleCount = sourceRows.filter(row => row.health.state === 'stale').length
-    const reviewCount = sources.filter(source => source.aiReview?.status === 'needs_human' || source.status === 'candidate' || source.status === 'review').length
+    const reviewCount = sources.filter(source => (source.aiReview?.status && source.aiReview.status !== 'approved') || source.status === 'candidate' || source.status === 'review').length
     const aiReviewedCount = sources.filter(source => source.aiReview).length
     const restrictedCount = sources.filter(source => source.risk === 'restricted').length
     const qualifyingCount = overview.sourceTotals.qualifying
@@ -74,12 +74,12 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                         Source inventory summary
                     </span>
                     <span className='inline-flex items-center gap-2 text-xs font-medium text-ui-muted'>
-                        {scope === 'global' ? 'Global' : 'Default tenant'} · {activeCount}/{overview.sourcePage.total} executable · {reviewCount} in review on this page · {staleCount} stale on this page
+                        {scope === 'global' ? 'Global' : 'Default tenant'} · {executableCount}/{overview.sourcePage.total} executable · {reviewCount} in review on this page · {staleCount} stale on this page
                         <ChevronDown className='h-4 w-4 transition group-open:rotate-180' />
                     </span>
                 </summary>
                 <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-6' data-ti-source-inventory-metrics>
-                    <Metric title='Executable' value={`${activeCount}/${overview.sourcePage.total}`} detail='configured sources with a collector' tone={activeCount ? 'ok' : 'warn'} />
+                    <Metric title='Executable' value={`${executableCount}/${overview.sourcePage.total}`} detail='configured sources with a collector' tone={executableCount ? 'ok' : 'warn'} />
                     <Metric title='Qualified' value={`${qualifyingCount}/6,100`} detail={`${qualifyingClearWeb}/5,000 web · ${qualifyingDarkWeb}/1,000 Tor · ${qualifyingTelegram}/100 Telegram`} tone={qualifyingCount >= 6100 && qualifyingClearWeb >= 5000 && qualifyingDarkWeb >= 1000 && qualifyingTelegram >= 100 ? 'ok' : 'warn'} />
                     <Metric title='Reviewed' value={String(aiReviewedCount)} detail={reviewCount ? `${reviewCount} in review` : 'ready for monitoring'} tone={reviewCount ? 'warn' : 'ok'} />
                     <Metric title='Stale' value={String(staleCount)} detail='late or not collecting' tone={staleCount ? 'warn' : 'ok'} />
@@ -120,7 +120,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                             <div className='mt-3 flex flex-wrap gap-1.5'>
                                 <span className={statusClass(row.source.status, row.source.aiReview)}>{statusLabel(row.source)}</span>
                                 <span className={riskClass(row.source.risk)}>{row.source.risk}</span>
-                                {row.source.aiReview ? <span className='inline-flex items-center gap-1 rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-primary'><Bot className='h-3 w-3' /> {row.source.aiReview.qualityScore}% QA</span> : null}
+                                {row.source.aiReview ? <span className='inline-flex items-center gap-1 rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-primary'><Bot className='h-3 w-3' /> {row.source.aiReview.confidencePercent}% AI confidence</span> : null}
                             </div>
                             <p className='mt-3 line-clamp-2 text-xs leading-5 text-ui-muted'>{row.source.aiReview?.summary || row.source.buyerValue}</p>
                         </Link>
@@ -147,7 +147,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                                     <div className='mt-1 flex flex-wrap gap-1'>
                                         <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-primary'>{row.source.family.replaceAll('_', ' ')}</span>
                                         <span className={statusClass(row.source.status, row.source.aiReview)}>{statusLabel(row.source)}</span>
-                                        {row.source.aiReview ? <span className='inline-flex items-center gap-1 rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-primary'><Bot className='h-3 w-3' /> {row.source.aiReview.qualityScore}% QA</span> : null}
+                                        {row.source.aiReview ? <span className='inline-flex items-center gap-1 rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-primary'><Bot className='h-3 w-3' /> {row.source.aiReview.confidencePercent}% AI confidence</span> : null}
                                     </div>
                                 </div>
                                 <div className='min-w-0'>
@@ -207,7 +207,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                         <AlertTriangle className='h-4 w-4 text-ui-warning' />
                     </div>
                     <div className='mt-4 grid gap-2'>
-                        {sourceRows.filter(row => row.health.state !== 'healthy' || row.source.aiReview?.status === 'needs_human').map(row => (
+                        {sourceRows.filter(row => row.health.state !== 'healthy' || (row.source.aiReview?.status && row.source.aiReview.status !== 'approved')).map(row => (
                             <Link key={row.source.id} href={`/dashboard/ti/sources/${row.source.id}?scope=${scope}`} className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3 md:grid-cols-[1fr_auto] md:items-center hover:border-ui-primary/35'>
                                 <div>
                                     <p className='font-semibold text-ui-text'>{row.source.name}</p>
@@ -216,7 +216,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                                 <span className='inline-flex items-center gap-1 text-sm font-semibold text-ui-primary'>Open <ExternalLink className='h-3.5 w-3.5' /></span>
                             </Link>
                         ))}
-                        {!sourceRows.some(row => row.health.state !== 'healthy' || row.source.aiReview?.status === 'needs_human') && (
+                        {!sourceRows.some(row => row.health.state !== 'healthy' || (row.source.aiReview?.status && row.source.aiReview.status !== 'approved')) && (
                             <div className='rounded-md border border-dashed border-ui-border bg-ui-canvas p-4 text-sm text-ui-muted'>No sources need review right now. Stale, failed, and review-tagged sources appear here.</div>
                         )}
                     </div>
@@ -226,7 +226,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                     <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
                         <span className='inline-flex items-center gap-2'><Camera className='h-4 w-4 text-ui-primary' /> Capture coverage</span>
                         <span className='inline-flex items-center gap-2 text-xs font-medium text-ui-muted'>
-                            Bounded recent sample · {overview.sourceTotals.active} active sources
+                            Bounded recent sample · {overview.sourceTotals.executable} executable sources
                             <ChevronDown className='h-4 w-4 transition group-open:rotate-180' />
                         </span>
                     </summary>
@@ -314,7 +314,7 @@ type SourceHealth = {
 
 function sourceHealth(source: TiAdminSource, minutesSinceRun: number): SourceHealth {
     if (source.status === 'paused') return { state: 'paused', label: 'Paused', detail: 'Collection disabled.' }
-    if (source.aiReview?.status === 'needs_human') return { state: 'review', label: 'Human review', detail: source.aiReview.summary }
+    if (source.aiReview && source.aiReview.status !== 'approved') return { state: 'review', label: statusLabel(source), detail: source.aiReview.summary }
     if (source.status === 'candidate' || source.status === 'review') return { state: 'review', label: 'Review', detail: 'Needs approval or access check.' }
     if (!source.lastRunAt) return { state: 'review', label: 'Not observed', detail: 'No source check has been recorded.' }
     if (minutesSinceRun > source.cadenceMinutes * 2) return { state: 'stale', label: 'Stale', detail: `${Math.round(minutesSinceRun / 60)} hr since run.` }
@@ -368,14 +368,18 @@ function shortTime(value: string) {
 
 function statusLabel(source: TiAdminSource) {
     if (source.aiReview?.status === 'approved') return 'AI approved'
-    if (source.aiReview?.status === 'monitoring') return 'AI monitoring'
+    if (source.aiReview?.status === 'rejected') return 'AI rejected'
+    if (source.aiReview?.status === 'stale') return 'AI review stale'
+    if (source.aiReview?.status === 'pending') return 'AI review pending'
     if (source.aiReview?.status === 'needs_human') return 'human review'
     return source.status
 }
 
 function statusClass(status: TiAdminSource['status'], aiReview?: TiAdminSource['aiReview']) {
     if (aiReview?.status === 'approved') return 'rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-primary'
-    if (aiReview?.status === 'monitoring') return 'rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-muted'
+    if (aiReview?.status === 'rejected') return 'rounded-full border border-ui-danger/35 bg-ui-danger/10 px-2 py-0.5 text-[10px] font-semibold text-ui-danger'
+    if (aiReview?.status === 'stale' || aiReview?.status === 'needs_human') return 'rounded-full border border-ui-warning/35 bg-ui-warning/10 px-2 py-0.5 text-[10px] font-semibold text-ui-warning'
+    if (aiReview?.status === 'pending') return 'rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-muted'
     if (status === 'active') return 'rounded-full border border-ui-success/35 bg-ui-success/10 px-2 py-0.5 text-[10px] font-semibold text-ui-success'
     if (status === 'paused') return 'rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-muted'
     return 'rounded-full border border-ui-warning/35 bg-ui-warning/10 px-2 py-0.5 text-[10px] font-semibold text-ui-warning'

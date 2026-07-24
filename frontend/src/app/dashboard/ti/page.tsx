@@ -49,7 +49,7 @@ export default async function TiAdminPage() {
                     state={operationalStateLabel(latestRun?.status || 'scheduled')}
                     stateTone={latestRun?.status === 'failed' ? 'bad' : latestRun?.status === 'running' || latestRun?.status === 'queued' ? 'watch' : 'ok'}
                     primary={latestRun?.sourceName || nextRun?.name || 'Selecting source'}
-                    secondary={latestRun ? `${latestRun.rows} rows, ${latestRun.captures} captures, ${latestRun.screenshots} screenshots` : `Next due ${nextRun ? shortTime(nextRun.nextRunAt) : 'as soon as a source lease opens'}`}
+                    secondary={latestRun ? `${latestRun.rows} rows, ${latestRun.captures} captures, ${latestRun.screenshots} screenshots` : `Next due ${nextRun ? shortTime(nextRun.nextRunAt) : 'as soon as a source is due'}`}
                     footer={latestRun ? `Started ${shortTime(latestRun.startedAt)}` : 'Scheduler is selecting the next source'}
                 />
                 <LiveLane
@@ -75,7 +75,7 @@ export default async function TiAdminPage() {
             </section>
 
             <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-6'>
-                <Metric title='Active sources' value={`${overview.sourceTotals.active}/${overview.sourcePage.total}`} icon={<DatabaseZap className='h-4 w-4' />} />
+                <Metric title='Executable sources' value={`${overview.sourceTotals.executable}/${overview.sourcePage.total}`} icon={<DatabaseZap className='h-4 w-4' />} />
                 <Metric title='Items to review' value={`${reviewDomains.length + candidateSources.length + failedRuns.length}`} tone={reviewDomains.length || candidateSources.length || failedRuns.length ? 'watch' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
                 <Metric title='Stale sources' value={`${staleSources.length}`} tone={staleSources.length ? 'bad' : 'ok'} icon={<Clock3 className='h-4 w-4' />} />
                 <Metric title='Recent capture sample' value={`${captures.length}`} icon={<Camera className='h-4 w-4' />} />

@@ -133,6 +133,27 @@ describe("source portfolio qualification", () => {
     expect(result.sources[0].reasons).toContain("insufficient_productive_cycles");
   });
 
+  test("does not combine a failed useful report with a successful empty report", () => {
+    const firstAt = "2026-07-22T12:00:00.000Z";
+    const secondAt = "2026-07-23T11:00:00.000Z";
+    const result = qualifySourcePortfolio({
+      sources: [publicSource("split-success", "rss", "https://example.test/split-success.xml")],
+      observations: [firstAt, secondAt].flatMap((checkedAt) => [
+        { ...observation("split-success", checkedAt, 0), useful: false },
+        { ...observation("split-success", checkedAt, 1), id: `failed-useful-${checkedAt}`, success: false, useful: true }
+      ]),
+      captures: [
+        capture("split-success", "first", "2026-07-22T10:00:00.000Z", `run-${firstAt}`),
+        capture("split-success", "second", "2026-07-23T10:00:00.000Z", `run-${secondAt}`)
+      ],
+      generatedAt
+    });
+
+    expect(result.counts.total).toBe(0);
+    expect(result.sources[0]).toMatchObject({ successfulCheckCount: 2, productiveCheckCount: 0, latestCheckUseful: false });
+    expect(result.sources[0].reasons).toContain("insufficient_productive_cycles");
+  });
+
   test("requires two productive scheduled cycles inside the current activity window", () => {
     const result = qualifySourcePortfolio({
       sources: [publicSource("windowed", "rss", "https://example.test/windowed.xml")],

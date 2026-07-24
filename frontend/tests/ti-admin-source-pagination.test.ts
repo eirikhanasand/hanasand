@@ -51,7 +51,7 @@ describe('TI admin bounded source operations', () => {
             reviewer: 'hanasand-ai',
             status: 'approved',
             reviewedAt: '2026-07-23T09:00:00.000Z',
-            qualityScore: 92,
+            confidencePercent: 92,
             summary: 'Approved from retained source evidence.',
             checks: ['supported', 'hanasand-review-v6'],
         })
@@ -130,6 +130,6 @@ describe('TI admin bounded source operations', () => {
         assert.equal(overview.sources.length, 0)
         assert.equal(overview.captures[0]?.sourceName, 'Beyond page one')
         assert.equal(overview.runs[0]?.sourceName, 'Beyond page one')
-        assert.equal(overview.sourceTotals.active, 6_100)
+        assert.equal(overview.sourceTotals.executable, 6_100)
     })
 })

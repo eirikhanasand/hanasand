@@ -4,6 +4,8 @@ import { automaticSourceReviewQualifies, qualifySourcePortfolio, SOURCE_PORTFOLI
 import { toSafeSourceDto } from "./sourceRoutes.ts";
 import { inTenantScope } from "./tenantScope.ts";
 import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
+import { automaticSourceReviewEvidenceBindingsMatch } from "./automaticReviewRoutes.ts";
+import { hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
 
 export async function buildSourceOperationsSnapshot(store: any, input: { tenantId?: string; generatedAt?: string; limit?: number; cursor?: number; sourceId?: string; executableOnly?: boolean } = {}) {
   const generatedAt = input.generatedAt ?? nowIso();
@@ -124,7 +126,7 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
       verification: {
         qualificationState: source.metadata?.sourcePortfolioQualificationState ?? source.metadata?.qualificationState,
         countsAsCoverage: source.countsAsCoverage === true,
-        automaticReview: safeAutomaticSourceReview(source),
+        automaticReview: safeAutomaticSourceReview(source, automaticSourceReviewEvidenceBindingsMatch(source, sourceCaptures)),
         authorityReportedItemCount: finiteNumber(source.metadata?.reportedVictimCount),
         directlyParsedItemCount: finiteNumber(source.metadata?.observedParsedItemCount),
         parserShape: source.metadata?.parserShape,
@@ -388,7 +390,7 @@ function operationalQueryRow(row: any, generatedAt: string) {
     verification: {
       qualificationState: source.metadata?.sourcePortfolioQualificationState ?? source.metadata?.qualificationState,
       countsAsCoverage: source.countsAsCoverage === true,
-      automaticReview: safeAutomaticSourceReview(source),
+      automaticReview: safeAutomaticSourceReview(source, row.automatic_review_evidence_matches === true),
       authorityReportedItemCount: finiteNumber(source.metadata?.reportedVictimCount),
       directlyParsedItemCount: finiteNumber(source.metadata?.observedParsedItemCount),
       parserShape: source.metadata?.parserShape,
@@ -398,11 +400,13 @@ function operationalQueryRow(row: any, generatedAt: string) {
   };
 }
 
-function safeAutomaticSourceReview(source: any) {
+function safeAutomaticSourceReview(source: any, evidenceBindingsMatch: boolean) {
   const review = source.metadata?.automaticSourceReview;
   if (!review?.state) return undefined;
   return {
-    state: String(review.state),
+    state: review.state === "approved" && (!hasApprovedAutomaticSourceReview(source) || !evidenceBindingsMatch)
+      ? "stale"
+      : String(review.state),
     reviewedAt: timeOf(review, "reviewedAt"),
     confidence: finiteRate(review.decision?.confidence),
     claimValidity: review.decision?.claimValidity,

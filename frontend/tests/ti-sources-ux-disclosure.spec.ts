@@ -26,7 +26,8 @@ test('ti source inventory keeps source health primary while summary and coverage
     expect(source).toContain('<ManualRunButton sourceId={row.source.id} label=\'Run\'')
     expect(source).toContain('href={`/dashboard/ti/sources/${row.source.id}?scope=${scope}`}')
     expect(source).toContain('sourceRows.filter(row => row.health.state !== \'healthy\'')
-    expect(source).toContain('Bounded recent sample · {overview.sourceTotals.active} active sources')
+    expect(source).toContain('Bounded recent sample · {overview.sourceTotals.executable} executable sources')
+    expect(source).toContain('% AI confidence')
 })
 
 test('ti source detail centers run status pills', async () => {

@@ -74,7 +74,7 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                     </div>
                     <div className='grid grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[42rem]'>
                         <TopStat label='Last seen' value={relativeAge(source.lastRunAt)} />
-                        <TopStat label='Lease due' value={relativeUntil(source.nextRunAt)} />
+                        <TopStat label='Next check' value={relativeUntil(source.nextRunAt)} />
                         <TopStat label='Interval' value={cadenceLabel(source.cadenceMinutes)} />
                         <TopStat label='Yield' value={`${avgRows} rows/run`} />
                     </div>
@@ -93,7 +93,7 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                             <OperationCard
                                 icon={<Activity className='h-4 w-4' />}
                                 label='Worker output'
-                                value={latestRun ? `${latestRun.rows} rows` : 'Lease pending'}
+                                value={latestRun ? `${latestRun.rows} rows` : 'Check pending'}
                                 detail={latestRun ? `${latestRun.captures} captures · ${latestRun.screenshots} screenshots · ${runDurationLabel(latestRun.startedAt, latestRun.finishedAt)}` : 'Worker output streams into this source view.'}
                                 tone={latestRun?.status === 'failed' ? 'bad' : latestRun ? 'ok' : 'warn'}
                             />

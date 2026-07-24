@@ -3195,6 +3195,18 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         captureCount: 1,
         legalMode: "public_content"
       });
+      store.saveSourceHealthObservation({
+        id: `health_bound_failed_useful_${index + 1}`,
+        tenantId: "tenant_bound",
+        sourceId: falseUsefulSourceId,
+        collectionRunId: runId,
+        checkedAt: new Date(Date.parse(checkedAt) + 1_000).toISOString(),
+        status: "failed",
+        success: false,
+        useful: true,
+        captureCount: 1,
+        legalMode: "public_content"
+      });
     }
     store.saveRun({ id: "run_bound_false_useful_unretained", tenantId: "tenant_bound", requestId: "req_public_canary", status: "completed", startedAt: "2026-07-23T12:45:00.000Z", completedAt: "2026-07-23T12:45:00.000Z", updatedAt: "2026-07-23T12:45:00.000Z" } as any);
     store.saveSourceHealthObservation({

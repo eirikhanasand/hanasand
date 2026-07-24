@@ -100,6 +100,32 @@ describe("source operations", () => {
     expect(payload.sources[0].qualification.lastUsefulAt).toBeUndefined();
   });
 
+  test("preserves rejected automatic reviews instead of calling them monitoring", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({
+      id: "src_rejected_review",
+      metadata: {
+        automaticSourceReview: {
+          state: "rejected",
+          reviewedAt: new Date().toISOString(),
+          decision: { confidence: 0.8, claimValidity: "contradicted" }
+        }
+      }
+    }));
+
+    const payload = await (await handleApiRequest(authenticatedApi("/v1/intel/source-operations"), {
+      store,
+      frontier: new FocusedFrontier(),
+      serviceToken: "source-ops-test"
+    })).json() as any;
+
+    expect(payload.sources[0].verification.automaticReview).toMatchObject({
+      state: "rejected",
+      confidence: 0.8,
+      claimValidity: "contradicted"
+    });
+  });
+
   test("reports historical retained usefulness without calling it recent", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "src_historical" }));
@@ -192,7 +218,11 @@ describe("source operations", () => {
             metadata: {
               productionCollection: true,
               sourceFeedDiscovery: { status: "accepted" },
-              automaticSourceReview: {}
+              automaticSourceReview: {
+                state: "approved",
+                reviewedAt: new Date().toISOString(),
+                decision: { confidence: 0.9, claimValidity: "supported" }
+              }
             }
           }),
           collection_executable: true,
@@ -227,6 +257,7 @@ describe("source operations", () => {
       scheduledCheckCount: 2,
       reasons: expect.arrayContaining(["automatic_source_review_not_approved"])
     });
+    expect(payload.sources[0].verification.automaticReview.state).toBe("stale");
   });
 
   test("keeps duplicate-feed ownership when a memory lookup filters to one source", async () => {

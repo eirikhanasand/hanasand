@@ -151,7 +151,7 @@ function summarizeScheduledCycles(rows: any[]) {
   for (const row of rows) {
     const runId = String(row.collectionRunId);
     const previous = cycles.get(runId);
-    const producedUsefulCapture = row.useful === true && Number(row.captureCount ?? 0) > 0;
+    const producedUsefulCapture = row.success === true && row.useful === true && Number(row.captureCount ?? 0) > 0;
     const usefulCheckedAt = producedUsefulCapture ? validTime(row.checkedAt) : undefined;
     cycles.set(runId, previous ? {
       ...row,
