@@ -26,7 +26,7 @@ for (const token of [
 for (const token of [
     'proxyApiTiRequest',
     'force-dynamic',
-    "'/ti/search'",
+    '\'/ti/search\'',
     'POST',
 ]) {
     assert.ok(tiSearchProxySource.includes(token), `TI search proxy missing token: ${token}`)
