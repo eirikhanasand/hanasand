@@ -121,7 +121,10 @@ const fullPublicVictims = victimObservationsFor(fixture)
 const fullPublicProfile = buildActorIntelligence(fixture, fullPublicVictims)
 const fullPublicActionability = buildTiActionability(fixture, fullPublicProfile, fullPublicVictims)
 const geo = actorGeoProfile(fixture)
-const pageClientSource = readFileSync(new URL('../src/app/ti/pageClient.tsx', import.meta.url), 'utf8')
+const pageClientSource = [
+    '../src/app/ti/pageClient.tsx',
+    '../src/app/ti/pageModel.ts',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n')
 const globalStylesSource = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8')
 const actorIntelligenceSource = readFileSync(new URL('../src/utils/ti/actorIntelligence.ts', import.meta.url), 'utf8')
 const actionabilitySource = readFileSync(new URL('../src/utils/ti/actionability.ts', import.meta.url), 'utf8')
