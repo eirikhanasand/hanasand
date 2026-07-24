@@ -762,8 +762,10 @@ export async function listDwmWebhookAuditEvents(ownerId: string, orgId?: string)
     return (result.rows as DwmWebhookAuditRow[]).map(toDwmWebhookAuditEvent)
 }
 
-export function signDwmWebhookDeliveryBody(body: string, secret = process.env.TI_SCRAPER_SERVICE_TOKEN || '') {
-    return secret ? `sha256=${crypto.createHmac('sha256', secret).update(body).digest('hex')}` : ''
+const DEFAULT_CONTROLLED_RECEIVER_URL = 'https://hanasand.com/api/dwm/webhook-sink'
+
+export function signDwmWebhookDeliveryBody(body: string, target: string, secret = process.env.TI_SCRAPER_SERVICE_TOKEN || '') {
+    return secret ? `sha256=${crypto.createHmac('sha256', secret).update(`${normalizeWebhookUrl(target)}\n${body}`).digest('hex')}` : ''
 }
 
 function constantTimeEqual(expected: string, presented: string) {
@@ -778,8 +780,10 @@ export function validateDwmWebhookReceiverEnvelope(value: unknown) {
     const envelope = recordOrEmpty(value)
     const payload = recordOrEmpty(envelope.payload)
     const payloadBody = canonicalJson(payload)
-    const expectedSignature = signDwmWebhookDeliveryBody(payloadBody)
     const presentedSignature = clean(envelope.signature)
+    const receiverUrl = controlledReceiverUrls().find(target =>
+        constantTimeEqual(signDwmWebhookDeliveryBody(payloadBody, target), presentedSignature)
+    )
     const nestedContext = recordOrEmpty(payload._hanasand)
     const context = Object.keys(nestedContext).length ? nestedContext : payload
     const org = recordOrEmpty(context.org)
@@ -797,7 +801,7 @@ export function validateDwmWebhookReceiverEnvelope(value: unknown) {
     const receivedAt = clean(envelope.receivedAt)
 
     if (!Object.keys(payload).length) return { valid: false as const, error: 'Receiver payload is required.' }
-    if (!constantTimeEqual(expectedSignature, presentedSignature)) {
+    if (!receiverUrl) {
         return { valid: false as const, error: 'Receiver payload signature is invalid.' }
     }
     if (!orgId || !destinationId || !deliveryId || !eventType || !idempotencyKey) {
@@ -835,6 +839,7 @@ export function validateDwmWebhookReceiverEnvelope(value: unknown) {
             eventType,
             idempotencyKey,
             payloadHash,
+            receiverEndpointHash: hashValue('endpoint', receiverUrl),
             reportValidation: reportValidation.report ? 'valid' : 'not_applicable',
             reportCaseId: clean(reportPolicy.caseId) || null,
             reportAlertId: clean(reportPolicy.alertId) || clean(alert.id) || null,
@@ -854,6 +859,7 @@ export async function recordDwmWebhookReceiverReceipt(value: unknown) {
         eventType: receipt.eventType,
         idempotencyKey: receipt.idempotencyKey,
         payloadHash: receipt.payloadHash,
+        receiverTargetHash: receipt.receiverEndpointHash,
         reportValidation: receipt.reportValidation,
         reportCaseId: receipt.reportCaseId,
         reportAlertId: receipt.reportAlertId,
@@ -876,6 +882,7 @@ export async function recordDwmWebhookReceiverReceipt(value: unknown) {
         WHERE destination.id = $3
           AND destination.org_id = $2
           AND destination.status = 'active'
+          AND destination.endpoint_hash = $5
         ON CONFLICT (id) DO NOTHING
         RETURNING *
     `, [
@@ -883,6 +890,7 @@ export async function recordDwmWebhookReceiverReceipt(value: unknown) {
         receipt.orgId,
         receipt.destinationId,
         JSON.stringify(redactAuditMetadata(metadata)),
+        receipt.receiverEndpointHash,
     ])
     if (inserted.rows[0]) return { ok: true as const, created: true, receipt: receiverReceiptFromAudit(inserted.rows[0] as DwmWebhookAuditRow) }
 
@@ -943,6 +951,7 @@ function receiverReceiptFromAudit(row: DwmWebhookAuditRow) {
         eventType: clean(metadata.eventType),
         idempotencyKey: clean(metadata.idempotencyKey),
         payloadHash: clean(metadata.payloadHash),
+        receiverEndpointHash: clean(metadata.receiverTargetHash),
         reportValidation: clean(metadata.reportValidation),
         reportCaseId: clean(metadata.reportCaseId) || null,
         reportAlertId: clean(metadata.reportAlertId) || null,
@@ -953,6 +962,7 @@ function receiverReceiptFromAudit(row: DwmWebhookAuditRow) {
 }
 
 async function bindDwmWebhookReceiverReceipt(delivery: DwmWebhookDeliveryRow) {
+    if (!controlledReceiverEndpointHashes().includes(delivery.endpoint_hash)) return
     await run(`
         UPDATE dwm_webhook_audit_events
            SET delivery_id = $1
@@ -962,12 +972,14 @@ async function bindDwmWebhookReceiverReceipt(delivery: DwmWebhookDeliveryRow) {
            AND delivery_id IS NULL
            AND metadata->>'idempotencyKey' = $4
            AND metadata->>'payloadHash' = $5
+           AND metadata->>'receiverTargetHash' = $6
     `, [
         delivery.id,
         delivery.org_id,
         delivery.destination_id,
         delivery.idempotency_key,
         delivery.payload_hash,
+        delivery.endpoint_hash,
     ])
 }
 
@@ -9428,7 +9440,9 @@ async function postPublicWebhook(endpoint: string, body: string) {
     const { normalized, addresses } = await resolvePublicWebhookTarget(endpoint)
     const url = new URL(normalized)
     const timeoutMs = Math.max(1000, Math.min(Number(process.env.DWM_WEBHOOK_TIMEOUT_MS || 8000), 30000))
-    const signature = signDwmWebhookDeliveryBody(body)
+    const signature = controlledReceiverUrls().includes(normalized)
+        ? signDwmWebhookDeliveryBody(body, normalized)
+        : ''
 
     return new Promise<{ status: number, body: string }>((resolve, reject) => {
         const request = httpsRequest(url, {
@@ -9452,6 +9466,20 @@ async function postPublicWebhook(endpoint: string, body: string) {
         request.on('error', reject)
         request.end(body)
     })
+}
+
+function controlledReceiverUrls() {
+    return [...new Set(
+        (process.env.DWM_CONTROLLED_RECEIVER_URLS || DEFAULT_CONTROLLED_RECEIVER_URL)
+            .split(',')
+            .map(value => value.trim())
+            .filter(Boolean)
+            .map(normalizeWebhookUrl)
+    )]
+}
+
+function controlledReceiverEndpointHashes() {
+    return controlledReceiverUrls().map(url => hashValue('endpoint', url))
 }
 
 export function pinnedWebhookLookup(addresses: Array<{ address: string, family: number }>): LookupFunction {

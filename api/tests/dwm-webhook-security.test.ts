@@ -145,7 +145,10 @@ describe('DWM webhook network boundary', () => {
 
     test('binds a durable receiver receipt to the exact report payload and delivery lineage', () => {
         const previousToken = process.env.TI_SCRAPER_SERVICE_TOKEN
+        const previousReceiverUrls = process.env.DWM_CONTROLLED_RECEIVER_URLS
+        const receiverUrl = 'https://hanasand.com/api/dwm/webhook-sink'
         process.env.TI_SCRAPER_SERVICE_TOKEN = 'receiver-signature-test'
+        process.env.DWM_CONTROLLED_RECEIVER_URLS = receiverUrl
         const report = reportFixture()
         const payload = buildDwmAlertDeliveryPayload({
             destination: { id: 'destination_report', kind: 'webhook', name: 'External receiver', org_id: 'org_1' },
@@ -164,7 +167,7 @@ describe('DWM webhook network boundary', () => {
             eventId: 'receiver_event_1',
             receivedAt: '2026-07-24T10:00:00.000Z',
             payload: candidate,
-            signature: signDwmWebhookDeliveryBody(canonicalJson(candidate)),
+            signature: signDwmWebhookDeliveryBody(canonicalJson(candidate), receiverUrl),
         })
         try {
             const envelope = envelopeFor(payload)
@@ -187,6 +190,13 @@ describe('DWM webhook network boundary', () => {
                 valid: false,
                 error: 'Receiver payload signature is invalid.',
             })
+            expect(validateDwmWebhookReceiverEnvelope({
+                ...envelope,
+                signature: signDwmWebhookDeliveryBody(canonicalJson(payload), 'https://external.example/report'),
+            })).toMatchObject({
+                valid: false,
+                error: 'Receiver payload signature is invalid.',
+            })
 
             const wrongScope = {
                 ...payload,
@@ -202,6 +212,7 @@ describe('DWM webhook network boundary', () => {
             }))).toMatchObject({ valid: false })
         } finally {
             restoreEnv('TI_SCRAPER_SERVICE_TOKEN', previousToken)
+            restoreEnv('DWM_CONTROLLED_RECEIVER_URLS', previousReceiverUrls)
         }
     })
 

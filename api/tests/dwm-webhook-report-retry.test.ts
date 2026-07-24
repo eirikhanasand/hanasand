@@ -8,6 +8,9 @@ const receiverAudits: Array<Record<string, any>> = []
 const lockTails = new Map<string, Promise<void>>()
 let persistedDelivery: Record<string, any> | undefined
 let insertedDelivery: Record<string, any> | undefined
+const controlledReceiverUrl = 'https://hanasand.com/api/dwm/webhook-sink'
+const controlledReceiverEndpointHash = endpointHash(controlledReceiverUrl)
+let receiverDestinationEndpointHash = controlledReceiverEndpointHash
 
 mock.module('#db', () => ({
     withDatabaseAdvisoryLock: async <T>(key: string, work: () => Promise<T>) => {
@@ -90,6 +93,7 @@ mock.module('#db', () => ({
             }
         }
         if (sql.includes('INSERT INTO dwm_webhook_audit_events') && sql.includes('\'receiver.accepted\'')) {
+            if (params[4] !== receiverDestinationEndpointHash) return { rows: [] }
             if (receiverAudits.some(row => row.id === params[0])) return { rows: [] }
             const row = {
                 id: params[0],
@@ -107,7 +111,9 @@ mock.module('#db', () => ({
         }
         if (sql.includes('FROM dwm_webhook_audit_events') && sql.includes('action = \'receiver.accepted\'')) {
             return {
-                rows: receiverAudits.filter(row => row.org_id === (params.length === 5 ? params[0] : params[1])),
+                rows: receiverAudits.filter(row => params.length === 5
+                    ? row.org_id === params[0]
+                    : row.id === params[0] && row.org_id === params[1] && row.destination_id === params[2]),
             }
         }
         if (sql.includes('INSERT INTO dwm_webhook_deliveries')) {
@@ -185,6 +191,7 @@ afterEach(() => {
     lockTails.clear()
     persistedDelivery = undefined
     insertedDelivery = undefined
+    receiverDestinationEndpointHash = controlledReceiverEndpointHash
 })
 
 test('retries a failed report after persistence reload with the exact stored payload and idempotency lineage', async () => {
@@ -362,13 +369,16 @@ test('persists one deterministic receiver receipt and filters it before the read
         signDwmWebhookDeliveryBody,
     } = await import('../src/utils/dwm/webhooks.ts')
     const previousToken = process.env.TI_SCRAPER_SERVICE_TOKEN
+    const previousReceiverUrls = process.env.DWM_CONTROLLED_RECEIVER_URLS
+    const receiverUrl = controlledReceiverUrl
     process.env.TI_SCRAPER_SERVICE_TOKEN = 'receiver-signature-test'
+    process.env.DWM_CONTROLLED_RECEIVER_URLS = receiverUrl
     const payload = reportDeliveryPayload()
     const envelope = {
         eventId: 'receiver_event_1',
         receivedAt: '2026-07-24T10:00:00.000Z',
         payload,
-        signature: signDwmWebhookDeliveryBody(canonicalJson(payload)),
+        signature: signDwmWebhookDeliveryBody(canonicalJson(payload), receiverUrl),
     }
     try {
         const first = await recordDwmWebhookReceiverReceipt(envelope)
@@ -394,12 +404,28 @@ test('persists one deterministic receiver receipt and filters it before the read
         const conflict = await recordDwmWebhookReceiverReceipt({
             ...envelope,
             payload: conflictingPayload,
-            signature: signDwmWebhookDeliveryBody(canonicalJson(conflictingPayload)),
+            signature: signDwmWebhookDeliveryBody(canonicalJson(conflictingPayload), receiverUrl),
         })
         expect(conflict).toMatchObject({
             ok: false,
             status: 409,
             error: 'Receiver idempotency lineage already contains a different payload.',
+        })
+        receiverDestinationEndpointHash = endpointHash('https://external.example/report')
+        const repointedPayload = {
+            ...payload,
+            idempotencyKey: `${payload.idempotencyKey}:repointed`,
+            delivery: { ...payload.delivery, id: 'delivery_receiver_repointed' },
+        }
+        const repointed = await recordDwmWebhookReceiverReceipt({
+            ...envelope,
+            payload: repointedPayload,
+            signature: signDwmWebhookDeliveryBody(canonicalJson(repointedPayload), receiverUrl),
+        })
+        expect(repointed).toMatchObject({
+            ok: false,
+            status: 404,
+            error: 'Receiver destination is not active in the delivered organization scope.',
         })
         expect(receiverAudits).toHaveLength(1)
 
@@ -423,6 +449,8 @@ test('persists one deterministic receiver receipt and filters it before the read
     } finally {
         if (previousToken === undefined) delete process.env.TI_SCRAPER_SERVICE_TOKEN
         else process.env.TI_SCRAPER_SERVICE_TOKEN = previousToken
+        if (previousReceiverUrls === undefined) delete process.env.DWM_CONTROLLED_RECEIVER_URLS
+        else process.env.DWM_CONTROLLED_RECEIVER_URLS = previousReceiverUrls
     }
 })
 
@@ -586,4 +614,8 @@ function failedDeliveryFixture(nextRetryAt: string) {
 
 function payloadHash(body: string) {
     return `payload_${createHash('sha256').update(body).digest('hex').slice(0, 32)}`
+}
+
+function endpointHash(url: string) {
+    return `endpoint_${createHash('sha256').update(new URL(url).toString()).digest('hex').slice(0, 32)}`
 }

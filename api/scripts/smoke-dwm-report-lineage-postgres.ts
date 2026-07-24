@@ -21,6 +21,7 @@ const ownerId = 'report_pg_owner'
 const adminId = 'report_pg_admin'
 const orgId = 'report_pg_org'
 const destinationId = 'report_pg_destination'
+const receiverUrl = 'https://hanasand.com/api/dwm/webhook-sink'
 const receiverObservationPath = '/tmp/hanasand-reporting-receiver-observation.json'
 const receiverReceivedAt = '2026-07-24T10:00:00.000Z'
 
@@ -28,6 +29,7 @@ assert.equal(process.env.DB, database, `Refusing to run outside the disposable $
 assert.ok(['exercise', 'verify', 'cleanup'].includes(phase), 'Usage: bun scripts/smoke-dwm-report-lineage-postgres.ts exercise|verify|cleanup')
 process.env.DWM_WEBHOOK_LIVE_DELIVERY = 'true'
 process.env.TI_SCRAPER_SERVICE_TOKEN = 'reporting-pg-receiver-signature'
+process.env.DWM_CONTROLLED_RECEIVER_URLS = receiverUrl
 
 if (phase === 'exercise') await exercise()
 if (phase === 'verify') await verifyAfterRestart()
@@ -47,7 +49,7 @@ async function exercise() {
             eventId: 'receiver_pg_concurrent',
             receivedAt: receiverReceivedAt,
             payload: JSON.parse(body),
-            signature: signDwmWebhookDeliveryBody(body),
+            signature: signDwmWebhookDeliveryBody(body, receiverUrl),
         })
         assert.equal(receiver.ok, true)
         assert.equal(receiver.ok && receiver.created, true)
@@ -167,7 +169,7 @@ async function verifyAfterRestart() {
         eventId: 'receiver_pg_concurrent',
         receivedAt: receiverReceivedAt,
         payload: concurrentPayload,
-        signature: signDwmWebhookDeliveryBody(canonicalJson(concurrentPayload)),
+        signature: signDwmWebhookDeliveryBody(canonicalJson(concurrentPayload), receiverUrl),
     })
     assert.equal(replayedReceiver.ok, true)
     assert.equal(replayedReceiver.ok && replayedReceiver.created, false)
@@ -213,7 +215,7 @@ async function verifyAfterRestart() {
             eventId: 'receiver_pg_restart',
             receivedAt: '2026-07-24T10:05:00.000Z',
             payload: JSON.parse(body),
-            signature: signDwmWebhookDeliveryBody(body),
+            signature: signDwmWebhookDeliveryBody(body, receiverUrl),
         })
         assert.equal(receiver.ok, true)
         assert.equal(receiver.ok && receiver.created, true)
@@ -308,7 +310,7 @@ async function seed() {
         orgId,
         name: 'Instrumented external receiver',
         kind: 'webhook',
-        endpointUrl: 'https://receiver.example.com/report',
+        endpointUrl: receiverUrl,
         events: ['dwm.alert.updated'],
     }, ownerId)
     assert.ok(destination.endpointEncrypted && destination.endpointHint && destination.endpointHash)

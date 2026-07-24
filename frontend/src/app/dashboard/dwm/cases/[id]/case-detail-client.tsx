@@ -170,6 +170,7 @@ type DeliveryRow = {
     destinationId?: string
     payloadHash?: string
     dedupeKey?: string
+    idempotencyKey?: string
     dryRun?: boolean
     httpStatus?: number
     error?: string
@@ -188,6 +189,7 @@ type ReceiverReceipt = {
     id?: string
     destinationId?: string
     deliveryId?: string
+    idempotencyKey?: string
     payloadHash?: string
     reportCaseId?: string
     reportExportChecksum?: string
@@ -477,10 +479,15 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     const deliveries = orderCaseDeliveries(state.detail.deliveries || state.exportPayload?.deliveryEvidence || [])
     const latestDelivery = deliveries[0]
     const latestReceiverReceipt = (state.receiverReceipts || []).find(receipt =>
-        receipt.destinationId === (latestDelivery?.webhookDestinationId || latestDelivery?.destinationId)
+        Boolean(receipt.deliveryId)
+        && receipt.destinationId === (latestDelivery?.webhookDestinationId || latestDelivery?.destinationId)
         && (
             receipt.deliveryId === latestDelivery?.id
-            || Boolean(receipt.reportExportChecksum && receipt.reportExportChecksum === latestDelivery?.reportExportChecksum)
+            || Boolean(
+                receipt.idempotencyKey
+                && receipt.idempotencyKey === latestDelivery?.idempotencyKey
+                && deliveries.some(delivery => delivery.id === receipt.deliveryId && delivery.status === 'delivered')
+            )
         )
     )
     const latestDeliveryRetryable = latestDelivery?.status === 'failed' && latestDelivery.retryable === true
@@ -1030,6 +1037,7 @@ function deliveryRowsFromApi(payload: Record<string, unknown>): DeliveryRow[] {
                 endpointHint: stringValue(destination.endpointHint) || stringValue(row.redactedEndpointLabel),
                 payloadHash: stringValue(row.payloadHash),
                 dedupeKey: stringValue(row.dedupeKey),
+                idempotencyKey: stringValue(row.idempotencyKey),
                 dryRun: row.dryRun === true,
                 httpStatus: typeof row.responseStatus === 'number' ? row.responseStatus : typeof response.httpStatus === 'number' ? response.httpStatus : undefined,
                 error: stringValue(row.error),
@@ -1054,6 +1062,7 @@ function receiverReceiptRowsFromApi(payload: Record<string, unknown>): ReceiverR
             id: stringValue(row.id),
             destinationId: stringValue(row.destinationId),
             deliveryId: stringValue(row.deliveryId),
+            idempotencyKey: stringValue(row.idempotencyKey),
             payloadHash: stringValue(row.payloadHash),
             reportCaseId: stringValue(row.reportCaseId),
             reportExportChecksum: stringValue(row.reportExportChecksum),
