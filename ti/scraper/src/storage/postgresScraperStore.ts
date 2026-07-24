@@ -1851,7 +1851,11 @@ function readRecord(row: any): any {
   return row.record;
 }
 
-function toJson(value: unknown): string { return JSON.stringify(value); }
+export function toJson(value: unknown): string {
+  return JSON.stringify(value, (_key, item) => typeof item === "string"
+    ? item.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g, (character) => character.length === 2 ? character : "�")
+    : item) ?? "null";
+}
 export function normalizeLegacySourceForImport(source: any): SourceRecord {
   if (source.accessMethod) return source;
   const at = source.updatedAt ?? source.createdAt ?? new Date().toISOString();
