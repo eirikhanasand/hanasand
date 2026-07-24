@@ -1,4 +1,4 @@
-export const AUTOMATIC_REVIEW_PROMPT_VERSION = "ti.automatic_intelligence_review.prompt.v6";
+export const AUTOMATIC_REVIEW_PROMPT_VERSION = "ti.automatic_intelligence_review.prompt.v7";
 export const AUTOMATIC_REVIEW_RESPONSE_SCHEMA = "ti.automatic_intelligence_review.response.v1";
 export const SOURCE_AUTOMATIC_REVIEW_SCHEMA = "ti.automatic_source_review.v1";
 
