@@ -50,6 +50,43 @@ test('does not synthesize an actor profile when canonical evidence is unavailabl
     }
 })
 
+test('retries canonical search after an unavailable response', async () => {
+    const previousScraperBase = process.env.TI_SCRAPER_API_BASE
+    const originalFetch = globalThis.fetch
+    process.env.TI_SCRAPER_API_BASE = 'http://scraper.test'
+    let attempts = 0
+    globalThis.fetch = async () => {
+        attempts++
+        if (attempts === 1) return new Response(null, { status: 503 })
+        return Response.json({
+            query: 'APT7654320',
+            generatedAt: '2026-07-24T12:00:00.000Z',
+            mode: 'scraper',
+            status: 'ready',
+            summary: 'Canonical evidence is available.',
+            confidence: 0.8,
+            lastSeen: '2026-07-24T11:00:00.000Z',
+            aliases: [],
+            recentActivity: [],
+            targets: [],
+            ttps: [],
+            datasets: [],
+            sources: [],
+            notes: [],
+        })
+    }
+
+    try {
+        expect((await searchThreatIntel({ query: 'APT7654320' })).mode).toBe('live_search')
+        expect((await searchThreatIntel({ query: 'APT7654320' })).mode).toBe('scraper')
+        expect(attempts).toBe(2)
+    } finally {
+        globalThis.fetch = originalFetch
+        if (previousScraperBase === undefined) delete process.env.TI_SCRAPER_API_BASE
+        else process.env.TI_SCRAPER_API_BASE = previousScraperBase
+    }
+})
+
 test('accepts the scraper canonicalizing actor query casing', async () => {
     const previousScraperBase = process.env.TI_SCRAPER_API_BASE
     const originalFetch = globalThis.fetch

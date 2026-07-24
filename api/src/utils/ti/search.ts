@@ -141,9 +141,7 @@ export async function searchThreatIntel(input: TiSearchRequest): Promise<TiSearc
         }
     }
 
-    const result = unavailableResult(query, queryKind)
-    writeCache(key, result)
-    return result
+    return unavailableResult(query, queryKind)
 }
 
 export function classifyTiQuery(query: string): NonNullable<TiSearchResponse['queryKind']> {
