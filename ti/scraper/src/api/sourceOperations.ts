@@ -1,6 +1,6 @@
 import { nowIso } from "../utils.ts";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
-import { qualifySourcePortfolio, SOURCE_PORTFOLIO_BASELINE } from "../ops/sourcePortfolioQualification.ts";
+import { automaticSourceReviewQualifies, qualifySourcePortfolio, SOURCE_PORTFOLIO_BASELINE } from "../ops/sourcePortfolioQualification.ts";
 import { toSafeSourceDto } from "./sourceRoutes.ts";
 import { inTenantScope } from "./tenantScope.ts";
 import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
@@ -19,7 +19,8 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
     return operationalQuerySnapshot(result, input, generatedAt);
   }
   const inTenant = (record: any) => inTenantScope(record, input.tenantId);
-  const sources = records(store, "listSources").filter(inTenant).filter((source) => !input.sourceId || source.id === input.sourceId);
+  const tenantSources = records(store, "listSources").filter(inTenant);
+  const sources = tenantSources.filter((source) => !input.sourceId || source.id === input.sourceId);
   const observations = records(store, "listSourceHealthObservations").filter(inTenant);
   const captures = records(store, "listCaptures").filter(inTenant);
   const entities = records(store, "listExtractedEntities").filter(inTenant);
@@ -35,7 +36,7 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
     if (["true_positive", "false_positive"].includes(label.outcome)) counts.classified += 1;
     labelCountsBySource.set(sourceId, counts);
   }
-  const portfolio = qualifySourcePortfolio({ sources, observations, captures, generatedAt });
+  const portfolio = qualifySourcePortfolio({ sources: tenantSources, observations, captures, generatedAt });
   const qualificationBySource = new Map(portfolio.sources.map((source) => [source.sourceId, source]));
 
   const rows = sources.map((source: any) => {
@@ -62,7 +63,7 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
         ? ratio(observedFalsePositiveRates.reduce((sum: number, value: number) => sum + value, 0), observedFalsePositiveRates.length)
         : null;
     const qualification = qualificationBySource.get(source.id);
-    const lastUsefulAt = timeOf(sourceObservations.filter((row: any) => row.useful === true && Number(row.captureCount ?? 0) > 0).at(-1), "checkedAt");
+    const lastUsefulAt = qualification?.lastUsefulAt;
     const duplicateCount = sum(sourceObservations, "duplicateCount");
     const captureCount = sum(sourceObservations, "captureCount");
 
@@ -132,6 +133,13 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
     };
   }).sort((left: any, right: any) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
   const executableRows = rows.filter((row: any) => row.executable);
+  const qualifyingRows = rows.filter((row: any) => row.qualification?.qualifies === true);
+  const qualificationCounts = {
+    clearWeb: qualifyingRows.filter((row: any) => row.qualification.family === "clear_web").length,
+    lawfulDarkWeb: qualifyingRows.filter((row: any) => row.qualification.family === "lawful_dark_web").length,
+    publicTelegram: qualifyingRows.filter((row: any) => row.qualification.family === "public_telegram").length,
+    total: qualifyingRows.length
+  };
   const limit = Math.max(1, Math.min(500, Number(input.limit ?? 100) || 100));
   const cursor = Math.max(0, Number(input.cursor ?? 0) || 0);
   const page = rows.slice(cursor, cursor + limit);
@@ -171,9 +179,17 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
     qualification: {
       schemaVersion: portfolio.schemaVersion,
       baseline: portfolio.baseline,
-      counts: portfolio.counts,
-      gaps: portfolio.gaps,
-      baselineMet: portfolio.baselineMet
+      counts: qualificationCounts,
+      gaps: {
+        clearWeb: Math.max(0, SOURCE_PORTFOLIO_BASELINE.clearWeb - qualificationCounts.clearWeb),
+        lawfulDarkWeb: Math.max(0, SOURCE_PORTFOLIO_BASELINE.lawfulDarkWeb - qualificationCounts.lawfulDarkWeb),
+        publicTelegram: Math.max(0, SOURCE_PORTFOLIO_BASELINE.publicTelegram - qualificationCounts.publicTelegram),
+        total: Math.max(0, SOURCE_PORTFOLIO_BASELINE.total - qualificationCounts.total)
+      },
+      baselineMet: qualificationCounts.clearWeb >= SOURCE_PORTFOLIO_BASELINE.clearWeb
+        && qualificationCounts.lawfulDarkWeb >= SOURCE_PORTFOLIO_BASELINE.lawfulDarkWeb
+        && qualificationCounts.publicTelegram >= SOURCE_PORTFOLIO_BASELINE.publicTelegram
+        && qualificationCounts.total >= SOURCE_PORTFOLIO_BASELINE.total
     },
     sources: page,
     safeOutput: { sourceUrlsExposed: false, rawCapturesExposed: false, restrictedPayloadsExposed: false }
@@ -258,6 +274,7 @@ function operationalQueryRow(row: any, generatedAt: string) {
   const latest = health.latest ?? {};
   const lastFailure = health.lastFailure ?? {};
   const observationCount = Number(health.observationCount ?? 0);
+  const scheduledCheckCount = Number(health.scheduledCycleCount ?? 0);
   const successCount = Number(health.successCount ?? 0);
   const usefulCheckCount = Number(health.usefulCycleCount ?? 0);
   const successfulCheckCount = Number(health.successfulCycleCount ?? 0);
@@ -281,6 +298,7 @@ function operationalQueryRow(row: any, generatedAt: string) {
   if (row.collection_executable !== true) reasons.push("not_executable");
   if (!family) reasons.push("not_an_intelligence_feed");
   if (!String(source.legalNotes ?? "").trim()) reasons.push("missing_legal_basis");
+  if (!automaticSourceReviewQualifies(source, row.automatic_review_evidence_matches === true)) reasons.push("automatic_source_review_not_approved");
   if (row.canonical_owner_id && row.canonical_owner_id !== source.id) reasons.push("duplicate_feed");
   if (family === "lawful_dark_web" && !(source.governance?.metadataOnly === true || source.metadata?.captureMode === "metadata_only")) reasons.push("dark_web_not_metadata_only");
   if (successfulCheckCount < 2) reasons.push("insufficient_successful_checks");
@@ -295,12 +313,13 @@ function operationalQueryRow(row: any, generatedAt: string) {
     family,
     qualifies: reasons.length === 0,
     reasons,
-    scheduledCheckCount: observationCount,
+    checkCount: observationCount,
+    scheduledCheckCount,
     successfulCheckCount,
     usefulCheckCount,
     productiveCheckCount: usefulCheckCount,
     retainedCaptureCount: captureCount,
-    latestCheckUseful: latest.useful === true && Number(latest.captureCount ?? 0) > 0,
+    latestCheckUseful: health.latestUseful === true,
     lastCheckedAt,
     lastSuccessAt,
     lastContentAt,

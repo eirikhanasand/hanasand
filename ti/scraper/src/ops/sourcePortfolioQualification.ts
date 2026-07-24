@@ -1,7 +1,7 @@
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
-import { hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
+import { hasApprovedAutomaticSourceReview, sourceRequiresAutomaticReview } from "../policy/sourceAutomaticReview.ts";
 import { automaticSourceReviewEvidenceBindingsMatch } from "../api/automaticReviewRoutes.ts";
 
 export const SOURCE_PORTFOLIO_BASELINE = {
@@ -37,17 +37,20 @@ export function qualifySourcePortfolio(input: {
     const activityWindowSeconds = sourceMonitoringWindowSeconds(source);
     const scheduled = observations.filter((row) => typeof row.collectionRunId === "string" && row.collectionRunId.trim());
     const retainedCaptureRunIds = new Set(captures.map((capture) => capture.metadata?.runId).filter((runId): runId is string => typeof runId === "string" && runId.trim().length > 0));
+    const scheduledCycles = summarizeScheduledCycles(scheduled);
     const currentScheduled = summarizeScheduledCycles(
       scheduled.filter((row) => recent(validTime(row.checkedAt), input.generatedAt, activityWindowSeconds))
     );
-    const latest = scheduled.at(-1);
+    const latest = observations.at(-1);
+    const latestScheduled = currentScheduled.at(-1);
     const successes = currentScheduled.filter((row) => row.success === true);
-    const productive = currentScheduled.filter((row) => row.useful === true && Number(row.captureCount ?? 0) > 0 && retainedCaptureRunIds.has(String(row.collectionRunId)));
+    const productive = currentScheduled.filter((row) => row.producedUsefulCapture === true && retainedCaptureRunIds.has(String(row.collectionRunId)));
+    const historicalProductive = scheduledCycles.filter((row) => row.producedUsefulCapture === true && retainedCaptureRunIds.has(String(row.collectionRunId)));
     const latestCapture = captures.at(-1);
     const family = baselineFamily(source);
     const lastCheckedAt = validTime(latest?.checkedAt);
-    const lastSuccessAt = validTime(successes.at(-1)?.checkedAt);
-    const lastUsefulAt = validTime(productive.at(-1)?.checkedAt);
+    const lastSuccessAt = validTime(observations.filter((row) => row.success === true).at(-1)?.checkedAt);
+    const lastUsefulAt = validTime([...historicalProductive].sort(byUsefulAt).at(-1)?.usefulCheckedAt);
     const lastContentAt = validTime(latestCapture?.publishedAt) ?? validTime(latestCapture?.collectedAt);
     const reasons: string[] = [];
     const canonicalKey = canonicalSourceKey(source);
@@ -55,7 +58,7 @@ export function qualifySourcePortfolio(input: {
     if (!isExecutableSource(source)) reasons.push("not_executable");
     if (!family) reasons.push("not_an_intelligence_feed");
     if (!String(source.legalNotes ?? "").trim()) reasons.push("missing_legal_basis");
-    if (!hasApprovedAutomaticSourceReview(source) || !automaticSourceReviewEvidenceBindingsMatch(source, captures)) reasons.push("automatic_source_review_not_approved");
+    if (!automaticSourceReviewQualifies(source, automaticSourceReviewEvidenceBindingsMatch(source, captures))) reasons.push("automatic_source_review_not_approved");
     if (canonicalKey && canonicalOwner.get(canonicalKey) !== source.id) reasons.push("duplicate_feed");
     if (family === "lawful_dark_web" && !(source.governance?.metadataOnly === true || source.metadata?.captureMode === "metadata_only")) reasons.push("dark_web_not_metadata_only");
     if (successes.length < 2) reasons.push("insufficient_successful_checks");
@@ -76,7 +79,7 @@ export function qualifySourcePortfolio(input: {
       successfulCheckCount: successes.length,
       usefulCheckCount: productive.length,
       productiveCheckCount: productive.length,
-      latestCheckUseful: latest?.useful === true && Number(latest.captureCount ?? 0) > 0,
+      latestCheckUseful: latestScheduled?.producedUsefulCapture === true && retainedCaptureRunIds.has(String(latestScheduled.collectionRunId)),
       retainedCaptureCount: captures.length,
       lastCheckedAt,
       lastSuccessAt,
@@ -114,6 +117,14 @@ export function qualifySourcePortfolio(input: {
   };
 }
 
+export function automaticSourceReviewQualifies(source: any, evidenceBindingsMatch: boolean) {
+  if (!sourceRequiresAutomaticReview(source)) return true;
+  return source.countsAsCoverage === true
+    && source.metadata?.productionCollection === true
+    && hasApprovedAutomaticSourceReview(source)
+    && evidenceBindingsMatch;
+}
+
 function baselineFamily(source: any): "clear_web" | "lawful_dark_web" | "public_telegram" | undefined {
   if (source.metadata?.transportCanary === true) return undefined;
   if (source.type === "telegram_public") return "public_telegram";
@@ -140,19 +151,27 @@ function summarizeScheduledCycles(rows: any[]) {
   for (const row of rows) {
     const runId = String(row.collectionRunId);
     const previous = cycles.get(runId);
+    const producedUsefulCapture = row.useful === true && Number(row.captureCount ?? 0) > 0;
+    const usefulCheckedAt = producedUsefulCapture ? validTime(row.checkedAt) : undefined;
     cycles.set(runId, previous ? {
       ...row,
       checkedAt: Date.parse(row.checkedAt) >= Date.parse(previous.checkedAt) ? row.checkedAt : previous.checkedAt,
       success: previous.success === true || row.success === true,
       useful: previous.useful === true || row.useful === true,
+      producedUsefulCapture: previous.producedUsefulCapture === true || producedUsefulCapture,
+      usefulCheckedAt: [previous.usefulCheckedAt, usefulCheckedAt].filter(Boolean).sort().at(-1),
       captureCount: Number(previous.captureCount ?? 0) + Number(row.captureCount ?? 0)
-    } : row);
+    } : { ...row, producedUsefulCapture, usefulCheckedAt });
   }
   return [...cycles.values()].sort(byCheckedAt);
 }
 
 function byCheckedAt(left: any, right: any) {
   return (Date.parse(left?.checkedAt ?? "") || 0) - (Date.parse(right?.checkedAt ?? "") || 0);
+}
+
+function byUsefulAt(left: any, right: any) {
+  return (Date.parse(left?.usefulCheckedAt ?? "") || 0) - (Date.parse(right?.usefulCheckedAt ?? "") || 0);
 }
 
 function byCaptureTime(left: any, right: any) {

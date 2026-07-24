@@ -3096,18 +3096,73 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       }
     });
     store.saveRun({ id: "run_bound_latest", tenantId: "tenant_bound", requestId: "req_public_canary", status: "completed", startedAt: "2026-07-23T12:30:00.000Z", completedAt: "2026-07-23T12:30:00.000Z", updatedAt: "2026-07-23T12:30:00.000Z" } as any);
+    store.saveCapture(fixtureCapture({
+      id: "capture_bound_latest",
+      tenantId: "tenant_bound",
+      sourceId,
+      url: "https://bounded.example/items/latest",
+      collectedAt: "2026-07-23T12:29:59.000Z",
+      publishedAt: "2026-07-23T12:29:59.000Z",
+      metadata: { runId: "run_bound_latest", domain: "latest.example", pageType: "advisory" }
+    }));
+    store.saveSourceHealthObservation({
+      id: "health_bound_latest_useful",
+      tenantId: "tenant_bound",
+      sourceId,
+      collectionRunId: "run_bound_latest",
+      checkedAt: "2026-07-23T12:29:59.000Z",
+      status: "healthy",
+      success: true,
+      useful: true,
+      captureCount: 1,
+      legalMode: "public_content"
+    });
     store.saveSourceHealthObservation({
       id: "health_bound_latest",
       tenantId: "tenant_bound",
       sourceId,
       collectionRunId: "run_bound_latest",
       checkedAt: "2026-07-23T12:30:00.000Z",
-      status: "healthy",
-      success: true,
+      status: "failed",
+      success: false,
       useful: false,
       captureCount: 0,
       legalMode: "public_content"
     });
+    const duplicateSourceId = "src_bound_duplicate";
+    store.saveSource(source({
+      id: duplicateSourceId,
+      tenantId: "tenant_bound",
+      name: "ZZZZ Duplicate Bound 06100",
+      type: "api",
+      url: "https://bounded.example/6100.xml",
+      metadata: { productionCollection: true, activityWindowSeconds: 2592000 }
+    }));
+    for (const [index, checkedAt] of ["2026-07-22T12:05:00.000Z", "2026-07-23T12:05:00.000Z"].entries()) {
+      const runId = `run_bound_duplicate_${index + 1}`;
+      store.saveRun({ id: runId, tenantId: "tenant_bound", requestId: "req_public_canary", status: "completed", startedAt: checkedAt, completedAt: checkedAt, updatedAt: checkedAt } as any);
+      store.saveCapture(fixtureCapture({
+        id: `capture_bound_duplicate_${index + 1}`,
+        tenantId: "tenant_bound",
+        sourceId: duplicateSourceId,
+        url: `https://bounded.example/duplicate/${index + 1}`,
+        collectedAt: checkedAt,
+        publishedAt: checkedAt,
+        metadata: { runId }
+      }));
+      store.saveSourceHealthObservation({
+        id: `health_bound_duplicate_${index + 1}`,
+        tenantId: "tenant_bound",
+        sourceId: duplicateSourceId,
+        collectionRunId: runId,
+        checkedAt,
+        status: "healthy",
+        success: true,
+        useful: true,
+        captureCount: 1,
+        legalMode: "public_content"
+      });
+    }
     const falseUsefulSourceId = "src_bound_false_useful";
     store.saveSource(source({
       id: falseUsefulSourceId,
@@ -3141,6 +3196,19 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         legalMode: "public_content"
       });
     }
+    store.saveRun({ id: "run_bound_false_useful_unretained", tenantId: "tenant_bound", requestId: "req_public_canary", status: "completed", startedAt: "2026-07-23T12:45:00.000Z", completedAt: "2026-07-23T12:45:00.000Z", updatedAt: "2026-07-23T12:45:00.000Z" } as any);
+    store.saveSourceHealthObservation({
+      id: "health_bound_false_useful_unretained",
+      tenantId: "tenant_bound",
+      sourceId: falseUsefulSourceId,
+      collectionRunId: "run_bound_false_useful_unretained",
+      checkedAt: "2026-07-23T12:45:00.000Z",
+      status: "healthy",
+      success: true,
+      useful: true,
+      captureCount: 1,
+      legalMode: "public_content"
+    });
     store.saveExtractedEntity({ id: "entity_bound", tenantId: "tenant_bound", sourceId, captureId: "capture_bound_2", type: "actor", value: "APT29", normalizedValue: "apt29" });
     store.saveEvaluationLabel({
       id: "label_bound",
@@ -3168,6 +3236,11 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       tenantId: "tenant_bound",
       generatedAt: "2026-07-23T13:00:00.000Z",
       sourceId: falseUsefulSourceId
+    });
+    const duplicate = await store.querySourceOperationalPage({
+      tenantId: "tenant_bound",
+      generatedAt: "2026-07-23T13:00:00.000Z",
+      sourceId: duplicateSourceId
     });
     const binding = selectedEvidenceProvenance[0];
     await admin`
@@ -3256,11 +3329,11 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       sourceId
     });
 
-    expect(page).toMatchObject({ total: 6_102, nextCursor: "6101" });
+    expect(page).toMatchObject({ total: 6_103, nextCursor: "6101" });
     expect(page.rows[0]).toMatchObject({
       record: { id: sourceId },
-      health_stats: { usefulCycleCount: 2, latest: { useful: false } },
-      capture_stats: { captureCount: 2 },
+      health_stats: { usefulCycleCount: 3, latest: { useful: false } },
+      capture_stats: { captureCount: 3 },
       actor_stats: { count: 1 },
       label_stats: { classified: 1 }
     });
@@ -3268,14 +3341,25 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       total: 1,
       totals: {
         everUsefulSourceCount: 1,
-        usefulSourceCount: 0,
-        latestUsefulSourceCount: 0,
+        usefulSourceCount: 1,
+        latestUsefulSourceCount: 1,
         usefulWithin24hSourceCount: 1,
         sustainedUsefulSourceCount: 1,
         qualifyingClearWebSourceCount: 1
       }
     });
-    expect(direct.rows[0]).toMatchObject({ health_stats: { latest: { useful: false } } });
+    expect(direct.rows[0]).toMatchObject({
+      automatic_review_evidence_matches: true,
+      health_stats: {
+        latest: { useful: false },
+        latestUseful: true,
+        lastSuccessAt: "2026-07-23T12:29:59+00:00",
+        lastUsefulAt: "2026-07-23T12:29:59+00:00"
+      }
+    });
+    expect(duplicate.total).toBe(1);
+    expect(duplicate.totals.qualifyingClearWebSourceCount).toBe(0);
+    expect(duplicate.rows[0].canonical_owner_id).toBe(sourceId);
     expect(falseUseful).toMatchObject({
       total: 1,
       totals: {
@@ -3290,14 +3374,15 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(changedIdentity.totals.qualifyingClearWebSourceCount).toBe(0);
     expect(forgedIdentityHash.totals.qualifyingClearWebSourceCount).toBe(0);
     expect(withoutReview.totals.qualifyingClearWebSourceCount).toBe(0);
+    expect(withoutReview.rows[0].automatic_review_evidence_matches).toBe(false);
     expect(duplicateEvidence.totals.qualifyingClearWebSourceCount).toBe(0);
     expect(forgedEvidence.totals.qualifyingClearWebSourceCount).toBe(0);
     expect(changedCaptureState.totals.qualifyingClearWebSourceCount).toBe(0);
     expect(falseUseful.rows[0]).toMatchObject({
-      health_stats: { usefulCycleCount: 0, latest: { useful: false } }
+      health_stats: { usefulCycleCount: 0, latest: { useful: true }, latestUseful: false, lastUsefulAt: null }
     });
     await store.close();
-  });
+  }, 10_000);
 });
 
 function pipeline(sourceId: string, tenantId?: string, suffix = "") {

@@ -92,7 +92,7 @@ describe("source portfolio qualification", () => {
       sources: [publicSource("multi-report", "rss", "https://example.test/multi-report.xml")],
       observations: [firstAt, secondAt].flatMap((checkedAt) => [
         observation("multi-report", checkedAt, 1),
-        { ...observation("multi-report", checkedAt, 0), id: `later-${checkedAt}`, checkedAt: new Date(Date.parse(checkedAt) + 1_000).toISOString() }
+        { ...observation("multi-report", checkedAt, 0), id: `later-${checkedAt}`, checkedAt: new Date(Date.parse(checkedAt) + 1_000).toISOString(), success: false }
       ]),
       captures: [
         capture("multi-report", "first", "2026-07-22T10:00:00.000Z", `run-${firstAt}`),
@@ -102,7 +102,35 @@ describe("source portfolio qualification", () => {
     });
 
     expect(result.counts.total).toBe(1);
-    expect(result.sources[0]).toMatchObject({ qualifies: true, usefulCheckCount: 2, productiveCheckCount: 2 });
+    expect(result.sources[0]).toMatchObject({
+      qualifies: true,
+      usefulCheckCount: 2,
+      productiveCheckCount: 2,
+      latestCheckUseful: true,
+      lastSuccessAt: secondAt,
+      lastUsefulAt: secondAt
+    });
+  });
+
+  test("does not combine useful truth and capture count from separate reports", () => {
+    const firstAt = "2026-07-22T12:00:00.000Z";
+    const secondAt = "2026-07-23T11:00:00.000Z";
+    const result = qualifySourcePortfolio({
+      sources: [publicSource("split-report", "rss", "https://example.test/split-report.xml")],
+      observations: [firstAt, secondAt].flatMap((checkedAt) => [
+        { ...observation("split-report", checkedAt, 0), useful: true },
+        { ...observation("split-report", checkedAt, 1), id: `capture-only-${checkedAt}`, useful: false }
+      ]),
+      captures: [
+        capture("split-report", "first", "2026-07-22T10:00:00.000Z", `run-${firstAt}`),
+        capture("split-report", "second", "2026-07-23T10:00:00.000Z", `run-${secondAt}`)
+      ],
+      generatedAt
+    });
+
+    expect(result.counts.total).toBe(0);
+    expect(result.sources[0]).toMatchObject({ qualifies: false, usefulCheckCount: 0, productiveCheckCount: 0, latestCheckUseful: false });
+    expect(result.sources[0].reasons).toContain("insufficient_productive_cycles");
   });
 
   test("requires two productive scheduled cycles inside the current activity window", () => {
@@ -122,6 +150,54 @@ describe("source portfolio qualification", () => {
     expect(result.counts.total).toBe(0);
     expect(result.sources[0]).toMatchObject({ scheduledCheckCount: 1, productiveCheckCount: 1 });
     expect(result.sources[0].reasons).toContain("insufficient_productive_cycles");
+  });
+
+  test("keeps historical retained usefulness separate from current qualification", () => {
+    const result = qualifySourcePortfolio({
+      sources: [publicSource("historical", "rss", "https://example.test/historical.xml")],
+      observations: [observation("historical", "2020-07-23T11:00:00.000Z", 1)],
+      captures: [capture("historical", "old", "2020-07-23T10:00:00.000Z", "run-2020-07-23T11:00:00.000Z")],
+      generatedAt
+    });
+
+    expect(result.sources[0]).toMatchObject({
+      qualifies: false,
+      usefulCheckCount: 0,
+      latestCheckUseful: false,
+      lastUsefulAt: "2020-07-23T11:00:00.000Z"
+    });
+  });
+
+  test("uses every health check for freshness while requiring scheduled productive cycles", () => {
+    const source = publicSource("unscheduled-freshness", "rss", "https://example.test/unscheduled-freshness.xml");
+    const result = qualifySourcePortfolio({
+      sources: [source],
+      observations: [
+        observation(source.id, "2026-07-22T10:00:00.000Z", 1),
+        observation(source.id, "2026-07-22T11:00:00.000Z", 1),
+        {
+          ...observation(source.id, "2026-07-23T11:30:00.000Z", 0),
+          id: "health-unscheduled",
+          collectionRunId: undefined,
+          useful: false
+        }
+      ],
+      captures: [
+        capture(source.id, "first", "2026-07-22T09:00:00.000Z", "run-2026-07-22T10:00:00.000Z"),
+        capture(source.id, "second", "2026-07-22T10:30:00.000Z", "run-2026-07-22T11:00:00.000Z")
+      ],
+      generatedAt
+    });
+
+    expect(result.counts.total).toBe(1);
+    expect(result.sources[0]).toMatchObject({
+      qualifies: true,
+      scheduledCheckCount: 2,
+      productiveCheckCount: 2,
+      lastCheckedAt: "2026-07-23T11:30:00.000Z",
+      lastSuccessAt: "2026-07-23T11:30:00.000Z",
+      lastUsefulAt: "2026-07-22T11:00:00.000Z"
+    });
   });
 
   test("requires the exact reviewed capture, tenant, content, and evidence identity", () => {
@@ -161,6 +237,8 @@ describe("source portfolio qualification", () => {
     const count = (source: any, rows: any[]) => qualifySourcePortfolio({ sources: [source], observations, captures: rows, generatedAt }).counts.total;
 
     expect(count(reviewed, captures)).toBe(1);
+    expect(count({ ...reviewed, countsAsCoverage: false }, captures)).toBe(0);
+    expect(count({ ...reviewed, metadata: { ...reviewed.metadata, productionCollection: false } }, captures)).toBe(0);
     expect(count(reviewed, captures.map((item) => item.id === selectedEvidenceProvenance[0].captureId ? { ...item, contentHash: hashContent("changed") } : item))).toBe(0);
     expect(count(reviewed, captures.map((item) => item.id === selectedEvidenceProvenance[0].captureId ? { ...item, tenantId: "other" } : item))).toBe(0);
     expect(count(reviewed, captures.map((item) => item.id === selectedEvidenceProvenance[0].captureId ? { ...item, sourceId: "other" } : item))).toBe(0);

@@ -289,6 +289,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         SELECT page.record,
           page.collection_executable,
           canonical_owner.id AS canonical_owner_id,
+          ${sourceReviewEvidenceMatchesSql("page")} AS automatic_review_evidence_matches,
           health.stats AS health_stats,
           captures.stats AS capture_stats,
           actors.stats AS actor_stats,
@@ -304,6 +305,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
               AND candidate_capture.tenant_id IS NOT DISTINCT FROM candidate.tenant_id
           ) candidate_captures ON TRUE
           WHERE candidate.tenant_id IS NOT DISTINCT FROM page.tenant_id
+            AND candidate.collection_executable
             AND (page.canonical_feed_key IS NULL AND candidate.id = page.id
               OR page.canonical_feed_key IS NOT NULL AND candidate.canonical_feed_key = page.canonical_feed_key)
           ORDER BY candidate_captures.capture_count DESC,
@@ -314,6 +316,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         LEFT JOIN LATERAL (
           SELECT jsonb_build_object(
             'observationCount', count(*),
+            'scheduledCycleCount', count(DISTINCT h.collection_run_id) FILTER (
+              WHERE h.collection_run_id IS NOT NULL
+                AND h.checked_at >= $6::timestamptz - make_interval(secs => GREATEST(
+                  86400,
+                  COALESCE((page.record->>'crawlFrequencySeconds')::int, 86400) * 3,
+                  COALESCE((page.record->'metadata'->>'activityWindowSeconds')::int, 2592000)
+                ))
+            ),
             'successCount', count(*) FILTER (WHERE h.success),
             'usefulCycleCount', count(DISTINCT h.collection_run_id) FILTER (
               WHERE h.collection_run_id IS NOT NULL AND h.useful AND h.capture_count > 0
@@ -345,7 +355,46 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             'observedFalsePositiveRate', avg(h.false_positive_rate),
             'latest', (array_agg(h.record ORDER BY h.checked_at DESC))[1],
             'lastSuccessAt', max(h.checked_at) FILTER (WHERE h.success),
-            'lastUsefulAt', max(h.checked_at) FILTER (WHERE h.useful AND h.capture_count > 0),
+            'lastUsefulAt', max(h.checked_at) FILTER (
+              WHERE h.useful AND h.capture_count > 0
+                AND EXISTS (
+                  SELECT 1 FROM threat_intel.captures retained
+                  WHERE retained.source_id = page.id
+                    AND retained.tenant_id IS NOT DISTINCT FROM page.tenant_id
+                    AND retained.record->'metadata'->>'runId' = h.collection_run_id
+                )
+            ),
+            'latestUseful', COALESCE((
+              SELECT bool_or(latest_observation.useful AND latest_observation.capture_count > 0)
+              FROM threat_intel.source_health latest_observation
+              WHERE latest_observation.source_id = page.id
+                AND latest_observation.tenant_id IS NOT DISTINCT FROM page.tenant_id
+                AND latest_observation.checked_at >= $6::timestamptz - make_interval(secs => GREATEST(
+                  86400,
+                  COALESCE((page.record->>'crawlFrequencySeconds')::int, 86400) * 3,
+                  COALESCE((page.record->'metadata'->>'activityWindowSeconds')::int, 2592000)
+                ))
+                AND latest_observation.collection_run_id = (
+                  SELECT latest_run.collection_run_id
+                  FROM threat_intel.source_health latest_run
+                  WHERE latest_run.source_id = page.id
+                    AND latest_run.tenant_id IS NOT DISTINCT FROM page.tenant_id
+                    AND latest_run.collection_run_id IS NOT NULL
+                    AND latest_run.checked_at >= $6::timestamptz - make_interval(secs => GREATEST(
+                      86400,
+                      COALESCE((page.record->>'crawlFrequencySeconds')::int, 86400) * 3,
+                      COALESCE((page.record->'metadata'->>'activityWindowSeconds')::int, 2592000)
+                    ))
+                  ORDER BY latest_run.checked_at DESC, latest_run.id DESC
+                  LIMIT 1
+                )
+                AND EXISTS (
+                  SELECT 1 FROM threat_intel.captures retained
+                  WHERE retained.source_id = page.id
+                    AND retained.tenant_id IS NOT DISTINCT FROM page.tenant_id
+                    AND retained.record->'metadata'->>'runId' = latest_observation.collection_run_id
+                )
+            ), FALSE),
             'lastFailure', (array_agg(h.record ORDER BY h.checked_at DESC) FILTER (WHERE NOT h.success))[1]
           ) AS stats
           FROM threat_intel.source_health h
@@ -389,15 +438,32 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         ORDER BY lower(page.name), page.id
       `, [tenantId, sourceId, executableOnly, limit, offset, input.generatedAt]),
       this.sql.unsafe(`
-        WITH scoped AS (
-          SELECT source.*
+        WITH capture_counts AS (
+          SELECT source_id, tenant_id, count(*) AS capture_count
+          FROM threat_intel.captures
+          WHERE tenant_id IS NOT DISTINCT FROM $1::text
+          GROUP BY source_id, tenant_id
+        ), canonical_sources AS (
+          SELECT source.*,
+            row_number() OVER (
+              PARTITION BY COALESCE(source.canonical_feed_key, 'source:' || source.id)
+              ORDER BY source.collection_executable DESC,
+                COALESCE(capture_counts.capture_count, 0) DESC,
+                COALESCE(source.record->>'createdAt', ''),
+                source.id
+            ) AS canonical_rank
           FROM threat_intel.sources source
+          LEFT JOIN capture_counts
+            ON capture_counts.source_id = source.id
+            AND capture_counts.tenant_id IS NOT DISTINCT FROM source.tenant_id
           WHERE source.tenant_id IS NOT DISTINCT FROM $1::text
-            AND ($2::text IS NULL OR source.id = $2::text)
-            AND (NOT $3::boolean OR source.collection_executable)
+        ), scoped AS (
+          SELECT * FROM canonical_sources
+          WHERE ($2::text IS NULL OR id = $2::text)
+            AND (NOT $3::boolean OR collection_executable)
         ), per_source AS (
           SELECT source.id, source.tenant_id, source.status, source.source_type, source.collection_executable,
-            source.canonical_feed_key, source.record,
+            source.canonical_feed_key, source.canonical_rank, source.record,
             health.observation_count, health.last_checked_at, health.last_success_at,
             health.last_useful_at, health.successful_cycles, health.useful_cycles,
             health.latest_success, health.latest_useful, health.latest_status, health.latest_parser_warning_count,
@@ -407,9 +473,47 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             SELECT count(*) AS observation_count,
               max(checked_at) AS last_checked_at,
               max(checked_at) FILTER (WHERE success) AS last_success_at,
-              max(checked_at) FILTER (WHERE useful AND capture_count > 0) AS last_useful_at,
+              max(checked_at) FILTER (
+                WHERE useful AND capture_count > 0
+                  AND EXISTS (
+                    SELECT 1 FROM threat_intel.captures retained
+                    WHERE retained.source_id = source.id
+                      AND retained.tenant_id IS NOT DISTINCT FROM source.tenant_id
+                      AND retained.record->'metadata'->>'runId' = source_health.collection_run_id
+                  )
+              ) AS last_useful_at,
               (array_agg(success ORDER BY checked_at DESC))[1] AS latest_success,
-              (array_agg(useful AND capture_count > 0 ORDER BY checked_at DESC))[1] AS latest_useful,
+              COALESCE((
+                SELECT bool_or(latest_observation.useful AND latest_observation.capture_count > 0)
+                FROM threat_intel.source_health latest_observation
+                WHERE latest_observation.source_id = source.id
+                  AND latest_observation.tenant_id IS NOT DISTINCT FROM source.tenant_id
+                  AND latest_observation.checked_at >= $4::timestamptz - make_interval(secs => GREATEST(
+                    86400,
+                    COALESCE((source.record->>'crawlFrequencySeconds')::int, 86400) * 3,
+                    COALESCE((source.record->'metadata'->>'activityWindowSeconds')::int, 2592000)
+                  ))
+                  AND latest_observation.collection_run_id = (
+                    SELECT latest_run.collection_run_id
+                    FROM threat_intel.source_health latest_run
+                    WHERE latest_run.source_id = source.id
+                      AND latest_run.tenant_id IS NOT DISTINCT FROM source.tenant_id
+                      AND latest_run.collection_run_id IS NOT NULL
+                      AND latest_run.checked_at >= $4::timestamptz - make_interval(secs => GREATEST(
+                        86400,
+                        COALESCE((source.record->>'crawlFrequencySeconds')::int, 86400) * 3,
+                        COALESCE((source.record->'metadata'->>'activityWindowSeconds')::int, 2592000)
+                      ))
+                    ORDER BY latest_run.checked_at DESC, latest_run.id DESC
+                    LIMIT 1
+                  )
+                  AND EXISTS (
+                    SELECT 1 FROM threat_intel.captures retained
+                    WHERE retained.source_id = source.id
+                      AND retained.tenant_id IS NOT DISTINCT FROM source.tenant_id
+                      AND retained.record->'metadata'->>'runId' = latest_observation.collection_run_id
+                  )
+              ), FALSE) AS latest_useful,
               (array_agg(status ORDER BY checked_at DESC))[1] AS latest_status,
               (array_agg(parser_warning_count ORDER BY checked_at DESC))[1] AS latest_parser_warning_count,
               count(DISTINCT collection_run_id) FILTER (
@@ -445,10 +549,6 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           ) captures
         ), ranked AS (
           SELECT per_source.*,
-            row_number() OVER (
-              PARTITION BY COALESCE(canonical_feed_key, 'source:' || id)
-              ORDER BY capture_count DESC, COALESCE(record->>'createdAt', ''), id
-            ) AS canonical_rank,
             collection_executable
               AND btrim(COALESCE(record->>'legalNotes', '')) <> ''
               AND successful_cycles >= 2
@@ -1937,6 +2037,59 @@ const structuredTables = {
 function readRecord(row: any): any {
   if (typeof row.record === "string") return JSON.parse(row.record);
   return row.record;
+}
+
+function sourceReviewEvidenceMatchesSql(source: string) {
+  const review = `${source}.record->'metadata'->'automaticSourceReview'`;
+  return `(CASE
+    WHEN ${source}.record->'metadata'->'sourcePortfolioVerification' IS NULL
+      AND ${source}.record->'metadata'->'sourceFeedDiscovery' IS NULL THEN TRUE
+    WHEN jsonb_typeof(${review}->'selectedEvidenceIds') IS DISTINCT FROM 'array'
+      OR jsonb_typeof(${review}->'selectedEvidenceProvenance') IS DISTINCT FROM 'array' THEN FALSE
+    ELSE NOT EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements(${review}->'selectedEvidenceProvenance') binding
+      WHERE COALESCE(binding->>'evidenceId', '') !~ '^[A-Za-z0-9_.:-]{1,200}$'
+        OR COALESCE(binding->>'sourceId', '') <> ${source}.id
+        OR COALESCE(binding->>'tenantKey', '') <> COALESCE(${source}.tenant_id, 'global')
+        OR COALESCE(binding->>'captureId', '') !~ '^[A-Za-z0-9_.:-]{1,200}$'
+        OR COALESCE(binding->>'contentHash', '') !~ '^[A-Za-z0-9_.:-]{1,200}$'
+        OR COALESCE(binding->>'captureStateSha256', '') !~ '^[a-f0-9]{64}$'
+        OR binding->>'evidenceId' <> 'automatic-source-review-evidence_' || substr(encode(sha256(convert_to(binding->>'captureId', 'UTF8')), 'hex'), 1, 16)
+        OR NOT (${review}->'selectedEvidenceIds' ? (binding->>'evidenceId'))
+        OR NOT EXISTS (
+          SELECT 1
+          FROM threat_intel.captures bound_capture
+          WHERE bound_capture.id = binding->>'captureId'
+            AND bound_capture.source_id = ${source}.id
+            AND bound_capture.tenant_id IS NOT DISTINCT FROM ${source}.tenant_id
+            AND bound_capture.content_hash = binding->>'contentHash'
+            AND binding->>'captureStateSha256' = encode(sha256(convert_to(concat_ws('|',
+              octet_length(COALESCE(bound_capture.record->>'sourceId', ''))::text || ':' || COALESCE(bound_capture.record->>'sourceId', ''),
+              octet_length(COALESCE(bound_capture.record->>'tenantId', 'global'))::text || ':' || COALESCE(bound_capture.record->>'tenantId', 'global'),
+              octet_length(COALESCE(bound_capture.record->>'contentHash', ''))::text || ':' || COALESCE(bound_capture.record->>'contentHash', ''),
+              octet_length(COALESCE(bound_capture.record->>'body', ''))::text || ':' || COALESCE(bound_capture.record->>'body', ''),
+              octet_length(COALESCE(bound_capture.record->>'sensitive', ''))::text || ':' || COALESCE(bound_capture.record->>'sensitive', ''),
+              octet_length(COALESCE(bound_capture.record->>'publishedAt', ''))::text || ':' || COALESCE(bound_capture.record->>'publishedAt', ''),
+              octet_length(COALESCE(bound_capture.record->>'collectedAt', ''))::text || ':' || COALESCE(bound_capture.record->>'collectedAt', ''),
+              octet_length(COALESCE(bound_capture.record->>'storageKind', ''))::text || ':' || COALESCE(bound_capture.record->>'storageKind', ''),
+              octet_length(COALESCE(bound_capture.record#>>'{provenance,extractorVersion}', bound_capture.record->>'extractorVersion', ''))::text || ':' || COALESCE(bound_capture.record#>>'{provenance,extractorVersion}', bound_capture.record->>'extractorVersion', ''),
+              octet_length(COALESCE(bound_capture.record#>>'{metadata,safeExcerpt}', ''))::text || ':' || COALESCE(bound_capture.record#>>'{metadata,safeExcerpt}', ''),
+              octet_length(COALESCE(bound_capture.record#>>'{metadata,leakSite,summary}', ''))::text || ':' || COALESCE(bound_capture.record#>>'{metadata,leakSite,summary}', ''),
+              octet_length(COALESCE(bound_capture.record#>>'{metadata,title}', ''))::text || ':' || COALESCE(bound_capture.record#>>'{metadata,title}', ''),
+              octet_length(COALESCE(bound_capture.record#>>'{provenance,parserVersion}', bound_capture.record#>>'{metadata,parserVersion}', ''))::text || ':' || COALESCE(bound_capture.record#>>'{provenance,parserVersion}', bound_capture.record#>>'{metadata,parserVersion}', '')
+            ), 'UTF8')), 'hex')
+        )
+    ) AND NOT EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(${review}->'selectedEvidenceIds') selected_id
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(${review}->'selectedEvidenceProvenance') binding
+        WHERE binding->>'evidenceId' = selected_id
+      )
+    )
+  END)`;
 }
 
 export function toJson(value: unknown): string {

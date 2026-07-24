@@ -466,7 +466,7 @@ describe("restricted metadata collection", () => {
     const json = JSON.stringify(response.body);
 
     expect(response.body.status.sourceCount).toBe(1);
-    expect(response.body.coverage).toMatchObject({ intelligenceSourceCount: 1, everUsefulSourceCount: 1, usefulSourceCount: 0, latestUsefulSourceCount: 0, usefulWithin24hSourceCount: 1, backedOffSourceCount: 1, candidateSourceCount: 1, rejectedSourceCount: 1, transportProbeCount: 1 });
+    expect(response.body.coverage).toMatchObject({ intelligenceSourceCount: 1, everUsefulSourceCount: 0, usefulSourceCount: 0, latestUsefulSourceCount: 0, usefulWithin24hSourceCount: 0, backedOffSourceCount: 1, candidateSourceCount: 1, rejectedSourceCount: 1, transportProbeCount: 1 });
     expect(response.body.status.liveSearch.tasks[0].targetUrl).toBeUndefined();
     expect(json).not.toContain(".onion");
   });
