@@ -835,11 +835,15 @@ function reportCaptureForEvidence(item: any, caseRecord: AnalystCase, options: A
   const contentHash = exactEvidenceReference(item.contentHash, provenance.contentHash);
   if (!captureId || !sourceId || !contentHash) return undefined;
   const capture = options.store.listCaptures().find((row: any) => row.id === captureId);
-  if (!capture || capture.tenantId !== caseRecord.tenantId) return undefined;
+  if (!capture || !reportEvidenceInScope(capture, caseRecord.tenantId)) return undefined;
   if (sourceId !== capture.sourceId || contentHash !== capture.contentHash) return undefined;
   const source = options.store.listSources().find((row: any) => row.id === sourceId);
-  if (!source || source.tenantId !== caseRecord.tenantId) return undefined;
+  if (!source || !reportEvidenceInScope(source, caseRecord.tenantId)) return undefined;
   return capture;
+}
+
+function reportEvidenceInScope(record: any, tenantId: string) {
+  return !record.tenantId || record.tenantId === tenantId;
 }
 
 function exactEvidenceReference(...values: unknown[]) {

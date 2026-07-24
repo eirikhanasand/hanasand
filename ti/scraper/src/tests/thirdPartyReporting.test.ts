@@ -12,7 +12,7 @@ const serviceHeaders = {
 };
 
 describe("authenticated third-party reporting", () => {
-  test("exports only selected tenant evidence as safe JSON and valid STIX", async () => {
+  test("exports only selected tenant-visible evidence as safe JSON and valid STIX", async () => {
     const { store, options } = reportingFixture();
     const noAuthentication = await handleApiRequest(new Request("http://local/v1/cases/case_report/export?organizationId=org_report&report=true&format=json&evidenceId=evidence_public", {
       headers: { "x-user-email": "analyst@acme.example" }
@@ -294,7 +294,7 @@ function reportingFixture() {
   store.saveOrganizationMember({ id: "member_report", organizationId: "org_report", email: "analyst@acme.example", role: "analyst", status: "active", createdAt: generatedAt, updatedAt: generatedAt });
   store.saveSource({
     id: "source_report",
-    tenantId: "tenant_report",
+    tenantId: undefined,
     name: "Public advisory",
     type: "public_advisory",
     url: "https://source.example/advisory",
@@ -309,7 +309,7 @@ function reportingFixture() {
   } as any);
   store.saveCapture({
     id: "capture_public",
-    tenantId: "tenant_report",
+    tenantId: undefined,
     sourceId: "source_report",
     url: "https://source.example/advisory",
     collectedAt: generatedAt,
@@ -322,7 +322,7 @@ function reportingFixture() {
   } as any);
   store.saveCapture({
     id: "capture_sensitive",
-    tenantId: "tenant_report",
+    tenantId: undefined,
     sourceId: "source_report",
     url: "metadata://darkweb/report-sensitive",
     collectedAt: generatedAt,
