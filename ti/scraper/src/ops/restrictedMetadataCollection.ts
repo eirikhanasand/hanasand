@@ -154,12 +154,18 @@ function governedCandidate(source: any, generatedAt: string) {
 function currentProductiveCycles(store: any, source: any, generatedAt: string) {
   const now = Date.parse(generatedAt);
   const windowSeconds = sourceMonitoringWindowSeconds(source);
+  const retainedRunIds = new Set((store.listCaptures?.() ?? [])
+    .filter((capture: any) => capture.sourceId === source.id && capture.tenantId === source.tenantId)
+    .map((capture: any) => String(capture.metadata?.runId ?? ""))
+    .filter(Boolean));
   const byRun = new Map<string, any>();
   for (const row of store.listSourceHealthObservations?.() ?? []) {
     if (row.sourceId === source.id
       && row.tenantId === source.tenantId
       && typeof row.collectionRunId === "string"
+      && row.useful === true
       && Number(row.captureCount ?? 0) > 0
+      && retainedRunIds.has(row.collectionRunId)
       && Number.isFinite(Date.parse(row.checkedAt))
       && now - Date.parse(row.checkedAt) >= 0
       && now - Date.parse(row.checkedAt) <= windowSeconds * 1_000) {

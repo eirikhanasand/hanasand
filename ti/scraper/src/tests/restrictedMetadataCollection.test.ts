@@ -343,6 +343,40 @@ describe("restricted metadata collection", () => {
       }
     });
     store.saveSource(candidate);
+    store.saveCapture({
+      id: "cap_restricted_not_useful",
+      sourceId: candidate.id,
+      url: "https://restricted.invalid/capture/not-useful",
+      collectedAt: "2026-07-22T09:30:00.000Z",
+      publishedAt: "2026-07-22T09:30:00.000Z",
+      contentHash: "not-useful-capture",
+      mediaType: "application/json",
+      storageKind: "metadata_only",
+      metadata: { runId: "restricted-run_not_useful" },
+      sensitive: true
+    } as any);
+    store.saveSourceHealthObservation({
+      id: "health_restricted_not_useful",
+      sourceId: candidate.id,
+      collectionRunId: "restricted-run_not_useful",
+      checkedAt: "2026-07-22T09:30:00.000Z",
+      status: "healthy",
+      success: true,
+      useful: false,
+      captureCount: 1,
+      legalMode: "metadata_only"
+    } as any);
+    store.saveSourceHealthObservation({
+      id: "health_restricted_unretained",
+      sourceId: candidate.id,
+      collectionRunId: "restricted-run_unretained",
+      checkedAt: "2026-07-22T09:45:00.000Z",
+      status: "healthy",
+      success: true,
+      useful: true,
+      captureCount: 1,
+      legalMode: "metadata_only"
+    } as any);
     let approveDuringFetch = false;
     const boundary = new TorMetadataHttpBoundary({
       proxyUrl: "http://onion-tor:8118",
@@ -367,7 +401,7 @@ describe("restricted metadata collection", () => {
       status: "active",
       metadata: { productionCollection: true, countsAsCoverage: true, sourcePortfolioQualificationState: "sustained_productive", sourcePortfolioProductiveCheckCount: 2, automaticSourceReview: { state: "approved" } }
     });
-    expect(store.listCaptures()).toHaveLength(2);
+    expect(store.listCaptures()).toHaveLength(3);
   });
 
   test("backs off reachable pages that yield no useful victim metadata", async () => {
