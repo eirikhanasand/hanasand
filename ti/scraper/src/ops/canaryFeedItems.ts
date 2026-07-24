@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { createHash } from "node:crypto";
 import { hashContent } from "../utils.ts";
 import { parseRssItems } from "../adapters/rssXml.ts";
 import { minimizeTelegramPii } from "../adapters/telegramPublicHelpers.ts";
@@ -51,7 +52,9 @@ function jsonItem(source: any, task: any, entry: any, at: string, metadata: any,
   const publishedAt = stringField(entry, ["discovered", "dateAdded", "published", "publishedDate", "lastModified", "lastModifiedDate", "updated"]);
   const url = stringField(entry, ["post_url", "link", "url", "source", "reference"]) || task.targetUrl;
   const rawText = ransomwareGroup ? ransomwareGroupSummary(source.name, ransomwareGroup) : [source.name, title, jsonSummary(entry)].filter(Boolean).join("\n").slice(0, 24_000);
-  return row(source, task, /^https?:\/\//i.test(url) ? url : task.targetUrl, title, rawText, at, publishedAt, { ...metadata, jsonApi: true, structuredFields: structuredFields(entry), ransomwareGroup }, index, false);
+  const collected = row(source, task, /^https?:\/\//i.test(url) ? url : task.targetUrl, title, rawText, at, publishedAt, { ...metadata, jsonApi: true, structuredFields: structuredFields(entry), ransomwareGroup }, index, false);
+  const evaluationCveSet = source.id === "src_canary_nvd_recent" ? completeCveProjection(entry) : undefined;
+  return evaluationCveSet ? { ...collected, evaluationCveSet: { ...evaluationCveSet, captureContentHash: collected.contentHash } } : collected;
 }
 
 function jsonRows(value: any): any[] {
@@ -67,9 +70,26 @@ function jsonSummary(value: any) {
   return JSON.stringify(value, (_key, item) => typeof item === "string" && item.length > 800 ? `${item.slice(0, 800)}...` : item);
 }
 
+function completeCveProjection(value: any) {
+  // ponytail: 64 distinct CVEs bounds transient parser memory; overflow is incomplete and cannot become evaluation truth.
+  const values = new Set<string>();
+  let complete = true;
+  for (const match of JSON.stringify(value).matchAll(/\bCVE-\d{4}-\d{4,}\b/gi)) {
+    values.add(match[0].toUpperCase());
+    if (values.size > 64) {
+      complete = false;
+      break;
+    }
+  }
+  const bounded = [...values].sort().slice(0, 64);
+  return { values: bounded, complete, hash: createHash("sha256").update(JSON.stringify(bounded)).digest("hex") };
+}
+
 function structuredFields(value: any) {
   const fields = ["cveID", "vendorProject", "product", "vulnerabilityName", "dateAdded", "shortDescription", "requiredAction", "dueDate", "knownRansomwareCampaignUse"];
-  return Object.fromEntries(fields.flatMap((field) => typeof value?.[field] === "string" && value[field].trim() ? [[field, value[field].trim().slice(0, 1_000)]] : []));
+  const retained = Object.fromEntries(fields.flatMap((field) => typeof value?.[field] === "string" && value[field].trim() ? [[field, value[field].trim().slice(0, 1_000)]] : []));
+  if (!retained.cveID && /^CVE-\d{4}-\d{4,}$/i.test(String(value?.id ?? ""))) retained.cveID = String(value.id).toUpperCase();
+  return retained;
 }
 
 function ransomwareGroupMetadata(value: any) {

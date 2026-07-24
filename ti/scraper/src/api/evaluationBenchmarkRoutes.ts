@@ -252,6 +252,7 @@ export function createEvaluationBenchmark(store: CaptureMetadataStore, input: {
   createdBy?: string;
   createdAt?: string;
   excludedCaptureIds?: string[];
+  independentOnly?: boolean;
 }) {
   const createdAt = input.createdAt ?? nowIso();
   const seed = evaluationHash(randomUUID());
@@ -271,7 +272,11 @@ export function createEvaluationBenchmark(store: CaptureMetadataStore, input: {
   const authoritativeReferenceCaptureIds = new Set(validations.filter((validation) => validation.validationType === REFERENCE_VALIDATION_TYPE).map((validation) => validation.referenceCaptureId).filter(Boolean));
   const existingBenchmarks = store.listEvaluationBenchmarks().filter((benchmark) => inTenantScope(benchmark, input.tenantId));
   const lockedTestCaptureIds = new Set(existingBenchmarks
-    .filter((benchmark) => benchmark.datasetSplit === "test" && benchmark.protocol?.testSplitLocked === true)
+    .filter((benchmark) => {
+      const complete = completeBenchmark(benchmark);
+      return benchmark.datasetSplit === "test" && benchmark.protocol?.testSplitLocked === true
+        && (!input.independentOnly || Boolean(complete && referenceReadyAutomaticBenchmark(store, complete)));
+    })
     .flatMap((benchmark) => benchmark.captureIds ?? []));
   const excludedCaptureIds = new Set(input.excludedCaptureIds ?? []);
   const entitiesByCapture = recordsByCapture(entities);
@@ -282,13 +287,22 @@ export function createEvaluationBenchmark(store: CaptureMetadataStore, input: {
     indicators: indicatorsByCapture.get(capture.id) ?? [],
     incidents: incidentsByCapture.get(capture.id) ?? []
   }]));
+  const referenceReadyLabelTypes = new Map(captures.map((capture) => {
+    const subjects = subjectsByCapture.get(capture.id) ?? { entities: [], indicators: [], incidents: [] };
+    return [capture.id, labelTypes.filter((labelType) => {
+      const predictions = predictionSnapshot(predictionsFor(labelType, subjects), labelType);
+      const versions = unique([...predictions.map((prediction) => prediction.extractorVersion), capture.provenance?.extractorVersion, capture.provenance?.parserVersion, capture.metadata?.extractorVersion, capture.metadata?.parserVersion].filter(Boolean));
+      return authoritativeReferences.has(referenceTruthKey(capture.id, labelType)) && extractionLineage(capture, predictions, versions).length > 0;
+    })] as const;
+  }));
   const evidenceByCapture = new Map<string, string>();
   const eligible = captures
     .filter((capture) => { const evidence = exhaustiveEvidenceText(capture); if (evidence) evidenceByCapture.set(capture.id, evidence); return !authoritativeReferenceCaptureIds.has(capture.id) && sourceById.has(capture.sourceId) && Boolean(evidence); })
     .filter((capture) => datasetSplit === "validation"
       ? !lockedTestCaptureIds.has(capture.id)
       : excludedCaptureIds.size ? !excludedCaptureIds.has(capture.id) : !lockedTestCaptureIds.size || lockedTestCaptureIds.has(capture.id))
-    .filter((capture) => !capture.metadata?.fixture && !capture.metadata?.synthetic && !capture.metadata?.demo);
+    .filter((capture) => !capture.metadata?.fixture && !capture.metadata?.synthetic && !capture.metadata?.demo)
+    .filter((capture) => !input.independentOnly || Boolean(referenceReadyLabelTypes.get(capture.id)?.length));
   const selected = balancedSample(eligible, sourceById, Math.max(1, Math.min(200, input.sampleSize)), seed, subjectsByCapture, createdAt, labelTypes);
   if (!selected.length) return undefined;
   const id = stableId("evaluation-benchmark", `${input.tenantId ?? "global"}:${seed}:${createdAt}`);
@@ -296,7 +310,8 @@ export function createEvaluationBenchmark(store: CaptureMetadataStore, input: {
     const subjects = subjectsByCapture.get(capture.id) ?? { entities: [], indicators: [], incidents: [] };
     const evidence = evidenceByCapture.get(capture.id)!;
     const caseTags = captureStrata(capture, subjects, createdAt, labelTypes);
-    return labelTypes.map((labelType) => {
+    const taskLabelTypes = input.independentOnly ? referenceReadyLabelTypes.get(capture.id) ?? [] : labelTypes;
+    return taskLabelTypes.map((labelType) => {
       const predictions = predictionsFor(labelType, subjects);
       const observedPredictions = predictionSnapshot(predictions, labelType);
       const extractionDecisionVersions = unique([...observedPredictions.map((prediction) => prediction.extractorVersion), capture.provenance?.extractorVersion, capture.provenance?.parserVersion, capture.metadata?.extractorVersion, capture.metadata?.parserVersion].filter(Boolean));
@@ -362,6 +377,7 @@ export function createEvaluationBenchmark(store: CaptureMetadataStore, input: {
       };
     });
   });
+  if (!manifest.length) return undefined;
   const selectedStrata = selected.flatMap((capture) => captureStrata(capture, subjectsByCapture.get(capture.id), createdAt, labelTypes)).sort();
   const benchmark = {
     id,
@@ -408,6 +424,7 @@ export function createEvaluationBenchmark(store: CaptureMetadataStore, input: {
     createdAt,
     updatedAt: createdAt
   };
+  if (input.independentOnly && datasetSplit === "test" && !automaticHeldOutSelectionReady(benchmark)) return undefined;
   store.saveEvaluationBenchmark(benchmark);
   return benchmark;
 }
@@ -1019,15 +1036,18 @@ export function startAutomaticEvaluationLoop(options: AutomaticEvaluationCycleOp
 function ensureAutomaticBenchmarks(store: CaptureMetadataStore, generatedAt: string, options: AutomaticEvaluationCycleOptions) {
   const created: string[] = [];
   const automatic = store.listEvaluationBenchmarks().map(completeBenchmark).filter((benchmark): benchmark is EvaluationBenchmark => Boolean(benchmark?.reviewMode === "automatic_model" && !benchmark.tenantId));
-  const sampleSize = Math.max(1, Math.min(200, Number(options.sampleSize ?? 50)));
-  let currentTest = automatic.find((benchmark) => benchmark.datasetSplit === "test" && benchmark.protocol?.version === BENCHMARK_PROTOCOL_VERSION && benchmark.protocol?.testSplitLocked === true && LABEL_TYPES.every((labelType) => benchmark.labelTypes?.includes(labelType)));
+  const sampleSize = Math.max(1, Math.min(200, Number(options.sampleSize ?? 51)));
+  let currentTest = automatic
+    .filter((benchmark) => benchmark.datasetSplit === "test")
+    .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))
+    .find((benchmark) => referenceReadyAutomaticBenchmark(store, benchmark) && automaticHeldOutSelectionReady(benchmark));
   if (!currentTest) {
-    const excludedCaptureIds = unique(automatic.filter((benchmark) => benchmark.datasetSplit === "test").flatMap((benchmark) => benchmark.captureIds ?? []));
-    const benchmark = createEvaluationBenchmark(store, { sampleSize, datasetSplit: "test", reviewMode: "automatic_model", createdAt: generatedAt, createdBy: "automatic-evaluation-runtime", name: `Locked automatic evaluation ${generatedAt.slice(0, 10)}`, excludedCaptureIds });
+    const excludedCaptureIds = unique(automatic.filter((benchmark) => benchmark.datasetSplit === "test" && referenceReadyAutomaticBenchmark(store, benchmark)).flatMap((benchmark) => benchmark.captureIds ?? []));
+    const benchmark = createEvaluationBenchmark(store, { sampleSize, datasetSplit: "test", reviewMode: "automatic_model", createdAt: generatedAt, createdBy: "automatic-evaluation-runtime", name: `Locked automatic evaluation ${generatedAt.slice(0, 10)}`, excludedCaptureIds, independentOnly: true });
     if (benchmark) { currentTest = benchmark; created.push(benchmark.id); }
   }
   if (currentTest) {
-    for (const legacy of automatic.filter((benchmark) => benchmark.datasetSplit === "test" && benchmark.id !== currentTest.id && benchmark.protocol?.version !== BENCHMARK_PROTOCOL_VERSION && benchmark.status !== "retired")) {
+    for (const legacy of automatic.filter((benchmark) => benchmark.datasetSplit === "test" && benchmark.id !== currentTest.id && benchmark.status !== "retired")) {
       store.patchEvaluationBenchmark(legacy.id, {
         status: "retired",
         retiredAt: generatedAt,
@@ -1040,11 +1060,58 @@ function ensureAutomaticBenchmarks(store: CaptureMetadataStore, generatedAt: str
   }
   const validations = automatic.filter((benchmark) => benchmark.datasetSplit === "validation").sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   const latest = validations[0], refreshMs = Math.max(86_400_000, Number(options.refreshIntervalMs ?? 7 * 86_400_000));
-  if (!latest || latest.protocol?.version !== BENCHMARK_PROTOCOL_VERSION || (TERMINAL_BENCHMARK_STATUSES.has(latest.status) && Date.parse(generatedAt) - Date.parse(latest.createdAt) >= refreshMs)) {
-    const benchmark = createEvaluationBenchmark(store, { sampleSize, datasetSplit: "validation", reviewMode: "automatic_model", createdAt: generatedAt, createdBy: "automatic-evaluation-runtime", name: `Rolling automatic evaluation ${generatedAt.slice(0, 10)}` });
-    if (benchmark) created.push(benchmark.id);
+  if (!latest || !referenceReadyAutomaticBenchmark(store, latest) || (TERMINAL_BENCHMARK_STATUSES.has(latest.status) && Date.parse(generatedAt) - Date.parse(latest.createdAt) >= refreshMs)) {
+    const benchmark = createEvaluationBenchmark(store, { sampleSize, datasetSplit: "validation", reviewMode: "automatic_model", createdAt: generatedAt, createdBy: "automatic-evaluation-runtime", name: `Rolling automatic evaluation ${generatedAt.slice(0, 10)}`, independentOnly: true });
+    if (benchmark) {
+      created.push(benchmark.id);
+      for (const prior of automatic.filter((candidate) => candidate.datasetSplit === "test" && candidate.status !== "retired" && !automaticHeldOutSelectionReady(candidate))) {
+        store.patchEvaluationBenchmark(prior.id, {
+          status: "retired",
+          retiredAt: generatedAt,
+          retiredReason: "superseded_by_reference_ready_independent_pilot",
+          successorBenchmarkId: benchmark.id,
+          lineage: { ...(isRecord(prior.lineage) ? prior.lineage : {}), priorStatus: prior.status, supersededByBenchmarkId: benchmark.id, retainedDiagnosticResults: true },
+          updatedAt: generatedAt
+        });
+      }
+      for (const prior of validations.filter((candidate) => candidate.id !== benchmark.id && candidate.status !== "retired")) {
+        store.patchEvaluationBenchmark(prior.id, {
+          status: "retired",
+          retiredAt: generatedAt,
+          retiredReason: "superseded_by_reference_ready_independent_protocol",
+          successorBenchmarkId: benchmark.id,
+          lineage: { ...(isRecord(prior.lineage) ? prior.lineage : {}), priorStatus: prior.status, supersededByBenchmarkId: benchmark.id, retainedDiagnosticResults: true },
+          updatedAt: generatedAt
+        });
+      }
+    }
   }
   return created;
+}
+
+function referenceReadyAutomaticBenchmark(store: CaptureMetadataStore, benchmark: EvaluationBenchmark) {
+  const tasks = benchmarkTasks(benchmark);
+  return benchmark.protocol?.version === BENCHMARK_PROTOCOL_VERSION
+    && benchmark.protocol?.reviewPromptVersion === REVIEW_PROMPT_VERSION
+    && benchmark.protocol?.reviewSchemaVersion === REVIEW_SCHEMA_VERSION
+    && tasks.length > 0
+    && tasks.every((task) => Boolean(task.independenceContext?.extractionDecisionLineage?.length)
+      && Boolean(authoritativeTaskValues(task))
+      && taskReferenceEvidenceMatches(store, task));
+}
+
+export function automaticHeldOutSelectionReady(benchmark: EvaluationBenchmark) {
+  const tasks = benchmarkTasks(benchmark);
+  if (benchmark.protocol?.testSplitLocked !== true || benchmark.protocol?.datasetUsage !== "locked_final_evaluation" || new Set(tasks.map((task) => task.captureId)).size < 51) return false;
+  const stratified = LABEL_TYPES.every((labelType) => {
+    const labelTasks = tasks.filter((task) => task.labelType === labelType);
+    return labelTasks.filter((task) => (task.authoritativeExpectedValues?.length ?? 0) > 0).length >= 5
+      && labelTasks.filter((task) => Array.isArray(task.authoritativeExpectedValues) && task.authoritativeExpectedValues.length === 0).length >= 5;
+  });
+  return stratified
+    && tasks.some((task) => task.caseTags?.includes("ambiguous"))
+    && tasks.some((task) => task.caseTags?.includes("parser_failure"))
+    && tasks.some((task) => ["actor", "ransomware"].includes(task.labelType) && task.authoritativeExpectedValues?.length === 0 && Boolean(task.observedValues?.length));
 }
 
 function recoverAutomaticTasks(store: CaptureMetadataStore, generatedAt: string) {
