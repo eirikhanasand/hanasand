@@ -16,6 +16,7 @@ import { PostgresScraperStore, normalizeLegacySourceForImport } from "../storage
 import { hashContent } from "../utils.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
 import { fixtureCapture } from "./helpers/storageFixtures.ts";
+import { AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA } from "../policy/sourceAutomaticReview.ts";
 
 const collectedAt = "2026-07-19T12:00:00.000Z";
 
@@ -3031,7 +3032,21 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       tenantId: "tenant_bound",
       name: "Bound 06100",
       url: "https://bounded.example/6100.xml",
-      metadata: { productionCollection: true, activityWindowSeconds: 2592000 }
+      metadata: {
+        productionCollection: true,
+        activityWindowSeconds: 2592000,
+        sourcePortfolioVerification: { outcome: "content_parsed" },
+        automaticSourceReview: {
+          schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
+          state: "approved",
+          promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION,
+          configuredModelVersion: "hanasand",
+          requestSha256: "a".repeat(64),
+          selectedEvidenceIds: ["capture_bound_1"],
+          runtimeIdentity: { status: "completed", conversationId: "source-review-postgres" },
+          decision: { subject: { type: "source", id: sourceId }, action: "confirm", claimValidity: "supported" }
+        }
+      }
     }));
     for (const [index, checkedAt] of ["2026-07-22T12:00:00.000Z", "2026-07-23T12:00:00.000Z"].entries()) {
       const runId = `run_bound_${index + 1}`;
@@ -3132,6 +3147,15 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       generatedAt: "2026-07-23T13:00:00.000Z",
       sourceId: falseUsefulSourceId
     });
+    const reviewedSource = store.getSource(sourceId)!;
+    const { automaticSourceReview: _review, ...unreviewedMetadata } = reviewedSource.metadata;
+    store.saveSource({ ...reviewedSource, metadata: unreviewedMetadata });
+    await store.flush();
+    const withoutReview = await store.querySourceOperationalPage({
+      tenantId: "tenant_bound",
+      generatedAt: "2026-07-23T13:00:00.000Z",
+      sourceId
+    });
 
     expect(page).toMatchObject({ total: 6_102, nextCursor: "6101" });
     expect(page.rows[0]).toMatchObject({
@@ -3164,6 +3188,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         qualifyingClearWebSourceCount: 0
       }
     });
+    expect(withoutReview.totals.qualifyingClearWebSourceCount).toBe(0);
     expect(falseUseful.rows[0]).toMatchObject({
       health_stats: { usefulCycleCount: 0, latest: { useful: false } }
     });

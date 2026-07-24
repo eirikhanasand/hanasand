@@ -10,6 +10,11 @@ import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { hashContent } from "../utils.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
+import {
+  AUTOMATIC_REVIEW_PROMPT_VERSION,
+  AUTOMATIC_REVIEW_RESPONSE_SCHEMA,
+  runAutomaticReviewCycle
+} from "../api/automaticReviewRoutes.ts";
 
 const generatedAt = "2026-07-23T12:00:00.000Z";
 const nextYear = "2027-07-23T12:00:00.000Z";
@@ -232,77 +237,123 @@ describe("scheduled public feed discovery", () => {
     }
   });
 
-  test("keeps discovery candidate-only until two useful retained collection cycles", async () => {
-    const store = new InMemoryScraperStore();
-    usefulCapture(store, "parent", undefined, "run-parent", ["https://candidate.example/feed.xml"]);
-    const discovered = await runSourceFeedDiscoveryCycle({
-      store,
-      sourceFeedDiscoveryFetch: async (input: string | URL | Request) =>
-        response(rss("CVE-2026-2000", "https://candidate.example/CVE-2026-2000", generatedAt), String(input), "application/rss+xml")
-    }, generatedAt);
-    expect(discovered.importedSourceCount).toBe(1);
-    const candidate = store.listSources().find((row: any) => row.metadata?.sourceFeedDiscovery);
-    expect(candidate).toMatchObject({ status: "candidate", countsAsCoverage: false, metadata: { productionCollection: false } });
-    expect(store.listCaptures().filter((capture: any) => capture.sourceId === candidate.id)).toHaveLength(0);
-    for (const [index, checkedAt] of ["2026-07-23T13:00:00.000Z", "2026-07-23T14:00:00.000Z"].entries()) {
-      const runId = `explicitly-not-useful-${index}`;
-      store.saveCapture({
-        id: `not-useful-capture-${index}`,
-        sourceId: candidate.id,
-        url: `https://candidate.example/not-useful-${index}`,
-        collectedAt: checkedAt,
-        publishedAt: checkedAt,
-        contentHash: hashContent(`not useful ${index}`),
-        mediaType: "text/plain",
-        storageKind: "inline_text",
-        body: "Retained but explicitly non-useful content.",
-        sensitive: false,
-        metadata: { runId }
-      });
-      store.saveSourceHealthObservation({
-        id: `not-useful-health-${index}`,
-        sourceId: candidate.id,
-        collectionRunId: runId,
-        checkedAt,
-        status: "healthy",
-        success: true,
-        useful: false,
-        captureCount: 1
-      });
-    }
+  test("requires persisted AI source review and two useful retained cycles across restart", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "source-ai-review-"));
+    const snapshotPath = join(directory, "store.json");
+    try {
+      const store = new FileBackedScraperStore({ snapshotPath });
+      const hosts = ["relevant", "irrelevant", "malformed", "timeout"];
+      usefulCapture(store, "parent", undefined, "run-parent", hosts.map((host) => `https://${host}.example/feed.xml`));
+      const discovered = await runSourceFeedDiscoveryCycle({
+        store,
+        sourceFeedDiscoveryMaxReferences: 4,
+        sourceFeedDiscoveryFetch: async (input: string | URL | Request) => {
+          const url = String(input);
+          const host = new URL(url).hostname.split(".")[0];
+          return response(rss(`CVE-2026-${host.length}000`, `https://${host}.example/CVE-2026-${host.length}000`, generatedAt), url, "application/rss+xml");
+        }
+      }, generatedAt);
+      expect(discovered.importedSourceCount).toBe(4);
+      const candidates = Object.fromEntries(store.listSources()
+        .filter((row: any) => row.metadata?.sourceFeedDiscovery)
+        .map((row: any) => [new URL(row.url).hostname.split(".")[0], row]));
+      expect(Object.keys(candidates).sort()).toEqual(hosts.sort());
 
-    let version = 0;
-    const collect = (at: string) => runCanaryCollectionCycle({
-      store,
-      frontier: new FocusedFrontier(),
-      sourceIds: [candidate.id],
-      scheduleSourceFeedDiscovery: false,
-      maxSources: 1,
-      maxTasks: 1,
-      maxItemsPerTask: 4,
-      now: () => at,
-      fetch: async (input: string | URL | Request) => {
-        version++;
-        return response(rss(`CVE-2026-20${version}1`, `https://candidate.example/CVE-2026-20${version}1`, at), String(input), "application/rss+xml");
+      const versions = new Map<string, number>();
+      const collect = (activeStore: any, at: string, selected = hosts) => runCanaryCollectionCycle({
+        store: activeStore,
+        frontier: new FocusedFrontier(),
+        sourceIds: selected.map((host) => candidates[host].id),
+        scheduleSourceFeedDiscovery: false,
+        maxSources: selected.length,
+        maxTasks: selected.length,
+        maxItemsPerTask: 4,
+        now: () => at,
+        fetch: async (input: string | URL | Request) => {
+          const url = String(input);
+          const host = new URL(url).hostname.split(".")[0];
+          const version = (versions.get(host) ?? 0) + 1;
+          versions.set(host, version);
+          return response(rss(`CVE-2026-${host.length}${version}01`, `https://${host}.example/CVE-2026-${host.length}${version}01`, at), url, "application/rss+xml");
+        }
+      });
+
+      const first = await collect(store, "2026-07-24T12:00:01.000Z");
+      expect(first).toMatchObject({ completedTaskCount: 4, insertedCaptureCount: 4 });
+      expect(Object.values(candidates).every((candidate: any) => store.getSource(candidate.id)?.status === "candidate")).toBe(true);
+
+      const modelCalls = new Map<string, number>();
+      const review = await runAutomaticReviewCycle({ store } as any, {
+        now: "2026-07-24T12:01:00.000Z",
+        allTenants: true,
+        limit: 8,
+        concurrency: 1,
+        modelVersion: "hanasand",
+        aiBase: "http://ai.test",
+        clock: () => "2026-07-24T12:01:00.000Z",
+        fetcher: async (_input, init) => {
+          const request = JSON.parse(String(init?.body));
+          const host = Object.entries(candidates).find(([, candidate]: any) => candidate.id === request.subject.id)?.[0] ?? "";
+          modelCalls.set(host, (modelCalls.get(host) ?? 0) + 1);
+          if (host === "timeout") throw new Error("model timeout");
+          if (host === "malformed") return Response.json({ status: "completed", provider: "hanasand-ai", model: "hanasand-inspur", conversationId: "malformed-conversation", decision: {} });
+          return completedSourceReview(request, host === "relevant");
+        }
+      });
+      expect(review).toMatchObject({ queued: 8, attempted: 8 });
+      expect(store.getSource(candidates.relevant.id)).toMatchObject({
+        status: "candidate",
+        metadata: {
+          productionCollection: false,
+          automaticSourceReview: {
+            state: "approved",
+            promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION,
+            configuredModelVersion: "hanasand",
+            requestSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+            runtimeIdentity: { status: "completed", model: "hanasand-inspur" },
+            decision: { action: "confirm", claimValidity: "supported" }
+          }
+        }
+      });
+      expect(store.getSource(candidates.irrelevant.id)).toMatchObject({
+        status: "rejected",
+        countsAsCoverage: false,
+        crawlState: { backoffUntil: expect.any(String) },
+        metadata: { automaticSourceReview: { state: "rejected", decision: { action: "reject", claimValidity: "invalid" } } }
+      });
+      expect(store.getSource(candidates.malformed.id)?.metadata?.automaticSourceReview).toBeUndefined();
+      expect(store.getSource(candidates.timeout.id)?.metadata?.automaticSourceReview).toBeUndefined();
+      const restarted = new FileBackedScraperStore({ snapshotPath });
+      const persistedTaskCount = restarted.listAnalystMetadataReviewTasks().filter((item: any) => item.recordKind === "automatic_intelligence_review_task").length;
+      const beforeRetry = await runAutomaticReviewCycle({ store: restarted } as any, {
+        now: "2026-07-24T12:01:01.000Z",
+        allTenants: true,
+        limit: 4,
+        modelVersion: "hanasand",
+        aiBase: "http://ai.test",
+        fetcher: async () => { throw new Error("no review is due"); }
+      });
+      expect(beforeRetry).toMatchObject({ queued: 0, attempted: 0 });
+      expect(restarted.listAnalystMetadataReviewTasks().filter((item: any) => item.recordKind === "automatic_intelligence_review_task")).toHaveLength(persistedTaskCount);
+
+      const second = await collect(restarted, "2026-07-25T12:02:00.000Z", ["relevant", "malformed", "timeout"]);
+      expect(second).toMatchObject({ completedTaskCount: 3, insertedCaptureCount: 3 });
+      expect(restarted.getSource(candidates.relevant.id)).toMatchObject({
+        status: "active",
+        countsAsCoverage: true,
+        metadata: { productionCollection: true, sourcePortfolioQualificationState: "sustained_productive", sourcePortfolioProductiveCheckCount: 2 }
+      });
+      for (const host of ["malformed", "timeout"]) {
+        expect(restarted.getSource(candidates[host].id)).toMatchObject({
+          status: "candidate",
+          countsAsCoverage: false,
+          metadata: { productionCollection: false, sourcePortfolioQualificationState: "pending_sustained_productivity", sourcePortfolioProductiveCheckCount: 2 }
+        });
       }
-    });
-
-    const first = await collect("2026-07-24T12:00:01.000Z");
-    expect(first).toMatchObject({ completedTaskCount: 1, insertedCaptureCount: 1 });
-    expect(store.getSource(candidate.id)).toMatchObject({
-      status: "candidate",
-      countsAsCoverage: false,
-      metadata: { productionCollection: false, sourcePortfolioProductiveCheckCount: 1 }
-    });
-
-    const second = await collect("2026-07-25T12:00:02.000Z");
-    expect(second).toMatchObject({ completedTaskCount: 1, insertedCaptureCount: 1 });
-    expect(store.getSource(candidate.id)).toMatchObject({
-      status: "active",
-      countsAsCoverage: true,
-      metadata: { productionCollection: true, sourcePortfolioQualificationState: "sustained_productive", sourcePortfolioProductiveCheckCount: 2 }
-    });
-    expect(new Set(store.listSourceHealthObservations().filter((row: any) => row.sourceId === candidate.id && row.useful).map((row: any) => row.collectionRunId)).size).toBe(2);
+      expect(modelCalls).toEqual(new Map([["irrelevant", 1], ["malformed", 1], ["relevant", 1], ["timeout", 1]]));
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   test("backs off failed candidates and retires only after their full activity window", async () => {
@@ -423,4 +474,32 @@ function response(body: string, url: string, contentType: string, status = 200, 
   const result = new Response(body, { status, headers: { "content-type": contentType, ...headers } });
   Object.defineProperty(result, "url", { value: url });
   return result;
+}
+
+function completedSourceReview(request: any, relevant: boolean) {
+  const evidenceId = request.evidence[0].id;
+  return Response.json({
+    status: "completed",
+    provider: "hanasand-ai",
+    model: "hanasand-inspur",
+    conversationId: `source-review-${request.subject.id}`,
+    decision: {
+      schemaVersion: AUTOMATIC_REVIEW_RESPONSE_SCHEMA,
+      promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION,
+      modelVersion: request.requestedModelVersion,
+      subject: request.subject,
+      action: relevant ? "confirm" : "reject",
+      claimValidity: relevant ? "supported" : "invalid",
+      actorAttribution: { canonicalName: null, aliases: [] },
+      supportingEvidenceIds: relevant ? [evidenceId] : [],
+      contradictoryEvidenceIds: relevant ? [] : [evidenceId],
+      uncertainty: [],
+      falsePositiveReasons: relevant ? [] : ["The retained parser output is unrelated or malformed source material."],
+      rationale: relevant
+        ? "The retained parser output is coherent operational threat intelligence."
+        : "The retained parser output is not relevant operational threat intelligence.",
+      confidence: 0.9,
+      calibrationContext: { sourceCount: 1, evidenceAssessment: relevant ? "relevant" : "irrelevant" }
+    }
+  });
 }

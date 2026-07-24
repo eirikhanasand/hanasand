@@ -5,6 +5,7 @@ import { nowIso, stableId } from "../utils.ts";
 import { reconcilePublicSourceProductivity } from "./canaryActivation.ts";
 import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
 import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
+import { hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
 
 export async function runRestrictedMetadataCollectionCycle(options: any) {
   const generatedAt = options.now?.() ?? nowIso();
@@ -60,7 +61,7 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
       options.store.saveSourceHealthObservation?.(observation(source, runId, task.id, checkedAt, Date.now() - started, true, useful, result.items.length, undefined, undefined, sourceCaptureCount, sourceDuplicateCount));
       const transportCanary = source.metadata?.transportCanary === true;
       const productiveCycles = transportCanary ? [] : currentProductiveCycles(options.store, source, checkedAt);
-      const sustained = productiveCycles.length >= 2;
+      const sustained = hasApprovedAutomaticSourceReview(source) && productiveCycles.length >= 2;
       const metadata = {
         ...(source.metadata ?? {})
       };

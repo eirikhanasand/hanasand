@@ -5,6 +5,7 @@ import { bootstrapRuntimeSources } from "../runtime/sourceBootstrap.ts";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
+import { AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA } from "../policy/sourceAutomaticReview.ts";
 
 describe("runtime source bootstrap and scheduler monitoring", () => {
   test("keeps dry-run source-atlas candidates out of automatic production bootstrap", () => {
@@ -95,6 +96,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
         now: () => "2026-07-23T13:00:00.000Z",
         fetch: async () => new Response(feed("2026-07-23T12:30:00Z", "1001"), { headers: { "content-type": "application/rss+xml" } })
       });
+      approveSourceReview(store, "src_portfolio_current");
       const secondCycle = await runCanaryCollectionCycle({
         store,
         frontier: new FocusedFrontier(),
@@ -808,4 +810,24 @@ function source(id: string, url: string) {
     createdAt: "2026-07-02T00:00:00.000Z",
     updatedAt: "2026-07-02T00:00:00.000Z"
   };
+}
+
+function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
+  const current = store.getSource(sourceId)!;
+  store.saveSource({
+    ...current,
+    metadata: {
+      ...current.metadata,
+      automaticSourceReview: {
+        schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
+        state: "approved",
+        promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION,
+        configuredModelVersion: "hanasand",
+        requestSha256: "a".repeat(64),
+        selectedEvidenceIds: ["retained-source-output"],
+        runtimeIdentity: { status: "completed", conversationId: "source-review-proof" },
+        decision: { subject: { type: "source", id: sourceId }, action: "confirm", claimValidity: "supported" }
+      }
+    }
+  } as any);
 }

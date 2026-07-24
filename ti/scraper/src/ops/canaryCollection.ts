@@ -12,6 +12,7 @@ import { buildRawCapture } from "../pipeline/pipelineCapture.ts";
 import { activeWatchlistDiscoveryTerms, collectWatchlistDiscoveryEvidence, scheduleWatchlistDiscoveryRuns } from "./watchlistDiscovery.ts";
 import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
 import { runSourceFeedDiscoveryCycle } from "./sourceFeedDiscovery.ts";
+import { hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
 export { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts"; export { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanaryReadinessPacket, buildCanarySoakReport } from "./canaryReports.ts";
 export type * from "./canaryCollectionTypes.ts";
@@ -178,7 +179,7 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
     options.store.saveSourceHealthObservation?.(sourceHealthObservation(source, task, runId, checkedAt, Date.now() - startedMs, taskMetrics, { success: true, useful }));
     const portfolioCandidate = governedPortfolioCandidate(source, checkedAt);
     const productiveCycles = portfolioCandidate ? currentProductiveCycles(options.store, source, checkedAt) : [];
-    const sustained = productiveCycles.length >= 2;
+    const sustained = hasApprovedAutomaticSourceReview(source) && productiveCycles.length >= 2;
     options.store.saveSource({
       ...source,
       status: portfolioCandidate && sustained ? "active" : source.status,

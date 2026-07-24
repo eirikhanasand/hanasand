@@ -8,6 +8,7 @@ import { bootstrapRuntimeSources } from "../runtime/sourceBootstrap.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
+import { AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA } from "../policy/sourceAutomaticReview.ts";
 
 const source = {
   id: "src_public_telegram_test",
@@ -216,6 +217,7 @@ describe("public Telegram canary collection", () => {
       }
     });
 
+    approveSourceReview(store, sourceId);
     expect(await collect("2026-07-23T17:00:00.000Z")).toMatchObject({ completedTaskCount: 1, insertedCaptureCount: 1, failedTaskCount: 0 });
     expect(store.getSource(sourceId)).toMatchObject({
       status: "active",
@@ -239,3 +241,23 @@ describe("public Telegram canary collection", () => {
     });
   });
 });
+
+function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
+  const current = store.getSource(sourceId)!;
+  store.saveSource({
+    ...current,
+    metadata: {
+      ...current.metadata,
+      automaticSourceReview: {
+        schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
+        state: "approved",
+        promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION,
+        configuredModelVersion: "hanasand",
+        requestSha256: "a".repeat(64),
+        selectedEvidenceIds: ["retained-source-output"],
+        runtimeIdentity: { status: "completed", conversationId: "source-review-proof" },
+        decision: { subject: { type: "source", id: sourceId }, action: "confirm", claimValidity: "supported" }
+      }
+    }
+  } as any);
+}

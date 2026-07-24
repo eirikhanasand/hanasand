@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { TorMetadataHttpBoundary } from "../adapters/torMetadataBoundary.ts";
 import { buildRestrictedMetadataStatusRouteResponse } from "../api/restrictedMetadataRoutes.ts";
 import { runRestrictedMetadataCollectionCycle } from "../ops/restrictedMetadataCollection.ts";
+import { AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA } from "../policy/sourceAutomaticReview.ts";
 import { importRestrictedMetadataSeedBundle } from "../registry/restrictedSourceSeeds.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
@@ -302,6 +303,7 @@ describe("restricted metadata collection", () => {
       metadata: { productionCollection: false, countsAsCoverage: false, sourcePortfolioQualificationState: "pending_sustained_productivity", sourcePortfolioProductiveCheckCount: 1 }
     });
 
+    approveSourceReview(store, candidate.id);
     victim = "Contoso Manufacturing";
     const second = await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-22T10:15:00.000Z" });
     expect(second).toMatchObject({ sourceCount: 1, captureCount: 1 });
@@ -376,3 +378,23 @@ describe("restricted metadata collection", () => {
     expect(json).not.toContain(".onion");
   });
 });
+
+function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
+  const current = store.getSource(sourceId)!;
+  store.saveSource({
+    ...current,
+    metadata: {
+      ...current.metadata,
+      automaticSourceReview: {
+        schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
+        state: "approved",
+        promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION,
+        configuredModelVersion: "hanasand",
+        requestSha256: "a".repeat(64),
+        selectedEvidenceIds: ["retained-source-output"],
+        runtimeIdentity: { status: "completed", conversationId: "source-review-proof" },
+        decision: { subject: { type: "source", id: sourceId }, action: "confirm", claimValidity: "supported" }
+      }
+    }
+  } as any);
+}

@@ -32,6 +32,7 @@ import { InMemoryScraperStore, linkedAlertCaptureIds } from "./memoryStore.ts";
 import { persistActorIdentityCatalog } from "./postgresActorIdentityCatalog.ts";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
+import { AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion } from "../policy/sourceAutomaticReview.ts";
 
 const DEFAULT_MIGRATIONS = [
   { version: "006_threat_intelligence_store", path: fileURLToPath(new URL("../../migrations/006_threat_intelligence_store.sql", import.meta.url)) },
@@ -453,6 +454,24 @@ export class PostgresScraperStore extends InMemoryScraperStore {
               AND successful_cycles >= 2
               AND useful_cycles >= 2
               AND capture_count > 0
+              AND (
+                (record->'metadata'->'sourcePortfolioVerification' IS NULL AND record->'metadata'->'sourceFeedDiscovery' IS NULL)
+                OR (
+                  record->'metadata'->'automaticSourceReview'->>'schemaVersion' = '${SOURCE_AUTOMATIC_REVIEW_SCHEMA}'
+                  AND record->'metadata'->'automaticSourceReview'->>'state' = 'approved'
+                  AND record->'metadata'->'automaticSourceReview'->>'promptVersion' = '${AUTOMATIC_REVIEW_PROMPT_VERSION}'
+                  AND record->'metadata'->'automaticSourceReview'->>'configuredModelVersion' = $5::text
+                  AND record->'metadata'->'automaticSourceReview'->'decision'->'subject'->>'type' = 'source'
+                  AND record->'metadata'->'automaticSourceReview'->'decision'->'subject'->>'id' = id
+                  AND record->'metadata'->'automaticSourceReview'->'decision'->>'action' = 'confirm'
+                  AND record->'metadata'->'automaticSourceReview'->'decision'->>'claimValidity' = 'supported'
+                  AND record->'metadata'->'automaticSourceReview'->'runtimeIdentity'->>'status' = 'completed'
+                  AND COALESCE(record->'metadata'->'automaticSourceReview'->'runtimeIdentity'->>'conversationId', '') <> ''
+                  AND COALESCE(record->'metadata'->'automaticSourceReview'->>'requestSha256', '') ~ '^[a-f0-9]{64}$'
+                  AND jsonb_typeof(record->'metadata'->'automaticSourceReview'->'selectedEvidenceIds') = 'array'
+                  AND jsonb_array_length(record->'metadata'->'automaticSourceReview'->'selectedEvidenceIds') > 0
+                )
+              )
               AND last_checked_at >= $4::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((record->>'crawlFrequencySeconds')::int, 86400) * 3))
               AND last_useful_at >= $4::timestamptz - make_interval(secs => GREATEST(
                 86400,
@@ -514,7 +533,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           'lastSuccessfulRun', (SELECT record FROM successful_run)
         ) AS totals
         FROM ranked
-      `, [tenantId, sourceId, executableOnly, input.generatedAt])
+      `, [tenantId, sourceId, executableOnly, input.generatedAt, automaticReviewModelVersion()])
     ]);
     const totals = totalRows[0]?.totals ?? {};
     const total = Number(totals.sourceCount ?? 0);
