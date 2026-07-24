@@ -1720,11 +1720,11 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         rows.push({
             id: 'open_source_operations',
             label: 'Collection',
-            detail: 'Open collection for parser checks, source requests, canary runs, and source apply-plan actions.',
+            detail: 'Open collection for parser checks, source requests, and canary runs.',
             tone: 'ready',
             href: '/dashboard/ti/control',
         })
-        for (const action of (selected.actions || []).filter(candidate => candidate.id === 'request_source_coverage' || candidate.id === 'run_canary_collection' || candidate.id === 'preview_source_apply_plan')) {
+        for (const action of (selected.actions || []).filter(candidate => candidate.id === 'request_source_coverage' || candidate.id === 'run_canary_collection')) {
             rows.push({
                 id: action.id,
                 label: action.label,
@@ -3669,16 +3669,6 @@ function actionResultMessage(action: WorkbenchAction, payload: Awaited<ReturnTyp
         if (sourceId) return `Source ${sourceId} is scheduled for coverage.`
         if (candidateId) return `Source candidate ${candidateId} is scheduled for review.`
         return 'Source coverage request accepted.'
-    }
-    if (action.id === 'preview_source_apply_plan') {
-        const sourcePayload = payload as Record<string, unknown>
-        const sourceStatusMessage = sourceOperationsActionMessage(sourcePayload)
-        if (sourceStatusMessage) return sourceStatusMessage
-        const applyPlan = objectValue(sourcePayload.applyPlan) || objectValue(sourcePayload.payload)
-        const affectedSources = numberValue(applyPlan?.affectedSourceCount) ?? numberValue(applyPlan?.sourceCount)
-        const plannedActions = arrayValue(applyPlan?.actions).length || arrayValue(applyPlan?.selectedActions).length
-        if (affectedSources !== undefined || plannedActions) return `Source apply plan prepared ${affectedSources ?? 0} source${affectedSources === 1 ? '' : 's'} and ${plannedActions} action${plannedActions === 1 ? '' : 's'} for review.`
-        return 'Source apply plan preview is ready.'
     }
     if (action.id === 'run_canary_collection') {
         const canaryPayload = payload as Record<string, unknown>

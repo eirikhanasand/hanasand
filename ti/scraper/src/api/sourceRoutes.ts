@@ -1,4 +1,3 @@
-import { handleSourceApplyPlanRoute } from "./sourceApplyPlanRoute.ts";
 import { json, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import type { SourceRecord } from "../types.ts";
@@ -7,14 +6,6 @@ import { sanitizeDwmApiPayload } from "../product/dwmCustomerDisplay.ts";
 import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
 import { authenticateRequest } from "./requestAuthentication.ts";
 import { validateSource } from "../registry/sourceRegistry.ts";
-
-export async function sourceApplyPlan(request: Request, options: ApiServerOptions): Promise<Response> {
-  const body = await readJson(request);
-  const scope = resolveTenantScope(request, new URL(request.url), body.tenantId);
-  if (scope.error) return scope.error;
-  const result = handleSourceApplyPlanRoute({ request: { ...body, tenantId: scope.tenantId }, sources: options.store.listSources().filter((source) => inTenantScope(source, scope.tenantId)), sourcePacks: starterPacks(body.sourcePackIds) });
-  return json(result.body, result.status);
-}
 
 export function listSources(request: Request, options: ApiServerOptions): Response {
   const url = new URL(request.url);
@@ -140,14 +131,4 @@ function paginated<T>(records: T[], url: URL) {
   const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") ?? url.searchParams.get("recordLimit") ?? 50) || 50));
   const offset = Math.max(0, Number(url.searchParams.get("cursor") ?? 0) || 0);
   return { records: records.slice(offset, offset + limit), nextCursor: offset + limit < records.length ? String(offset + limit) : undefined };
-}
-
-function starterPacks(ids: unknown) {
-  const names = Array.isArray(ids) ? ids.map(String) : [];
-  if (!names.includes("safe-public-cti-starter-pack")) return [];
-  return [{ version: 1, name: "safe-public-cti-starter-pack", sources: [starterSource()] }];
-}
-
-function starterSource() {
-  return { id: "src_safe_public_cti_starter_feed", name: "Safe Public CTI Starter Feed", type: "rss", url: "https://starter.example.test/cti/rss.xml", accessMethod: "public_http", status: "candidate", risk: "low", trustScore: 0.72, crawlFrequencySeconds: 3600, legalNotes: "Public security RSS metadata collection basis.", catalog: { approvalScope: "safe_public_auto", adapterCompatibility: ["rss"], collection: { freshnessTargetSeconds: 3600 } } };
 }

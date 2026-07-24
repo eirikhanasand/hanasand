@@ -39,7 +39,7 @@ export default function ManualRunButton({ sourceId = 'all_sources', label = 'Sta
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
-                action: sourceId === 'all_sources' ? 'source_apply_plan' : 'run_query',
+                action: sourceId === 'all_sources' ? 'scheduler_run_now' : 'run_query',
                 sourceId,
                 query: uniqueQueries[0] || sourceId,
                 targets: uniqueQueries,
