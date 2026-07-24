@@ -173,6 +173,43 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(store.getIntelligenceClaim("claim_cve_contradicted")).toMatchObject({ reviewState: "contradicted", reviewedBy: "hanasand-ai:automatic:hanasand" });
   });
 
+  test("rejects unrelated same-kind CVE, domain, IP, and hash contradiction literals", async () => {
+    const store = new InMemoryScraperStore();
+    seedSource(store, "source_unrelated_cve", "CISA identifies an unrelated browser issue as CVE-2025-11699.");
+    store.saveIntelligenceClaim({ id: "claim_unrelated_cve", tenantId: "default", claimType: "cve", subjectType: "entity", subjectId: "cve_entity", reviewState: "unreviewed", summary: "Affected controller issue CVE-2025-11698", value: { type: "cve", value: "CVE-2025-11698", normalizedValue: "CVE-2025-11698" }, extractorVersion: "claim-parser-v4" });
+    store.saveClaimEvidence(claimEvidence("evidence_unrelated_cve", "claim_unrelated_cve", "capture_source_unrelated_cve", "source_unrelated_cve", 0.9));
+    seedSource(store, "source_unrelated_domain", "An unrelated advertising domain ads.example appears in a marketing page.");
+    store.saveIncident(incident("incident_unrelated_domain", "Suspicious domain updates.acme.example contacted the gateway."));
+    store.saveEvidenceLink(evidenceLink("evidence_unrelated_domain", "incident_unrelated_domain", "capture_source_unrelated_domain", "source_unrelated_domain"));
+    seedSource(store, "source_unrelated_ip", "An unrelated scanner contacted 198.51.100.20 during a separate campaign.");
+    store.saveIntelligenceClaim({ id: "claim_unrelated_ip", tenantId: "default", claimType: "ip", subjectType: "entity", subjectId: "ip_entity", reviewState: "unreviewed", summary: "Controller callback address 203.0.113.10", value: { type: "ip", value: "203.0.113.10" }, extractorVersion: "claim-parser-v4" });
+    store.saveClaimEvidence(claimEvidence("evidence_unrelated_ip", "claim_unrelated_ip", "capture_source_unrelated_ip", "source_unrelated_ip", 0.9));
+    seedSource(store, "source_unrelated_hash", `An unrelated file has hash ${"b".repeat(64)}.`);
+    store.saveIntelligenceClaim({ id: "claim_unrelated_hash", tenantId: "default", claimType: "hash", subjectType: "entity", subjectId: "hash_entity", reviewState: "unreviewed", summary: `Malware payload hash ${"a".repeat(64)}`, value: { type: "sha256", value: "a".repeat(64) }, extractorVersion: "claim-parser-v4" });
+    store.saveClaimEvidence(claimEvidence("evidence_unrelated_hash", "claim_unrelated_hash", "capture_source_unrelated_hash", "source_unrelated_hash", 0.9));
+    const fetcher = directFetcher((request) => supportedDecision(request, {
+      action: request.subject.type === "claim" ? "mark_contradicted" : "reject",
+      claimValidity: request.subject.type === "claim" ? "contradicted" : "invalid",
+      actorAttribution: { canonicalName: null, aliases: [] },
+      supportingEvidenceIds: [],
+      contradictoryEvidenceIds: [request.evidence[0].id],
+      uncertainty: [],
+      falsePositiveReasons: ["A different identifier appears in the retained excerpt."],
+      rationale: "The retained excerpt contains a different same-kind identifier."
+    }));
+
+    await runAutomaticReviewCycle(options(store), { now: firstAt, allTenants: true, modelVersion: "hanasand", fetcher, aiBase: "http://ai.test" });
+
+    const tasks = automaticReviewSnapshot(store, "default").tasks;
+    for (const subjectId of ["claim_unrelated_cve", "incident_unrelated_domain", "claim_unrelated_ip", "claim_unrelated_hash"]) {
+      expect(tasks.find((task: any) => task.subject.id === subjectId)).toMatchObject({
+        state: "quarantined",
+        lastError: "literal_contradiction_not_grounded",
+        decision: { action: "mark_needs_review", claimValidity: "uncertain", contradictoryEvidenceIds: [] }
+      });
+    }
+  });
+
   test("quarantines an absence-only incident domain rejection without a same-kind identifier", async () => {
     const store = new InMemoryScraperStore();
     seedSource(store, "source_vendor_advisory", "The vendor advisory describes remote code execution affecting Acme Gateway appliances.");

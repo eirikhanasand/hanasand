@@ -55,15 +55,17 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
       }
       counters.completedSourceCount++;
       const checkedAt = options.now?.() ?? nowIso();
+      options.store.saveSourceHealthObservation?.(observation(source, runId, task.id, checkedAt, Date.now() - started, true, useful, result.items.length, undefined, undefined, sourceCaptureCount, sourceDuplicateCount));
+      const currentSource = options.store.getSource?.(source.id);
+      if (!currentSource || currentSource.tenantId !== source.tenantId) return;
       const lastContentAt = useful
         ? productiveContentTimes.sort().at(-1) ?? checkedAt
-        : source.health?.lastContentAt;
-      options.store.saveSourceHealthObservation?.(observation(source, runId, task.id, checkedAt, Date.now() - started, true, useful, result.items.length, undefined, undefined, sourceCaptureCount, sourceDuplicateCount));
-      const transportCanary = source.metadata?.transportCanary === true;
-      const productiveCycles = transportCanary ? [] : currentProductiveCycles(options.store, source, checkedAt);
-      const sustained = hasApprovedAutomaticSourceReview(source) && productiveCycles.length >= 2;
+        : currentSource.health?.lastContentAt;
+      const transportCanary = currentSource.metadata?.transportCanary === true;
+      const productiveCycles = transportCanary ? [] : currentProductiveCycles(options.store, currentSource, checkedAt);
+      const sustained = hasApprovedAutomaticSourceReview(currentSource) && productiveCycles.length >= 2;
       const metadata = {
-        ...(source.metadata ?? {})
+        ...(currentSource.metadata ?? {})
       };
       if (transportCanary) {
         delete metadata.sourcePortfolioQualificationState;
@@ -80,12 +82,15 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
         metadata.countsAsCoverage = true;
         delete metadata.restrictedMetadataCandidate;
       }
-      options.store.saveSource({ ...source, status: sustained ? "active" : source.status, countsAsCoverage: !transportCanary && sustained, lastSeenAt: lastContentAt ?? source.lastSeenAt, health: { ...(source.health ?? {}), status: "healthy", checkedAt, lastSuccessAt: checkedAt, lastContentAt, lastUsefulAt: useful ? checkedAt : source.health?.lastUsefulAt, consecutiveFailures: 0, lastError: undefined }, metadata, crawlState: { ...(source.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + cadence(source) * 1_000).toISOString(), lastError: undefined, backoffUntil: undefined }, updatedAt: checkedAt });
+      options.store.saveSource({ ...currentSource, status: sustained ? "active" : currentSource.status, countsAsCoverage: !transportCanary && sustained, lastSeenAt: lastContentAt ?? currentSource.lastSeenAt, health: { ...(currentSource.health ?? {}), status: "healthy", checkedAt, lastSuccessAt: checkedAt, lastContentAt, lastUsefulAt: useful ? checkedAt : currentSource.health?.lastUsefulAt, consecutiveFailures: 0, lastError: undefined }, metadata, crawlState: { ...(currentSource.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + cadence(currentSource) * 1_000).toISOString(), lastError: undefined, backoffUntil: undefined }, updatedAt: checkedAt });
     } catch (caught) {
       counters.failedSourceCount++;
-      const checkedAt = options.now?.() ?? nowIso(), message = safeError(caught), retryCount = (source.crawlState?.retryCount ?? 0) + 1;
+      const checkedAt = options.now?.() ?? nowIso(), message = safeError(caught);
       options.store.saveSourceHealthObservation?.(observation(source, runId, task.id, checkedAt, Date.now() - started, false, false, 0, message, (caught as any)?.httpStatus));
-      options.store.saveSource({ ...source, health: { ...(source.health ?? {}), status: retryCount >= 5 ? "failing" : "degraded", checkedAt, lastFailureAt: checkedAt, consecutiveFailures: retryCount, lastError: message }, crawlState: { ...(source.crawlState ?? {}), retryCount, lastError: message, lastErrorAt: checkedAt, backoffUntil: new Date(Date.parse(checkedAt) + Math.min(86_400, retryCount * retryCount * 900) * 1_000).toISOString() }, updatedAt: checkedAt });
+      const currentSource = options.store.getSource?.(source.id);
+      if (!currentSource || currentSource.tenantId !== source.tenantId) return;
+      const retryCount = (currentSource.crawlState?.retryCount ?? 0) + 1;
+      options.store.saveSource({ ...currentSource, health: { ...(currentSource.health ?? {}), status: retryCount >= 5 ? "failing" : "degraded", checkedAt, lastFailureAt: checkedAt, consecutiveFailures: retryCount, lastError: message }, crawlState: { ...(currentSource.crawlState ?? {}), retryCount, lastError: message, lastErrorAt: checkedAt, backoffUntil: new Date(Date.parse(checkedAt) + Math.min(86_400, retryCount * retryCount * 900) * 1_000).toISOString() }, updatedAt: checkedAt });
     }
     }));
   }

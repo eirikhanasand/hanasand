@@ -175,20 +175,22 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
     }
     counters.completedTaskCount++; options.frontier.complete(task);
     const checkedAt = options.now?.() ?? nowIso(), useful = taskMetrics.captureCount > 0;
-    const lastContentAt = useful ? latestTimestamp(taskMetrics.productivePublishedAt) ?? checkedAt : source.health?.lastContentAt;
     options.store.saveSourceHealthObservation?.(sourceHealthObservation(source, task, runId, checkedAt, Date.now() - startedMs, taskMetrics, { success: true, useful }));
-    const portfolioCandidate = governedPortfolioCandidate(source, checkedAt);
-    const productiveCycles = portfolioCandidate ? currentProductiveCycles(options.store, source, checkedAt) : [];
-    const sustained = hasApprovedAutomaticSourceReview(source) && productiveCycles.length >= 2;
+    const currentSource = options.store.getSource?.(source.id);
+    if (!currentSource || currentSource.tenantId !== source.tenantId) return;
+    const lastContentAt = useful ? latestTimestamp(taskMetrics.productivePublishedAt) ?? checkedAt : currentSource.health?.lastContentAt;
+    const portfolioCandidate = governedPortfolioCandidate(currentSource, checkedAt);
+    const productiveCycles = portfolioCandidate ? currentProductiveCycles(options.store, currentSource, checkedAt) : [];
+    const sustained = hasApprovedAutomaticSourceReview(currentSource) && productiveCycles.length >= 2;
     options.store.saveSource({
-      ...source,
-      status: portfolioCandidate && sustained ? "active" : source.status,
-      countsAsCoverage: portfolioCandidate ? sustained : source.countsAsCoverage,
-      lastSeenAt: lastContentAt ?? source.lastSeenAt,
-      health: { ...(source.health ?? {}), status: taskMetrics.parserWarningCount ? "degraded" : "healthy", checkedAt, lastSuccessAt: checkedAt, lastContentAt, lastUsefulAt: useful ? checkedAt : source.health?.lastUsefulAt, consecutiveFailures: 0, errorRate: 0, parserStatus: taskMetrics.parserWarningCount ? "warnings" : "healthy", lastError: undefined },
-      crawlState: { ...(source.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + (source.crawlFrequencySeconds ?? 3600) * 1000).toISOString(), backoffUntil: undefined, lastError: undefined },
+      ...currentSource,
+      status: portfolioCandidate && sustained ? "active" : currentSource.status,
+      countsAsCoverage: portfolioCandidate ? sustained : currentSource.countsAsCoverage,
+      lastSeenAt: lastContentAt ?? currentSource.lastSeenAt,
+      health: { ...(currentSource.health ?? {}), status: taskMetrics.parserWarningCount ? "degraded" : "healthy", checkedAt, lastSuccessAt: checkedAt, lastContentAt, lastUsefulAt: useful ? checkedAt : currentSource.health?.lastUsefulAt, consecutiveFailures: 0, errorRate: 0, parserStatus: taskMetrics.parserWarningCount ? "warnings" : "healthy", lastError: undefined },
+      crawlState: { ...(currentSource.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + (currentSource.crawlFrequencySeconds ?? 3600) * 1000).toISOString(), backoffUntil: undefined, lastError: undefined },
       metadata: {
-        ...(source.metadata ?? {}),
+        ...(currentSource.metadata ?? {}),
         lastCanaryFetchMode: mode,
         ...(portfolioCandidate ? {
           productionCollection: sustained,
@@ -204,15 +206,18 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
     const message = error instanceof Error ? error.message : String(error); taskMetrics.httpStatus = Number.isInteger((error as any)?.httpStatus) ? (error as any).httpStatus : taskMetrics.httpStatus; counters.failedTaskCount++; errors.push({ taskId: task.id, sourceId: task.sourceId, message });
     const ack = options.frontier.fail(task, new Date(generatedAt), message); if (ack?.status === "retry_scheduled") counters.retryScheduledCount++; if (ack?.status === "retry_exhausted") counters.retryExhaustedCount++;
     if (source) {
-      const retryCount = (source.crawlState?.retryCount ?? 0) + 1;
-      const backoffSeconds = Math.min(86_400, Math.max(300, retryCount * retryCount * 300));
-      const checkedAt = options.now?.() ?? nowIso(), backoffUntil = new Date(Date.parse(checkedAt) + (ack?.status === "retry_exhausted" ? 86_400 : backoffSeconds) * 1000).toISOString();
+      const checkedAt = options.now?.() ?? nowIso();
       options.store.saveSourceHealthObservation?.(sourceHealthObservation(source, task, runId, checkedAt, Date.now() - startedMs, taskMetrics, { success: false, useful: false, failureReason: message }));
+      const currentSource = options.store.getSource?.(source.id);
+      if (!currentSource || currentSource.tenantId !== source.tenantId) return;
+      const retryCount = (currentSource.crawlState?.retryCount ?? 0) + 1;
+      const backoffSeconds = Math.min(86_400, Math.max(300, retryCount * retryCount * 300));
+      const backoffUntil = new Date(Date.parse(checkedAt) + (ack?.status === "retry_exhausted" ? 86_400 : backoffSeconds) * 1000).toISOString();
       options.store.saveSource({
-        ...source,
-        health: { ...(source.health ?? {}), status: retryCount >= 5 ? "failing" : "degraded", checkedAt, lastFailureAt: checkedAt, consecutiveFailures: retryCount, errorRate: 1, lastError: message },
+        ...currentSource,
+        health: { ...(currentSource.health ?? {}), status: retryCount >= 5 ? "failing" : "degraded", checkedAt, lastFailureAt: checkedAt, consecutiveFailures: retryCount, errorRate: 1, lastError: message },
         crawlState: {
-          ...(source.crawlState ?? {}),
+          ...(currentSource.crawlState ?? {}),
           retryCount,
           lastErrorAt: checkedAt,
           lastError: message,

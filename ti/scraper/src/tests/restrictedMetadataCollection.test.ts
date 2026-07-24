@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { TorMetadataHttpBoundary } from "../adapters/torMetadataBoundary.ts";
 import { buildRestrictedMetadataStatusRouteResponse } from "../api/restrictedMetadataRoutes.ts";
 import { runRestrictedMetadataCollectionCycle } from "../ops/restrictedMetadataCollection.ts";
-import { AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA } from "../policy/sourceAutomaticReview.ts";
+import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
 import { importRestrictedMetadataSeedBundle } from "../registry/restrictedSourceSeeds.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
@@ -291,9 +291,13 @@ describe("restricted metadata collection", () => {
       }
     });
     store.saveSource(candidate);
+    let approveDuringFetch = false;
     const boundary = new TorMetadataHttpBoundary({
       proxyUrl: "http://onion-tor:8118",
-      fetcher: async () => new Response(`<title>Candidate notices</title><div class="post-title">${victim}</div>`, { headers: { "content-type": "text/html" } })
+      fetcher: async () => {
+        if (approveDuringFetch) approveSourceReview(store, candidate.id);
+        return new Response(`<title>Candidate notices</title><div class="post-title">${victim}</div>`, { headers: { "content-type": "text/html" } });
+      }
     });
 
     const first = await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-22T10:00:00.000Z" });
@@ -303,13 +307,13 @@ describe("restricted metadata collection", () => {
       metadata: { productionCollection: false, countsAsCoverage: false, sourcePortfolioQualificationState: "pending_sustained_productivity", sourcePortfolioProductiveCheckCount: 1 }
     });
 
-    approveSourceReview(store, candidate.id);
+    approveDuringFetch = true;
     victim = "Contoso Manufacturing";
     const second = await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-22T10:15:00.000Z" });
     expect(second).toMatchObject({ sourceCount: 1, captureCount: 1 });
     expect(store.getSource(candidate.id)).toMatchObject({
       status: "active",
-      metadata: { productionCollection: true, countsAsCoverage: true, sourcePortfolioQualificationState: "sustained_productive", sourcePortfolioProductiveCheckCount: 2 }
+      metadata: { productionCollection: true, countsAsCoverage: true, sourcePortfolioQualificationState: "sustained_productive", sourcePortfolioProductiveCheckCount: 2, automaticSourceReview: { state: "approved" } }
     });
     expect(store.listCaptures()).toHaveLength(2);
   });
@@ -388,8 +392,9 @@ function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
       automaticSourceReview: {
         schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
         state: "approved",
-        promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION,
+        promptVersion: SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION,
         configuredModelVersion: "hanasand",
+        sourceIdentity: automaticSourceReviewIdentity(current),
         requestSha256: "a".repeat(64),
         selectedEvidenceIds: ["retained-source-output"],
         runtimeIdentity: { status: "completed", conversationId: "source-review-proof" },
