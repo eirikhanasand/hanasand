@@ -74,11 +74,5 @@ function isAllowedIncidentalSchedulerFile(file: string) {
         'ti/scraper/src/ops/canaryActivation.ts',
         'ti/scraper/src/api/canaryRoutes.ts',
         'ti/scraper/src/registry/sourceReconciliation.ts',
-        'ti/scraper/src/frontier/schedulerProductionApply.ts',
-        'ti/scraper/src/frontier/schedulerProductionRuntime.ts',
-        'ti/scraper/src/frontier/schedulerProduction.ts',
-        'ti/scraper/src/frontier/schedulerProductionCore.ts',
-        'ti/scraper/src/frontier/schedulerProductionFreshness.ts',
-        'ti/scraper/src/frontier/schedulerProductionRepositories.ts',
     ].includes(file)
 }

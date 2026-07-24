@@ -18,7 +18,6 @@
     "smoke:realtime-alert-discord": "bun run scripts/smoke-realtime-alert-discord.ts",
     "smoke:live-alert-discord": "bun run scripts/smoke-live-alert-discord.ts",
     "check:api-gateway": "bun run scripts/check-api-gateway.ts",
-    "check:frontier-apply-plan": "bun run scripts/check-frontier-apply-plan.ts",
     "check:inspur-public-proof": "bun run scripts/check-inspur-public-proof.ts",
     "check:restricted-metadata-apply-plan": "bun run scripts/check-restricted-metadata-apply-plan.ts",
     "check:restricted-metadata-status": "bun run scripts/check-restricted-metadata-status.ts",

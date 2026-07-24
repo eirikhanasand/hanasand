@@ -79,7 +79,6 @@ export function contractIndex() {
     route("GET", "/v1/restricted-metadata/status"),
     route("POST", "/v1/restricted-metadata/apply-plan"),
     route("POST", "/v1/sources/:sourceId/restricted-metadata/apply-plan"),
-    route("POST", "/v1/frontier/apply-plan"),
     route("GET", "/v1/ops/product-slo"),
     route("GET", "/v1/contracts"),
     route("GET", "/v1/dwm/watchlists"),

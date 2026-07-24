@@ -27,10 +27,8 @@ import type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 import { metrics, productSlo } from "./sloRoute.ts";
 import { createSource, listSources, sourceApplyPlan, sourceAtlas, updateSource } from "./sourceRoutes.ts";
 import { handleStructuredIntelRequest } from "./structuredIntelRoutes.ts";
-import { handleFrontierApplyPlanRoute } from "./frontierApplyPlanRoute.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
 import { InMemoryOrgAlertCaseActionLedgerRepository } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
-import { buildSchedulerDiagnostics, SCHEDULER_CUTOVER_DESIGN } from "../frontier/schedulerProduction.ts";
 import { buildResourceSnapshot, readCgroupResourceSnapshot } from "../ops/resourceControls.ts";
 import { authenticateOperatorRequest, authorizeOperatorScope } from "./requestAuthentication.ts";
 export type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
@@ -330,20 +328,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     }
     if (url.pathname === "/v1/frontier") {
       const queue = options.frontier.snapshot?.() ?? [];
-      return json({ queue, summary: options.frontier.groupedSnapshot(), scheduler: { cutover: SCHEDULER_CUTOVER_DESIGN, diagnostics: buildSchedulerDiagnostics({ queued: queue.map((item: any) => item.task ?? item), leased: options.frontier.leasedSnapshot?.() ?? [], deadLetters: options.frontier.deadLetterSnapshot?.() ?? [], now: new Date() }) } });
-    }
-    if (url.pathname === "/v1/frontier/apply-plan" && request.method === "POST") {
-      const body = await readJson(request);
-      const result = handleFrontierApplyPlanRoute({
-        request: body,
-        sources: options.store.listSources(),
-        queued: options.frontier.snapshot?.() ?? [],
-        leased: options.frontier.leasedSnapshot?.() ?? [],
-        deadLetters: options.frontier.deadLetterSnapshot?.() ?? [],
-        runs: options.store.listRuns?.() ?? [],
-        generatedAt: body.generatedAt
-      });
-      return json(result.body, result.status);
+      return json({ queue, summary: options.frontier.groupedSnapshot() });
     }
     return error("not_found", "Route not found", 404);
   } catch (caught) {

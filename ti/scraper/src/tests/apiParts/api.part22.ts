@@ -22,8 +22,6 @@ describe("api v1", () => {
     const frontierResponse = await body(await handleApiRequest(api("/v1/frontier"), options));
     expect((frontierResponse.queue as unknown[])).toHaveLength(1);
     expect((frontierResponse.summary as { groups: { tenants: Record<string, number> } }).groups.tenants.tenant_a).toBe(1);
-    expect((frontierResponse.scheduler as { cutover: { targetBackend: string } }).cutover.targetBackend).toBe("postgres_queue");
-    expect((frontierResponse.scheduler as { diagnostics: { status: string; queue: { pressure: string } } }).diagnostics).toMatchObject({ status: "ok", queue: { pressure: "normal" } });
 
     const runResponse = await body(await handleApiRequest(api("/v1/intel/runs", {
       method: "POST",

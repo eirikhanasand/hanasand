@@ -48,7 +48,6 @@ if (!ok) process.exit(1);
 
 function bodyFor(path: string): Record<string, unknown> {
   if (path === "/v1/intel/runs") return { query: "APT29", entityType: "actor" };
-  if (path === "/v1/frontier/apply-plan") return { dryRun: true };
   if (path === "/v1/restricted-metadata/apply-plan" || path.includes("restricted-metadata/apply-plan")) return {};
   return {};
 }
