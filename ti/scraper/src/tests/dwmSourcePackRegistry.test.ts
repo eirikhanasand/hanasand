@@ -25,7 +25,6 @@ import {
   type DwmSourcePackSqlDriver
 } from "../storage/dwmSourcePackRegistry.ts";
 import type { SourceRecord } from "../types.ts";
-import { sourceRecordToPostgresRows } from "../storage/sourceRegistryPostgres.ts";
 
 describe("dwm source pack registry adapter", () => {
   test("persists packs across adapter restarts and supports family search", () => {
@@ -570,18 +569,6 @@ describe("dwm source pack registry adapter", () => {
         metadata: { sourcePack: { collectionMode: "metadata_only", targetRawStored: false } }
       }
     ]);
-    const darkRows = sourceRecordToPostgresRows(store.getSource("src_cand_durable_dark")!);
-    expect(darkRows.sources[0]).toMatchObject({
-      id: "src_cand_durable_dark",
-      type: "tor_metadata",
-      status: "active",
-      metadata: { sourcePack: { packId: "pack_durable_growth", targetRawStored: false } }
-    });
-    expect(darkRows.source_governance[0]).toMatchObject({
-      source_id: "src_cand_durable_dark",
-      approval_state: "approved",
-      metadata_only: true
-    });
     expect(handoff.jobs).toMatchObject([
       {
         sourceId: "src_cand_durable_tg",

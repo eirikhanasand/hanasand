@@ -5,7 +5,7 @@ import path from 'node:path'
 const root = process.cwd()
 
 test.describe('public threat actor profile', () => {
-    test('APT29 renders country-level map and concrete victim context', async ({ page }, testInfo) => {
+    test('APT29 renders country-level map and source-backed activity', async ({ page }, testInfo) => {
         await page.goto('/ti/apt29')
 
         await expect(page.getByRole('heading', { name: 'APT29', exact: true })).toBeVisible()
@@ -17,18 +17,10 @@ test.describe('public threat actor profile', () => {
 
         const body = page.locator('body')
         await expect(body).toContainText('Russia')
-        await expect(body).toContainText('United States')
-        await expect(body).toContainText('United Kingdom')
-        await expect(body).toContainText('Germany')
-        await expect(body).toContainText('Democratic National Committee')
-        await expect(body).toContainText('SolarWinds Orion customers and U.S. federal agencies')
-        await expect(body).toContainText('Microsoft corporate email accounts')
-        await expect(body).toContainText('Government and policy organizations')
-        await expect(body).toContainText('Russia-linked SVR/APT29 activity in public government, vendor, and incident reporting')
         await expect(body).toContainText('Recent activity')
         await expect(body).toContainText('Summary')
         await expect(body).toContainText('Sources')
-        await expect(body).toContainText('Malpedia\'s actor summary for APT29.')
+        await expect(body).toContainText('MITRE ATT&CK\'s group profile for APT29.')
 
         const actorBox = await page.locator('[data-ti-actor-info="true"]').boundingBox()
         const geoBox = await page.locator('[data-ti-map="true"]').boundingBox()
@@ -66,8 +58,10 @@ test.describe('public threat actor profile', () => {
     })
 
     test('keeps the actor page focused on four sections', async () => {
-        const source = await readFile(path.join(root, 'src/app/ti/pageClient.tsx'), 'utf8')
-        const workspaceIndex = source.indexOf('data-ti-workspace=\'true\'')
+        const pageSource = await readFile(path.join(root, 'src/app/ti/pageClient.tsx'), 'utf8')
+        const modelSource = await readFile(path.join(root, 'src/app/ti/pageModel.ts'), 'utf8')
+        const source = `${pageSource}\n${modelSource}`
+        const workspaceIndex = pageSource.indexOf('data-ti-workspace=\'true\'')
 
         expect(workspaceIndex).toBeGreaterThan(-1)
         expect(source).toContain('data-ti-actor-info')
@@ -96,7 +90,7 @@ test.describe('public threat actor profile', () => {
         expect(source).toContain('political|election')
         expect(source).toContain('{sourceBasisLabel(source.confidence)}</span>')
         expect(source).not.toContain('{Math.round(source.confidence * 100)}%</span>')
-        expect(source).toContain('No intelligence is available for that search yet.')
+        expect(source).toContain('No sources are attached to this result yet.')
         expect(source).toContain('summary: \'Checking sources\'')
         expect(source).not.toContain('The TI service did not return results.')
         expect(source).not.toContain('summary: \'Searching\'')

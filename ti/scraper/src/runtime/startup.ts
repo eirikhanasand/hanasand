@@ -181,7 +181,7 @@ export async function startScraperRuntime() {
     maxTasks: Number(Bun.env.TI_AUTOMATIC_EVALUATION_MAX_TASKS_PER_CYCLE ?? "2"),
     sampleSize: Number(Bun.env.TI_AUTOMATIC_EVALUATION_SAMPLE_SIZE ?? "50"),
     timeoutMs: Number(Bun.env.HANASAND_AI_EVALUATION_TIMEOUT_MS ?? "30000"),
-    onCycle: (result: any) => logger.info("automatic evaluation cycle", { event: "automatic_evaluation.cycle", ...result }),
+    onCycle: (result) => logger.info("automatic evaluation cycle", { event: "automatic_evaluation.cycle", ...result }),
     onError: (error: unknown) => logger.warn("automatic evaluation cycle failed", { event: "automatic_evaluation.error", error: error instanceof Error ? error.message : String(error) })
   });
   const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, defaultCanaryLoop: defaultCanary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
