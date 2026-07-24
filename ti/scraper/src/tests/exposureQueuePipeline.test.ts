@@ -543,6 +543,28 @@ describe("DWM exposure queue pipeline", () => {
     expect(queueBody.items).toHaveLength(1);
     expect(queueBody.items[0].actor).toBe("LockBit");
     expect(queueBody.items[0].company).toBe("Alpine Robotics");
+
+    const source = store.listSources()[0];
+    store.saveSourceHealthObservation({
+      id: "health_recent_duplicate_check",
+      tenantId: source.tenantId,
+      sourceId: source.id,
+      checkedAt: new Date().toISOString(),
+      status: "healthy",
+      success: true,
+      useful: false,
+      itemCount: 1,
+      captureCount: 0,
+      duplicateCount: 1,
+      parserWarningCount: 0,
+      legalMode: "public_content"
+    });
+    const checked = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?limit=5"), options);
+    const checkedBody = await checked.json() as any;
+    expect(checkedBody.status).toBe("live");
+    expect(checkedBody.scheduler.state).toBe("fresh");
+    expect(checkedBody.freshness.collectionCheckAgeMinutes).toBe(0);
+    expect(checkedBody.freshness.claimAgeMinutes).toBeGreaterThan(60);
   });
 
   test("paginates live exposure queue rows for landing-page infinite scroll", async () => {

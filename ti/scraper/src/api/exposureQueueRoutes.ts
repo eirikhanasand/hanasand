@@ -72,8 +72,18 @@ export async function listExposureQueue(request: Request, url: URL, options: Api
   const latestCollectedAt = latestTime(allItems.map((item: any) => item.collectedAt));
   const claimAgeMinutes = ageMinutes(at, latestClaimAt);
   const collectionAgeMinutes = ageMinutes(at, latestCollectedAt);
+  const sourceIds = new Set(allItems.map((item: any) => item.sourceId).filter(Boolean));
+  const latestCollectionCheckAt = latestTime((options.store.listSourceHealthObservations?.() ?? [])
+    .filter((observation: any) =>
+      observation.success === true
+      && sourceIds.has(observation.sourceId)
+      && (!observation.tenantId || observation.tenantId === tenantId))
+    .map((observation: any) => observation.checkedAt));
+  const collectionCheckAgeMinutes = ageMinutes(at, latestCollectionCheckAt);
   const age = collectionAgeMinutes ?? claimAgeMinutes;
-  const fresh = (collectionAgeMinutes !== undefined && collectionAgeMinutes <= 60) || (claimAgeMinutes !== undefined && claimAgeMinutes <= 60);
+  const activityFresh = (collectionAgeMinutes !== undefined && collectionAgeMinutes <= 60) || (claimAgeMinutes !== undefined && claimAgeMinutes <= 60);
+  const collectorFresh = collectionCheckAgeMinutes !== undefined && collectionCheckAgeMinutes <= 60;
+  const fresh = collectorFresh || (collectionCheckAgeMinutes === undefined && activityFresh);
   return json({
     schemaVersion: "dwm.exposure_queue.v1",
     generatedAt: at,
@@ -81,9 +91,11 @@ export async function listExposureQueue(request: Request, url: URL, options: Api
     freshness: {
       latestClaimAt,
       latestCollectedAt,
+      latestCollectionCheckAt,
       ageMinutes: age,
       claimAgeMinutes,
       collectionAgeMinutes,
+      collectionCheckAgeMinutes,
       maxLiveAgeMinutes: 60,
       nextExpectedCollection: nextCollectionAt(at)
     },
