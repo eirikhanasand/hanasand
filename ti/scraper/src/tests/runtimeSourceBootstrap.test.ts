@@ -5,7 +5,7 @@ import { bootstrapRuntimeSources } from "../runtime/sourceBootstrap.ts";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
-import { AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA } from "../policy/sourceAutomaticReview.ts";
+import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
 
 describe("runtime source bootstrap and scheduler monitoring", () => {
   test("keeps dry-run source-atlas candidates out of automatic production bootstrap", () => {
@@ -821,8 +821,9 @@ function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
       automaticSourceReview: {
         schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
         state: "approved",
-        promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION,
+        promptVersion: SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION,
         configuredModelVersion: "hanasand",
+        sourceIdentity: automaticSourceReviewIdentity(current),
         requestSha256: "a".repeat(64),
         selectedEvidenceIds: ["retained-source-output"],
         runtimeIdentity: { status: "completed", conversationId: "source-review-proof" },

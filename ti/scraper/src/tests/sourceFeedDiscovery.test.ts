@@ -11,10 +11,11 @@ import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { hashContent } from "../utils.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
 import {
-  AUTOMATIC_REVIEW_PROMPT_VERSION,
   AUTOMATIC_REVIEW_RESPONSE_SCHEMA,
-  runAutomaticReviewCycle
+  runAutomaticReviewCycle,
+  syncAutomaticReviewQueue
 } from "../api/automaticReviewRoutes.ts";
+import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity, hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
 
 const generatedAt = "2026-07-23T12:00:00.000Z";
 const nextYear = "2027-07-23T12:00:00.000Z";
@@ -293,6 +294,11 @@ describe("scheduled public feed discovery", () => {
         clock: () => "2026-07-24T12:01:00.000Z",
         fetcher: async (_input, init) => {
           const request = JSON.parse(String(init?.body));
+          expect(request).toMatchObject({
+            schemaVersion: "ti.automatic_intelligence_review.request.v6",
+            promptVersion: SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION,
+            subject: { type: "source" }
+          });
           const host = Object.entries(candidates).find(([, candidate]: any) => candidate.id === request.subject.id)?.[0] ?? "";
           modelCalls.set(host, (modelCalls.get(host) ?? 0) + 1);
           if (host === "timeout") throw new Error("model timeout");
@@ -307,7 +313,7 @@ describe("scheduled public feed discovery", () => {
           productionCollection: false,
           automaticSourceReview: {
             state: "approved",
-            promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION,
+            promptVersion: SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION,
             configuredModelVersion: "hanasand",
             requestSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
             runtimeIdentity: { status: "completed", model: "hanasand-inspur" },
@@ -323,6 +329,12 @@ describe("scheduled public feed discovery", () => {
       });
       expect(store.getSource(candidates.malformed.id)?.metadata?.automaticSourceReview).toBeUndefined();
       expect(store.getSource(candidates.timeout.id)?.metadata?.automaticSourceReview).toBeUndefined();
+      const sourceRetries = store.listAnalystMetadataReviewTasks()
+        .filter((task: any) => [candidates.malformed.id, candidates.timeout.id].includes(task.subject?.sourceId));
+      expect(sourceRetries.every((task: any) => task.promptVersion === SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION)).toBe(true);
+      for (const candidate of [candidates.malformed, candidates.timeout]) {
+        expect(sourceRetries.some((task: any) => task.subject.sourceId === candidate.id && task.state === "retrying")).toBe(true);
+      }
       const restarted = new FileBackedScraperStore({ snapshotPath });
       const persistedTaskCount = restarted.listAnalystMetadataReviewTasks().filter((item: any) => item.recordKind === "automatic_intelligence_review_task").length;
       const beforeRetry = await runAutomaticReviewCycle({ store: restarted } as any, {
@@ -354,6 +366,320 @@ describe("scheduled public feed discovery", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+
+  test("preserves a concurrent public-source approval through its second productive collection", async () => {
+    const store = new InMemoryScraperStore();
+    const candidate = source({
+      id: "concurrent-public-review",
+      status: "candidate",
+      type: "rss",
+      url: "https://concurrent.example/feed.xml",
+      accessMethod: "public_http",
+      risk: "low",
+      crawlFrequencySeconds: 60,
+      governance: { approvalRequired: false, approvalState: "approved", metadataOnly: false },
+      metadata: {
+        productionCollection: false,
+        sourcePortfolioVerification: {
+          verifiedAt: generatedAt,
+          legalBasisVerifiedAt: generatedAt,
+          outcome: "content_parsed",
+          observedItemCount: 2
+        }
+      }
+    });
+    store.saveSource(candidate);
+    let version = 0;
+    const collect = (at: string, approve = false) => runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      sourceIds: [candidate.id],
+      scheduleSourceFeedDiscovery: false,
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => at,
+      fetch: async () => {
+        if (approve) approveSourceReview(store, candidate.id);
+        version++;
+        return response(rss(`CVE-2026-90${version}`, `https://concurrent.example/CVE-2026-90${version}`, at), candidate.url, "application/rss+xml");
+      }
+    });
+
+    expect(await collect("2026-07-24T12:00:00.000Z")).toMatchObject({ completedTaskCount: 1, insertedCaptureCount: 1 });
+    expect(await collect("2026-07-24T12:02:00.000Z", true)).toMatchObject({ completedTaskCount: 1, insertedCaptureCount: 1 });
+    expect(store.getSource(candidate.id)).toMatchObject({
+      status: "active",
+      countsAsCoverage: true,
+      metadata: {
+        automaticSourceReview: { state: "approved" },
+        sourcePortfolioQualificationState: "sustained_productive",
+        sourcePortfolioProductiveCheckCount: 2
+      }
+    });
+  });
+
+  test("automatically re-reviews an uncertain source only after backoff and newer useful evidence", async () => {
+    const store = new InMemoryScraperStore();
+    const candidate = source({
+      id: "uncertain-source-review",
+      status: "candidate",
+      type: "rss",
+      url: "https://uncertain-review.example/feed.xml",
+      accessMethod: "public_http",
+      risk: "low",
+      crawlFrequencySeconds: 60,
+      governance: { approvalRequired: false, approvalState: "approved", metadataOnly: false },
+      metadata: {
+        productionCollection: false,
+        sourcePortfolioVerification: {
+          verifiedAt: generatedAt,
+          legalBasisVerifiedAt: generatedAt,
+          outcome: "content_parsed",
+          observedItemCount: 3
+        }
+      }
+    });
+    store.saveSource(candidate);
+    let version = 0;
+    const collect = (at: string) => runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      sourceIds: [candidate.id],
+      scheduleSourceFeedDiscovery: false,
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => at,
+      fetch: async () => {
+        version++;
+        return response(rss(`CVE-2026-91${version}`, `https://uncertain-review.example/CVE-2026-91${version}`, at), candidate.url, "application/rss+xml");
+      }
+    });
+
+    await collect("2026-07-24T12:00:00.000Z");
+    const firstReview = await runAutomaticReviewCycle({ store } as any, {
+      now: "2026-07-24T12:01:00.000Z",
+      clock: () => "2026-07-24T12:01:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      aiBase: "http://ai.test",
+      fetcher: async (_input, init) => uncertainSourceReview(JSON.parse(String(init?.body)))
+    });
+    expect(firstReview).toMatchObject({ queued: 1, attempted: 1 });
+    expect(store.getSource(candidate.id)).toMatchObject({
+      status: "candidate",
+      crawlState: { backoffUntil: "2026-07-25T12:01:00.000Z" },
+      metadata: { automaticSourceReview: { state: "needs_review", nextReviewAt: "2026-07-25T12:01:00.000Z", selectedEvidenceIds: [expect.any(String)] } }
+    });
+    const firstTaskId = store.getSource(candidate.id)?.metadata?.automaticSourceReview?.taskId;
+
+    const noNewEvidence = await runAutomaticReviewCycle({ store } as any, {
+      now: "2026-07-25T12:01:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      aiBase: "http://ai.test",
+      fetcher: async () => { throw new Error("no newer evidence should mean no model call"); }
+    });
+    expect(noNewEvidence).toMatchObject({ queued: 0, attempted: 0 });
+
+    await collect("2026-07-25T12:02:00.000Z");
+    let reReviewCalls = 0;
+    const reReview = await runAutomaticReviewCycle({ store } as any, {
+      now: "2026-07-25T12:03:00.000Z",
+      clock: () => "2026-07-25T12:03:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      aiBase: "http://ai.test",
+      fetcher: async (_input, init) => {
+        reReviewCalls++;
+        return completedSourceReview(JSON.parse(String(init?.body)), true);
+      }
+    });
+    expect(reReview).toMatchObject({ queued: 1, attempted: 1 });
+    expect(reReviewCalls).toBe(1);
+    expect(store.getSource(candidate.id)?.metadata?.automaticSourceReview).toMatchObject({ state: "approved" });
+    expect(store.getSource(candidate.id)?.metadata?.automaticSourceReview?.taskId).not.toBe(firstTaskId);
+    expect(await runAutomaticReviewCycle({ store } as any, {
+      now: "2026-07-25T12:03:01.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      aiBase: "http://ai.test",
+      fetcher: async () => { throw new Error("approved review must be restart-idempotent"); }
+    })).toMatchObject({ queued: 0, attempted: 0 });
+
+    const previousModel = Bun.env.HANASAND_AI_MODEL;
+    Bun.env.HANASAND_AI_MODEL = "hanasand";
+    try {
+      await collect("2026-07-25T12:04:00.000Z");
+    } finally {
+      if (previousModel === undefined) delete Bun.env.HANASAND_AI_MODEL;
+      else Bun.env.HANASAND_AI_MODEL = previousModel;
+    }
+    expect(store.getSource(candidate.id)).toMatchObject({
+      status: "active",
+      countsAsCoverage: true,
+      metadata: { sourcePortfolioProductiveCheckCount: 3, automaticSourceReview: { state: "approved" } }
+    });
+  });
+
+  test("preserves an existing source-v6 nonterminal while binding its current source identity", async () => {
+    const store = new InMemoryScraperStore();
+    const candidate = reviewableCandidate(store, "source-v6-nonterminal");
+    expect(syncAutomaticReviewQueue({ store } as any, {
+      allTenants: true,
+      now: "2026-07-24T12:00:00.000Z",
+      modelVersion: "hanasand"
+    })).toBe(1);
+    const current = store.listAnalystMetadataReviewTasks()
+      .find((task: any) => task.recordKind === "automatic_intelligence_review_task" && task.subject.sourceId === candidate.id);
+    const { sourceIdentitySha256: _newField, ...legacyV6Task } = current;
+    store.saveAnalystMetadataReviewTask(legacyV6Task);
+    let modelCalls = 0;
+
+    const cycle = await runAutomaticReviewCycle({ store } as any, {
+      now: "2026-07-24T12:01:00.000Z",
+      clock: () => "2026-07-24T12:01:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      aiBase: "http://ai.test",
+      fetcher: async (_input, init) => {
+        modelCalls++;
+        return completedSourceReview(JSON.parse(String(init?.body)), true);
+      }
+    });
+
+    expect(cycle).toMatchObject({ superseded: 0, queued: 0, attempted: 1, results: [{ state: "terminal" }] });
+    expect(modelCalls).toBe(1);
+    expect(store.getAnalystMetadataReviewTask(current.id)?.sourceIdentitySha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(store.getSource(candidate.id)?.metadata?.automaticSourceReview).toMatchObject({
+      state: "approved",
+      promptVersion: SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION
+    });
+    const approved = store.getSource(candidate.id)!;
+    expect(hasApprovedAutomaticSourceReview(approved, "hanasand")).toBe(true);
+    expect(hasApprovedAutomaticSourceReview({ ...approved, url: "https://replacement.example/feed.xml" }, "hanasand")).toBe(false);
+    expect(hasApprovedAutomaticSourceReview({ ...approved, tenantId: "replacement-tenant" }, "hanasand")).toBe(false);
+    expect(hasApprovedAutomaticSourceReview({
+      ...approved,
+      metadata: {
+        ...approved.metadata,
+        automaticSourceReview: {
+          ...approved.metadata.automaticSourceReview,
+          sourceIdentity: {
+            ...approved.metadata.automaticSourceReview.sourceIdentity,
+            canonicalFeedKey: "https://replacement.example/feed.xml"
+          }
+        }
+      }
+    }, "hanasand")).toBe(false);
+  });
+
+  test("automatically re-reviews a legacy source-v6 approval once to bind its current identity", async () => {
+    const store = new InMemoryScraperStore();
+    const candidate = reviewableCandidate(store, "source-v6-approval");
+    const fetcher = async (_input: RequestInfo | URL, init?: RequestInit) => completedSourceReview(JSON.parse(String(init?.body)), true);
+
+    expect(await runAutomaticReviewCycle({ store } as any, {
+      now: "2026-07-24T12:00:00.000Z",
+      clock: () => "2026-07-24T12:00:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      aiBase: "http://ai.test",
+      fetcher
+    })).toMatchObject({ queued: 1, attempted: 1, results: [{ state: "terminal" }] });
+    const firstTaskId = store.getSource(candidate.id)?.metadata?.automaticSourceReview?.taskId;
+    const approved = store.getSource(candidate.id)!;
+    const { sourceIdentity: _identity, ...legacyReview } = approved.metadata.automaticSourceReview;
+    store.saveSource({ ...approved, metadata: { ...approved.metadata, automaticSourceReview: legacyReview } });
+    expect(hasApprovedAutomaticSourceReview(store.getSource(candidate.id), "hanasand")).toBe(false);
+
+    let modelCalls = 0;
+    const rebound = await runAutomaticReviewCycle({ store } as any, {
+      now: "2026-07-24T12:01:00.000Z",
+      clock: () => "2026-07-24T12:01:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      aiBase: "http://ai.test",
+      fetcher: async (input, init) => {
+        modelCalls++;
+        return fetcher(input, init);
+      }
+    });
+
+    expect(rebound).toMatchObject({ queued: 1, attempted: 1, results: [{ state: "terminal" }] });
+    expect(modelCalls).toBe(1);
+    const reboundSource = store.getSource(candidate.id)!;
+    const reboundReview = reboundSource.metadata.automaticSourceReview;
+    expect(hasApprovedAutomaticSourceReview(reboundSource, "hanasand")).toBe(true);
+    expect(reboundReview.state).toBe("approved");
+    expect(reboundReview.taskId).not.toBe(firstTaskId);
+    expect(reboundReview.sourceIdentity).toEqual(automaticSourceReviewIdentity(reboundSource));
+    expect(await runAutomaticReviewCycle({ store } as any, {
+      now: "2026-07-24T12:02:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      fetcher: async () => { throw new Error("identity-bound approval must be restart-idempotent"); }
+    })).toMatchObject({ queued: 0, attempted: 0 });
+  });
+
+  test("supersedes reassigned source tasks before the model call and before decision persistence", async () => {
+    const beforeCallStore = new InMemoryScraperStore();
+    const beforeCall = reviewableCandidate(beforeCallStore, "reassigned-before-review");
+    await runAutomaticReviewCycle({ store: beforeCallStore } as any, {
+      now: "2026-07-24T12:00:00.000Z",
+      clock: () => "2026-07-24T12:00:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      aiBase: "http://ai.test",
+      fetcher: async () => { throw new Error("temporary model timeout"); }
+    });
+    beforeCallStore.saveSource({
+      ...beforeCallStore.getSource(beforeCall.id)!,
+      tenantId: "customer-replacement",
+      url: "https://replacement.example/feed.xml",
+      createdAt: "2026-07-24T12:00:30.000Z",
+      updatedAt: "2026-07-24T12:00:30.000Z"
+    });
+    let staleModelCalls = 0;
+    const staleRetry = await runAutomaticReviewCycle({ store: beforeCallStore } as any, {
+      now: "2026-07-24T12:02:00.000Z",
+      clock: () => "2026-07-24T12:02:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      aiBase: "http://ai.test",
+      fetcher: async () => {
+        staleModelCalls++;
+        throw new Error("stale task must not reach the model");
+      }
+    });
+    expect(staleRetry).toMatchObject({ attempted: 1, results: [{ state: "terminal", outcome: "superseded" }] });
+    expect(staleModelCalls).toBe(0);
+
+    const beforeWriteStore = new InMemoryScraperStore();
+    const beforeWrite = reviewableCandidate(beforeWriteStore, "reassigned-before-write");
+    let writeRaceCalls = 0;
+    const writeRace = await runAutomaticReviewCycle({ store: beforeWriteStore } as any, {
+      now: "2026-07-24T13:00:00.000Z",
+      clock: () => "2026-07-24T13:00:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      aiBase: "http://ai.test",
+      fetcher: async (_input, init) => {
+        writeRaceCalls++;
+        const current = beforeWriteStore.getSource(beforeWrite.id)!;
+        beforeWriteStore.saveSource({
+          ...current,
+          tenantId: "customer-during-review",
+          url: "https://during-review.example/feed.xml",
+          createdAt: "2026-07-24T13:00:01.000Z",
+          updatedAt: "2026-07-24T13:00:01.000Z"
+        });
+        return completedSourceReview(JSON.parse(String(init?.body)), true);
+      }
+    });
+    expect(writeRace).toMatchObject({ attempted: 1, results: [{ state: "terminal", outcome: "superseded" }] });
+    expect(writeRaceCalls).toBe(1);
+    expect(beforeWriteStore.getSource(beforeWrite.id)?.metadata?.automaticSourceReview).toBeUndefined();
   });
 
   test("backs off failed candidates and retires only after their full activity window", async () => {
@@ -476,6 +802,25 @@ function response(body: string, url: string, contentType: string, status = 200, 
   return result;
 }
 
+function reviewableCandidate(store: InMemoryScraperStore, sourceId: string) {
+  usefulCapture(store, sourceId, undefined, `run-${sourceId}`, [`https://${sourceId}.example/report`]);
+  const current = store.getSource(sourceId)!;
+  return store.saveSource({
+    ...current,
+    status: "candidate",
+    metadata: {
+      ...current.metadata,
+      productionCollection: false,
+      sourcePortfolioVerification: {
+        verifiedAt: generatedAt,
+        legalBasisVerifiedAt: generatedAt,
+        outcome: "content_parsed",
+        observedItemCount: 1
+      }
+    }
+  });
+}
+
 function completedSourceReview(request: any, relevant: boolean) {
   const evidenceId = request.evidence[0].id;
   return Response.json({
@@ -485,7 +830,7 @@ function completedSourceReview(request: any, relevant: boolean) {
     conversationId: `source-review-${request.subject.id}`,
     decision: {
       schemaVersion: AUTOMATIC_REVIEW_RESPONSE_SCHEMA,
-      promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION,
+      promptVersion: request.promptVersion,
       modelVersion: request.requestedModelVersion,
       subject: request.subject,
       action: relevant ? "confirm" : "reject",
@@ -502,4 +847,50 @@ function completedSourceReview(request: any, relevant: boolean) {
       calibrationContext: { sourceCount: 1, evidenceAssessment: relevant ? "relevant" : "irrelevant" }
     }
   });
+}
+
+function uncertainSourceReview(request: any) {
+  return Response.json({
+    status: "completed",
+    provider: "hanasand-ai",
+    model: "hanasand-inspur",
+    conversationId: `uncertain-source-review-${request.subject.id}`,
+    decision: {
+      schemaVersion: AUTOMATIC_REVIEW_RESPONSE_SCHEMA,
+      promptVersion: request.promptVersion,
+      modelVersion: request.requestedModelVersion,
+      subject: request.subject,
+      action: "mark_needs_review",
+      claimValidity: "uncertain",
+      actorAttribution: { canonicalName: null, aliases: [] },
+      supportingEvidenceIds: [],
+      contradictoryEvidenceIds: [],
+      uncertainty: ["The bounded parser output is not sufficient for approval."],
+      falsePositiveReasons: ["The bounded parser output needs a newer retained sample."],
+      rationale: "The source requires newer retained parser evidence.",
+      confidence: 0.5,
+      calibrationContext: { sourceCount: 1, evidenceAssessment: "insufficient" }
+    }
+  });
+}
+
+function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
+  const current = store.getSource(sourceId)!;
+  store.saveSource({
+    ...current,
+    metadata: {
+      ...current.metadata,
+      automaticSourceReview: {
+        schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
+        state: "approved",
+        promptVersion: SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION,
+        configuredModelVersion: "hanasand",
+        sourceIdentity: automaticSourceReviewIdentity(current),
+        requestSha256: "a".repeat(64),
+        selectedEvidenceIds: ["retained-source-output"],
+        runtimeIdentity: { status: "completed", conversationId: "source-review-proof" },
+        decision: { subject: { type: "source", id: sourceId }, action: "confirm", claimValidity: "supported" }
+      }
+    }
+  } as any);
 }
