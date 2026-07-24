@@ -6,6 +6,7 @@ import { reconcilePublicSourceProductivity } from "./canaryActivation.ts";
 import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
 import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
 import { hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
+import { currentTorMetadataAuthorityDiscovery } from "./torMetadataDiscovery.ts";
 
 export async function runRestrictedMetadataCollectionCycle(options: any) {
   const generatedAt = options.now?.() ?? nowIso();
@@ -76,6 +77,13 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
         metadata.sourcePortfolioQualificationState = sustained ? "sustained_productive" : "pending_sustained_productivity";
         metadata.sourcePortfolioProductiveCheckCount = productiveCycles.length;
         metadata.sourcePortfolioLastProductiveAt = productiveCycles.at(-1)?.checkedAt;
+        if (!metadata.sourcePortfolioVerification) metadata.sourcePortfolioVerification = {
+          outcome: "content_parsed",
+          observedItemCount: result.items.length,
+          parserVersion: "darknet-metadata-v2",
+          verifiedAt: checkedAt,
+          legalBasisVerifiedAt: checkedAt
+        };
       }
       if (!transportCanary && sustained) {
         metadata.productionCollection = true;
@@ -149,7 +157,7 @@ function governedCandidate(source: any, generatedAt: string) {
     && source.governance?.metadataOnly === true
     && source.metadata?.restrictedMetadataCandidate === true
     && source.metadata?.productionCollection === false
-    && isCurrentSourcePortfolioVerification(source, generatedAt);
+    && (isCurrentSourcePortfolioVerification(source, generatedAt) || currentTorMetadataAuthorityDiscovery(source, generatedAt));
 }
 function currentProductiveCycles(store: any, source: any, generatedAt: string) {
   const now = Date.parse(generatedAt);

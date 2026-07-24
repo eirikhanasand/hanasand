@@ -13,6 +13,7 @@ import { activeWatchlistDiscoveryTerms, collectWatchlistDiscoveryEvidence, sched
 import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
 import { runSourceFeedDiscoveryCycle } from "./sourceFeedDiscovery.ts";
 import { hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
+import { admitTorMetadataCandidates } from "./torMetadataDiscovery.ts";
 export { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts"; export { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanaryReadinessPacket, buildCanarySoakReport } from "./canaryReports.ts";
 export type * from "./canaryCollectionTypes.ts";
@@ -64,7 +65,8 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
     exposureClaimCount: Number(resumedRun?.exposureClaimCount ?? 0),
     skippedLowValueCount: Number(resumedRun?.skippedLowValueCount ?? 0),
     retryScheduledCount: Number(resumedRun?.retryScheduledCount ?? 0),
-    retryExhaustedCount: Number(resumedRun?.retryExhaustedCount ?? 0)
+    retryExhaustedCount: Number(resumedRun?.retryExhaustedCount ?? 0),
+    discoveredRestrictedSourceCount: Number(resumedRun?.discoveredRestrictedSourceCount ?? 0)
   };
   const latestCaptureIds: string[] = [], errors: any[] = [];
   const concurrency = Math.max(1, Math.min(tasks.length || 1, Number(options.maxConcurrentTasks ?? 5)));
@@ -72,7 +74,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const remainingQueuedTaskCount = options.frontier.snapshot().map(frontierTask).filter((task: any) => task.runId === runId).length;
   const runStatus = remainingQueuedTaskCount ? "queued" : counters.failedTaskCount && counters.completedTaskCount ? "degraded" : counters.failedTaskCount ? "failed" : "completed";
   const completedAt = options.now?.() ?? nowIso();
-  options.store.saveRun?.({ ...resumedRun, id: runId, tenantId: resumedRun?.tenantId ?? options.tenantId, planId, requestId: "req_public_canary", status: runStatus, createdAt: resumedRun?.createdAt ?? generatedAt, startedAt: resumedRun?.startedAt ?? generatedAt, completedAt: runStatus === "queued" ? undefined : completedAt, updatedAt: completedAt, taskCount: resumedRun?.taskCount ?? tasks.length, sourceCount: resumedRun?.sourceCount ?? scheduledSourceIds.size, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, duplicateCaptureCount: counters.duplicateCaptureCount, leasedTaskCount: counters.leasedTaskCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, retryScheduledCount: counters.retryScheduledCount, retryExhaustedCount: counters.retryExhaustedCount, error: errors[0]?.message });
+  options.store.saveRun?.({ ...resumedRun, id: runId, tenantId: resumedRun?.tenantId ?? options.tenantId, planId, requestId: "req_public_canary", status: runStatus, createdAt: resumedRun?.createdAt ?? generatedAt, startedAt: resumedRun?.startedAt ?? generatedAt, completedAt: runStatus === "queued" ? undefined : completedAt, updatedAt: completedAt, taskCount: resumedRun?.taskCount ?? tasks.length, sourceCount: resumedRun?.sourceCount ?? scheduledSourceIds.size, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, duplicateCaptureCount: counters.duplicateCaptureCount, discoveredRestrictedSourceCount: counters.discoveredRestrictedSourceCount, leasedTaskCount: counters.leasedTaskCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, retryScheduledCount: counters.retryScheduledCount, retryExhaustedCount: counters.retryExhaustedCount, error: errors[0]?.message });
   return { generatedAt, tenantId: options.tenantId, mode: "production_canary", status: runStatus, runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, retiredSourceCount: productivity.retired.length, supersededTaskCount, activeSourceCount: scheduledSourceIds.size, deferredDueSourceCount: allDue.length - scheduledSourceIds.size, queuedTaskCount: tasks.length, queueLimit, availableQueueSlots, backpressureState, ...counters, remainingQueuedTaskCount, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
 }
 export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { enabled?: boolean; intervalSeconds?: number; queueLimit?: number; onCycle?: (r: any) => void; onError?: (e: unknown) => void }): CanaryCollectionLoopHandle {
@@ -151,7 +153,14 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
       collected.metadata = { ...collected.metadata, runId, queryTerms: task.planning?.watchlistDiscovery ? (collected.metadata?.matchedWatchlistTerms ?? []).map((term: any) => term.value) : task.planning?.queryTerms ?? [], sellableCandidate: true, sellableReason: sellableReason(collected.rawText) };
       const actorIdentityCatalogSnapshot = collected.metadata?.actorIdentityCatalogSnapshot ?? collected.metadata?.ransomwareOperationCatalogSnapshot;
       const catalogEvidenceOnly = collected.metadata?.catalogEvidenceOnly === true;
-      const { actorIdentityCatalogSnapshot: _mitreSnapshot, ransomwareOperationCatalogSnapshot: _ransomwareSnapshot, ...captureMetadata } = collected.metadata ?? {};
+      const restrictedMetadataCandidates = Array.isArray(collected.metadata?.restrictedMetadataCandidates) ? collected.metadata.restrictedMetadataCandidates : [];
+      counters.discoveredRestrictedSourceCount += admitTorMetadataCandidates(options.store, restrictedMetadataCandidates, generatedAt);
+      const {
+        actorIdentityCatalogSnapshot: _mitreSnapshot,
+        ransomwareOperationCatalogSnapshot: _ransomwareSnapshot,
+        restrictedMetadataCandidates: _restrictedMetadataCandidates,
+        ...captureMetadata
+      } = collected.metadata ?? {};
       let pipeline = actorIdentityCatalogSnapshot || catalogEvidenceOnly
         ? { capture: buildRawCapture({ ...collected, metadata: captureMetadata }), entities: [], indicators: [] }
         : processCollectedItem(collected, { actorIdentities: options.store.listActorIdentities?.() ?? [] });
