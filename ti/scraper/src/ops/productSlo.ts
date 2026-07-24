@@ -4,7 +4,7 @@ import type { CollectionRun, IncidentCandidate, RawCapture, SourceRecord } from 
 import type { FrontierGroupSummary } from "../frontier/frontier.ts";
 import { nowIso, stableId } from "../utils.ts";
 
-export type LiveProductProofMode = "fixture" | "local" | "inspur" | "public_live";
+export type LiveProductProofMode = "local" | "public_live";
 export type LiveProductSloState = "pass" | "warn" | "alert" | "unavailable";
 
 export interface BuildLiveProductSloDashboardInput {

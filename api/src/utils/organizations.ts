@@ -491,7 +491,6 @@ export type OrganizationDownstreamAuthorizationExport = {
             safeFields: string[]
         }
         dashboard: {
-            readinessFixture: 'organization_watchlist'
             safeFields: string[]
             nonmemberEnumeration: false
         }
@@ -1438,21 +1437,6 @@ export type OrganizationWatchlistAlertTermsExport = {
             archivedWatchlistBlocker: 'watchlist_archived'
             nonmemberEnumeration: false
         }
-        alertGenerationFixture: {
-            schemaVersion: 'organization.watchlist_alert_generation_fixture.v1'
-            route: 'organization_watchlist'
-            matchingInputSchema: 'organization.watchlist_alert_matching_input.v1'
-            activeTermCount: number
-            watchlistItemIds: string[]
-            alertGeneratorKeys: string[]
-            expectedAlertFields: Array<'organizationId' | 'tenantId' | 'watchlistItemIds' | 'workflowContext.alertGenerationRefs' | 'workflowContext.alertGeneratorKeys' | 'workflowContext.visibilityDecision' | 'casePath'>
-            expectedCaseFields: Array<'organizationId' | 'tenantId' | 'alertId' | 'casePath' | 'watchlistItemIds'>
-            replaySteps: Array<'export_alert_terms' | 'match_capture_fixture' | 'persist_org_alert' | 'verify_case_visibility' | 'archive_cleanup'>
-            lifecycleBlockers: Array<'member_revoked' | 'invite_expired' | 'watchlist_paused' | 'watchlist_archived' | 'org_archived' | 'org_deleted'>
-            cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup'
-            crossOrgDedupeAllowed: false
-            nonmemberEnumeration: false
-        }
         blockers: string[]
         noLeakFields: Array<'activeTerms[].term' | 'otherOrg.watchlistItemIds' | 'otherOrg.alertGeneratorKeys' | 'destination.secret' | 'case.evidence.rawContent'>
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
@@ -2151,7 +2135,6 @@ export type OrganizationLifecycleReadiness = {
         blockedRoutes: string[]
         downstreamRefs: {
             alertGenerationConsumer: 'organization.watchlist_alert_generation_consumer.v1'
-            alertGenerationFixture: 'organization.watchlist_alert_generation_fixture.v1'
             caseVisibilityConsumer: 'organization.case_visibility_consumer.v1'
             webhookDestinationAccessDecision: 'organization.webhook_destination_access_decision.v1'
         }
@@ -2544,22 +2527,11 @@ export type OrganizationReadinessProof = {
         }
         lifecycleBlockers: Array<'needs_10_active_members_or_pending_invites' | 'needs_shared_watchlist_item' | 'no_active_terms' | 'org_archived' | 'org_deleted' | 'member_revoked'>
         noEnumerationFields: Array<'otherOrg.members' | 'otherOrg.watchlistItemIds' | 'otherOrg.alertGeneratorKeys' | 'destination.secret'>
-        fixtureBackedReadiness: {
-            schemaVersion: 'organization.ten_member_workspace_fixture.v1'
-            fixtureName: 'organization_watchlist'
-            downstreamConsumers: Array<'alert_queue' | 'case_workflow' | 'webhook_delivery' | 'dashboard_readiness' | 'support_timeline'>
-            requiredOrganizationFields: Array<'organizationId' | 'tenantId' | 'activeMemberCount' | 'pendingInviteCount' | 'ownerCount'>
-            requiredWatchlistFields: Array<'watchlistItemId' | 'alertGenerationRef' | 'alertGeneratorKey' | 'termFamily' | 'normalizedTerm' | 'status'>
-            cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup'
-            memberLifecycleBlockers: Array<'member_revoked' | 'not_member' | 'invite_expired'>
-            noEnumerationFields: Array<'otherOrg.members' | 'otherOrg.watchlistItemIds' | 'destination.secret'>
-        }
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
     }
     alertGenerationHandoff: {
         schemaVersion: 'organization.watchlist_alert_generation_handoff.v1'
         sourceContract: 'organization.watchlist_alert_generation_consumer.v1'
-        fixtureContract: 'organization.watchlist_alert_generation_fixture.v1'
         route: 'organization_watchlist'
         exportRoute: 'GET /api/organizations/:id/watchlists/alert-terms'
         cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup'
@@ -2572,7 +2544,7 @@ export type OrganizationReadinessProof = {
         expectedPersistedAlertFields: Array<'organizationId' | 'tenantId' | 'watchlistItemIds' | 'workflowContext.organizationId' | 'workflowContext.alertGeneratorKeys' | 'workflowContext.visibilityDecision' | 'casePath'>
         expectedCaseFields: Array<'organizationId' | 'tenantId' | 'casePath' | 'watchlistItemIds' | 'allowedActions'>
         dedupeKeyFields: Array<'organizationId' | 'watchlistItemId' | 'termFamily' | 'normalizedTerm'>
-        replaySteps: Array<'export_alert_terms' | 'match_capture_fixture' | 'persist_org_alert' | 'verify_case_visibility' | 'deliver_webhook' | 'archive_cleanup'>
+        replaySteps: Array<'export_alert_terms' | 'match_retained_capture' | 'persist_org_alert' | 'verify_case_visibility' | 'deliver_webhook' | 'archive_cleanup'>
         readinessRefs: {
             alertQueue: 'organization.alert_queue_visibility_proof.v1'
             caseAssignment: 'organization.case_assignment_readiness.v1'
@@ -2589,7 +2561,6 @@ export type OrganizationReadinessProof = {
         safeFields: string[]
         redactedFields: string[]
         nonmemberEnumeration: false
-        dashboardFixture: 'organization_watchlist'
     }
     cleanupProof: {
         cleanupIdempotent: true
@@ -3130,7 +3101,6 @@ export function organizationDownstreamAuthorizationExport(
                 safeFields: ['organizationId', 'tenantId', 'member.role', 'watchlists.activeCount', 'watchlists.pausedCount', 'watchlists.archivedCount', 'visibility.allowedRoles'],
             },
             dashboard: {
-                readinessFixture: 'organization_watchlist',
                 safeFields: ['organizationId', 'tenantId', 'organizationLifecycleState', 'member.role', 'allowedActions', 'watchlists.states', 'downstream.alertGeneration.blockerCodes'],
                 nonmemberEnumeration: false,
             },
@@ -5375,7 +5345,6 @@ export function organizationLifecycleReadiness(row: OrganizationRow): Organizati
             ],
             downstreamRefs: {
                 alertGenerationConsumer: 'organization.watchlist_alert_generation_consumer.v1',
-                alertGenerationFixture: 'organization.watchlist_alert_generation_fixture.v1',
                 caseVisibilityConsumer: 'organization.case_visibility_consumer.v1',
                 webhookDestinationAccessDecision: 'organization.webhook_destination_access_decision.v1',
             },
@@ -6029,49 +5998,11 @@ export function organizationReadinessProof(input: {
                 'otherOrg.alertGeneratorKeys',
                 'destination.secret',
             ],
-            fixtureBackedReadiness: {
-                schemaVersion: 'organization.ten_member_workspace_fixture.v1',
-                fixtureName: 'organization_watchlist',
-                downstreamConsumers: [
-                    'alert_queue',
-                    'case_workflow',
-                    'webhook_delivery',
-                    'dashboard_readiness',
-                    'support_timeline',
-                ],
-                requiredOrganizationFields: [
-                    'organizationId',
-                    'tenantId',
-                    'activeMemberCount',
-                    'pendingInviteCount',
-                    'ownerCount',
-                ],
-                requiredWatchlistFields: [
-                    'watchlistItemId',
-                    'alertGenerationRef',
-                    'alertGeneratorKey',
-                    'termFamily',
-                    'normalizedTerm',
-                    'status',
-                ],
-                cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup',
-                memberLifecycleBlockers: [
-                    'member_revoked',
-                    'not_member',
-                    'invite_expired',
-                ],
-                noEnumerationFields: [
-                    'otherOrg.members',
-                    'otherOrg.watchlistItemIds',
-                    'destination.secret',
-                ],
-            },
             proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
         },
         alertGenerationHandoff: {
             schemaVersion: 'organization.watchlist_alert_generation_handoff.v1',
             sourceContract: 'organization.watchlist_alert_generation_consumer.v1',
-            fixtureContract: 'organization.watchlist_alert_generation_fixture.v1',
             route: 'organization_watchlist',
             exportRoute: 'GET /api/organizations/:id/watchlists/alert-terms',
             cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup',
@@ -6112,7 +6043,7 @@ export function organizationReadinessProof(input: {
             ],
             replaySteps: [
                 'export_alert_terms',
-                'match_capture_fixture',
+                'match_retained_capture',
                 'persist_org_alert',
                 'verify_case_visibility',
                 'deliver_webhook',
@@ -6162,7 +6093,6 @@ export function organizationReadinessProof(input: {
                 'alertGenerationRef.lifecycle.createdBy',
             ],
             nonmemberEnumeration: false,
-            dashboardFixture: 'organization_watchlist',
         },
         cleanupProof: {
             cleanupIdempotent: true,
@@ -7948,48 +7878,6 @@ export function organizationWatchlistAlertTermsExport(
             expiredInviteBlocker: 'invite_expired',
             pausedWatchlistBlocker: 'watchlist_paused',
             archivedWatchlistBlocker: 'watchlist_archived',
-            nonmemberEnumeration: false,
-        },
-        alertGenerationFixture: {
-            schemaVersion: 'organization.watchlist_alert_generation_fixture.v1',
-            route: 'organization_watchlist',
-            matchingInputSchema: alertGenerationConsumer.matchingInputReceipt.schemaVersion,
-            activeTermCount: alertGenerationConsumer.matchingInputReceipt.termCount,
-            watchlistItemIds: alertGenerationConsumer.matchingInputReceipt.terms.map(term => term.watchlistItemId),
-            alertGeneratorKeys: alertGenerationConsumer.matchingInputReceipt.terms.map(term => term.alertGeneratorKey),
-            expectedAlertFields: [
-                'organizationId',
-                'tenantId',
-                'watchlistItemIds',
-                'workflowContext.alertGenerationRefs',
-                'workflowContext.alertGeneratorKeys',
-                'workflowContext.visibilityDecision',
-                'casePath',
-            ],
-            expectedCaseFields: [
-                'organizationId',
-                'tenantId',
-                'alertId',
-                'casePath',
-                'watchlistItemIds',
-            ],
-            replaySteps: [
-                'export_alert_terms',
-                'match_capture_fixture',
-                'persist_org_alert',
-                'verify_case_visibility',
-                'archive_cleanup',
-            ],
-            lifecycleBlockers: [
-                'member_revoked',
-                'invite_expired',
-                'watchlist_paused',
-                'watchlist_archived',
-                'org_archived',
-                'org_deleted',
-            ],
-            cleanupRoute: termLifecycle.cleanupRoute,
-            crossOrgDedupeAllowed: false,
             nonmemberEnumeration: false,
         },
         blockers: Array.from(new Set([

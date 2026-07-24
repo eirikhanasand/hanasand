@@ -1073,7 +1073,6 @@ describe("api regression sentinel", () => {
         replayExport: "dwm.case_action_replay_export.v1",
         alertReasonContext: "dwm.case_alert_reason_context.v1",
         organizationAccessReadiness: "dwm.case_org_access_replay_readiness.v1",
-        webhookReplayFixture: "dwm.case_to_webhook_replay_readiness_fixture.v1",
         publicTiHandoffReadiness: "dwm.case_public_ti_handoff_replay_readiness.v1",
         webhookDryRunReadiness: "dwm.case_webhook_dry_run_replay_readiness.v1",
         webhookDeliveryReplayContext: "dwm.case_webhook_delivery_replay_context.v1",

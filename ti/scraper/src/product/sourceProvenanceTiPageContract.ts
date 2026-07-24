@@ -10,14 +10,6 @@ type SafeSourceOutput = {
   liveNetworkScrapeStarted: false;
 };
 
-type SourceActionRoute = {
-  method: "GET" | "POST";
-  path: string;
-  body?: Record<string, unknown>;
-  dryRunSupported: true;
-  liveNetworkFetch: false;
-};
-
 export type TiSourceProvenanceAlertRebuildReceiptBlocker = {
   code:
     | "request_blocked"
@@ -63,76 +55,6 @@ export type TiSourceProvenanceAlertRebuildReceipt = {
     ready: boolean;
   }>;
   blockers: TiSourceProvenanceAlertRebuildReceiptBlocker[];
-  payloadShape: string[];
-  safeOutput: SafeSourceOutput;
-};
-
-export type TiSourceProvenancePublicTiSourceOpsProjection = {
-  schemaVersion: "ti.source_provenance_public_ti_source_ops_projection.v1";
-  id: string;
-  generatedAt: string;
-  ok: boolean;
-  tenantId: string;
-  organizationId?: string;
-  actor: string;
-  publicTiRoute: string;
-  sourceOpsFixtureBundleId: string;
-  pageReadiness: {
-    state: "ready" | "partial" | "blocked";
-    canRender: true;
-    publicTI: boolean;
-    dashboard: boolean;
-    sourceOps: boolean;
-    alertGeneration: boolean;
-  };
-  sourceCoverage: {
-    families: string[];
-    freshnessState: "fresh" | "stale" | "missing";
-    parserAlertCount: number;
-    operatorActionCount: number;
-    validationIssueCount: number;
-    nextRetryAt?: string;
-  };
-  provenanceRows: Array<{
-    rowId: string;
-    sourceFamily?: string;
-    state: "ready" | "needs_action" | "validation_blocked";
-    reasonCode?: string;
-    ownerLane: "source" | "parser" | "policy" | "publicTI" | "alert" | "case";
-    parserStatus?: {
-      state?: string;
-      failureReason?: string;
-    };
-    freshness?: {
-      state: "fresh" | "stale" | "missing";
-      newestEvidenceAt?: string;
-      ageDays?: number;
-    };
-    provenance: {
-      sourceOpsFixtureBundleId: string;
-      sourceFreshnessGapPacketId: string;
-      parserHealthAlertPacketId: string;
-      sourceOpsActionQueueId: string;
-      sourceHealthProofId?: string;
-      fixtureBacked: true;
-    };
-    route: SourceActionRoute;
-    safeOutput: SafeSourceOutput;
-  }>;
-  enrichmentGaps: Array<{
-    code: string;
-    ownerLane: "source" | "parser" | "policy" | "publicTI" | "alert" | "case";
-    sourceFamily?: string;
-    nextAction: string;
-    route: SourceActionRoute;
-  }>;
-  consumerContracts: Array<{
-    consumer: "publicTI" | "dashboard" | "sourceOps" | "alertGeneration";
-    route: string;
-    requiredFields: string[];
-    sourceSchemas: string[];
-    liveNetworkFetch: false;
-  }>;
   payloadShape: string[];
   safeOutput: SafeSourceOutput;
 };

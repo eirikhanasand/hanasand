@@ -496,7 +496,6 @@ export type PublicTiActorEnrichmentCoverageRow = {
         sourceId?: string
         sourceRequestId?: string
         captureId?: string
-        fixtureBacked: true
     }
 }
 
@@ -2285,7 +2284,6 @@ function buildPublicTiActorEnrichmentCoverage(input: {
                 sourceId: row.sourceId,
                 sourceRequestId: row.sourceRequestId,
                 captureId: row.captureId,
-                fixtureBacked: true,
             },
         }
     })

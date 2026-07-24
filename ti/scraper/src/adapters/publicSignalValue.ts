@@ -13,5 +13,5 @@ export const buildPublicCoverageFreshnessValue = (input: any): any => ({ generat
 
 export function buildPublicSignalLiveCollectionLoopDto(input: any): any {
   const sources = input.sources ?? [];
-  return { query: input.query, generatedAt: input.generatedAt ?? nowIso(), nextTasks: sources.slice(0, 20).map((source: any) => ({ sourceId: source.sourceId ?? source.id, action: "collect_public_metadata", priority: source.score >= 0.7 ? "high" : "normal" })), queryFixtures: [] };
+  return { query: input.query, generatedAt: input.generatedAt ?? nowIso(), nextTasks: sources.slice(0, 20).map((source: any) => ({ sourceId: source.sourceId ?? source.id, action: "collect_public_metadata", priority: source.score >= 0.7 ? "high" : "normal" })) };
 }

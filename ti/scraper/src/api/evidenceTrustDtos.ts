@@ -173,8 +173,7 @@ function trustLedgerFor(endpoint: string, store: any, objects: any, query: strin
       releaseAction,
       canCutover: canPromote,
       objectStore: {
-        missingObjectIds: assessment.missingObjectCaptureIds,
-        writeFailureFixture: "covered"
+        missingObjectIds: assessment.missingObjectCaptureIds
       }
     },
     digest: hashContent(JSON.stringify({ query: normalize(query), runId: options.runId, claims: claims.map((claim) => claim.claimId), blockers: assessment.blockers })),

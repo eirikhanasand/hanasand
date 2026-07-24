@@ -739,7 +739,7 @@ describe("dwm source requests", () => {
           retryReadiness: expect.objectContaining({
             retryable: true,
             failureCategory: "parser_retry_scheduled",
-            remediation: expect.stringContaining("Retry the parser fixture")
+            remediation: expect.stringContaining("Retry parsing the retained response")
           }),
           actorEnrichment: expect.objectContaining({
             canEnrichActor: false,

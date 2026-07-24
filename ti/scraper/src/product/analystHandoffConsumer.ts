@@ -798,7 +798,7 @@ export type BetaReadinessCapabilityId =
   | "support_access_recovery"
   | "public_ti_actor_relevance";
 
-export type BetaReadinessPersistenceMode = "real_persistence" | "local_proof" | "session_state" | "demo_fixture";
+export type BetaReadinessPersistenceMode = "real_persistence" | "local_proof" | "session_state";
 
 export type BetaReadinessWorkflowContract = {
   route: string;
@@ -1870,7 +1870,7 @@ export function validateBetaReadinessArtifact(input: unknown): BetaReadinessVali
     if (!typed.proofArtifact?.schemaVersion || !typed.proofArtifact?.artifactId) blockers.push({ code: "missing_proof_artifact", rowId, field: "proofArtifact", detail: "Every beta row needs a proof artifact pointer." });
     if (!typed.latestCommitOrCheck) blockers.push({ code: "missing_latest_commit_or_check", rowId, field: "latestCommitOrCheck", detail: "Every beta row needs a latest commit or check pointer." });
     if (!typed.requiredNextAction) blockers.push({ code: "missing_required_next_action", rowId, field: "requiredNextAction", detail: "Every beta row needs a required next action." });
-    if (!typed.persistenceMode) blockers.push({ code: "missing_persistence_mode", rowId, field: "persistenceMode", detail: "Every beta row must declare whether proof is real, local, session, or demo." });
+    if (!typed.persistenceMode) blockers.push({ code: "missing_persistence_mode", rowId, field: "persistenceMode", detail: "Every beta row must declare whether proof is persisted, local, or session-scoped." });
     if (!typed.expectedAdapter) blockers.push({ code: "missing_expected_adapter", rowId, field: "expectedAdapter", detail: "Every beta row needs an adapter contract name." });
     if (!Array.isArray(typed.payloadShape) || !typed.payloadShape.length) blockers.push({ code: "missing_payload_shape", rowId, field: "payloadShape", detail: "Every beta row needs a payload shape." });
     if (!typed.proofCommand) blockers.push({ code: "missing_proof_command", rowId, field: "proofCommand", detail: "Every beta row needs a proof command." });

@@ -1488,7 +1488,7 @@ function sourceActivationRemediation(failureCategory: unknown, candidate: Source
   const category = String(failureCategory ?? "");
   if (category.includes("restricted_policy")) return "Keep the source metadata-only, remove payload/download/credential intent, and resubmit for policy review.";
   if (category.includes("duplicate")) return "Suppress or link the duplicate before attempting activation.";
-  if (category.includes("parser")) return "Retry the parser fixture after backoff; no live network probe is required for readiness.";
+  if (category.includes("parser")) return "Retry parsing the retained response after backoff; no live network probe is required.";
   if (isRejectedPolicySourcePackCandidate(candidate)) return "Resolve policy rejection before activation.";
   return "Review parser health and retry only through the source-pack worker contract.";
 }

@@ -13,7 +13,6 @@ export const createDarknetMetadataCollectionPlan = (sources: SourceRecord[]) => 
 export const createDarknetMetadataSourceSeed = (input: any) => ({ id: input.id ?? stableId("source", input.url), name: input.name ?? input.url, type: sourceTypeForNetwork(input.network ?? "tor"), url: input.url, accessMethod: "approved_proxy", language: input.language ?? "en", trustScore: input.trustScore ?? 0.5, metadata: { network: input.network ?? "tor", metadataOnly: true } });
 export const restrictedMetadataSourcePackEntryToSource = createDarknetMetadataSourceSeed;
 export const validateRestrictedMetadataSourcePack = (pack: any) => ({ valid: true, sourceCount: (pack.sources ?? pack.entries ?? []).length, errors: [] });
-export const restrictedMetadataConnectorFixtures = () => restrictedMetadataProductionBoundaryContracts();
 export const restrictedMetadataClaimRiskLabels = (claim: any) => [claim?.victim ? "victim_claim" : "actor_claim", "metadata_only"];
 export const restrictedMetadataComplianceReport = (sources: any[] = [], captures: any[] = []) => ({ metadataOnly: true, sourceCount: sources.length, captureCount: captures.length, noRawLeakData: true });
 export const restrictedMetadataComplianceSummaryForPromotion = restrictedMetadataComplianceReport;

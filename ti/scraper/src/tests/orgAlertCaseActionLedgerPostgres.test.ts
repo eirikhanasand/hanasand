@@ -1,12 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
-  buildOrgAlertCaseActionPacket,
-  buildOrgAlertCaseActionReceipt,
-  buildOrgAlertOperatorReadinessPacket,
-  buildOrgAlertSourceEvidenceReport,
-  buildOrgAlertWebhookFixtureContract,
-  buildOrgAlertWorkflowBridgeReport,
-  recordOrgAlertCaseActionReceipt
+  recordOrgAlertCaseActionReceipt,
+  type OrgAlertCaseActionReceipt
 } from "../product/orgAlertWorkflowBridge.ts";
 import {
   buildOrgAlertCaseActionLedgerApiList,
@@ -15,7 +10,6 @@ import {
   orgAlertCaseActionLedgerRecordToPostgresRows,
   writeOrgAlertCaseActionLedgerApiRecord
 } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
-import fixture from "./fixtures/org-alert-workflow-bridge-happy.json";
 
 describe("org alert case action ledger postgres adapter", () => {
   test("round-trips case action ledger rows with redacted audit metadata", () => {
@@ -220,81 +214,27 @@ function readyLedgerRecord() {
   return result.record;
 }
 
-function readyActionReceipt() {
-  const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
-  const sourceEvidence = buildOrgAlertSourceEvidenceReport({
-    bridge,
-    sources: sourceRefs(),
-    captures: [],
-    sourceProvenanceSummaries: [sourceProvenanceSummary()],
-    checkedAt: "2026-06-29T15:00:00.000Z"
-  });
-  const webhookFixture = buildOrgAlertWebhookFixtureContract({
-    bridge,
-    destinations: [webhookDestination()],
-    destinationIdsByWatchlistId: { watch_acme_domains: ["webhook_discord"] }
-  });
-  const readiness = buildOrgAlertOperatorReadinessPacket({
-    bridge,
-    sourceEvidence,
-    webhookFixture
-  });
-  const packet = buildOrgAlertCaseActionPacket({ readiness, checkedAt: "2026-06-29T15:03:00.000Z" });
-  const receipt = buildOrgAlertCaseActionReceipt({
-    packet,
+function readyActionReceipt(): OrgAlertCaseActionReceipt {
+  return {
+    schemaVersion: "dwm.org_alert_case_action_receipt.v1",
+    id: "receipt_acme_open_case",
+    checkedAt: "2026-06-29T15:04:00.000Z",
+    ok: true,
+    tenantId: "tenant_acme",
+    organizationId: "org_acme",
+    rowId: "row_acme_domains",
+    watchlistId: "watch_acme_domains",
+    watchlistItemId: "watch_item_acme_com",
+    alertIds: ["alert_acme_lumma"],
+    casePaths: ["/v1/cases/case_acme_lumma?alertId=alert_acme_lumma"],
     action: "open_case",
-    analystId: "analyst_acme",
-    checkedAt: "2026-06-29T15:04:00.000Z"
-  });
-  return receipt;
-}
-
-function webhookDestination() {
-  return {
-    destinationId: "webhook_discord",
-    tenantId: "tenant_acme",
-    organizationId: "org_acme",
-    kind: "discord",
-    status: "active",
-    verified: true,
-    endpointUrl: "https://discord.com/api/webhooks/acme/token"
-  };
-}
-
-function sourceRefs() {
-  return [{
-    sourceId: "src_acme_tg",
-    sourceFamily: "telegram_public",
-    status: "active",
-    lastCollectedAt: "2026-06-29T14:10:00.000Z"
-  }, {
-    sourceId: "src_acme_forum",
-    sourceFamily: "darkweb_metadata",
-    status: "active",
-    lastCollectedAt: "2026-06-29T14:30:00.000Z"
-  }];
-}
-
-function sourceProvenanceSummary() {
-  return {
-    schemaVersion: "dwm.alert_source_provenance.v1",
-    alertId: "alert_acme_lumma",
-    tenantId: "tenant_acme",
-    organizationId: "org_acme",
-    sourceFamily: "telegram_public",
-    sourceFamilies: ["telegram_public", "darkweb_metadata"],
-    captureIds: ["cap_acme_initial", "cap_acme_followup"],
-    sourceIds: ["src_acme_tg", "src_acme_forum"],
-    contentHashes: ["hash_acme_initial", "hash_acme_followup"],
-    evidenceCount: 2,
-    firstObservedAt: "2026-06-29T14:05:00.000Z",
-    lastObservedAt: "2026-06-29T14:30:00.000Z",
-    generationEvidenceWindow: {
-      captureIds: ["cap_acme_initial", "cap_acme_followup"],
-      sourceFamilies: ["telegram_public", "darkweb_metadata"],
-      contentHashes: ["hash_acme_initial", "hash_acme_followup"],
-      firstObservedAt: "2026-06-29T14:05:00.000Z",
-      lastObservedAt: "2026-06-29T14:30:00.000Z"
-    }
+    execution: "ready",
+    ownerLane: "case",
+    route: "/v1/cases/case_acme_lumma?alertId=alert_acme_lumma",
+    method: "GET",
+    analyst: { analystId: "analyst_acme" },
+    blockedByCodes: [],
+    blockers: [],
+    payloadShape: ["action", "execution", "route", "blockedByCodes", "blockers[]"]
   };
 }
