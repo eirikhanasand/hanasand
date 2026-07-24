@@ -38,6 +38,15 @@ sub vcl_hash {
 }
 
 sub vcl_backend_response {
+    if (
+        beresp.http.Cache-Control ~ "(?i)(no-cache|no-store|private)"
+        || beresp.http.Set-Cookie
+    ) {
+        set beresp.uncacheable = true;
+        set beresp.ttl = 0s;
+        return (deliver);
+    }
+
     set beresp.ttl = 52w;
     return (deliver);
 }
