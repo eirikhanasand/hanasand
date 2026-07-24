@@ -14,7 +14,7 @@ import { parseCurrentRansomwareOperations } from "../pipeline/ransomwareOperatio
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { PostgresScraperStore, normalizeLegacySourceForImport, toJson } from "../storage/postgresScraperStore.ts";
-import { hashContent } from "../utils.ts";
+import { hashContent, stableId } from "../utils.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
 import { fixtureCapture } from "./helpers/storageFixtures.ts";
 import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
@@ -209,6 +209,125 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
 
   afterAll(async () => {
     await admin?.close({ timeout: 2 });
+  });
+
+  test("serializes source discovery ownership and preserves approved source state", async () => {
+    const generatedAt = "2026-07-24T12:00:00.000Z";
+    const planId = stableId("source-feed-discovery-plan", "https://publisher.example/");
+    const claimInput = {
+      planId,
+      publisherKey: "https://publisher.example/",
+      referenceUrl: "https://publisher.example/security",
+      parentSourceId: "source-parent",
+      evidenceCaptureId: "capture-parent",
+      generatedAt,
+      runExpiresAt: "2026-07-24T12:02:00.000Z"
+    };
+    const first = await PostgresScraperStore.create({ databaseUrl });
+    const second = await PostgresScraperStore.create({ databaseUrl });
+    const [firstClaim, secondClaim] = await Promise.all([
+      first.claimSourceFeedDiscoveryPlan({ ...claimInput, activeRunId: "discovery-run-first" }),
+      second.claimSourceFeedDiscoveryPlan({ ...claimInput, activeRunId: "discovery-run-second" })
+    ]);
+    expect([firstClaim, secondClaim].filter(Boolean)).toHaveLength(1);
+    const winner = firstClaim ? first : second;
+    const activeRunId = firstClaim?.activeRunId ?? secondClaim?.activeRunId;
+    expect(await (winner === first ? second : first).finishSourceFeedDiscoveryPlan({
+      planId,
+      activeRunId: "stale-discovery-owner",
+      generatedAt,
+      result: { outcome: "no_feed" }
+    })).toBeUndefined();
+    expect(await winner.finishSourceFeedDiscoveryPlan({
+      planId,
+      activeRunId,
+      generatedAt,
+      result: { outcome: "no_feed", importedSourceCount: 0, duplicateSourceCount: 0, revalidatedSourceCount: 0 }
+    })).toMatchObject({
+      attemptCount: 1,
+      audit: [
+        { at: generatedAt, outcome: "claimed" },
+        { at: generatedAt, outcome: "no_feed" }
+      ]
+    });
+
+    const feedEndpointKey = "https://auto.example/security.xml";
+    const candidate = source({
+      id: stableId("src", feedEndpointKey),
+      url: feedEndpointKey,
+      status: "candidate",
+      metadata: {
+        sourceFeedDiscovery: { workflow: "req_source_feed_discovery", publisherKey: claimInput.publisherKey },
+        sourcePortfolioVerification: { outcome: "content_parsed" }
+      }
+    });
+    const admissionInput = {
+      source: candidate,
+      feedEndpointKey,
+      publisherKey: claimInput.publisherKey,
+      parentSourceId: claimInput.parentSourceId,
+      evidenceCaptureId: claimInput.evidenceCaptureId,
+      verification: { outcome: "content_parsed", verifiedAt: generatedAt },
+      generatedAt
+    };
+    const admissions = await Promise.all([
+      first.admitSourceFeedDiscovery(admissionInput),
+      second.admitSourceFeedDiscovery(admissionInput)
+    ]);
+    expect(admissions.map((row) => row.outcome).sort()).toEqual(["imported", "revalidated"]);
+
+    const tenantFeedEndpointKey = "https://tenant.example/security.xml";
+    const tenantSource = source({
+      id: stableId("src", tenantFeedEndpointKey),
+      tenantId: "customer-a",
+      url: tenantFeedEndpointKey,
+      status: "active",
+      metadata: { productionCollection: true }
+    });
+    first.saveSource(tenantSource);
+    await first.flush();
+    expect(await second.admitSourceFeedDiscovery({
+      ...admissionInput,
+      source: { ...candidate, id: tenantSource.id, url: tenantFeedEndpointKey },
+      feedEndpointKey: tenantFeedEndpointKey
+    })).toMatchObject({ outcome: "duplicate", sourceId: tenantSource.id });
+    await first.close();
+    await second.close();
+
+    const restarted = await PostgresScraperStore.create({ databaseUrl });
+    expect(restarted.getSource(tenantSource.id)).toMatchObject({
+      tenantId: "customer-a",
+      status: "active",
+      metadata: { productionCollection: true }
+    });
+    const discovered = restarted.getSource(candidate.id)!;
+    restarted.saveSource({
+      ...discovered,
+      status: "active",
+      crawlState: { retryCount: 0, nextEligibleAt: "2026-07-25T12:00:00.000Z" },
+      metadata: {
+        ...discovered.metadata,
+        automaticSourceReview: { state: "approved", requestSha256: "a".repeat(64) },
+        sourcePortfolioQualificationState: "qualified"
+      },
+      updatedAt: "2026-07-24T12:01:00.000Z"
+    });
+    await restarted.flush();
+    expect(await restarted.admitSourceFeedDiscovery({ ...admissionInput, generatedAt: "2026-07-24T12:02:00.000Z" }))
+      .toMatchObject({ outcome: "duplicate", sourceId: candidate.id });
+    await restarted.close();
+
+    const verified = await PostgresScraperStore.create({ databaseUrl });
+    expect(verified.getSource(candidate.id)).toMatchObject({
+      status: "active",
+      crawlState: { retryCount: 0, nextEligibleAt: "2026-07-25T12:00:00.000Z" },
+      metadata: {
+        automaticSourceReview: { state: "approved", requestSha256: "a".repeat(64) },
+        sourcePortfolioQualificationState: "qualified"
+      }
+    });
+    expect(verified.listSources().filter((record: any) => record.url === feedEndpointKey)).toHaveLength(1);
+    await verified.close();
   });
 
   test("persists bounded automatic evaluation task transitions across restart", async () => {

@@ -8,7 +8,7 @@ import { runCanaryCollectionCycle, startCanaryCollectionLoop } from "../ops/cana
 import { runSourceFeedDiscoveryCycle } from "../ops/sourceFeedDiscovery.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
-import { hashContent } from "../utils.ts";
+import { hashContent, stableId } from "../utils.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
 import {
   AUTOMATIC_REVIEW_RESPONSE_SCHEMA,
@@ -191,6 +191,127 @@ describe("scheduled public feed discovery", () => {
     });
   });
 
+  test("finds same-site security feeds once and skips the current page", async () => {
+    const store = new InMemoryScraperStore();
+    usefulCapture(store, "same-site-parent", undefined, "run-same-site", ["https://vendor.example/security/article"]);
+    const fetched: string[] = [];
+    const discovery = await runSourceFeedDiscoveryCycle({
+      store,
+      sourceFeedDiscoveryMaxFeedsPerReference: 2,
+      sourceFeedDiscoveryFetch: async (input: string | URL | Request) => {
+        const url = String(input instanceof Request ? input.url : input);
+        fetched.push(url);
+        if (url === "https://vendor.example/security/article") return response(
+          `<html><head>${feedLink("https://vendor.example/security/feed.xml")}</head><body>
+            <a href="https://vendor.example/security/article">Security article</a>
+            <a href="/security/advisories">Security advisories</a>
+          </body></html>`,
+          url,
+          "text/html"
+        );
+        if (url === "https://vendor.example/security/advisories") {
+          return response(feedLink("https://vendor.example/security/feed.xml"), url, "text/html");
+        }
+        if (url === "https://vendor.example/security/feed.xml") {
+          return response(rss("CVE-2026-4243", "https://vendor.example/security/CVE-2026-4243", generatedAt), url, "application/rss+xml");
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }
+    }, generatedAt);
+
+    expect(discovery).toMatchObject({ importedSourceCount: 1, duplicateSourceCount: 0, failedPublisherCount: 0 });
+    expect(fetched.filter((url) => url === "https://vendor.example/security/article")).toHaveLength(1);
+    expect(fetched).toContain("https://vendor.example/security/advisories");
+    expect(store.listSources().filter((row: any) => row.metadata?.sourceFeedDiscovery)).toHaveLength(1);
+  });
+
+  test("claims a publisher once across overlapping discovery cycles", async () => {
+    const store = new InMemoryScraperStore();
+    usefulCapture(store, "overlap-parent", undefined, "run-overlap", ["https://overlap.example/security.xml"]);
+    let release!: () => void, started!: () => void, fetchCount = 0;
+    const waiting = new Promise<void>((resolve) => { started = resolve; });
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const options = {
+      store,
+      sourceFeedDiscoveryFetch: async (input: string | URL | Request) => {
+        fetchCount++;
+        started();
+        await blocked;
+        return response(rss("CVE-2026-4244", "https://overlap.example/CVE-2026-4244", generatedAt), String(input), "application/rss+xml");
+      }
+    };
+    const first = runSourceFeedDiscoveryCycle(options, generatedAt);
+    await waiting;
+    const second = runSourceFeedDiscoveryCycle(options, generatedAt);
+    release();
+    const results = await Promise.all([first, second]);
+
+    expect(results.map((result) => result.processedPublisherCount).sort()).toEqual([0, 1]);
+    expect(fetchCount).toBe(1);
+    expect(store.listPlans().find((plan: any) => plan.requestId === "req_source_feed_discovery")).toMatchObject({
+      attemptCount: 1,
+      audit: [
+        { at: generatedAt, outcome: "claimed" },
+        { at: generatedAt, outcome: "feeds_proven" }
+      ]
+    });
+  });
+
+  test("rejects credential-bearing redirects before a second request", async () => {
+    const store = new InMemoryScraperStore();
+    usefulCapture(store, "secret-redirect-parent", undefined, "run-secret-redirect", ["https://redirect.example/security"]);
+    const fetched: string[] = [];
+    const discovery = await runSourceFeedDiscoveryCycle({
+      store,
+      sourceFeedDiscoveryFetch: async (input: string | URL | Request) => {
+        const url = String(input instanceof Request ? input.url : input);
+        fetched.push(url);
+        return response("", url, "text/html", 302, { location: "https://feed.example/security.xml?token=secret" });
+      }
+    }, generatedAt);
+
+    expect(discovery).toMatchObject({ processedPublisherCount: 1, failedPublisherCount: 1, importedSourceCount: 0 });
+    expect(fetched).toEqual(["https://redirect.example/security"]);
+  });
+
+  test("revalidation preserves review and collection state and keeps bounded audit history", async () => {
+    const store = new InMemoryScraperStore();
+    usefulCapture(store, "revalidate-parent", undefined, "run-revalidate", ["https://revalidate.example/security.xml"]);
+    const fetcher = async (input: string | URL | Request) =>
+      response(rss("CVE-2026-4245", "https://revalidate.example/CVE-2026-4245", generatedAt), String(input), "application/rss+xml");
+    await runSourceFeedDiscoveryCycle({ store, sourceFeedDiscoveryFetch: fetcher }, generatedAt);
+    const candidate = store.listSources().find((row: any) => row.metadata?.sourceFeedDiscovery)!;
+    store.saveSource({
+      ...candidate,
+      crawlState: { retryCount: 2, nextEligibleAt: nextYear },
+      metadata: {
+        ...candidate.metadata,
+        automaticSourceReview: { state: "approved", requestSha256: "a".repeat(64) },
+        sourcePortfolioQualificationState: "awaiting_second_productive_cycle"
+      }
+    });
+    const publisherKey = "https://revalidate.example/";
+    const plan = store.getPlan(stableId("source-feed-discovery-plan", publisherKey))!;
+    store.savePlan({
+      ...plan,
+      nextEligibleAt: "2026-07-30T12:00:00.000Z",
+      audit: Array.from({ length: 100 }, (_, index) => ({ at: generatedAt, outcome: `old-${index}` }))
+    });
+
+    const result = await runSourceFeedDiscoveryCycle({ store, sourceFeedDiscoveryFetch: fetcher }, "2026-07-31T12:00:00.000Z");
+    expect(result).toMatchObject({ revalidatedSourceCount: 1, importedSourceCount: 0 });
+    expect(store.getSource(candidate.id)).toMatchObject({
+      crawlState: { retryCount: 2, nextEligibleAt: nextYear },
+      metadata: {
+        automaticSourceReview: { state: "approved", requestSha256: "a".repeat(64) },
+        sourcePortfolioQualificationState: "awaiting_second_productive_cycle"
+      }
+    });
+    const updatedPlan = store.getPlan(plan.id)!;
+    expect(updatedPlan.audit).toHaveLength(100);
+    expect(updatedPlan.audit.at(-1)).toMatchObject({ at: "2026-07-31T12:00:00.000Z", outcome: "feeds_proven", runId: expect.any(String) });
+  });
+
   test("bounds stuck auxiliary work before the canonical run and remains restart-idempotent", async () => {
     const directory = mkdtempSync(join(tmpdir(), "source-feed-discovery-timeout-"));
     const snapshotPath = join(directory, "store.json");
@@ -267,7 +388,10 @@ describe("scheduled public feed discovery", () => {
         consecutiveFailureCount: 1,
         nextEligibleAt: expect.any(String),
         result: { outcome: "fetch_failed", error: "Public feed discovery cycle timed out." },
-        audit: [{ at: generatedAt, outcome: "fetch_failed" }]
+        audit: [
+          { at: generatedAt, outcome: "claimed" },
+          { at: generatedAt, outcome: "fetch_failed" }
+        ]
       });
       expect(store.listPlans().filter((plan: any) => plan.request?.requesterId === "scheduled-watchlist-discovery")).toHaveLength(1);
       await loop.stop();
@@ -292,7 +416,13 @@ describe("scheduled public feed discovery", () => {
       expect({ discoveryFetchCount, watchlistExecutionCount }).toEqual({ discoveryFetchCount: 1, watchlistExecutionCount: 1 });
       expect(restarted.listPlans().filter((plan: any) => plan.requestId === "req_source_feed_discovery")).toHaveLength(1);
       expect(restarted.listPlans().filter((plan: any) => plan.request?.requesterId === "scheduled-watchlist-discovery")).toHaveLength(1);
-      expect(restarted.getPlan(discoveryPlan.id)).toMatchObject({ attemptCount: 1, audit: [{ at: generatedAt, outcome: "fetch_failed" }] });
+      expect(restarted.getPlan(discoveryPlan.id)).toMatchObject({
+        attemptCount: 1,
+        audit: [
+          { at: generatedAt, outcome: "claimed" },
+          { at: generatedAt, outcome: "fetch_failed" }
+        ]
+      });
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

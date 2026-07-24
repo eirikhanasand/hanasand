@@ -1009,6 +1009,138 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   override savePlan(plan: CollectionPlan): CollectionPlan { return this.saveWorkflow("collection_plan", plan, () => super.savePlan(plan)); }
+  async claimSourceFeedDiscoveryPlan(input: any): Promise<any | undefined> {
+    await this.flush();
+    let claimed: any;
+    await this.sql.begin(async (sql) => {
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${`source-feed-discovery-plan:${input.planId}`}))`;
+      const [row] = await sql`
+        SELECT record
+        FROM threat_intel.workflow_records
+        WHERE record_type = 'collection_plan' AND id = ${input.planId}
+        FOR UPDATE
+      `;
+      const current = row ? readRecord(row) : undefined;
+      const now = Date.parse(input.generatedAt);
+      const due = Date.parse(String(current?.nextEligibleAt ?? ""));
+      const expires = Date.parse(String(current?.runExpiresAt ?? ""));
+      if ((current?.activeRunId && Number.isFinite(expires) && expires > now)
+        || (Number.isFinite(due) && due > now)) return;
+      claimed = {
+        ...current,
+        id: input.planId,
+        tenantId: undefined,
+        requestId: "req_source_feed_discovery",
+        publisherKey: input.publisherKey,
+        referenceUrl: input.referenceUrl,
+        parentSourceId: input.parentSourceId,
+        evidenceCaptureId: input.evidenceCaptureId,
+        request: {
+          id: "req_source_feed_discovery",
+          publisherKey: input.publisherKey,
+          referenceUrl: input.referenceUrl,
+          parentSourceId: input.parentSourceId,
+          evidenceCaptureId: input.evidenceCaptureId
+        },
+        tasks: [],
+        status: "running",
+        attemptCount: Number(current?.attemptCount ?? 0) + 1,
+        activeRunId: input.activeRunId,
+        runExpiresAt: input.runExpiresAt,
+        createdAt: current?.createdAt ?? input.generatedAt,
+        updatedAt: input.generatedAt,
+        audit: [...(current?.audit ?? []), { at: input.generatedAt, outcome: "claimed", runId: input.activeRunId }].slice(-100)
+      };
+      await this.persistWorkflow("collection_plan", claimed, sql);
+    });
+    if (claimed) super.savePlan(claimed);
+    return claimed;
+  }
+
+  async finishSourceFeedDiscoveryPlan(input: any): Promise<any | undefined> {
+    await this.flush();
+    let finished: any;
+    await this.sql.begin(async (sql) => {
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${`source-feed-discovery-plan:${input.planId}`}))`;
+      const [row] = await sql`
+        SELECT record
+        FROM threat_intel.workflow_records
+        WHERE record_type = 'collection_plan' AND id = ${input.planId}
+        FOR UPDATE
+      `;
+      const current = row ? readRecord(row) : undefined;
+      if (!current || current.activeRunId !== input.activeRunId) return;
+      const failed = input.result?.outcome === "fetch_failed";
+      const consecutiveFailureCount = failed ? Number(current.consecutiveFailureCount ?? 0) + 1 : 0;
+      const delaySeconds = failed
+        ? Math.min(7 * 86_400, 3_600 * 2 ** Math.min(7, Math.max(0, consecutiveFailureCount - 1)))
+        : input.result?.outcome === "feeds_proven" ? 7 * 86_400 : 30 * 86_400;
+      finished = {
+        ...current,
+        status: failed ? "failed" : "completed",
+        result: input.result,
+        consecutiveFailureCount,
+        nextEligibleAt: new Date(Date.parse(input.generatedAt) + delaySeconds * 1_000).toISOString(),
+        activeRunId: undefined,
+        runExpiresAt: undefined,
+        updatedAt: input.generatedAt,
+        audit: [...(current.audit ?? []), { at: input.generatedAt, outcome: input.result?.outcome, runId: input.activeRunId }].slice(-100)
+      };
+      await this.persistWorkflow("collection_plan", finished, sql);
+    });
+    if (finished) super.savePlan(finished);
+    return finished;
+  }
+
+  async admitSourceFeedDiscovery(input: any): Promise<any> {
+    await this.flush();
+    let admission: any;
+    let stored: any;
+    await this.sql.begin(async (sql) => {
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${`source-feed-discovery-source:${input.feedEndpointKey}`}))`;
+      const [row] = await sql`
+        SELECT id, canonical_feed_key, record
+        FROM threat_intel.sources
+        WHERE canonical_feed_key = ${input.feedEndpointKey} OR id = ${input.source.id}
+        ORDER BY CASE WHEN canonical_feed_key = ${input.feedEndpointKey} THEN 0 ELSE 1 END, id
+        LIMIT 1
+        FOR UPDATE
+      `;
+      const existing = row ? readRecord(row) : undefined;
+      if (!existing) {
+        stored = input.source;
+        await this.persistSource(stored, sql);
+        admission = { outcome: "imported", sourceId: stored.id, feedEndpointKey: input.feedEndpointKey };
+        return;
+      }
+      if ((existing.tenantId === undefined || existing.tenantId === null || existing.tenantId === "")
+        && row.canonical_feed_key === input.feedEndpointKey
+        && existing.status === "candidate"
+        && existing.metadata?.sourceFeedDiscovery?.workflow === "req_source_feed_discovery"
+        && existing.metadata.sourceFeedDiscovery.publisherKey === input.publisherKey) {
+        stored = {
+          ...existing,
+          updatedAt: input.generatedAt,
+          metadata: {
+            ...existing.metadata,
+            sourcePortfolioVerification: input.verification,
+            sourceFeedDiscovery: {
+              ...existing.metadata.sourceFeedDiscovery,
+              parentSourceId: input.parentSourceId,
+              evidenceCaptureId: input.evidenceCaptureId
+            }
+          }
+        };
+        await this.persistSource(stored, sql);
+        admission = { outcome: "revalidated", sourceId: stored.id, feedEndpointKey: input.feedEndpointKey };
+        return;
+      }
+      admission = { outcome: "duplicate", sourceId: existing.id, feedEndpointKey: input.feedEndpointKey };
+    });
+    if (stored) super.saveSource(stored);
+    return admission;
+  }
+
   override saveRun(run: CollectionRun): CollectionRun {
     const stored = super.saveRun(run);
     this.enqueue(`collection-run:${stored.id}`, () => this.persistCollectionRun(stored));

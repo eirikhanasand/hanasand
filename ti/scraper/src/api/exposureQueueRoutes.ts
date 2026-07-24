@@ -11,7 +11,7 @@ import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { StaticWebAdapter, canonicalizeUrl } from "../adapters/staticWeb.ts";
 import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
-import { sourceFieldReportTimestamp, zonedSourceTimestamp } from "../pipeline/sourceFieldReportTimestamp.ts";
+import { publicSourceReferenceUrl, sourceFieldReportTimestamp, zonedSourceTimestamp } from "../pipeline/sourceFieldReportTimestamp.ts";
 
 const PUBLIC_ADVISORY_MAX_BYTES = 2_000_000;
 
@@ -790,10 +790,13 @@ async function publicAdvisoryDeadline<T>(operation: Promise<T>, timeoutMs: numbe
 }
 
 function normalizePublicAdvisoryUrl(value: string) {
-  let url: URL;
-  try { url = new URL(value); } catch { throw new Error("Public advisory URL must be valid."); }
-  if (url.protocol !== "https:" || url.username || url.password) throw new Error("Public advisory URL must use HTTPS without credentials.");
-  if (privateTarget(url.hostname)) throw new Error("Public advisory URL must use a public network target.");
+  let parsed: URL;
+  try { parsed = new URL(value); } catch { throw new Error("Public advisory URL must be valid."); }
+  if (privateTarget(parsed.hostname)) throw new Error("Public advisory URL must use a public network target.");
+  const safe = publicSourceReferenceUrl(value);
+  if (!safe) throw new Error("Public advisory URL must use a public HTTP URL without credentials or secrets.");
+  const url = new URL(safe);
+  if (url.protocol !== "https:") throw new Error("Public advisory URL must use HTTPS.");
   return url.toString();
 }
 
