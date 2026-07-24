@@ -129,6 +129,7 @@ test('public footer does not hardcode operational status', async () => {
 test('status monitors probe buyer-facing surfaces without inserting fake traffic', async () => {
     const syntheticMonitor = await readFile(path.join(root, '../api/src/utils/status/monitor.ts'), 'utf8')
     const logMonitor = await readFile(path.join(root, '../api/src/utils/status/logMonitors.ts'), 'utf8')
+    const dashboardMonitor = await readFile(path.join(root, '../ops/db-dashboard-monitor/db-dashboard-monitor.mjs'), 'utf8')
 
     for (const expected of ['API health', 'Public website', 'Public search', 'Browser workspace', 'Monitoring workspace']) {
         expect(syntheticMonitor).toContain(`'${expected}'`)
@@ -138,6 +139,9 @@ test('status monitors probe buyer-facing surfaces without inserting fake traffic
     expect(syntheticMonitor).toContain('fetchJson(\'/openapi.json\', {}, publicApiBase)')
     expect(syntheticMonitor).toContain('result?.mode !== \'scraper\'')
     expect(syntheticMonitor).toContain('freshness?.collectionCheckAgeMinutes')
+    expect(dashboardMonitor.indexOf('await monitorThreatIntelBackup()')).toBeLessThan(dashboardMonitor.indexOf('if (!username || !password)'))
+    expect(dashboardMonitor).toContain('`${statusIngestBaseUrl}/api/status/ingest`')
+    expect(dashboardMonitor).toContain('statePath: backupStatePath')
     expect(logMonitor).not.toContain('INSERT INTO traffic_events')
     expect(logMonitor).not.toContain('synthetic-monitor')
     expect(logMonitor).not.toContain('normal sample')
