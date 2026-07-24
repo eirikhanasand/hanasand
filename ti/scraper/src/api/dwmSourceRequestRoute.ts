@@ -3128,11 +3128,8 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.alertGenerationConsumerHandoff.schemaVersion == \"ti.public_actor.alert_generation_consumer_handoff.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.consumerProofLedger.schemaVersion == \"ti.public_actor.consumer_proof_ledger.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourceOperationsHandoff.schemaVersion == \"ti.public_actor.source_operations_handoff.v1\"",
-      ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.schemaVersion == \"ti.public_actor.downstream_fixture_export.v1\"",
-      ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceEnrichmentProfileContract.requiredFields | index(\"sourceEnrichmentProfile.fields[].provenance\")",
-      ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsContract.requiredFields | index(\"sourceOperationsReadiness.rows[].proofId\")",
-      ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.schemaVersion == \"ti.public_actor.downstream_source_operations_readiness.v1\"",
-      ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.rows | all(has(\"sourceFamily\") and has(\"state\") and has(\"parserStatus\") and has(\"provenance\") and .safeOutput.liveNetworkScrapeStarted == false)",
+      ".proofArtifacts.publicTiQueryAdapter.sourceOperationsReadiness.schemaVersion == \"ti.public_actor.source_operations_readiness.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.sourceOperationsReadiness.rows | all(has(\"sourceFamily\") and has(\"state\") and has(\"parserStatus\") and has(\"provenance\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.publicTiQueryAdapter.sourceFamilyCoverageMatrix.schemaVersion == \"ti.public_actor.source_family_coverage_matrix.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourcePackActivationPreview.schemaVersion == \"ti.public_actor.source_pack_activation_preview.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger.schemaVersion == \"ti.public_actor.source_enrichment_freshness_ledger.v1\"",
@@ -3389,7 +3386,7 @@ function sourceActorDashboardSourceOperationsAdapter(input: {
     const family = String(row.sourceFamily);
     alertRowsByFamily.set(family, [...(alertRowsByFamily.get(family) ?? []), row]);
   }
-  const sourceOperationsReadinessByFamily = new Map<string, Record<string, any>>((input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.rows ?? []).map((row: any) => [String(row.sourceFamily), row]));
+  const sourceOperationsReadinessByFamily = new Map<string, Record<string, any>>((input.publicTiQueryAdapter.sourceOperationsReadiness?.rows ?? []).map((row: any) => [String(row.sourceFamily), row]));
   const recoveryByFamily = new Map<string, Record<string, any>>((input.publicTiQueryAdapter.sourceHealth ?? []).map((row: any) => [String(row.family), row.operationalRecovery]));
   const rows = freshnessRows.map((row: any) => {
     const family = String(row.sourceFamily);
@@ -3486,9 +3483,9 @@ function sourceActorDashboardSourceOperationsAdapter(input: {
       gapFamilies: input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.summary?.gapFamilies ?? [],
       retryFamilies: input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.summary?.retryFamilies ?? [],
       alertableFamilies: input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.summary?.alertableFamilies ?? [],
-      sourceOperationsReadyFamilies: input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.summary?.readyFamilies ?? [],
-      sourceOperationsActionableFamilies: input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.summary?.actionableFamilies ?? [],
-      candidateIntakeFamilies: input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.summary?.candidateIntakeFamilies ?? [],
+      sourceOperationsReadyFamilies: input.publicTiQueryAdapter.sourceOperationsReadiness?.summary?.readyFamilies ?? [],
+      sourceOperationsActionableFamilies: input.publicTiQueryAdapter.sourceOperationsReadiness?.summary?.actionableFamilies ?? [],
+      candidateIntakeFamilies: input.publicTiQueryAdapter.sourceOperationsReadiness?.summary?.candidateIntakeFamilies ?? [],
       nextActionTypes: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.nextActions.map((action: any) => action.action))),
       recoveryStates: uniqueSourceReadinessStrings(rows.map((row: any) => row.operationalRecovery?.state).filter(Boolean)),
       recoveryActionFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.operationalRecovery?.nextActionTypes?.length > 0).map((row) => row.sourceFamily)),
@@ -3634,17 +3631,16 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     actorReadiness,
     consumerProofLedger
   });
-  const downstreamFixtureExport = sourceActorPublicTiDownstreamFixtureExport({
+  const sourceOperationsReadiness = sourceActorPublicTiSourceOperationsReadiness({
     query,
-    actorReadiness,
     consumerProofLedger,
-    alertGenerationConsumerHandoff,
     sourceOperationsHandoff,
     sourcePackIntakeHandoff
   });
   const sourceFamilyCoverageMatrix = sourceActorPublicTiSourceFamilyCoverageMatrix({
     query,
-    downstreamFixtureExport
+    consumerProofLedger,
+    sourceOperationsHandoff
   });
   const sourcePackActivationPreview = sourceActorPublicTiSourcePackActivationPreview({
     query,
@@ -3668,7 +3664,7 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     alertGenerationConsumerHandoff,
     sourceEnrichmentFreshnessLedger,
     watchlistAlertabilityBridge,
-    sourceOperationsReadiness: downstreamFixtureExport.sourceOperationsReadiness
+    sourceOperationsReadiness
   });
   const scraperEnrichmentLifecycle = sourceActorPublicTiScraperEnrichmentLifecycle({
     query,
@@ -3679,7 +3675,7 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     sourceEnrichmentFreshnessLedger,
     alertEnrichmentHandoff,
     watchlistAlertabilityBridge,
-    downstreamFixtureExport
+    sourceOperationsReadiness
   });
   const parserHealthAlerts = sourceActorPublicTiParserHealthAlerts({
     query,
@@ -3731,7 +3727,7 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     alertGenerationConsumerHandoff,
     consumerProofLedger,
     sourceOperationsHandoff,
-    downstreamFixtureExport,
+    sourceOperationsReadiness,
     sourceFamilyCoverageMatrix,
     sourcePackActivationPreview,
     sourceEnrichmentFreshnessLedger,
@@ -3759,12 +3755,12 @@ function sourceActorPublicTiScraperEnrichmentLifecycle(input: {
   sourceEnrichmentFreshnessLedger: Record<string, any>;
   alertEnrichmentHandoff: Record<string, any>;
   watchlistAlertabilityBridge: Record<string, any>;
-  downstreamFixtureExport: Record<string, any>;
+  sourceOperationsReadiness: Record<string, any>;
 }) {
   const parserByFamily = new Map<string, Record<string, any>>((input.parserStatusLedger.rows ?? []).map((row: any) => [String(row.family), row]));
   const freshnessByFamily = new Map<string, Record<string, any>>((input.sourceEnrichmentFreshnessLedger.rows ?? []).map((row: any) => [String(row.sourceFamily), row]));
   const intakeByFamily = new Map<string, Record<string, any>>((input.sourcePackIntakeHandoff.candidates ?? []).map((row: any) => [String(row.family), row]));
-  const operationByFamily = new Map<string, Record<string, any>>((input.downstreamFixtureExport.sourceOperationsReadiness?.rows ?? []).map((row: any) => [String(row.sourceFamily), row]));
+  const operationByFamily = new Map<string, Record<string, any>>((input.sourceOperationsReadiness.rows ?? []).map((row: any) => [String(row.sourceFamily), row]));
   const watchlistByFamily = new Map<string, Record<string, any>>((input.watchlistAlertabilityBridge.rows ?? []).map((row: any) => [String(row.sourceFamily), row]));
   const alertRowsByFamily = new Map<string, Array<Record<string, any>>>();
   for (const row of input.alertEnrichmentHandoff.rows ?? []) {
@@ -3780,7 +3776,7 @@ function sourceActorPublicTiScraperEnrichmentLifecycle(input: {
     ...(input.parserStatusLedger.rows ?? []).map((row: any) => row.family),
     ...(input.sourceEnrichmentFreshnessLedger.rows ?? []).map((row: any) => row.sourceFamily),
     ...(input.sourcePackIntakeHandoff.candidates ?? []).map((row: any) => row.family),
-    ...(input.downstreamFixtureExport.sourceOperationsReadiness?.rows ?? []).map((row: any) => row.sourceFamily),
+    ...(input.sourceOperationsReadiness.rows ?? []).map((row: any) => row.sourceFamily),
     ...(input.watchlistAlertabilityBridge.rows ?? []).map((row: any) => row.sourceFamily),
     ...(input.alertEnrichmentHandoff.rows ?? []).map((row: any) => row.sourceFamily)
   ]);
@@ -3911,7 +3907,6 @@ function sourceActorPublicTiScraperEnrichmentLifecycle(input: {
     schemaVersion: "ti.public_actor.scraper_enrichment_lifecycle.v1",
     proofId: stableId("ti_public_actor_scraper_enrichment_lifecycle", `${input.query}:${rows.map((row: any) => `${row.sourceFamily}:${row.parserStatus.state}:${row.freshness.state}`).join(",")}`),
     query: input.query,
-    mode: "no_network_fixture",
     rows,
     summary: {
       totalFamilies: rows.length,
@@ -4110,7 +4105,6 @@ function sourceActorPublicTiEnrichmentGapQueue(input: {
     schemaVersion: "ti.public_actor.enrichment_gap_queue.v1",
     proofId: stableId("ti_public_actor_enrichment_gap_queue", `${input.query}:${items.map((item: any) => `${item.sourceFamily}:${item.gapType}:${item.operatorAction}`).join(",")}`),
     query: input.query,
-    mode: "no_network_fixture",
     items,
     summary: {
       total: items.length,
@@ -4758,18 +4752,19 @@ function sourceActorPublicTiWatchlistAlertabilityBridge(input: {
 
 function sourceActorPublicTiSourceFamilyCoverageMatrix(input: {
   query: string;
-  downstreamFixtureExport: Record<string, any>;
+  consumerProofLedger: Record<string, any>;
+  sourceOperationsHandoff: Record<string, any>;
 }) {
   const operationTypesByFamily = new Map<string, string[]>();
-  for (const operation of input.downstreamFixtureExport.operations ?? []) {
+  for (const operation of input.sourceOperationsHandoff.operations ?? []) {
     const family = String(operation.family ?? "unknown");
     operationTypesByFamily.set(family, uniqueSourceReadinessStrings([...(operationTypesByFamily.get(family) ?? []), operation.type]));
   }
-  const rows = (input.downstreamFixtureExport.rows ?? []).map((row: any) => ({
+  const rows = (input.consumerProofLedger.rows ?? []).map((row: any) => ({
     schemaVersion: "ti.public_actor.source_family_coverage_row.v1",
-    proofId: stableId("ti_public_actor_source_family_coverage_row", `${input.query}:${row.sourceFamily}:${row.state}:${row.parserStatus?.state}:${row.consumers?.publicTi?.ready === true}:${row.consumers?.alertGeneration?.ready === true}`),
+    proofId: stableId("ti_public_actor_source_family_coverage_row", `${input.query}:${row.family}:${row.state}:${row.parserStatus?.state}:${row.consumers?.publicTi?.ready === true}:${row.consumers?.alertGeneration?.ready === true}`),
     query: input.query,
-    sourceFamily: row.sourceFamily,
+    sourceFamily: row.family,
     state: row.state,
     parserState: row.parserStatus?.state,
     captureState: row.parserStatus?.captureState,
@@ -4779,7 +4774,7 @@ function sourceActorPublicTiSourceFamilyCoverageMatrix(input: {
     lastEnrichmentAt: row.timestamps?.lastEnrichmentAt,
     publicTiReady: row.consumers?.publicTi?.ready === true,
     alertGenerationReady: row.consumers?.alertGeneration?.ready === true,
-    operationTypes: operationTypesByFamily.get(String(row.sourceFamily)) ?? [],
+    operationTypes: operationTypesByFamily.get(String(row.family)) ?? [],
     gapState: row.gap?.state,
     blockerCodes: uniqueSourceReadinessStrings((row.blockers ?? []).map((blocker: any) => blocker.code).filter(Boolean)),
     provenance: {
@@ -4820,160 +4815,13 @@ function sourceActorPublicTiSourceFamilyCoverageMatrix(input: {
   };
 }
 
-function sourceActorPublicTiDownstreamFixtureExport(input: {
+function sourceActorPublicTiSourceOperationsReadiness(input: {
   query: string;
-  actorReadiness: Record<string, any>;
   consumerProofLedger: Record<string, any>;
-  alertGenerationConsumerHandoff: Record<string, any>;
   sourceOperationsHandoff: Record<string, any>;
   sourcePackIntakeHandoff: Record<string, any>;
 }) {
-  const rows = (input.consumerProofLedger.rows ?? []).map((row: any) => ({
-    schemaVersion: "ti.public_actor.downstream_fixture_row.v1",
-    proofId: stableId("ti_public_actor_downstream_fixture_row", `${input.query}:${row.family}:${row.state}:${row.parserStatus?.state}:${row.consumers?.alertGeneration?.ready === true}`),
-    query: input.query,
-    sourceFamily: row.family,
-    state: row.state,
-    parserStatus: row.parserStatus,
-    confidence: row.confidence,
-    confidenceTier: row.confidenceTier,
-    timestamps: row.timestamps,
-    provenance: {
-      evidenceProofId: row.provenance?.evidenceProofId,
-      sourceHealthProofId: row.provenance?.sourceHealthProofId,
-      parserProofId: row.provenance?.parserProofId,
-      intakeProofId: row.provenance?.intakeProofId,
-      sourceIds: row.provenance?.sourceIds ?? [],
-      candidateIds: row.provenance?.candidateIds ?? [],
-      privacyBoundary: row.provenance?.privacyBoundary
-    },
-    consumers: {
-      publicTi: row.consumers?.publicTi,
-      alertGeneration: row.consumers?.alertGeneration
-    },
-    gap: row.gap,
-    blockers: row.blockers ?? [],
-    safeOutput: {
-      rawTargetsExposed: false,
-      restrictedMetadataLeaked: false,
-      privateTelegramContentExposed: false,
-      liveNetworkScrapeStarted: false
-    }
-  }));
-  const sourceOperationsReadiness = sourceActorPublicTiDownstreamSourceOperationsReadiness({
-    query: input.query,
-    rows,
-    sourceOperationsHandoff: input.sourceOperationsHandoff,
-    sourcePackIntakeHandoff: input.sourcePackIntakeHandoff
-  });
-  return {
-    schemaVersion: "ti.public_actor.downstream_fixture_export.v1",
-    proofId: stableId("ti_public_actor_downstream_fixture_export", `${input.query}:${rows.map((row: any) => `${row.sourceFamily}:${row.state}:${row.parserStatus?.state}`).join(",")}`),
-    query: input.query,
-    mode: "no_network_fixture",
-    generatedFrom: {
-      actorReadinessProofId: input.actorReadiness.proofId,
-      consumerProofLedgerId: input.consumerProofLedger.proofId,
-      alertGenerationHandoffId: input.alertGenerationConsumerHandoff.proofId,
-      sourceOperationsHandoffId: input.sourceOperationsHandoff.proofId
-    },
-    publicTiContract: {
-      path: `/ti/${encodeURIComponent(input.query.toLowerCase())}`,
-      requiredFields: ["sourceFamily", "parserStatus", "confidence", "timestamps", "provenance", "gap", "safeOutput", "sourceEnrichmentProfile"]
-    },
-    sourceEnrichmentProfileContract: {
-      schemaVersion: "ti.public_actor.source_enrichment_profile_contract.v1",
-      mode: "no_network_fixture",
-      profile: input.actorReadiness.sourceEnrichmentProfile,
-      requiredFields: [
-        "sourceEnrichmentProfile.schemaVersion",
-        "sourceEnrichmentProfile.fields[].field",
-        "sourceEnrichmentProfile.fields[].state",
-        "sourceEnrichmentProfile.fields[].values",
-        "sourceEnrichmentProfile.fields[].confidence",
-        "sourceEnrichmentProfile.fields[].freshness",
-        "sourceEnrichmentProfile.fields[].provenance",
-        "sourceEnrichmentProfile.fields[].gaps",
-        "sourceEnrichmentProfile.safeOutput"
-      ],
-      consumerRoutes: {
-        publicTi: `/ti/${encodeURIComponent(input.query.toLowerCase())}`,
-        dashboardSourceOps: "/dashboard/ti/control"
-      },
-      policyBoundary: {
-        liveNetworkFetch: false,
-        rawActorClaimsSynthesized: false,
-        restrictedPayloadStorage: false
-      }
-    },
-    alertGenerationContract: {
-      path: "/v1/dwm/alerts/rebuild",
-      requiredFields: ["sourceFamily", "consumers.alertGeneration", "provenance.evidenceProofId", "parserStatus", "blockers"]
-    },
-    sourceOperationsContract: {
-      schemaVersion: "ti.public_actor.source_operations_contract.v1",
-      mode: "no_network_fixture",
-      requiredFields: [
-        "sourceOperationsReadiness.rows[].proofId",
-        "sourceOperationsReadiness.rows[].sourceFamily",
-        "sourceOperationsReadiness.rows[].state",
-        "sourceOperationsReadiness.rows[].parserStatus",
-        "sourceOperationsReadiness.rows[].provenance",
-        "sourceOperationsReadiness.rows[].operatorActions",
-        "sourceOperationsReadiness.rows[].candidateIntake",
-        "sourceOperationsReadiness.rows[].safeOutput"
-      ],
-      consumerRoutes: {
-        publicTi: `/ti/${encodeURIComponent(input.query.toLowerCase())}`,
-        dashboardSourceOps: "/dashboard/ti/control",
-        sourceRequests: "/v1/dwm/source-requests",
-        alertRebuild: "/v1/dwm/alerts/rebuild"
-      },
-      policyBoundary: {
-        liveNetworkFetch: false,
-        publicTelegramOnly: true,
-        metadataOnlyRestrictedSources: true,
-        rawRestrictedPayloadStorage: false
-      }
-    },
-    rows,
-    operations: (input.sourceOperationsHandoff.operations ?? []).map((operation: any) => ({
-      operationId: operation.operationId,
-      type: operation.type,
-      family: operation.family,
-      priority: operation.priority,
-      route: operation.route,
-      blockers: operation.blockers ?? [],
-      safeOutput: operation.safeOutput
-    })),
-    sourceOperationsReadiness,
-    summary: {
-      rowCount: rows.length,
-      publicTiReadyFamilies: input.consumerProofLedger.summary?.publicTiReadyFamilies ?? [],
-      alertReadyFamilies: input.consumerProofLedger.summary?.alertReadyFamilies ?? [],
-      gapFamilies: input.consumerProofLedger.summary?.gapFamilies ?? [],
-      retryFamilies: input.consumerProofLedger.summary?.retryFamilies ?? [],
-      operationTypes: input.sourceOperationsHandoff.summary?.actionTypes ?? [],
-      sourceOperationsReadyFamilies: sourceOperationsReadiness.summary.readyFamilies,
-      sourceOperationsActionableFamilies: sourceOperationsReadiness.summary.actionableFamilies,
-      latestCaptureAt: input.consumerProofLedger.summary?.latestCaptureAt,
-      latestEnrichmentAt: input.consumerProofLedger.summary?.latestEnrichmentAt
-    },
-    safeOutput: {
-      rawTargetsExposed: false,
-      restrictedMetadataLeaked: false,
-      privateTelegramContentExposed: false,
-      liveNetworkScrapeStarted: false
-    }
-  };
-}
-
-function sourceActorPublicTiDownstreamSourceOperationsReadiness(input: {
-  query: string;
-  rows: Array<Record<string, any>>;
-  sourceOperationsHandoff: Record<string, any>;
-  sourcePackIntakeHandoff: Record<string, any>;
-}) {
+  const consumerRows = input.consumerProofLedger.rows ?? [];
   const operationsByFamily = new Map<string, Array<Record<string, any>>>();
   for (const operation of input.sourceOperationsHandoff.operations ?? []) {
     const families = operation.relatedFamilies?.length ? operation.relatedFamilies : [operation.family];
@@ -4983,12 +4831,12 @@ function sourceActorPublicTiDownstreamSourceOperationsReadiness(input: {
   }
   const intakeByFamily = new Map<string, Record<string, any>>((input.sourcePackIntakeHandoff.candidates ?? []).map((candidate: any) => [String(candidate.family), candidate]));
   const familyNames = uniqueSourceReadinessStrings([
-    ...input.rows.map((row) => row.sourceFamily),
+    ...consumerRows.map((row: any) => row.family),
     ...Array.from(operationsByFamily.keys()),
     ...Array.from(intakeByFamily.keys())
   ]);
   const rows = familyNames.map((family) => {
-    const proof = input.rows.find((row) => row.sourceFamily === family);
+    const proof = consumerRows.find((row: any) => row.family === family);
     const operations = operationsByFamily.get(family) ?? [];
     const intake = intakeByFamily.get(family);
     const blockers = dedupeBlockers([
@@ -5000,8 +4848,8 @@ function sourceActorPublicTiDownstreamSourceOperationsReadiness(input: {
     const alertGenerationReady = proof?.consumers?.alertGeneration?.ready === true;
     const hasAction = operations.length > 0 || Boolean(intake);
     return {
-      schemaVersion: "ti.public_actor.downstream_source_operations_readiness_row.v1",
-      proofId: stableId("ti_public_actor_downstream_source_operations_readiness_row", `${input.query}:${family}:${proof?.state ?? "candidate"}:${operations.map((operation) => operation.type).join(",")}:${intake?.policyResult?.allowed === true}`),
+      schemaVersion: "ti.public_actor.source_operations_readiness_row.v1",
+      proofId: stableId("ti_public_actor_source_operations_readiness_row", `${input.query}:${family}:${proof?.state ?? "candidate"}:${operations.map((operation) => operation.type).join(",")}:${intake?.policyResult?.allowed === true}`),
       query: input.query,
       sourceFamily: family,
       state: publicTiReady || alertGenerationReady ? "ready" : hasAction ? "actionable" : "blocked",
@@ -5012,7 +4860,7 @@ function sourceActorPublicTiDownstreamSourceOperationsReadiness(input: {
         freshnessState: proof?.timestamps?.lastCaptureAt ? "observed" : "capture_required"
       },
       provenance: {
-        downstreamProofId: proof?.proofId,
+        consumerProofId: proof?.proofId,
         intakeProofId: intake?.proofId,
         sourceIds: proof?.provenance?.sourceIds ?? [],
         candidateIds: uniqueSourceReadinessStrings([
@@ -5055,8 +4903,8 @@ function sourceActorPublicTiDownstreamSourceOperationsReadiness(input: {
     };
   });
   return {
-    schemaVersion: "ti.public_actor.downstream_source_operations_readiness.v1",
-    proofId: stableId("ti_public_actor_downstream_source_operations_readiness", `${input.query}:${rows.map((row: any) => `${row.sourceFamily}:${row.state}:${row.operatorActions.length}`).join(",")}`),
+    schemaVersion: "ti.public_actor.source_operations_readiness.v1",
+    proofId: stableId("ti_public_actor_source_operations_readiness", `${input.query}:${rows.map((row: any) => `${row.sourceFamily}:${row.state}:${row.operatorActions.length}`).join(",")}`),
     query: input.query,
     rows,
     summary: {

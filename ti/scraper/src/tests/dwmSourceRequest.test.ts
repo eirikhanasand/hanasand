@@ -1980,7 +1980,7 @@ describe("dwm source requests", () => {
       ])
     });
     expect(body.candidateIntakeContract).not.toHaveProperty("fixtureManifest");
-    expect(body.proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.rows
+    expect(body.proofArtifacts.publicTiQueryAdapter.sourceOperationsReadiness.rows
       .some((row: Record<string, unknown>) => "fixtureReadiness" in row)).toBe(false);
     expect(body.proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.summary)
       .not.toHaveProperty("fixtureReadyFamilies");
@@ -2011,16 +2011,14 @@ describe("dwm source requests", () => {
           expect.objectContaining({ type: "request_candidate", family: "darkweb_onion" })
         ])
       }),
-      downstreamFixtureExport: expect.objectContaining({
-        sourceOperationsReadiness: expect.objectContaining({
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              sourceFamily: "darkweb_onion",
-              state: "actionable",
-              candidateIntake: expect.objectContaining({ available: true })
-            })
-          ])
-        })
+      sourceOperationsReadiness: expect.objectContaining({
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            sourceFamily: "darkweb_onion",
+            state: "actionable",
+            candidateIntake: expect.objectContaining({ available: true })
+          })
+        ])
       }),
       enrichmentGapQueue: expect.objectContaining({
         items: expect.arrayContaining([
@@ -2426,10 +2424,10 @@ describe("dwm source requests", () => {
         recoveryActionFamilies: expect.arrayContaining(["telegram", "actor_page"])
       })
     });
-    expect(retryQueryAdapter.downstreamFixtureExport).toMatchObject({
+    expect(retryQueryAdapter.consumerProofLedger).toMatchObject({
       rows: expect.arrayContaining([
         expect.objectContaining({
-          sourceFamily: "telegram",
+          family: "telegram",
           parserStatus: expect.objectContaining({
             state: "retry_required",
             retryBackoff: expect.objectContaining({ retryable: true })
@@ -2439,18 +2437,18 @@ describe("dwm source requests", () => {
             expect.objectContaining({ code: "parser_retry_required", family: "telegram" })
           ])
         })
-      ]),
-      sourceOperationsReadiness: expect.objectContaining({
-        rows: expect.arrayContaining([
-          expect.objectContaining({
-            sourceFamily: "telegram",
-            state: "actionable",
-            operatorActions: expect.arrayContaining([
-              expect.objectContaining({ type: "retry_parser" })
-            ])
-          })
-        ])
-      })
+      ])
+    });
+    expect(retryQueryAdapter.sourceOperationsReadiness).toMatchObject({
+      rows: expect.arrayContaining([
+        expect.objectContaining({
+          sourceFamily: "telegram",
+          state: "actionable",
+          operatorActions: expect.arrayContaining([
+            expect.objectContaining({ type: "retry_parser" })
+          ])
+        })
+      ])
     });
     expect(retryQueryAdapter.sourceEnrichmentFreshnessLedger).toMatchObject({
       rows: expect.arrayContaining([
