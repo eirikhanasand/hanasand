@@ -105,7 +105,8 @@ function victimNamesFromHtml(html: string, actorName?: string): string[] {
     ...(actor === "spacebears" ? [...html.matchAll(/<div\b[^>]*class=["'][^"']*\bcompanies-list__item\b[^"']*["'][^>]*>[\s\S]*?<div\b[^>]*class=["'][^"']*\bname\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)].map((match) => clean(match[1])) : []),
     ...(actor === "qilin" ? [...html.matchAll(/<([a-z0-9]+)\b[^>]*class=["'][^"']*\bitem_box-title\b[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi)].map((match) => clean(match[2])) : []),
     ...(actor === "nova" ? [...html.matchAll(/<[^>]*class=["'][^"']*\bpost-card\b[^"']*["'][^>]*>[\s\S]*?<a\b[^>]*class=["'][^"']*\blogo\b[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi)].map((match) => clean(match[1])) : []),
-    ...(actor === "interlock" ? [...html.matchAll(/<([a-z0-9]+)\b[^>]*class=["'][^"']*\badvert_info_title\b[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi)].map((match) => clean(match[2])) : [])
+    ...(actor === "interlock" ? [...html.matchAll(/<([a-z0-9]+)\b[^>]*class=["'][^"']*\badvert_info_title\b[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi)].map((match) => clean(match[2])) : []),
+    ...(actor === "genesis" ? [...html.matchAll(/<section\b[^>]*class=["'][^"']*\bblock-bg\b[^"']*["'][^>]*>\s*<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)].map((match) => clean(match[1])) : [])
   ];
   return safeVictimNames(names);
 }
