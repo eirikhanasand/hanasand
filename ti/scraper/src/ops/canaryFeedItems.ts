@@ -69,7 +69,9 @@ function jsonSummary(value: any) {
 
 function structuredFields(value: any) {
   const fields = ["cveID", "vendorProject", "product", "vulnerabilityName", "dateAdded", "shortDescription", "requiredAction", "dueDate", "knownRansomwareCampaignUse"];
-  return Object.fromEntries(fields.flatMap((field) => typeof value?.[field] === "string" && value[field].trim() ? [[field, value[field].trim().slice(0, 1_000)]] : []));
+  const retained = Object.fromEntries(fields.flatMap((field) => typeof value?.[field] === "string" && value[field].trim() ? [[field, value[field].trim().slice(0, 1_000)]] : []));
+  if (!retained.cveID && /^CVE-\d{4}-\d{4,}$/i.test(String(value?.id ?? ""))) retained.cveID = String(value.id).toUpperCase();
+  return retained;
 }
 
 function ransomwareGroupMetadata(value: any) {
