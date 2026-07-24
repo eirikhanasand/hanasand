@@ -181,6 +181,38 @@ describe("scheduled public feed discovery", () => {
     });
   });
 
+  test("keeps a proven feed when an optional related link fails and blocks secret redirects", async () => {
+    const store = new InMemoryScraperStore();
+    usefulCapture(store, "safe-redirect-parent", undefined, "run-safe-redirect", ["https://publisher.example/security"]);
+    const fetched: string[] = [];
+    const discovery = await runSourceFeedDiscoveryCycle({
+      store,
+      sourceFeedDiscoveryFetch: async (input: string | URL | Request) => {
+        const url = String(input instanceof Request ? input.url : input);
+        fetched.push(url);
+        if (url === "https://publisher.example/security") return response(
+          `<html><head><link type="application/rss+xml" href="/security.xml" rel="alternate"></head>
+            <body><a href="https://related.example/security">Related security research</a></body></html>`,
+          url,
+          "text/html"
+        );
+        if (url === "https://publisher.example/security.xml") return response(
+          rss("CVE-2026-5000", "https://publisher.example/CVE-2026-5000", generatedAt),
+          url,
+          "application/rss+xml"
+        );
+        if (url === "https://related.example/security") return response("", url, "text/html", 302, {
+          location: "https://related.example/security?token=must-not-be-sent"
+        });
+        throw new Error(`unexpected fetch ${url}`);
+      }
+    }, generatedAt);
+
+    expect(discovery).toMatchObject({ importedSourceCount: 1, failedPublisherCount: 0 });
+    expect(fetched).toContain("https://related.example/security");
+    expect(fetched.some((url) => url.includes("must-not-be-sent"))).toBe(false);
+  });
+
   test("discovers and verifies public Telegram channels without private access", async () => {
     const store = new InMemoryScraperStore();
     usefulCapture(store, "telegram-reporter", undefined, "run-telegram-reporter", ["https://reporter.example/research/apt29"]);

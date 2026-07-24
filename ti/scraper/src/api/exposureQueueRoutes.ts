@@ -794,6 +794,7 @@ function normalizePublicAdvisoryUrl(value: string) {
   try { url = new URL(value); } catch { throw new Error("Public advisory URL must be valid."); }
   if (url.protocol !== "https:" || url.username || url.password) throw new Error("Public advisory URL must use HTTPS without credentials.");
   if (privateTarget(url.hostname)) throw new Error("Public advisory URL must use a public network target.");
+  if ([...url.searchParams.keys()].some((key) => /token|secret|password|authorization|cookie|api[_-]?key|signature/i.test(key))) throw new Error("Public advisory URL must not contain secret query parameters.");
   return url.toString();
 }
 

@@ -284,16 +284,20 @@ function retainedPublisherReferences(store: DiscoveryStore) {
 async function advertisedFeedProofs(html: string, pageUrl: string, fetcher: CanaryFetch, generatedAt: string, maxFeeds: number, signal: AbortSignal) {
   const proofs: FeedProof[] = [];
   for (const url of alternateFeedUrls(html, pageUrl).slice(0, maxFeeds)) {
-    const response = await abortable(fetcher(url, {
-      headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml" },
-      signal
-    }), signal);
-    if (!response.ok) continue;
-    const effectiveUrl = safePublicReference(response.url || url);
-    if (!effectiveUrl) continue;
-    const body = await abortable(boundedResponseText(response, MAX_RESPONSE_BYTES), signal);
-    const proof = feedProof(body, effectiveUrl, response.headers.get("content-type"), generatedAt);
-    if (proof && !proofs.some((row) => row.feedEndpointKey === proof.feedEndpointKey)) proofs.push(proof);
+    try {
+      const response = await abortable(fetcher(url, {
+        headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml" },
+        signal
+      }), signal);
+      if (!response.ok) continue;
+      const effectiveUrl = safePublicReference(response.url || url);
+      if (!effectiveUrl) continue;
+      const body = await abortable(boundedResponseText(response, MAX_RESPONSE_BYTES), signal);
+      const proof = feedProof(body, effectiveUrl, response.headers.get("content-type"), generatedAt);
+      if (proof && !proofs.some((row) => row.feedEndpointKey === proof.feedEndpointKey)) proofs.push(proof);
+    } catch {
+      if (signal.aborted) throw signal.reason;
+    }
   }
   return proofs;
 }
@@ -301,19 +305,23 @@ async function advertisedFeedProofs(html: string, pageUrl: string, fetcher: Cana
 async function relatedPublisherFeedProofs(html: string, pageUrl: string, fetcher: CanaryFetch, generatedAt: string, maxFeeds: number, signal: AbortSignal) {
   const proofs: FeedProof[] = [];
   for (const url of relatedSecurityPageUrls(html, pageUrl).slice(0, maxFeeds)) {
-    const response = await abortable(fetcher(url, {
-      headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.8" },
-      signal
-    }), signal);
-    if (!response.ok) continue;
-    const effectiveUrl = safePublicReference(response.url || url);
-    if (!effectiveUrl) continue;
-    const body = await abortable(boundedResponseText(response, MAX_RESPONSE_BYTES), signal);
-    const direct = feedProof(body, effectiveUrl, response.headers.get("content-type"), generatedAt);
-    const discovered = direct ? [direct] : await advertisedFeedProofs(body, effectiveUrl, fetcher, generatedAt, 1, signal);
-    for (const proof of discovered) {
-      if (!proofs.some((row) => row.feedEndpointKey === proof.feedEndpointKey)) proofs.push(proof);
-      if (proofs.length >= maxFeeds) return proofs;
+    try {
+      const response = await abortable(fetcher(url, {
+        headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.8" },
+        signal
+      }), signal);
+      if (!response.ok) continue;
+      const effectiveUrl = safePublicReference(response.url || url);
+      if (!effectiveUrl) continue;
+      const body = await abortable(boundedResponseText(response, MAX_RESPONSE_BYTES), signal);
+      const direct = feedProof(body, effectiveUrl, response.headers.get("content-type"), generatedAt);
+      const discovered = direct ? [direct] : await advertisedFeedProofs(body, effectiveUrl, fetcher, generatedAt, 1, signal);
+      for (const proof of discovered) {
+        if (!proofs.some((row) => row.feedEndpointKey === proof.feedEndpointKey)) proofs.push(proof);
+        if (proofs.length >= maxFeeds) return proofs;
+      }
+    } catch {
+      if (signal.aborted) throw signal.reason;
     }
   }
   return proofs;
@@ -322,36 +330,40 @@ async function relatedPublisherFeedProofs(html: string, pageUrl: string, fetcher
 async function publicTelegramProofs(html: string, pageUrl: string, fetcher: CanaryFetch, generatedAt: string, maxChannels: number, signal: AbortSignal) {
   const proofs: FeedProof[] = [];
   for (const url of publicTelegramChannelUrls(html, pageUrl).slice(0, maxChannels)) {
-    const channel = new URL(url).pathname.slice(1);
-    const previewUrl = `https://t.me/s/${channel}`;
-    const response = await abortable(fetcher(previewUrl, {
-      headers: { accept: "text/html" },
-      signal
-    }), signal);
-    if (!response.ok || !safePublicReference(response.url || previewUrl)) continue;
-    const body = await abortable(boundedResponseText(response, MAX_RESPONSE_BYTES), signal);
-    const probe = { id: "source-telegram-discovery-probe", name: "Public Telegram intelligence channel", type: "telegram_public", url };
-    const rows = (feedItems(probe, { id: probe.id, targetUrl: url }, body, generatedAt, {}, 150) as FeedItem[])
-      .filter((row) => !row.metadata?.parserWarnings?.length
-        && currentPublisherTimestamp(row.publishedAt, generatedAt)
-        && isSellableIntelText({
-          text: String(row.rawText ?? ""),
-          title: row.title,
-          sourceId: probe.id,
-          publishedAt: row.publishedAt,
-          collectedAt: row.collectedAt,
-          now: generatedAt,
-          maxAgeDays: 365
-        }));
-    if (!rows.length) continue;
-    proofs.push({
-      url,
-      feedEndpointKey: canonicalFeedKey(url),
-      observedItemCount: rows.length,
-      parserVersion: rows[0].metadata?.parserVersion ?? "telegram-public-preview:v1",
-      sourceType: "telegram_public",
-      family: "public_telegram"
-    });
+    try {
+      const channel = new URL(url).pathname.slice(1);
+      const previewUrl = `https://t.me/s/${channel}`;
+      const response = await abortable(fetcher(previewUrl, {
+        headers: { accept: "text/html" },
+        signal
+      }), signal);
+      if (!response.ok || !safePublicReference(response.url || previewUrl)) continue;
+      const body = await abortable(boundedResponseText(response, MAX_RESPONSE_BYTES), signal);
+      const probe = { id: "source-telegram-discovery-probe", name: "Public Telegram intelligence channel", type: "telegram_public", url };
+      const rows = (feedItems(probe, { id: probe.id, targetUrl: url }, body, generatedAt, {}, 150) as FeedItem[])
+        .filter((row) => !row.metadata?.parserWarnings?.length
+          && currentPublisherTimestamp(row.publishedAt, generatedAt)
+          && isSellableIntelText({
+            text: String(row.rawText ?? ""),
+            title: row.title,
+            sourceId: probe.id,
+            publishedAt: row.publishedAt,
+            collectedAt: row.collectedAt,
+            now: generatedAt,
+            maxAgeDays: 365
+          }));
+      if (!rows.length) continue;
+      proofs.push({
+        url,
+        feedEndpointKey: canonicalFeedKey(url),
+        observedItemCount: rows.length,
+        parserVersion: rows[0].metadata?.parserVersion ?? "telegram-public-preview:v1",
+        sourceType: "telegram_public",
+        family: "public_telegram"
+      });
+    } catch {
+      if (signal.aborted) throw signal.reason;
+    }
   }
   return proofs;
 }
@@ -377,7 +389,17 @@ function feedProof(body: string, feedUrl: string, mediaType: string | null, gene
   if (!parsed.length) return undefined;
   const probe = { id: "source-feed-discovery-probe", name: "Public intelligence feed", type: "rss", url: feedUrl };
   const productionRows = (feedItems(probe, { id: "source-feed-discovery-probe", targetUrl: feedUrl }, body, generatedAt, {}, 150) as FeedItem[])
-    .filter((row) => !row.metadata?.parserWarnings?.length && currentPublisherTimestamp(row.publishedAt, generatedAt));
+    .filter((row) => !row.metadata?.parserWarnings?.length
+      && currentPublisherTimestamp(row.publishedAt, generatedAt)
+      && isSellableIntelText({
+        text: String(row.rawText ?? ""),
+        title: row.title,
+        sourceId: probe.id,
+        publishedAt: row.publishedAt,
+        collectedAt: row.collectedAt,
+        now: generatedAt,
+        maxAgeDays: 365
+      }));
   if (!productionRows.length) return undefined;
   return {
     url: feedUrl,
