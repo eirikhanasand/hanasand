@@ -1,5 +1,5 @@
 import { describe, expect, fixtureCapture, FocusedFrontier, handleApiRequest, InMemoryScraperStore, source, test } from "./apiTestHarness.ts";
-import { pinnedPublicAdvisoryLookup, publicAdvisorySourceIdentity, resolvePublicAdvisoryTarget, saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.ts";
+import { exposureClaimsFromStore, pinnedPublicAdvisoryLookup, publicAdvisorySourceIdentity, resolvePublicAdvisoryTarget, saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.ts";
 import { responseFixture } from "./helpers/adapterFixtureHelpers.ts";
 
 Bun.env.HANASAND_AI_API_BASE = "";
@@ -543,6 +543,59 @@ describe("DWM exposure queue pipeline", () => {
     expect(queueBody.items).toHaveLength(1);
     expect(queueBody.items[0].actor).toBe("LockBit");
     expect(queueBody.items[0].company).toBe("Alpine Robotics");
+
+    const source = store.listSources()[0];
+    store.saveSourceHealthObservation({
+      id: "health_recent_duplicate_check",
+      tenantId: source.tenantId,
+      sourceId: source.id,
+      checkedAt: new Date().toISOString(),
+      status: "healthy",
+      success: true,
+      useful: false,
+      itemCount: 1,
+      captureCount: 0,
+      duplicateCount: 1,
+      parserWarningCount: 0,
+      legalMode: "public_content"
+    });
+    const checked = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?limit=5"), options);
+    const checkedBody = await checked.json() as any;
+    expect(checkedBody.status).toBe("live");
+    expect(checkedBody.scheduler.state).toBe("fresh");
+    expect(checkedBody.freshness.collectionCheckAgeMinutes).toBe(0);
+    expect(checkedBody.freshness.claimAgeMinutes).toBeGreaterThan(60);
+  });
+
+  test("shows tenant captures backed by shared public sources without crossing tenants", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({
+      id: "src_shared_victim_feed",
+      tenantId: undefined,
+      name: "Shared public victim feed",
+      metadata: { sourceFamily: "public_actor_claims" }
+    }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_tenant_a_shared_source",
+      tenantId: "tenant_a",
+      sourceId: "src_shared_victim_feed",
+      title: "Akira has just published a new victim: Tenant A Manufacturing",
+      publishedAt: new Date().toISOString(),
+      collectedAt: new Date().toISOString(),
+      metadata: {
+        sourceFamily: "public_actor_claims",
+        safeExcerpt: "Akira has just published a new victim: Tenant A Manufacturing",
+        leakSite: { actorName: "Akira", victimName: "Tenant A Manufacturing" }
+      }
+    }));
+
+    expect(exposureClaimsFromStore(store, "", { tenantId: "tenant_a" })).toEqual([
+      expect.objectContaining({ id: "cap_tenant_a_shared_source", company: "Tenant A Manufacturing" })
+    ]);
+    expect(exposureClaimsFromStore(store, "", { tenantId: "tenant_b" })).toEqual([]);
+
+    store.saveSource({ ...store.getSource("src_shared_victim_feed")!, tenantId: "tenant_b" });
+    expect(exposureClaimsFromStore(store, "", { tenantId: "tenant_a" })).toEqual([]);
   });
 
   test("paginates live exposure queue rows for landing-page infinite scroll", async () => {
