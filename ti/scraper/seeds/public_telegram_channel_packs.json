@@ -1,10 +1,10 @@
 {
-  "version": 4,
+  "version": 5,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-07-23T19:34:33.000Z",
+  "generatedAt": "2026-07-24T09:04:39.000Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 12,
+  "sourceCount": 14,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -1339,6 +1339,256 @@
           "collectionSlaSeconds": 900,
           "budgetClass": "high",
           "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_red_hot_cyber_telegram",
+      "name": "Red Hot Cyber public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/redhotcyber",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.82,
+      "language": "it",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public Italian-language cybercrime and security reporting from the channel linked by redhotcyber.com. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-24T09:04:39.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "malware_research",
+          "cybercrime_reporting",
+          "victim_publication_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "redhotcyber",
+        "verifiedSourceId": "src_red_hot_cyber_telegram",
+        "publisherReference": "https://www.redhotcyber.com/",
+        "ownershipVerifiedAt": "2026-07-24T09:04:39.000Z",
+        "activityVerifiedAt": "2026-07-24T09:04:39.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "malware",
+          "cybercrime",
+          "vulnerabilities",
+          "data breaches",
+          "threat research"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-24T09:04:39.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 5,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.redhotcyber.com/",
+          "legalBasisVerifiedAt": "2026-07-24T09:04:39.000Z",
+          "latestPublishedAt": "2026-07-24T07:28:06+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:it:red-hot-cyber:telegram",
+        "publisher": {
+          "name": "Red Hot Cyber",
+          "country": "IT",
+          "homepage": "https://www.redhotcyber.com/",
+          "trustBasis": "publisher website links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.82,
+        "intelligenceValue": 0.8,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "malware",
+            "cybercrime",
+            "vulnerabilities",
+            "data breaches",
+            "threat research"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "government",
+            "healthcare",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Italy",
+            "Europe",
+            "Global"
+          ],
+          "countries": [
+            "Italy"
+          ],
+          "languages": [
+            "it"
+          ],
+          "queryPatterns": [
+            "malware",
+            "vulnerabilità",
+            "cybercrime",
+            "attacco"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_segu_info_telegram",
+      "name": "Segu-Info public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/SeguInfoChannel",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.84,
+      "language": "es",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Spanish-language vulnerability and cybercrime reporting from the channel linked by blog.segu-info.com.ar. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-24T09:04:39.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "malware_research",
+          "cybercrime_reporting",
+          "vulnerability_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "SeguInfoChannel",
+        "verifiedSourceId": "src_segu_info_telegram",
+        "publisherReference": "https://blog.segu-info.com.ar/",
+        "ownershipVerifiedAt": "2026-07-24T09:04:39.000Z",
+        "activityVerifiedAt": "2026-07-24T09:04:39.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "vulnerabilities",
+          "malware",
+          "phishing",
+          "cybercrime",
+          "security prioritization"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-24T09:04:39.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 10,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://blog.segu-info.com.ar/",
+          "legalBasisVerifiedAt": "2026-07-24T09:04:39.000Z",
+          "latestPublishedAt": "2026-07-23T22:56:34+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:ar:segu-info:telegram",
+        "publisher": {
+          "name": "Segu-Info",
+          "country": "AR",
+          "homepage": "https://blog.segu-info.com.ar/",
+          "trustBasis": "publisher website links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.84,
+        "intelligenceValue": 0.84,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "vulnerabilities",
+            "malware",
+            "phishing",
+            "cybercrime",
+            "security prioritization"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "finance",
+            "government",
+            "consumer"
+          ],
+          "regions": [
+            "Argentina",
+            "Latin America",
+            "Global"
+          ],
+          "countries": [
+            "Argentina"
+          ],
+          "languages": [
+            "es"
+          ],
+          "queryPatterns": [
+            "vulnerabilidad",
+            "malware",
+            "phishing",
+            "ciberataque"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
         },
         "adapterCompatibility": [
           "telegram_public"
