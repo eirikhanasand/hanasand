@@ -3,11 +3,27 @@ import { proxyOrganizationApiRequest } from '@/app/api/organizations/_organizati
 import { authApiUrl } from '@/utils/auth/authApiUrl'
 
 export const dynamic = 'force-dynamic'
+const MAX_WEBHOOK_BYTES = 512 * 1024
 
 export async function POST(request: Request) {
     const receivedAt = new Date().toISOString()
-    const eventId = request.headers.get('x-hanasand-event-id') || request.headers.get('x-webhook-id') || `dwm_sink_${Date.now()}`
     const text = await request.text()
+    const eventId = request.headers.get('x-hanasand-event-id')
+        || request.headers.get('x-webhook-id')
+        || request.headers.get('x-hanasand-delivery-id')
+        || `dwm_sink_${Date.now()}`
+    if (new TextEncoder().encode(text).byteLength > MAX_WEBHOOK_BYTES) {
+        return NextResponse.json({
+            schemaVersion: 'dwm.webhook_sink.acceptance.v1',
+            accepted: false,
+            eventId,
+            receivedAt,
+            error: 'DWM webhook payload exceeds the 512 KiB receiver limit.',
+        }, {
+            status: 413,
+            headers: { 'cache-control': 'no-store' },
+        })
+    }
     const payload = parseJsonRecord(text)
     const context = webhookContext(payload)
     const error = validateDwmWebhookPayload(context)
@@ -42,6 +58,9 @@ export async function POST(request: Request) {
                 eventId,
                 receivedAt,
                 payload,
+                payloadBody: text,
+                deliveryId: request.headers.get('x-hanasand-delivery-id'),
+                idempotencyKey: request.headers.get('x-hanasand-dedupe-key'),
                 signature: request.headers.get('x-hanasand-delivery-signature'),
             }),
             signal: AbortSignal.timeout(12_000),
@@ -102,8 +121,8 @@ function validateDwmWebhookPayload(payload: Record<string, unknown> | null) {
         return 'A JSON DWM webhook payload is required.'
     }
 
-    if (payload.eventType === 'organization.webhook.test') {
-        for (const field of ['organizationId', 'tenantId', 'webhookDestinationId', 'generatedAt', 'message', 'expectedAlertEvent']) {
+    if (['organization.webhook.test', 'darkweb.monitoring.test'].includes(String(payload.eventType))) {
+        for (const field of ['organizationId', 'tenantId', 'webhookDestinationId', 'deliveryId', 'idempotencyKey', 'generatedAt', 'message', 'expectedAlertEvent']) {
             if (typeof payload[field] !== 'string' || !payload[field].trim()) return `Missing required organization webhook test field: ${field}.`
         }
         return ''
@@ -143,6 +162,11 @@ function validateDwmWebhookPayload(payload: Record<string, unknown> | null) {
         'claimSummary',
         'reviewState',
         'recommendedAction',
+        'organizationId',
+        'tenantId',
+        'webhookDestinationId',
+        'deliveryId',
+        'idempotencyKey',
     ]
 
     for (const field of requiredStrings) {

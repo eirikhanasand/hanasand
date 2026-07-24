@@ -102,6 +102,10 @@ describe("dwm webhook delivery", () => {
         `sha256=${createHmac("sha256", "scraper-receiver-signature-test").update(`${receiverUrl}\n${sent?.body}`).digest("hex")}`
       );
       expect(JSON.parse(sent?.body ?? "{}").eventType).toBe("organization.webhook.test");
+      expect(JSON.parse(sent?.body ?? "{}")).toMatchObject({
+        deliveryId: sent?.headers.get("x-hanasand-delivery-id"),
+        idempotencyKey: sent?.headers.get("x-hanasand-dedupe-key")
+      });
     } finally {
       if (previousToken === undefined) delete Bun.env.TI_SCRAPER_SERVICE_TOKEN;
       else Bun.env.TI_SCRAPER_SERVICE_TOKEN = previousToken;
@@ -249,6 +253,10 @@ describe("dwm webhook delivery", () => {
       basisKind: "watchlist_created_at"
     });
     expect(seen[0].headers.get("x-hanasand-event")).toBe("darkweb.monitoring.match");
+    expect(alertPayload).toMatchObject({
+      deliveryId: seen[0].headers.get("x-hanasand-delivery-id"),
+      idempotencyKey: seen[0].headers.get("x-hanasand-dedupe-key")
+    });
     expect((store as any).listDwmAlerts()[0].deliveryState).toBe("delivered");
     expect((store as any).listDwmAlerts()[0].deliveryReadinessContext).toMatchObject({
       state: "delivered",
@@ -697,6 +705,10 @@ describe("dwm webhook delivery", () => {
     expect(seen[0].url).toBe("https://hooks.example.com/dwm");
     expect(seen[0].body.eventType).toBe("darkweb.monitoring.test");
     expect(seen[0].headers.get("x-hanasand-event")).toBe("darkweb.monitoring.test");
+    expect(seen[0].body).toMatchObject({
+      deliveryId: seen[0].headers.get("x-hanasand-delivery-id"),
+      idempotencyKey: seen[0].headers.get("x-hanasand-dedupe-key")
+    });
     expect((store as any).listDwmWebhookDeliveries()).toHaveLength(1);
   });
 

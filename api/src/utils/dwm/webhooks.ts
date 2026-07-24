@@ -3,7 +3,7 @@ import { canonicalJson, containsUnsafeCustomerOutboundText, sanitizeCustomerOutb
 import { lookup } from 'node:dns/promises'
 import { request as httpsRequest } from 'node:https'
 import { isIP, type LookupFunction } from 'node:net'
-import run, { withDatabaseAdvisoryLock } from '#db'
+import run, { withDatabaseAdvisoryLock, withTransaction } from '#db'
 import { organizationVisibilityDecision, type OrganizationRole, type OrganizationVisibilityDecisionInput } from '#utils/organizations.ts'
 
 export type DwmWebhookKind = 'webhook' | 'discord'
@@ -779,7 +779,21 @@ function constantTimeEqual(expected: string, presented: string) {
 export function validateDwmWebhookReceiverEnvelope(value: unknown) {
     const envelope = recordOrEmpty(value)
     const payload = recordOrEmpty(envelope.payload)
-    const payloadBody = canonicalJson(payload)
+    const forwardedPayloadBody = typeof envelope.payloadBody === 'string' ? envelope.payloadBody : null
+    if (forwardedPayloadBody !== null && Buffer.byteLength(forwardedPayloadBody) > 512 * 1024) {
+        return { valid: false as const, error: 'Receiver payload exceeds the 512 KiB limit.' }
+    }
+    let payloadBody = canonicalJson(payload)
+    if (forwardedPayloadBody !== null) {
+        try {
+            if (canonicalJson(recordOrEmpty(JSON.parse(forwardedPayloadBody))) !== payloadBody) {
+                return { valid: false as const, error: 'Receiver serialized payload does not match its parsed payload.' }
+            }
+            payloadBody = forwardedPayloadBody
+        } catch {
+            return { valid: false as const, error: 'Receiver serialized payload must be valid JSON.' }
+        }
+    }
     const presentedSignature = clean(envelope.signature)
     const receiverUrl = controlledReceiverUrls().find(target =>
         constantTimeEqual(signDwmWebhookDeliveryBody(payloadBody, target), presentedSignature)
@@ -791,14 +805,14 @@ export function validateDwmWebhookReceiverEnvelope(value: unknown) {
     const delivery = recordOrEmpty(context.delivery)
     const alert = recordOrEmpty(context.alert)
     const eventType = clean(context.eventType)
-    const organizationTest = eventType === 'organization.webhook.test'
-    const orgId = organizationTest ? firstClean(context.organizationId, context.tenantId) : firstClean(org.id, org.tenantId)
-    const destinationId = organizationTest ? clean(context.webhookDestinationId) : clean(destination.id)
-    const deliveryId = organizationTest ? clean(envelope.eventId) : clean(delivery.id)
-    const idempotencyKey = organizationTest
-        ? firstClean(envelope.eventId, context.generatedAt)
-        : clean(context.idempotencyKey)
+    const legacyEvent = ['organization.webhook.test', 'darkweb.monitoring.match', 'darkweb.monitoring.test'].includes(eventType)
+    const orgId = legacyEvent ? firstClean(context.organizationId, context.tenantId) : firstClean(org.id, org.tenantId)
+    const destinationId = legacyEvent ? clean(context.webhookDestinationId) : clean(destination.id)
+    const deliveryId = legacyEvent ? clean(context.deliveryId) : clean(delivery.id)
+    const idempotencyKey = legacyEvent ? firstClean(context.idempotencyKey, context.dedupeKey) : clean(context.idempotencyKey)
     const receivedAt = clean(envelope.receivedAt)
+    const forwardedDeliveryId = clean(envelope.deliveryId)
+    const forwardedIdempotencyKey = clean(envelope.idempotencyKey)
 
     if (!Object.keys(payload).length) return { valid: false as const, error: 'Receiver payload is required.' }
     if (!receiverUrl) {
@@ -806,6 +820,10 @@ export function validateDwmWebhookReceiverEnvelope(value: unknown) {
     }
     if (!orgId || !destinationId || !deliveryId || !eventType || !idempotencyKey) {
         return { valid: false as const, error: 'Receiver payload scope, destination, delivery, event type, and idempotency lineage are required.' }
+    }
+    if ((forwardedDeliveryId && forwardedDeliveryId !== deliveryId)
+        || (forwardedIdempotencyKey && forwardedIdempotencyKey !== idempotencyKey)) {
+        return { valid: false as const, error: 'Receiver delivery headers do not match the signed payload lineage.' }
     }
     if (!receivedAt || Number.isNaN(Date.parse(receivedAt))) {
         return { valid: false as const, error: 'Receiver timestamp must be valid.' }
@@ -895,18 +913,32 @@ export async function recordDwmWebhookReceiverReceipt(value: unknown) {
     if (inserted.rows[0]) return { ok: true as const, created: true, receipt: receiverReceiptFromAudit(inserted.rows[0] as DwmWebhookAuditRow) }
 
     const existing = await run(`
-        SELECT *
-        FROM dwm_webhook_audit_events
-        WHERE id = $1
-          AND org_id = $2
-          AND destination_id = $3
-          AND action = 'receiver.accepted'
+        SELECT audit.*,
+               destination.status AS receiver_destination_status,
+               destination.endpoint_hash AS receiver_destination_endpoint_hash
+        FROM dwm_webhook_audit_events audit
+        JOIN dwm_webhook_destinations destination
+          ON destination.id = audit.destination_id
+         AND destination.org_id = audit.org_id
+        WHERE audit.id = $1
+          AND audit.org_id = $2
+          AND audit.destination_id = $3
+          AND audit.action = 'receiver.accepted'
         LIMIT 1
     `, [receipt.id, receipt.orgId, receipt.destinationId])
     if (existing.rows[0]) {
-        const existingReceipt = receiverReceiptFromAudit(existing.rows[0] as DwmWebhookAuditRow)
-        if (existingReceipt.payloadHash !== receipt.payloadHash) {
-            return { ok: false as const, status: 409, error: 'Receiver idempotency lineage already contains a different payload.' }
+        const existingRow = existing.rows[0] as DwmWebhookAuditRow & {
+            receiver_destination_status: string
+            receiver_destination_endpoint_hash: string
+        }
+        const existingReceipt = receiverReceiptFromAudit(existingRow)
+        if (existingReceipt.payloadHash !== receipt.payloadHash
+            || existingReceipt.receiverEndpointHash !== receipt.receiverEndpointHash) {
+            return { ok: false as const, status: 409, error: 'Receiver idempotency lineage already contains a different payload or target.' }
+        }
+        if (existingRow.receiver_destination_status !== 'active'
+            || existingRow.receiver_destination_endpoint_hash !== receipt.receiverEndpointHash) {
+            return { ok: false as const, status: 409, error: 'Receiver destination no longer matches the signed controlled target.' }
         }
         return { ok: true as const, created: false, receipt: existingReceipt }
     }
@@ -961,9 +993,9 @@ function receiverReceiptFromAudit(row: DwmWebhookAuditRow) {
     }
 }
 
-async function bindDwmWebhookReceiverReceipt(delivery: DwmWebhookDeliveryRow) {
-    if (!controlledReceiverEndpointHashes().includes(delivery.endpoint_hash)) return
-    await run(`
+async function bindDwmWebhookReceiverReceipt(delivery: DwmWebhookDeliveryRow, query: typeof run = run) {
+    if (!controlledReceiverEndpointHashes().includes(delivery.endpoint_hash)) return false
+    const result = await query(`
         UPDATE dwm_webhook_audit_events
            SET delivery_id = $1
          WHERE action = 'receiver.accepted'
@@ -973,6 +1005,7 @@ async function bindDwmWebhookReceiverReceipt(delivery: DwmWebhookDeliveryRow) {
            AND metadata->>'idempotencyKey' = $4
            AND metadata->>'payloadHash' = $5
            AND metadata->>'receiverTargetHash' = $6
+        RETURNING id
     `, [
         delivery.id,
         delivery.org_id,
@@ -981,6 +1014,7 @@ async function bindDwmWebhookReceiverReceipt(delivery: DwmWebhookDeliveryRow) {
         delivery.payload_hash,
         delivery.endpoint_hash,
     ])
+    return Boolean(result.rows[0])
 }
 
 export function buildDwmWebhookDeliveryEvidence({
@@ -7320,6 +7354,9 @@ export async function retryDwmWebhookDelivery(
     if (!destination || destination.org_id !== orgId || destination.status !== 'active') {
         return { ok: false as const, status: 409, code: 'delivery_destination_unavailable', error: 'The persisted delivery destination is unavailable.' }
     }
+    if (destination.endpoint_hash !== prior.endpoint_hash) {
+        return { ok: false as const, status: 409, code: 'delivery_destination_changed', error: 'The delivery destination changed; create a new delivery instead of replaying prior recipient approval.' }
+    }
     if (process.env.DWM_WEBHOOK_LIVE_DELIVERY !== 'true') {
         return { ok: false as const, status: 503, code: 'live_delivery_disabled', error: 'Live webhook delivery is disabled.' }
     }
@@ -7398,7 +7435,8 @@ export async function retryDwmWebhookDelivery(
         const nextAttemptCount = attemptCount + 1
         const retryPlan = planDwmWebhookDeliveryRetry({ status, dryRun: false, responseStatus, error, attemptedAt, attemptCount: nextAttemptCount })
         const nextId = crypto.randomUUID()
-        const result = await run(`
+        const row = await withTransaction(async query => {
+            const result = await query(`
         INSERT INTO dwm_webhook_deliveries (
             id, destination_id, owner_id, org_id, alert_id, event_type, status, dry_run,
             endpoint_hint, endpoint_hash, payload_hash, payload, response_status, response_body,
@@ -7413,34 +7451,41 @@ export async function retryDwmWebhookDelivery(
         )
         RETURNING *
     `, [
-            nextId,
-            destination.id,
-            lineageOwnerId,
-            orgId,
-            prior.alert_id,
-            prior.event_type,
-            status,
-            prior.endpoint_hint,
-            prior.endpoint_hash,
-            payloadHash,
-            payloadBody,
-            responseStatus,
-            responseBody,
-            error,
-            retryPlan.errorClass,
-            nextAttemptCount,
-            retryPlan.nextRetryAt,
-            prior.idempotency_key,
-            prior.watchlist_id,
-            prior.watchlist_name,
-            prior.route,
-            prior.case_path,
-            attemptedAt,
-            completedAt,
-            status === 'delivered' ? completedAt : null,
-        ])
-        const row = result.rows[0] as DwmWebhookDeliveryRow
-        await bindDwmWebhookReceiverReceipt(row)
+                nextId,
+                destination.id,
+                lineageOwnerId,
+                orgId,
+                prior.alert_id,
+                prior.event_type,
+                status,
+                destination.endpoint_hint,
+                destination.endpoint_hash,
+                payloadHash,
+                payloadBody,
+                responseStatus,
+                responseBody,
+                error,
+                retryPlan.errorClass,
+                nextAttemptCount,
+                retryPlan.nextRetryAt,
+                prior.idempotency_key,
+                prior.watchlist_id,
+                prior.watchlist_name,
+                prior.route,
+                prior.case_path,
+                attemptedAt,
+                completedAt,
+                status === 'delivered' ? completedAt : null,
+            ])
+            const persisted = result.rows[0] as DwmWebhookDeliveryRow
+            const receiptBound = await bindDwmWebhookReceiverReceipt(persisted, query)
+            if (status === 'delivered'
+                && controlledReceiverEndpointHashes().includes(persisted.endpoint_hash)
+                && !receiptBound) {
+                throw new Error('Controlled receiver accepted delivery without an exact durable receipt.')
+            }
+            return persisted
+        })
         if (status === 'delivered') {
             await run(`
             UPDATE dwm_webhook_destinations
@@ -8799,7 +8844,8 @@ async function deliverToDwmWebhookDestination({
     }
     const deliveredAt = status === 'delivered' ? completedAt : null
 
-    const result = await run(`
+    const delivery = await withTransaction(async query => {
+        const result = await query(`
         INSERT INTO dwm_webhook_deliveries (
             id,
             destination_id,
@@ -8831,33 +8877,42 @@ async function deliverToDwmWebhookDestination({
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::JSONB, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
         RETURNING *
     `, [
-        deliveryId,
-        destination.id,
-        ownerId,
-        destination.org_id,
-        normalizedAlert.id,
-        eventType,
-        status,
-        dryRun,
-        destination.endpoint_hint,
-        destination.endpoint_hash,
-        payloadHash,
-        payloadBody,
-        responseStatus,
-        responseBody,
-        error,
-        classifyDeliveryError({ status, dryRun, responseStatus, error }),
-        attemptCount,
-        planDwmWebhookDeliveryRetry({ status, dryRun, responseStatus, error, attemptCount }).nextRetryAt,
-        idempotencyKey,
-        watchlist.id,
-        watchlist.name,
-        normalizedAlert.route,
-        normalizedAlert.casePath,
-        attemptedAt,
-        completedAt,
-        deliveredAt,
-    ])
+            deliveryId,
+            destination.id,
+            ownerId,
+            destination.org_id,
+            normalizedAlert.id,
+            eventType,
+            status,
+            dryRun,
+            destination.endpoint_hint,
+            destination.endpoint_hash,
+            payloadHash,
+            payloadBody,
+            responseStatus,
+            responseBody,
+            error,
+            classifyDeliveryError({ status, dryRun, responseStatus, error }),
+            attemptCount,
+            planDwmWebhookDeliveryRetry({ status, dryRun, responseStatus, error, attemptCount }).nextRetryAt,
+            idempotencyKey,
+            watchlist.id,
+            watchlist.name,
+            normalizedAlert.route,
+            normalizedAlert.casePath,
+            attemptedAt,
+            completedAt,
+            deliveredAt,
+        ])
+        const persisted = result.rows[0] as DwmWebhookDeliveryRow
+        const receiptBound = await bindDwmWebhookReceiverReceipt(persisted, query)
+        if (status === 'delivered'
+            && controlledReceiverEndpointHashes().includes(persisted.endpoint_hash)
+            && !receiptBound) {
+            throw new Error('Controlled receiver accepted delivery without an exact durable receipt.')
+        }
+        return persisted
+    })
 
     if (status === 'delivered' || status === 'dry_run' || markTested) {
         await run(`
@@ -8872,8 +8927,6 @@ async function deliverToDwmWebhookDestination({
         `, [destination.id, markTested, status, error, responseStatus, status === 'delivered', deliveredAt])
     }
 
-    const delivery = result.rows[0] as DwmWebhookDeliveryRow
-    await bindDwmWebhookReceiverReceipt(delivery)
     const auditAction = markTested
         ? 'delivery.tested'
         : delivery.status === 'failed'

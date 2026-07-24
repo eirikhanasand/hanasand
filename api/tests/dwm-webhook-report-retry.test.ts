@@ -11,8 +11,25 @@ let insertedDelivery: Record<string, any> | undefined
 const controlledReceiverUrl = 'https://hanasand.com/api/dwm/webhook-sink'
 const controlledReceiverEndpointHash = endpointHash(controlledReceiverUrl)
 let receiverDestinationEndpointHash = controlledReceiverEndpointHash
+let receiverDestinationStatus = 'active'
+let destinationEndpointHash = 'endpoint_hash'
+let failReceiptBind = false
+let databaseRun: (sql: string, params?: unknown[]) => Promise<{ rows: any[] }>
 
 mock.module('#db', () => ({
+    withTransaction: async <T>(work: (query: typeof databaseRun) => Promise<T>) => {
+        const ledgerLength = ledger.length
+        const priorInserted = insertedDelivery
+        const priorReceiptDeliveryIds = receiverAudits.map(row => row.delivery_id)
+        try {
+            return await work(databaseRun)
+        } catch (error) {
+            ledger.splice(ledgerLength)
+            insertedDelivery = priorInserted
+            receiverAudits.forEach((row, index) => { row.delivery_id = priorReceiptDeliveryIds[index] })
+            throw error
+        }
+    },
     withDatabaseAdvisoryLock: async <T>(key: string, work: () => Promise<T>) => {
         const previous = lockTails.get(key) || Promise.resolve()
         let release = () => {}
@@ -25,7 +42,7 @@ mock.module('#db', () => ({
             release()
         }
     },
-    default: async (sql: string, params: unknown[] = []) => {
+    default: databaseRun = async (sql: string, params: unknown[] = []) => {
         queries.push({ sql, params })
         const deliveries = [...(persistedDelivery ? [persistedDelivery] : []), ...ledger]
         if (sql.includes('FROM dwm_webhook_deliveries') && sql.includes('WHERE id = $1')) {
@@ -54,7 +71,7 @@ mock.module('#db', () => ({
                     kind: 'webhook',
                     endpoint_encrypted: 'https://receiver.example/hook',
                     endpoint_hint: 'receiver.example/...',
-                    endpoint_hash: 'endpoint_hash',
+                    endpoint_hash: destinationEndpointHash,
                     status: 'active',
                     events: ['dwm.alert.updated'],
                     created_by: 'owner_1',
@@ -93,7 +110,7 @@ mock.module('#db', () => ({
             }
         }
         if (sql.includes('INSERT INTO dwm_webhook_audit_events') && sql.includes('\'receiver.accepted\'')) {
-            if (params[4] !== receiverDestinationEndpointHash) return { rows: [] }
+            if (receiverDestinationStatus !== 'active' || params[4] !== receiverDestinationEndpointHash) return { rows: [] }
             if (receiverAudits.some(row => row.id === params[0])) return { rows: [] }
             const row = {
                 id: params[0],
@@ -113,8 +130,27 @@ mock.module('#db', () => ({
             return {
                 rows: receiverAudits.filter(row => params.length === 5
                     ? row.org_id === params[0]
-                    : row.id === params[0] && row.org_id === params[1] && row.destination_id === params[2]),
+                    : row.id === params[0] && row.org_id === params[1] && row.destination_id === params[2])
+                    .map(row => ({
+                        ...row,
+                        receiver_destination_status: receiverDestinationStatus,
+                        receiver_destination_endpoint_hash: receiverDestinationEndpointHash,
+                    })),
             }
+        }
+        if (sql.includes('UPDATE dwm_webhook_audit_events') && sql.includes('metadata->>\'receiverTargetHash\'')) {
+            if (failReceiptBind) throw new Error('simulated receipt bind failure')
+            const row = receiverAudits.find(candidate =>
+                candidate.org_id === params[1]
+                && candidate.destination_id === params[2]
+                && candidate.delivery_id === null
+                && candidate.metadata.idempotencyKey === params[3]
+                && candidate.metadata.payloadHash === params[4]
+                && candidate.metadata.receiverTargetHash === params[5]
+            )
+            if (!row) return { rows: [] }
+            row.delivery_id = params[0]
+            return { rows: [{ id: row.id }] }
         }
         if (sql.includes('INSERT INTO dwm_webhook_deliveries')) {
             const duplicateInsert = sql.includes('\'skipped\', FALSE')
@@ -192,6 +228,9 @@ afterEach(() => {
     persistedDelivery = undefined
     insertedDelivery = undefined
     receiverDestinationEndpointHash = controlledReceiverEndpointHash
+    receiverDestinationStatus = 'active'
+    destinationEndpointHash = 'endpoint_hash'
+    failReceiptBind = false
 })
 
 test('retries a failed report after persistence reload with the exact stored payload and idempotency lineage', async () => {
@@ -306,6 +345,31 @@ test('blocks an exact persisted retry until its due timestamp without a network 
     }
 })
 
+test('rejects retry after the approved destination endpoint changes without a network attempt', async () => {
+    const { retryDwmWebhookDelivery } = await import('../src/utils/dwm/webhooks.ts')
+    persistedDelivery = failedDeliveryFixture('2020-07-23T10:01:00.000Z')
+    destinationEndpointHash = 'endpoint_changed'
+    const previousLive = process.env.DWM_WEBHOOK_LIVE_DELIVERY
+    process.env.DWM_WEBHOOK_LIVE_DELIVERY = 'true'
+    let networkAttempts = 0
+    try {
+        const result = await retryDwmWebhookDelivery('member_2', 'org_1', persistedDelivery.id, async () => {
+            networkAttempts += 1
+            return { status: 204, body: '' }
+        })
+        expect(result).toMatchObject({
+            ok: false,
+            status: 409,
+            code: 'delivery_destination_changed',
+        })
+        expect(networkAttempts).toBe(0)
+        expect(insertedDelivery).toBeUndefined()
+    } finally {
+        if (previousLive === undefined) delete process.env.DWM_WEBHOOK_LIVE_DELIVERY
+        else process.env.DWM_WEBHOOK_LIVE_DELIVERY = previousLive
+    }
+})
+
 test('rejects a persisted payload whose canonical body no longer matches its hash', async () => {
     const { retryDwmWebhookDelivery } = await import('../src/utils/dwm/webhooks.ts')
     persistedDelivery = { ...failedDeliveryFixture('2020-07-23T10:01:00.000Z'), payload_hash: 'payload_tampered' }
@@ -409,8 +473,24 @@ test('persists one deterministic receiver receipt and filters it before the read
         expect(conflict).toMatchObject({
             ok: false,
             status: 409,
-            error: 'Receiver idempotency lineage already contains a different payload.',
+            error: 'Receiver idempotency lineage already contains a different payload or target.',
         })
+        receiverDestinationEndpointHash = endpointHash('https://external.example/report')
+        const replayAfterRepoint = await recordDwmWebhookReceiverReceipt(envelope)
+        expect(replayAfterRepoint).toMatchObject({
+            ok: false,
+            status: 409,
+            error: 'Receiver destination no longer matches the signed controlled target.',
+        })
+        receiverDestinationEndpointHash = controlledReceiverEndpointHash
+        receiverDestinationStatus = 'paused'
+        const replayAfterPause = await recordDwmWebhookReceiverReceipt(envelope)
+        expect(replayAfterPause).toMatchObject({
+            ok: false,
+            status: 409,
+            error: 'Receiver destination no longer matches the signed controlled target.',
+        })
+        receiverDestinationStatus = 'active'
         receiverDestinationEndpointHash = endpointHash('https://external.example/report')
         const repointedPayload = {
             ...payload,
@@ -447,6 +527,56 @@ test('persists one deterministic receiver receipt and filters it before the read
         expect(query?.sql.indexOf('metadata->>\'reportCaseId\' = $4')).toBeLessThan(query?.sql.indexOf('LIMIT 100') ?? -1)
         expect(query?.sql.indexOf('metadata->>\'reportExportChecksum\' = $5')).toBeLessThan(query?.sql.indexOf('LIMIT 100') ?? -1)
     } finally {
+        if (previousToken === undefined) delete process.env.TI_SCRAPER_SERVICE_TOKEN
+        else process.env.TI_SCRAPER_SERVICE_TOKEN = previousToken
+        if (previousReceiverUrls === undefined) delete process.env.DWM_CONTROLLED_RECEIVER_URLS
+        else process.env.DWM_CONTROLLED_RECEIVER_URLS = previousReceiverUrls
+    }
+})
+
+test('commits a controlled delivery and exact receiver bind atomically', async () => {
+    const {
+        deliverDwmAlertNotification,
+        recordDwmWebhookReceiverReceipt,
+        signDwmWebhookDeliveryBody,
+    } = await import('../src/utils/dwm/webhooks.ts')
+    const previousLive = process.env.DWM_WEBHOOK_LIVE_DELIVERY
+    const previousToken = process.env.TI_SCRAPER_SERVICE_TOKEN
+    const previousReceiverUrls = process.env.DWM_CONTROLLED_RECEIVER_URLS
+    process.env.DWM_WEBHOOK_LIVE_DELIVERY = 'true'
+    process.env.TI_SCRAPER_SERVICE_TOKEN = 'receiver-signature-test'
+    process.env.DWM_CONTROLLED_RECEIVER_URLS = controlledReceiverUrl
+    destinationEndpointHash = controlledReceiverEndpointHash
+    try {
+        const sender = async (_endpoint: string, body: string) => {
+            const payload = JSON.parse(body)
+            const receipt = await recordDwmWebhookReceiverReceipt({
+                eventId: payload.delivery.id,
+                receivedAt: '2026-07-24T10:00:00.000Z',
+                payload,
+                payloadBody: body,
+                signature: signDwmWebhookDeliveryBody(body, controlledReceiverUrl),
+            })
+            expect(receipt.ok).toBe(true)
+            return { status: 202, body: '' }
+        }
+        const [delivery] = await deliverDwmAlertNotification('owner_1', deliveryInput('atomic_receipt', false), sender)
+        expect(delivery.status).toBe('delivered')
+        expect(receiverAudits).toHaveLength(1)
+        expect(receiverAudits[0].delivery_id).toBe(delivery.id)
+
+        ledger.length = 0
+        receiverAudits.length = 0
+        insertedDelivery = undefined
+        failReceiptBind = true
+        await expect(deliverDwmAlertNotification('owner_1', deliveryInput('atomic_rollback', false), sender))
+            .rejects.toThrow('simulated receipt bind failure')
+        expect(ledger).toHaveLength(0)
+        expect(receiverAudits).toHaveLength(1)
+        expect(receiverAudits[0].delivery_id).toBeNull()
+    } finally {
+        if (previousLive === undefined) delete process.env.DWM_WEBHOOK_LIVE_DELIVERY
+        else process.env.DWM_WEBHOOK_LIVE_DELIVERY = previousLive
         if (previousToken === undefined) delete process.env.TI_SCRAPER_SERVICE_TOKEN
         else process.env.TI_SCRAPER_SERVICE_TOKEN = previousToken
         if (previousReceiverUrls === undefined) delete process.env.DWM_CONTROLLED_RECEIVER_URLS

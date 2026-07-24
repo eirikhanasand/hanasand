@@ -271,6 +271,8 @@ export async function testOrganizationWebhook(request: Request, options: ApiServ
     organizationId: organization.id,
     tenantId: organization.tenantId,
     webhookDestinationId: destination.id,
+    deliveryId,
+    idempotencyKey: deliveryId,
     generatedAt,
     message: "Hanasand organization webhook test.",
     expectedAlertEvent: "darkweb.monitoring.match"
