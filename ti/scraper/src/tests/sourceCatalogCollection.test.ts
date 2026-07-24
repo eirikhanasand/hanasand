@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-  AUTOMATIC_REVIEW_PROMPT_VERSION,
   AUTOMATIC_REVIEW_RESPONSE_SCHEMA,
   runAutomaticReviewCycle
 } from "../api/automaticReviewRoutes.ts";
@@ -119,7 +118,7 @@ test("catalog registration captures identities without activity profiles while r
       conversationId: `source-review-${request.subject.id}`,
       decision: {
         schemaVersion: AUTOMATIC_REVIEW_RESPONSE_SCHEMA,
-        promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION,
+        promptVersion: request.promptVersion,
         modelVersion: request.requestedModelVersion,
         subject: request.subject,
         action: "confirm",
