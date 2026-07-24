@@ -15,7 +15,6 @@ export type TiAdminSource = {
     nextRunAt: string
     monitoredSince: string
     cadenceMinutes: number
-    usefulRows: number
     retainedEvidenceCount: number
     productiveCycleCount: number
     qualifiesForBaseline: boolean
@@ -105,6 +104,8 @@ export type TiAdminOverview = {
         nextCursor?: string
     }
     sourceTotals: {
+        configured: number
+        executable: number
         active: number
         qualifying: number
         qualifyingClearWeb: number
@@ -116,7 +117,7 @@ export type TiAdminOverview = {
 type ApiPayload = Record<string, unknown>
 const TI_ADMIN_FETCH_TIMEOUT_MS = 2_500
 
-export async function getTiAdminOverview(tenantId = 'default', page: { cursor?: number, limit?: number, sourceId?: string, includeSamples?: boolean } = {}): Promise<TiAdminOverview> {
+export async function getTiAdminOverview(tenantId: string | null = 'default', page: { cursor?: number, limit?: number, sourceId?: string, includeSamples?: boolean } = {}): Promise<TiAdminOverview> {
     const base = tiScraperApiBase()
     const sampleFilter = page.sourceId ? { query: page.sourceId } : {}
     const resources = await Promise.all([
@@ -156,8 +157,8 @@ export async function getTiAdminOverview(tenantId = 'default', page: { cursor?: 
     }
 }
 
-export async function getTiAdminSource(id: string) {
-    return (await getTiAdminOverview('default', { sourceId: id })).sources[0] || null
+export async function getTiAdminSource(id: string, tenantId: string | null = 'default') {
+    return (await getTiAdminOverview(tenantId, { sourceId: id })).sources[0] || null
 }
 
 export async function getTiAdminDomain(domain: string) {
@@ -196,11 +197,11 @@ export function ageDays(since: string) {
     return Number.isFinite(diff) ? Math.max(1, Math.round(diff / 86400000)) : 0
 }
 
-async function fetchResource(base: string, path: string, key: string, tenantId: string, page: { cursor?: number, limit?: number, sourceId?: string, query?: string } = {}) {
+async function fetchResource(base: string, path: string, key: string, tenantId: string | null, page: { cursor?: number, limit?: number, sourceId?: string, query?: string } = {}) {
     const resource = path.split('/').at(-1) || key
     try {
         const target = new URL(path, base)
-        target.searchParams.set('tenantId', tenantId)
+        if (tenantId) target.searchParams.set('tenantId', tenantId)
         target.searchParams.set('limit', String(page.limit || 500))
         if (page.cursor) target.searchParams.set('cursor', String(page.cursor))
         if (page.sourceId) target.searchParams.set('sourceId', page.sourceId)
@@ -235,6 +236,8 @@ function sourceTotals(payload: ApiPayload): TiAdminOverview['sourceTotals'] {
     const summary = objectValue(payload.summary)
     const counts = objectValue(objectValue(payload.qualification).counts)
     return {
+        configured: numberValue(summary.sourceCount),
+        executable: numberValue(summary.retainedSourceCount, summary.activeSourceCount),
         active: numberValue(summary.activeSourceCount),
         qualifying: numberValue(counts.total),
         qualifyingClearWeb: numberValue(counts.clearWeb),
@@ -251,6 +254,7 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
     const health = objectValue(operations?.health)
     const coverage = objectValue(operations?.coverage)
     const qualification = objectValue(operations?.qualification)
+    const automaticReview = objectValue(objectValue(operations?.verification).automaticReview)
     const cadenceMinutes = Math.max(1, Math.round(numberValue(collection.cadenceSeconds, 3600) / 60))
     const monitoredSince = isoValue(collection.createdAt)
     const lastRunAt = isoValue(health.lastAttemptAt, health.lastSuccessAt)
@@ -274,7 +278,6 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
         nextRunAt,
         monitoredSince,
         cadenceMinutes,
-        usefulRows: retainedEvidenceCount,
         retainedEvidenceCount,
         productiveCycleCount: numberValue(qualification.productiveCheckCount, qualification.usefulCheckCount),
         qualifiesForBaseline: qualification.qualifies === true,
@@ -290,6 +293,22 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
         buyerValue: retainedEvidenceCount ? `${retainedEvidenceCount} retained evidence capture${retainedEvidenceCount === 1 ? '' : 's'} recorded; this page shows a bounded recent sample.` : 'No accepted captures are stored for this source.',
         legalNotes: `${textValue(operatingMode.legalMode, 'operating mode not recorded')} · approval ${textValue(operatingMode.approvalState, 'not recorded')}`,
         screenshotIds: sourceCaptures.filter(capture => capture.screenshotLabel !== 'not captured').map(capture => capture.id),
+        aiReview: toAiReview(automaticReview),
+    }
+}
+
+function toAiReview(review: ApiPayload): TiAdminAiReview | undefined {
+    const state = stringValue(review.state)
+    if (!state) return undefined
+    const status = state === 'approved' ? 'approved' : state === 'needs_review' ? 'needs_human' : 'monitoring'
+    const confidence = Math.max(0, Math.min(1, numberValue(review.confidence)))
+    return {
+        reviewer: 'hanasand-ai',
+        status,
+        reviewedAt: isoValue(review.reviewedAt),
+        qualityScore: Math.round(confidence * 100),
+        summary: state === 'approved' ? 'Approved from retained source evidence.' : state === 'needs_review' ? 'Automatic review needs human follow-up.' : 'Automatic review did not approve this source.',
+        checks: [textValue(review.claimValidity), textValue(review.modelVersion)].filter(Boolean),
     }
 }
 

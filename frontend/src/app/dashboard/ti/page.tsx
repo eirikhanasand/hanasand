@@ -160,7 +160,7 @@ export default async function TiAdminPage() {
                                                 <p className='mt-1 text-xs text-ui-muted'>{source.family}</p>
                                             </td>
                                             <td className='px-4 py-4'><StatusPill label={stale ? 'stale' : operationalStateLabel(source.status)} tone={stale ? 'bad' : source.status === 'active' ? 'ok' : 'watch'} /></td>
-                                            <td className='px-4 py-3 text-ui-muted'>{rowsPerRun || source.usefulRows} rows/run</td>
+                                            <td className='px-4 py-3 text-ui-muted'>{rowsPerRun ? `${rowsPerRun} rows/run` : `${source.retainedEvidenceCount} retained captures`}</td>
                                             <td className='whitespace-nowrap px-4 py-3 text-ui-muted'>{formatTiDate(source.lastRunAt)}</td>
                                             <td className='whitespace-nowrap px-4 py-3 text-ui-muted'>{formatTiDate(source.nextRunAt)}</td>
                                             <td className='px-4 py-3 text-ui-muted'>{source.domains.length} terms · {source.resultTypes.length} result types</td>

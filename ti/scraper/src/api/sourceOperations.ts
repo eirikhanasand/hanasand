@@ -123,7 +123,8 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
       },
       verification: {
         qualificationState: source.metadata?.sourcePortfolioQualificationState ?? source.metadata?.qualificationState,
-        countsAsCoverage: source.metadata?.countsAsCoverage === true,
+        countsAsCoverage: source.countsAsCoverage === true,
+        automaticReview: safeAutomaticSourceReview(source),
         authorityReportedItemCount: finiteNumber(source.metadata?.reportedVictimCount),
         directlyParsedItemCount: finiteNumber(source.metadata?.observedParsedItemCount),
         parserShape: source.metadata?.parserShape,
@@ -386,13 +387,26 @@ function operationalQueryRow(row: any, generatedAt: string) {
     },
     verification: {
       qualificationState: source.metadata?.sourcePortfolioQualificationState ?? source.metadata?.qualificationState,
-      countsAsCoverage: source.metadata?.countsAsCoverage === true,
+      countsAsCoverage: source.countsAsCoverage === true,
+      automaticReview: safeAutomaticSourceReview(source),
       authorityReportedItemCount: finiteNumber(source.metadata?.reportedVictimCount),
       directlyParsedItemCount: finiteNumber(source.metadata?.observedParsedItemCount),
       parserShape: source.metadata?.parserShape,
       verifiedAt: timeOf(source.metadata?.sourcePortfolioVerification, "verifiedAt")
     },
     qualification
+  };
+}
+
+function safeAutomaticSourceReview(source: any) {
+  const review = source.metadata?.automaticSourceReview;
+  if (!review?.state) return undefined;
+  return {
+    state: String(review.state),
+    reviewedAt: timeOf(review, "reviewedAt"),
+    confidence: finiteRate(review.decision?.confidence),
+    claimValidity: review.decision?.claimValidity,
+    modelVersion: review.decision?.configuredModelVersion ?? review.configuredModelVersion
   };
 }
 

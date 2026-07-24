@@ -8,9 +8,10 @@ import TiDataAvailability from '../../ti-data-availability'
 
 export const dynamic = 'force-dynamic'
 
-export default async function TiSourceDetailPage(props: { params: Promise<{ id: string }> }) {
-    const params = await props.params
-    const overview = await getTiAdminOverview('default', { sourceId: params.id })
+export default async function TiSourceDetailPage(props: { params: Promise<{ id: string }>, searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
+    const [params, query] = await Promise.all([props.params, props.searchParams])
+    const scope = query?.scope === 'default' ? 'default' : 'global'
+    const overview = await getTiAdminOverview(scope === 'default' ? 'default' : null, { sourceId: params.id })
     const source = overview.sources[0]
 
     if (!source && overview.availability.state === 'live') return notFound()
@@ -35,7 +36,7 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
     const actionItems = sourceActionItems(source, runs, captures, health, freshness)
     const captureDomains = captureDomainCounts(captures)
     const activeDays = Math.max(1, ageDays(source.monitoredSince))
-    const dailyRows = Math.round(source.usefulRows / activeDays)
+    const dailyEvidence = Math.round(source.retainedEvidenceCount / activeDays)
     const dailyCaptures = Math.round((captures.length / activeDays) * 10) / 10
     const operation = sourceOperation(source, latestRun, captures.length, freshness)
 
@@ -50,7 +51,7 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
             <TiDataAvailability availability={overview.availability} />
 
             <div className='flex'>
-                <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>
+                <Link href={`/dashboard/ti/sources?scope=${scope}`} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>
                     <ArrowLeft className='h-4 w-4' />
                     Sources
                 </Link>
@@ -108,7 +109,7 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                         <section className='grid gap-3 md:grid-cols-4'>
                             <MiniMetric title='Runs' value={String(runs.length)} detail={latestRun ? operationalStateLabel(latestRun.status) : 'checking'} />
                             <MiniMetric title='Captures' value={String(captures.length)} detail={`${avgCaptures} per run avg`} />
-                            <MiniMetric title='Rows/day' value={`${dailyRows}/d`} detail={`${source.usefulRows.toLocaleString()} rows total`} />
+                            <MiniMetric title='Captures/day' value={`${dailyEvidence}/d`} detail={`${source.retainedEvidenceCount.toLocaleString()} retained total`} />
                             <MiniMetric title='Evidence rate' value={`${dailyCaptures}/d`} detail={`${activeDays} d monitored`} />
                         </section>
 

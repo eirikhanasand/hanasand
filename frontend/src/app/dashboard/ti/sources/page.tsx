@@ -10,7 +10,18 @@ export const dynamic = 'force-dynamic'
 export default async function TiSourcesPage(props: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
     const params = await props.searchParams
     const cursor = Math.max(0, Number(typeof params?.cursor === 'string' ? params.cursor : 0) || 0)
-    const overview = await getTiAdminOverview('default', { cursor, limit: 100 })
+    const scope = params?.scope === 'default' ? 'default' : 'global'
+    const tenantId = scope === 'default' ? 'default' : null
+    const [overview, otherScope] = await Promise.all([
+        getTiAdminOverview(tenantId, { cursor, limit: 100 }),
+        getTiAdminOverview(scope === 'default' ? null : 'default', { limit: 1, includeSamples: false }),
+    ])
+    const scopeTotals = scope === 'global'
+        ? { global: overview.sourceTotals, default: otherScope.sourceTotals }
+        : { global: otherScope.sourceTotals, default: overview.sourceTotals }
+    const scopeAvailability = scope === 'global'
+        ? { global: sourceOperationsAvailable(overview), default: sourceOperationsAvailable(otherScope) }
+        : { global: sourceOperationsAvailable(otherScope), default: sourceOperationsAvailable(overview) }
     const { sources, captures, runs } = overview
     const sourceRows = sources.map(source => {
         const sourceCaptures = captures.filter(capture => capture.sourceId === source.id)
@@ -45,6 +56,17 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
             />
             <TiDataAvailability availability={overview.availability} />
 
+            <DashboardPanel className='grid gap-3 border-ui-border bg-ui-panel p-4 lg:grid-cols-[auto_1fr] lg:items-center'>
+                <div className='flex gap-2' aria-label='Source inventory scope'>
+                    <Link href='/dashboard/ti/sources?scope=global' className={scope === 'global' ? 'rounded-md bg-ui-primary px-3 py-2 text-sm font-semibold text-white' : 'rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:bg-ui-raised'}>Global sources</Link>
+                    <Link href='/dashboard/ti/sources?scope=default' className={scope === 'default' ? 'rounded-md bg-ui-primary px-3 py-2 text-sm font-semibold text-white' : 'rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:bg-ui-raised'}>Default tenant</Link>
+                </div>
+                <div className='grid gap-2 text-sm sm:grid-cols-2'>
+                    <ScopeTotal label='Global' totals={scopeTotals.global} available={scopeAvailability.global} />
+                    <ScopeTotal label='Default tenant' totals={scopeTotals.default} available={scopeAvailability.default} />
+                </div>
+            </DashboardPanel>
+
             <details className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-ti-source-inventory-summary-disclosure>
                 <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                     <span className='inline-flex items-center gap-2'>
@@ -52,12 +74,12 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                         Source inventory summary
                     </span>
                     <span className='inline-flex items-center gap-2 text-xs font-medium text-ui-muted'>
-                        {activeCount}/{overview.sourcePage.total} active · {reviewCount} in review on this page · {staleCount} stale on this page
+                        {scope === 'global' ? 'Global' : 'Default tenant'} · {activeCount}/{overview.sourcePage.total} executable · {reviewCount} in review on this page · {staleCount} stale on this page
                         <ChevronDown className='h-4 w-4 transition group-open:rotate-180' />
                     </span>
                 </summary>
                 <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-6' data-ti-source-inventory-metrics>
-                    <Metric title='Active' value={`${activeCount}/${overview.sourcePage.total}`} detail='collecting sources' tone='ok' />
+                    <Metric title='Executable' value={`${activeCount}/${overview.sourcePage.total}`} detail='configured sources with a collector' tone={activeCount ? 'ok' : 'warn'} />
                     <Metric title='Qualified' value={`${qualifyingCount}/6,100`} detail={`${qualifyingClearWeb}/5,000 web · ${qualifyingDarkWeb}/1,000 Tor · ${qualifyingTelegram}/100 Telegram`} tone={qualifyingCount >= 6100 && qualifyingClearWeb >= 5000 && qualifyingDarkWeb >= 1000 && qualifyingTelegram >= 100 ? 'ok' : 'warn'} />
                     <Metric title='Reviewed' value={String(aiReviewedCount)} detail={reviewCount ? `${reviewCount} in review` : 'ready for monitoring'} tone={reviewCount ? 'warn' : 'ok'} />
                     <Metric title='Stale' value={String(staleCount)} detail='late or not collecting' tone={staleCount ? 'warn' : 'ok'} />
@@ -81,7 +103,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
 
                 <div className='grid gap-3 p-3 lg:hidden'>
                     {sourceRows.map(row => (
-                        <Link key={row.source.id} href={`/dashboard/ti/sources/${row.source.id}`} className='rounded-md border border-ui-border bg-ui-canvas p-3 text-left shadow-sm'>
+                        <Link key={row.source.id} href={`/dashboard/ti/sources/${row.source.id}?scope=${scope}`} className='rounded-md border border-ui-border bg-ui-canvas p-3 text-left shadow-sm'>
                             <div className='flex items-start justify-between gap-3'>
                                 <div className='min-w-0'>
                                     <p className='line-clamp-2 text-sm font-semibold leading-5 text-ui-text'>{row.source.name}</p>
@@ -121,7 +143,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                         {sourceRows.map(row => (
                             <div key={row.source.id} className='grid grid-cols-[1.45fr_0.72fr_0.72fr_0.7fr_0.62fr_0.9fr_0.72fr_0.82fr] gap-2 border-b border-ui-border px-4 py-2 text-sm last:border-b-0 hover:bg-ui-panel'>
                                 <div className='min-w-0'>
-                                    <Link href={`/dashboard/ti/sources/${row.source.id}`} className='line-clamp-1 font-semibold text-ui-text hover:text-ui-primary'>{row.source.name}</Link>
+                                    <Link href={`/dashboard/ti/sources/${row.source.id}?scope=${scope}`} className='line-clamp-1 font-semibold text-ui-text hover:text-ui-primary'>{row.source.name}</Link>
                                     <div className='mt-1 flex flex-wrap gap-1'>
                                         <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-primary'>{row.source.family.replaceAll('_', ' ')}</span>
                                         <span className={statusClass(row.source.status, row.source.aiReview)}>{statusLabel(row.source)}</span>
@@ -154,7 +176,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                                 </div>
                                 <div className='flex flex-wrap gap-1.5'>
                                     <ManualRunButton sourceId={row.source.id} label='Run' queries={row.source.domains.filter(domain => !domain.includes('only'))} />
-                                    <Link href={`/dashboard/ti/sources/${row.source.id}`} className='inline-flex h-8 items-center gap-1.5 rounded-md border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text hover:bg-ui-raised'>
+                                    <Link href={`/dashboard/ti/sources/${row.source.id}?scope=${scope}`} className='inline-flex h-8 items-center gap-1.5 rounded-md border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text hover:bg-ui-raised'>
                                         Open
                                         <ArrowRight className='h-3.5 w-3.5' />
                                     </Link>
@@ -170,8 +192,8 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                     {overview.sourcePage.total ? `${cursor + 1}–${Math.min(cursor + sources.length, overview.sourcePage.total)} of ${overview.sourcePage.total}` : 'No sources recorded'}
                 </span>
                 <div className='flex gap-2'>
-                    {cursor > 0 ? <Link href={`/dashboard/ti/sources?cursor=${Math.max(0, cursor - overview.sourcePage.limit)}`} className='rounded-md border border-ui-border px-3 py-1.5 font-semibold text-ui-text hover:bg-ui-raised'>Previous</Link> : null}
-                    {overview.sourcePage.nextCursor ? <Link href={`/dashboard/ti/sources?cursor=${overview.sourcePage.nextCursor}`} className='rounded-md border border-ui-border px-3 py-1.5 font-semibold text-ui-text hover:bg-ui-raised'>Next</Link> : null}
+                    {cursor > 0 ? <Link href={`/dashboard/ti/sources?scope=${scope}&cursor=${Math.max(0, cursor - overview.sourcePage.limit)}`} className='rounded-md border border-ui-border px-3 py-1.5 font-semibold text-ui-text hover:bg-ui-raised'>Previous</Link> : null}
+                    {overview.sourcePage.nextCursor ? <Link href={`/dashboard/ti/sources?scope=${scope}&cursor=${overview.sourcePage.nextCursor}`} className='rounded-md border border-ui-border px-3 py-1.5 font-semibold text-ui-text hover:bg-ui-raised'>Next</Link> : null}
                 </div>
             </nav>
 
@@ -186,7 +208,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                     </div>
                     <div className='mt-4 grid gap-2'>
                         {sourceRows.filter(row => row.health.state !== 'healthy' || row.source.aiReview?.status === 'needs_human').map(row => (
-                            <Link key={row.source.id} href={`/dashboard/ti/sources/${row.source.id}`} className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3 md:grid-cols-[1fr_auto] md:items-center hover:border-ui-primary/35'>
+                            <Link key={row.source.id} href={`/dashboard/ti/sources/${row.source.id}?scope=${scope}`} className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3 md:grid-cols-[1fr_auto] md:items-center hover:border-ui-primary/35'>
                                 <div>
                                     <p className='font-semibold text-ui-text'>{row.source.name}</p>
                                     <p className='mt-1 text-sm text-ui-muted'>{row.health.label} · {statusLabel(row.source)} · {row.source.owner}</p>
@@ -225,6 +247,19 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
             </div>
         </DashboardPage>
     )
+}
+
+function ScopeTotal({ label, totals, available }: { label: string, totals: { configured: number, executable: number, qualifying: number }, available: boolean }) {
+    return (
+        <div className='rounded-md border border-ui-border bg-ui-canvas px-3 py-2'>
+            <span className='font-semibold text-ui-text'>{label}</span>
+            <span className='ml-2 text-ui-muted'>{available ? `${totals.configured} configured · ${totals.executable} executable · ${totals.qualifying} qualifying` : 'source totals unavailable'}</span>
+        </div>
+    )
+}
+
+function sourceOperationsAvailable(overview: Awaited<ReturnType<typeof getTiAdminOverview>>) {
+    return !overview.availability.failedResources.includes('source-operations')
 }
 
 function Metric({ title, value, detail, tone }: { title: string, value: string, detail: string, tone: 'ok' | 'warn' | 'hold' }) {

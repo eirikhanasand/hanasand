@@ -9,7 +9,24 @@ describe("source operations", () => {
   test("summarizes persisted health safely inside the requested tenant", async () => {
     const store = new InMemoryScraperStore();
     const now = new Date(Date.now() - 2_000).toISOString();
-    store.saveSource({ ...source({ id: "src_ops_a", metadata: { sourceFamily: "vendor_blog", parserVersion: "vendor:v2" } }), tenantId: "tenant_a" });
+    store.saveSource({
+      ...source({
+        id: "src_ops_a",
+        metadata: {
+          sourceFamily: "vendor_blog",
+          parserVersion: "vendor:v2",
+          countsAsCoverage: false,
+          automaticSourceReview: {
+            state: "approved",
+            reviewedAt: now,
+            configuredModelVersion: "hanasand-review-v6",
+            decision: { confidence: 0.92, claimValidity: "supported", rationale: "private rationale must stay internal" }
+          }
+        }
+      }),
+      countsAsCoverage: true,
+      tenantId: "tenant_a"
+    });
     store.saveSource({ ...source({ id: "src_ops_b" }), tenantId: "tenant_b" });
     store.saveCapture(fixtureCapture({ id: "cap_ops_a", tenantId: "tenant_a", sourceId: "src_ops_a", collectedAt: now, metadata: { runId: "run_ops_useful" } }));
     store.saveExtractedEntity({ id: "entity_ops_a", tenantId: "tenant_a", sourceId: "src_ops_a", captureId: "cap_ops_a", type: "actor", value: "APT29", normalizedValue: "apt29" });
@@ -31,8 +48,10 @@ describe("source operations", () => {
       health: { state: "failed", collectionSuccessRate: 0.5, usefulYieldRate: 1, consecutiveFailures: 1, lastFailureCategory: "network_failure" },
       parser: { version: "vendor:v2", attemptCount: 1, successRate: 0, warningCount: 1 },
       quality: { falsePositiveRate: 0.5, falsePositiveSampleSize: 2, falsePositiveBasis: "evaluation_labels", duplicateRate: 0.5 },
-      coverage: { observedActorCount: 1, observedActors: ["apt29"], captureCount: 1 }
+      coverage: { observedActorCount: 1, observedActors: ["apt29"], captureCount: 1 },
+      verification: { countsAsCoverage: true, automaticReview: { state: "approved", reviewedAt: now, confidence: 0.92, claimValidity: "supported", modelVersion: "hanasand-review-v6" } }
     });
+    expect(JSON.stringify(payload)).not.toContain("private rationale");
     expect(JSON.stringify(payload)).not.toContain("secretexample.onion");
     expect(JSON.stringify(payload)).not.toContain("token=unsafe");
 

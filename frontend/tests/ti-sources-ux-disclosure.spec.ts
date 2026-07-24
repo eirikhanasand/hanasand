@@ -13,6 +13,10 @@ test('ti source inventory keeps source health primary while summary and coverage
     expect(source).toContain('data-ti-source-capture-coverage')
     expect(source).toContain('ChevronDown')
     expect(source).toContain('group-open:rotate-180')
+    expect(source).toContain('Global sources')
+    expect(source).toContain('Default tenant')
+    expect(source).toContain('configured ·')
+    expect(source).toContain('?scope=${scope}')
 
     expect(source.indexOf('data-ti-source-inventory-summary-disclosure')).toBeLessThan(source.indexOf('Source health'))
     expect(source.indexOf('Source health')).toBeLessThan(source.indexOf('Sources to review'))
@@ -20,9 +24,9 @@ test('ti source inventory keeps source health primary while summary and coverage
     expect(source.indexOf('data-ti-source-capture-coverage-disclosure')).toBeLessThan(source.indexOf(' data-ti-source-capture-coverage>'))
 
     expect(source).toContain('<ManualRunButton sourceId={row.source.id} label=\'Run\'')
-    expect(source).toContain('href={`/dashboard/ti/sources/${row.source.id}`}')
+    expect(source).toContain('href={`/dashboard/ti/sources/${row.source.id}?scope=${scope}`}')
     expect(source).toContain('sourceRows.filter(row => row.health.state !== \'healthy\'')
-    expect(source).toContain('{captures.length} captures across {sources.length} sources')
+    expect(source).toContain('Bounded recent sample · {overview.sourceTotals.active} active sources')
 })
 
 test('ti source detail centers run status pills', async () => {
