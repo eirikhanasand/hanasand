@@ -24,7 +24,6 @@
     "check:route-inventory": "bun run scripts/check-route-inventory.ts",
     "check:sdk-fixtures": "bun run scripts/check-sdk-fixtures.ts",
     "check:search-quality-mounted": "bun run scripts/check-search-quality-mounted.ts",
-    "check:source-apply-plan": "bun run scripts/check-source-apply-plan.ts",
     "check:scraper-native-search": "bun run scripts/check-scraper-native-search-readiness.ts",
     "check:public-ti-org-relevance": "bun run scripts/validatePublicTiOrgRelevance.ts",
     "snapshot:product-slo": "bun run scripts/collect-product-slo-snapshot.ts",

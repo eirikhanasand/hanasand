@@ -25,7 +25,7 @@ import { createRun, exportRunStix, runResults, runStatus } from "./runRoutes.ts"
 import { searchResponse } from "./searchRoute.ts";
 import type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 import { metrics, productSlo } from "./sloRoute.ts";
-import { createSource, listSources, sourceApplyPlan, sourceAtlas, updateSource } from "./sourceRoutes.ts";
+import { createSource, listSources, sourceAtlas, updateSource } from "./sourceRoutes.ts";
 import { handleStructuredIntelRequest } from "./structuredIntelRoutes.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
 import { InMemoryOrgAlertCaseActionLedgerRepository } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
@@ -139,7 +139,6 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/sources" && request.method === "POST") return createSource(request, options);
     if (url.pathname.startsWith("/v1/sources/") && request.method === "PATCH") return updateSource(request, options, url.pathname.split("/")[3]);
     if (url.pathname === "/v1/sources/atlas" && request.method === "GET") return sourceAtlas(request, options);
-    if (url.pathname === "/v1/sources/apply-plan") return sourceApplyPlan(request, options);
     if (url.pathname === "/v1/intel/search" || url.pathname === "/api/ti/search") return searchResponse(request, options, url);
     const evidenceResponse = await handleEvidenceRequest(request, options);
     if (evidenceResponse) return evidenceResponse;

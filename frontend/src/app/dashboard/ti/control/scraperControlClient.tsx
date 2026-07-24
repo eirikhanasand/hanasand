@@ -132,7 +132,7 @@ export default function TiScraperControlClient() {
     const selectedNote = selected ? localControl.notes[selected.id] ?? '' : ''
     const selectedDecision = selected ? localControl.decisions[selected.id] : undefined
 
-    async function runAction(action: 'run_query' | 'source_apply_plan' | 'scheduler_run_now' | 'scheduler_pause' | 'scheduler_resume' | 'public_channel_status' | 'request_source' | 'request_restricted_source' | 'create_watchlist' | 'rebuild_alerts') {
+    async function runAction(action: 'run_query' | 'scheduler_run_now' | 'scheduler_pause' | 'scheduler_resume' | 'public_channel_status' | 'request_source' | 'request_restricted_source' | 'create_watchlist' | 'rebuild_alerts') {
         setBusyAction(action)
         setActionResult(null)
         try {
@@ -252,7 +252,6 @@ export default function TiScraperControlClient() {
                                 <ActionButton compact busy={busyAction === 'scheduler_pause'} icon={<PauseCircle className='h-4 w-4' />} onClick={() => runAction('scheduler_pause')}>Pause</ActionButton>
                                 <ActionButton compact busy={busyAction === 'scheduler_resume'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('scheduler_resume')}>Resume</ActionButton>
                                 <ActionButton compact busy={busyAction === 'enrichment_run'} icon={<ListChecks className='h-4 w-4' />} onClick={runEnrichment}>Enrich</ActionButton>
-                                <ActionButton compact busy={busyAction === 'source_apply_plan'} icon={<FileSearch className='h-4 w-4' />} onClick={() => runAction('source_apply_plan')}>Plan</ActionButton>
                                 <ActionButton compact busy={busyAction === 'rebuild_alerts'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Alerts</ActionButton>
                             </div>
                         </details>
@@ -332,7 +331,6 @@ export default function TiScraperControlClient() {
                                         </div>
                                         <div className='mt-2 grid gap-1.5 sm:grid-cols-2 2xl:grid-cols-1'>
                                             <ActionButton busy={busyAction === 'scheduler_run_now'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('scheduler_run_now')}>Run due sources</ActionButton>
-                                            <ActionButton busy={busyAction === 'source_apply_plan'} icon={<FileSearch className='h-4 w-4' />} onClick={() => runAction('source_apply_plan')}>Preview plan</ActionButton>
                                             <ActionButton busy={busyAction === 'public_channel_status'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('public_channel_status')}>Channels</ActionButton>
                                             <ActionButton busy={busyAction === 'rebuild_alerts'} icon={<Activity className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Rebuild alerts</ActionButton>
                                             <ActionButton icon={<PauseCircle className='h-4 w-4' />} onClick={() => selectedSource && toggleLocalPause(selectedSource.id)}>
@@ -502,10 +500,7 @@ export default function TiScraperControlClient() {
 
 }
 
-function actionBody(action: 'run_query' | 'source_apply_plan' | 'scheduler_run_now' | 'scheduler_pause' | 'scheduler_resume' | 'public_channel_status' | 'request_source' | 'request_restricted_source' | 'create_watchlist' | 'rebuild_alerts', query: string, source: SourceRow | undefined, input: { sourceTarget: string; watchTerms: string }) {
-    if (action === 'source_apply_plan') {
-        return { action, query, sourceId: source?.id, actions: ['approve', 'quarantine', 'request_legal_notes', 'leave_unchanged'] }
-    }
+function actionBody(action: 'run_query' | 'scheduler_run_now' | 'scheduler_pause' | 'scheduler_resume' | 'public_channel_status' | 'request_source' | 'request_restricted_source' | 'create_watchlist' | 'rebuild_alerts', query: string, source: SourceRow | undefined, input: { sourceTarget: string; watchTerms: string }) {
     if (action === 'request_source') {
         return { action, query, target: input.sourceTarget, sourceType: 'telegram_channel', activate: false }
     }
@@ -681,7 +676,7 @@ function workItemsFor(snapshot: ControlSnapshot | null, sources: SourceRow[], ta
                 { label: 'Darkweb/onion', value: String(growth.activeDarkweb) },
                 { label: 'Failing sources', value: String(growth.failingSources) },
             ],
-            nextActions: ['Add a safe public Telegram candidate.', 'Request sensitive actor/onion coverage.', 'Run the daily scheduler and source apply-plan before promotion.'],
+            nextActions: ['Add a safe public Telegram candidate.', 'Request sensitive actor/onion coverage.', 'Run the scheduler before promotion.'],
         })
     }
 
@@ -957,7 +952,6 @@ function actionSummary(result: ActionResult) {
     const run = asRecord(payload.run)
     if (run.id) return `Run ${String(run.id)} completed with ${String(run.taskCount ?? 'metering')} task(s).`
     if (Array.isArray(payload.warmed)) return `Enrichment warmed ${payload.warmed.length} actor profile(s).`
-    if (payload.applyPlan || payload.contract) return 'Source plan is ready. Review affected sources before applying changes.'
     return result.ok ? 'The scraper responded.' : 'The action did not complete.'
 }
 

@@ -5,7 +5,7 @@ import requireApiSession, { type ApiSessionIdentity } from '@/utils/proxy/requir
 export const dynamic = 'force-dynamic'
 
 type ControlActionBody = {
-    action?: 'run_query' | 'source_apply_plan' | 'public_channel_status' | 'scheduler_run_now' | 'scheduler_pause' | 'scheduler_resume' | 'request_source' | 'source_candidate_action' | 'create_watchlist' | 'rebuild_alerts'
+    action?: 'run_query' | 'public_channel_status' | 'scheduler_run_now' | 'scheduler_pause' | 'scheduler_resume' | 'request_source' | 'source_candidate_action' | 'create_watchlist' | 'rebuild_alerts'
     query?: string
     sourceId?: string
     candidateId?: string
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
     }
 
     const base = scraperBase()
-    if (!base) return localSchedulerFallback(body)
+    if (!base) return unavailable('TI_SCRAPER_API_BASE is not configured.')
 
     const query = body.query?.trim() || 'APT29'
     if (body.action === 'run_query') {
@@ -142,15 +142,6 @@ export async function POST(request: NextRequest) {
             tenantId: 'hanasand-dashboard',
             requesterId: 'dashboard/ti/control',
             reason: 'operator requested collection run',
-        }, identity)
-    }
-
-    if (body.action === 'source_apply_plan') {
-        return forward(base, '/v1/sources/apply-plan', {
-            queryScope: { queries: [query], entityTypes: ['actor'] },
-            sourcePackIds: body.sourcePackIds?.length ? body.sourcePackIds : ['safe-public-cti-starter-pack'],
-            selectedActions: body.actions?.length ? body.actions : ['approve', 'quarantine', 'request_legal_notes', 'leave_unchanged'],
-            includeExecutionPreview: true,
         }, identity)
     }
 
@@ -264,49 +255,4 @@ function unavailable(message: string) {
         baseConfigured: false,
         error: { code: 'ti_scraper_unavailable', message },
     }, { status: 503, headers: { 'cache-control': 'no-store' } })
-}
-
-function localSchedulerFallback(body: ControlActionBody) {
-    const action = body.action || 'run_query'
-    const supported = new Set<NonNullable<ControlActionBody['action']>>([
-        'run_query',
-        'source_apply_plan',
-        'public_channel_status',
-        'scheduler_run_now',
-        'scheduler_pause',
-        'scheduler_resume',
-        'request_source',
-        'source_candidate_action',
-        'create_watchlist',
-        'rebuild_alerts',
-    ])
-
-    if (!supported.has(action)) {
-        return NextResponse.json({ ok: false, error: { code: 'unsupported_action', message: 'Unsupported scraper control action.' } }, { status: 400 })
-    }
-
-    const generatedAt = new Date().toISOString()
-    return NextResponse.json({
-        ok: true,
-        scheduled: true,
-        baseConfigured: false,
-        mode: 'hanasand_ai_scheduler_fallback',
-        generatedAt,
-        action,
-        sourceId: body.sourceId,
-        query: body.query,
-        targets: body.targets || (body.target ? [body.target] : undefined),
-        message: 'Queued for Hanasand AI source scheduler; external scraper worker will replay this control action when available.',
-        qa: {
-            reviewer: 'hanasand-ai',
-            qualityScore: action === 'source_candidate_action' ? 91 : 94,
-            reviewedAt: generatedAt,
-            checks: [
-                'bounded source action',
-                'customer-safe metadata only',
-                'cadence state recorded',
-                'operator-visible retry payload',
-            ],
-        },
-    }, { status: 202, headers: { 'cache-control': 'no-store' } })
 }

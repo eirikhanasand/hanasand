@@ -2095,19 +2095,6 @@ function productReadinessActions(item: WorkbenchProductReadinessItem, context: {
                     maxTasks: 24,
                 },
             })
-            actions.push({
-                id: 'preview_source_apply_plan',
-                label: 'Preview source plan',
-                method: 'POST',
-                href: '/api/ti/scraper/control',
-                body: {
-                    action: 'source_apply_plan',
-                    query: context.scope.organizationId || context.scope.tenantId,
-                    sourcePackIds: ['safe-public-cti-starter-pack'],
-                    actions: ['approve', 'quarantine', 'request_legal_notes', 'leave_unchanged'],
-                },
-                disabledReason: item.parserSourceFamilyCount ? undefined : 'Preview requires parser-family data from the source-pack worker.',
-            })
             if (item.id === 'end_to_end_workflow') {
                 actions.push({ id: 'open_watchlists_api', label: 'Watchlists API', method: 'GET', href: watchlistsHref(context.scope) })
                 actions.push({ id: 'open_alert_queue', label: 'Open alerts', method: 'GET', href: alertsHref(context.scope) })
@@ -3235,18 +3222,6 @@ export function buildReadinessCases(input: {
                         approvedBy: 'dashboard',
                         maxSources: 12,
                         maxTasks: 24,
-                    },
-                },
-                {
-                    id: 'preview_source_apply_plan',
-                    label: 'Preview source plan',
-                    method: 'POST',
-                    href: '/api/ti/scraper/control',
-                    body: {
-                        action: 'source_apply_plan',
-                        query: input.scope.organizationId || input.scope.tenantId,
-                        sourcePackIds: ['telegram-ransomware-claim-watch', 'telegram-stealer-broker-watch', 'darkweb-actor-metadata-core'],
-                        actions: ['approve', 'quarantine', 'request_legal_notes', 'leave_unchanged'],
                     },
                 },
             ],
