@@ -1,6 +1,7 @@
 import { parseTelegramTarget, validateTelegramPublicSourceCompliance } from "../adapters/telegramPublic.ts";
 import { evaluateTelegramPublicCompliance } from "../policy/telegramCollectionPolicy.ts";
 import { evaluateMetadataOnlySource } from "../policy/metadataCollectionPolicy.ts";
+import { isExecutableSource } from "../policy/collectionPolicy.ts";
 import { sourceDedupeKey } from "../product/dwmSourceInventory.ts";
 import {
   InMemoryDwmSourcePackActiveSourceAdapter,
@@ -2637,7 +2638,7 @@ function applySourcePackReviewAction(source: SourceRecord, body: DwmSourceReques
         })
       });
     }
-    const activated = saveLifecyclePatch(source, options, {
+    const activation = {
       action: "promote",
       actor: input.actor,
       reason: body.reason ?? (isRestrictedMetadataSource(source) ? "source-pack metadata-only approval" : "source-pack public source approved"),
@@ -2646,7 +2647,22 @@ function applySourcePackReviewAction(source: SourceRecord, body: DwmSourceReques
       parserStatus: parserStatusForSource(source),
       activationState: isRestrictedMetadataSource(source) ? "metadata_only_approved" : "active_canary",
       approveMetadataOnly: isRestrictedMetadataSource(source)
-    });
+    };
+    if (!isExecutableSource(buildLifecyclePatch(source, activation))) {
+      return sourcePackReviewResult(source, "approval_blocked", {
+        reviewedAt: input.reviewedAt,
+        actor: input.actor,
+        reason: body.reason ?? "source has no executable collection path",
+        collectionTrigger: skippedCollectionTrigger(source, "source_collection_path_unavailable"),
+        alertRebuild: skippedAlertRebuild(source, "source_collection_path_unavailable"),
+        error: {
+          code: "source_collection_path_unavailable",
+          message: "Source cannot be activated until it has an executable production collection path."
+        },
+        actionContract: contract
+      });
+    }
+    const activated = saveLifecyclePatch(source, options, activation);
     const operations = persistOperationalNextStep(activated, options, "pack_review");
     updateSourcePackRegistryDecision(options, operations.source, {
       action: "approved",
@@ -7630,7 +7646,7 @@ function handleSourceLifecycleAction(body: DwmSourceRequestBody, options: ApiSer
         alertRebuild: skippedAlertRebuild(source, "metadata_only_approval_required")
       }, 409);
     }
-    const activated = saveLifecyclePatch(source, options, {
+    const activation = {
       action: body.action,
       actor: body.approvedBy ?? body.decidedBy ?? "operator",
       reason: body.reason ?? (isRestrictedMetadataSource(source) ? "metadata-only monitoring approved" : "bounded public source canary approved"),
@@ -7639,7 +7655,23 @@ function handleSourceLifecycleAction(body: DwmSourceRequestBody, options: ApiSer
       parserStatus: parserStatusForSource(source),
       activationState: isRestrictedMetadataSource(source) ? "metadata_only_approved" : "active_canary",
       approveMetadataOnly: isRestrictedMetadataSource(source)
-    });
+    };
+    if (!isExecutableSource(buildLifecyclePatch(source, activation))) {
+      return json({
+        error: {
+          code: "source_collection_path_unavailable",
+          message: "Source cannot be activated until it has an executable production collection path."
+        },
+        source,
+        candidate: sourceCandidate(source),
+        lifecycle: sourceLifecycle(source),
+        policy: sourcePolicyPosture(source),
+        parser: sourceParserStatus(source),
+        collectionTrigger: skippedCollectionTrigger(source, "source_collection_path_unavailable"),
+        alertRebuild: skippedAlertRebuild(source, "source_collection_path_unavailable")
+      }, 409);
+    }
+    const activated = saveLifecyclePatch(source, options, activation);
     const operations = persistOperationalNextStep(activated, options, body.action);
     return json(lifecycleResponse(operations.source, "activate", operations), 200);
   }
@@ -7742,7 +7774,7 @@ function lifecycleResponse(source: SourceRecord, action: string, operations?: Op
   };
 }
 
-function saveLifecyclePatch(source: SourceRecord, options: ApiServerOptions, input: {
+type LifecyclePatchInput = {
   action: string;
   actor: string;
   reason: string;
@@ -7751,7 +7783,13 @@ function saveLifecyclePatch(source: SourceRecord, options: ApiServerOptions, inp
   parserStatus: string;
   activationState: string;
   approveMetadataOnly?: boolean;
-}): SourceRecord {
+};
+
+function saveLifecyclePatch(source: SourceRecord, options: ApiServerOptions, input: LifecyclePatchInput): SourceRecord {
+  return options.store.saveSource(buildLifecyclePatch(source, input));
+}
+
+function buildLifecyclePatch(source: SourceRecord, input: LifecyclePatchInput): SourceRecord {
   const at = nowIso();
   const restricted = isRestrictedMetadataSource(source);
   const previousEvents = Array.isArray(source.metadata?.sourceRequestAudit) ? source.metadata.sourceRequestAudit : [];
@@ -7813,7 +7851,7 @@ function saveLifecyclePatch(source: SourceRecord, options: ApiServerOptions, inp
       ]
     }
   } as SourceRecord;
-  return options.store.saveSource(next);
+  return next;
 }
 
 function sourceLifecycle(source: SourceRecord) {

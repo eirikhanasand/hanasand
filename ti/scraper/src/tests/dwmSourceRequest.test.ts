@@ -2755,6 +2755,30 @@ describe("dwm source requests", () => {
     expect(store.getSource(createdBody.source.id)?.metadata.sourceRequestAudit).toHaveLength(3);
   });
 
+  test("keeps a legacy Telegram source inactive without an executable collection path", async () => {
+    const store = new InMemoryScraperStore();
+    const created = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ target: "@legacy_acceptance_only", type: "telegram_channel", activate: false })
+    }), { store, frontier: new FocusedFrontier() });
+    const createdBody = await created.json() as any;
+    const source = store.getSource(createdBody.source.id)!;
+    store.saveSource({ ...source, metadata: { ...source.metadata, collectionMode: undefined } });
+
+    const promoted = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "promote", sourceId: source.id, approvedBy: "analyst-1" })
+    }), { store, frontier: new FocusedFrontier() });
+    const body = await promoted.json() as any;
+
+    expect(promoted.status).toBe(409);
+    expect(body.error.code).toBe("source_collection_path_unavailable");
+    expect(body.collectionTrigger).toMatchObject({ queued: false, reason: "source_collection_path_unavailable" });
+    expect(store.getSource(source.id)?.status).toBe("candidate");
+    expect(store.getSource(source.id)?.approvedAt).toBeUndefined();
+    expect(store.getSource(source.id)?.metadata.sourceRequestAudit).toBeUndefined();
+  });
+
   test("collects promoted Telegram evidence only through a persisted canary run", async () => {
     const store = new InMemoryScraperStore();
     const frontier = new FocusedFrontier();
