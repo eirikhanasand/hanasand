@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { createHmac } from "node:crypto";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
@@ -47,73 +46,6 @@ const followupCapture: RawCapture = {
 } as RawCapture;
 
 describe("dwm webhook delivery", () => {
-  test("signs the exact serialized organization delivery only for the controlled Hanasand receiver", async () => {
-    const previousToken = Bun.env.TI_SCRAPER_SERVICE_TOKEN;
-    const previousReceiverUrls = Bun.env.DWM_CONTROLLED_RECEIVER_URLS;
-    const receiverUrl = "https://hanasand.com/api/dwm/webhook-sink";
-    Bun.env.TI_SCRAPER_SERVICE_TOKEN = "scraper-receiver-signature-test";
-    Bun.env.DWM_CONTROLLED_RECEIVER_URLS = receiverUrl;
-    try {
-      const store = new InMemoryScraperStore();
-      store.saveOrganization({
-        id: "org_controlled_receiver",
-        tenantId: "org_controlled_receiver",
-        name: "Controlled receiver organization",
-        status: "active",
-        createdAt: "2026-07-24T10:00:00.000Z",
-        updatedAt: "2026-07-24T10:00:00.000Z"
-      });
-      store.saveOrganizationMember({
-        id: "member_controlled_receiver",
-        organizationId: "org_controlled_receiver",
-        email: "owner@controlled-receiver.example",
-        userId: "owner_controlled_receiver",
-        role: "owner",
-        status: "active",
-        createdAt: "2026-07-24T10:00:00.000Z",
-        updatedAt: "2026-07-24T10:00:00.000Z"
-      });
-      store.saveWebhookDestination({
-        id: "destination_controlled_receiver",
-        organizationId: "org_controlled_receiver",
-        tenantId: "org_controlled_receiver",
-        name: "Controlled Hanasand receiver",
-        url: receiverUrl,
-        kind: "generic",
-        status: "active",
-        createdAt: "2026-07-24T10:00:00.000Z",
-        updatedAt: "2026-07-24T10:00:00.000Z"
-      });
-      let sent: { body: string; headers: Headers } | undefined;
-      const response = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations/org_controlled_receiver/webhooks/test", {
-        method: "POST",
-        headers: { "x-hanasand-service-token": "scraper-receiver-signature-test" },
-        body: JSON.stringify({ webhookDestinationId: "destination_controlled_receiver" })
-      }), {
-        store,
-        frontier: new FocusedFrontier(),
-        webhookFetch: async (_url: string, init: RequestInit) => {
-          sent = { body: String(init.body), headers: new Headers(init.headers) };
-          return new Response("accepted", { status: 202 });
-        }
-      });
-      expect(response.status).toBe(200);
-      expect(sent?.headers.get("x-hanasand-delivery-signature")).toBe(
-        `sha256=${createHmac("sha256", "scraper-receiver-signature-test").update(`${receiverUrl}\n${sent?.body}`).digest("hex")}`
-      );
-      expect(JSON.parse(sent?.body ?? "{}").eventType).toBe("organization.webhook.test");
-      expect(JSON.parse(sent?.body ?? "{}")).toMatchObject({
-        deliveryId: sent?.headers.get("x-hanasand-delivery-id"),
-        idempotencyKey: sent?.headers.get("x-hanasand-dedupe-key")
-      });
-    } finally {
-      if (previousToken === undefined) delete Bun.env.TI_SCRAPER_SERVICE_TOKEN;
-      else Bun.env.TI_SCRAPER_SERVICE_TOKEN = previousToken;
-      if (previousReceiverUrls === undefined) delete Bun.env.DWM_CONTROLLED_RECEIVER_URLS;
-      else Bun.env.DWM_CONTROLLED_RECEIVER_URLS = previousReceiverUrls;
-    }
-  });
-
   test("delivers saved alerts and records delivery attempts", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source);
@@ -253,10 +185,6 @@ describe("dwm webhook delivery", () => {
       basisKind: "watchlist_created_at"
     });
     expect(seen[0].headers.get("x-hanasand-event")).toBe("darkweb.monitoring.match");
-    expect(alertPayload).toMatchObject({
-      deliveryId: seen[0].headers.get("x-hanasand-delivery-id"),
-      idempotencyKey: seen[0].headers.get("x-hanasand-dedupe-key")
-    });
     expect((store as any).listDwmAlerts()[0].deliveryState).toBe("delivered");
     expect((store as any).listDwmAlerts()[0].deliveryReadinessContext).toMatchObject({
       state: "delivered",
@@ -551,12 +479,12 @@ describe("dwm webhook delivery", () => {
       createdAt: "2026-06-27T21:00:00.000Z",
       updatedAt: "2026-06-27T21:00:00.000Z"
     });
-    const seen: Array<{ url: string; body: any; headers: Headers }> = [];
+    const seen: Array<{ url: string; body: any }> = [];
     const options = {
       store,
       frontier: new FocusedFrontier(),
       webhookFetch: async (url: string, init: RequestInit) => {
-        seen.push({ url, body: JSON.parse(String(init.body)), headers: new Headers(init.headers) });
+        seen.push({ url, body: JSON.parse(String(init.body)) });
         return new Response("ok", { status: 202 });
       }
     };
@@ -588,7 +516,6 @@ describe("dwm webhook delivery", () => {
     });
     expect(seen).toHaveLength(1);
     expect(seen[0].url).toBe("https://hooks.example.com/chosen");
-    expect(seen[0].headers.get("x-hanasand-delivery-signature")).toBeNull();
     expect(seen[0].body.webhookDestinationId).toBe("webhook_selection_chosen");
     expect(seen[0].body.selectedCaptureIds).toEqual(["cap_webhook_acme"]);
     expect(seen[0].body.generationEvidenceWindow).toMatchObject({
@@ -705,10 +632,6 @@ describe("dwm webhook delivery", () => {
     expect(seen[0].url).toBe("https://hooks.example.com/dwm");
     expect(seen[0].body.eventType).toBe("darkweb.monitoring.test");
     expect(seen[0].headers.get("x-hanasand-event")).toBe("darkweb.monitoring.test");
-    expect(seen[0].body).toMatchObject({
-      deliveryId: seen[0].headers.get("x-hanasand-delivery-id"),
-      idempotencyKey: seen[0].headers.get("x-hanasand-dedupe-key")
-    });
     expect((store as any).listDwmWebhookDeliveries()).toHaveLength(1);
   });
 

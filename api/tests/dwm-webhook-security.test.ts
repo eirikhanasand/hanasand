@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 import { canonicalThirdPartyReportForDelivery } from '../src/handlers/dwm/webhooks.ts'
 import { assertPublicWebhookTarget, buildDwmAlertDeliveryPayload, computeOutboundThirdPartyReportChecksum, normalizeDwmWebhookDestinationInput, pinnedWebhookLookup, signDwmWebhookDeliveryBody, validateDwmWebhookReceiverEnvelope, validateOutboundThirdPartyReport } from '../src/utils/dwm/webhooks.ts'
 import { canonicalJson, containsUnsafeCustomerOutboundText, sanitizeCustomerOutboundText } from '../src/utils/dwm/customerOutputSafety.ts'
-import { webhookHeaders } from '../../ti/scraper/src/api/organizationRoutes.ts'
 
 describe('DWM webhook network boundary', () => {
     test('rejects local and private literal destinations before encryption', () => {
@@ -187,6 +186,21 @@ describe('DWM webhook network boundary', () => {
                 },
             })
             expect(replay).toEqual(first)
+            const payloadBody = JSON.stringify(payload, null, 2)
+            expect(validateDwmWebhookReceiverEnvelope({
+                ...envelope,
+                payloadBody,
+                deliveryId: 'delivery_report',
+                idempotencyKey: payload.idempotencyKey,
+                signature: signDwmWebhookDeliveryBody(payloadBody, receiverUrl),
+            })).toMatchObject({ valid: true })
+            expect(validateDwmWebhookReceiverEnvelope({
+                ...envelope,
+                payloadBody: JSON.stringify({ ...payload, eventType: 'dwm.alert.created' }),
+            })).toMatchObject({
+                valid: false,
+                error: 'Receiver serialized payload does not match its parsed payload.',
+            })
             expect(validateDwmWebhookReceiverEnvelope({ ...envelope, signature: 'sha256=forged' })).toMatchObject({
                 valid: false,
                 error: 'Receiver payload signature is invalid.',
@@ -211,89 +225,17 @@ describe('DWM webhook network boundary', () => {
                 ...payload,
                 report: { ...report, body: 'raw evidence' },
             }))).toMatchObject({ valid: false })
-        } finally {
-            restoreEnv('TI_SCRAPER_SERVICE_TOKEN', previousToken)
-            restoreEnv('DWM_CONTROLLED_RECEIVER_URLS', previousReceiverUrls)
-        }
-    })
-
-    test('verifies every scraper legacy producer with its exact serialized body and lineage', () => {
-        const previousToken = process.env.TI_SCRAPER_SERVICE_TOKEN
-        const previousReceiverUrls = process.env.DWM_CONTROLLED_RECEIVER_URLS
-        const receiverUrl = 'https://hanasand.com/api/dwm/webhook-sink'
-        process.env.TI_SCRAPER_SERVICE_TOKEN = 'receiver-signature-test'
-        process.env.DWM_CONTROLLED_RECEIVER_URLS = receiverUrl
-        const base = {
-            organizationId: 'org_1',
-            tenantId: 'org_1',
-            webhookDestinationId: 'destination_1',
-            generatedAt: '2026-07-24T10:00:00.000Z',
-        }
-        const payloads = [
-            {
-                ...base,
+            const legacy = {
                 eventType: 'organization.webhook.test',
-                deliveryId: 'organization_delivery_1',
-                idempotencyKey: 'organization_delivery_1',
-            },
-            {
-                ...base,
-                eventType: 'darkweb.monitoring.test',
-                deliveryId: 'dwm_test_delivery_1',
-                idempotencyKey: 'dwm_test_delivery_1',
-            },
-            {
-                ...base,
-                eventType: 'darkweb.monitoring.match',
-                deliveryId: 'dwm_match_delivery_1',
-                idempotencyKey: 'dwm_match_lineage_1',
-            },
-        ]
-        try {
-            for (const payload of payloads) {
-                const payloadBody = JSON.stringify(payload)
-                const headers = new Headers(webhookHeaders(
-                    payload.eventType,
-                    payload.deliveryId,
-                    payload.idempotencyKey,
-                    receiverUrl,
-                    payloadBody
-                ))
-                expect(validateDwmWebhookReceiverEnvelope({
-                    eventId: payload.deliveryId,
-                    receivedAt: '2026-07-24T10:00:01.000Z',
-                    payload,
-                    payloadBody,
-                    deliveryId: headers.get('x-hanasand-delivery-id'),
-                    idempotencyKey: headers.get('x-hanasand-dedupe-key'),
-                    signature: headers.get('x-hanasand-delivery-signature'),
-                })).toMatchObject({
-                    valid: true,
-                    receipt: {
-                        orgId: 'org_1',
-                        destinationId: 'destination_1',
-                        deliveryId: payload.deliveryId,
-                        idempotencyKey: payload.idempotencyKey,
-                    },
-                })
+                organizationId: 'org_1',
+                tenantId: 'org_1',
+                webhookDestinationId: 'destination_report',
+                deliveryId: 'legacy_delivery',
+                idempotencyKey: 'legacy_delivery',
             }
-            const payload = payloads[0]
-            const payloadBody = JSON.stringify(payload)
-            const signature = new Headers(webhookHeaders(
-                payload.eventType,
-                payload.deliveryId,
-                payload.idempotencyKey,
-                receiverUrl,
-                payloadBody
-            )).get('x-hanasand-delivery-signature')
-            expect(validateDwmWebhookReceiverEnvelope({
-                receivedAt: '2026-07-24T10:00:01.000Z',
-                payload,
-                payloadBody: JSON.stringify({ ...payload, tenantId: 'org_other' }),
-                signature,
-            })).toMatchObject({
+            expect(validateDwmWebhookReceiverEnvelope(envelopeFor(legacy))).toMatchObject({
                 valid: false,
-                error: 'Receiver serialized payload does not match its parsed payload.',
+                error: 'Receiver accepts only the canonical DWM webhook contract.',
             })
         } finally {
             restoreEnv('TI_SCRAPER_SERVICE_TOKEN', previousToken)

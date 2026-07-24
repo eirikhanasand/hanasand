@@ -143,10 +143,22 @@ mock.module('#db', () => ({
             const row = receiverAudits.find(candidate =>
                 candidate.org_id === params[1]
                 && candidate.destination_id === params[2]
-                && candidate.delivery_id === null
                 && candidate.metadata.idempotencyKey === params[3]
                 && candidate.metadata.payloadHash === params[4]
                 && candidate.metadata.receiverTargetHash === params[5]
+                && (candidate.delivery_id === null || (
+                    params[6] === 'delivered'
+                    && deliveries.some(prior =>
+                        prior.id === candidate.delivery_id
+                        && prior.org_id === params[1]
+                        && prior.destination_id === params[2]
+                        && prior.status === 'failed'
+                        && !prior.dry_run
+                        && prior.idempotency_key === params[3]
+                        && prior.payload_hash === params[4]
+                        && prior.endpoint_hash === params[5]
+                    )
+                ))
             )
             if (!row) return { rows: [] }
             row.delivery_id = params[0]
@@ -574,6 +586,59 @@ test('commits a controlled delivery and exact receiver bind atomically', async (
         expect(ledger).toHaveLength(0)
         expect(receiverAudits).toHaveLength(1)
         expect(receiverAudits[0].delivery_id).toBeNull()
+    } finally {
+        if (previousLive === undefined) delete process.env.DWM_WEBHOOK_LIVE_DELIVERY
+        else process.env.DWM_WEBHOOK_LIVE_DELIVERY = previousLive
+        if (previousToken === undefined) delete process.env.TI_SCRAPER_SERVICE_TOKEN
+        else process.env.TI_SCRAPER_SERVICE_TOKEN = previousToken
+        if (previousReceiverUrls === undefined) delete process.env.DWM_CONTROLLED_RECEIVER_URLS
+        else process.env.DWM_CONTROLLED_RECEIVER_URLS = previousReceiverUrls
+    }
+})
+
+test('moves a durable lost-ack receipt from the failed attempt to its exact delivered retry', async () => {
+    const {
+        deliverDwmAlertNotification,
+        recordDwmWebhookReceiverReceipt,
+        retryDwmWebhookDelivery,
+        signDwmWebhookDeliveryBody,
+    } = await import('../src/utils/dwm/webhooks.ts')
+    const previousLive = process.env.DWM_WEBHOOK_LIVE_DELIVERY
+    const previousToken = process.env.TI_SCRAPER_SERVICE_TOKEN
+    const previousReceiverUrls = process.env.DWM_CONTROLLED_RECEIVER_URLS
+    process.env.DWM_WEBHOOK_LIVE_DELIVERY = 'true'
+    process.env.TI_SCRAPER_SERVICE_TOKEN = 'receiver-signature-test'
+    process.env.DWM_CONTROLLED_RECEIVER_URLS = controlledReceiverUrl
+    destinationEndpointHash = controlledReceiverEndpointHash
+    let networkAttempts = 0
+    const sender = async (_endpoint: string, body: string) => {
+        networkAttempts += 1
+        const payload = JSON.parse(body)
+        const receipt = await recordDwmWebhookReceiverReceipt({
+            eventId: payload.delivery.id,
+            receivedAt: '2026-07-24T10:00:00.000Z',
+            payload,
+            payloadBody: body,
+            signature: signDwmWebhookDeliveryBody(body, controlledReceiverUrl),
+        })
+        expect(receipt.ok).toBe(true)
+        if (networkAttempts === 1) throw new Error('receiver acknowledgement lost')
+        return { status: 202, body: '' }
+    }
+    try {
+        const [failed] = await deliverDwmAlertNotification('owner_1', deliveryInput('lost_ack', false), sender)
+        expect(failed.status).toBe('failed')
+        expect(receiverAudits[0]?.delivery_id).toBe(failed.id)
+        const failedRow = ledger.find(row => row.id === failed.id)
+        expect(failedRow).toBeDefined()
+        failedRow!.next_retry_at = '2020-07-23T10:01:00.000Z'
+
+        const retried = await retryDwmWebhookDelivery('member_2', 'org_1', failed.id, sender)
+        expect(retried).toMatchObject({ ok: true, delivery: { status: 'delivered', attemptCount: 2 } })
+        expect(networkAttempts).toBe(2)
+        expect(receiverAudits).toHaveLength(1)
+        expect(receiverAudits[0]?.delivery_id).toBe(retried.ok ? retried.delivery.id : '')
+        expect(receiverAudits[0]?.metadata.deliveryId).toBe(failed.id)
     } finally {
         if (previousLive === undefined) delete process.env.DWM_WEBHOOK_LIVE_DELIVERY
         else process.env.DWM_WEBHOOK_LIVE_DELIVERY = previousLive

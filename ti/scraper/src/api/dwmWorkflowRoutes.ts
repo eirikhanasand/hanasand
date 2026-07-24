@@ -696,15 +696,10 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
     if (explicitWebhookUrl && body.attachToWatchlist === true) {
       (options.store as any).saveDwmWatchlist?.({ ...watchlist, webhookUrl: explicitWebhookUrl, updatedAt: generatedAt });
     }
+    const payload = buildWebhookPayload(alert, watchlist, generatedAt, destination, downstreamHandoff);
+    const requestBody = buildWebhookRequestBody(deliveryKind, payload);
     const deliveryDedupeKey = alert.webhookDelivery?.dedupeKey ?? stableId("dwm_delivery_dedupe", `${tenantId}:${alert.id}:${destination?.id ?? watchlist.id}`);
     const deliveryId = newDeliveryId(alert.id, destination?.id ?? watchlist.id, deliveryDedupeKey);
-    const payload = {
-      ...buildWebhookPayload(alert, watchlist, generatedAt, destination, downstreamHandoff),
-      deliveryId,
-      idempotencyKey: deliveryDedupeKey
-    };
-    const requestBody = buildWebhookRequestBody(deliveryKind, payload);
-    const serializedBody = JSON.stringify(requestBody);
     const attemptCount = existingDeliveries.filter((delivery: any) => delivery.dedupeKey === deliveryDedupeKey && !["dry_run", "skipped"].includes(delivery.status)).length + 1;
     const deliveryCaseId = requestedCaseId ?? alert.caseId ?? alert.workflowContext?.caseId;
     const deliveryCasePath = requestedCasePath ?? alert.casePath ?? alert.workflowContext?.casePath;
@@ -722,7 +717,7 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
       attemptCount,
       attemptedAt: generatedAt,
       dryRun,
-      payloadHash: stableId("payload", serializedBody),
+      payloadHash: stableId("payload", JSON.stringify(requestBody)),
       deliveryKind
     };
 
@@ -738,8 +733,8 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
       const response = await fetcher(webhookUrl, {
         method: "POST",
         redirect: "error",
-        headers: webhookHeaders("darkweb.monitoring.match", deliveryId, baseDelivery.dedupeKey, webhookUrl, serializedBody),
-        body: serializedBody
+        headers: webhookHeaders("darkweb.monitoring.match", deliveryId, baseDelivery.dedupeKey),
+        body: JSON.stringify(requestBody)
       });
       const ok = response.status >= 200 && response.status < 300;
       const completedAt = nowIso();
@@ -792,8 +787,6 @@ export async function testDwmWebhook(request: Request, options: ApiServerOptions
     tenantId,
     watchlistId: watchlist?.id ?? "ad_hoc_webhook_test",
     webhookDestinationId: destination?.id,
-    deliveryId,
-    idempotencyKey: deliveryId,
     notificationTarget: {
       organizationId: scope.organizationId,
       tenantId,
@@ -806,7 +799,6 @@ export async function testDwmWebhook(request: Request, options: ApiServerOptions
     expectedAlertEvent: "darkweb.monitoring.match"
   };
   const requestBody = buildWebhookRequestBody(deliveryKind, payload);
-  const serializedBody = JSON.stringify(requestBody);
   const baseDelivery = {
     id: deliveryId,
     organizationId: scope.organizationId,
@@ -818,7 +810,7 @@ export async function testDwmWebhook(request: Request, options: ApiServerOptions
     dedupeKey: deliveryId,
     attemptedAt: generatedAt,
     dryRun: body.dryRun === true,
-    payloadHash: stableId("payload", serializedBody),
+    payloadHash: stableId("payload", JSON.stringify(requestBody)),
     deliveryKind
   };
 
@@ -832,8 +824,8 @@ export async function testDwmWebhook(request: Request, options: ApiServerOptions
     const response = await fetcher(webhookUrl, {
       method: "POST",
       redirect: "error",
-      headers: webhookHeaders("darkweb.monitoring.test", deliveryId, deliveryId, webhookUrl, serializedBody),
-      body: serializedBody
+      headers: webhookHeaders("darkweb.monitoring.test", deliveryId, deliveryId),
+      body: JSON.stringify(requestBody)
     });
     const ok = response.status >= 200 && response.status < 300;
     const completedAt = nowIso();

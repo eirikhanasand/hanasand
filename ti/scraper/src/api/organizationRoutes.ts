@@ -1,5 +1,4 @@
 import { nowIso, stableId, uniqueStrings } from "../utils.ts";
-import { createHmac } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { sanitizeDwmCustomerEvidenceExcerpt, sanitizeDwmCustomerText } from "../product/dwmCustomerDisplay.ts";
 import { error, json, readJson } from "./http.ts";
@@ -271,13 +270,10 @@ export async function testOrganizationWebhook(request: Request, options: ApiServ
     organizationId: organization.id,
     tenantId: organization.tenantId,
     webhookDestinationId: destination.id,
-    deliveryId,
-    idempotencyKey: deliveryId,
     generatedAt,
     message: "Hanasand organization webhook test.",
     expectedAlertEvent: "darkweb.monitoring.match"
   });
-  const serializedBody = JSON.stringify(payload);
 
   const baseDelivery = {
     id: deliveryId,
@@ -290,7 +286,7 @@ export async function testOrganizationWebhook(request: Request, options: ApiServ
     dedupeKey: deliveryId,
     attemptedAt: generatedAt,
     dryRun: body.dryRun === true,
-    payloadHash: stableId("payload", serializedBody),
+    payloadHash: stableId("payload", JSON.stringify(payload)),
     deliveryKind: destination.kind
   };
 
@@ -306,8 +302,8 @@ export async function testOrganizationWebhook(request: Request, options: ApiServ
     const response = await fetcher(destination.url, {
       method: "POST",
       redirect: "error",
-      headers: webhookHeaders("organization.webhook.test", deliveryId, deliveryId, destination.url, serializedBody),
-      body: serializedBody
+      headers: webhookHeaders("organization.webhook.test", deliveryId, deliveryId),
+      body: JSON.stringify(payload)
     });
     const ok = response.status >= 200 && response.status < 300;
     const completedAt = nowIso();
@@ -460,28 +456,13 @@ export function buildWebhookRequestBody(kind: WebhookKind, payload: any): any {
   };
 }
 
-export function webhookHeaders(eventType: string, deliveryId: string, dedupeKey: string, targetUrl: string, body: string): HeadersInit {
-  const normalizedTarget = normalizeWebhookUrl(targetUrl);
-  const serviceToken = String(Bun.env.TI_SCRAPER_SERVICE_TOKEN ?? "").trim();
-  const signature = normalizedTarget && controlledReceiverUrls().includes(normalizedTarget) && serviceToken
-    ? `sha256=${createHmac("sha256", serviceToken).update(`${normalizedTarget}\n${body}`).digest("hex")}`
-    : "";
+export function webhookHeaders(eventType: string, deliveryId: string, dedupeKey: string): HeadersInit {
   return {
     "content-type": "application/json",
     "x-hanasand-event": eventType,
     "x-hanasand-delivery-id": deliveryId,
-    "x-hanasand-dedupe-key": dedupeKey,
-    ...(signature ? { "x-hanasand-delivery-signature": signature } : {})
+    "x-hanasand-dedupe-key": dedupeKey
   };
-}
-
-function controlledReceiverUrls(): string[] {
-  return [...new Set(
-    String(Bun.env.DWM_CONTROLLED_RECEIVER_URLS ?? "https://hanasand.com/api/dwm/webhook-sink")
-      .split(",")
-      .map((value) => normalizeWebhookUrl(value))
-      .filter((value): value is string => Boolean(value))
-  )];
 }
 
 function upsertMember(options: ApiServerOptions, input: { organizationId: string; email?: string; userId?: string; role: OrganizationRole; status: MemberStatus; invitedAt?: string; acceptedAt?: string; generatedAt: string }): OrganizationMember {

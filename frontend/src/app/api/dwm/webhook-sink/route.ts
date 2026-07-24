@@ -41,6 +41,25 @@ export async function POST(request: Request) {
         })
     }
 
+    if (context?.schemaVersion !== 'dwm.webhook.v1') {
+        return NextResponse.json({
+            schemaVersion: 'dwm.webhook_sink.transport_ack.v1',
+            accepted: true,
+            durableReceiverReceipt: false,
+            eventId,
+            receivedAt,
+            summary: {
+                eventType: context?.eventType,
+                matchedTerm: webhookMatchedTerm(context),
+                reviewState: record(context?.alert)?.reviewState ?? context?.reviewState,
+                severity: record(context?.alert)?.severity ?? context?.severity,
+            },
+        }, {
+            status: 202,
+            headers: { 'cache-control': 'no-store' },
+        })
+    }
+
     const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN || ''
     if (!serviceToken) {
         return unavailableReceiver(eventId, receivedAt)
@@ -122,7 +141,7 @@ function validateDwmWebhookPayload(payload: Record<string, unknown> | null) {
     }
 
     if (['organization.webhook.test', 'darkweb.monitoring.test'].includes(String(payload.eventType))) {
-        for (const field of ['organizationId', 'tenantId', 'webhookDestinationId', 'deliveryId', 'idempotencyKey', 'generatedAt', 'message', 'expectedAlertEvent']) {
+        for (const field of ['organizationId', 'tenantId', 'webhookDestinationId', 'generatedAt', 'message', 'expectedAlertEvent']) {
             if (typeof payload[field] !== 'string' || !payload[field].trim()) return `Missing required organization webhook test field: ${field}.`
         }
         return ''
@@ -162,11 +181,6 @@ function validateDwmWebhookPayload(payload: Record<string, unknown> | null) {
         'claimSummary',
         'reviewState',
         'recommendedAction',
-        'organizationId',
-        'tenantId',
-        'webhookDestinationId',
-        'deliveryId',
-        'idempotencyKey',
     ]
 
     for (const field of requiredStrings) {

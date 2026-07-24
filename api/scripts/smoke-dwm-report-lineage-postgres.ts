@@ -97,6 +97,46 @@ async function exercise() {
     assert.equal(budgetRows.filter(row => row.attempted_at).length, 5)
     assert.equal(budgetRows.filter(row => row.status === 'skipped').length, 1)
 
+    let lostAckNetworkAttempts = 0
+    const lostAckSender = async (_endpoint: string, body: string) => {
+        lostAckNetworkAttempts += 1
+        const receiver = await recordDwmWebhookReceiverReceipt({
+            eventId: 'receiver_pg_lost_ack',
+            receivedAt: receiverReceivedAt,
+            payload: JSON.parse(body),
+            payloadBody: body,
+            signature: signDwmWebhookDeliveryBody(body, receiverUrl),
+        })
+        assert.equal(receiver.ok, true)
+        if (lostAckNetworkAttempts === 1) throw new Error('receiver acknowledgement lost')
+        assert.equal(receiver.ok && receiver.created, false)
+        return { status: 204, body: 'duplicate accepted' }
+    }
+    const [lostAckFailed] = await deliverDwmAlertNotification(ownerId, deliveryInput('lost_ack', false), lostAckSender)
+    assert.equal(lostAckFailed.status, 'failed')
+    const lostAckBeforeRetry = await listDwmWebhookReceiverReceipts(orgId, {
+        destinationId,
+        reportCaseId: 'case_lost_ack',
+    })
+    assert.equal(lostAckBeforeRetry.length, 1)
+    assert.equal(lostAckBeforeRetry[0].deliveryId, lostAckFailed.id)
+    await queryOnce(`
+        UPDATE dwm_webhook_deliveries
+        SET next_retry_at = NOW() - INTERVAL '1 second'
+        WHERE id = $1
+    `, [lostAckFailed.id])
+    const lostAckRetry = await retryDwmWebhookDelivery(adminId, orgId, lostAckFailed.id, lostAckSender)
+    assert.equal(lostAckRetry.ok, true, JSON.stringify(lostAckRetry))
+    assert.equal(lostAckRetry.ok && lostAckRetry.delivery.status, 'delivered')
+    assert.equal(lostAckNetworkAttempts, 2)
+    const lostAckAfterRetry = await listDwmWebhookReceiverReceipts(orgId, {
+        destinationId,
+        reportCaseId: 'case_lost_ack',
+    })
+    assert.equal(lostAckAfterRetry.length, 1)
+    assert.equal(lostAckAfterRetry[0].deliveryId, lostAckRetry.ok ? lostAckRetry.delivery.id : '')
+    assert.equal(lostAckAfterRetry[0].payloadDeliveryId, lostAckFailed.id)
+
     let originalReceiverBody = ''
     const [failed] = await deliverDwmAlertNotification(ownerId, deliveryInput('restart', false), async (_endpoint, body) => {
         originalReceiverBody = body
@@ -116,6 +156,11 @@ async function exercise() {
     assert.equal(premature.code, 'delivery_retry_not_ready')
     assert.equal(new Date(premature.nextRetryAt).toISOString(), new Date(failed.nextRetryAt).toISOString())
     assert.equal(prematureNetworkAttempts, 0)
+    await queryOnce(`
+        UPDATE dwm_webhook_deliveries
+        SET next_retry_at = NOW() - INTERVAL '1 second'
+        WHERE id = $1
+    `, [failed.id])
     await writeFile(receiverObservationPath, JSON.stringify({
         body: originalReceiverBody,
         payloadHash: failed.payloadHash,
@@ -152,12 +197,25 @@ async function exercise() {
         nextRetryAt: failed.nextRetryAt,
         reportReceiptPastHundredRows: reportRowsPastLimit.length === 1,
         durableReceiverReceipts: concurrentReceipts.length,
+        lostAckReceiptRebound: lostAckRetry.ok && lostAckAfterRetry[0].deliveryId === lostAckRetry.delivery.id,
+        lostAckNetworkAttempts,
         prematureRetryBlocked: true,
         next: `Stop and restart PostgreSQL, then rerun this script with DB=${database} and phase verify; verification waits until the persisted retry due time.`,
     }, null, 2))
 }
 
 async function verifyAfterRestart() {
+    const lostAckReceipts = await listDwmWebhookReceiverReceipts(orgId, {
+        destinationId,
+        reportCaseId: 'case_lost_ack',
+    })
+    assert.equal(lostAckReceipts.length, 1)
+    const lostAckRows = await deliveryRows('report_pg_alert_lost_ack')
+    const lostAckDelivered = lostAckRows.find(row => row.status === 'delivered')
+    assert.ok(lostAckDelivered)
+    assert.equal(lostAckReceipts[0].deliveryId, lostAckDelivered.id)
+    assert.equal(lostAckRows.filter(row => row.attempted_at).length, 2)
+
     const persistedReceiverReceipts = await listDwmWebhookReceiverReceipts(orgId, {
         destinationId,
         reportCaseId: 'case_concurrent',
@@ -278,6 +336,7 @@ async function verifyAfterRestart() {
         reportReceiptPastHundredRows: reportRowsPastLimit.length === 1,
         durableReceiverReceiptAfterRestart: persistedReceiverReceipts.length === 1,
         retryReceiptBoundToAuthoritativeDelivery: restartReceipts[0].deliveryId === retried.delivery.id,
+        lostAckReceiptSurvivedRestart: lostAckReceipts[0].deliveryId === lostAckDelivered.id,
         duplicateNetworkAttempts,
         receiverReplayCreatedDuplicate: replayedReceiver.ok && replayedReceiver.created,
         exactIdempotencyLineage: retried.delivery.idempotencyKey === storedIdempotencyKey,

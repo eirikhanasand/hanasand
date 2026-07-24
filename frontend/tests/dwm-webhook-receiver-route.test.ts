@@ -104,84 +104,42 @@ test('acknowledges a webhook only after the central API persists its receiver re
     }
 })
 
-test('forwards every legacy producer shape with its exact signed bytes and lineage', async () => {
+test('keeps scraper-owned legacy delivery in its authoritative sender ledger', async () => {
     const previousFetch = globalThis.fetch
-    const previousToken = process.env.TI_SCRAPER_SERVICE_TOKEN
-    process.env.TI_SCRAPER_SERVICE_TOKEN = 'service-token'
-    const forwarded: Array<Record<string, unknown>> = []
-    globalThis.fetch = async (_input, init) => {
-        forwarded.push(JSON.parse(String(init?.body)))
-        return Response.json({ accepted: true, receipt: { id: `receipt_${forwarded.length}` } }, { status: 201 })
+    let centralCalls = 0
+    globalThis.fetch = async () => {
+        centralCalls += 1
+        throw new Error('legacy delivery must not cross stores')
     }
-    const base = {
-        organizationId: 'org_1',
-        tenantId: 'org_1',
-        webhookDestinationId: 'destination_1',
-        generatedAt: '2026-07-24T10:00:00.000Z',
-    }
-    const payloads = [
-        {
-            ...base,
-            eventType: 'organization.webhook.test',
-            deliveryId: 'organization_delivery_1',
-            idempotencyKey: 'organization_delivery_1',
-            message: 'Hanasand organization webhook test.',
-            expectedAlertEvent: 'darkweb.monitoring.match',
-        },
-        {
-            ...base,
-            eventType: 'darkweb.monitoring.test',
-            deliveryId: 'dwm_test_delivery_1',
-            idempotencyKey: 'dwm_test_delivery_1',
-            message: 'Hanasand DWM webhook test.',
-            expectedAlertEvent: 'darkweb.monitoring.match',
-        },
-        {
-            ...base,
-            eventType: 'darkweb.monitoring.match',
-            deliveryId: 'dwm_match_delivery_1',
-            idempotencyKey: 'dwm_match_lineage_1',
-            severity: 'high',
-            actor: 'Akira',
-            company: 'example.org',
-            matchedTerm: 'example.org',
-            artifactType: 'domain',
-            sourceFamily: 'public_http',
-            claimSummary: 'Evidence-backed match.',
-            reviewState: 'confirmed',
-            recommendedAction: 'Review retained evidence.',
-            confidence: 90,
-            selectedCaptureIds: ['capture_1'],
-            deliveryReadinessContext: { selectedCaptureIds: ['capture_1'] },
-        },
-    ]
     try {
-        for (const candidate of payloads) {
-            const payloadBody = JSON.stringify(candidate, null, 2)
-            const response = await POST(new Request('http://local/api/dwm/webhook-sink', {
-                method: 'POST',
-                headers: {
-                    'content-type': 'application/json',
-                    'x-hanasand-delivery-id': candidate.deliveryId,
-                    'x-hanasand-dedupe-key': candidate.idempotencyKey,
-                    'x-hanasand-delivery-signature': 'sha256=producer-signature',
-                },
-                body: payloadBody,
-            }))
-            assert.equal(response.status, 202)
-            assert.deepEqual(forwarded.at(-1), {
-                eventId: candidate.deliveryId,
-                receivedAt: forwarded.at(-1)?.receivedAt,
-                payload: candidate,
-                payloadBody,
-                deliveryId: candidate.deliveryId,
-                idempotencyKey: candidate.idempotencyKey,
-                signature: 'sha256=producer-signature',
-            })
-        }
+        const response = await POST(new Request('http://local/api/dwm/webhook-sink', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                eventType: 'organization.webhook.test',
+                organizationId: 'org_1',
+                tenantId: 'org_1',
+                webhookDestinationId: 'destination_1',
+                generatedAt: '2026-07-24T10:00:00.000Z',
+                message: 'Hanasand organization webhook test.',
+                expectedAlertEvent: 'darkweb.monitoring.match',
+            }),
+        }))
+        assert.equal(response.status, 202)
+        const responseBody = await response.json()
+        assert.deepEqual(responseBody, {
+            schemaVersion: 'dwm.webhook_sink.transport_ack.v1',
+            accepted: true,
+            durableReceiverReceipt: false,
+            eventId: responseBody.eventId,
+            receivedAt: responseBody.receivedAt,
+            summary: {
+                eventType: 'organization.webhook.test',
+                matchedTerm: '',
+            },
+        })
+        assert.equal(centralCalls, 0)
     } finally {
         globalThis.fetch = previousFetch
-        if (previousToken === undefined) delete process.env.TI_SCRAPER_SERVICE_TOKEN
-        else process.env.TI_SCRAPER_SERVICE_TOKEN = previousToken
     }
 })
