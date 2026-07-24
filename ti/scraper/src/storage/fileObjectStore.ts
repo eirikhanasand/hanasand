@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ObjectStoreRef } from "../types.ts";
@@ -31,7 +32,7 @@ export class FileObjectEvidenceStore implements ObjectEvidenceStore {
       key,
       versionId: input.contentHash,
       sizeBytes: bytes.byteLength,
-      sha256: input.contentHash
+      sha256: createHash("sha256").update(bytes).digest("hex")
     };
     const record = fileObjectRecordFor(ref, input);
     writeFileSync(`${objectPath}.json`, JSON.stringify(record, null, 2));

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,9 +13,9 @@ import { FileObjectEvidenceStore } from "../storage/fileObjectStore.ts";
 import { fileObjectPathForKey } from "../storage/fileObjectStoreHelpers.ts";
 import { hashContent } from "../utils.ts";
 
-function fixture(evidenceRoot: string) {
+function fixture(evidenceRoot: string, legacyRefHash = false) {
   const body = "retained recovery evidence";
-  const contentHash = hashContent(body);
+  const contentHash = hashContent(`semantic identity:${body}`);
   const objects = new FileObjectEvidenceStore({ rootDir: join(evidenceRoot, "objects") });
   const record = objects.putObject({
     tenantId: "tenant_restore",
@@ -25,6 +26,13 @@ function fixture(evidenceRoot: string) {
     contentHash,
     retentionClass: "public_report",
   });
+  if (legacyRefHash) {
+    record.ref.sha256 = contentHash;
+    const metadataPath = `${fileObjectPathForKey(join(evidenceRoot, "objects"), record.ref.key)}.json`;
+    const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
+    metadata.ref.sha256 = contentHash;
+    writeFileSync(metadataPath, JSON.stringify(metadata));
+  }
   const capture = {
     id: "capture_restore",
     tenantId: "tenant_restore",
@@ -70,8 +78,11 @@ async function withFixture(run: (value: ReturnType<typeof fixture>, evidenceRoot
 
 describe("restored object evidence reconciliation", () => {
   test("binds restored DB references to the archived bytes and recovery metadata", async () => {
-    await withFixture(async ({ capture, references }, evidenceRoot) => {
-      const ledger = formatObjectLedger(await buildObjectLedger(references, evidenceRoot));
+    await withFixture(async ({ body, capture, references }, evidenceRoot) => {
+      const rows = await buildObjectLedger(references, evidenceRoot);
+      expect(rows[0]?.objectSha256).toBe(createHash("sha256").update(body).digest("hex"));
+      expect(rows[0]?.refContentHash).toBe(rows[0]?.objectSha256);
+      const ledger = formatObjectLedger(rows);
       expect(await reconcileRestoredObjectEvidence([capture], evidenceRoot, ledger)).toEqual({
         linked: 1,
         resolved: 1,
@@ -80,6 +91,23 @@ describe("restored object evidence reconciliation", () => {
         metadataRetentionDifferences: 0,
       });
     });
+  });
+
+  test("accepts legacy semantic ref hashes while recording the real archived byte hash", async () => {
+    const evidenceRoot = mkdtempSync(join(tmpdir(), "ti-restore-legacy-objects-"));
+    try {
+      const { body, capture, references } = fixture(evidenceRoot, true);
+      const rows = await buildObjectLedger(references, evidenceRoot);
+      expect(rows[0]?.refContentHash).toBe(capture.contentHash);
+      expect(rows[0]?.objectSha256).toBe(createHash("sha256").update(body).digest("hex"));
+      expect(await reconcileRestoredObjectEvidence(
+        [capture],
+        evidenceRoot,
+        formatObjectLedger(rows),
+      )).toMatchObject({ linked: 1, resolved: 1, missing: 0, mismatched: 0 });
+    } finally {
+      rmSync(evidenceRoot, { recursive: true, force: true });
+    }
   });
 
   test("preserves and reports historical database/file retention differences exactly", async () => {

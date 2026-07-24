@@ -156,6 +156,7 @@ async function inspectObject(
     throw new ObjectEvidenceError("mismatched");
   }
   const metadataRef = record?.ref ?? {};
+  const objectSha256 = sha256(objectBytes);
   if (
     normalizeTenant(record?.tenantId) !== reference.tenantId
     || record?.captureId !== reference.captureId
@@ -171,9 +172,8 @@ async function inspectObject(
     || metadataRef.sha256 !== reference.refContentHash
     || metadataRef.sizeBytes !== reference.sizeBytes
     || reference.versionId !== reference.contentHash
-    || reference.refContentHash !== reference.contentHash
     || objectBytes.byteLength !== reference.sizeBytes
-    || Bun.hash(objectBytes).toString(16) !== reference.contentHash
+    || ![reference.contentHash, objectSha256].includes(reference.refContentHash)
   ) {
     throw new ObjectEvidenceError("mismatched");
   }
@@ -182,7 +182,7 @@ async function inspectObject(
     metadataTenantId: normalizeTenant(record.tenantId),
     metadataMediaType: record.mediaType,
     metadataRetentionClass: record.retentionClass,
-    objectSha256: sha256(objectBytes),
+    objectSha256,
     metadataSha256: sha256(metadataBytes),
   };
   if (expectedHashes && (
