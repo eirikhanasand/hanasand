@@ -19,10 +19,7 @@ const timeoutMs = Number(process.env.HANASAND_DB_MONITOR_TIMEOUT_MS || 30_000)
 const repeatAlertMinutes = Number(process.env.HANASAND_DB_MONITOR_REPEAT_ALERT_MINUTES || 15)
 const failureThreshold = Math.max(Number(process.env.HANASAND_DB_MONITOR_FAILURE_THRESHOLD || 2), 1)
 const backupStatusPath = process.env.HANASAND_TI_BACKUP_STATUS || '/home/hanasand/backups/threat-intel/LATEST-STATUS'
-const backupStatePath = process.env.HANASAND_TI_BACKUP_MONITOR_STATE || '/home/hanasand/monitor-state/threat-intel-backup.json'
 const backupMaxAgeHours = Math.max(Number(process.env.HANASAND_TI_BACKUP_MAX_AGE_HOURS || 30), 1)
-const statusIngestBaseUrl = trimSlash(process.env.HANASAND_STATUS_INGEST_BASE_URL || 'https://api.hanasand.com')
-const statusIngestToken = process.env.HANASAND_STATUS_INGEST_TOKEN || ''
 const now = new Date()
 
 class MonitorFailure extends Error {
@@ -37,8 +34,6 @@ if (process.argv.includes('--self-test')) {
     runSelfTest()
     process.exit(0)
 }
-
-await monitorThreatIntelBackup()
 
 if (!username || !password) {
     await handleResult({
@@ -81,13 +76,29 @@ try {
     if (!signal.ok) {
         throw new MonitorFailure(signal.reason, signal.detail, signal.metrics)
     }
+    const backup = evaluateThreatIntelBackupStatus(
+        await readFile(backupStatusPath, 'utf8').catch(() => ''),
+        now,
+        backupMaxAgeHours,
+    )
+    if (!backup.ok) {
+        throw new MonitorFailure(backup.reason, backup.detail, {
+            ...signal.metrics,
+            backupStatus: backup.status,
+            backupFinishedAt: backup.finishedAt,
+        })
+    }
 
     await handleResult({
         ok: true,
         reason: 'db_dashboard_ok',
-        detail: signal.detail,
+        detail: `${signal.detail} Threat-intelligence backup completed ${backup.finishedAt}.`,
         latencyMs: Math.round(performance.now() - started),
-        metrics: signal.metrics,
+        metrics: {
+            ...signal.metrics,
+            backupStatus: backup.status,
+            backupFinishedAt: backup.finishedAt,
+        },
     })
 } catch (error) {
     const failure = normalizeFailure(error)
@@ -123,10 +134,10 @@ export function evaluateDashboardText(text) {
     const unavailableMatch = fullText.match(unavailablePattern)
     const metrics = {
         clusters: parseIntegerMetric(lines, 'Clusters'),
-        databases: parseIntegerMetric(lines, ['Databases', 'DBs']),
+        databases: parseIntegerMetric(lines, 'Databases'),
         storageBytes: parseStorageMetric(lines, 'Storage'),
-        activeQueries: parseIntegerMetric(lines, ['Active queries', 'Active']),
-        longRunning: parseIntegerMetric(lines, ['Long-running', 'Longest running query']),
+        activeQueries: parseIntegerMetric(lines, 'Active queries'),
+        longRunning: parseIntegerMetric(lines, 'Long-running'),
     }
 
     if (unavailableMatch) {
@@ -247,34 +258,8 @@ export function evaluateThreatIntelBackupStatus(text, checkedAt = new Date(), ma
     }
 }
 
-async function monitorThreatIntelBackup() {
-    const started = performance.now()
-    const backup = evaluateThreatIntelBackupStatus(
-        await readFile(backupStatusPath, 'utf8').catch(() => ''),
-        now,
-        backupMaxAgeHours,
-    )
-    await handleResult({
-        ok: backup.ok,
-        reason: backup.reason,
-        detail: backup.detail,
-        latencyMs: Math.round(performance.now() - started),
-        metrics: {
-            backupStatus: backup.status,
-            backupFinishedAt: backup.finishedAt,
-        },
-    }, {
-        statePath: backupStatePath,
-        service: 'threat-intelligence',
-        checkName: 'Backup continuity',
-    })
-}
-
-async function handleResult(result, options = {}) {
-    const resultStatePath = options.statePath || statePath
-    const service = options.service || 'database'
-    const checkName = options.checkName || 'Database dashboard'
-    const previous = await readState(resultStatePath)
+async function handleResult(result) {
+    const previous = await readState()
     const alertErrors = []
     const backupFailure = String(result.reason || '').startsWith('ti_backup_')
     const next = {
@@ -290,9 +275,6 @@ async function handleResult(result, options = {}) {
         failureThreshold,
         alertErrors,
     }
-    await sendStatusIngest(service, checkName, result).catch(error => {
-        alertErrors.push(error instanceof Error ? error.message : String(error))
-    })
 
     if (result.ok && previous.ok === false) {
         const backupRecovered = String(previous.reason || '').startsWith('ti_backup_')
@@ -331,7 +313,7 @@ async function handleResult(result, options = {}) {
         }
     }
 
-    await writeState(next, resultStatePath)
+    await writeState(next)
     console.log(JSON.stringify(next))
 
     async function trySendDiscord(payload) {
@@ -342,31 +324,6 @@ async function handleResult(result, options = {}) {
             alertErrors.push(error instanceof Error ? error.message : String(error))
             return false
         }
-    }
-}
-
-async function sendStatusIngest(service, checkName, result) {
-    if (!statusIngestToken) {
-        throw new Error('HANASAND_STATUS_INGEST_TOKEN is required to persist monitor results and send email alerts')
-    }
-    const response = await fetch(`${statusIngestBaseUrl}/api/status/ingest`, {
-        method: 'POST',
-        signal: AbortSignal.timeout(timeoutMs),
-        headers: {
-            Authorization: `Bearer ${statusIngestToken}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            service,
-            check_name: checkName,
-            status: result.ok ? 'up' : 'down',
-            latency_ms: result.latencyMs,
-            message: result.detail,
-        }),
-    })
-    if (!response.ok) {
-        const body = await response.text().catch(() => '')
-        throw new Error(`Status ingest failed ${response.status}: ${truncate(body, 240)}`)
     }
 }
 
@@ -498,17 +455,17 @@ function operatorAction(reason) {
     return 'Open the failure screenshot and rerun the monitor after the dependency is fixed.'
 }
 
-async function readState(path = statePath) {
+async function readState() {
     try {
-        return JSON.parse(await readFile(path, 'utf8'))
+        return JSON.parse(await readFile(statePath, 'utf8'))
     } catch {
         return {}
     }
 }
 
-async function writeState(state, path = statePath) {
-    await mkdir(dirname(path), { recursive: true })
-    await writeFile(path, `${JSON.stringify(state, null, 2)}\n`)
+async function writeState(state) {
+    await mkdir(dirname(statePath), { recursive: true })
+    await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
 }
 
 function normalizeFailure(error) {
@@ -533,8 +490,8 @@ function linesFromText(text) {
         .filter(Boolean)
 }
 
-function parseIntegerMetric(lines, labels) {
-    const value = metricValue(lines, labels)
+function parseIntegerMetric(lines, label) {
+    const value = metricValue(lines, label)
     if (!value) return null
     const parsed = Number(value.replace(/,/g, ''))
     return Number.isFinite(parsed) ? parsed : null
@@ -551,9 +508,8 @@ function parseStorageMetric(lines, label) {
     return Number.isFinite(amount) ? amount * multiplier : null
 }
 
-function metricValue(lines, labels) {
-    const expected = Array.isArray(labels) ? labels : [labels]
-    const index = lines.findIndex(line => expected.some(label => line.toLowerCase() === label.toLowerCase()))
+function metricValue(lines, label) {
+    const index = lines.findIndex(line => line.toLowerCase() === label.toLowerCase())
     if (index === -1) return null
     return lines[index + 1] || null
 }
@@ -618,23 +574,6 @@ function runSelfTest() {
     assert.equal(healthy.metrics.clusters, 1)
     assert.equal(healthy.metrics.databases, 2)
     assert.ok(healthy.metrics.storageBytes > 0)
-
-    const currentDashboardLabels = evaluateDashboardText(`
-        Operations
-        Database
-        Clusters
-        1
-        DBs
-        2
-        Storage
-        108.00 MB
-        Active
-        0
-        Longest running query
-        No active query details available.
-    `)
-    assert.equal(currentDashboardLabels.ok, true)
-    assert.equal(currentDashboardLabels.metrics.databases, 2)
 
     const unavailable = evaluateDashboardText(`
         Operations
