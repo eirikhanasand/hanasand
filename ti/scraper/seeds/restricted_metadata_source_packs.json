@@ -20,6 +20,87 @@
   ],
   "reviewedRejectedCandidates": [
     {
+      "id": "restricted_pear_victim_blog",
+      "actorName": "Pear",
+      "disposition": "rejected",
+      "reason": "The only currently reported public DLS returned an empty body through the approved proxy and yielded no victim metadata.",
+      "evidenceCheckedAt": "2026-07-24T08:30:00.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/pear",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_ailock_victim_blog",
+      "actorName": "AiLock",
+      "disposition": "rejected",
+      "reason": "The only currently reported public DLS returned a 1,385-byte application shell with no bounded victim metadata.",
+      "evidenceCheckedAt": "2026-07-24T08:30:00.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/ailock",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_medusalocker_victim_blog",
+      "actorName": "MedusaLocker",
+      "disposition": "rejected",
+      "reason": "The only currently reported public DLS returned a 774-byte title-only response with no victim metadata.",
+      "evidenceCheckedAt": "2026-07-24T08:30:00.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/medusalocker",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_payoutsking_victim_blog",
+      "actorName": "PayoutsKing",
+      "disposition": "rejected",
+      "reason": "The only currently reported public DLS returned a verification response and no lawful victim metadata without interaction.",
+      "evidenceCheckedAt": "2026-07-24T08:30:00.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/payoutsking",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_wallstreet_victim_blog",
+      "actorName": "Wallstreet",
+      "disposition": "rejected",
+      "reason": "The only currently reported public DLS returned a 946-byte title-only response with no victim metadata.",
+      "evidenceCheckedAt": "2026-07-24T08:30:00.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/wallstreet",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_aurora_victim_blog",
+      "actorName": "Aurora",
+      "disposition": "rejected",
+      "reason": "The only currently reported public DLS returned a 505-byte title-only response with no victim metadata.",
+      "evidenceCheckedAt": "2026-07-24T08:30:00.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/aurora",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_embargo_victim_blog",
+      "actorName": "Embargo",
+      "disposition": "rejected",
+      "reason": "The only currently reported public DLS returned a 617-byte title-only response with no victim metadata.",
+      "evidenceCheckedAt": "2026-07-24T08:30:00.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/embargo",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_lapsus_victim_blog",
+      "actorName": "Lapsus$",
+      "disposition": "rejected",
+      "reason": "The only currently reported public DLS returned a 568-byte title-only response with no victim metadata.",
+      "evidenceCheckedAt": "2026-07-24T08:30:00.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/lapsus%24",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_termite_victim_blog",
+      "actorName": "Termite",
+      "disposition": "rejected",
+      "reason": "The only currently reported public DLS returned a 454-byte title-only response with no victim metadata.",
+      "evidenceCheckedAt": "2026-07-24T08:30:00.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/termite",
+      "countsAsCoverage": false
+    },
+    {
       "id": "restricted_ransomhouse_victim_blog",
       "actorName": "RansomHouse",
       "disposition": "rejected",
@@ -647,6 +728,85 @@
         "retainRawContent": false,
         "retentionDays": 30,
         "attribution": "Ransomwhere.org public research inventory, Red Piranha threat research, and approved-proxy metadata verification"
+      }
+    },
+    {
+      "id": "restricted_genesis_victim_blog",
+      "name": "Genesis victim blog",
+      "type": "tor_metadata",
+      "url": "http://genesis6ixpb5mcy4kudybtw5op2wqlrkocfogbnenz3c647ibqixiad.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.86,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "language": "en",
+      "legalNotes": "Collect only public victim-card names from the bounded listing response during governed probation. Never authenticate, interact with operators, follow detail or payload links, or retain descriptions, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-07-24T08:30:00.000Z",
+        "approvedBy": "source-review:goal4-lawful-tor-candidate",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Genesis",
+        "actors": [
+          "Genesis"
+        ],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/data",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/genesis",
+        "discoveryCheckedAt": "2026-07-24T08:30:00.000Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-07-24T08:30:00.000Z",
+        "productionCollectionVerifiedAt": "2026-07-24T08:30:00.000Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "productionCollection": false,
+        "parserProfile": "section_block_h2",
+        "parserShape": "section.block-bg > h2",
+        "reportedVictimCount": 100,
+        "observedParsedItemCount": 20,
+        "lastReportedVictimAt": "2026-07-05T13:59:07.846Z",
+        "discoveryAuthorityChain": [
+          {
+            "name": "Ransomwhere.org",
+            "role": "current public ransomware leak-service and victim inventory",
+            "url": "https://ransomwhere.org/data",
+            "recordUrl": "https://ransomwhere.org/api/groups/genesis"
+          },
+          {
+            "name": "Halcyon",
+            "role": "independent threat actor identity and Tor DLS corroboration",
+            "url": "https://www.halcyon.ai/threat-actor-index",
+            "recordUrl": "https://www.halcyon.ai/threat-actor-index?e4c1d599_page=9"
+          },
+          {
+            "name": "CYFIRMA",
+            "role": "independent ransomware research corroborating Genesis victim disclosures",
+            "url": "https://www.cyfirma.com/research/",
+            "recordUrl": "https://www.cyfirma.com/research/tracking-ransomware-october-2025/"
+          }
+        ],
+        "qualificationState": "pending_two_productive_scheduled_cycles",
+        "countsAsCoverage": false,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-24T08:30:00.000Z",
+          "legalBasisVerifiedAt": "2026-07-24T08:30:00.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "contentType": "text/html",
+          "publisherReference": "https://ransomwhere.org/api/groups/genesis",
+          "latestPublishedAt": "2026-07-05T13:59:07.846Z"
+        },
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "attribution": "Ransomwhere.org public research inventory, Halcyon actor index, CYFIRMA ransomware research, and approved-proxy metadata verification"
       }
     }
   ]

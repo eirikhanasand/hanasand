@@ -176,6 +176,58 @@ describe("restricted metadata collection", () => {
     expect(store.listSources().every((item) => item.status === "candidate" && item.countsAsCoverage === false && item.metadata.productionCollection === false)).toBe(true);
   });
 
+  test("persists allowlisted Genesis section-card names without retaining card details", async () => {
+    const store = new InMemoryScraperStore();
+    const restrictedHost = `${"z".repeat(56)}.onion`;
+    const html = `<title>Genesis</title>
+      <section class="block-bg relative"><h2>Northwind Health</h2><div>token=do-not-store analyst@example.test</div><a href="http://${restrictedHost}/files">details</a></section>
+      <section class="block-bg relative"><h2>Contoso Manufacturing</h2><div>private file listing</div></section>
+      <section class="block-bg relative"><h2>http://${restrictedHost}/not-a-victim</h2></section>`;
+    const boundary = new TorMetadataHttpBoundary({
+      proxyUrl: "http://onion-tor:8118",
+      fetcher: async () => new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } })
+    });
+    store.saveSource(source({
+      id: "src_genesis",
+      type: "tor_metadata",
+      url: `http://${"g".repeat(56)}.onion/`,
+      accessMethod: "approved_proxy",
+      status: "candidate",
+      risk: "restricted",
+      legalNotes: "Approved public victim-card metadata only; no card details or response body retention.",
+      governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-07-24T08:30:00.000Z", approvedBy: "reviewer" },
+      metadata: {
+        actorName: "Genesis",
+        restrictedMetadataCandidate: true,
+        productionCollection: false,
+        countsAsCoverage: false,
+        sourcePortfolioVerification: {
+          verifiedAt: "2026-07-24T08:30:00.000Z",
+          legalBasisVerifiedAt: "2026-07-24T08:30:00.000Z",
+          outcome: "content_parsed",
+          observedItemCount: 2
+        }
+      }
+    }));
+
+    const result = await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-24T09:00:00.000Z" });
+    const capture = store.listCaptures()[0];
+    const serialized = JSON.stringify(capture);
+
+    expect(result).toMatchObject({ status: "completed", intelligenceSourceCount: 1, captureCount: 1, incidentCount: 1, failedSourceCount: 0 });
+    expect(capture.metadata.leakSite.victimNames).toEqual(["Northwind Health", "Contoso Manufacturing"]);
+    expect(capture.storageKind).toBe("metadata_only");
+    expect(capture.body).toBeUndefined();
+    expect(capture.objectRef).toBeUndefined();
+    expect(serialized).not.toContain(restrictedHost);
+    expect(serialized).not.toContain("do-not-store");
+    expect(serialized).not.toContain("analyst@example.test");
+    expect(serialized).not.toContain("private file listing");
+    expect(store.listSourceHealthObservations()[0]).toMatchObject({ success: true, useful: true, captureCount: 1, parserWarningCount: 0 });
+    expect(store.getSource("src_genesis")).toMatchObject({ status: "candidate", countsAsCoverage: false, metadata: { productionCollection: false, countsAsCoverage: false } });
+    expect((await boundary.fetchMetadata({ url: `http://${"g".repeat(56)}.onion/`, actorName: "Unapproved" })).victimNames).toEqual([]);
+  });
+
   test("rejects malformed or non-allowlisted JSON through the Tor boundary", async () => {
     const malformed = new TorMetadataHttpBoundary({ proxyUrl: "http://onion-tor:8118", fetcher: async () => new Response("{", { headers: { "content-type": "application/json" } }) });
     const unsupported = new TorMetadataHttpBoundary({ proxyUrl: "http://onion-tor:8118", fetcher: async () => new Response('{"posts":[{"title":"Victim"}]}', { headers: { "content-type": "application/json" } }) });
@@ -332,11 +384,13 @@ describe("restricted metadata collection", () => {
     const report = importRestrictedMetadataSeedBundle(bundle, "2026-07-22T13:00:00.000Z");
 
     expect(report.valid).toBe(true);
-    expect(report.accepted.filter((item) => item.metadata?.transportCanary !== true).map((item) => item.id)).toEqual(["restricted_safepay_victim_blog", "restricted_space_bears_victim_blog", "restricted_blackwater_victim_blog", "restricted_qilin_victim_blog", "restricted_nova_victim_blog", "restricted_interlock_victim_blog", "restricted_lamashtu_victim_blog"]);
+    expect(report.accepted.filter((item) => item.metadata?.transportCanary !== true).map((item) => item.id)).toEqual(["restricted_safepay_victim_blog", "restricted_space_bears_victim_blog", "restricted_blackwater_victim_blog", "restricted_qilin_victim_blog", "restricted_nova_victim_blog", "restricted_interlock_victim_blog", "restricted_lamashtu_victim_blog", "restricted_genesis_victim_blog"]);
     expect(report.accepted.filter((item) => item.metadata?.transportCanary !== true).every((item) => item.status === "candidate" && item.governance?.approvalState === "approved" && item.metadata?.productionCollectionOutcome === "metadata_only_parser_verified")).toBe(true);
     expect(report.accepted.find((item) => item.id === "restricted_blackwater_victim_blog")).toMatchObject({ countsAsCoverage: false, metadata: { qualificationState: "pending_two_productive_scheduled_cycles", sourcePortfolioVerification: { outcome: "content_parsed", observedItemCount: 8 } } });
     expect(report.accepted.find((item) => item.id === "restricted_lamashtu_victim_blog"))
       .toMatchObject({ countsAsCoverage: false, metadata: { qualificationState: "pending_two_productive_scheduled_cycles", sourcePortfolioVerification: { contentType: "application/json", observedItemCount: 20 } } });
+    expect(report.accepted.find((item) => item.id === "restricted_genesis_victim_blog"))
+      .toMatchObject({ status: "candidate", countsAsCoverage: false, metadata: { parserShape: "section.block-bg > h2", qualificationState: "pending_two_productive_scheduled_cycles", sourcePortfolioVerification: { contentType: "text/html", observedItemCount: 20 } } });
     expect(bundle.reviewedRejectedCandidates.find((item: any) => item.id === "restricted_ransomhouse_victim_blog"))
       .toMatchObject({ disposition: "rejected", countsAsCoverage: false });
     expect(report.accepted.some((item) => ["restricted_akira_victim_blog", "restricted_blackout_victim_blog", "restricted_braincipher_victim_blog", "restricted_deadlock_victim_blog"].includes(item.id))).toBe(false);
