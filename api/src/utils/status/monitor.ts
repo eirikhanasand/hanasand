@@ -167,7 +167,7 @@ export default async function runSyntheticMonitor() {
             const counts = object(queue?.counts)
             const freshness = object(queue?.freshness)
             const total = Number(counts?.total)
-            if (response.status !== 200 || queue?.status !== 'live' || !Array.isArray(queue?.items) || !queue.items.length || total < 1) {
+            if (response.status !== 200 || !['live', 'stale'].includes(String(queue?.status)) || !Array.isArray(queue?.items) || !queue.items.length || total < 1) {
                 throw new Error(`Latest customer activity is unavailable or empty (${response.status})`)
             }
             const ageMinutes = Number(freshness?.collectionAgeMinutes)
