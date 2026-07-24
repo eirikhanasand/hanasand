@@ -215,6 +215,7 @@ export default async function runSyntheticMonitor() {
                 SELECT
                   count(*) FILTER (
                     WHERE record_type = 'analyst_metadata_review_task'
+                      AND record->>'recordKind' = 'automatic_intelligence_review_task'
                       AND record->>'state' IN ('queued', 'running', 'retrying')
                       AND record->>'promptVersion' NOT IN (
                         'ti.automatic_intelligence_review.prompt.v1',
