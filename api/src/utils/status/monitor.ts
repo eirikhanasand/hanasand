@@ -125,7 +125,7 @@ export default async function runSyntheticMonitor() {
             return 'The authenticated dark-web monitoring workspace rendered successfully.'
         }),
         check('dark-web-monitoring', 'Latest activity', async () => {
-            const { response, body } = await fetchJson('/dwm/exposure-queue?limit=1', {}, webBase)
+            const { response, body } = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase)
             const queue = object(body)
             const counts = object(queue?.counts)
             if (response.status !== 200 || queue?.status === 'empty' || !Array.isArray(queue?.items) || !queue.items.length || Number(counts?.total) < 1) {
