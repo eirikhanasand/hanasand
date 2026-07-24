@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
+import { fetchSharedExposureQueue } from '@/utils/dwm/sharedExposureQueue'
 import { buildRouteMetadata } from '../seo'
 import ActivityClient from './activityClient'
 import { normalizeExposureQueue, type ExposureQueue } from '../exposureQueue'
@@ -19,15 +19,8 @@ export default async function ActivityPage() {
 }
 
 async function loadExposureQueue(): Promise<ExposureQueue | null> {
-    const target = new URL('/v1/dwm/exposure-queue', tiScraperApiBase())
-    target.searchParams.set('limit', '50')
-    target.searchParams.set('offset', '0')
-
     try {
-        const response = await fetch(target, {
-            cache: 'no-store',
-            signal: AbortSignal.timeout(3500),
-        })
+        const response = await fetchSharedExposureQueue(new URLSearchParams({ limit: '50', offset: '0' }), { timeoutMs: 3500 })
         if (!response.ok) return null
         return normalizeExposureQueue(await response.json())
     } catch {
@@ -38,9 +31,9 @@ async function loadExposureQueue(): Promise<ExposureQueue | null> {
 function emptyExposureQueue(): ExposureQueue {
     return {
         generatedAt: new Date().toISOString(),
-        status: 'checking',
+        status: 'unavailable',
         freshness: { latestClaimAt: null, ageMinutes: null, maxLiveAgeMinutes: 60 },
-        scheduler: { state: 'due', cadenceSeconds: 300 },
+        scheduler: { state: 'unavailable', cadenceSeconds: 300 },
         counts: { visible: 0, total: 0, needsReview: 0, metadataOnly: 0 },
         page: { limit: 50, offset: 0, total: 0, nextOffset: null, hasMore: false },
         items: [],

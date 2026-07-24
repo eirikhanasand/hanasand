@@ -18,7 +18,9 @@ async function check(service: string, checkName: string, fn: () => Promise<void 
         const message = await fn()
         await record(service, checkName, 'up', Math.round(performance.now() - started), message || '')
     } catch (error) {
-        await record(service, checkName, 'down', Math.round(performance.now() - started), error instanceof Error ? error.message : String(error))
+        const message = error instanceof Error ? error.message : String(error)
+        await record(service, checkName, 'down', Math.round(performance.now() - started), message)
+        console.error(`[synthetic-monitor] ${service}/${checkName}: ${message}`)
     }
 }
 
@@ -121,6 +123,15 @@ export default async function runSyntheticMonitor() {
             })
             if (response.status !== 200 || !body.includes('Dark web monitoring')) throw new Error(`Unexpected monitoring workspace response ${response.status}`)
             return 'The authenticated dark-web monitoring workspace rendered successfully.'
+        }),
+        check('dark-web-monitoring', 'Latest activity', async () => {
+            const { response, body } = await fetchJson('/dwm/exposure-queue?limit=1', {}, webBase)
+            const queue = object(body)
+            const counts = object(queue?.counts)
+            if (response.status !== 200 || queue?.status === 'empty' || !Array.isArray(queue?.items) || !queue.items.length || Number(counts?.total) < 1) {
+                throw new Error(`Latest customer activity is unavailable or empty (${response.status})`)
+            }
+            return `Latest customer activity returned ${Number(counts?.total)} retained records.`
         }),
         check('content', 'Articles', async () => {
             const { response } = await fetchJson('/articles')

@@ -67,6 +67,11 @@ const tasks: TestTask[] = [
         command: [bun, 'scripts/check-service-check-ti-landing.mjs'],
     },
     {
+        id: 'shared-exposure-activity',
+        title: 'Shared exposure activity',
+        command: [bun, 'scripts/check-shared-exposure-activity.ts'],
+    },
+    {
         id: 'ti-actor-intelligence',
         title: 'TI actor intelligence shaping',
         command: [bun, 'scripts/check-ti-actor-intelligence.ts'],
