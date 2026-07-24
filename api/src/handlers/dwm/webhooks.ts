@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
+import { timingSafeEqual } from 'node:crypto'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import {
@@ -51,6 +52,8 @@ import {
     listDwmWebhookAuditEvents,
     listDwmWebhookDeliveries,
     listDwmWebhookDestinations,
+    listDwmWebhookReceiverReceipts,
+    recordDwmWebhookReceiverReceipt,
     retryDwmWebhookDelivery,
     testDwmWebhookDestination,
     updateDwmWebhookDestination,
@@ -1007,6 +1010,55 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
     return res.send(payload)
 }
 
+export async function postDwmWebhookReceiver(req: FastifyRequest<{ Body: unknown }>, res: FastifyReply) {
+    if (!serviceTokenMatches(req.headers['x-hanasand-service-token'])) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
+    const result = await recordDwmWebhookReceiverReceipt(req.body)
+    if (!result.ok) return res.status(result.status).send({ accepted: false, error: result.error })
+    return res.status(result.created ? 201 : 200).send({
+        accepted: true,
+        created: result.created,
+        receipt: result.receipt,
+    })
+}
+
+export async function getDwmWebhookReceiverReceipts(req: FastifyRequest<{ Querystring: OrgQuery }>, res: FastifyReply) {
+    const userId = await authenticatedUserId(req, res)
+    if (!userId) return
+
+    const orgId = orgIdFromQuery(req.query)
+    if (!orgId) return res.status(400).send({ error: 'orgId is required.' })
+    const visibility = orgId !== userId ? await loadOrganizationVisibilityMembership(orgId, userId) : null
+    if (orgId !== userId) {
+        const decision = organizationVisibilityDecision({
+            role: visibility?.role,
+            status: visibility?.status,
+            userActive: visibility?.user_active,
+            alertVisibilityPolicy: visibility?.alert_visibility_policy,
+        })
+        if (!decision.allowed) {
+            return res.status(decision.reason === 'not_member' ? 404 : 403).send({
+                error: decision.reason === 'not_member' ? 'Organization not found.' : 'Receiver receipts are not visible for this organization membership.',
+                reason: decision.reason,
+            })
+        }
+    }
+
+    const receipts = await listDwmWebhookReceiverReceipts(orgId, {
+        destinationId: req.query.destinationId || req.query.destination_id,
+        deliveryId: req.query.deliveryId || req.query.delivery_id,
+        reportCaseId: req.query.reportCaseId || req.query.report_case_id,
+        reportExportChecksum: req.query.reportExportChecksum || req.query.report_export_checksum,
+    })
+    return res.send({
+        schemaVersion: 'dwm.webhook.receiver_receipts.v1',
+        orgId,
+        total: receipts.length,
+        receipts,
+    })
+}
+
 export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAlertNotificationInput }>, res: FastifyReply) {
     const userId = await authenticatedUserId(req, res)
     if (!userId) return
@@ -1405,6 +1457,16 @@ async function authenticatedUserId(req: FastifyRequest, res: FastifyReply) {
         return null
     }
     return id
+}
+
+function serviceTokenMatches(value: string | string[] | undefined) {
+    const expected = process.env.TI_SCRAPER_SERVICE_TOKEN || ''
+    const presented = Array.isArray(value) ? value[0] || '' : value || ''
+    const expectedBytes = Buffer.from(expected)
+    const presentedBytes = Buffer.from(presented)
+    return expectedBytes.length > 0
+        && expectedBytes.length === presentedBytes.length
+        && timingSafeEqual(expectedBytes, presentedBytes)
 }
 
 async function updatePreview(destinationId: string, userId: string) {

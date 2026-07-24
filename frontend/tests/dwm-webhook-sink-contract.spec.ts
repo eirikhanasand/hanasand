@@ -19,23 +19,17 @@ const validPayload = {
     source: { family: 'restricted_metadata', artifactType: 'victim_claim', confidence: { score: 88 } },
 }
 
-test('public DWM webhook receiver accepts the real delivery payload contract', async ({ request }) => {
-    const accepted = await request.post('/api/dwm/webhook-sink', {
+test('public DWM webhook receiver fails closed unless the delivery scope is durably persisted', async ({ request }) => {
+    const unpersisted = await request.post('/api/dwm/webhook-sink', {
         headers: { 'x-hanasand-event-id': 'preview_contract_ok' },
         data: validPayload,
     })
 
-    expect(accepted.status()).toBe(202)
-    await expect(accepted).toBeOK()
-    await expect(accepted.json()).resolves.toMatchObject({
-        accepted: true,
+    expect(unpersisted.status()).toBe(503)
+    await expect(unpersisted.json()).resolves.toMatchObject({
+        accepted: false,
         eventId: 'preview_contract_ok',
-        summary: {
-            eventType: 'dwm.alert.created',
-            matchedTerm: 'tenant.example',
-            reviewState: 'needs_review',
-            severity: 'critical',
-        },
+        error: 'Durable receiver persistence is temporarily unavailable.',
     })
 
     const rejected = await request.post('/api/dwm/webhook-sink', {

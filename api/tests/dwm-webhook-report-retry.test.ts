@@ -4,6 +4,7 @@ import { canonicalJson } from '../src/utils/dwm/customerOutputSafety.ts'
 
 const queries: Array<{ sql: string, params: unknown[] }> = []
 const ledger: Array<Record<string, any>> = []
+const receiverAudits: Array<Record<string, any>> = []
 const lockTails = new Map<string, Promise<void>>()
 let persistedDelivery: Record<string, any> | undefined
 let insertedDelivery: Record<string, any> | undefined
@@ -88,6 +89,27 @@ mock.module('#db', () => ({
                 ).slice(-1),
             }
         }
+        if (sql.includes('INSERT INTO dwm_webhook_audit_events') && sql.includes('\'receiver.accepted\'')) {
+            if (receiverAudits.some(row => row.id === params[0])) return { rows: [] }
+            const row = {
+                id: params[0],
+                owner_id: 'owner_1',
+                actor_id: null,
+                org_id: params[1],
+                destination_id: params[2],
+                delivery_id: null,
+                action: 'receiver.accepted',
+                metadata: JSON.parse(String(params[3])),
+                created_at: '2026-07-24T10:00:01.000Z',
+            }
+            receiverAudits.push(row)
+            return { rows: [row] }
+        }
+        if (sql.includes('FROM dwm_webhook_audit_events') && sql.includes('action = \'receiver.accepted\'')) {
+            return {
+                rows: receiverAudits.filter(row => row.org_id === (params.length === 5 ? params[0] : params[1])),
+            }
+        }
         if (sql.includes('INSERT INTO dwm_webhook_deliveries')) {
             const duplicateInsert = sql.includes('\'skipped\', FALSE')
             const retryInsert = sql.includes('$7, FALSE')
@@ -159,6 +181,7 @@ mock.module('#db', () => ({
 afterEach(() => {
     queries.length = 0
     ledger.length = 0
+    receiverAudits.length = 0
     lockTails.clear()
     persistedDelivery = undefined
     insertedDelivery = undefined
@@ -304,8 +327,8 @@ test('filters exact report receipts in PostgreSQL before the bounded delivery le
     })
     const query = queries.at(-1)
     expect(query?.params).toEqual(['org_1', 'alert_1', 'case_1', 'case_report_exact'])
-    expect(query?.sql).toContain("metadata->>'reportValidation' AS report_validation")
-    expect(query?.sql).toContain("audit.report_validation = 'valid'")
+    expect(query?.sql).toContain('metadata->>\'reportValidation\' AS report_validation')
+    expect(query?.sql).toContain('audit.report_validation = \'valid\'')
     expect(query?.sql.indexOf('deliveries.alert_id = $2')).toBeLessThan(query?.sql.indexOf('LIMIT 100') ?? -1)
     expect(query?.sql.indexOf('audit.report_case_id = $3')).toBeLessThan(query?.sql.indexOf('LIMIT 100') ?? -1)
     expect(query?.sql.indexOf('audit.report_export_checksum = $4')).toBeLessThan(query?.sql.indexOf('LIMIT 100') ?? -1)
@@ -330,6 +353,56 @@ test('exposes report identity from the persisted delivery audit projection', asy
         reportCaseId: 'case_1',
         thirdPartyReport: true,
     })
+})
+
+test('persists one deterministic receiver receipt and filters it before the read limit', async () => {
+    const {
+        listDwmWebhookReceiverReceipts,
+        recordDwmWebhookReceiverReceipt,
+    } = await import('../src/utils/dwm/webhooks.ts')
+    const payload = reportDeliveryPayload()
+    const envelope = {
+        eventId: 'receiver_event_1',
+        receivedAt: '2026-07-24T10:00:00.000Z',
+        payload,
+    }
+    const first = await recordDwmWebhookReceiverReceipt(envelope)
+    const duplicate = await recordDwmWebhookReceiverReceipt(envelope)
+    expect(first).toMatchObject({
+        ok: true,
+        created: true,
+        receipt: {
+            orgId: 'org_1',
+            destinationId: 'destination_1',
+            deliveryId: 'delivery_receiver_1',
+            reportValidation: 'valid',
+            reportCaseId: 'case_1',
+        },
+    })
+    expect(duplicate).toMatchObject({
+        ok: true,
+        created: false,
+        receipt: { id: first.ok ? first.receipt.id : '' },
+    })
+    expect(receiverAudits).toHaveLength(1)
+
+    const receipts = await listDwmWebhookReceiverReceipts('org_1', {
+        destinationId: 'destination_1',
+        deliveryId: 'delivery_receiver_1',
+        reportCaseId: 'case_1',
+        reportExportChecksum: payload.report.exportChecksum,
+    })
+    expect(receipts).toHaveLength(1)
+    const query = queries.at(-1)
+    expect(query?.params).toEqual([
+        'org_1',
+        'destination_1',
+        'delivery_receiver_1',
+        'case_1',
+        payload.report.exportChecksum,
+    ])
+    expect(query?.sql.indexOf('metadata->>\'reportCaseId\' = $4')).toBeLessThan(query?.sql.indexOf('LIMIT 100') ?? -1)
+    expect(query?.sql.indexOf('metadata->>\'reportExportChecksum\' = $5')).toBeLessThan(query?.sql.indexOf('LIMIT 100') ?? -1)
 })
 
 test('serializes the same org destination checksum across two admins', async () => {
@@ -413,6 +486,43 @@ function deliveryInput(dedupeKey: string, dryRun: boolean) {
             title: 'Evidence-backed report delivery',
             firstSeenAt: '2026-07-23T10:00:00.000Z',
         },
+    }
+}
+
+function reportDeliveryPayload() {
+    const draft = {
+        bundle: {
+            type: 'bundle',
+            id: 'bundle--11111111-1111-4111-8111-111111111111',
+            objects: [
+                { type: 'identity', spec_version: '2.1', id: 'identity--11111111-1111-4111-8111-111111111111' },
+                { type: 'x-ti-evidence', spec_version: '2.1', id: 'x-ti-evidence--11111111-1111-4111-8111-111111111111', x_ti_capture_id: 'capture_1', x_ti_source_id: 'source_1', x_ti_content_hash: 'hash_1' },
+                { type: 'report', spec_version: '2.1', id: 'report--11111111-1111-4111-8111-111111111111', published: '2026-07-24T10:00:00.000Z', object_refs: ['x-ti-evidence--11111111-1111-4111-8111-111111111111'] },
+            ],
+        },
+        reportPolicy: {
+            direction: 'outbound_third_party',
+            format: 'stix-2.1',
+            caseId: 'case_1',
+            alertId: 'alert_1',
+            organizationId: 'org_1',
+            evidenceIds: ['evidence_1'],
+            evidenceCount: 1,
+        },
+        standardsValidation: { standard: 'STIX 2.1', valid: true, issues: [] },
+    }
+    const exportChecksum = `case_report_${createHash('sha256').update(canonicalJson(draft)).digest('hex')}`
+    const report = { ...draft, exportChecksum, reportPolicy: { ...draft.reportPolicy, exportChecksum } }
+    return {
+        schemaVersion: 'dwm.webhook.v1',
+        eventType: 'dwm.alert.updated',
+        occurredAt: '2026-07-24T10:00:00.000Z',
+        idempotencyKey: `dwm.alert.updated:org_1:destination_1:${exportChecksum}`,
+        org: { id: 'org_1', tenantId: 'org_1' },
+        destination: { id: 'destination_1', kind: 'webhook' },
+        report,
+        alert: { id: 'alert_1' },
+        delivery: { id: 'delivery_receiver_1', eventType: 'dwm.alert.updated' },
     }
 }
 

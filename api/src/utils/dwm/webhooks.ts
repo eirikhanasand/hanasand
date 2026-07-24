@@ -762,6 +762,174 @@ export async function listDwmWebhookAuditEvents(ownerId: string, orgId?: string)
     return (result.rows as DwmWebhookAuditRow[]).map(toDwmWebhookAuditEvent)
 }
 
+export function validateDwmWebhookReceiverEnvelope(value: unknown) {
+    const envelope = recordOrEmpty(value)
+    const payload = recordOrEmpty(envelope.payload)
+    const nestedContext = recordOrEmpty(payload._hanasand)
+    const context = Object.keys(nestedContext).length ? nestedContext : payload
+    const org = recordOrEmpty(context.org)
+    const destination = recordOrEmpty(context.destination)
+    const delivery = recordOrEmpty(context.delivery)
+    const alert = recordOrEmpty(context.alert)
+    const eventType = clean(context.eventType)
+    const organizationTest = eventType === 'organization.webhook.test'
+    const orgId = organizationTest ? firstClean(context.organizationId, context.tenantId) : firstClean(org.id, org.tenantId)
+    const destinationId = organizationTest ? clean(context.webhookDestinationId) : clean(destination.id)
+    const deliveryId = organizationTest ? clean(envelope.eventId) : clean(delivery.id)
+    const idempotencyKey = organizationTest
+        ? firstClean(envelope.eventId, context.generatedAt)
+        : clean(context.idempotencyKey)
+    const receivedAt = clean(envelope.receivedAt)
+
+    if (!Object.keys(payload).length) return { valid: false as const, error: 'Receiver payload is required.' }
+    if (!orgId || !destinationId || !deliveryId || !eventType || !idempotencyKey) {
+        return { valid: false as const, error: 'Receiver payload scope, destination, delivery, event type, and idempotency lineage are required.' }
+    }
+    if (!receivedAt || Number.isNaN(Date.parse(receivedAt))) {
+        return { valid: false as const, error: 'Receiver timestamp must be valid.' }
+    }
+
+    const report = context.report
+    const reportValidation = report === undefined
+        ? { valid: true as const, report: undefined }
+        : validateOutboundThirdPartyReport(report, {
+            organizationId: orgId,
+            alertId: alert.id,
+        })
+    if (!reportValidation.valid) {
+        return { valid: false as const, error: reportValidation.error || 'Third-party report validation failed.' }
+    }
+    const reportPolicy = recordOrEmpty(reportValidation.report?.reportPolicy)
+    const payloadHash = hashValue('payload', canonicalJson(payload))
+    const receiptId = hashValue('receiver_receipt', canonicalJson({
+        orgId,
+        destinationId,
+        deliveryId,
+        eventType,
+        idempotencyKey,
+        payloadHash,
+    }))
+
+    return {
+        valid: true as const,
+        receipt: {
+            id: receiptId,
+            orgId,
+            destinationId,
+            deliveryId,
+            eventType,
+            idempotencyKey,
+            payloadHash,
+            reportValidation: reportValidation.report ? 'valid' : 'not_applicable',
+            reportCaseId: clean(reportPolicy.caseId) || null,
+            reportAlertId: clean(reportPolicy.alertId) || clean(alert.id) || null,
+            reportExportChecksum: clean(reportValidation.report?.exportChecksum) || null,
+            receivedAt,
+        },
+    }
+}
+
+export async function recordDwmWebhookReceiverReceipt(value: unknown) {
+    const validation = validateDwmWebhookReceiverEnvelope(value)
+    if (!validation.valid) return { ok: false as const, status: 400, error: validation.error }
+    const receipt = validation.receipt
+    const metadata = {
+        schemaVersion: 'dwm.webhook.receiver_receipt.v1',
+        deliveryId: receipt.deliveryId,
+        eventType: receipt.eventType,
+        idempotencyKey: receipt.idempotencyKey,
+        payloadHash: receipt.payloadHash,
+        reportValidation: receipt.reportValidation,
+        reportCaseId: receipt.reportCaseId,
+        reportAlertId: receipt.reportAlertId,
+        reportExportChecksum: receipt.reportExportChecksum,
+        receivedAt: receipt.receivedAt,
+    }
+    const inserted = await run(`
+        INSERT INTO dwm_webhook_audit_events (
+            id,
+            owner_id,
+            actor_id,
+            org_id,
+            destination_id,
+            delivery_id,
+            action,
+            metadata
+        )
+        SELECT $1, destination.owner_id, NULL, $2, destination.id, NULL, 'receiver.accepted', $4::JSONB
+        FROM dwm_webhook_destinations destination
+        WHERE destination.id = $3
+          AND destination.org_id = $2
+          AND destination.status = 'active'
+        ON CONFLICT (id) DO NOTHING
+        RETURNING *
+    `, [
+        receipt.id,
+        receipt.orgId,
+        receipt.destinationId,
+        JSON.stringify(redactAuditMetadata(metadata)),
+    ])
+    if (inserted.rows[0]) return { ok: true as const, created: true, receipt: receiverReceiptFromAudit(inserted.rows[0] as DwmWebhookAuditRow) }
+
+    const existing = await run(`
+        SELECT *
+        FROM dwm_webhook_audit_events
+        WHERE id = $1
+          AND org_id = $2
+          AND destination_id = $3
+          AND action = 'receiver.accepted'
+        LIMIT 1
+    `, [receipt.id, receipt.orgId, receipt.destinationId])
+    if (existing.rows[0]) return { ok: true as const, created: false, receipt: receiverReceiptFromAudit(existing.rows[0] as DwmWebhookAuditRow) }
+    return { ok: false as const, status: 404, error: 'Receiver destination is not active in the delivered organization scope.' }
+}
+
+export async function listDwmWebhookReceiverReceipts(orgId: string, filters: {
+    destinationId?: unknown
+    deliveryId?: unknown
+    reportCaseId?: unknown
+    reportExportChecksum?: unknown
+} = {}) {
+    const result = await run(`
+        SELECT *
+        FROM dwm_webhook_audit_events
+        WHERE action = 'receiver.accepted'
+          AND org_id = $1
+          AND ($2::TEXT IS NULL OR destination_id = $2)
+          AND ($3::TEXT IS NULL OR metadata->>'deliveryId' = $3)
+          AND ($4::TEXT IS NULL OR metadata->>'reportCaseId' = $4)
+          AND ($5::TEXT IS NULL OR metadata->>'reportExportChecksum' = $5)
+        ORDER BY created_at DESC
+        LIMIT 100
+    `, [
+        orgId,
+        clean(filters.destinationId) || null,
+        clean(filters.deliveryId) || null,
+        clean(filters.reportCaseId) || null,
+        clean(filters.reportExportChecksum) || null,
+    ])
+    return (result.rows as DwmWebhookAuditRow[]).map(receiverReceiptFromAudit)
+}
+
+function receiverReceiptFromAudit(row: DwmWebhookAuditRow) {
+    const metadata = recordOrEmpty(row.metadata)
+    return {
+        id: row.id,
+        orgId: row.org_id,
+        destinationId: row.destination_id,
+        deliveryId: clean(metadata.deliveryId),
+        eventType: clean(metadata.eventType),
+        idempotencyKey: clean(metadata.idempotencyKey),
+        payloadHash: clean(metadata.payloadHash),
+        reportValidation: clean(metadata.reportValidation),
+        reportCaseId: clean(metadata.reportCaseId) || null,
+        reportAlertId: clean(metadata.reportAlertId) || null,
+        reportExportChecksum: clean(metadata.reportExportChecksum) || null,
+        receivedAt: clean(metadata.receivedAt),
+        persistedAt: row.created_at,
+    }
+}
+
 export function buildDwmWebhookDeliveryEvidence({
     deliveries,
     auditEvents = [],

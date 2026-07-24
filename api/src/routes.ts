@@ -200,9 +200,11 @@ import {
     deleteDwmWebhookDestination,
     getDwmWebhookDeliveries,
     getDwmWebhookDestinations,
+    getDwmWebhookReceiverReceipts,
     postDwmWebhookDelivery,
     postDwmWebhookDestination,
     postDwmWebhookDestinationTest,
+    postDwmWebhookReceiver,
     putDwmWebhookDestination,
 } from './handlers/dwm/webhooks.ts'
 import { getBrowserSandboxProfiles, putBrowserSandboxProfiles } from './handlers/browserSandboxProfiles.ts'
@@ -314,6 +316,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/dwm/webhook-destinations/:id/test', postDwmWebhookDestinationTest)
     fastify.get('/dwm/webhook-deliveries', getDwmWebhookDeliveries)
     fastify.post('/dwm/webhook-deliveries', postDwmWebhookDelivery)
+    fastify.get('/dwm/webhook-receiver', getDwmWebhookReceiverReceipts)
+    fastify.post('/dwm/webhook-receiver', postDwmWebhookReceiver)
 
     // Browser profiles
     fastify.get('/browser/profiles', getBrowserSandboxProfiles)

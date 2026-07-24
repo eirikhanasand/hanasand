@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { canonicalThirdPartyReportForDelivery } from '../src/handlers/dwm/webhooks.ts'
-import { assertPublicWebhookTarget, buildDwmAlertDeliveryPayload, computeOutboundThirdPartyReportChecksum, normalizeDwmWebhookDestinationInput, pinnedWebhookLookup, validateOutboundThirdPartyReport } from '../src/utils/dwm/webhooks.ts'
+import { assertPublicWebhookTarget, buildDwmAlertDeliveryPayload, computeOutboundThirdPartyReportChecksum, normalizeDwmWebhookDestinationInput, pinnedWebhookLookup, validateDwmWebhookReceiverEnvelope, validateOutboundThirdPartyReport } from '../src/utils/dwm/webhooks.ts'
 import { containsUnsafeCustomerOutboundText, sanitizeCustomerOutboundText } from '../src/utils/dwm/customerOutputSafety.ts'
 
 describe('DWM webhook network boundary', () => {
@@ -141,6 +141,56 @@ describe('DWM webhook network boundary', () => {
                 expect(validateOutboundThirdPartyReport(withReportChecksum({ ...reportFixture(format), note: sanitized }))).toMatchObject({ valid: true })
             }
         }
+    })
+
+    test('binds a durable receiver receipt to the exact report payload and delivery lineage', () => {
+        const report = reportFixture()
+        const payload = buildDwmAlertDeliveryPayload({
+            destination: { id: 'destination_report', kind: 'webhook', name: 'External receiver', org_id: 'org_1' },
+            eventType: 'dwm.alert.updated',
+            deliveryId: 'delivery_report',
+            alert: {
+                id: 'alert_1',
+                tenantId: 'org_1',
+                dedupeKey: report.exportChecksum,
+                title: 'Evidence-backed case report',
+                firstSeenAt: '2026-07-23T10:00:00.000Z',
+                report,
+            },
+        })
+        const envelope = {
+            eventId: 'receiver_event_1',
+            receivedAt: '2026-07-24T10:00:00.000Z',
+            payload,
+        }
+        const first = validateDwmWebhookReceiverEnvelope(envelope)
+        const replay = validateDwmWebhookReceiverEnvelope(envelope)
+        expect(first).toMatchObject({
+            valid: true,
+            receipt: {
+                orgId: 'org_1',
+                destinationId: 'destination_report',
+                deliveryId: 'delivery_report',
+                reportValidation: 'valid',
+                reportCaseId: 'case_1',
+                reportAlertId: 'alert_1',
+                reportExportChecksum: report.exportChecksum,
+            },
+        })
+        expect(replay).toEqual(first)
+
+        const wrongScope = {
+            ...payload,
+            org: { ...payload.org, id: 'org_other', tenantId: 'org_other' },
+        }
+        expect(validateDwmWebhookReceiverEnvelope({ ...envelope, payload: wrongScope })).toMatchObject({
+            valid: false,
+            error: 'report organization does not match delivery scope.',
+        })
+        expect(validateDwmWebhookReceiverEnvelope({
+            ...envelope,
+            payload: { ...payload, report: { ...report, body: 'raw evidence' } },
+        })).toMatchObject({ valid: false })
     })
 
     test('keeps idempotency stable per event while allowing created, updated, and replayed delivery', () => {

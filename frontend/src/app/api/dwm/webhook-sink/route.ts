@@ -1,11 +1,14 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { proxyOrganizationApiRequest } from '@/app/api/organizations/_organizationApiProxy'
+import { authApiUrl } from '@/utils/auth/authApiUrl'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
     const receivedAt = new Date().toISOString()
     const eventId = request.headers.get('x-hanasand-event-id') || request.headers.get('x-webhook-id') || `dwm_sink_${Date.now()}`
-    const payload = await request.json().catch(() => null) as Record<string, unknown> | null
+    const text = await request.text()
+    const payload = parseJsonRecord(text)
     const context = webhookContext(payload)
     const error = validateDwmWebhookPayload(context)
 
@@ -22,11 +25,36 @@ export async function POST(request: Request) {
         })
     }
 
+    const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN || ''
+    if (!serviceToken) {
+        return unavailableReceiver(eventId, receivedAt)
+    }
+    let persisted: Response
+    try {
+        persisted = await fetch(`${authApiUrl().replace(/\/$/, '')}/dwm/webhook-receiver`, {
+            method: 'POST',
+            cache: 'no-store',
+            headers: {
+                'content-type': 'application/json',
+                'x-hanasand-service-token': serviceToken,
+            },
+            body: JSON.stringify({ eventId, receivedAt, payload }),
+            signal: AbortSignal.timeout(12_000),
+        })
+    } catch {
+        return unavailableReceiver(eventId, receivedAt)
+    }
+    const persistedPayload = await persisted.json().catch(() => null) as Record<string, unknown> | null
+    if (!persisted.ok || persistedPayload?.accepted !== true || !record(persistedPayload.receipt)) {
+        return unavailableReceiver(eventId, receivedAt)
+    }
+
     return NextResponse.json({
         schemaVersion: 'dwm.webhook_sink.acceptance.v1',
         accepted: true,
         eventId,
         receivedAt,
+        receipt: persistedPayload.receipt,
         summary: {
             eventType: context?.eventType,
             matchedTerm: webhookMatchedTerm(context),
@@ -37,6 +65,31 @@ export async function POST(request: Request) {
         status: 202,
         headers: { 'cache-control': 'no-store' },
     })
+}
+
+export async function GET(request: NextRequest) {
+    return proxyOrganizationApiRequest(request, '/dwm/webhook-receiver', { method: 'GET' })
+}
+
+function unavailableReceiver(eventId: string, receivedAt: string) {
+    return NextResponse.json({
+        schemaVersion: 'dwm.webhook_sink.acceptance.v1',
+        accepted: false,
+        eventId,
+        receivedAt,
+        error: 'Durable receiver persistence is temporarily unavailable.',
+    }, {
+        status: 503,
+        headers: { 'cache-control': 'no-store' },
+    })
+}
+
+function parseJsonRecord(value: string) {
+    try {
+        return record(JSON.parse(value))
+    } catch {
+        return null
+    }
 }
 
 function validateDwmWebhookPayload(payload: Record<string, unknown> | null) {

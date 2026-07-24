@@ -184,6 +184,17 @@ type DeliveryRow = {
     thirdPartyReport?: boolean
 }
 
+type ReceiverReceipt = {
+    id?: string
+    destinationId?: string
+    deliveryId?: string
+    payloadHash?: string
+    reportCaseId?: string
+    reportExportChecksum?: string
+    receivedAt?: string
+    persistedAt?: string
+}
+
 type WebhookDestination = {
     id: string
     name?: string
@@ -215,10 +226,12 @@ type LoadState = {
     loading: boolean
     error?: string
     deliveryError?: string
+    receiverError?: string
     destinationError?: string
     detail?: CaseDetail
     exportPayload?: CaseExport
     destinations?: WebhookDestination[]
+    receiverReceipts?: ReceiverReceipt[]
 }
 
 const primaryActions = ['review', 'assign', 'escalate', 'suppress', 'false_positive', 'close', 'reopen', 'note']
@@ -267,16 +280,20 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
             const scopedOrganizationId = resolvedOrganizationId(detailPayload.case, organizationId)
             const scopedAlertId = resolvedAlertId(detailPayload.case, detailPayload.alertContext, alertId)
             let deliveryError: string | undefined
+            let receiverError: string | undefined
             let destinationError: string | undefined
             let deliveries: DeliveryRow[] = []
             let destinations: WebhookDestination[] = []
+            let receiverReceipts: ReceiverReceipt[] = []
             if (scopedOrganizationId && scopedAlertId) {
-                const [deliveryResponse, destinationResponse] = await Promise.all([
+                const [deliveryResponse, destinationResponse, receiverResponse] = await Promise.all([
                     fetch(`/api/dwm/webhooks/deliveries${queryString({ organizationId: scopedOrganizationId, alertId: scopedAlertId, reportCaseId: caseId })}`, { cache: 'no-store' }),
                     fetch(`/api/organizations/${encodeURIComponent(scopedOrganizationId)}/webhooks`, { cache: 'no-store' }),
+                    fetch(`/api/dwm/webhook-sink${queryString({ orgId: scopedOrganizationId, reportCaseId: caseId })}`, { cache: 'no-store' }),
                 ])
                 const deliveryPayload = await deliveryResponse.json().catch(() => ({}))
                 const destinationPayload = await destinationResponse.json().catch(() => ({}))
+                const receiverPayload = await receiverResponse.json().catch(() => ({}))
                 if (deliveryResponse.ok) {
                     deliveries = deliveryRowsFromApi(deliveryPayload)
                         .filter(delivery => delivery.thirdPartyReport === true && delivery.reportCaseId === caseId)
@@ -284,6 +301,8 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                 else deliveryError = deliveryPayload.error?.message || deliveryPayload.error || 'Canonical delivery history is unavailable.'
                 if (destinationResponse.ok) destinations = destinationRowsFromApi(destinationPayload)
                 else destinationError = destinationPayload.error?.message || destinationPayload.error || 'Configured destinations are unavailable.'
+                if (receiverResponse.ok) receiverReceipts = receiverReceiptRowsFromApi(receiverPayload)
+                else receiverError = receiverPayload.error?.message || receiverPayload.error || 'Durable receiver history is unavailable.'
             }
             const orderedDeliveries = orderCaseDeliveries(deliveries)
             const detail = {
@@ -292,7 +311,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                 deliveryContext: deliveryContextFromApi(orderedDeliveries),
             }
             const canonicalExport = exportResponse.ok ? { ...exportPayload, deliveryEvidence: orderedDeliveries } : undefined
-            setState({ loading: false, detail, exportPayload: canonicalExport, deliveryError, destinationError, destinations })
+            setState({ loading: false, detail, exportPayload: canonicalExport, deliveryError, receiverError, destinationError, destinations, receiverReceipts })
             const availableIds = (detailPayload.evidence || exportPayload.evidenceSummary || []).map((row: EvidenceRow) => row.id).filter(Boolean).slice(0, DWM_CASE_REPORT_MAX_EVIDENCE) as string[]
             setSelectedEvidenceIds(previous => previous.filter(id => availableIds.includes(id)))
             setSelectedDestinationId(previous => destinations.some(destination => destination.id === previous) ? previous : '')
@@ -457,6 +476,10 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     const visibleEvidence = showAllEvidenceRows ? evidence.slice(0, DWM_CASE_REPORT_MAX_EVIDENCE) : evidence.slice(0, DWM_CASE_EVIDENCE_PREVIEW_ROWS)
     const deliveries = orderCaseDeliveries(state.detail.deliveries || state.exportPayload?.deliveryEvidence || [])
     const latestDelivery = deliveries[0]
+    const latestReceiverReceipt = (state.receiverReceipts || []).find(receipt =>
+        receipt.deliveryId === latestDelivery?.id
+        || Boolean(receipt.reportExportChecksum && receipt.reportExportChecksum === latestDelivery?.reportExportChecksum)
+    )
     const latestDeliveryRetryable = latestDelivery?.status === 'failed' && latestDelivery.retryable === true
     const retryBlockedReason = latestDeliveryRetryable ? deliveryRetryBlockedReason(latestDelivery) : undefined
     const destinationBlockedReason = !latestDeliveryRetryable && !selectedDestinationId
@@ -631,6 +654,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
                         <Panel title='Third-party report delivery' action={state.detail.deliveryContext?.retryable ? 'retryable' : latestDelivery?.status || 'pending'}>
                             {state.deliveryError ? <p className='mb-3 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-xs text-ui-danger'>{state.deliveryError}</p> : null}
+                            {state.receiverError ? <p className='mb-3 rounded-lg border border-ui-warning/30 bg-ui-warning/10 p-2 text-xs text-ui-warning'>{state.receiverError}</p> : null}
                             {state.destinationError ? <p className='mb-3 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-xs text-ui-danger'>{state.destinationError}</p> : null}
                             <label className='mb-3 grid gap-1 text-xs font-semibold text-ui-muted'>
                                 External receiver
@@ -655,6 +679,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                         <KeyValue label='Mode' value={latestDelivery.dryRun ? 'Dry run' : latestDelivery.httpStatus ? `HTTP ${latestDelivery.httpStatus}` : 'queued'} />
                                         <KeyValue label='Case link' value='case linked' />
                                     </div>
+                                    <KeyValue label='Hanasand receiver receipt' value={latestReceiverReceipt ? `stored ${relativeTime(latestReceiverReceipt.receivedAt || latestReceiverReceipt.persistedAt)}` : 'not recorded'} />
                                     {latestDelivery.error ? <p className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-ui-danger'>{latestDelivery.error}</p> : null}
                                 </div>
                             ) : <EmptyLine text='No webhook delivery attempt is attached to this case.' />}
@@ -1015,6 +1040,23 @@ function deliveryRowsFromApi(payload: Record<string, unknown>): DeliveryRow[] {
                 thirdPartyReport: row.thirdPartyReport === true,
             }
         })
+        .filter(row => Boolean(row.id))
+}
+
+function receiverReceiptRowsFromApi(payload: Record<string, unknown>): ReceiverReceipt[] {
+    const rows = Array.isArray(payload.receipts) ? payload.receipts : []
+    return rows
+        .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object' && !Array.isArray(row))
+        .map(row => ({
+            id: stringValue(row.id),
+            destinationId: stringValue(row.destinationId),
+            deliveryId: stringValue(row.deliveryId),
+            payloadHash: stringValue(row.payloadHash),
+            reportCaseId: stringValue(row.reportCaseId),
+            reportExportChecksum: stringValue(row.reportExportChecksum),
+            receivedAt: stringValue(row.receivedAt),
+            persistedAt: stringValue(row.persistedAt),
+        }))
         .filter(row => Boolean(row.id))
 }
 
