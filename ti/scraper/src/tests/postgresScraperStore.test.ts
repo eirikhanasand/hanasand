@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createEvaluationBenchmark, runAutomaticEvaluationCycle } from "../api/evaluationBenchmarkRoutes.ts";
+import { sourceAutomaticReviewEvidenceBindings } from "../api/automaticReviewRoutes.ts";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import type { MitreActorCatalogSnapshot, MitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
@@ -3078,6 +3079,22 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         legalMode: "public_content"
       });
     }
+    const boundSource = store.getSource(sourceId)!;
+    const selectedEvidenceProvenance = sourceAutomaticReviewEvidenceBindings(boundSource, store.listCaptures()).slice(0, 1);
+    store.saveSource({
+      ...boundSource,
+      countsAsCoverage: true,
+      metadata: {
+        ...boundSource.metadata,
+        countsAsCoverage: true,
+        productionCollection: true,
+        automaticSourceReview: {
+          ...boundSource.metadata.automaticSourceReview,
+          selectedEvidenceIds: selectedEvidenceProvenance.map((item) => item.evidenceId),
+          selectedEvidenceProvenance
+        }
+      }
+    });
     store.saveRun({ id: "run_bound_latest", tenantId: "tenant_bound", requestId: "req_public_canary", status: "completed", startedAt: "2026-07-23T12:30:00.000Z", completedAt: "2026-07-23T12:30:00.000Z", updatedAt: "2026-07-23T12:30:00.000Z" } as any);
     store.saveSourceHealthObservation({
       id: "health_bound_latest",
@@ -3152,6 +3169,57 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       generatedAt: "2026-07-23T13:00:00.000Z",
       sourceId: falseUsefulSourceId
     });
+    const binding = selectedEvidenceProvenance[0];
+    await admin`
+      UPDATE threat_intel.sources
+      SET record = jsonb_set(
+        jsonb_set(record, '{metadata,automaticSourceReview,selectedEvidenceIds}', ${JSON.stringify([binding.evidenceId, binding.evidenceId])}::jsonb),
+        '{metadata,automaticSourceReview,selectedEvidenceProvenance}', ${JSON.stringify([binding, binding])}::jsonb
+      )
+      WHERE id = ${sourceId}
+    `;
+    const duplicateEvidence = await store.querySourceOperationalPage({
+      tenantId: "tenant_bound",
+      generatedAt: "2026-07-23T13:00:00.000Z",
+      sourceId
+    });
+    const forgedBinding = { ...binding, evidenceId: "automatic-source-review-evidence_forged" };
+    await admin`
+      UPDATE threat_intel.sources
+      SET record = jsonb_set(
+        jsonb_set(record, '{metadata,automaticSourceReview,selectedEvidenceIds}', ${JSON.stringify([forgedBinding.evidenceId])}::jsonb),
+        '{metadata,automaticSourceReview,selectedEvidenceProvenance}', ${JSON.stringify([forgedBinding])}::jsonb
+      )
+      WHERE id = ${sourceId}
+    `;
+    const forgedEvidence = await store.querySourceOperationalPage({
+      tenantId: "tenant_bound",
+      generatedAt: "2026-07-23T13:00:00.000Z",
+      sourceId
+    });
+    await admin`
+      UPDATE threat_intel.sources
+      SET record = jsonb_set(
+        jsonb_set(record, '{metadata,automaticSourceReview,selectedEvidenceIds}', ${JSON.stringify([binding.evidenceId])}::jsonb),
+        '{metadata,automaticSourceReview,selectedEvidenceProvenance}', ${JSON.stringify([binding])}::jsonb
+      )
+      WHERE id = ${sourceId}
+    `;
+    await admin`
+      UPDATE threat_intel.captures
+      SET record = jsonb_set(record, '{metadata,safeExcerpt}', to_jsonb('tampered retained evidence'::text))
+      WHERE id = ${binding.captureId}
+    `;
+    const changedCaptureState = await store.querySourceOperationalPage({
+      tenantId: "tenant_bound",
+      generatedAt: "2026-07-23T13:00:00.000Z",
+      sourceId
+    });
+    await admin`
+      UPDATE threat_intel.captures
+      SET record = record #- '{metadata,safeExcerpt}'
+      WHERE id = ${binding.captureId}
+    `;
     const reviewedSource = store.getSource(sourceId)!;
     store.saveSource({ ...reviewedSource, url: "https://bounded.example/replacement.xml" });
     await store.flush();
@@ -3222,6 +3290,9 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(changedIdentity.totals.qualifyingClearWebSourceCount).toBe(0);
     expect(forgedIdentityHash.totals.qualifyingClearWebSourceCount).toBe(0);
     expect(withoutReview.totals.qualifyingClearWebSourceCount).toBe(0);
+    expect(duplicateEvidence.totals.qualifyingClearWebSourceCount).toBe(0);
+    expect(forgedEvidence.totals.qualifyingClearWebSourceCount).toBe(0);
+    expect(changedCaptureState.totals.qualifyingClearWebSourceCount).toBe(0);
     expect(falseUseful.rows[0]).toMatchObject({
       health_stats: { usefulCycleCount: 0, latest: { useful: false } }
     });

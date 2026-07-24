@@ -2,6 +2,7 @@ import { isExecutableSource } from "../policy/collectionPolicy.ts";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
 import { hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
+import { automaticSourceReviewEvidenceBindingsMatch } from "../api/automaticReviewRoutes.ts";
 
 export const SOURCE_PORTFOLIO_BASELINE = {
   clearWeb: 5_000,
@@ -54,7 +55,7 @@ export function qualifySourcePortfolio(input: {
     if (!isExecutableSource(source)) reasons.push("not_executable");
     if (!family) reasons.push("not_an_intelligence_feed");
     if (!String(source.legalNotes ?? "").trim()) reasons.push("missing_legal_basis");
-    if (!hasApprovedAutomaticSourceReview(source)) reasons.push("automatic_source_review_not_approved");
+    if (!hasApprovedAutomaticSourceReview(source) || !automaticSourceReviewEvidenceBindingsMatch(source, captures)) reasons.push("automatic_source_review_not_approved");
     if (canonicalKey && canonicalOwner.get(canonicalKey) !== source.id) reasons.push("duplicate_feed");
     if (family === "lawful_dark_web" && !(source.governance?.metadataOnly === true || source.metadata?.captureMode === "metadata_only")) reasons.push("dark_web_not_metadata_only");
     if (successes.length < 2) reasons.push("insufficient_successful_checks");
@@ -143,6 +144,7 @@ function summarizeScheduledCycles(rows: any[]) {
       ...row,
       checkedAt: Date.parse(row.checkedAt) >= Date.parse(previous.checkedAt) ? row.checkedAt : previous.checkedAt,
       success: previous.success === true || row.success === true,
+      useful: previous.useful === true || row.useful === true,
       captureCount: Number(previous.captureCount ?? 0) + Number(row.captureCount ?? 0)
     } : row);
   }

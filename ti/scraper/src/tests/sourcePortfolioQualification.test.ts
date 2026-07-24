@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { qualifySourcePortfolio } from "../ops/sourcePortfolioQualification.ts";
 import { validateSourcePortfolioBatch } from "../registry/sourcePortfolioBatch.ts";
+import { sourceAutomaticReviewEvidenceBindings } from "../api/automaticReviewRoutes.ts";
+import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
+import { hashContent } from "../utils.ts";
 
 const generatedAt = "2026-07-23T12:00:00.000Z";
 
@@ -82,6 +85,26 @@ describe("source portfolio qualification", () => {
     expect(result.sources[0].reasons).toContain("insufficient_productive_cycles");
   });
 
+  test("keeps a useful result when a later report shares the same run", () => {
+    const firstAt = "2026-07-22T12:00:00.000Z";
+    const secondAt = "2026-07-23T11:00:00.000Z";
+    const result = qualifySourcePortfolio({
+      sources: [publicSource("multi-report", "rss", "https://example.test/multi-report.xml")],
+      observations: [firstAt, secondAt].flatMap((checkedAt) => [
+        observation("multi-report", checkedAt, 1),
+        { ...observation("multi-report", checkedAt, 0), id: `later-${checkedAt}`, checkedAt: new Date(Date.parse(checkedAt) + 1_000).toISOString() }
+      ]),
+      captures: [
+        capture("multi-report", "first", "2026-07-22T10:00:00.000Z", `run-${firstAt}`),
+        capture("multi-report", "second", "2026-07-23T10:00:00.000Z", `run-${secondAt}`)
+      ],
+      generatedAt
+    });
+
+    expect(result.counts.total).toBe(1);
+    expect(result.sources[0]).toMatchObject({ qualifies: true, usefulCheckCount: 2, productiveCheckCount: 2 });
+  });
+
   test("requires two productive scheduled cycles inside the current activity window", () => {
     const result = qualifySourcePortfolio({
       sources: [publicSource("windowed", "rss", "https://example.test/windowed.xml")],
@@ -99,6 +122,98 @@ describe("source portfolio qualification", () => {
     expect(result.counts.total).toBe(0);
     expect(result.sources[0]).toMatchObject({ scheduledCheckCount: 1, productiveCheckCount: 1 });
     expect(result.sources[0].reasons).toContain("insufficient_productive_cycles");
+  });
+
+  test("requires the exact reviewed capture, tenant, content, and evidence identity", () => {
+    const base = publicSource("bound-review", "rss", "https://example.test/bound.xml", {
+      productionCollection: true,
+      sourcePortfolioVerification: { outcome: "content_parsed" }
+    });
+    const captures = [
+      reviewedCapture(base.id, "bound-1", "2026-07-22T10:00:00.000Z", "run-2026-07-22T12:00:00.000Z"),
+      reviewedCapture(base.id, "bound-2", "2026-07-23T10:00:00.000Z", "run-2026-07-23T11:00:00.000Z")
+    ];
+    const selectedEvidenceProvenance = sourceAutomaticReviewEvidenceBindings(base, captures).slice(0, 1);
+    const reviewed = {
+      ...base,
+      countsAsCoverage: true,
+      metadata: {
+        ...base.metadata,
+        countsAsCoverage: true,
+        automaticSourceReview: {
+          schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
+          state: "approved",
+          promptVersion: SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION,
+          configuredModelVersion: automaticReviewModelVersion(),
+          sourceIdentity: automaticSourceReviewIdentity(base),
+          requestSha256: "a".repeat(64),
+          selectedEvidenceIds: selectedEvidenceProvenance.map((item) => item.evidenceId),
+          selectedEvidenceProvenance,
+          runtimeIdentity: { status: "completed", conversationId: "bound-review" },
+          decision: { subject: { type: "source", id: base.id }, action: "confirm", claimValidity: "supported" }
+        }
+      }
+    };
+    const observations = [
+      observation(base.id, "2026-07-22T12:00:00.000Z", 1),
+      observation(base.id, "2026-07-23T11:00:00.000Z", 1)
+    ];
+    const count = (source: any, rows: any[]) => qualifySourcePortfolio({ sources: [source], observations, captures: rows, generatedAt }).counts.total;
+
+    expect(count(reviewed, captures)).toBe(1);
+    expect(count(reviewed, captures.map((item) => item.id === selectedEvidenceProvenance[0].captureId ? { ...item, contentHash: hashContent("changed") } : item))).toBe(0);
+    expect(count(reviewed, captures.map((item) => item.id === selectedEvidenceProvenance[0].captureId ? { ...item, tenantId: "other" } : item))).toBe(0);
+    expect(count(reviewed, captures.map((item) => item.id === selectedEvidenceProvenance[0].captureId ? { ...item, sourceId: "other" } : item))).toBe(0);
+    expect(count({
+      ...reviewed,
+      metadata: {
+        ...reviewed.metadata,
+        automaticSourceReview: {
+          ...reviewed.metadata.automaticSourceReview,
+          selectedEvidenceProvenance: selectedEvidenceProvenance.map((item) => ({ ...item, captureStateSha256: "b".repeat(64) }))
+        }
+      }
+    }, captures)).toBe(0);
+    expect(count({
+      ...reviewed,
+      metadata: {
+        ...reviewed.metadata,
+        automaticSourceReview: {
+          ...reviewed.metadata.automaticSourceReview,
+          selectedEvidenceIds: ["forged-evidence"],
+          selectedEvidenceProvenance: selectedEvidenceProvenance.map((item) => ({ ...item, evidenceId: "forged-evidence" }))
+        }
+      }
+    }, captures)).toBe(0);
+    expect(count({
+      ...reviewed,
+      metadata: {
+        ...reviewed.metadata,
+        automaticSourceReview: {
+          ...reviewed.metadata.automaticSourceReview,
+          selectedEvidenceProvenance: selectedEvidenceProvenance.map((item) => ({ ...item, tenantKey: "other" }))
+        }
+      }
+    }, captures)).toBe(0);
+    expect(count({
+      ...reviewed,
+      metadata: {
+        ...reviewed.metadata,
+        automaticSourceReview: { ...reviewed.metadata.automaticSourceReview, selectedEvidenceIds: ["other-evidence"] }
+      }
+    }, captures)).toBe(0);
+    const bothBindings = sourceAutomaticReviewEvidenceBindings(base, captures);
+    expect(count({
+      ...reviewed,
+      metadata: {
+        ...reviewed.metadata,
+        automaticSourceReview: {
+          ...reviewed.metadata.automaticSourceReview,
+          selectedEvidenceIds: bothBindings.map((item) => item.evidenceId),
+          selectedEvidenceProvenance: [bothBindings[0], bothBindings[0]]
+        }
+      }
+    }, captures)).toBe(0);
   });
 
   test("requires immutable batch verification and rejects seeded runtime timestamps", () => {
@@ -168,4 +283,9 @@ function observation(sourceId: string, checkedAt: string, captureCount: number) 
 
 function capture(sourceId: string, id: string, publishedAt: string, runId?: string) {
   return { id, sourceId, publishedAt, collectedAt: publishedAt, metadata: runId ? { runId } : undefined };
+}
+
+function reviewedCapture(sourceId: string, id: string, publishedAt: string, runId: string) {
+  const body = `CVE-2026-${id.endsWith("1") ? "1001" : "1002"} is a critical remote code execution advisory.`;
+  return { ...capture(sourceId, id, publishedAt, runId), url: `https://example.test/${id}`, contentHash: hashContent(body), body, sensitive: false, storageKind: "inline_text" };
 }

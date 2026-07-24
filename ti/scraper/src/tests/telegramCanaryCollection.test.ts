@@ -9,6 +9,7 @@ import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
 import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
+import { sourceAutomaticReviewEvidenceBindings } from "../api/automaticReviewRoutes.ts";
 
 const source = {
   id: "src_public_telegram_test",
@@ -258,6 +259,7 @@ describe("public Telegram canary collection", () => {
 
 function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
   const current = store.getSource(sourceId)!;
+  const selectedEvidenceProvenance = sourceAutomaticReviewEvidenceBindings(current, store.listCaptures()).slice(0, 1);
   store.saveSource({
     ...current,
     metadata: {
@@ -269,7 +271,8 @@ function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
         configuredModelVersion: "hanasand",
         sourceIdentity: automaticSourceReviewIdentity(current),
         requestSha256: "a".repeat(64),
-        selectedEvidenceIds: ["retained-source-output"],
+        selectedEvidenceIds: selectedEvidenceProvenance.map((item) => item.evidenceId),
+        selectedEvidenceProvenance,
         runtimeIdentity: { status: "completed", conversationId: "source-review-proof" },
         decision: { subject: { type: "source", id: sourceId }, action: "confirm", claimValidity: "supported" }
       }

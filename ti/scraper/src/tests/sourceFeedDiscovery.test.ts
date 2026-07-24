@@ -12,6 +12,9 @@ import { hashContent } from "../utils.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
 import {
   AUTOMATIC_REVIEW_RESPONSE_SCHEMA,
+  automaticSourceReviewEvidenceBindingsMatch,
+  sourceAutomaticReviewEvidenceBindings,
+  automaticReviewSnapshot,
   runAutomaticReviewCycle,
   syncAutomaticReviewQueue
 } from "../api/automaticReviewRoutes.ts";
@@ -368,6 +371,159 @@ describe("scheduled public feed discovery", () => {
     }
   });
 
+  test("keeps the exact reviewed source capture visible after newer captures and restart", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "source-review-evidence-"));
+    const snapshotPath = join(directory, "store.json");
+    try {
+      const store = new FileBackedScraperStore({ snapshotPath });
+      const candidate = reviewableCandidate(store, "reviewed-history");
+      expect(await runAutomaticReviewCycle({ store } as any, {
+        now: "2026-07-24T12:00:00.000Z",
+        clock: () => "2026-07-24T12:00:00.000Z",
+        allTenants: true,
+        modelVersion: "hanasand",
+        aiBase: "http://ai.test",
+        fetcher: async (_input, init) => completedSourceReview(JSON.parse(String(init?.body)), true)
+      })).toMatchObject({ queued: 1, attempted: 1, results: [{ state: "terminal" }] });
+
+      const reviewed = automaticReviewSnapshot(store).tasks.find((task: any) => task.subject.sourceId === candidate.id);
+      expect(reviewed.evidence).toHaveLength(1);
+      const reviewedEvidenceId = reviewed.evidence[0].id;
+      const reviewedCaptureId = reviewed.evidence[0].capture.id;
+
+      for (let index = 0; index < 9; index++) {
+        const sequence = String(index + 1).padStart(2, "0");
+        const at = `2026-07-25T12:${sequence}:00.000Z`;
+        const runId = `run-reviewed-history-${sequence}`;
+        store.saveCapture({
+          id: `capture-reviewed-history-${sequence}`,
+          sourceId: candidate.id,
+          url: `https://reviewed-history.example/advisory-${sequence}`,
+          collectedAt: at,
+          publishedAt: at,
+          contentHash: hashContent(`reviewed-history-${sequence}`),
+          mediaType: "text/plain",
+          storageKind: "inline_text",
+          body: `CVE-2026-${sequence} is a newly retained operational advisory.`,
+          sensitive: false,
+          metadata: { runId }
+        });
+        store.saveSourceHealthObservation({
+          id: `health-reviewed-history-${sequence}`,
+          sourceId: candidate.id,
+          collectionRunId: runId,
+          checkedAt: at,
+          status: "healthy",
+          success: true,
+          useful: true,
+          captureCount: 1
+        });
+      }
+      const restarted = new FileBackedScraperStore({ snapshotPath });
+      const persisted = automaticReviewSnapshot(restarted).tasks.find((task: any) => task.subject.sourceId === candidate.id);
+      expect(persisted.selectedEvidenceIds).toEqual([reviewedEvidenceId]);
+      expect(persisted.selectedEvidenceProvenance).toEqual([expect.objectContaining({
+        evidenceId: reviewedEvidenceId,
+        sourceId: candidate.id,
+        tenantKey: "global",
+        captureId: reviewedCaptureId,
+        contentHash: expect.stringMatching(/^[A-Za-z0-9_.:-]{1,200}$/),
+        captureStateSha256: expect.stringMatching(/^[a-f0-9]{64}$/)
+      })]);
+      expect(persisted.evidence).toHaveLength(1);
+      expect(persisted.evidence[0]).toMatchObject({
+        id: reviewedEvidenceId,
+        source: { id: candidate.id },
+        capture: { id: reviewedCaptureId },
+        provenance: { evidenceId: reviewedEvidenceId, sourceId: candidate.id, captureId: reviewedCaptureId }
+      });
+      expect(JSON.stringify(restarted.getAnalystMetadataReviewTask(persisted.id))).not.toContain("operational advisory");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("fails closed when reviewed source evidence changes tenant, projection, or binding", async () => {
+    const store = new InMemoryScraperStore();
+    const candidate = reviewableCandidate(store, "reviewed-evidence-mutation");
+    expect(await runAutomaticReviewCycle({ store } as any, {
+      now: "2026-07-24T12:00:00.000Z",
+      clock: () => "2026-07-24T12:00:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      aiBase: "http://ai.test",
+      fetcher: async (_input, init) => completedSourceReview(JSON.parse(String(init?.body)), true)
+    })).toMatchObject({ queued: 1, attempted: 1, results: [{ state: "terminal" }] });
+    const sourceAfterReview = store.getSource(candidate.id)!;
+    const review = sourceAfterReview.metadata.automaticSourceReview;
+    const captureId = review.selectedEvidenceProvenance[0].captureId;
+    const originalTaskId = review.taskId;
+    expect(automaticSourceReviewEvidenceBindingsMatch(sourceAfterReview, store.listCaptures())).toBe(true);
+
+    store.updateCaptureMetadata(captureId, (metadata) => ({ ...metadata, unrelatedAuditNote: "preserved" }));
+    expect(automaticSourceReviewEvidenceBindingsMatch(store.getSource(candidate.id), store.listCaptures())).toBe(true);
+    expect(store.getSource(candidate.id)?.metadata?.automaticSourceReview?.taskId).toBe(originalTaskId);
+
+    store.updateCaptureMetadata(captureId, (metadata) => ({ ...metadata, safeExcerpt: "CVE-2026-9999 changed after review." }));
+    expect(automaticSourceReviewEvidenceBindingsMatch(store.getSource(candidate.id), store.listCaptures())).toBe(false);
+    expect(automaticReviewSnapshot(store).tasks.find((task: any) => task.id === originalTaskId)?.evidence).toEqual([]);
+    expect(store.getSource(candidate.id)).toMatchObject({
+      status: "candidate",
+      countsAsCoverage: false,
+      metadata: { productionCollection: false, sourcePortfolioQualificationState: "pending_sustained_productivity" }
+    });
+
+    let calls = 0;
+    expect(await runAutomaticReviewCycle({ store } as any, {
+      now: "2026-07-24T12:01:00.000Z",
+      clock: () => "2026-07-24T12:01:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      aiBase: "http://ai.test",
+      fetcher: async (_input, init) => {
+        calls++;
+        return completedSourceReview(JSON.parse(String(init?.body)), true);
+      }
+    })).toMatchObject({ queued: 1, attempted: 1, results: [{ state: "terminal" }] });
+    expect(calls).toBe(1);
+    expect(store.getSource(candidate.id)?.metadata?.automaticSourceReview?.taskId).not.toBe(originalTaskId);
+
+    let reboundTask = store.getAnalystMetadataReviewTask(store.getSource(candidate.id)!.metadata.automaticSourceReview.taskId);
+    store.saveAnalystMetadataReviewTask({ ...reboundTask, selectedEvidenceProvenance: [] });
+    expect(automaticReviewSnapshot(store).tasks.find((task: any) => task.id === reboundTask.id)?.evidence).toEqual([]);
+
+    const reboundSource = store.getSource(candidate.id)!;
+    store.saveSource({
+      ...reboundSource,
+      metadata: {
+        ...reboundSource.metadata,
+        automaticSourceReview: { ...reboundSource.metadata.automaticSourceReview, selectedEvidenceProvenance: [] }
+      }
+    });
+    let restartCalls = 0;
+    expect(await runAutomaticReviewCycle({ store } as any, {
+      now: "2026-07-24T12:02:00.000Z",
+      clock: () => "2026-07-24T12:02:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      aiBase: "http://ai.test",
+      fetcher: async (_input, init) => {
+        restartCalls++;
+        return completedSourceReview(JSON.parse(String(init?.body)), true);
+      }
+    })).toMatchObject({ queued: 1, attempted: 1, results: [{ state: "terminal" }] });
+    expect(restartCalls).toBe(1);
+    expect(store.getSource(candidate.id)?.metadata?.automaticSourceReview?.taskId).not.toBe(reboundTask.id);
+    reboundTask = store.getAnalystMetadataReviewTask(store.getSource(candidate.id)!.metadata.automaticSourceReview.taskId);
+
+    const reboundCapture = store.getCapture(captureId)!;
+    expect(() => store.replaceCaptureForRetention({ ...reboundCapture, tenantId: "other-tenant" })).toThrow("Retention cannot change capture identity");
+    const currentSource = store.getSource(candidate.id)!;
+    store.saveSource({ ...currentSource, tenantId: "other-tenant" });
+    expect(automaticSourceReviewEvidenceBindingsMatch(store.getSource(candidate.id), store.listCaptures())).toBe(false);
+    expect(automaticReviewSnapshot(store).tasks.find((task: any) => task.id === reboundTask.id)?.evidence).toEqual([]);
+  });
+
   test("preserves a concurrent public-source approval through its second productive collection", async () => {
     const store = new InMemoryScraperStore();
     const candidate = source({
@@ -469,8 +625,9 @@ describe("scheduled public feed discovery", () => {
     expect(store.getSource(candidate.id)).toMatchObject({
       status: "candidate",
       crawlState: { backoffUntil: "2026-07-25T12:01:00.000Z" },
-      metadata: { automaticSourceReview: { state: "needs_review", nextReviewAt: "2026-07-25T12:01:00.000Z", selectedEvidenceIds: [expect.any(String)] } }
+      metadata: { automaticSourceReview: { state: "needs_review", nextReviewAt: "2026-07-25T12:01:00.000Z" } }
     });
+    expect(store.getSource(candidate.id)?.metadata?.automaticSourceReview?.selectedEvidenceIds?.[0]).toEqual(expect.any(String));
     const firstTaskId = store.getSource(candidate.id)?.metadata?.automaticSourceReview?.taskId;
 
     const noNewEvidence = await runAutomaticReviewCycle({ store } as any, {
@@ -666,14 +823,8 @@ describe("scheduled public feed discovery", () => {
       aiBase: "http://ai.test",
       fetcher: async (_input, init) => {
         writeRaceCalls++;
-        const current = beforeWriteStore.getSource(beforeWrite.id)!;
-        beforeWriteStore.saveSource({
-          ...current,
-          tenantId: "customer-during-review",
-          url: "https://during-review.example/feed.xml",
-          createdAt: "2026-07-24T13:00:01.000Z",
-          updatedAt: "2026-07-24T13:00:01.000Z"
-        });
+        const capture = beforeWriteStore.listCaptures().find((item: any) => item.sourceId === beforeWrite.id)!;
+        beforeWriteStore.updateCaptureMetadata(capture.id, (metadata) => ({ ...metadata, safeExcerpt: "CVE-2026-9998 changed during review." }));
         return completedSourceReview(JSON.parse(String(init?.body)), true);
       }
     });
@@ -876,6 +1027,7 @@ function uncertainSourceReview(request: any) {
 
 function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
   const current = store.getSource(sourceId)!;
+  const selectedEvidenceProvenance = sourceAutomaticReviewEvidenceBindings(current, store.listCaptures()).slice(0, 1);
   store.saveSource({
     ...current,
     metadata: {
@@ -887,7 +1039,8 @@ function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
         configuredModelVersion: "hanasand",
         sourceIdentity: automaticSourceReviewIdentity(current),
         requestSha256: "a".repeat(64),
-        selectedEvidenceIds: ["retained-source-output"],
+        selectedEvidenceIds: selectedEvidenceProvenance.map((item) => item.evidenceId),
+        selectedEvidenceProvenance,
         runtimeIdentity: { status: "completed", conversationId: "source-review-proof" },
         decision: { subject: { type: "source", id: sourceId }, action: "confirm", claimValidity: "supported" }
       }

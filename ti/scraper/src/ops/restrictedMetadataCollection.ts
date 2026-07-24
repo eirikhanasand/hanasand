@@ -5,7 +5,8 @@ import { nowIso, stableId } from "../utils.ts";
 import { reconcilePublicSourceProductivity } from "./canaryActivation.ts";
 import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
 import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
-import { hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
+import { hasApprovedAutomaticSourceReview, sourceRequiresAutomaticReview } from "../policy/sourceAutomaticReview.ts";
+import { automaticSourceReviewEvidenceBindingsMatch } from "../api/automaticReviewRoutes.ts";
 
 export async function runRestrictedMetadataCollectionCycle(options: any) {
   const generatedAt = options.now?.() ?? nowIso();
@@ -62,8 +63,11 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
         ? productiveContentTimes.sort().at(-1) ?? checkedAt
         : currentSource.health?.lastContentAt;
       const transportCanary = currentSource.metadata?.transportCanary === true;
+      const managedCandidate = sourceRequiresAutomaticReview(currentSource);
       const productiveCycles = transportCanary ? [] : currentProductiveCycles(options.store, currentSource, checkedAt);
-      const sustained = hasApprovedAutomaticSourceReview(currentSource) && productiveCycles.length >= 2;
+      const sustained = hasApprovedAutomaticSourceReview(currentSource)
+        && automaticSourceReviewEvidenceBindingsMatch(currentSource, (id) => options.store.getCapture?.(id))
+        && productiveCycles.length >= 2;
       const metadata = {
         ...(currentSource.metadata ?? {})
       };
@@ -72,7 +76,9 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
         delete metadata.sourcePortfolioProductiveCheckCount;
         delete metadata.sourcePortfolioLastProductiveAt;
         metadata.countsAsCoverage = false;
-      } else {
+      } else if (managedCandidate) {
+        metadata.productionCollection = sustained;
+        metadata.countsAsCoverage = sustained;
         metadata.sourcePortfolioQualificationState = sustained ? "sustained_productive" : "pending_sustained_productivity";
         metadata.sourcePortfolioProductiveCheckCount = productiveCycles.length;
         metadata.sourcePortfolioLastProductiveAt = productiveCycles.at(-1)?.checkedAt;
@@ -82,7 +88,7 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
         metadata.countsAsCoverage = true;
         delete metadata.restrictedMetadataCandidate;
       }
-      options.store.saveSource({ ...currentSource, status: sustained ? "active" : currentSource.status, countsAsCoverage: !transportCanary && sustained, lastSeenAt: lastContentAt ?? currentSource.lastSeenAt, health: { ...(currentSource.health ?? {}), status: "healthy", checkedAt, lastSuccessAt: checkedAt, lastContentAt, lastUsefulAt: useful ? checkedAt : currentSource.health?.lastUsefulAt, consecutiveFailures: 0, lastError: undefined }, metadata, crawlState: { ...(currentSource.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + cadence(currentSource) * 1_000).toISOString(), lastError: undefined, backoffUntil: undefined }, updatedAt: checkedAt });
+      options.store.saveSource({ ...currentSource, status: transportCanary || !managedCandidate ? currentSource.status : sustained ? "active" : "candidate", countsAsCoverage: transportCanary ? false : managedCandidate ? sustained : currentSource.countsAsCoverage, lastSeenAt: lastContentAt ?? currentSource.lastSeenAt, health: { ...(currentSource.health ?? {}), status: "healthy", checkedAt, lastSuccessAt: checkedAt, lastContentAt, lastUsefulAt: useful ? checkedAt : currentSource.health?.lastUsefulAt, consecutiveFailures: 0, lastError: undefined }, metadata, crawlState: { ...(currentSource.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + cadence(currentSource) * 1_000).toISOString(), lastError: undefined, backoffUntil: undefined }, updatedAt: checkedAt });
     } catch (caught) {
       counters.failedSourceCount++;
       const checkedAt = options.now?.() ?? nowIso(), message = safeError(caught);

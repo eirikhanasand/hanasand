@@ -4,6 +4,7 @@ import { TorMetadataHttpBoundary } from "../adapters/torMetadataBoundary.ts";
 import { buildRestrictedMetadataStatusRouteResponse } from "../api/restrictedMetadataRoutes.ts";
 import { runRestrictedMetadataCollectionCycle } from "../ops/restrictedMetadataCollection.ts";
 import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
+import { sourceAutomaticReviewEvidenceBindings } from "../api/automaticReviewRoutes.ts";
 import { importRestrictedMetadataSeedBundle } from "../registry/restrictedSourceSeeds.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
@@ -473,6 +474,7 @@ describe("restricted metadata collection", () => {
 
 function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
   const current = store.getSource(sourceId)!;
+  const selectedEvidenceProvenance = sourceAutomaticReviewEvidenceBindings(current, store.listCaptures()).slice(0, 1);
   store.saveSource({
     ...current,
     metadata: {
@@ -484,7 +486,8 @@ function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
         configuredModelVersion: "hanasand",
         sourceIdentity: automaticSourceReviewIdentity(current),
         requestSha256: "a".repeat(64),
-        selectedEvidenceIds: ["retained-source-output"],
+        selectedEvidenceIds: selectedEvidenceProvenance.map((item) => item.evidenceId),
+        selectedEvidenceProvenance,
         runtimeIdentity: { status: "completed", conversationId: "source-review-proof" },
         decision: { subject: { type: "source", id: sourceId }, action: "confirm", claimValidity: "supported" }
       }

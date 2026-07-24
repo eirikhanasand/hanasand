@@ -33,6 +33,24 @@ export function sourceAutomaticReviewIdentityMatches(source: any, review = sourc
     && review.sourceIdentity.sha256 === identity.sha256;
 }
 
+export function sourceAutomaticReviewEvidenceBound(review: any) {
+  const ids = review?.selectedEvidenceIds;
+  const provenance = review?.selectedEvidenceProvenance;
+  if (!Array.isArray(ids) || !ids.length || !Array.isArray(provenance) || provenance.length !== ids.length) return false;
+  const selected = new Set(ids);
+  const bound = new Set(provenance.map((item: any) => item?.evidenceId));
+  return selected.size === ids.length
+    && bound.size === provenance.length
+    && ids.every((id: unknown) => bound.has(id))
+    && provenance.every((item: any) =>
+    selected.has(item?.evidenceId)
+    && /^[A-Za-z0-9_.:-]{1,200}$/.test(String(item?.sourceId ?? ""))
+    && /^[A-Za-z0-9_.:-]{1,200}$/.test(String(item?.tenantKey ?? ""))
+    && /^[A-Za-z0-9_.:-]{1,200}$/.test(String(item?.captureId ?? ""))
+    && /^[A-Za-z0-9_.:-]{1,200}$/.test(String(item?.contentHash ?? ""))
+    && /^[a-f0-9]{64}$/.test(String(item?.captureStateSha256 ?? "")));
+}
+
 export function hasApprovedAutomaticSourceReview(source: any, modelVersion = automaticReviewModelVersion()) {
   if (!sourceRequiresAutomaticReview(source)) return true;
   const review = source?.metadata?.automaticSourceReview;
@@ -49,8 +67,7 @@ export function hasApprovedAutomaticSourceReview(source: any, modelVersion = aut
     && typeof review?.runtimeIdentity?.conversationId === "string"
     && review.runtimeIdentity.conversationId.length > 0
     && /^[a-f0-9]{64}$/.test(String(review?.requestSha256 ?? ""))
-    && Array.isArray(review?.selectedEvidenceIds)
-    && review.selectedEvidenceIds.length > 0;
+    && sourceAutomaticReviewEvidenceBound(review);
 }
 
 function cleanModelVersion(value: unknown) {

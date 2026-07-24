@@ -15,6 +15,7 @@ import {
   SOURCE_AUTOMATIC_REVIEW_SCHEMA,
   automaticSourceReviewIdentity,
   automaticReviewModelVersion,
+  sourceAutomaticReviewEvidenceBound,
   sourceAutomaticReviewIdentityMatches,
   sourceRequiresAutomaticReview
 } from "../policy/sourceAutomaticReview.ts";
@@ -34,6 +35,8 @@ const FALSE_POSITIVE_REASON_RETRY = "The prior response omitted mandatory falseP
 const FALSE_POSITIVE_REASON_FINAL_RETRY = "The prior corrected response still omitted mandatory falsePositiveReasons. For this non-supported decision, the model must now return at least one non-empty, evidence-grounded falsePositiveReasons entry derived from the supplied governed evidence; do not copy this instruction as the reason.";
 const DECISION_KEYS = ["schemaVersion", "promptVersion", "modelVersion", "subject", "action", "claimValidity", "actorAttribution", "supportingEvidenceIds", "contradictoryEvidenceIds", "uncertainty", "falsePositiveReasons", "rationale", "confidence", "calibrationContext"];
 
+type SourceEvidenceBinding = { evidenceId: string; sourceId: string; tenantKey: string; captureId: string; contentHash: string; captureStateSha256: string };
+
 type AutomaticReviewTask = {
   id: string;
   recordKind: typeof TASK_KIND;
@@ -41,6 +44,7 @@ type AutomaticReviewTask = {
   tenantId?: string;
   subject: { type: "claim" | "incident" | "source"; id: string; claimId?: string; incidentId?: string; sourceId?: string };
   selectedEvidenceIds: string[];
+  selectedEvidenceProvenance?: Array<{ evidenceId: string; sourceId: string; tenantKey?: string; captureId: string; contentHash?: string; captureStateSha256?: string }>;
   linkedEvidenceCount: number;
   linkedSourceCount: number;
   linkedIndependentSourceCount: number;
@@ -73,6 +77,7 @@ type GovernedEvidence = {
   source: { id: string; name?: string; type?: string; trustScore?: number; independenceGroup: string };
   capture: { id: string; safeExcerpt: string; referenceFingerprints: Array<{ host: string; sha256: string }>; publishedAt?: string; collectedAt?: string; storageKind?: string; extractorVersion?: string; parserVersion?: string };
   provenance: { evidenceId: string; sourceId: string; captureId: string; subjectType: "claim" | "incident" | "source"; subjectId: string; publicationProvenance?: string };
+  binding?: SourceEvidenceBinding;
 };
 
 type ModelRuntimeIdentity = {
@@ -329,7 +334,17 @@ function newTask(index: ReviewIndex, subject: AutomaticReviewTask["subject"], at
     && !sourceAutomaticReviewIdentityMatches(source, previousSourceReview)
     ? ":bind-source-identity-v1"
     : "";
-  const sourceRevision = source ? `${automaticSourceReviewIdentity(source).sha256}:${records[0]?.id ?? "no-evidence"}${identityBindingRevision}` : "";
+  const evidenceBindingRevision = source
+    && previousSourceReview?.promptVersion === SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION
+    && previousSourceReview?.configuredModelVersion === modelVersion
+    && !automaticSourceReviewEvidenceBindingsMatch(source, index.capturesById, previousSourceReview)
+    ? `:bind-source-evidence-v1:${createHash("sha256").update(JSON.stringify({
+        previousTaskId: previousSourceReview.taskId,
+        previousRequestSha256: previousSourceReview.requestSha256,
+        evidence: governedEvidence(index, subject).map(evidenceBinding)
+      })).digest("hex")}`
+    : "";
+  const sourceRevision = source ? `${automaticSourceReviewIdentity(source).sha256}:${records[0]?.id ?? "no-evidence"}${identityBindingRevision}${evidenceBindingRevision}` : "";
   const promptVersion = reviewPromptVersion(subject);
   return {
     id: stableId("automatic-review", `${subject.type}:${subject.id}:${subjectTenant(index, subject) ?? "global"}:${promptVersion}:${modelVersion}${sourceRevision ? `:${sourceRevision}` : ""}`),
@@ -385,14 +400,17 @@ async function processTask(options: ApiServerOptions, original: AutomaticReviewT
     return { taskId: task.id, state: task.state, outcome: task.outcome };
   }
   const source = task.subject.sourceId ? store.getSource?.(task.subject.sourceId) : undefined;
-  if (source?.metadata?.automaticSourceReview?.taskId === task.id
-    && source.metadata.automaticSourceReview.decision?.runtimeIdentity?.conversationId
-    && source.metadata.automaticSourceReview.requestSha256) {
-    const review = source.metadata.automaticSourceReview;
+  const sourceReview = source?.metadata?.automaticSourceReview;
+  if (sourceReview?.taskId === task.id
+    && sourceReview.decision?.runtimeIdentity?.conversationId
+    && sourceReview.requestSha256
+    && automaticSourceReviewEvidenceBindingsMatch(source, (id) => store.getCapture?.(id), sourceReview)) {
+    const review = sourceReview;
     const reconciled = reconciledDecisionState(review.decision);
     task = saveTask(store, task, {
       ...reconciled,
       selectedEvidenceIds: review.selectedEvidenceIds ?? [],
+      selectedEvidenceProvenance: review.selectedEvidenceProvenance ?? task.selectedEvidenceProvenance,
       requestSha256: review.requestSha256,
       decision: review.decision,
       completedAt: review.reviewedAt,
@@ -416,6 +434,7 @@ async function processTask(options: ApiServerOptions, original: AutomaticReviewT
     state: "running",
     attempt: task.attempt + 1,
     selectedEvidenceIds: refreshedEvidence.map((item) => item.id),
+    selectedEvidenceProvenance: refreshedEvidence.map(evidenceBinding),
     linkedEvidenceCount: linkedRecords.length,
     linkedSourceCount: linkedCounts.rawSourceCount,
     linkedIndependentSourceCount: linkedCounts.independentSourceCount,
@@ -716,6 +735,7 @@ function persistSubjectDecision(store: any, index: ReviewIndex, task: AutomaticR
           responseSchemaVersion: task.responseSchemaVersion,
           evidenceProjectionSchema: task.evidenceProjectionSchema,
           selectedEvidenceIds: task.selectedEvidenceIds,
+          selectedEvidenceProvenance: task.selectedEvidenceProvenance,
           linkedEvidenceCount: task.linkedEvidenceCount,
           sourceIdentity: automaticSourceReviewIdentity(source),
           decision,
@@ -848,15 +868,16 @@ function assertionUnderReview(index: ReviewIndex, subject: AutomaticReviewTask["
   } : undefined;
 }
 
-function governedEvidence(index: ReviewIndex, subject: AutomaticReviewTask["subject"]): GovernedEvidence[] {
-  const tenantId = subjectTenant(index, subject);
-  const ranked = eligibleLinkedEvidence(index, subject).flatMap((record: any) => {
+function governedEvidence(index: ReviewIndex, subject: AutomaticReviewTask["subject"], selectedEvidenceProvenance?: AutomaticReviewTask["selectedEvidenceProvenance"], tenantId = subjectTenant(index, subject)): GovernedEvidence[] {
+  const ranked = eligibleLinkedEvidence(index, subject, selectedEvidenceProvenance, tenantId).flatMap((record: any) => {
     const id = safeOpaqueId(record.id);
     const capture = index.capturesById.get(record.captureId);
     const source = index.sourcesById.get(record.sourceId ?? capture?.sourceId);
     const captureId = safeOpaqueId(capture?.id);
     const sourceId = safeOpaqueId(source?.id);
-    if (!id || !capture || !source || !captureId || !sourceId || (capture.tenantId || undefined) !== (tenantId || undefined)) return [];
+    if (!id || !capture || !source || !captureId || !sourceId
+      || (source.tenantId || undefined) !== (tenantId || undefined)
+      || (capture.tenantId || undefined) !== (tenantId || undefined)) return [];
     const retainedExcerpt = capture.metadata?.safeExcerpt
       ?? capture.metadata?.leakSite?.summary
       ?? (subject.sourceId ? capture.metadata?.title ?? (!capture.sensitive ? capture.body : undefined) : undefined);
@@ -866,14 +887,18 @@ function governedEvidence(index: ReviewIndex, subject: AutomaticReviewTask["subj
     const publicationProvenance = capture.metadata?.publisherReportedAtProvenance || capture.metadata?.publicationProvenance
       ? "publisher_reported"
       : capture.publishedAt ? "capture_published_at" : undefined;
+    const captureProjection = captureEvidenceProjection(capture, captureId, safeExcerpt, retainedExcerpt, evidenceReferenceText);
+    const binding = subject.sourceId ? sourceEvidenceBinding(id, sourceId, capture, captureProjection) : undefined;
+    if (subject.sourceId && !binding) return [];
     const evidence: GovernedEvidence = {
       id,
       relationship: safeOpaqueText(record.relationship, 80) ?? "supports",
       evidenceStage: safeOpaqueText(record.evidenceStage, 80) ?? "unknown",
       confidence: finiteScore(record.confidence),
       source: { id: sourceId, name: safeEvidenceText(source.name, 180), type: safeOpaqueText(source.type, 80), trustScore: finiteScore(source.trustScore), independenceGroup: sourceGroup(source) },
-      capture: { id: captureId, safeExcerpt, referenceFingerprints: hiddenReferenceFingerprints(retainedExcerpt, ...evidenceReferenceText), publishedAt: validIso(capture.publishedAt), collectedAt: validIso(capture.collectedAt), storageKind: safeOpaqueText(capture.storageKind, 80), extractorVersion: safeOpaqueText(capture.provenance?.extractorVersion ?? capture.extractorVersion, 120), parserVersion: safeOpaqueText(capture.provenance?.parserVersion ?? capture.metadata?.parserVersion, 120) },
-      provenance: { evidenceId: id, sourceId, captureId, subjectType: subject.type, subjectId: subject.id, publicationProvenance }
+      capture: captureProjection,
+      provenance: { evidenceId: id, sourceId, captureId, subjectType: subject.type, subjectId: subject.id, publicationProvenance },
+      binding
     };
     const group = sourceGroup(source);
     const priority = (publicationProvenance === "publisher_reported" ? 100 : publicationProvenance ? 50 : 0)
@@ -896,6 +921,110 @@ function governedEvidence(index: ReviewIndex, subject: AutomaticReviewTask["subj
   return selected;
 }
 
+function captureEvidenceProjection(capture: any, captureId: string, safeExcerpt: string, retainedExcerpt: unknown, evidenceReferenceText: unknown[]) {
+  return {
+    id: captureId,
+    safeExcerpt,
+    referenceFingerprints: hiddenReferenceFingerprints(retainedExcerpt, ...evidenceReferenceText),
+    publishedAt: validIso(capture.publishedAt),
+    collectedAt: validIso(capture.collectedAt),
+    storageKind: safeOpaqueText(capture.storageKind, 80),
+    extractorVersion: safeOpaqueText(capture.provenance?.extractorVersion ?? capture.extractorVersion, 120),
+    parserVersion: safeOpaqueText(capture.provenance?.parserVersion ?? capture.metadata?.parserVersion, 120)
+  };
+}
+
+function sourceCaptureProjection(capture: any) {
+  const captureId = safeOpaqueId(capture?.id);
+  const retainedExcerpt = capture?.metadata?.safeExcerpt
+    ?? capture?.metadata?.leakSite?.summary
+    ?? capture?.metadata?.title
+    ?? (!capture?.sensitive ? capture?.body : undefined);
+  const safeExcerpt = safeEvidenceText(retainedExcerpt, 500);
+  return captureId && safeExcerpt ? captureEvidenceProjection(capture, captureId, safeExcerpt, retainedExcerpt, []) : undefined;
+}
+
+function sourceEvidenceBinding(evidenceId: string, sourceId: string, capture: any, projection: GovernedEvidence["capture"]): SourceEvidenceBinding | undefined {
+  const contentHash = String(capture?.contentHash ?? "");
+  if (!/^[A-Za-z0-9_.:-]{1,200}$/.test(contentHash)) return undefined;
+  return {
+    evidenceId,
+    sourceId,
+    tenantKey: String(capture?.tenantId ?? "global"),
+    captureId: projection.id,
+    contentHash,
+    captureStateSha256: sourceCaptureStateSha256(capture)
+  };
+}
+
+function evidenceBinding(evidence: GovernedEvidence) {
+  return evidence.binding ?? {
+    evidenceId: evidence.provenance.evidenceId,
+    sourceId: evidence.provenance.sourceId,
+    captureId: evidence.provenance.captureId
+  };
+}
+
+export function sourceAutomaticReviewEvidenceBindings(source: any, captures: any[]) {
+  return captures
+    .filter((capture) => capture.sourceId === source?.id && (capture.tenantId || undefined) === (source?.tenantId || undefined))
+    .sort((left, right) => Date.parse(right.collectedAt ?? "") - Date.parse(left.collectedAt ?? "") || String(left.id).localeCompare(String(right.id)))
+    .flatMap((capture) => {
+      const projection = sourceCaptureProjection(capture);
+      const evidenceId = safeOpaqueId(capture.id) ? sourceEvidenceId(capture.id) : undefined;
+      const binding = projection && evidenceId && safeOpaqueId(source?.id) ? sourceEvidenceBinding(evidenceId, source.id, capture, projection) : undefined;
+      return binding ? [binding] : [];
+    })
+    .slice(0, 8);
+}
+
+export function automaticSourceReviewEvidenceBindingsMatch(source: any, captures: any[] | Map<string, any> | ((id: string) => any), review = source?.metadata?.automaticSourceReview) {
+  if (!sourceRequiresAutomaticReview(source)) return true;
+  if (!sourceAutomaticReviewEvidenceBound(review)) return false;
+  return review.selectedEvidenceProvenance.every((binding: SourceEvidenceBinding) =>
+    sourceEvidenceBindingMatches(source, captureById(captures, binding.captureId), binding, source.tenantId));
+}
+
+function captureById(captures: any[] | Map<string, any> | ((id: string) => any), id: string) {
+  return typeof captures === "function" ? captures(id) : captures instanceof Map ? captures.get(id) : captures.find((capture) => capture.id === id);
+}
+
+function sourceEvidenceBindingMatches(source: any, capture: any, binding: SourceEvidenceBinding, tenantId: unknown) {
+  const projection = sourceCaptureProjection(capture);
+  return binding.sourceId === source?.id
+    && binding.tenantKey === String(tenantId ?? "global")
+    && (source?.tenantId || undefined) === (tenantId || undefined)
+    && capture?.sourceId === source.id
+    && (capture?.tenantId || undefined) === (tenantId || undefined)
+    && binding.evidenceId === sourceEvidenceId(capture.id)
+    && binding.contentHash === capture.contentHash
+    && binding.captureStateSha256 === sourceCaptureStateSha256(capture)
+    && projection !== undefined;
+}
+
+function sourceEvidenceId(captureId: string) {
+  return `automatic-source-review-evidence_${createHash("sha256").update(captureId).digest("hex").slice(0, 16)}`;
+}
+
+function sourceCaptureStateSha256(capture: any) {
+  const fields = [
+    capture?.sourceId,
+    capture?.tenantId ?? "global",
+    capture?.contentHash,
+    capture?.body,
+    capture?.sensitive,
+    capture?.publishedAt,
+    capture?.collectedAt,
+    capture?.storageKind,
+    capture?.provenance?.extractorVersion ?? capture?.extractorVersion,
+    capture?.metadata?.safeExcerpt,
+    capture?.metadata?.leakSite?.summary,
+    capture?.metadata?.title,
+    capture?.provenance?.parserVersion ?? capture?.metadata?.parserVersion
+  ].map((value) => value === undefined || value === null ? "" : String(value));
+  return createHash("sha256").update(fields.map((value) => `${Buffer.byteLength(value)}:${value}`).join("|")).digest("hex");
+}
+
 function replayAutomaticReview(options: ApiServerOptions, taskId: string, tenantId?: string): AutomaticReviewTask | Response {
   const store = options.store as any;
   const current = store.getAnalystMetadataReviewTask?.(taskId) as AutomaticReviewTask | undefined;
@@ -911,6 +1040,7 @@ function replayAutomaticReview(options: ApiServerOptions, taskId: string, tenant
     attempt: 0,
     replayCount: current.replayCount + 1,
     selectedEvidenceIds: evidence.map((item) => item.id),
+    selectedEvidenceProvenance: evidence.map(evidenceBinding),
     linkedEvidenceCount: records.length,
     linkedSourceCount: counts.rawSourceCount,
     linkedIndependentSourceCount: counts.independentSourceCount,
@@ -961,6 +1091,7 @@ function sourceEligible(source: any, index: ReviewIndex, modelVersion: string, a
   if (!evidence.length) return false;
   if (previous?.configuredModelVersion !== modelVersion || previous?.promptVersion !== SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION) return true;
   if (!sourceAutomaticReviewIdentityMatches(source, previous)) return true;
+  if (!automaticSourceReviewEvidenceBindingsMatch(source, index.capturesById, previous)) return true;
   if (previous.state !== "needs_review" || Date.parse(previous.nextReviewAt ?? source.crawlState?.backoffUntil ?? "") > Date.parse(at)) return false;
   const reviewedAt = Date.parse(previous.reviewedAt ?? "");
   const previousEvidence = new Set(previous.selectedEvidenceIds ?? []);
@@ -979,7 +1110,8 @@ function sourceTaskIsCurrent(store: any, task: AutomaticReviewTask) {
     && (!task.sourceIdentitySha256 || automaticSourceReviewIdentity(source).sha256 === task.sourceIdentitySha256)
     && sourceRequiresAutomaticReview(source)
     && source.metadata?.transportCanary !== true
-    && ["candidate", "active", "degraded", "probation"].includes(source.status));
+    && ["candidate", "active", "degraded", "probation"].includes(source.status)
+    && (task.attempt === 0 || automaticSourceReviewEvidenceBindingsMatch(source, (id) => store.getCapture?.(id), task)));
 }
 
 function supersedeSourceTask(store: any, task: AutomaticReviewTask, at: string) {
@@ -1144,10 +1276,23 @@ function buildReviewIndex(store: any): ReviewIndex {
   };
 }
 
-function linkedEvidence(index: ReviewIndex, subject: AutomaticReviewTask["subject"]) {
+function linkedEvidence(index: ReviewIndex, subject: AutomaticReviewTask["subject"], selectedEvidenceProvenance?: AutomaticReviewTask["selectedEvidenceProvenance"], tenantId = subjectTenant(index, subject)) {
   if (subject.sourceId) {
     const source = index.sourcesById.get(subject.sourceId);
-    if (!source) return [];
+    if (!source || (source.tenantId || undefined) !== (tenantId || undefined)) return [];
+    if (selectedEvidenceProvenance !== undefined) return selectedEvidenceProvenance.flatMap((provenance) => {
+      const capture = index.capturesById.get(provenance.captureId);
+      return sourceEvidenceBindingMatches(source, capture, provenance as SourceEvidenceBinding, tenantId)
+        ? [{
+            id: provenance.evidenceId,
+            sourceId: source.id,
+            captureId: capture.id,
+            relationship: "supports",
+            evidenceStage: "source_parser_output",
+            confidence: 1
+          }]
+        : [];
+    });
     const usefulRunIds = new Set((index.healthBySource.get(source.id) ?? [])
       .filter((row: any) => row.tenantId === source.tenantId && row.useful === true && Number(row.captureCount ?? 0) > 0)
       .map((row: any) => String(row.collectionRunId ?? ""))
@@ -1158,7 +1303,7 @@ function linkedEvidence(index: ReviewIndex, subject: AutomaticReviewTask["subjec
       .sort((left: any, right: any) => Date.parse(right.collectedAt ?? "") - Date.parse(left.collectedAt ?? ""))
       .slice(0, 8)
       .map((capture: any) => ({
-        id: stableId("automatic-source-review-evidence", capture.id),
+        id: sourceEvidenceId(capture.id),
         sourceId: source.id,
         captureId: capture.id,
         relationship: "supports",
@@ -1169,9 +1314,8 @@ function linkedEvidence(index: ReviewIndex, subject: AutomaticReviewTask["subjec
   return subject.claimId ? index.claimEvidenceByClaim.get(subject.claimId) ?? [] : index.incidentEvidenceByIncident.get(subject.incidentId!) ?? [];
 }
 
-function eligibleLinkedEvidence(index: ReviewIndex, subject: AutomaticReviewTask["subject"]) {
-  const tenantId = subjectTenant(index, subject);
-  return linkedEvidence(index, subject).filter((record: any) => {
+function eligibleLinkedEvidence(index: ReviewIndex, subject: AutomaticReviewTask["subject"], selectedEvidenceProvenance?: AutomaticReviewTask["selectedEvidenceProvenance"], tenantId = subjectTenant(index, subject)) {
+  return linkedEvidence(index, subject, selectedEvidenceProvenance, tenantId).filter((record: any) => {
     const capture = index.capturesById.get(record.captureId);
     const source = index.sourcesById.get(record.sourceId ?? capture?.sourceId);
     return Boolean(safeOpaqueId(record.id) && safeOpaqueId(capture?.id) && safeOpaqueId(source?.id) && (capture?.tenantId || undefined) === (tenantId || undefined));
@@ -1190,11 +1334,11 @@ function sourceGroup(source: any) {
 
 function publicTask(task: AutomaticReviewTask, index: ReviewIndex, allEvents: any[]) {
   const { evidence: _legacyEvidence, history: _legacyHistory, ...idsOnly } = task as any;
-  const currentEvidence = governedEvidence(index, task.subject);
+  const currentEvidence = governedEvidence(index, task.subject, task.selectedEvidenceProvenance, task.tenantId);
   const selected = task.selectedEvidenceIds?.length ? currentEvidence.filter((item) => task.selectedEvidenceIds.includes(item.id)) : currentEvidence;
   return {
     ...idsOnly,
-    evidence: selected,
+    evidence: selected.map(({ binding: _binding, ...item }) => item),
     history: allEvents.filter((event) => event.taskId === task.id).sort((left, right) => Date.parse(left.occurredAt) - Date.parse(right.occurredAt))
   };
 }
@@ -1243,6 +1387,7 @@ function saveEvent(store: any, task: AutomaticReviewTask, state: string, occurre
     responseSchemaVersion: task.responseSchemaVersion,
     evidenceProjectionSchema: task.evidenceProjectionSchema,
     selectedEvidenceIds: task.selectedEvidenceIds,
+    selectedEvidenceProvenance: task.selectedEvidenceProvenance,
     linkedEvidenceCount: task.linkedEvidenceCount,
     linkedSourceCount: task.linkedSourceCount,
     linkedIndependentSourceCount: task.linkedIndependentSourceCount,

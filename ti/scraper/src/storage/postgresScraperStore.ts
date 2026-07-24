@@ -482,6 +482,63 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                   AND COALESCE(record->'metadata'->'automaticSourceReview'->>'requestSha256', '') ~ '^[a-f0-9]{64}$'
                   AND jsonb_typeof(record->'metadata'->'automaticSourceReview'->'selectedEvidenceIds') = 'array'
                   AND jsonb_array_length(record->'metadata'->'automaticSourceReview'->'selectedEvidenceIds') > 0
+                  AND jsonb_typeof(record->'metadata'->'automaticSourceReview'->'selectedEvidenceProvenance') = 'array'
+                  AND jsonb_array_length(record->'metadata'->'automaticSourceReview'->'selectedEvidenceProvenance')
+                    = jsonb_array_length(record->'metadata'->'automaticSourceReview'->'selectedEvidenceIds')
+                  AND (
+                    SELECT count(DISTINCT selected_id)
+                    FROM jsonb_array_elements_text(record->'metadata'->'automaticSourceReview'->'selectedEvidenceIds') selected_id
+                  ) = jsonb_array_length(record->'metadata'->'automaticSourceReview'->'selectedEvidenceIds')
+                  AND (
+                    SELECT count(DISTINCT binding->>'evidenceId')
+                    FROM jsonb_array_elements(record->'metadata'->'automaticSourceReview'->'selectedEvidenceProvenance') binding
+                  ) = jsonb_array_length(record->'metadata'->'automaticSourceReview'->'selectedEvidenceProvenance')
+                  AND COALESCE((record->>'countsAsCoverage')::boolean, FALSE)
+                  AND COALESCE((record->'metadata'->>'productionCollection')::boolean, FALSE)
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(record->'metadata'->'automaticSourceReview'->'selectedEvidenceProvenance') binding
+                    WHERE COALESCE(binding->>'evidenceId', '') !~ '^[A-Za-z0-9_.:-]{1,200}$'
+                      OR COALESCE(binding->>'sourceId', '') <> per_source.id
+                      OR COALESCE(binding->>'tenantKey', '') <> COALESCE(per_source.tenant_id, 'global')
+                      OR COALESCE(binding->>'captureId', '') !~ '^[A-Za-z0-9_.:-]{1,200}$'
+                      OR COALESCE(binding->>'contentHash', '') !~ '^[A-Za-z0-9_.:-]{1,200}$'
+                      OR COALESCE(binding->>'captureStateSha256', '') !~ '^[a-f0-9]{64}$'
+                      OR binding->>'evidenceId' <> 'automatic-source-review-evidence_' || substr(encode(sha256(convert_to(binding->>'captureId', 'UTF8')), 'hex'), 1, 16)
+                      OR NOT (record->'metadata'->'automaticSourceReview'->'selectedEvidenceIds' ? (binding->>'evidenceId'))
+                      OR NOT EXISTS (
+                        SELECT 1
+                        FROM threat_intel.captures bound_capture
+                        WHERE bound_capture.id = binding->>'captureId'
+                          AND bound_capture.source_id = per_source.id
+                          AND bound_capture.tenant_id IS NOT DISTINCT FROM per_source.tenant_id
+                          AND bound_capture.content_hash = binding->>'contentHash'
+                          AND binding->>'captureStateSha256' = encode(sha256(convert_to(concat_ws('|',
+                            octet_length(COALESCE(bound_capture.record->>'sourceId', ''))::text || ':' || COALESCE(bound_capture.record->>'sourceId', ''),
+                            octet_length(COALESCE(bound_capture.record->>'tenantId', 'global'))::text || ':' || COALESCE(bound_capture.record->>'tenantId', 'global'),
+                            octet_length(COALESCE(bound_capture.record->>'contentHash', ''))::text || ':' || COALESCE(bound_capture.record->>'contentHash', ''),
+                            octet_length(COALESCE(bound_capture.record->>'body', ''))::text || ':' || COALESCE(bound_capture.record->>'body', ''),
+                            octet_length(COALESCE(bound_capture.record->>'sensitive', ''))::text || ':' || COALESCE(bound_capture.record->>'sensitive', ''),
+                            octet_length(COALESCE(bound_capture.record->>'publishedAt', ''))::text || ':' || COALESCE(bound_capture.record->>'publishedAt', ''),
+                            octet_length(COALESCE(bound_capture.record->>'collectedAt', ''))::text || ':' || COALESCE(bound_capture.record->>'collectedAt', ''),
+                            octet_length(COALESCE(bound_capture.record->>'storageKind', ''))::text || ':' || COALESCE(bound_capture.record->>'storageKind', ''),
+                            octet_length(COALESCE(bound_capture.record#>>'{provenance,extractorVersion}', bound_capture.record->>'extractorVersion', ''))::text || ':' || COALESCE(bound_capture.record#>>'{provenance,extractorVersion}', bound_capture.record->>'extractorVersion', ''),
+                            octet_length(COALESCE(bound_capture.record#>>'{metadata,safeExcerpt}', ''))::text || ':' || COALESCE(bound_capture.record#>>'{metadata,safeExcerpt}', ''),
+                            octet_length(COALESCE(bound_capture.record#>>'{metadata,leakSite,summary}', ''))::text || ':' || COALESCE(bound_capture.record#>>'{metadata,leakSite,summary}', ''),
+                            octet_length(COALESCE(bound_capture.record#>>'{metadata,title}', ''))::text || ':' || COALESCE(bound_capture.record#>>'{metadata,title}', ''),
+                            octet_length(COALESCE(bound_capture.record#>>'{provenance,parserVersion}', bound_capture.record#>>'{metadata,parserVersion}', ''))::text || ':' || COALESCE(bound_capture.record#>>'{provenance,parserVersion}', bound_capture.record#>>'{metadata,parserVersion}', '')
+                          ), 'UTF8')), 'hex')
+                      )
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements_text(record->'metadata'->'automaticSourceReview'->'selectedEvidenceIds') selected_id
+                    WHERE NOT EXISTS (
+                      SELECT 1
+                      FROM jsonb_array_elements(record->'metadata'->'automaticSourceReview'->'selectedEvidenceProvenance') binding
+                      WHERE binding->>'evidenceId' = selected_id
+                    )
+                  )
                 )
               )
               AND last_checked_at >= $4::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((record->>'crawlFrequencySeconds')::int, 86400) * 3))

@@ -60,8 +60,26 @@ export class InMemoryScraperStore implements ScraperStore {
   }
   private insertCapture(capture: RawCapture, delta: boolean) { this.captures.set(capture.id, capture); for (const key of dedupeIndexKeys(capture)) this.dedupe.set(key, capture.id); if (delta) this.recordCaptureDelta("added", capture); return capture; }
   getCapture(id: string) { return this.captures.get(id); }
-  updateCaptureMetadata(id: string, update: (metadata: any) => any) { const previous = this.mustCapture(id); this.assertOrganizationWritable(previous); const next = { ...previous, metadata: update(previous.metadata ?? {}) }; this.captures.set(id, next); return next; }
-  replaceCaptureForRetention(capture: RawCapture) { const previous = this.mustCapture(capture.id); if (previous.contentHash !== capture.contentHash || previous.sourceId !== capture.sourceId) throw new Error(`Retention cannot change capture identity: ${capture.id}`); this.captures.set(capture.id, capture); return capture; }
+  updateCaptureMetadata(id: string, update: (metadata: any) => any) { const previous = this.mustCapture(id); this.assertOrganizationWritable(previous); const next = { ...previous, metadata: update(previous.metadata ?? {}) }; this.captures.set(id, next); this.invalidateSourceReviewForCapture(previous, next); return next; }
+  replaceCaptureForRetention(capture: RawCapture) { const previous = this.mustCapture(capture.id); if (previous.contentHash !== capture.contentHash || previous.sourceId !== capture.sourceId || previous.tenantId !== capture.tenantId) throw new Error(`Retention cannot change capture identity: ${capture.id}`); this.captures.set(capture.id, capture); this.invalidateSourceReviewForCapture(previous, capture); return capture; }
+  private invalidateSourceReviewForCapture(previous: RawCapture, capture: RawCapture) {
+    if (JSON.stringify(sourceReviewProjectionInput(previous)) === JSON.stringify(sourceReviewProjectionInput(capture))) return;
+    const source = this.sources.get(previous.sourceId);
+    const review = source?.metadata?.automaticSourceReview;
+    if (!Array.isArray(review?.selectedEvidenceProvenance) || !review.selectedEvidenceProvenance.some((item: any) => item?.captureId === capture.id)) return;
+    this.saveSource({
+      ...source,
+      status: source.status === "active" ? "candidate" : source.status,
+      countsAsCoverage: false,
+      metadata: {
+        ...source.metadata,
+        productionCollection: false,
+        countsAsCoverage: false,
+        sourcePortfolioQualificationState: "pending_sustained_productivity"
+      },
+      updatedAt: nowIso()
+    });
+  }
   findDuplicateCapture(capture: RawCapture) { const prepared = prepareCapture(capture); for (const key of dedupeIndexKeys(prepared)) { const id = this.dedupe.get(key); if (id) return this.captures.get(id); } }
   listCaptures() { return mapValues(this.captures); }
   savePipelineResult(result: PipelineResult): PipelineResult {
@@ -447,6 +465,24 @@ export class InMemoryScraperStore implements ScraperStore {
   protected hydrateDwmWebhookDeliverySnapshot(delivery: any) { return put(this.dwmWebhookDeliveries, delivery); }
   getDwmWebhookDelivery(id: string) { return this.dwmWebhookDeliveries.get(id); } listDwmWebhookDeliveries() { return mapValues(this.dwmWebhookDeliveries); }
   saveActorOrgRelevanceReview(review: any) { return this.putScoped(this.actorOrgRelevanceReviews, review); } getActorOrgRelevanceReview(id: string) { return this.actorOrgRelevanceReviews.get(id); } listActorOrgRelevanceReviews() { return mapValues(this.actorOrgRelevanceReviews); }
+}
+
+function sourceReviewProjectionInput(capture: RawCapture) {
+  return {
+    sourceId: capture.sourceId,
+    tenantId: capture.tenantId,
+    contentHash: capture.contentHash,
+    body: capture.body,
+    sensitive: capture.sensitive,
+    publishedAt: capture.publishedAt,
+    collectedAt: capture.collectedAt,
+    storageKind: capture.storageKind,
+    extractorVersion: capture.provenance?.extractorVersion ?? capture.extractorVersion,
+    safeExcerpt: capture.metadata?.safeExcerpt,
+    leakSiteSummary: capture.metadata?.leakSite?.summary,
+    title: capture.metadata?.title,
+    parserVersion: capture.provenance?.parserVersion ?? capture.metadata?.parserVersion
+  };
 }
 
 function preservedIncidentReview(previous: any, candidate: any) {

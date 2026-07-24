@@ -6,6 +6,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
 import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
+import { sourceAutomaticReviewEvidenceBindings } from "../api/automaticReviewRoutes.ts";
 
 describe("runtime source bootstrap and scheduler monitoring", () => {
   test("keeps dry-run source-atlas candidates out of automatic production bootstrap", () => {
@@ -814,6 +815,7 @@ function source(id: string, url: string) {
 
 function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
   const current = store.getSource(sourceId)!;
+  const selectedEvidenceProvenance = sourceAutomaticReviewEvidenceBindings(current, store.listCaptures()).slice(0, 1);
   store.saveSource({
     ...current,
     metadata: {
@@ -825,7 +827,8 @@ function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
         configuredModelVersion: "hanasand",
         sourceIdentity: automaticSourceReviewIdentity(current),
         requestSha256: "a".repeat(64),
-        selectedEvidenceIds: ["retained-source-output"],
+        selectedEvidenceIds: selectedEvidenceProvenance.map((item) => item.evidenceId),
+        selectedEvidenceProvenance,
         runtimeIdentity: { status: "completed", conversationId: "source-review-proof" },
         decision: { subject: { type: "source", id: sourceId }, action: "confirm", claimValidity: "supported" }
       }
