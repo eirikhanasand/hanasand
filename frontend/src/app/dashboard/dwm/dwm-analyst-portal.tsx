@@ -462,7 +462,7 @@ export function DwmAnalystPortal({
                     <div className='flex flex-wrap items-center justify-between gap-3'>
                         <div className='min-w-0 flex-1 border-l border-ui-border pl-3 dark:border-ui-border'>
                             <p className='wrap-break-word text-sm font-semibold text-ui-text'>
-                                {alerts.length} cases · {activeCount} active · {criticalCount} critical · {readyCount} sendable
+                                {alerts.length} alerts · {activeCount} active · {criticalCount} critical · {readyCount} sendable
                             </p>
                             <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted'>
                                 {freshCount} fresh · {highConfidenceCount} strong evidence · {watchTermCount} watchlist terms · webhook {webhookState} · run {latestRunLabel} · {apiProblemCount ? `${apiProblemCount} data issue${apiProblemCount === 1 ? '' : 's'}` : 'data live'}

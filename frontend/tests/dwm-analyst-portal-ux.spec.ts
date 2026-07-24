@@ -126,6 +126,7 @@ test('dwm case actions use the dashboard detail route instead of the scraper API
     expect(page).toContain('const caseId = alertCaseId(alert)')
     expect(page).toContain('return Boolean(alertCaseId(alert))')
     expect(page).toContain('return `/dashboard/dwm/cases/${encodeURIComponent(caseId)}')
+    expect(page).toContain('{alerts.length} alerts · {activeCount} active')
 })
 
 test('dwm next operator action prioritizes the workflow step an analyst can take now', () => {
