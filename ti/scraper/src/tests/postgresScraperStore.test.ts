@@ -16,7 +16,7 @@ import { PostgresScraperStore, normalizeLegacySourceForImport, toJson } from "..
 import { hashContent } from "../utils.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
 import { fixtureCapture } from "./helpers/storageFixtures.ts";
-import { AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA } from "../policy/sourceAutomaticReview.ts";
+import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
 
 const collectedAt = "2026-07-19T12:00:00.000Z";
 
@@ -3043,8 +3043,9 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         automaticSourceReview: {
           schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
           state: "approved",
-          promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION,
+          promptVersion: SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION,
           configuredModelVersion: "hanasand",
+          sourceIdentity: automaticSourceReviewIdentity({ id: sourceId, tenantId: "tenant_bound", url: "https://bounded.example/6100.xml", createdAt: "1970-01-01T00:00:00.000Z" }),
           requestSha256: "a".repeat(64),
           selectedEvidenceIds: ["capture_bound_1"],
           runtimeIdentity: { status: "completed", conversationId: "source-review-postgres" },
@@ -3152,6 +3153,32 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       sourceId: falseUsefulSourceId
     });
     const reviewedSource = store.getSource(sourceId)!;
+    store.saveSource({ ...reviewedSource, url: "https://bounded.example/replacement.xml" });
+    await store.flush();
+    const changedIdentity = await store.querySourceOperationalPage({
+      tenantId: "tenant_bound",
+      generatedAt: "2026-07-23T13:00:00.000Z",
+      sourceId
+    });
+    store.saveSource({
+      ...reviewedSource,
+      metadata: {
+        ...reviewedSource.metadata,
+        automaticSourceReview: {
+          ...reviewedSource.metadata.automaticSourceReview,
+          sourceIdentity: {
+            ...automaticSourceReviewIdentity(reviewedSource),
+            sha256: "f".repeat(64)
+          }
+        }
+      }
+    });
+    await store.flush();
+    const forgedIdentityHash = await store.querySourceOperationalPage({
+      tenantId: "tenant_bound",
+      generatedAt: "2026-07-23T13:00:00.000Z",
+      sourceId
+    });
     const { automaticSourceReview: _review, ...unreviewedMetadata } = reviewedSource.metadata;
     store.saveSource({ ...reviewedSource, metadata: unreviewedMetadata });
     await store.flush();
@@ -3192,6 +3219,8 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         qualifyingClearWebSourceCount: 0
       }
     });
+    expect(changedIdentity.totals.qualifyingClearWebSourceCount).toBe(0);
+    expect(forgedIdentityHash.totals.qualifyingClearWebSourceCount).toBe(0);
     expect(withoutReview.totals.qualifyingClearWebSourceCount).toBe(0);
     expect(falseUseful.rows[0]).toMatchObject({
       health_stats: { usefulCycleCount: 0, latest: { useful: false } }

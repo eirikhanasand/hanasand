@@ -8,7 +8,7 @@ import { bootstrapRuntimeSources } from "../runtime/sourceBootstrap.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
-import { AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA } from "../policy/sourceAutomaticReview.ts";
+import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
 
 const source = {
   id: "src_public_telegram_test",
@@ -251,8 +251,9 @@ function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
       automaticSourceReview: {
         schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
         state: "approved",
-        promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION,
+        promptVersion: SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION,
         configuredModelVersion: "hanasand",
+        sourceIdentity: automaticSourceReviewIdentity(current),
         requestSha256: "a".repeat(64),
         selectedEvidenceIds: ["retained-source-output"],
         runtimeIdentity: { status: "completed", conversationId: "source-review-proof" },

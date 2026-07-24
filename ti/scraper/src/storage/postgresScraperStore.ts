@@ -32,7 +32,7 @@ import { InMemoryScraperStore, linkedAlertCaptureIds } from "./memoryStore.ts";
 import { persistActorIdentityCatalog } from "./postgresActorIdentityCatalog.ts";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
-import { AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion } from "../policy/sourceAutomaticReview.ts";
+import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion } from "../policy/sourceAutomaticReview.ts";
 
 const DEFAULT_MIGRATIONS = [
   { version: "006_threat_intelligence_store", path: fileURLToPath(new URL("../../migrations/006_threat_intelligence_store.sql", import.meta.url)) },
@@ -396,7 +396,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             AND ($2::text IS NULL OR source.id = $2::text)
             AND (NOT $3::boolean OR source.collection_executable)
         ), per_source AS (
-          SELECT source.id, source.status, source.source_type, source.collection_executable,
+          SELECT source.id, source.tenant_id, source.status, source.source_type, source.collection_executable,
             source.canonical_feed_key, source.record,
             health.observation_count, health.last_checked_at, health.last_success_at,
             health.last_useful_at, health.successful_cycles, health.useful_cycles,
@@ -459,8 +459,20 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                 OR (
                   record->'metadata'->'automaticSourceReview'->>'schemaVersion' = '${SOURCE_AUTOMATIC_REVIEW_SCHEMA}'
                   AND record->'metadata'->'automaticSourceReview'->>'state' = 'approved'
-                  AND record->'metadata'->'automaticSourceReview'->>'promptVersion' = '${AUTOMATIC_REVIEW_PROMPT_VERSION}'
+                  AND record->'metadata'->'automaticSourceReview'->>'promptVersion' = '${SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION}'
                   AND record->'metadata'->'automaticSourceReview'->>'configuredModelVersion' = $5::text
+                  AND record->'metadata'->'automaticSourceReview'->'sourceIdentity'->>'sourceId' = id
+                  AND record->'metadata'->'automaticSourceReview'->'sourceIdentity'->>'tenantKey' = COALESCE(tenant_id, 'global')
+                  AND record->'metadata'->'automaticSourceReview'->'sourceIdentity'->>'canonicalFeedKey' = COALESCE(canonical_feed_key, '')
+                  AND record->'metadata'->'automaticSourceReview'->'sourceIdentity'->>'createdAt' = COALESCE(record->>'createdAt', '')
+                  AND record->'metadata'->'automaticSourceReview'->'sourceIdentity'->>'sha256' = encode(sha256(convert_to(
+                    '{"sourceId":' || to_json(id)::text
+                    || ',"tenantKey":' || to_json(COALESCE(tenant_id, 'global'))::text
+                    || ',"canonicalFeedKey":' || to_json(COALESCE(canonical_feed_key, ''))::text
+                    || ',"createdAt":' || to_json(COALESCE(record->>'createdAt', ''))::text
+                    || '}',
+                    'UTF8'
+                  )), 'hex')
                   AND record->'metadata'->'automaticSourceReview'->'decision'->'subject'->>'type' = 'source'
                   AND record->'metadata'->'automaticSourceReview'->'decision'->'subject'->>'id' = id
                   AND record->'metadata'->'automaticSourceReview'->'decision'->>'action' = 'confirm'
