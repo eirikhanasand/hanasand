@@ -170,7 +170,8 @@ export default async function runSyntheticMonitor() {
             if (response.status !== 200 || !['live', 'stale'].includes(String(queue?.status)) || !Array.isArray(queue?.items) || !queue.items.length || total < 1) {
                 throw new Error(`Latest customer activity is unavailable or empty (${response.status})`)
             }
-            const ageMinutes = Number(freshness?.collectionAgeMinutes)
+            const collectionCheckAgeMinutes = Number(freshness?.collectionCheckAgeMinutes)
+            const ageMinutes = Number.isFinite(collectionCheckAgeMinutes) ? collectionCheckAgeMinutes : Number(freshness?.collectionAgeMinutes)
             const maxAgeMinutes = Number(freshness?.maxLiveAgeMinutes)
             if (!Number.isFinite(ageMinutes) || !Number.isFinite(maxAgeMinutes) || ageMinutes > maxAgeMinutes) {
                 throw new Error(`Latest customer activity is stale (${Number.isFinite(ageMinutes) ? ageMinutes : 'unknown'} minutes).`)
@@ -184,7 +185,7 @@ export default async function runSyntheticMonitor() {
             `)
             const drop = activityCountDrop(total, prior.rows[0])
             if (drop) return drop
-            return `Latest customer activity returned ${total} retained records; newest collection is ${ageMinutes} minutes old.`
+            return `Latest customer activity returned ${total} retained records; newest successful collection check is ${ageMinutes} minutes old.`
         }, { degraded: 3_000, down: 10_000 }),
         check('threat-intelligence', 'Processing backlog', async () => {
             const result = await run(`

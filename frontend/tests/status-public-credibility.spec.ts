@@ -137,6 +137,7 @@ test('status monitors probe buyer-facing surfaces without inserting fake traffic
     expect(syntheticMonitor).toContain('\'https://hanasand.com\'')
     expect(syntheticMonitor).toContain('fetchJson(\'/openapi.json\', {}, publicApiBase)')
     expect(syntheticMonitor).toContain('result?.mode !== \'scraper\'')
+    expect(syntheticMonitor).toContain('freshness?.collectionCheckAgeMinutes')
     expect(logMonitor).not.toContain('INSERT INTO traffic_events')
     expect(logMonitor).not.toContain('synthetic-monitor')
     expect(logMonitor).not.toContain('normal sample')
