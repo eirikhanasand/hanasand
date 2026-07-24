@@ -67,6 +67,8 @@ Required implementation:
 - Feed every check into source health and expose failure class, retry/backoff, freshness, useful yield, and last real evidence without leaking restricted locators.
 - Use Hanasand AI automatically to review source relevance and parser output after collection; AI review cannot manufacture source success or evidence.
 - Discover, validate, schedule, and retire feeds automatically with bounded concurrency, per-source cadence, backpressure, retry, and resource accounting suitable for 6,100+ feeds without starving processing, review, alerts, or API traffic.
+- Make source discovery a continuous production capability owned by Hanasand itself, not by Codex or manual source lists. Reuse the existing scraper and GPU-hosted Hanasand AI path to follow safe links and publisher references, propose canonical feed endpoints, test the real collector/parser, reject duplicates and unsafe or low-value candidates, schedule successful candidates for repeated collection, and retire sources that stop producing useful intelligence. Human or Codex research may supply leads but must never be required for continued discovery.
+- Preserve existing collection, processing, automatic review, alerting, API, and UI behavior while adding discovery. Discovery must run as bounded background work with its own observable resource use so it cannot starve or replace the current scraper or AI workloads.
 
 Acceptance:
 
@@ -77,6 +79,7 @@ Acceptance:
 - No source is marked active when it has no executable production collection path.
 - Duplicate, bad, irrelevant, inactive, legacy-documentation-style, copied, unsafe, or non-producing sources are excluded from qualifying counts even if registered or reachable.
 - A restart resumes monitoring without duplicate schedules, lost health history, or timestamp fabrication.
+- After deployment and restart, production continues finding and evaluating new source candidates without a Codex session or manual trigger, and at least one independently discovered source completes the full path from public reference to repeated useful retained captures and truthful qualification.
 
 ### 3. Establish Large, Current Telegram And Dark-Web Coverage
 
