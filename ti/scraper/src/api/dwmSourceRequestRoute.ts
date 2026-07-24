@@ -10,7 +10,6 @@ import {
   InMemoryDwmSourcePackWorkerRunAdapter,
   applyDwmSourcePackValidationResults,
   buildDwmSourcePackCollectionJobHandoff,
-  enqueueDwmSourcePackCollectionTasks,
   enqueueDwmSourcePackValidationJobs,
   persistDwmSourcePackActiveSources,
   persistDwmSourcePackSourceRecords,
@@ -2399,37 +2398,18 @@ function handleSourcePackWorkerRun(body: DwmSourceRequestBody, options: ApiServe
     updateExisting: true
   });
   const handoff = buildDwmSourcePackCollectionJobHandoff(activeRows, { generatedAt: startedAt });
-  const persistedCollectionReceipts = persistedCollectionReceiptsForPack(registry.id, options);
-  const persistedTaskIds = new Set(persistedCollectionReceipts.map((receipt) => receipt.taskId));
-  const duplicatePersistedReceipts = handoff.jobs
-    .filter((job) => persistedTaskIds.has(job.id))
-    .map((job) => ({
-      status: "duplicate" as const,
-      taskId: job.id,
-      sourceId: job.sourceId,
-      candidateId: job.candidateId,
-      reason: "persisted_collection_receipt"
-    }));
-  const jobsToQueue = handoff.jobs.filter((job) => !persistedTaskIds.has(job.id));
-  const queuedCollection = enqueueDwmSourcePackCollectionTasks(options.frontier, jobsToQueue, options.store.listSources(), {
-    tenantId: body.tenantId ?? registry.tenantId
-  });
   const collectionQueue = {
-    ...queuedCollection,
-    receipts: [...duplicatePersistedReceipts, ...queuedCollection.receipts],
+    receipts: [],
+    tasks: [],
     summary: {
-      queuedCount: queuedCollection.summary.queuedCount,
-      duplicateCount: queuedCollection.summary.duplicateCount + duplicatePersistedReceipts.length,
-      blockedCount: queuedCollection.summary.blockedCount,
-      taskCount: new Set([
-        ...(options.frontier.snapshot?.() ?? []).map((item: any) => String(item.task?.id ?? item.id)),
-        ...persistedTaskIds,
-        ...queuedCollection.receipts.filter((receipt) => receipt.status !== "blocked").map((receipt) => receipt.taskId)
-      ].filter(Boolean)).size
-    }
+      queuedCount: 0,
+      duplicateCount: 0,
+      blockedCount: 0,
+      taskCount: 0
+    },
+    safeOutput: sourcePackSafeOutput()
   };
-  persistSourcePackWorkerCollectionReceipts(handoff.jobs, collectionQueue.receipts, options);
-  persistSourcePackWorkerCollectionState(sourceWrite.sources, collectionQueue.receipts, options, startedAt);
+  persistSourcePackWorkerCollectionState(sourceWrite.sources, options, startedAt);
 
   const completedAt = nowIso();
   const savedPack = upsertSourcePackRegistry(options, {
@@ -2570,28 +2550,20 @@ function defaultSourcePackWorkerConcurrency(): Partial<Record<SourceGrowthFamily
 
 function persistSourcePackWorkerCollectionState(
   sources: SourceRecord[],
-  receipts: Array<{ status: string; taskId: string; sourceId: string; candidateId: string; reason?: string }>,
   options: ApiServerOptions,
   at: string
 ) {
-  const receiptBySourceId = new Map(receipts.map((receipt) => [receipt.sourceId, receipt]));
   for (const source of sources) {
-    const receipt = receiptBySourceId.get(source.id);
-    if (!receipt) continue;
     const candidate = sourceCandidate(source);
     const collectionTrigger = {
       id: stableId("dwm_collection_trigger", `${candidate.id}:${source.id}:source_pack_worker`),
-      type: "frontier_collection",
-      queued: receipt.status !== "blocked",
+      type: "scheduled_collection",
+      queued: false,
       unsafeJobQueued: false,
-      queue: "frontier",
-      jobId: receipt.taskId,
-      taskId: receipt.taskId,
       candidateId: candidate.id,
       sourceId: source.id,
       activeSourceId: source.id,
-      reason: receipt.reason,
-      queuedAt: at,
+      reason: "await_scheduled_collection",
       policyBoundary: candidate.policyBoundary ?? source.metadata?.policyBoundary,
       parserStatus: sourceParserStatus(source).status
     };
@@ -2604,51 +2576,16 @@ function persistSourcePackWorkerCollectionState(
           ...candidate,
           collectionTrigger,
           alertRebuild,
-          collectionStatus: collectionTrigger.queued ? "queued" : "not_queued",
-          lastCollectionOutcome: collectionTrigger.queued
-            ? { status: "queued", at, taskId: receipt.taskId, triggerId: collectionTrigger.id }
-            : { status: "skipped", at, reason: receipt.reason ?? "collection_not_queued" }
+          collectionStatus: "not_queued",
+          lastCollectionOutcome: { status: "skipped", at, reason: collectionTrigger.reason }
         },
         collectionTrigger,
         alertRebuild,
-        collectionStatus: collectionTrigger.queued ? "queued" : "not_queued",
-        lastCollectionOutcome: collectionTrigger.queued
-          ? { status: "queued", at, taskId: receipt.taskId, triggerId: collectionTrigger.id }
-          : { status: "skipped", at, reason: receipt.reason ?? "collection_not_queued" }
+        collectionStatus: "not_queued",
+        lastCollectionOutcome: { status: "skipped", at, reason: collectionTrigger.reason }
       },
       updatedAt: at
     } as SourceRecord);
-  }
-}
-
-function persistedCollectionReceiptsForPack(sourcePackId: string, options: ApiServerOptions): DwmSourcePackCollectionQueueReceiptRecord[] {
-  return sourcePackCollectionReceiptStore(options).list().filter((receipt) => receipt.packId === sourcePackId);
-}
-
-function persistSourcePackWorkerCollectionReceipts(
-  jobs: ReturnType<typeof buildDwmSourcePackCollectionJobHandoff>["jobs"],
-  receipts: Array<{ status: string; taskId: string; sourceId: string; candidateId: string; reason?: string }>,
-  options: ApiServerOptions
-) {
-  const jobById = new Map(jobs.map((job) => [job.id, job]));
-  const receiptStore = sourcePackCollectionReceiptStore(options);
-  for (const receipt of receipts) {
-    const job = jobById.get(receipt.taskId);
-    if (!job) continue;
-    receiptStore.upsert({
-      status: receipt.status === "blocked" ? "blocked" : receipt.status === "duplicate" ? "duplicate" : "queued",
-      taskId: receipt.taskId,
-      sourceId: receipt.sourceId,
-      candidateId: receipt.candidateId,
-      reason: receipt.reason,
-      packId: job.packId,
-      requestId: job.requestId,
-      family: job.family,
-      queuedAt: job.queuedAt,
-      parserStatus: job.parserStatus,
-      validationJobKey: job.validationJobKey,
-      targetRawStored: false
-    });
   }
 }
 
@@ -7519,11 +7456,12 @@ function publicUrlSourceFromRequest(input: { target: string; body: DwmSourceRequ
   const family = input.family === "telegram" || input.family === "darkweb_onion" || input.family === "darkweb_metadata" ? "public_advisory" : input.family;
   return {
     id: stableId("src_dwm_public_url", normalizedUrl),
+    tenantId: input.body.tenantId,
     name: `DWM Public TI ${new URL(normalizedUrl).hostname}`,
     type: family,
     url: normalizedUrl,
     accessMethod: "public_http_metadata",
-    status: input.body.activate === false ? "candidate" : "active",
+    status: "candidate",
     risk: input.body.priority === "critical" ? "medium" : "low",
     trustScore: input.body.priority === "critical" ? 0.68 : 0.58,
     crawlFrequencySeconds: input.body.priority === "critical" ? 1800 : 3600,
@@ -7549,8 +7487,8 @@ function publicUrlSourceFromRequest(input: { target: string; body: DwmSourceRequ
         validationResult: { allowed: true, reason: "public TI/blog source URL passed metadata-only validation", checkedAt: generatedAt },
         parserStatus: `${family}_parser_ready`,
         healthStatus: "not_tested",
-        status: input.body.activate === false ? "queued" : "active",
-        activationDecision: input.body.activate === false ? "pending_operator_review" : "auto_activated_public_metadata"
+        status: "queued",
+        activationDecision: "pending_operator_review"
       })
     }
   } as SourceRecord;
@@ -7561,11 +7499,12 @@ function telegramSourceFromRequest(input: { target: string; channel: string; bod
   const normalizedUrl = `https://t.me/${input.channel}`;
   return {
     id: stableId("src_dwm_tg", normalizedUrl),
+    tenantId: input.body.tenantId,
     name: `DWM Telegram ${input.channel}`,
     type: "telegram_public",
     url: normalizedUrl,
     accessMethod: "public_http",
-    status: input.body.activate === false ? "candidate" : "active",
+    status: "candidate",
     risk: input.body.priority === "critical" ? "high" : "medium",
     trustScore: input.body.priority === "critical" ? 0.72 : 0.62,
     crawlFrequencySeconds: input.body.priority === "critical" ? 300 : 900,
@@ -7578,6 +7517,7 @@ function telegramSourceFromRequest(input: { target: string; channel: string; bod
       dwmSourceRequest: true,
       canaryPortfolio: true,
       sourceFamily: "telegram_public",
+      collectionMode: "public_web_preview",
       scope: input.body.scope,
       maxItemsPerFetch: 40,
       mediaPolicy: "metadata_only_no_download",
@@ -7592,8 +7532,8 @@ function telegramSourceFromRequest(input: { target: string; channel: string; bod
         validationResult: { allowed: true, reason: "public Telegram target passed policy validation", checkedAt: generatedAt },
         parserStatus: "telegram_public_parser_ready",
         healthStatus: "not_tested",
-        status: input.body.activate === false ? "queued" : "active",
-        activationDecision: input.body.activate === false ? "pending_operator_review" : "auto_activated_public_preview"
+        status: "queued",
+        activationDecision: "pending_operator_review"
       })
     }
   } as SourceRecord;
@@ -8126,7 +8066,7 @@ type OperationalNextStep = {
 };
 
 function persistOperationalNextStep(source: SourceRecord, options: ApiServerOptions, action: string): OperationalNextStep {
-  const collectionTrigger: Record<string, any> = buildCollectionTrigger(source, options, action);
+  const collectionTrigger: Record<string, any> = buildCollectionTrigger(source, action);
   const alertRebuild = buildAlertRebuildTrigger(source, collectionTrigger);
   const candidate = sourceCandidate(source);
   const next = options.store.saveSource({
@@ -8153,7 +8093,7 @@ function persistOperationalNextStep(source: SourceRecord, options: ApiServerOpti
   return { source: next, collectionTrigger, alertRebuild };
 }
 
-function buildCollectionTrigger(source: SourceRecord, options: ApiServerOptions, action: string) {
+function buildCollectionTrigger(source: SourceRecord, action: string) {
   const candidate = sourceCandidate(source);
   const triggerId = stableId("dwm_collection_trigger", `${candidate.id}:${source.id}:${action}`);
   if (source.status !== "active") return skippedCollectionTrigger(source, "source_not_active", triggerId);
@@ -8167,49 +8107,15 @@ function buildCollectionTrigger(source: SourceRecord, options: ApiServerOptions,
   }
   if (source.type !== "telegram_public") return skippedCollectionTrigger(source, "unsupported_source_family", triggerId);
 
-  const discoveredAt = nowIso();
-  const scope = String(candidate.scope ?? source.metadata?.scope ?? "public threat intelligence").trim();
-  const intelRequestId = stableId("dwm_source_candidate_collection", `${candidate.id}:${source.id}`);
-  const score = options.frontier.add({
-    source,
-    tenantId: source.tenantId ?? candidate.tenantId,
-    intelRequestId,
-    url: source.url,
-    discoveredAt,
-    anchorText: `${scope} public Telegram CTI collection candidate`,
-    surroundingText: `${scope} ransomware malware exploit credential broker threat intelligence public channel`,
-    parentTitle: source.name,
-    parentText: source.legalNotes,
-    parentRelevance: 0.92,
-    destinationTitle: source.name,
-    destinationText: `${scope} public Telegram source approved for bounded preview collection`,
-    destinationRelevance: 0.9,
-    novelty: 0.8,
-    freshness: 0.85,
-    fairnessKey: `source-candidate:${candidate.id}`,
-    budgetKey: "public_channel_window",
-    planning: {
-      budgetClass: "source_health_probe",
-      sourceCandidateId: candidate.id,
-      triggerId
-    },
-    maxBytes: 64_000
-  });
-  const task = options.frontier.snapshot().map((item: any) => item.task ?? item).find((item: any) => item.intelRequestId === intelRequestId && item.sourceId === source.id);
   return {
     id: triggerId,
-    type: "frontier_collection",
-    queued: score.decision === "enqueue",
+    type: "scheduled_collection",
+    queued: false,
     unsafeJobQueued: false,
-    queue: "frontier",
-    jobId: task?.id,
-    taskId: task?.id,
     candidateId: candidate.id,
     sourceId: source.id,
     activeSourceId: source.id,
-    scoreDecision: score.decision,
-    scoreReason: score.reason,
-    queuedAt: discoveredAt,
+    reason: "await_scheduled_collection",
     policyBoundary: candidate.policyBoundary,
     parserStatus: parserStatusForSource(source)
   };

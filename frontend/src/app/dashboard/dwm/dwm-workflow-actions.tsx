@@ -241,11 +241,11 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 type: 'telegram_channel',
                 priority: 'high',
                 scope: terms,
-                activate: true,
+                activate: false,
             })
             if (!source.ok) throw new Error(source.message)
             const duplicateOf = typeof source.duplicateOf === 'string' ? source.duplicateOf : ''
-            setResult({ ok: true, message: duplicateOf ? `Already registered as ${duplicateOf}.` : 'Telegram source submitted for bounded public polling.' })
+            setResult({ ok: true, message: duplicateOf ? `Already registered as ${duplicateOf}.` : 'Telegram source submitted for review.' })
             setLastRoute({
                 label: 'Source request',
                 watchTerms: countTerms(terms),

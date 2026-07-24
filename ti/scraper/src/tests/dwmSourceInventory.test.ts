@@ -123,7 +123,7 @@ describe("dwm source inventory", () => {
       }), options);
       const runBody = await run.json() as any;
       expect(run.status).toBe(200);
-      expect(runBody.collectionQueue.summary).toMatchObject({ queuedCount: 1, duplicateCount: 0, taskCount: 1 });
+      expect(runBody.collectionQueue.summary).toMatchObject({ queuedCount: 0, duplicateCount: 0, taskCount: 0 });
 
       const reloadedWorkerState = new FileBackedDwmSourcePackWorkerStateAdapter({ snapshotPath: join(tmp, "worker-state.json") });
       const reloadedOptions = {
@@ -152,7 +152,7 @@ describe("dwm source inventory", () => {
           packCount: 1,
           candidateCount: 4,
           activeSourceRows: 1,
-          queuedCollectionReceipts: 1
+          queuedCollectionReceipts: 0
         },
         safeOutput: {
           privateTelegramContentExposed: false,
@@ -170,8 +170,7 @@ describe("dwm source inventory", () => {
           telegram_public_parser_ready: 1,
           parser_retry_scheduled: 1,
           duplicate_skipped: 1
-        }),
-        lastWorkerReceipt: expect.objectContaining({ targetRawStored: false, status: "queued" })
+        })
       });
       expect(health.family.darkweb_onion).toMatchObject({
         candidateCount: 1,
@@ -217,7 +216,7 @@ describe("dwm source inventory", () => {
       ]));
       expect(packsBody.sourceHealth).toMatchObject({
         schemaVersion: "dwm.source_health_operations.v1",
-        sourcePackGrowthDeltas: { queuedCollectionReceipts: 1 },
+        sourcePackGrowthDeltas: { queuedCollectionReceipts: 0 },
         safeOutput: { liveNetworkScrapeStarted: false }
       });
       expect(packsBody.sourceOperationsReadiness).toMatchObject({
@@ -274,8 +273,8 @@ describe("dwm source inventory", () => {
       }), options);
       const firstRunBody = await firstRun.json() as any;
       expect(firstRun.status).toBe(200);
-      expect(firstRunBody.collectionQueue.summary).toMatchObject({ queuedCount: 2, duplicateCount: 0, taskCount: 2 });
-      expect(options.frontier.snapshot()).toHaveLength(2);
+      expect(firstRunBody.collectionQueue.summary).toMatchObject({ queuedCount: 0, duplicateCount: 0, taskCount: 0 });
+      expect(options.frontier.snapshot()).toHaveLength(0);
 
       const reloadedWorkerState = new FileBackedDwmSourcePackWorkerStateAdapter({ snapshotPath: workerStatePath });
       const reloadedOptions = {
@@ -294,7 +293,7 @@ describe("dwm source inventory", () => {
       }), reloadedOptions);
       const repeatedBody = await repeated.json() as any;
       expect(repeated.status).toBe(200);
-      expect(repeatedBody.collectionQueue.summary).toMatchObject({ queuedCount: 0, duplicateCount: 2, taskCount: 2 });
+      expect(repeatedBody.collectionQueue.summary).toMatchObject({ queuedCount: 0, duplicateCount: 0, taskCount: 0 });
       expect(reloadedOptions.frontier.snapshot()).toHaveLength(0);
 
       const inventory = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-inventory?tenantId=tenant_inventory&full=true&watchlist=APT29"), reloadedOptions);
@@ -310,7 +309,7 @@ describe("dwm source inventory", () => {
           accepted: 2,
           restrictedBlocked: 1,
           activeSourceRows: 2,
-          queuedCollectionTasks: 2,
+          queuedCollectionTasks: 0,
           collectionReadyRows: 2
         },
         readiness: { state: "ready", blockers: [] },
@@ -383,7 +382,7 @@ describe("dwm source inventory", () => {
       expect(packs.status).toBe(200);
       expect(packsBody).toMatchObject({
         workerReadiness: { activeSourceRows: 2, collectionReadyRows: 2 },
-        sourceGrowthCounters: { queuedCollectionTasks: 2, restrictedBlocked: 1 },
+        sourceGrowthCounters: { queuedCollectionTasks: 0, restrictedBlocked: 1 },
         readiness: { state: "ready" },
         proxyVerification: {
           schemaVersion: "dwm.source_pack_worker_proxy_verification.v1",
@@ -391,7 +390,7 @@ describe("dwm source inventory", () => {
         },
         sourceHealth: {
           schemaVersion: "dwm.source_health_operations.v1",
-          sourcePackGrowthDeltas: { activeSourceRows: 2, queuedCollectionReceipts: 2 },
+          sourcePackGrowthDeltas: { activeSourceRows: 2, queuedCollectionReceipts: 0 },
           safeOutput: { liveNetworkScrapeStarted: false }
         },
         sourceOperationsReadiness: {

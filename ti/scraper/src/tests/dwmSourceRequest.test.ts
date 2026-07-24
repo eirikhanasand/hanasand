@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
+import { runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
 import { InMemoryDwmSourcePackRegistryAdapter } from "../storage/dwmSourcePackRegistry.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 
 describe("dwm source requests", () => {
-  test("creates an active bounded public Telegram source", async () => {
+  test("creates a governed public Telegram candidate", async () => {
     const store = new InMemoryScraperStore();
     const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
@@ -15,13 +16,15 @@ describe("dwm source requests", () => {
 
     expect(response.status).toBe(201);
     expect(body.source.type).toBe("telegram_public");
-    expect(body.source.status).toBe("active");
+    expect(body.source.status).toBe("candidate");
+    expect(body.source.tenantId).toBe("tenant_acme");
     expect(body.source.metadata.canaryPortfolio).toBe(true);
+    expect(body.source.metadata.collectionMode).toBe("public_web_preview");
     expect(body.source.metadata.collectionBoundary.noPrivateAccess).toBe(true);
     expect(body.candidate).toMatchObject({
       family: "telegram_public",
       target: "https://t.me/public_threat_test",
-      status: "active",
+      status: "queued",
       requestedBy: "api",
       validationResult: { allowed: true }
     });
@@ -183,20 +186,19 @@ describe("dwm source requests", () => {
     expect(promotedBody.results[0]).toMatchObject({
       reviewStatus: "approved",
       candidate: { id: publicCandidate.id, sourcePackId: "pack_apt29_growth", status: "active" },
-      collectionTrigger: { queued: true, candidateId: publicCandidate.id }
+      collectionTrigger: { queued: false, reason: "await_scheduled_collection", candidateId: publicCandidate.id }
     });
     expect(promotedBody.packStatus).toMatchObject({
-      queuedForCollectionCount: 1,
-      queuedJobIds: [promotedBody.results[0].collectionTrigger.jobId]
+      queuedForCollectionCount: 0,
+      queuedJobIds: []
     });
-    expect(frontier.snapshot()).toHaveLength(1);
+    expect(frontier.snapshot()).toHaveLength(0);
 
     const observed = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
       body: JSON.stringify({
         action: "record_capture",
         candidateId: publicCandidate.id,
-        collectionTaskId: promotedBody.results[0].collectionTrigger.jobId,
         captureText: "APT29 source-pack public Telegram mention observed without live network scraping."
       })
     }), { store, frontier });
@@ -292,12 +294,12 @@ describe("dwm source requests", () => {
       sourceGrowthFamily: "telegram",
       parserExpectation: "telegram_public_metadata_and_text_fixture",
       sourceHealth: {
-        queuedActivationJobs: [expect.any(String)],
+        queuedActivationJobs: [],
         canProduceAlertGradeEvidence: true
       },
       evidenceReadiness: { canProduceAlertGradeEvidence: true, reason: "active_public_source_waiting_for_capture" },
-      lifecycle: { collectionStatus: "queued" },
-      alertRebuild: { queued: false, skipped: true, reason: "collection_queued_alert_rebuild_waits_for_new_captures" }
+      lifecycle: { collectionStatus: "not_queued" },
+      alertRebuild: { queued: false, skipped: true, reason: "collection_not_queued" }
     });
     expect(statusBody.registry.candidates.find((candidate: any) => candidate.status === "duplicate")).toMatchObject({
       intakeStatus: "duplicate",
@@ -317,13 +319,13 @@ describe("dwm source requests", () => {
       totalCandidates: 7,
       activeCount: 1,
       duplicateCount: 1,
-      queuedForCollectionCount: 1
+      queuedForCollectionCount: 0
     });
     expect(listedBody.packs[0]).toMatchObject({ id: "pack_apt29_growth", packStatus: { capturesObservedCount: 0 } });
-    expect(frontier.snapshot()).toHaveLength(1);
+    expect(frontier.snapshot()).toHaveLength(0);
   });
 
-  test("runs source-pack worker into durable active sources and safe frontier tasks without live scraping", async () => {
+  test("persists source-pack sources for the scheduled collectors without orphan tasks", async () => {
     const store = new InMemoryScraperStore();
     const frontier = new FocusedFrontier();
     const created = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
@@ -367,12 +369,12 @@ describe("dwm source requests", () => {
     expect(body.activeSourcePersistence.summary).toMatchObject({ insertedCount: 2, duplicateCount: 0, collectionReadyCount: 2 });
     expect(body.sourceRecordWrite.summary).toMatchObject({ insertedCount: 0, duplicateCount: 2, sourceRecordCount: 2, collectionEligibleCount: 2 });
     expect(body.run.sourceRecordSummary).toMatchObject({ upsertedCount: 2 });
-    expect(body.collectionQueue.summary).toMatchObject({ queuedCount: 2, duplicateCount: 0, blockedCount: 0, taskCount: 2 });
+    expect(body.collectionQueue.summary).toMatchObject({ queuedCount: 0, duplicateCount: 0, blockedCount: 0, taskCount: 0 });
     expect(body.sourceGrowthCounters).toMatchObject({
       totalCandidates: 4,
       metadataOnly: 2,
       restrictedBlocked: 1,
-      queuedCollectionTasks: 2,
+      queuedCollectionTasks: 0,
       activeSourceRows: 2
     });
     expect(body.sourceGrowthCounters.parserSourceFamilyCounts.telegram).toMatchObject({ telegram_public_parser_ready: 1 });
@@ -386,7 +388,7 @@ describe("dwm source requests", () => {
           family: "telegram",
           totalCandidates: 2,
           activeSourceRows: 1,
-          queuedCollectionTasks: 1,
+          queuedCollectionTasks: 0,
           parserStatuses: expect.objectContaining({ telegram_public_parser_ready: 1 }),
           alertability: expect.objectContaining({
             canProduceAlertGradeEvidence: true,
@@ -397,7 +399,7 @@ describe("dwm source requests", () => {
           family: "darkweb_metadata",
           totalCandidates: 1,
           activeSourceRows: 1,
-          queuedCollectionTasks: 1,
+          queuedCollectionTasks: 0,
           parserStatuses: expect.objectContaining({ restricted_metadata_parser_ready: 1 }),
           policyBoundary: expect.objectContaining({ metadataOnly: true }),
           alertability: expect.objectContaining({ canProduceAlertGradeEvidence: true })
@@ -412,7 +414,7 @@ describe("dwm source requests", () => {
       ]),
       summary: expect.objectContaining({
         activeFamilies: expect.arrayContaining(["telegram", "darkweb_metadata"]),
-        collectionReadyFamilies: expect.arrayContaining(["telegram", "darkweb_metadata"]),
+        collectionReadyFamilies: [],
         blockedFamilies: expect.arrayContaining(["telegram", "darkweb_onion"]),
         alertableFamilies: expect.arrayContaining(["telegram", "darkweb_metadata"])
       }),
@@ -421,22 +423,9 @@ describe("dwm source requests", () => {
     expect(store.listSources()).toHaveLength(2);
     expect(store.listSources().every((source) => source.status === "active")).toBe(true);
     expect(store.listSources().find((source) => source.type === "tor_metadata")?.governance).toMatchObject({ metadataOnly: true, approvalState: "approved" });
-    expect(frontier.snapshot()).toHaveLength(2);
-    expect(frontier.snapshot().map((item: any) => item.task)).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        sourceType: "telegram_public",
-        targetUrl: "https://t.me/worker_route_public_cti",
-        maxRetries: 4,
-        planning: expect.objectContaining({ sourcePack: expect.objectContaining({ targetRawStored: false }) })
-      }),
-      expect.objectContaining({
-        sourceType: "tor_metadata",
-        targetUrl: "metadata://darkweb/apt29/claims",
-        maxRetries: 4,
-        planning: expect.objectContaining({
-          safetyEnvelope: expect.objectContaining({ allowRestrictedMetadata: true, metadataOnlyRestricted: true })
-        })
-      })
+    expect(frontier.snapshot()).toHaveLength(0);
+    expect(body.collectionJobs.jobs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceId: expect.any(String), status: "awaiting_scheduler", targetRawStored: false })
     ]));
     expect(JSON.stringify(body)).not.toContain("password-dump");
     expect(JSON.stringify(body)).not.toContain("rawPayload");
@@ -448,9 +437,9 @@ describe("dwm source requests", () => {
     const repeatedBody = await repeated.json() as any;
     expect(repeated.status).toBe(200);
     expect(repeatedBody.activeSourcePersistence.summary).toMatchObject({ insertedCount: 0, duplicateCount: 2 });
-    expect(repeatedBody.collectionQueue.summary).toMatchObject({ queuedCount: 0, duplicateCount: 2, taskCount: 2 });
+    expect(repeatedBody.collectionQueue.summary).toMatchObject({ queuedCount: 0, duplicateCount: 0, taskCount: 0 });
     expect(store.listSources()).toHaveLength(2);
-    expect(frontier.snapshot()).toHaveLength(2);
+    expect(frontier.snapshot()).toHaveLength(0);
 
     const status = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
@@ -459,14 +448,14 @@ describe("dwm source requests", () => {
     const statusBody = await status.json() as any;
     expect(status.status).toBe(200);
     expect(statusBody.registry).toMatchObject({
-      sourceGrowthCounters: { activeSourceRows: 2, queuedCollectionTasks: 2 },
+      sourceGrowthCounters: { activeSourceRows: 2, queuedCollectionTasks: 0 },
       workerReadiness: { activeSourceRows: 2, collectionReadyRows: 2 },
       lastWorkerRun: { sourcePackId: "pack_worker_route_growth" }
     });
     expect(statusBody.registry.sourceGrowthCounters).not.toHaveProperty("fixtureLoadReadiness");
     expect(statusBody.registry.sourceGrowthCounters.sourceFamilyBreakdown.summary).toMatchObject({
       activeFamilies: expect.arrayContaining(["telegram", "darkweb_metadata"]),
-      collectionReadyFamilies: expect.arrayContaining(["telegram", "darkweb_metadata"])
+      collectionReadyFamilies: []
     });
   });
 
@@ -1063,7 +1052,7 @@ describe("dwm source requests", () => {
     expect(JSON.stringify(inventoryBody.sourcePackWorker.sourceOperationsReadiness)).not.toContain("password-dump");
     expect(JSON.stringify(inventoryBody.sourcePackWorker.sourceHealth)).not.toContain("password-dump");
     expect(JSON.stringify(inventoryBody.sourcePackWorker.sourceCustomerConfig)).not.toContain("password-dump");
-    expect(frontier.snapshot()).toHaveLength(1);
+    expect(frontier.snapshot()).toHaveLength(0);
   });
 
   test("exposes Telegram-only source-growth pack coverage and health fields without live scraping", async () => {
@@ -1223,7 +1212,7 @@ describe("dwm source requests", () => {
     const workerBody = await worker.json() as any;
     expect(worker.status).toBe(200);
     expect(workerBody.activation.summary.activeSourceCount).toBe(6);
-    expect(workerBody.collectionQueue.summary.taskCount).toBe(6);
+    expect(workerBody.collectionQueue.summary.taskCount).toBe(0);
     const telegramSource = store.listSources().find((source: any) => source.metadata?.sourceGrowthFamily === "telegram");
     expect(telegramSource?.id).toBeTruthy();
     const observed = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
@@ -1505,7 +1494,7 @@ describe("dwm source requests", () => {
     ]));
     expect(actorReadinessBody.actorReadiness.candidateGaps).toEqual([]);
     expect(configBody.sourceConfigs.every((row: any) => row.activationProof.safeOutput.liveNetworkScrapeStarted === false)).toBe(true);
-    expect(frontier.snapshot()).toHaveLength(6);
+    expect(frontier.snapshot()).toHaveLength(0);
     expect(JSON.stringify(configBody)).not.toContain("apt29/claims");
     expect(JSON.stringify(configBody)).not.toContain("apt29-index");
 
@@ -2028,7 +2017,7 @@ describe("dwm source requests", () => {
     });
     expect(JSON.stringify(body.proofArtifacts)).not.toContain('"record_capture"');
     expect(JSON.stringify(body.proofArtifacts)).not.toContain('"retry_capture"');
-    expect(frontier.snapshot()).toHaveLength(1);
+    expect(frontier.snapshot()).toHaveLength(0);
 
     const source = store.listSources().find((item: any) => item.metadata?.sourceGrowthFamily === "telegram");
     expect(source?.id).toBeTruthy();
@@ -2743,28 +2732,30 @@ describe("dwm source requests", () => {
     expect(activatedBody.candidate).toMatchObject({ status: "active", decidedBy: "analyst-1" });
     expect(activatedBody.lifecycle.activationState).toBe("active_canary");
     expect(activatedBody.collectionTrigger).toMatchObject({
-      queued: true,
-      queue: "frontier",
+      type: "scheduled_collection",
+      queued: false,
+      reason: "await_scheduled_collection",
       candidateId: createdBody.candidate.id,
       activeSourceId: createdBody.source.id,
       unsafeJobQueued: false,
       parserStatus: "telegram_public_parser_ready",
       policyBoundary: { noPrivateAccess: true }
     });
-    expect(activatedBody.collectionTrigger.jobId).toEqual(expect.any(String));
     expect(activatedBody.alertRebuild).toMatchObject({
       queued: false,
       skipped: true,
-      reason: "collection_queued_alert_rebuild_waits_for_new_captures",
+      reason: "collection_not_queued",
       contract: { endpoint: "/v1/dwm/alerts/rebuild", requiredAfter: "capture_persisted" }
     });
-    const queuedTask = store.getSource(createdBody.source.id)?.metadata.sourceCandidate.collectionTrigger;
-    expect(queuedTask).toMatchObject({ queued: true, jobId: activatedBody.collectionTrigger.jobId });
-    expect((activatedBody.collectionTrigger.jobId as string).startsWith("task_")).toBe(true);
+    expect(store.getSource(createdBody.source.id)?.metadata.sourceCandidate.collectionTrigger).toMatchObject({
+      type: "scheduled_collection",
+      queued: false,
+      reason: "await_scheduled_collection"
+    });
     expect(store.getSource(createdBody.source.id)?.metadata.sourceRequestAudit).toHaveLength(3);
   });
 
-  test("promoting a public Telegram candidate queues a real frontier task without a synthetic capture path", async () => {
+  test("collects promoted Telegram evidence only through a persisted canary run", async () => {
     const store = new InMemoryScraperStore();
     const frontier = new FocusedFrontier();
     store.saveDwmWatchlist({
@@ -2790,35 +2781,81 @@ describe("dwm source requests", () => {
 
     expect(promoted.status).toBe(200);
     expect(body.collectionTrigger).toMatchObject({
-      queued: true,
+      type: "scheduled_collection",
+      queued: false,
+      reason: "await_scheduled_collection",
       candidateId: createdBody.candidate.id,
       sourceId: createdBody.source.id,
       activeSourceId: createdBody.source.id,
       policyBoundary: { publicOnly: true },
       parserStatus: "telegram_public_parser_ready"
     });
-    expect(frontier.snapshot()).toHaveLength(1);
-    expect((frontier.snapshot()[0] as any).task).toMatchObject({
-      id: body.collectionTrigger.jobId,
-      sourceId: createdBody.source.id,
-      sourceType: "telegram_public",
+    expect(frontier.snapshot()).toHaveLength(0);
+    expect(store.getSource(createdBody.source.id)).toMatchObject({
       tenantId: "tenant_acme",
-      targetUrl: "https://t.me/queued_public_cti",
-      planning: { budgetClass: "source_health_probe", sourceCandidateId: createdBody.candidate.id }
+      approvedBy: "analyst-queue",
+      metadata: { collectionMode: "public_web_preview" }
     });
     expect(body.alertRebuild).toMatchObject({ queued: false, skipped: true });
 
-    const observed = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
-      method: "POST",
-      body: JSON.stringify({
-        action: "record_capture",
-        candidateId: createdBody.candidate.id,
-        collectionTaskId: body.collectionTrigger.jobId,
-        captureText: "APT29 public Telegram mention observed in bounded source collection."
-      })
-    }), { store, frontier });
-    expect(observed.status).toBe(400);
-    expect(store.listCaptures()).toHaveLength(0);
+    const collected = await runCanaryCollectionCycle({
+      store,
+      frontier,
+      tenantId: "tenant_acme",
+      sourceIds: [createdBody.source.id],
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => "2026-07-24T07:10:00.000Z",
+      fetch: async () => new Response(`<html><body>
+        <div class="tgme_widget_message" data-post="queued_public_cti/42">
+          <div class="tgme_widget_message_text">APT29 targeted public-sector victims with malware and command infrastructure.</div>
+          <time datetime="2026-07-24T07:00:00.000Z"></time>
+        </div>
+      </body></html>`, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } })
+    });
+    expect(collected).toMatchObject({
+      status: "completed",
+      activeSourceCount: 1,
+      completedTaskCount: 1,
+      insertedCaptureCount: 1,
+      failedTaskCount: 0
+    });
+    expect(store.getRun(collected.runId)).toMatchObject({
+      tenantId: "tenant_acme",
+      requestId: "req_public_canary",
+      status: "completed",
+      sourceCount: 1,
+      captureCount: 1
+    });
+    expect(store.listPlans().find((plan: any) => plan.id === collected.planId)?.tasks[0]).toMatchObject({
+      runId: collected.runId,
+      sourceId: createdBody.source.id,
+      tenantId: "tenant_acme"
+    });
+    expect(store.listCaptures()).toHaveLength(1);
+    expect(store.listCaptures()[0]).toMatchObject({
+      tenantId: "tenant_acme",
+      sourceId: createdBody.source.id,
+      metadata: { runId: collected.runId }
+    });
+    expect(JSON.stringify(store.listCaptures()[0])).toContain("APT29");
+
+    const failed = await runCanaryCollectionCycle({
+      store,
+      frontier,
+      tenantId: "tenant_acme",
+      sourceIds: [createdBody.source.id],
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => "2026-07-24T07:30:00.000Z",
+      fetch: async () => { throw new Error("preview unavailable"); }
+    });
+    expect(failed).toMatchObject({ status: "queued", failedTaskCount: 1, insertedCaptureCount: 0, retryScheduledCount: 1, remainingQueuedTaskCount: 1 });
+    expect(store.listCaptures()).toHaveLength(1);
+    expect(store.getSource(createdBody.source.id)).toMatchObject({
+      health: { status: "degraded", lastError: "preview unavailable" },
+      crawlState: { retryCount: 1, backoffUntil: expect.any(String) }
+    });
     expect(store.listDwmAlerts()).toHaveLength(0);
   });
 

@@ -507,7 +507,7 @@ function actionBody(action: 'run_query' | 'source_apply_plan' | 'scheduler_run_n
         return { action, query, sourceId: source?.id, actions: ['approve', 'quarantine', 'request_legal_notes', 'leave_unchanged'] }
     }
     if (action === 'request_source') {
-        return { action, query, target: input.sourceTarget, sourceType: 'telegram_channel', activate: true }
+        return { action, query, target: input.sourceTarget, sourceType: 'telegram_channel', activate: false }
     }
     if (action === 'request_restricted_source') {
         return { action: 'request_source', query, target: input.sourceTarget || query, sourceType: 'restricted_metadata', activate: false, approveMetadataOnly: false }

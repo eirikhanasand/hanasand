@@ -4,7 +4,6 @@ import {
   buildDwmSourcePackCollectionJobHandoff,
   buildDwmSourcePackPersistenceShape,
   buildDwmSourcePackWorkerIntegrationShape,
-  enqueueDwmSourcePackCollectionTasks,
   DwmSourcePackPostgresAdapter,
   InMemoryDwmSourcePackActiveSourceAdapter,
   InMemoryDwmSourcePackRegistryAdapter,
@@ -25,7 +24,7 @@ import {
   type DwmSourcePackRecord,
   type DwmSourcePackSqlDriver
 } from "../storage/dwmSourcePackRegistry.ts";
-import type { CollectionTask, SourceRecord } from "../types.ts";
+import type { SourceRecord } from "../types.ts";
 import { sourceRecordToPostgresRows } from "../storage/sourceRegistryPostgres.ts";
 
 describe("dwm source pack registry adapter", () => {
@@ -480,9 +479,8 @@ describe("dwm source pack registry adapter", () => {
     expect(JSON.stringify(activation)).not.toContain("rawPayload");
   });
 
-  test("persists validated candidates as durable source records and queues collection jobs idempotently", () => {
+  test("persists validated candidates and hands them to the scheduled collector", () => {
     const store = new FakeSourceStore();
-    const frontier = new FakeFrontierQueue();
     const queue = new InMemoryDwmSourcePackValidationQueueAdapter();
     const sourcePack = pack({
       id: "pack_durable_growth",
@@ -532,8 +530,6 @@ describe("dwm source pack registry adapter", () => {
       approvedBy: "source-growth-worker"
     });
     const handoff = buildDwmSourcePackCollectionJobHandoff(activation.activeSources, { generatedAt: "2026-06-28T13:05:00.000Z" });
-    const queued = enqueueDwmSourcePackCollectionTasks(frontier, handoff.jobs, store.listSources(), { tenantId: "tenant_growth" });
-    const queuedAgain = enqueueDwmSourcePackCollectionTasks(frontier, handoff.jobs, store.listSources(), { tenantId: "tenant_growth" });
 
     expect(activation.summary).toEqual({
       activeSourceCount: 2,
@@ -586,28 +582,22 @@ describe("dwm source pack registry adapter", () => {
       approval_state: "approved",
       metadata_only: true
     });
-    expect(queued.summary).toEqual({ queuedCount: 2, duplicateCount: 0, blockedCount: 0, taskCount: 2 });
-    expect(queuedAgain.summary).toEqual({ queuedCount: 0, duplicateCount: 2, blockedCount: 0, taskCount: 2 });
-    expect(frontier.snapshot().map((item) => item.task)).toMatchObject([
+    expect(handoff.jobs).toMatchObject([
       {
         sourceId: "src_cand_durable_tg",
-        sourceType: "telegram_public",
-        targetUrl: "https://t.me/durable_public",
-        retryCount: 0,
-        maxRetries: 4,
-        planning: { safetyEnvelope: { allowPublicChannel: true, metadataOnlyRestricted: false } }
+        status: "awaiting_scheduler",
+        collectionMode: "bounded_public_preview",
+        targetRawStored: false
       },
       {
         sourceId: "src_cand_durable_dark",
-        sourceType: "tor_metadata",
-        targetUrl: "source-pack://darkweb_metadata/hash_cand_durable_dark",
-        retryCount: 0,
-        maxRetries: 4,
-        planning: { safetyEnvelope: { allowRestrictedMetadata: true, metadataOnlyRestricted: true } }
+        status: "awaiting_scheduler",
+        collectionMode: "metadata_only",
+        targetRawStored: false
       }
     ]);
-    expect(JSON.stringify({ sourceWrite, queued })).not.toContain("rawPayload");
-    expect(JSON.stringify({ sourceWrite, queued })).not.toContain("password");
+    expect(JSON.stringify({ sourceWrite, handoff })).not.toContain("rawPayload");
+    expect(JSON.stringify({ sourceWrite, handoff })).not.toContain("password");
   });
 
   test("turns thousands-scale validated candidates into capped durable active rows and collection job handoffs", () => {
@@ -678,7 +668,7 @@ describe("dwm source pack registry adapter", () => {
     expect(repeated.summary).toMatchObject({ insertedCount: 0, duplicateCount: 600, skippedCount: 150, activeSourceCount: 600 });
     expect(handoff.jobs).toHaveLength(600);
     expect(handoff.jobs[0]).toMatchObject({
-      status: "queued",
+      status: "awaiting_scheduler",
       targetRawStored: false,
       retry: { maxAttempts: 5, backoffSeconds: 180 },
       validationScore: expect.any(Number)
@@ -801,19 +791,6 @@ class FakeSourceStore {
 
   listSources(): SourceRecord[] {
     return [...this.sources.values()];
-  }
-}
-
-class FakeFrontierQueue {
-  readonly tasks = new Map<string, CollectionTask>();
-
-  enqueueTask(task: CollectionTask): CollectionTask {
-    this.tasks.set(task.id, task);
-    return task;
-  }
-
-  snapshot(): Array<{ id: string; task: CollectionTask }> {
-    return [...this.tasks.values()].map((task) => ({ id: task.id, task }));
   }
 }
 

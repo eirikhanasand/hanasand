@@ -245,7 +245,7 @@ export type DwmSourcePackCollectionJobHandoff = {
   targetPreview: string;
   targetRawStored: false;
   collectionMode: "bounded_public_preview" | "metadata_only" | "parser_readiness";
-  status: "queued";
+  status: "awaiting_scheduler";
   queuedAt: string;
   parserStatus: string;
   validationScore: number;
@@ -300,18 +300,6 @@ export type DwmSourcePackCollectionQueueReceipt = {
   reason?: string;
 };
 
-export type DwmSourcePackCollectionQueueResult = {
-  receipts: DwmSourcePackCollectionQueueReceipt[];
-  tasks: CollectionTask[];
-  summary: {
-    queuedCount: number;
-    duplicateCount: number;
-    blockedCount: number;
-    taskCount: number;
-  };
-  safeOutput: Record<string, boolean>;
-};
-
 export type DwmSourcePackCollectionQueueReceiptRecord = DwmSourcePackCollectionQueueReceipt & {
   packId: string;
   requestId: string;
@@ -344,11 +332,6 @@ export interface DwmSourcePackWorkerRunAdapter {
   save(run: DwmSourcePackWorkerRunRecord): DwmSourcePackWorkerRunRecord;
   list(): DwmSourcePackWorkerRunRecord[];
 }
-
-export type DwmSourcePackFrontierQueue = {
-  enqueueTask(task: CollectionTask): unknown;
-  snapshot?(): Array<{ id?: string; task?: { id?: string } }>;
-};
 
 export type DwmSourcePackActivationResult = {
   pack: DwmSourcePackRecord;
@@ -1327,7 +1310,7 @@ export function buildDwmSourcePackCollectionJobHandoff(
       targetPreview: row.targetPreview,
       targetRawStored: false,
       collectionMode: collectionModeForActiveSource(row),
-      status: "queued",
+      status: "awaiting_scheduler",
       queuedAt,
       parserStatus: row.parserStatus,
       validationScore: row.validationScore,
@@ -1380,7 +1363,7 @@ export function sourceRecordFromDwmSourcePackActiveRow(
     name: sourceNameForActiveRow(row),
     type: sourceTypeForActiveRow(row),
     url: safeSourceUrlForActiveRow(row),
-    accessMethod: metadataOnly ? "approved_proxy" : row.family === "telegram" ? "official_api" : "public_http",
+    accessMethod: metadataOnly ? "approved_proxy" : "public_http",
     status: "active",
     risk: metadataOnly ? "restricted" : row.family === "telegram" ? "medium" : "low",
     trustScore: clamp01(row.validationScore),
@@ -1437,7 +1420,8 @@ export function sourceRecordFromDwmSourcePackActiveRow(
         alertGradeEvidenceEligible: row.alertGradeEvidenceEligible
       },
       policyBoundary: row.policyBoundary,
-      sourceFamily: row.family
+      sourceFamily: row.family,
+      ...(row.family === "telegram" ? { collectionMode: "public_web_preview" } : {})
     },
     lifecycle: [{
       at: generatedAt,
@@ -1542,53 +1526,6 @@ function mergeSourcePackActiveSourceRecord(existing: SourceRecord, source: Sourc
     ],
     updatedAt: source.updatedAt
   } as SourceRecord;
-}
-
-export function enqueueDwmSourcePackCollectionTasks(
-  frontier: DwmSourcePackFrontierQueue,
-  jobs: DwmSourcePackCollectionJobHandoff[],
-  sources: SourceRecord[],
-  options: { tenantId?: string; maxBytes?: number } = {}
-): DwmSourcePackCollectionQueueResult {
-  const sourceById = new Map(sources.map((source) => [source.id, source]));
-  const existingTaskIds = new Set((frontier.snapshot?.() ?? []).map((item) => item.task?.id ?? item.id).filter((id): id is string => Boolean(id)));
-  const receipts: DwmSourcePackCollectionQueueReceipt[] = [];
-  const tasks: CollectionTask[] = [];
-  for (const job of jobs) {
-    const source = sourceById.get(job.sourceId);
-    if (!source) {
-      receipts.push({ status: "blocked", taskId: job.id, sourceId: job.sourceId, candidateId: job.candidateId, reason: "source record missing" });
-      continue;
-    }
-    if (job.targetRawStored !== false) {
-      receipts.push({ status: "blocked", taskId: job.id, sourceId: job.sourceId, candidateId: job.candidateId, reason: "raw target storage is not allowed" });
-      continue;
-    }
-    if (isRestrictedFamily(job.family) && source.governance?.metadataOnly !== true) {
-      receipts.push({ status: "blocked", taskId: job.id, sourceId: job.sourceId, candidateId: job.candidateId, reason: "restricted source requires metadata-only governance" });
-      continue;
-    }
-    if (existingTaskIds.has(job.id)) {
-      receipts.push({ status: "duplicate", taskId: job.id, sourceId: job.sourceId, candidateId: job.candidateId });
-      continue;
-    }
-    const task = collectionTaskFromSourcePackJob(job, source, options);
-    frontier.enqueueTask(task);
-    existingTaskIds.add(job.id);
-    receipts.push({ status: "queued", taskId: job.id, sourceId: job.sourceId, candidateId: job.candidateId, task });
-    tasks.push(task);
-  }
-  return {
-    receipts,
-    tasks,
-    summary: {
-      queuedCount: receipts.filter((receipt) => receipt.status === "queued").length,
-      duplicateCount: receipts.filter((receipt) => receipt.status === "duplicate").length,
-      blockedCount: receipts.filter((receipt) => receipt.status === "blocked").length,
-      taskCount: frontier.snapshot?.().length ?? tasks.length
-    },
-    safeOutput: sourcePackSafeOutput()
-  };
 }
 
 export function buildDwmSourcePackRegistrySql() {
@@ -1755,53 +1692,6 @@ function collectionModeForActiveSource(row: DwmSourcePackActiveSourceRow): DwmSo
   if (row.family === "telegram") return "bounded_public_preview";
   if (isRestrictedFamily(row.family)) return "metadata_only";
   return "parser_readiness";
-}
-
-function collectionTaskFromSourcePackJob(
-  job: DwmSourcePackCollectionJobHandoff,
-  source: SourceRecord,
-  options: { tenantId?: string; maxBytes?: number }
-): CollectionTask {
-  return {
-    id: job.id,
-    tenantId: source.tenantId ?? options.tenantId,
-    sourceId: job.sourceId,
-    sourceType: source.type,
-    targetUrl: source.url,
-    queuedAt: job.queuedAt,
-    availableAt: job.retry.retryAfter,
-    priority: clamp01(job.validationScore),
-    reason: `source-pack ${job.collectionMode} validation handoff`,
-    retryCount: job.retry.attempt,
-    maxRetries: job.retry.maxAttempts,
-    maxBytes: options.maxBytes ?? (job.collectionMode === "metadata_only" ? 128_000 : 512_000),
-    fairnessKey: `${source.tenantId ?? options.tenantId ?? "global"}:${job.family}:source-pack`,
-    intelRequestId: job.requestId,
-    crawlBudgetKey: `${source.tenantId ?? options.tenantId ?? "global"}:source-pack:${job.family}`,
-    planning: {
-      budgetClass: job.collectionMode === "bounded_public_preview" ? "interactive_live_search" : "background_source_growth",
-      decision: "selected",
-      selectedFor: "source_growth",
-      reason: `validated ${job.family} source-pack candidate`,
-      sourcePack: {
-        packId: job.packId,
-        requestId: job.requestId,
-        candidateId: job.candidateId,
-        validationJobKey: job.validationJobKey,
-        parserStatus: job.parserStatus,
-        validationScore: job.validationScore,
-        collectionMode: job.collectionMode,
-        targetHash: job.targetHash,
-        targetRawStored: false
-      },
-      safetyEnvelope: {
-        allowPublicChannel: job.collectionMode === "bounded_public_preview",
-        allowRestrictedMetadata: job.collectionMode === "metadata_only",
-        metadataOnlyRestricted: job.collectionMode === "metadata_only",
-        forbiddenOperations: ["credential_bypass", "private_community_access", "payload_download", "captcha_solving"]
-      }
-    }
-  } as CollectionTask;
 }
 
 function sourceNameForActiveRow(row: DwmSourcePackActiveSourceRow): string {
