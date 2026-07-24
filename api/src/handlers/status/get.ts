@@ -27,6 +27,7 @@ type IncidentRow = {
 }
 
 const STATUS_CACHE_MS = 3000
+const MONITOR_STALE_MS = 5 * 60 * 1000
 let statusCache: { expiresAt: number, payload: object } | null = null
 let statusInflight: Promise<object> | null = null
 
@@ -100,8 +101,22 @@ async function loadStatusPayload() {
         ORDER BY service ASC, check_name ASC, checked_at ASC
     `)
 
-    const checks = (result.rows as MonitorRow[]).map(toPublicMonitorRow)
-    const incidents = buildIncidents(incidentResult.rows as IncidentRow[], checks)
+    const rawChecks = result.rows as MonitorRow[]
+    const checks = rawChecks.map(row => toPublicMonitorRow(row))
+    const staleRows = rawChecks
+        .filter(row => row.status === 'up' && Date.now() - time(row.checked_at) > MONITOR_STALE_MS)
+        .map(row => ({
+            service: row.service,
+            check_name: row.check_name,
+            status: 'down' as const,
+            message: `Monitoring stopped reporting after ${iso(row.checked_at)}.`,
+            checked_at: new Date(time(row.checked_at) + MONITOR_STALE_MS),
+        }))
+    const incidentRows = [...incidentResult.rows as IncidentRow[], ...staleRows]
+        .sort((left, right) => left.service.localeCompare(right.service)
+            || left.check_name.localeCompare(right.check_name)
+            || time(left.checked_at) - time(right.checked_at))
+    const incidents = buildIncidents(incidentRows, checks)
     const history = buildHistory(historyResult.rows as HistoryRow[], incidents)
     const overall = checks.length && checks.every(check => check.status === 'up')
         ? 'up'
@@ -119,6 +134,13 @@ async function loadStatusPayload() {
 }
 
 function toPublicMonitorRow(row: MonitorRow): MonitorRow {
+    if (Date.now() - time(row.checked_at) > MONITOR_STALE_MS) {
+        return {
+            ...row,
+            status: 'down',
+            message: `Monitoring stopped reporting after ${iso(row.checked_at)}.`,
+        }
+    }
     if (row.status !== 'up' || !row.message) {
         return row
     }

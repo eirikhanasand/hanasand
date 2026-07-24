@@ -1,4 +1,5 @@
 import run from '#db'
+import { recordMonitorResult } from './record.ts'
 
 type MonitorDefinition = {
     service: string
@@ -44,22 +45,17 @@ export default async function runProductionLogMonitors() {
 async function runMonitor(monitor: MonitorDefinition) {
     const result = await run(`
         SELECT COUNT(*)::int AS count,
-               MAX(created_at) AS last_seen,
-               ARRAY_AGG(message ORDER BY created_at DESC) FILTER (WHERE message IS NOT NULL) AS messages
+               MAX(created_at) AS last_seen
         FROM service_logs
         WHERE created_at >= NOW() - ($1::int * INTERVAL '1 minute')
           AND metadata->>'category' = $2
     `, [lookbackMinutes, monitor.category])
-    const row = result.rows[0] as { count: number, last_seen: string | null, messages: string[] | null }
+    const row = result.rows[0] as { count: number, last_seen: string | null }
     const count = Number(row?.count || 0)
-    const recentMessages = (row?.messages || []).slice(0, 3)
     const status = count === 0 ? 'up' : count >= downThreshold ? 'down' : 'degraded'
     const message = count === 0
         ? `${monitor.noEventMessage} Window: ${lookbackMinutes} minutes.`
-        : `${count} event${count === 1 ? '' : 's'} in ${lookbackMinutes} minutes${row.last_seen ? `; latest ${row.last_seen}` : ''}${recentMessages.length ? `: ${recentMessages.join(' | ')}` : ''}`
+        : `${count} event${count === 1 ? '' : 's'} in ${lookbackMinutes} minutes${row.last_seen ? `; latest ${row.last_seen}` : ''}.`
 
-    await run(`
-        INSERT INTO service_monitor_results (service, check_name, status, latency_ms, message)
-        VALUES ($1, $2, $3, $4, $5)
-    `, [monitor.service, monitor.checkName, status, 0, message])
+    await recordMonitorResult(monitor.service, monitor.checkName, status, 0, message)
 }

@@ -1,25 +1,31 @@
 import run from '#db'
 import crypto from 'crypto'
+import { activityCountDrop, latencyStatus, type MonitorStatus } from './monitorPolicy.ts'
+import { recordMonitorResult } from './record.ts'
 
 const apiBase = process.env.MONITOR_API_BASE || `http://127.0.0.1:${Number(process.env.PORT) || 8081}/api`
 const publicApiBase = (process.env.MONITOR_PUBLIC_API_BASE || 'https://api.hanasand.com/api/v1').replace(/\/$/, '')
 const webBase = (process.env.MONITOR_WEB_BASE || 'https://hanasand.com').replace(/\/$/, '')
+const scraperBase = (process.env.TI_SCRAPER_API_BASE || 'http://ti-scraper:8097').replace(/\/$/, '')
+type CheckResult = string | void | { status: MonitorStatus, message: string }
 
-async function record(service: string, checkName: string, status: 'up' | 'degraded' | 'down', latency: number, message = '') {
-    await run(`
-        INSERT INTO service_monitor_results (service, check_name, status, latency_ms, message)
-        VALUES ($1, $2, $3, $4, $5)
-    `, [service, checkName, status, latency, message])
-}
-
-async function check(service: string, checkName: string, fn: () => Promise<void | string>) {
+async function check(
+    service: string,
+    checkName: string,
+    fn: () => Promise<CheckResult>,
+    latencyThresholds?: { degraded: number, down: number }
+) {
     const started = performance.now()
     try {
-        const message = await fn()
-        await record(service, checkName, 'up', Math.round(performance.now() - started), message || '')
+        const result = await fn()
+        const latency = Math.round(performance.now() - started)
+        const explicit = typeof result === 'object' && result ? result : undefined
+        const status = explicit?.status || latencyStatus(latency, latencyThresholds)
+        const message = explicit?.message || (typeof result === 'string' ? result : '')
+        await recordMonitorResult(service, checkName, status, latency, status === 'up' ? message : message || `Response took ${latency} ms.`)
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        await record(service, checkName, 'down', Math.round(performance.now() - started), message)
+        await recordMonitorResult(service, checkName, 'down', Math.round(performance.now() - started), message)
         console.error(`[synthetic-monitor] ${service}/${checkName}: ${message}`)
     }
 }
@@ -111,6 +117,37 @@ export default async function runSyntheticMonitor() {
                 throw new Error(`Threat intelligence search is unavailable (${response.status})`)
             }
             return 'A canonical threat-intelligence search completed successfully.'
+        }, { degraded: 3_000, down: 10_000 }),
+        check('threat-intelligence', 'Scraper health', async () => {
+            const { response, body } = await fetchJson('/v1/health', {}, scraperBase)
+            const health = object(body)
+            const storage = object(health?.storage)
+            if (response.status !== 200 || health?.ok !== true || storage?.ok !== true) {
+                throw new Error(`Threat-intelligence storage or service is unhealthy (${response.status}).`)
+            }
+            const pendingWrites = Number(storage.pendingWrites ?? 0)
+            if (storage.lastWriteError) {
+                throw new Error('Threat-intelligence storage has a write error.')
+            }
+            const collection = object(health.collection)
+            const loops = ['public', 'publicDefault', 'restrictedMetadata']
+                .map(name => [name, object(collection?.[name])] as const)
+                .filter(([, loop]) => loop?.enabled !== false)
+            const stale = loops.filter(([, loop]) => {
+                const intervalMs = Math.max(60_000, Number(loop?.intervalSeconds ?? 300) * 3_000)
+                const lastSuccess = Date.parse(String(loop?.lastSuccessAt ?? ''))
+                return !Number.isFinite(lastSuccess) || Date.now() - lastSuccess > intervalMs
+            })
+            const errors = loops.filter(([, loop]) =>
+                Number(loop?.consecutiveErrorCount ?? 0) > 0
+                || object(loop?.latestResult)?.status === 'failed')
+            if (stale.length || errors.length) {
+                return {
+                    status: stale.length ? 'down' : 'degraded',
+                    message: `Collection problems: ${[...new Set([...stale, ...errors].map(([name]) => name))].join(', ')}.`,
+                }
+            }
+            return `Storage is healthy with ${pendingWrites} pending writes and ${loops.length} current collection loops.`
         }),
         check('browser-sandbox', 'Browser workspace', async () => {
             const { response, body } = await fetchPage('/browser')
@@ -128,10 +165,76 @@ export default async function runSyntheticMonitor() {
             const { response, body } = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase)
             const queue = object(body)
             const counts = object(queue?.counts)
-            if (response.status !== 200 || queue?.status === 'empty' || !Array.isArray(queue?.items) || !queue.items.length || Number(counts?.total) < 1) {
+            const freshness = object(queue?.freshness)
+            const total = Number(counts?.total)
+            if (response.status !== 200 || queue?.status !== 'live' || !Array.isArray(queue?.items) || !queue.items.length || total < 1) {
                 throw new Error(`Latest customer activity is unavailable or empty (${response.status})`)
             }
-            return `Latest customer activity returned ${Number(counts?.total)} retained records.`
+            const ageMinutes = Number(freshness?.collectionAgeMinutes)
+            const maxAgeMinutes = Number(freshness?.maxLiveAgeMinutes)
+            if (!Number.isFinite(ageMinutes) || !Number.isFinite(maxAgeMinutes) || ageMinutes > maxAgeMinutes) {
+                throw new Error(`Latest customer activity is stale (${Number.isFinite(ageMinutes) ? ageMinutes : 'unknown'} minutes).`)
+            }
+            const prior = await run(`
+                SELECT status, message
+                FROM service_monitor_results
+                WHERE service = 'dark-web-monitoring' AND check_name = 'Latest activity'
+                ORDER BY checked_at DESC
+                LIMIT 1
+            `)
+            const drop = activityCountDrop(total, prior.rows[0])
+            if (drop) return drop
+            return `Latest customer activity returned ${total} retained records; newest collection is ${ageMinutes} minutes old.`
+        }, { degraded: 3_000, down: 10_000 }),
+        check('threat-intelligence', 'Processing backlog', async () => {
+            const result = await run(`
+                SELECT
+                  count(*) FILTER (
+                    WHERE record_type = 'analyst_metadata_review_task'
+                      AND record->>'state' IN ('queued', 'running', 'retrying')
+                      AND updated_at < NOW() - INTERVAL '30 minutes'
+                  )::int AS stale_reviews,
+                  count(*) FILTER (
+                    WHERE record_type = 'collection_plan'
+                      AND id LIKE 'source-feed-discovery-plan_%'
+                      AND record->>'status' = 'failed'
+                      AND COALESCE((record->>'consecutiveFailureCount')::int, 0) > 0
+                      AND NULLIF(record->>'nextEligibleAt', '')::timestamptz < NOW()
+                  )::int AS overdue_discovery,
+                  count(*) FILTER (
+                    WHERE record_type = 'evaluation_benchmark'
+                      AND record->>'status' = 'annotating'
+                      AND updated_at < NOW() - INTERVAL '4 hours'
+                  )::int AS stalled_evaluations,
+                  (
+                    SELECT count(*)::int
+                    FROM public.dwm_webhook_deliveries failed
+                    WHERE failed.status = 'failed'
+                      AND failed.updated_at >= NOW() - INTERVAL '24 hours'
+                      AND NOT EXISTS (
+                        SELECT 1
+                        FROM public.dwm_webhook_deliveries recovered
+                        WHERE recovered.destination_id IS NOT DISTINCT FROM failed.destination_id
+                          AND recovered.idempotency_key = failed.idempotency_key
+                          AND recovered.status = 'delivered'
+                          AND recovered.updated_at > failed.updated_at
+                      )
+                  ) AS recent_delivery_failures
+                FROM threat_intel.workflow_records
+            `)
+            const counts = result.rows[0] || {}
+            const staleReviews = Number(counts.stale_reviews ?? 0)
+            const overdueDiscovery = Number(counts.overdue_discovery ?? 0)
+            const stalledEvaluations = Number(counts.stalled_evaluations ?? 0)
+            const recentDeliveryFailures = Number(counts.recent_delivery_failures ?? 0)
+            const message = `${staleReviews} stale reviews, ${overdueDiscovery} overdue discovery jobs, ${stalledEvaluations} stalled evaluations, ${recentDeliveryFailures} recent delivery failures.`
+            if (staleReviews >= 1_000 || overdueDiscovery >= 10 || stalledEvaluations >= 2 || recentDeliveryFailures >= 10) {
+                return { status: 'down', message }
+            }
+            if (staleReviews || overdueDiscovery || stalledEvaluations || recentDeliveryFailures >= 3) {
+                return { status: 'degraded', message }
+            }
+            return message
         }),
         check('content', 'Articles', async () => {
             const { response } = await fetchJson('/articles')

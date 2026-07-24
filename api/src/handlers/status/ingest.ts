@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import hasInternalToken from '#utils/auth/internalToken.ts'
-import run from '#db'
+import { recordMonitorResult } from '#utils/status/record.ts'
 
 export default async function ingestStatus(req: FastifyRequest, res: FastifyReply) {
     if (!hasInternalToken(req)) {
@@ -19,10 +19,7 @@ export default async function ingestStatus(req: FastifyRequest, res: FastifyRepl
         return res.status(400).send({ error: 'Missing service, check_name or status.' })
     }
 
-    await run(`
-        INSERT INTO service_monitor_results (service, check_name, status, latency_ms, message)
-        VALUES ($1, $2, $3, $4, $5)
-    `, [service, check_name, status, latency_ms, message])
+    await recordMonitorResult(service, check_name, status, latency_ms, message)
 
     return res.status(201).send({ ok: true })
 }
