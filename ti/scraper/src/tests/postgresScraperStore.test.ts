@@ -12,7 +12,7 @@ import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { parseCurrentRansomwareOperations } from "../pipeline/ransomwareOperationCatalog.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
-import { PostgresScraperStore, normalizeLegacySourceForImport } from "../storage/postgresScraperStore.ts";
+import { PostgresScraperStore, normalizeLegacySourceForImport, toJson } from "../storage/postgresScraperStore.ts";
 import { hashContent } from "../utils.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
 import { fixtureCapture } from "./helpers/storageFixtures.ts";
@@ -21,6 +21,10 @@ import { AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA } from 
 const collectedAt = "2026-07-19T12:00:00.000Z";
 
 describe("structured threat-intelligence storage contract", () => {
+  test("repairs malformed Unicode before PostgreSQL JSON persistence", () => {
+    expect(JSON.parse(toJson({ title: "Operating lower \ud835" }))).toEqual({ title: "Operating lower �" });
+  });
+
   test("normalizes incomplete legacy sources into review-only records", () => {
     expect(normalizeLegacySourceForImport({ id: "legacy", type: "tor_metadata", url: "http://example.onion", updatedAt: collectedAt })).toMatchObject({
       accessMethod: "disabled",
