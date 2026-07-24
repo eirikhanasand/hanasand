@@ -1,7 +1,9 @@
 // @ts-nocheck
+import { createHash } from "node:crypto";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.ts";
 import { nowIso, stableId } from "../utils.ts";
+import { evidenceIndependence } from "../storage/memoryStore.ts";
 import { activatePublicCanarySources, pausePublicCanarySources, reconcilePublicSourceProductivity } from "./canaryActivation.ts";
 import { canaryQueries, PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 import { detachedState, externalize, fetchItems, health, maxItemsFor, tasksForSource } from "./canaryHelpers.ts";
@@ -66,14 +68,93 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
     retryScheduledCount: Number(resumedRun?.retryScheduledCount ?? 0),
     retryExhaustedCount: Number(resumedRun?.retryExhaustedCount ?? 0)
   };
-  const latestCaptureIds: string[] = [], errors: any[] = [];
+  const latestCaptureIds: string[] = [], completeEvaluationCaptures: any[] = [], errors: any[] = [];
   const concurrency = Math.max(1, Math.min(tasks.length || 1, Number(options.maxConcurrentTasks ?? 5)));
-  for (let done = 0; done < tasks.length; done += concurrency) await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length - done) }, () => runLeasedTask(options, runId, generatedAt, fetcher, mode, maxBytes, counters, latestCaptureIds, errors)));
+  for (let done = 0; done < tasks.length; done += concurrency) await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length - done) }, () => runLeasedTask(options, runId, generatedAt, fetcher, mode, maxBytes, counters, latestCaptureIds, errors, completeEvaluationCaptures)));
+  retainIndependentEvaluationReferences(options.store, completeEvaluationCaptures);
   const remainingQueuedTaskCount = options.frontier.snapshot().map(frontierTask).filter((task: any) => task.runId === runId).length;
   const runStatus = remainingQueuedTaskCount ? "queued" : counters.failedTaskCount && counters.completedTaskCount ? "degraded" : counters.failedTaskCount ? "failed" : "completed";
   const completedAt = options.now?.() ?? nowIso();
   options.store.saveRun?.({ ...resumedRun, id: runId, tenantId: resumedRun?.tenantId ?? options.tenantId, planId, requestId: "req_public_canary", status: runStatus, createdAt: resumedRun?.createdAt ?? generatedAt, startedAt: resumedRun?.startedAt ?? generatedAt, completedAt: runStatus === "queued" ? undefined : completedAt, updatedAt: completedAt, taskCount: resumedRun?.taskCount ?? tasks.length, sourceCount: resumedRun?.sourceCount ?? scheduledSourceIds.size, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, duplicateCaptureCount: counters.duplicateCaptureCount, leasedTaskCount: counters.leasedTaskCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, retryScheduledCount: counters.retryScheduledCount, retryExhaustedCount: counters.retryExhaustedCount, error: errors[0]?.message });
   return { generatedAt, tenantId: options.tenantId, mode: "production_canary", status: runStatus, runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, retiredSourceCount: productivity.retired.length, supersededTaskCount, activeSourceCount: scheduledSourceIds.size, deferredDueSourceCount: allDue.length - scheduledSourceIds.size, queuedTaskCount: tasks.length, queueLimit, availableQueueSlots, backpressureState, ...counters, remainingQueuedTaskCount, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
+}
+
+export function retainIndependentEvaluationReferences(store: any, completeCollectedCaptures: any[]) {
+  if (!completeCollectedCaptures.length || typeof store.saveValidationRecord !== "function") return 0;
+  const sources = new Map(store.listSources().map((source: any) => [source.id, source]));
+  const captures = store.listCaptures().filter(referenceEligibleCapture);
+  const cisa = new Map<string, any>();
+  for (const capture of captures) {
+    if (!isCisaKevSource(sources.get(capture.sourceId))) continue;
+    const cve = retainedCveId(capture);
+    if (cve) cisa.set(cve, capture);
+  }
+  let retained = 0;
+  for (const candidate of completeCollectedCaptures) {
+    const target = candidate?.capture, targetCveSet = candidate?.evaluationCveSet;
+    if (!referenceEligibleCapture(target)
+      || !isNvdCveSource(sources.get(target.sourceId))
+      || store.getCapture(target.id)?.contentHash !== target.contentHash
+      || targetCveSet?.complete !== true
+      || targetCveSet.captureContentHash !== target.contentHash
+      || !Array.isArray(targetCveSet.values)
+      || targetCveSet.hash !== createHash("sha256").update(JSON.stringify(targetCveSet.values)).digest("hex")) continue;
+    const targetCve = retainedCveId(target), reference = targetCve && cisa.get(targetCve);
+    const authoritativeCve = reference && retainedCveId(reference);
+    if (!authoritativeCve
+      || targetCveSet.values.length !== 1
+      || targetCveSet.values[0] !== targetCve
+      || !reference
+      || target.id === reference.id
+      || evidenceIndependence(store, [target.id, reference.id]).groupCount < 2) continue;
+    const expectedValues = [authoritativeCve];
+    store.saveValidationRecord({
+      id: stableId("evaluation-reference", `${target.id}:${reference.id}:cve:${authoritativeCve}`),
+      tenantId: target.tenantId,
+      captureId: target.id,
+      validationType: "independent_evaluation_reference",
+      status: "supported",
+      referenceUrl: reference.canonicalUrl ?? reference.url,
+      referenceCaptureId: reference.id,
+      referenceSourceId: reference.sourceId,
+      referenceContentHash: reference.contentHash,
+      labelType: "cve",
+      expectedValues,
+      expectedValuesHash: createHash("sha256").update(JSON.stringify(["cve", authoritativeCve.toLowerCase()])).digest("hex"),
+      exhaustiveExpectedValues: true,
+      truthSchemaVersion: "ti.independent_evaluation_reference.v1",
+      truthFrozenAt: reference.collectedAt,
+      matchedAt: reference.collectedAt,
+      reviewerId: "source-scheduler:cisa-kev:nvd-cve:v1"
+    });
+    retained++;
+  }
+  return retained;
+}
+
+function referenceEligibleCapture(capture: any) {
+  return !capture.tenantId
+    && !capture.sensitive
+    && capture.storageKind !== "metadata_only"
+    && capture.metadata?.fetchProvenance?.truncated !== true
+    && !capture.metadata?.fixture
+    && !capture.metadata?.synthetic
+    && !capture.metadata?.demo;
+}
+
+function retainedCveId(capture: any) {
+  const value = String(capture.metadata?.structuredFields?.cveID ?? "").trim().toUpperCase();
+  return /^CVE-\d{4}-\d{4,}$/.test(value) ? value : undefined;
+}
+
+function isCisaKevSource(source: any) {
+  return source?.id === "src_canary_cisa_known_exploited_json"
+    && /^https:\/\/www\.cisa\.gov\/sites\/default\/files\/feeds\/known_exploited_vulnerabilities\.json(?:[?#].*)?$/i.test(String(source.url ?? ""));
+}
+
+function isNvdCveSource(source: any) {
+  return source?.id === "src_canary_nvd_recent"
+    && /^https:\/\/services\.nvd\.nist\.gov\/rest\/json\/cves\/2\.0(?:[?#].*)?$/i.test(String(source.url ?? ""));
 }
 export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { enabled?: boolean; intervalSeconds?: number; queueLimit?: number; onCycle?: (r: any) => void; onError?: (e: unknown) => void }): CanaryCollectionLoopHandle {
   const state = detachedState(options.now?.() ?? nowIso(), options.queueLimit ?? 500), intervalMs = Math.max(5, options.intervalSeconds ?? 300) * 1000; let timer: Timer | undefined, startupTimer: Timer | undefined, active: Promise<void> | undefined;
@@ -124,7 +205,7 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
     runOnce: () => cycle()
   };
 }
-export async function runLeasedTask(options: any, runId: string, generatedAt: string, fetcher: any, mode: string, maxBytes: number, counters: any, latestCaptureIds: string[], errors: any[]) {
+export async function runLeasedTask(options: any, runId: string, generatedAt: string, fetcher: any, mode: string, maxBytes: number, counters: any, latestCaptureIds: string[], errors: any[], completeEvaluationCaptures: any[] = []) {
   const leased = options.frontier.next(new Date(generatedAt), (task: any) => task.runId === runId); if (!leased) return;
   const task = leased.task, source = options.store.getSource?.(task.sourceId), startedMs = Date.now(); counters.leasedTaskCount++;
   const taskMetrics: any = { itemCount: 0, captureCount: 0, incidentCount: 0, duplicateCount: 0, parserWarningCount: 0, actorIds: new Set<string>(), publishedAt: [], productivePublishedAt: [] };
@@ -155,6 +236,7 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
       let pipeline = actorIdentityCatalogSnapshot || catalogEvidenceOnly
         ? { capture: buildRawCapture({ ...collected, metadata: captureMetadata }), entities: [], indicators: [] }
         : processCollectedItem(collected, { actorIdentities: options.store.listActorIdentities?.() ?? [] });
+      const completeEvaluationCapture = pipeline.capture;
       if (pipeline.capture.body && options.objectStore) pipeline = { ...pipeline, capture: externalize(pipeline.capture, options.objectStore) };
       const duplicate = options.store.findDuplicateCapture?.(pipeline.capture), saved = options.store.savePipelineResult(pipeline);
       if (actorIdentityCatalogSnapshot) {
@@ -172,6 +254,7 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
       for (const entity of pipeline.entities ?? []) if (["actor", "ransomware_family"].includes(entity.type)) taskMetrics.actorIds.add(String(entity.normalizedValue ?? entity.value));
       if (!task.planning?.watchlistDiscovery && !actorIdentityCatalogSnapshot && !catalogEvidenceOnly && await saveExposureClaimFromCollectedItem(options.store, collected, generatedAt)) counters.exposureClaimCount++;
       latestCaptureIds.push(saved.capture.id);
+      if (source.id === "src_canary_nvd_recent") completeEvaluationCaptures.push({ capture: completeEvaluationCapture, evaluationCveSet: collected.evaluationCveSet });
     }
     counters.completedTaskCount++; options.frontier.complete(task);
     const checkedAt = options.now?.() ?? nowIso(), useful = taskMetrics.captureCount > 0;
