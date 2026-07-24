@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { canonicalThirdPartyReportForDelivery } from '../src/handlers/dwm/webhooks.ts'
-import { assertPublicWebhookTarget, buildDwmAlertDeliveryPayload, computeOutboundThirdPartyReportChecksum, normalizeDwmWebhookDestinationInput, pinnedWebhookLookup, validateDwmWebhookReceiverEnvelope, validateOutboundThirdPartyReport } from '../src/utils/dwm/webhooks.ts'
-import { containsUnsafeCustomerOutboundText, sanitizeCustomerOutboundText } from '../src/utils/dwm/customerOutputSafety.ts'
+import { assertPublicWebhookTarget, buildDwmAlertDeliveryPayload, computeOutboundThirdPartyReportChecksum, normalizeDwmWebhookDestinationInput, pinnedWebhookLookup, signDwmWebhookDeliveryBody, validateDwmWebhookReceiverEnvelope, validateOutboundThirdPartyReport } from '../src/utils/dwm/webhooks.ts'
+import { canonicalJson, containsUnsafeCustomerOutboundText, sanitizeCustomerOutboundText } from '../src/utils/dwm/customerOutputSafety.ts'
 
 describe('DWM webhook network boundary', () => {
     test('rejects local and private literal destinations before encryption', () => {
@@ -144,6 +144,8 @@ describe('DWM webhook network boundary', () => {
     })
 
     test('binds a durable receiver receipt to the exact report payload and delivery lineage', () => {
+        const previousToken = process.env.TI_SCRAPER_SERVICE_TOKEN
+        process.env.TI_SCRAPER_SERVICE_TOKEN = 'receiver-signature-test'
         const report = reportFixture()
         const payload = buildDwmAlertDeliveryPayload({
             destination: { id: 'destination_report', kind: 'webhook', name: 'External receiver', org_id: 'org_1' },
@@ -158,39 +160,49 @@ describe('DWM webhook network boundary', () => {
                 report,
             },
         })
-        const envelope = {
+        const envelopeFor = (candidate: Record<string, unknown>) => ({
             eventId: 'receiver_event_1',
             receivedAt: '2026-07-24T10:00:00.000Z',
-            payload,
-        }
-        const first = validateDwmWebhookReceiverEnvelope(envelope)
-        const replay = validateDwmWebhookReceiverEnvelope(envelope)
-        expect(first).toMatchObject({
-            valid: true,
-            receipt: {
-                orgId: 'org_1',
-                destinationId: 'destination_report',
-                deliveryId: 'delivery_report',
-                reportValidation: 'valid',
-                reportCaseId: 'case_1',
-                reportAlertId: 'alert_1',
-                reportExportChecksum: report.exportChecksum,
-            },
+            payload: candidate,
+            signature: signDwmWebhookDeliveryBody(canonicalJson(candidate)),
         })
-        expect(replay).toEqual(first)
+        try {
+            const envelope = envelopeFor(payload)
+            const first = validateDwmWebhookReceiverEnvelope(envelope)
+            const replay = validateDwmWebhookReceiverEnvelope(envelope)
+            expect(first).toMatchObject({
+                valid: true,
+                receipt: {
+                    orgId: 'org_1',
+                    destinationId: 'destination_report',
+                    deliveryId: 'delivery_report',
+                    reportValidation: 'valid',
+                    reportCaseId: 'case_1',
+                    reportAlertId: 'alert_1',
+                    reportExportChecksum: report.exportChecksum,
+                },
+            })
+            expect(replay).toEqual(first)
+            expect(validateDwmWebhookReceiverEnvelope({ ...envelope, signature: 'sha256=forged' })).toMatchObject({
+                valid: false,
+                error: 'Receiver payload signature is invalid.',
+            })
 
-        const wrongScope = {
-            ...payload,
-            org: { ...payload.org, id: 'org_other', tenantId: 'org_other' },
+            const wrongScope = {
+                ...payload,
+                org: { ...payload.org, id: 'org_other', tenantId: 'org_other' },
+            }
+            expect(validateDwmWebhookReceiverEnvelope(envelopeFor(wrongScope))).toMatchObject({
+                valid: false,
+                error: 'report organization does not match delivery scope.',
+            })
+            expect(validateDwmWebhookReceiverEnvelope(envelopeFor({
+                ...payload,
+                report: { ...report, body: 'raw evidence' },
+            }))).toMatchObject({ valid: false })
+        } finally {
+            restoreEnv('TI_SCRAPER_SERVICE_TOKEN', previousToken)
         }
-        expect(validateDwmWebhookReceiverEnvelope({ ...envelope, payload: wrongScope })).toMatchObject({
-            valid: false,
-            error: 'report organization does not match delivery scope.',
-        })
-        expect(validateDwmWebhookReceiverEnvelope({
-            ...envelope,
-            payload: { ...payload, report: { ...report, body: 'raw evidence' } },
-        })).toMatchObject({ valid: false })
     })
 
     test('keeps idempotency stable per event while allowing created, updated, and replayed delivery', () => {

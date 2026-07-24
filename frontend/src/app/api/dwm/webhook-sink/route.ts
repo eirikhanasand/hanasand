@@ -38,7 +38,12 @@ export async function POST(request: Request) {
                 'content-type': 'application/json',
                 'x-hanasand-service-token': serviceToken,
             },
-            body: JSON.stringify({ eventId, receivedAt, payload }),
+            body: JSON.stringify({
+                eventId,
+                receivedAt,
+                payload,
+                signature: request.headers.get('x-hanasand-delivery-signature'),
+            }),
             signal: AbortSignal.timeout(12_000),
         })
     } catch {

@@ -477,8 +477,11 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     const deliveries = orderCaseDeliveries(state.detail.deliveries || state.exportPayload?.deliveryEvidence || [])
     const latestDelivery = deliveries[0]
     const latestReceiverReceipt = (state.receiverReceipts || []).find(receipt =>
-        receipt.deliveryId === latestDelivery?.id
-        || Boolean(receipt.reportExportChecksum && receipt.reportExportChecksum === latestDelivery?.reportExportChecksum)
+        receipt.destinationId === (latestDelivery?.webhookDestinationId || latestDelivery?.destinationId)
+        && (
+            receipt.deliveryId === latestDelivery?.id
+            || Boolean(receipt.reportExportChecksum && receipt.reportExportChecksum === latestDelivery?.reportExportChecksum)
+        )
     )
     const latestDeliveryRetryable = latestDelivery?.status === 'failed' && latestDelivery.retryable === true
     const retryBlockedReason = latestDeliveryRetryable ? deliveryRetryBlockedReason(latestDelivery) : undefined

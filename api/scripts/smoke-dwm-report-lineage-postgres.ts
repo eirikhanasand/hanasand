@@ -12,6 +12,7 @@ import {
     normalizeDwmWebhookDestinationInput,
     recordDwmWebhookReceiverReceipt,
     retryDwmWebhookDelivery,
+    signDwmWebhookDeliveryBody,
 } from '../src/utils/dwm/webhooks.ts'
 
 const phase = process.argv[2]
@@ -26,6 +27,7 @@ const receiverReceivedAt = '2026-07-24T10:00:00.000Z'
 assert.equal(process.env.DB, database, `Refusing to run outside the disposable ${database} database.`)
 assert.ok(['exercise', 'verify', 'cleanup'].includes(phase), 'Usage: bun scripts/smoke-dwm-report-lineage-postgres.ts exercise|verify|cleanup')
 process.env.DWM_WEBHOOK_LIVE_DELIVERY = 'true'
+process.env.TI_SCRAPER_SERVICE_TOKEN = 'reporting-pg-receiver-signature'
 
 if (phase === 'exercise') await exercise()
 if (phase === 'verify') await verifyAfterRestart()
@@ -45,6 +47,7 @@ async function exercise() {
             eventId: 'receiver_pg_concurrent',
             receivedAt: receiverReceivedAt,
             payload: JSON.parse(body),
+            signature: signDwmWebhookDeliveryBody(body),
         })
         assert.equal(receiver.ok, true)
         assert.equal(receiver.ok && receiver.created, true)
@@ -65,7 +68,10 @@ async function exercise() {
         reportCaseId: 'case_concurrent',
     })
     assert.equal(concurrentReceipts.length, 1)
-    assert.equal(concurrentReceipts[0].payloadHash, concurrentRows.find(row => row.attempted_at)?.payload_hash)
+    const concurrentAttempt = concurrentRows.find(row => row.attempted_at)
+    assert.equal(concurrentReceipts[0].payloadHash, concurrentAttempt?.payload_hash)
+    assert.equal(concurrentReceipts[0].deliveryId, concurrentAttempt?.id)
+    assert.equal(concurrentReceipts[0].payloadDeliveryId, concurrentAttempt?.id)
 
     let budgetNetworkAttempts = 0
     const budgetSender = async () => {
@@ -155,10 +161,13 @@ async function verifyAfterRestart() {
         reportCaseId: 'case_concurrent',
     })
     assert.equal(persistedReceiverReceipts.length, 1)
+    const concurrentRowsBeforeReplay = await deliveryRows('report_pg_alert_concurrent')
+    const concurrentPayload = concurrentRowsBeforeReplay.find(row => row.attempted_at)?.payload
     const replayedReceiver = await recordDwmWebhookReceiverReceipt({
         eventId: 'receiver_pg_concurrent',
         receivedAt: receiverReceivedAt,
-        payload: (await deliveryRows('report_pg_alert_concurrent')).find(row => row.attempted_at)?.payload,
+        payload: concurrentPayload,
+        signature: signDwmWebhookDeliveryBody(canonicalJson(concurrentPayload)),
     })
     assert.equal(replayedReceiver.ok, true)
     assert.equal(replayedReceiver.ok && replayedReceiver.created, false)
@@ -200,6 +209,14 @@ async function verifyAfterRestart() {
 
     const retried = await retryDwmWebhookDelivery(adminId, orgId, prior.id, async (_endpoint, body) => {
         sentBodies.push(body)
+        const receiver = await recordDwmWebhookReceiverReceipt({
+            eventId: 'receiver_pg_restart',
+            receivedAt: '2026-07-24T10:05:00.000Z',
+            payload: JSON.parse(body),
+            signature: signDwmWebhookDeliveryBody(body),
+        })
+        assert.equal(receiver.ok, true)
+        assert.equal(receiver.ok && receiver.created, true)
         return { status: 204, body: 'accepted after restart' }
     })
     assert.equal(retried.ok, true, JSON.stringify(retried))
@@ -210,13 +227,34 @@ async function verifyAfterRestart() {
     assert.equal(retried.delivery.auditActorId, adminId)
     assert.equal(retried.delivery.attemptCount, 2)
     assert.deepEqual(retried.delivery.payload, prior.payload)
+    const restartReceipts = await listDwmWebhookReceiverReceipts(orgId, {
+        destinationId,
+        reportCaseId: 'case_restart',
+    })
+    assert.equal(restartReceipts.length, 1)
+    assert.equal(restartReceipts[0].deliveryId, retried.delivery.id)
+    assert.equal(restartReceipts[0].payloadDeliveryId, prior.id)
+    assert.equal(restartReceipts[0].payloadHash, prior.payload_hash)
+
+    let duplicateNetworkAttempts = 0
+    const [duplicate] = await deliverDwmAlertNotification(ownerId, deliveryInput('restart', false), async () => {
+        duplicateNetworkAttempts += 1
+        return { status: 204, body: 'duplicate must not reach receiver' }
+    })
+    assert.equal(duplicate.status, 'skipped')
+    assert.equal(duplicateNetworkAttempts, 0)
+    assert.equal((await listDwmWebhookReceiverReceipts(orgId, {
+        destinationId,
+        reportCaseId: 'case_restart',
+    })).length, 1)
 
     const restartRows = await deliveryRows('report_pg_alert_restart')
-    assert.equal(restartRows.filter(row => row.attempted_at).length, 2)
+    const attemptedRestartRows = restartRows.filter(row => row.attempted_at)
+    assert.equal(attemptedRestartRows.length, 2)
     assert.equal(restartRows.filter(row => row.status === 'delivered').length, 1)
     assert.equal(new Set(restartRows.map(row => row.idempotency_key)).size, 1)
-    assert.ok(restartRows.every(row => canonicalJson(row.payload) === receiverObservation.body))
-    assert.ok(restartRows.every(row => row.payload_hash === receiverObservation.payloadHash))
+    assert.ok(attemptedRestartRows.every(row => canonicalJson(row.payload) === receiverObservation.body))
+    assert.ok(attemptedRestartRows.every(row => row.payload_hash === receiverObservation.payloadHash))
 
     const budgetRows = await deliveryRows('report_pg_alert_budget')
     assert.equal(budgetRows.filter(row => row.dry_run).length, 3)
@@ -237,6 +275,8 @@ async function verifyAfterRestart() {
         prematureRetryBlocked: receiverObservation.prematureRetryBlocked,
         reportReceiptPastHundredRows: reportRowsPastLimit.length === 1,
         durableReceiverReceiptAfterRestart: persistedReceiverReceipts.length === 1,
+        retryReceiptBoundToAuthoritativeDelivery: restartReceipts[0].deliveryId === retried.delivery.id,
+        duplicateNetworkAttempts,
         receiverReplayCreatedDuplicate: replayedReceiver.ok && replayedReceiver.created,
         exactIdempotencyLineage: retried.delivery.idempotencyKey === storedIdempotencyKey,
         retryActorAuditOnly: retried.delivery.ownerId === ownerId && retried.delivery.auditActorId === adminId,

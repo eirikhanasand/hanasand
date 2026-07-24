@@ -762,9 +762,24 @@ export async function listDwmWebhookAuditEvents(ownerId: string, orgId?: string)
     return (result.rows as DwmWebhookAuditRow[]).map(toDwmWebhookAuditEvent)
 }
 
+export function signDwmWebhookDeliveryBody(body: string, secret = process.env.TI_SCRAPER_SERVICE_TOKEN || '') {
+    return secret ? `sha256=${crypto.createHmac('sha256', secret).update(body).digest('hex')}` : ''
+}
+
+function constantTimeEqual(expected: string, presented: string) {
+    const expectedBytes = Buffer.from(expected)
+    const presentedBytes = Buffer.from(presented)
+    return expectedBytes.length > 0
+        && expectedBytes.length === presentedBytes.length
+        && crypto.timingSafeEqual(expectedBytes, presentedBytes)
+}
+
 export function validateDwmWebhookReceiverEnvelope(value: unknown) {
     const envelope = recordOrEmpty(value)
     const payload = recordOrEmpty(envelope.payload)
+    const payloadBody = canonicalJson(payload)
+    const expectedSignature = signDwmWebhookDeliveryBody(payloadBody)
+    const presentedSignature = clean(envelope.signature)
     const nestedContext = recordOrEmpty(payload._hanasand)
     const context = Object.keys(nestedContext).length ? nestedContext : payload
     const org = recordOrEmpty(context.org)
@@ -782,6 +797,9 @@ export function validateDwmWebhookReceiverEnvelope(value: unknown) {
     const receivedAt = clean(envelope.receivedAt)
 
     if (!Object.keys(payload).length) return { valid: false as const, error: 'Receiver payload is required.' }
+    if (!constantTimeEqual(expectedSignature, presentedSignature)) {
+        return { valid: false as const, error: 'Receiver payload signature is invalid.' }
+    }
     if (!orgId || !destinationId || !deliveryId || !eventType || !idempotencyKey) {
         return { valid: false as const, error: 'Receiver payload scope, destination, delivery, event type, and idempotency lineage are required.' }
     }
@@ -800,14 +818,11 @@ export function validateDwmWebhookReceiverEnvelope(value: unknown) {
         return { valid: false as const, error: reportValidation.error || 'Third-party report validation failed.' }
     }
     const reportPolicy = recordOrEmpty(reportValidation.report?.reportPolicy)
-    const payloadHash = hashValue('payload', canonicalJson(payload))
+    const payloadHash = hashValue('payload', payloadBody)
     const receiptId = hashValue('receiver_receipt', canonicalJson({
         orgId,
         destinationId,
-        deliveryId,
-        eventType,
         idempotencyKey,
-        payloadHash,
     }))
 
     return {
@@ -880,7 +895,13 @@ export async function recordDwmWebhookReceiverReceipt(value: unknown) {
           AND action = 'receiver.accepted'
         LIMIT 1
     `, [receipt.id, receipt.orgId, receipt.destinationId])
-    if (existing.rows[0]) return { ok: true as const, created: false, receipt: receiverReceiptFromAudit(existing.rows[0] as DwmWebhookAuditRow) }
+    if (existing.rows[0]) {
+        const existingReceipt = receiverReceiptFromAudit(existing.rows[0] as DwmWebhookAuditRow)
+        if (existingReceipt.payloadHash !== receipt.payloadHash) {
+            return { ok: false as const, status: 409, error: 'Receiver idempotency lineage already contains a different payload.' }
+        }
+        return { ok: true as const, created: false, receipt: existingReceipt }
+    }
     return { ok: false as const, status: 404, error: 'Receiver destination is not active in the delivered organization scope.' }
 }
 
@@ -896,7 +917,7 @@ export async function listDwmWebhookReceiverReceipts(orgId: string, filters: {
         WHERE action = 'receiver.accepted'
           AND org_id = $1
           AND ($2::TEXT IS NULL OR destination_id = $2)
-          AND ($3::TEXT IS NULL OR metadata->>'deliveryId' = $3)
+          AND ($3::TEXT IS NULL OR delivery_id = $3 OR metadata->>'deliveryId' = $3)
           AND ($4::TEXT IS NULL OR metadata->>'reportCaseId' = $4)
           AND ($5::TEXT IS NULL OR metadata->>'reportExportChecksum' = $5)
         ORDER BY created_at DESC
@@ -917,7 +938,8 @@ function receiverReceiptFromAudit(row: DwmWebhookAuditRow) {
         id: row.id,
         orgId: row.org_id,
         destinationId: row.destination_id,
-        deliveryId: clean(metadata.deliveryId),
+        deliveryId: row.delivery_id,
+        payloadDeliveryId: clean(metadata.deliveryId),
         eventType: clean(metadata.eventType),
         idempotencyKey: clean(metadata.idempotencyKey),
         payloadHash: clean(metadata.payloadHash),
@@ -928,6 +950,25 @@ function receiverReceiptFromAudit(row: DwmWebhookAuditRow) {
         receivedAt: clean(metadata.receivedAt),
         persistedAt: row.created_at,
     }
+}
+
+async function bindDwmWebhookReceiverReceipt(delivery: DwmWebhookDeliveryRow) {
+    await run(`
+        UPDATE dwm_webhook_audit_events
+           SET delivery_id = $1
+         WHERE action = 'receiver.accepted'
+           AND org_id = $2
+           AND destination_id = $3
+           AND delivery_id IS NULL
+           AND metadata->>'idempotencyKey' = $4
+           AND metadata->>'payloadHash' = $5
+    `, [
+        delivery.id,
+        delivery.org_id,
+        delivery.destination_id,
+        delivery.idempotency_key,
+        delivery.payload_hash,
+    ])
 }
 
 export function buildDwmWebhookDeliveryEvidence({
@@ -7387,6 +7428,7 @@ export async function retryDwmWebhookDelivery(
             status === 'delivered' ? completedAt : null,
         ])
         const row = result.rows[0] as DwmWebhookDeliveryRow
+        await bindDwmWebhookReceiverReceipt(row)
         if (status === 'delivered') {
             await run(`
             UPDATE dwm_webhook_destinations
@@ -8819,6 +8861,7 @@ async function deliverToDwmWebhookDestination({
     }
 
     const delivery = result.rows[0] as DwmWebhookDeliveryRow
+    await bindDwmWebhookReceiverReceipt(delivery)
     const auditAction = markTested
         ? 'delivery.tested'
         : delivery.status === 'failed'
@@ -9385,6 +9428,7 @@ async function postPublicWebhook(endpoint: string, body: string) {
     const { normalized, addresses } = await resolvePublicWebhookTarget(endpoint)
     const url = new URL(normalized)
     const timeoutMs = Math.max(1000, Math.min(Number(process.env.DWM_WEBHOOK_TIMEOUT_MS || 8000), 30000))
+    const signature = signDwmWebhookDeliveryBody(body)
 
     return new Promise<{ status: number, body: string }>((resolve, reject) => {
         const request = httpsRequest(url, {
@@ -9393,6 +9437,7 @@ async function postPublicWebhook(endpoint: string, body: string) {
                 'content-type': 'application/json',
                 'content-length': Buffer.byteLength(body),
                 'user-agent': 'hanasand-dwm-webhooks/1.0',
+                ...(signature ? { 'x-hanasand-delivery-signature': signature } : {}),
             },
             lookup: pinnedWebhookLookup(addresses),
         }, response => {

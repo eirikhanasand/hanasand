@@ -359,50 +359,71 @@ test('persists one deterministic receiver receipt and filters it before the read
     const {
         listDwmWebhookReceiverReceipts,
         recordDwmWebhookReceiverReceipt,
+        signDwmWebhookDeliveryBody,
     } = await import('../src/utils/dwm/webhooks.ts')
+    const previousToken = process.env.TI_SCRAPER_SERVICE_TOKEN
+    process.env.TI_SCRAPER_SERVICE_TOKEN = 'receiver-signature-test'
     const payload = reportDeliveryPayload()
     const envelope = {
         eventId: 'receiver_event_1',
         receivedAt: '2026-07-24T10:00:00.000Z',
         payload,
+        signature: signDwmWebhookDeliveryBody(canonicalJson(payload)),
     }
-    const first = await recordDwmWebhookReceiverReceipt(envelope)
-    const duplicate = await recordDwmWebhookReceiverReceipt(envelope)
-    expect(first).toMatchObject({
-        ok: true,
-        created: true,
-        receipt: {
-            orgId: 'org_1',
+    try {
+        const first = await recordDwmWebhookReceiverReceipt(envelope)
+        const duplicate = await recordDwmWebhookReceiverReceipt(envelope)
+        expect(first).toMatchObject({
+            ok: true,
+            created: true,
+            receipt: {
+                orgId: 'org_1',
+                destinationId: 'destination_1',
+                deliveryId: null,
+                payloadDeliveryId: 'delivery_receiver_1',
+                reportValidation: 'valid',
+                reportCaseId: 'case_1',
+            },
+        })
+        expect(duplicate).toMatchObject({
+            ok: true,
+            created: false,
+            receipt: { id: first.ok ? first.receipt.id : '' },
+        })
+        const conflictingPayload = { ...payload, alert: { ...payload.alert, title: 'different payload' } }
+        const conflict = await recordDwmWebhookReceiverReceipt({
+            ...envelope,
+            payload: conflictingPayload,
+            signature: signDwmWebhookDeliveryBody(canonicalJson(conflictingPayload)),
+        })
+        expect(conflict).toMatchObject({
+            ok: false,
+            status: 409,
+            error: 'Receiver idempotency lineage already contains a different payload.',
+        })
+        expect(receiverAudits).toHaveLength(1)
+
+        const receipts = await listDwmWebhookReceiverReceipts('org_1', {
             destinationId: 'destination_1',
             deliveryId: 'delivery_receiver_1',
-            reportValidation: 'valid',
             reportCaseId: 'case_1',
-        },
-    })
-    expect(duplicate).toMatchObject({
-        ok: true,
-        created: false,
-        receipt: { id: first.ok ? first.receipt.id : '' },
-    })
-    expect(receiverAudits).toHaveLength(1)
-
-    const receipts = await listDwmWebhookReceiverReceipts('org_1', {
-        destinationId: 'destination_1',
-        deliveryId: 'delivery_receiver_1',
-        reportCaseId: 'case_1',
-        reportExportChecksum: payload.report.exportChecksum,
-    })
-    expect(receipts).toHaveLength(1)
-    const query = queries.at(-1)
-    expect(query?.params).toEqual([
-        'org_1',
-        'destination_1',
-        'delivery_receiver_1',
-        'case_1',
-        payload.report.exportChecksum,
-    ])
-    expect(query?.sql.indexOf('metadata->>\'reportCaseId\' = $4')).toBeLessThan(query?.sql.indexOf('LIMIT 100') ?? -1)
-    expect(query?.sql.indexOf('metadata->>\'reportExportChecksum\' = $5')).toBeLessThan(query?.sql.indexOf('LIMIT 100') ?? -1)
+            reportExportChecksum: payload.report.exportChecksum,
+        })
+        expect(receipts).toHaveLength(1)
+        const query = queries.at(-1)
+        expect(query?.params).toEqual([
+            'org_1',
+            'destination_1',
+            'delivery_receiver_1',
+            'case_1',
+            payload.report.exportChecksum,
+        ])
+        expect(query?.sql.indexOf('metadata->>\'reportCaseId\' = $4')).toBeLessThan(query?.sql.indexOf('LIMIT 100') ?? -1)
+        expect(query?.sql.indexOf('metadata->>\'reportExportChecksum\' = $5')).toBeLessThan(query?.sql.indexOf('LIMIT 100') ?? -1)
+    } finally {
+        if (previousToken === undefined) delete process.env.TI_SCRAPER_SERVICE_TOKEN
+        else process.env.TI_SCRAPER_SERVICE_TOKEN = previousToken
+    }
 })
 
 test('serializes the same org destination checksum across two admins', async () => {

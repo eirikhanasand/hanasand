@@ -41,6 +41,7 @@ test('acknowledges a webhook only after the central API persists its receiver re
             headers: {
                 'content-type': 'application/json',
                 'x-hanasand-event-id': 'event_1',
+                'x-hanasand-delivery-signature': 'sha256=signed-by-api',
             },
             body: JSON.stringify(payload),
         }))
@@ -65,7 +66,12 @@ test('acknowledges a webhook only after the central API persists its receiver re
         assert.equal(persisted.length, 1)
         assert.equal(new URL(persisted[0].url).pathname, '/api/dwm/webhook-receiver')
         assert.equal(persisted[0].headers.get('x-hanasand-service-token'), 'service-token')
-        assert.deepEqual((await persisted[0].clone().json()).payload, payload)
+        assert.deepEqual(await persisted[0].clone().json(), {
+            eventId: 'event_1',
+            receivedAt: (await persisted[0].clone().json()).receivedAt,
+            payload,
+            signature: 'sha256=signed-by-api',
+        })
 
         globalThis.fetch = async () => {
             throw new Error('central API unavailable')

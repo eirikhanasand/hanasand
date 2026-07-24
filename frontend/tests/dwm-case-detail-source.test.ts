@@ -49,6 +49,7 @@ test('DWM case detail exposes webhook delivery traceability', () => {
     assert.match(source, /fetch\(`\/api\/dwm\/webhook-sink\$\{queryString\(\{ orgId: scopedOrganizationId, reportCaseId: caseId \}\)\}`/)
     assert.match(source, /receiverReceipts = receiverReceiptRowsFromApi\(receiverPayload\)/)
     assert.match(source, /Hanasand receiver receipt/)
+    assert.match(source, /receipt\.destinationId === \(latestDelivery\?\.webhookDestinationId \|\| latestDelivery\?\.destinationId\)/)
     assert.match(source, /reportExportChecksum: stringValue\(row\.reportExportChecksum\)/)
     assert.match(source, /deliveryContext: deliveryContextFromApi\(orderedDeliveries\)/)
     assert.match(source, /const deliveries = orderCaseDeliveries\(state\.detail\.deliveries \|\| state\.exportPayload\?\.deliveryEvidence \|\| \[\]\)/)
