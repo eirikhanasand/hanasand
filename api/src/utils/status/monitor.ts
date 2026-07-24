@@ -191,6 +191,7 @@ export default async function runSyntheticMonitor() {
                 SELECT
                   count(*) FILTER (
                     WHERE record_type = 'analyst_metadata_review_task'
+                      AND record->>'recordKind' = 'automatic_intelligence_review_task'
                       AND record->>'state' IN ('queued', 'running', 'retrying')
                       AND updated_at < NOW() - INTERVAL '30 minutes'
                   )::int AS stale_reviews,
