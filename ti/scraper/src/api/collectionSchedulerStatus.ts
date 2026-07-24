@@ -357,6 +357,9 @@ export async function updateCollectionSchedulerControl(request: Request, options
     if (typeof loop.runOnce !== "function") {
       return json({ error: { code: "run_now_unavailable", message: "Collection scheduler does not expose runOnce." } }, 409);
     }
+    if (readCanaryState(loop)?.enabled === false) {
+      return json({ error: { code: "scheduler_paused", message: "Resume the collection scheduler before running it." } }, 409);
+    }
     await loop.runOnce();
   } else {
     if (typeof loop.setEnabled !== "function") {

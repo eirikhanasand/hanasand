@@ -55,6 +55,18 @@ describe("collection scheduler control", () => {
     expect(body.lastControlAction).toMatchObject({ action: "run_now", approvedBy: "service:hanasand-api", applied: true });
   });
 
+  test("does not report a paused scheduler run as applied", async () => {
+    let runs = 0;
+    const options = optionsWithCanaryLoop({ enabled: false, runOnce: async () => { runs += 1; } });
+
+    const response = await handleApiRequest(request({ action: "run_now", approvedBy: "test" }), options as any);
+    const body = await json(response);
+
+    expect(response.status).toBe(409);
+    expect(body.error).toMatchObject({ code: "scheduler_paused" });
+    expect(runs).toBe(0);
+  });
+
   test("requires trusted operator identity when authentication is configured", async () => {
     const options = optionsWithCanaryLoop();
     options.serviceToken = "scheduler-test-secret";

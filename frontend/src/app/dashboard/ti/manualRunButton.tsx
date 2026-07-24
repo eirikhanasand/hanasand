@@ -27,7 +27,7 @@ export default function ManualRunButton({ sourceId = 'all_sources', label = 'Sta
 
         setState('running')
         setQueuedAt(now)
-        setMessage(uniqueQueries.length ? `Starting ${uniqueQueries.length} source check${uniqueQueries.length === 1 ? '' : 's'}...` : 'Run request recorded.')
+        setMessage(uniqueQueries.length ? `Starting ${uniqueQueries.length} source check${uniqueQueries.length === 1 ? '' : 's'}...` : 'Starting scheduled source collection...')
 
         try {
             window.localStorage.setItem(`hanasand:ti-admin:manual-run:${sourceId}`, now)
@@ -54,9 +54,8 @@ export default function ManualRunButton({ sourceId = 'all_sources', label = 'Sta
         }))
 
         const qa = controlResult.body.qa?.qualityScore ? ` QA ${controlResult.body.qa.qualityScore}%.` : ''
-        setMessage(controlResult.ok ? `Queued in Hanasand AI scheduler.${qa}` : controlResult.body.error?.message || 'Run request recorded; scheduler response unavailable.')
-
-        setState('queued')
+        setMessage(controlResult.ok ? `Queued in Hanasand AI scheduler.${qa}` : controlResult.body.error?.message || 'Run failed; scheduler response unavailable.')
+        setState(controlResult.ok ? 'queued' : 'idle')
     }
 
     return (
