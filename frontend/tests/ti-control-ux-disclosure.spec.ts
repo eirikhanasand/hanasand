@@ -40,6 +40,8 @@ test('ti control keeps search and work queue primary while telemetry is disclose
     expect(source).not.toContain('Source plan returned')
     expect(source).not.toContain('What returned')
     expect(manualRun).toContain("action: sourceId === 'all_sources' ? 'scheduler_run_now' : 'run_query'")
+    expect(manualRun).toContain("setState(controlResult.ok ? 'queued' : 'idle')")
+    expect(manualRun).not.toContain("Run request recorded")
     expect(controlRoute).toContain("if (!base) return unavailable('TI_SCRAPER_API_BASE is not configured.')")
     expect(controlRoute).not.toContain('hanasand_ai_scheduler_fallback')
 })
