@@ -218,7 +218,12 @@ async function discoverFeedProofs(input: {
   if (!pageUrl) throw new Error("Public feed discovery returned an unsafe response URL.");
   const body = await abortable(boundedResponseText(response, MAX_RESPONSE_BYTES), input.signal);
   const direct = feedProof(body, pageUrl, response.headers.get("content-type"), input.generatedAt);
-  return direct ? [direct] : advertisedFeedProofs(body, pageUrl, input.fetcher, input.generatedAt, input.maxFeeds, input.signal);
+  if (direct) return [direct];
+  const advertised = await advertisedFeedProofs(body, pageUrl, input.fetcher, input.generatedAt, input.maxFeeds, input.signal);
+  const related = advertised.length < input.maxFeeds
+    ? await relatedPublisherFeedProofs(body, pageUrl, input.fetcher, input.generatedAt, input.maxFeeds - advertised.length, input.signal)
+    : [];
+  return [...advertised, ...related];
 }
 
 function retainedPublisherReferences(store: DiscoveryStore) {
@@ -272,6 +277,27 @@ async function advertisedFeedProofs(html: string, pageUrl: string, fetcher: Cana
     const body = await abortable(boundedResponseText(response, MAX_RESPONSE_BYTES), signal);
     const proof = feedProof(body, effectiveUrl, response.headers.get("content-type"), generatedAt);
     if (proof && !proofs.some((row) => row.feedEndpointKey === proof.feedEndpointKey)) proofs.push(proof);
+  }
+  return proofs;
+}
+
+async function relatedPublisherFeedProofs(html: string, pageUrl: string, fetcher: CanaryFetch, generatedAt: string, maxFeeds: number, signal: AbortSignal) {
+  const proofs: FeedProof[] = [];
+  for (const url of relatedSecurityPageUrls(html, pageUrl).slice(0, maxFeeds)) {
+    const response = await abortable(fetcher(url, {
+      headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.8" },
+      signal
+    }), signal);
+    if (!response.ok) continue;
+    const effectiveUrl = safePublicReference(response.url || url);
+    if (!effectiveUrl) continue;
+    const body = await abortable(boundedResponseText(response, MAX_RESPONSE_BYTES), signal);
+    const direct = feedProof(body, effectiveUrl, response.headers.get("content-type"), generatedAt);
+    const discovered = direct ? [direct] : await advertisedFeedProofs(body, effectiveUrl, fetcher, generatedAt, 1, signal);
+    for (const proof of discovered) {
+      if (!proofs.some((row) => row.feedEndpointKey === proof.feedEndpointKey)) proofs.push(proof);
+      if (proofs.length >= maxFeeds) return proofs;
+    }
   }
   return proofs;
 }
@@ -442,6 +468,23 @@ function alternateFeedUrls(html: string, pageUrl: string) {
   return urls;
 }
 
+function relatedSecurityPageUrls(html: string, pageUrl: string) {
+  const urls: string[] = [];
+  const pageOrigin = new URL(pageUrl).origin;
+  for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const href = attribute(match[1], "href");
+    if (!href) continue;
+    try {
+      const safe = safePublicReference(new URL(decodeHtml(href), pageUrl).toString());
+      if (!safe || new URL(safe).origin === pageOrigin) continue;
+      const context = `${safe} ${decodeHtml(match[2].replace(/<[^>]+>/g, " "))}`;
+      if (!/\b(?:security|advisory|advisories|alert|bulletin|cert|cve-\d{4}-\d+|exploit|incident|malware|psirt|ransomware|threat|vulnerabilit(?:y|ies))\b/i.test(context)) continue;
+      if (!urls.some((url) => canonicalFeedKey(url) === canonicalFeedKey(safe))) urls.push(safe);
+    } catch {}
+  }
+  return urls;
+}
+
 async function boundedResponseText(response: Response, maxBytes: number) {
   const reader = response.body?.getReader();
   if (!reader) return "";
@@ -451,9 +494,12 @@ async function boundedResponseText(response: Response, maxBytes: number) {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      bytes += value.byteLength;
-      if (bytes > maxBytes) throw new Error(`Public feed discovery exceeds maxBytes ${maxBytes}.`);
-      text += decoder.decode(value, { stream: true });
+      const remaining = maxBytes - bytes;
+      if (remaining <= 0) { await reader.cancel(); break; }
+      const accepted = value.byteLength > remaining ? value.subarray(0, remaining) : value;
+      bytes += accepted.byteLength;
+      text += decoder.decode(accepted, { stream: true });
+      if (accepted.byteLength < value.byteLength) { await reader.cancel(); break; }
     }
     return text + decoder.decode();
   } catch (error) {

@@ -131,6 +131,56 @@ describe("scheduled public feed discovery", () => {
     }
   });
 
+  test("follows one bounded security-reference hop to a new publisher feed", async () => {
+    const store = new InMemoryScraperStore();
+    usefulCapture(store, "reporter-parent", undefined, "run-reporter-parent", ["https://reporter.example/research/new-campaign"]);
+    const fetched: string[] = [];
+    const discovery = await runSourceFeedDiscoveryCycle({
+      store,
+      sourceFeedDiscoveryMaxFeedsPerReference: 2,
+      sourceFeedDiscoveryFetch: async (input: string | URL | Request) => {
+        const url = String(input instanceof Request ? input.url : input);
+        fetched.push(url);
+        if (url === "https://reporter.example/research/new-campaign") {
+          return response(
+            `<html><body>
+              <a href="https://vendor.example/security/advisories/CVE-2026-4242">Vendor security advisory</a>
+              <a href="https://marketing.example/company">Company profile</a>
+              <a href="https://127.0.0.1/security">Internal security page</a>
+              <a href="https://user:secret@auth.example/security">Authenticated security page</a>
+            </body></html>${"x".repeat(600_000)}`,
+            url,
+            "text/html"
+          );
+        }
+        if (url === "https://vendor.example/security/advisories/CVE-2026-4242") {
+          return response(feedLink("https://vendor.example/security/feed.xml"), url, "text/html");
+        }
+        if (url === "https://vendor.example/security/feed.xml") {
+          return response(rss("CVE-2026-4242", "https://vendor.example/security/advisories/CVE-2026-4242", generatedAt), url, "application/rss+xml");
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }
+    }, generatedAt);
+
+    expect(discovery).toMatchObject({
+      status: "completed",
+      importedSourceCount: 1,
+      failedPublisherCount: 0
+    });
+    expect(fetched).toEqual([
+      "https://reporter.example/research/new-campaign",
+      "https://vendor.example/security/advisories/CVE-2026-4242",
+      "https://vendor.example/security/feed.xml"
+    ]);
+    expect(store.listSources().find((row: any) => row.metadata?.sourceFeedDiscovery)).toMatchObject({
+      url: "https://vendor.example/security/feed.xml",
+      status: "candidate",
+      countsAsCoverage: false,
+      metadata: { productionCollection: false }
+    });
+  });
+
   test("bounds stuck auxiliary work before the canonical run and remains restart-idempotent", async () => {
     const directory = mkdtempSync(join(tmpdir(), "source-feed-discovery-timeout-"));
     const snapshotPath = join(directory, "store.json");
