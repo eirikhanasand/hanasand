@@ -181,6 +181,63 @@ describe("scheduled public feed discovery", () => {
     });
   });
 
+  test("discovers and verifies public Telegram channels without private access", async () => {
+    const store = new InMemoryScraperStore();
+    usefulCapture(store, "telegram-reporter", undefined, "run-telegram-reporter", ["https://reporter.example/research/apt29"]);
+    const fetched: string[] = [];
+    const discovery = await runSourceFeedDiscoveryCycle({
+      store,
+      sourceFeedDiscoveryFetch: async (input: string | URL | Request) => {
+        const url = String(input instanceof Request ? input.url : input);
+        fetched.push(url);
+        if (url === "https://reporter.example/research/apt29") {
+          return response(
+            `<html><body>
+              <a href="https://t.me/Public_Threat_Intel">Public threat channel</a>
+              <a href="https://t.me/+PrivateInvite">Private invite</a>
+              <a href="https://t.me/Public_Threat_Intel/42">One message</a>
+              <a href="https://telegram.dog/not-supported">Unsupported Telegram mirror</a>
+            </body></html>`,
+            url,
+            "text/html"
+          );
+        }
+        if (url === "https://t.me/s/public_threat_intel") {
+          return response(`
+            <html><body><section>
+              <div class="tgme_widget_message" data-post="public_threat_intel/42">
+                <div class="tgme_widget_message_text">APT29 used malware and exploited CVE-2026-4242 in a current phishing campaign.</div>
+                <time datetime="${generatedAt}"></time>
+              </div>
+            </section></body></html>`, url, "text/html");
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }
+    }, generatedAt);
+
+    expect(discovery).toMatchObject({
+      status: "completed",
+      importedSourceCount: 1,
+      failedPublisherCount: 0
+    });
+    expect(fetched).toEqual([
+      "https://reporter.example/research/apt29",
+      "https://t.me/s/public_threat_intel"
+    ]);
+    expect(store.listSources().find((row: any) => row.metadata?.sourceFeedDiscovery)).toMatchObject({
+      type: "telegram_public",
+      url: "https://t.me/public_threat_intel",
+      accessMethod: "public_http",
+      status: "candidate",
+      countsAsCoverage: false,
+      metadata: {
+        sourceFamily: "public_telegram",
+        collectionMode: "public_web_preview",
+        productionCollection: false
+      }
+    });
+  });
+
   test("bounds stuck auxiliary work before the canonical run and remains restart-idempotent", async () => {
     const directory = mkdtempSync(join(tmpdir(), "source-feed-discovery-timeout-"));
     const snapshotPath = join(directory, "store.json");

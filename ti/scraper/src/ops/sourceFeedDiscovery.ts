@@ -9,6 +9,7 @@ import { prepareRuntimeSource } from "../runtime/sourceBootstrap.ts";
 import { publicSourceReferenceUrl } from "../pipeline/sourceFieldReportTimestamp.ts";
 import type { CaptureMetadataStore } from "../storage/evidenceStore.ts";
 import { nowIso, stableId } from "../utils.ts";
+import { isSellableIntelText } from "../value/sellableIntel.ts";
 import type { CanaryFetch } from "./canaryCollectionTypes.ts";
 import { feedItems } from "./canaryFeedItems.ts";
 
@@ -86,7 +87,14 @@ type PublisherReference = {
   captureId: string;
   capturedAt?: string;
 };
-type FeedProof = { url: string; feedEndpointKey: string; observedItemCount: number; parserVersion: string };
+type FeedProof = {
+  url: string;
+  feedEndpointKey: string;
+  observedItemCount: number;
+  parserVersion: string;
+  sourceType?: "rss" | "telegram_public";
+  family?: "clear_web" | "public_telegram";
+};
 type Admission = { outcome: "imported" | "duplicate" | "revalidated"; sourceId: string; feedEndpointKey: string };
 type AttemptResult = {
   outcome: "feeds_proven" | "no_feed" | "fetch_failed";
@@ -98,7 +106,13 @@ type AttemptResult = {
   error?: string;
 };
 type ProcessedReference = AttemptResult & { planId: string };
-type FeedItem = { publishedAt?: unknown; metadata?: { parserWarnings?: unknown[]; parserVersion?: string } };
+type FeedItem = {
+  title?: string;
+  rawText?: string;
+  publishedAt?: string;
+  collectedAt?: string;
+  metadata?: { parserWarnings?: unknown[]; parserVersion?: string };
+};
 
 export async function runSourceFeedDiscoveryCycle(options: DiscoveryOptions, generatedAt = options.now?.() ?? nowIso()) {
   if (options.tenantId !== undefined || options.scheduleSourceFeedDiscovery === false) {
@@ -220,10 +234,13 @@ async function discoverFeedProofs(input: {
   const direct = feedProof(body, pageUrl, response.headers.get("content-type"), input.generatedAt);
   if (direct) return [direct];
   const advertised = await advertisedFeedProofs(body, pageUrl, input.fetcher, input.generatedAt, input.maxFeeds, input.signal);
-  const related = advertised.length < input.maxFeeds
-    ? await relatedPublisherFeedProofs(body, pageUrl, input.fetcher, input.generatedAt, input.maxFeeds - advertised.length, input.signal)
+  const telegram = advertised.length < input.maxFeeds
+    ? await publicTelegramProofs(body, pageUrl, input.fetcher, input.generatedAt, input.maxFeeds - advertised.length, input.signal)
     : [];
-  return [...advertised, ...related];
+  const related = advertised.length + telegram.length < input.maxFeeds
+    ? await relatedPublisherFeedProofs(body, pageUrl, input.fetcher, input.generatedAt, input.maxFeeds - advertised.length - telegram.length, input.signal)
+    : [];
+  return [...advertised, ...telegram, ...related];
 }
 
 function retainedPublisherReferences(store: DiscoveryStore) {
@@ -302,6 +319,43 @@ async function relatedPublisherFeedProofs(html: string, pageUrl: string, fetcher
   return proofs;
 }
 
+async function publicTelegramProofs(html: string, pageUrl: string, fetcher: CanaryFetch, generatedAt: string, maxChannels: number, signal: AbortSignal) {
+  const proofs: FeedProof[] = [];
+  for (const url of publicTelegramChannelUrls(html, pageUrl).slice(0, maxChannels)) {
+    const channel = new URL(url).pathname.slice(1);
+    const previewUrl = `https://t.me/s/${channel}`;
+    const response = await abortable(fetcher(previewUrl, {
+      headers: { accept: "text/html" },
+      signal
+    }), signal);
+    if (!response.ok || !safePublicReference(response.url || previewUrl)) continue;
+    const body = await abortable(boundedResponseText(response, MAX_RESPONSE_BYTES), signal);
+    const probe = { id: "source-telegram-discovery-probe", name: "Public Telegram intelligence channel", type: "telegram_public", url };
+    const rows = (feedItems(probe, { id: probe.id, targetUrl: url }, body, generatedAt, {}, 150) as FeedItem[])
+      .filter((row) => !row.metadata?.parserWarnings?.length
+        && currentPublisherTimestamp(row.publishedAt, generatedAt)
+        && isSellableIntelText({
+          text: String(row.rawText ?? ""),
+          title: row.title,
+          sourceId: probe.id,
+          publishedAt: row.publishedAt,
+          collectedAt: row.collectedAt,
+          now: generatedAt,
+          maxAgeDays: 365
+        }));
+    if (!rows.length) continue;
+    proofs.push({
+      url,
+      feedEndpointKey: canonicalFeedKey(url),
+      observedItemCount: rows.length,
+      parserVersion: rows[0].metadata?.parserVersion ?? "telegram-public-preview:v1",
+      sourceType: "telegram_public",
+      family: "public_telegram"
+    });
+  }
+  return proofs;
+}
+
 async function abortable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) throw signal.reason;
   let abort!: () => void;
@@ -335,6 +389,8 @@ function feedProof(body: string, feedUrl: string, mediaType: string | null, gene
 
 function admitFeed(store: DiscoveryStore, reference: PublisherReference, proof: FeedProof, generatedAt: string): Admission {
   const existing = store.listSources().find((source) => seedDuplicateKey(source) === proof.feedEndpointKey);
+  const sourceType = proof.sourceType ?? "rss";
+  const family = proof.family ?? "clear_web";
   const verification = {
     outcome: "content_parsed",
     verifiedAt: generatedAt,
@@ -370,19 +426,23 @@ function admitFeed(store: DiscoveryStore, reference: PublisherReference, proof: 
 
   const source: DiscoverySource = {
     id: stableId("src", proof.feedEndpointKey),
-    name: `${new URL(proof.url).hostname} public intelligence feed`,
-    type: "rss",
+    name: sourceType === "telegram_public"
+      ? `${new URL(proof.url).pathname.slice(1)} public Telegram intelligence channel`
+      : `${new URL(proof.url).hostname} public intelligence feed`,
+    type: sourceType,
     url: proof.url,
     accessMethod: "public_http",
     status: "candidate",
     risk: "low",
     trustScore: 0.7,
-    crawlFrequencySeconds: DAY_SECONDS,
-    legalNotes: "Public RSS or Atom feed advertised by a retained useful public publisher reference and fetched without credentials.",
+    crawlFrequencySeconds: sourceType === "telegram_public" ? 21_600 : DAY_SECONDS,
+    legalNotes: sourceType === "telegram_public"
+      ? "Public Telegram channel linked by retained useful public intelligence and verified through the unauthenticated public web preview."
+      : "Public RSS or Atom feed advertised by a retained useful public publisher reference and fetched without credentials.",
     catalog: {
       approvalScope: "safe_public_auto",
-      adapterCompatibility: ["rss"],
-      collection: { freshnessTargetSeconds: DAY_SECONDS }
+      adapterCompatibility: [sourceType],
+      collection: { freshnessTargetSeconds: sourceType === "telegram_public" ? 21_600 : DAY_SECONDS }
     },
     governance: {
       approvalRequired: false,
@@ -393,9 +453,10 @@ function admitFeed(store: DiscoveryStore, reference: PublisherReference, proof: 
       policyVersion: "public-feed-discovery:v1"
     },
     metadata: {
-      sourceFamily: "clear_web",
+      sourceFamily: family,
       queryClass: "threat-intel",
       activityWindowSeconds: 365 * DAY_SECONDS,
+      ...(sourceType === "telegram_public" ? { collectionMode: "public_web_preview", publicTelegramCandidate: true } : {}),
       sourcePortfolioVerification: verification,
       sourceFeedDiscovery: {
         workflow: REQUEST_ID,
@@ -405,7 +466,7 @@ function admitFeed(store: DiscoveryStore, reference: PublisherReference, proof: 
       }
     }
   };
-  const bundle = { schemaVersion: "ti.source_portfolio_batch.v1", family: "clear_web", generatedAt, sources: [source] };
+  const bundle = { schemaVersion: "ti.source_portfolio_batch.v1", family, generatedAt, sources: [source] };
   const validation = validateSourcePortfolioBatch(bundle, generatedAt);
   if (!validation.valid) throw new Error(validation.errors[0]?.message ?? "Discovered feed failed source portfolio validation.");
   const report = importSeedBundle(bundle, { importedAt: generatedAt, existingSources: store.listSources() });
@@ -468,6 +529,25 @@ function alternateFeedUrls(html: string, pageUrl: string) {
   return urls;
 }
 
+function publicTelegramChannelUrls(html: string, pageUrl: string) {
+  const urls: string[] = [];
+  for (const tag of html.match(/<a\b[^>]*>/gi) ?? []) {
+    const href = attribute(tag, "href");
+    if (!href) continue;
+    try {
+      const resolved = new URL(decodeHtml(href), pageUrl);
+      if (resolved.protocol !== "https:" || resolved.username || resolved.password
+        || !["t.me", "telegram.me"].includes(resolved.hostname.toLowerCase())
+        || resolved.search || resolved.hash
+        || !/^\/(?:s\/)?[a-z0-9_]{4,}\/?$/i.test(resolved.pathname)
+        || /^\/(?:s\/)?(?:joinchat|share|proxy|login)\/?$/i.test(resolved.pathname)) continue;
+      const canonical = canonicalFeedKey(resolved.toString());
+      if (!urls.includes(canonical)) urls.push(canonical);
+    } catch {}
+  }
+  return urls;
+}
+
 function relatedSecurityPageUrls(html: string, pageUrl: string) {
   const urls: string[] = [];
   const pageOrigin = new URL(pageUrl).origin;
@@ -477,6 +557,7 @@ function relatedSecurityPageUrls(html: string, pageUrl: string) {
     try {
       const safe = safePublicReference(new URL(decodeHtml(href), pageUrl).toString());
       if (!safe || new URL(safe).origin === pageOrigin) continue;
+      if (["t.me", "telegram.me"].includes(new URL(safe).hostname.toLowerCase())) continue;
       const context = `${safe} ${decodeHtml(match[2].replace(/<[^>]+>/g, " "))}`;
       if (!/\b(?:security|advisory|advisories|alert|bulletin|cert|cve-\d{4}-\d+|exploit|incident|malware|psirt|ransomware|threat|vulnerabilit(?:y|ies))\b/i.test(context)) continue;
       if (!urls.some((url) => canonicalFeedKey(url) === canonicalFeedKey(safe))) urls.push(safe);
