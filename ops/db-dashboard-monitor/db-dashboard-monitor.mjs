@@ -351,6 +351,7 @@ async function sendStatusIngest(service, checkName, result) {
     }
     const response = await fetch(`${statusIngestBaseUrl}/api/status/ingest`, {
         method: 'POST',
+        signal: AbortSignal.timeout(timeoutMs),
         headers: {
             Authorization: `Bearer ${statusIngestToken}`,
             'Content-Type': 'application/json',
