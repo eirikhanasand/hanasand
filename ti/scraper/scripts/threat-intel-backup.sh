@@ -110,6 +110,7 @@ verify_object_continuity() {
   object_continuity_status=initial_no_prior_structured_archive
   object_continuity_prior_archive=none
   object_continuity_compared_objects=0
+  object_continuity_legacy_baseline_objects=$(awk -F '\t' 'NR > 1 && $10 != $15 { count += 1 } END { print count + 0 }' "$object_ledger")
   [ -n "$prior_object_ledger" ] || return 0
   [ -f "$prior_object_ledger" ] && [ ! -L "$prior_object_ledger" ] || {
     echo "prior object ledger is not a regular file" >&2
@@ -154,6 +155,9 @@ verify_object_continuity() {
           print "immutable evidence object changed between backups: " $1 > "/dev/stderr"
           changed = 1
         }
+      } else if ($10 != $15) {
+        print "new legacy evidence object has no prior byte baseline: " $1 > "/dev/stderr"
+        changed = 1
       }
     }
     END {
@@ -166,6 +170,7 @@ verify_object_continuity() {
   fi
   object_continuity_status=verified
   object_continuity_prior_archive=$(basename -- "$prior_archive")
+  object_continuity_legacy_baseline_objects=0
 }
 
 verify() (
@@ -300,6 +305,7 @@ case "$action" in
       printf 'object_continuity=%s\n' "$object_continuity_status"
       printf 'object_continuity_prior_archive=%s\n' "$object_continuity_prior_archive"
       printf 'object_continuity_compared_objects=%s\n' "$object_continuity_compared_objects"
+      printf 'object_continuity_legacy_baseline_objects=%s\n' "$object_continuity_legacy_baseline_objects"
       printf 'restore_policy=isolated_ephemeral_postgresql_only\n'
     } > "$manifest"
     rm -f -- "$archive/SOURCE-DATABASE"

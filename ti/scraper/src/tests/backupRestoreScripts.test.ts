@@ -335,6 +335,7 @@ describe("backup and restore scripts", () => {
       expect(manifest).toContain("object_continuity=initial_no_prior_structured_archive\n");
       expect(manifest).toContain("object_continuity_prior_archive=none\n");
       expect(manifest).toContain("object_continuity_compared_objects=0\n");
+      expect(manifest).toContain("object_continuity_legacy_baseline_objects=0\n");
 
       const dockerRuns = readFileSync(log, "utf8").trim().split("\n");
       expect(dockerRuns.filter((line) => line.startsWith("compose ps -q ti-scraper"))).toHaveLength(1);
@@ -381,6 +382,124 @@ describe("backup and restore scripts", () => {
       expect(manifest).toContain("object_continuity=verified\n");
       expect(manifest).toContain("object_continuity_prior_archive=20260723T010000Z\n");
       expect(manifest).toContain("object_continuity_compared_objects=1\n");
+      expect(manifest).toContain("object_continuity_legacy_baseline_objects=0\n");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("first structured backup explicitly records its legacy object byte baseline", () => {
+    const root = mkdtempSync(join(tmpdir(), "ti-backup-initial-legacy-continuity-"));
+    try {
+      const archive = join(root, "archive");
+      const currentLedger = join(root, "current-object-ledger.tsv");
+      writeFileSync(currentLedger, objectLedger("a".repeat(64)));
+      const { databaseBundle, evidenceArchive } = makeBackupInputs(root);
+      const { bin, failMarker, log } = makeFakeDocker(root, archive);
+      unlinkSync(failMarker);
+      const backup = Bun.spawnSync({
+        cmd: ["sh", backupScript, "backup", archive],
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          FAKE_DATABASE_BUNDLE: databaseBundle,
+          FAKE_DATABASE_INVENTORY: join(root, "backup-source", "DATABASE-INVENTORY.tsv"),
+          FAKE_OBJECT_LEDGER: currentLedger,
+          FAKE_EVIDENCE_ARCHIVE: evidenceArchive,
+          FAKE_FAIL_MARKER: failMarker,
+          FAKE_DOCKER_LOG: log,
+        },
+      });
+
+      if (backup.exitCode !== 0) throw new Error(backup.stderr.toString());
+      const manifest = readFileSync(join(archive, "BACKUP-MANIFEST"), "utf8");
+      expect(manifest).toContain("object_continuity=initial_no_prior_structured_archive\n");
+      expect(manifest).toContain("object_continuity_legacy_baseline_objects=1\n");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("later backup rejects a newly appearing legacy object without a prior byte baseline", () => {
+    const root = mkdtempSync(join(tmpdir(), "ti-backup-late-legacy-continuity-"));
+    try {
+      const archive = join(root, "archive");
+      const prior = join(root, "20260723T010000Z");
+      const priorLedger = join(prior, "OBJECT-LEDGER.tsv");
+      const currentLedger = join(root, "current-object-ledger.tsv");
+      mkdirSync(prior);
+      writeFileSync(priorLedger, objectLedger("a".repeat(64)));
+      writeSums(prior, "SHA256SUMS", ["OBJECT-LEDGER.tsv"]);
+      const [header, priorRow] = objectLedger("a".repeat(64)).trimEnd().split("\n");
+      const lateLegacyRow = objectLedger("b".repeat(64)).trimEnd().split("\n")[1]!
+        .replaceAll("cap_continuity", "cap_late_legacy");
+      writeFileSync(currentLedger, `${header}\n${priorRow}\n${lateLegacyRow}\n`);
+      const { databaseBundle, evidenceArchive } = makeBackupInputs(root);
+      const { bin, failMarker, log } = makeFakeDocker(root, archive);
+      unlinkSync(failMarker);
+      const backup = Bun.spawnSync({
+        cmd: ["sh", backupScript, "backup", archive],
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          FAKE_DATABASE_BUNDLE: databaseBundle,
+          FAKE_DATABASE_INVENTORY: join(root, "backup-source", "DATABASE-INVENTORY.tsv"),
+          FAKE_OBJECT_LEDGER: currentLedger,
+          FAKE_EVIDENCE_ARCHIVE: evidenceArchive,
+          FAKE_FAIL_MARKER: failMarker,
+          FAKE_DOCKER_LOG: log,
+          TI_BACKUP_PRIOR_OBJECT_LEDGER: priorLedger,
+        },
+      });
+
+      expect(backup.exitCode).not.toBe(0);
+      expect(backup.stderr.toString()).toContain("new legacy evidence object has no prior byte baseline: cap_late_legacy");
+      expect(() => readFileSync(join(archive, "BACKUP-MANIFEST"), "utf8")).toThrow();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("later backup accepts a new object whose reference already binds its byte hash", () => {
+    const root = mkdtempSync(join(tmpdir(), "ti-backup-new-byte-hash-continuity-"));
+    try {
+      const archive = join(root, "archive");
+      const prior = join(root, "20260723T010000Z");
+      const priorLedger = join(prior, "OBJECT-LEDGER.tsv");
+      const currentLedger = join(root, "current-object-ledger.tsv");
+      mkdirSync(prior);
+      writeFileSync(priorLedger, objectLedger("a".repeat(64)));
+      writeSums(prior, "SHA256SUMS", ["OBJECT-LEDGER.tsv"]);
+      const [header, priorRow] = objectLedger("a".repeat(64)).trimEnd().split("\n");
+      const byteHash = "b".repeat(64);
+      const newRow = objectLedger(byteHash).trimEnd().split("\n")[1]!
+        .replaceAll("cap_continuity", "cap_new_byte_hash")
+        .split("\t");
+      newRow[9] = byteHash;
+      writeFileSync(currentLedger, `${header}\n${priorRow}\n${newRow.join("\t")}\n`);
+      const { databaseBundle, evidenceArchive } = makeBackupInputs(root);
+      const { bin, failMarker, log } = makeFakeDocker(root, archive);
+      unlinkSync(failMarker);
+      const backup = Bun.spawnSync({
+        cmd: ["sh", backupScript, "backup", archive],
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          FAKE_DATABASE_BUNDLE: databaseBundle,
+          FAKE_DATABASE_INVENTORY: join(root, "backup-source", "DATABASE-INVENTORY.tsv"),
+          FAKE_OBJECT_LEDGER: currentLedger,
+          FAKE_EVIDENCE_ARCHIVE: evidenceArchive,
+          FAKE_FAIL_MARKER: failMarker,
+          FAKE_DOCKER_LOG: log,
+          TI_BACKUP_PRIOR_OBJECT_LEDGER: priorLedger,
+        },
+      });
+
+      if (backup.exitCode !== 0) throw new Error(backup.stderr.toString());
+      const manifest = readFileSync(join(archive, "BACKUP-MANIFEST"), "utf8");
+      expect(manifest).toContain("object_continuity=verified\n");
+      expect(manifest).toContain("object_continuity_compared_objects=1\n");
+      expect(manifest).toContain("object_continuity_legacy_baseline_objects=0\n");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
