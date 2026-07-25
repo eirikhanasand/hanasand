@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "check": "node db-dashboard-monitor.mjs",
-    "self-test": "node db-dashboard-monitor.mjs --self-test"
+    "self-test": "node db-dashboard-monitor.mjs --self-test && node db-dashboard-monitor.integration-test.mjs"
   },
   "dependencies": {
     "playwright": "^1.53.1"

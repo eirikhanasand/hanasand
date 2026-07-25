@@ -18,6 +18,11 @@ const cdnUploadToken = process.env.HANASAND_DB_MONITOR_CDN_TOKEN || ''
 const timeoutMs = Number(process.env.HANASAND_DB_MONITOR_TIMEOUT_MS || 30_000)
 const repeatAlertMinutes = Number(process.env.HANASAND_DB_MONITOR_REPEAT_ALERT_MINUTES || 15)
 const failureThreshold = Math.max(Number(process.env.HANASAND_DB_MONITOR_FAILURE_THRESHOLD || 2), 1)
+const backupStatusPath = process.env.HANASAND_TI_BACKUP_STATUS || '/home/hanasand/backups/threat-intel/LATEST-STATUS'
+const backupStatePath = process.env.HANASAND_TI_BACKUP_MONITOR_STATE || '/home/hanasand/monitor-state/threat-intel-backup.json'
+const backupMaxAgeHours = Math.max(Number(process.env.HANASAND_TI_BACKUP_MAX_AGE_HOURS || 30), 1)
+const statusIngestBaseUrl = trimSlash(process.env.HANASAND_STATUS_INGEST_BASE_URL || 'https://api.hanasand.com')
+const statusIngestToken = process.env.HANASAND_STATUS_INGEST_TOKEN || ''
 const now = new Date()
 
 class MonitorFailure extends Error {
@@ -32,6 +37,8 @@ if (process.argv.includes('--self-test')) {
     runSelfTest()
     process.exit(0)
 }
+
+await monitorThreatIntelBackup()
 
 if (!username || !password) {
     await handleResult({
@@ -84,15 +91,17 @@ try {
     })
 } catch (error) {
     const failure = normalizeFailure(error)
-    try {
-        const pages = browser?.contexts()?.flatMap(context => context.pages()) || []
-        const page = pages[pages.length - 1]
-        if (page) {
-            await mkdir(dirname(failureScreenshotPath), { recursive: true })
-            await page.screenshot({ path: failureScreenshotPath, fullPage: true }).catch(() => {})
+    if (!failure.reason.startsWith('ti_backup_')) {
+        try {
+            const pages = browser?.contexts()?.flatMap(context => context.pages()) || []
+            const page = pages[pages.length - 1]
+            if (page) {
+                await mkdir(dirname(failureScreenshotPath), { recursive: true })
+                await page.screenshot({ path: failureScreenshotPath, fullPage: true }).catch(() => {})
+            }
+        } catch {
+            // Best-effort failure evidence only.
         }
-    } catch {
-        // Best-effort failure evidence only.
     }
 
     await handleResult({
@@ -173,9 +182,101 @@ export function evaluateDashboardText(text) {
     }
 }
 
-async function handleResult(result) {
-    const previous = await readState()
+export function evaluateThreatIntelBackupStatus(text, checkedAt = new Date(), maxAgeHours = 30) {
+    if (!String(text || '').trim()) {
+        return {
+            ok: false,
+            reason: 'ti_backup_missing',
+            detail: `Threat-intelligence backup status is missing at ${backupStatusPath}.`,
+            status: 'missing',
+            finishedAt: null,
+        }
+    }
+    const fields = Object.fromEntries(String(text).trim().split(/\r?\n/).map(line => line.trim()).map(line => {
+        const separator = line.indexOf('=')
+        return separator > 0 ? [line.slice(0, separator), line.slice(separator + 1)] : ['', '']
+    }).filter(([key]) => key))
+    const finishedAt = fields.finished_at || null
+    const finishedMs = Date.parse(finishedAt || '')
+    if (
+        fields.format !== 'hanasand.threat_intel_backup_status.v2'
+        || !Number.isFinite(finishedMs)
+    ) {
+        return {
+            ok: false,
+            reason: 'ti_backup_invalid',
+            detail: 'Threat-intelligence backup status is incomplete or malformed.',
+            status: fields.status || 'invalid',
+            finishedAt,
+        }
+    }
+    if (fields.status !== 'succeeded' || fields.exit_code !== '0' || fields.phase !== 'complete') {
+        return {
+            ok: false,
+            reason: 'ti_backup_failed',
+            detail: `Threat-intelligence backup failed in ${fields.phase || 'unknown'} (${fields.reason || 'unknown'}, exit ${fields.exit_code || 'unknown'}).`,
+            status: fields.status || 'failed',
+            finishedAt,
+        }
+    }
+    if (!fields.archive) {
+        return {
+            ok: false,
+            reason: 'ti_backup_invalid',
+            detail: 'Threat-intelligence backup status is incomplete or malformed.',
+            status: fields.status,
+            finishedAt,
+        }
+    }
+    const ageHours = (checkedAt.getTime() - finishedMs) / 3_600_000
+    if (ageHours < -5 / 60 || ageHours > maxAgeHours) {
+        return {
+            ok: false,
+            reason: 'ti_backup_stale',
+            detail: `Threat-intelligence backup last succeeded ${finishedAt}; expected within ${maxAgeHours} hours.`,
+            status: fields.status,
+            finishedAt,
+        }
+    }
+    return {
+        ok: true,
+        reason: 'ti_backup_ok',
+        detail: `Threat-intelligence backup completed ${finishedAt}.`,
+        status: fields.status,
+        finishedAt,
+    }
+}
+
+async function monitorThreatIntelBackup() {
+    const started = performance.now()
+    const backup = evaluateThreatIntelBackupStatus(
+        await readFile(backupStatusPath, 'utf8').catch(() => ''),
+        now,
+        backupMaxAgeHours,
+    )
+    await handleResult({
+        ok: backup.ok,
+        reason: backup.reason,
+        detail: backup.detail,
+        latencyMs: Math.round(performance.now() - started),
+        metrics: {
+            backupStatus: backup.status,
+            backupFinishedAt: backup.finishedAt,
+        },
+    }, {
+        statePath: backupStatePath,
+        service: 'threat-intelligence',
+        checkName: 'Backup continuity',
+    })
+}
+
+async function handleResult(result, options = {}) {
+    const resultStatePath = options.statePath || statePath
+    const service = options.service || 'database'
+    const checkName = options.checkName || 'Database dashboard'
+    const previous = await readState(resultStatePath)
     const alertErrors = []
+    const backupFailure = String(result.reason || '').startsWith('ti_backup_')
     const next = {
         ...result,
         checkedAt: now.toISOString(),
@@ -189,12 +290,16 @@ async function handleResult(result) {
         failureThreshold,
         alertErrors,
     }
+    await sendStatusIngest(service, checkName, result).catch(error => {
+        alertErrors.push(error instanceof Error ? error.message : String(error))
+    })
 
     if (result.ok && previous.ok === false) {
+        const backupRecovered = String(previous.reason || '').startsWith('ti_backup_')
         const sent = await trySendDiscord({
             status: 'RECOVERED',
             color: 0x22c55e,
-            title: 'Database dashboard recovered',
+            title: backupRecovered ? 'Threat-intelligence backup recovered' : 'Database dashboard recovered',
             description: `${result.detail} Alerts resume only if the monitor sees a fresh outage.`,
             fields: resultFields(result),
         })
@@ -205,7 +310,7 @@ async function handleResult(result) {
         const shouldAlert = next.failureCount >= failureThreshold
             && (previous.ok !== false || minutesSince(previous.lastAlertAt) >= repeatAlertMinutes)
         if (shouldAlert) {
-            const failureScreenshotUrl = await uploadFailureScreenshot().catch(error => {
+            const failureScreenshotUrl = backupFailure ? '' : await uploadFailureScreenshot().catch(error => {
                 alertErrors.push(error instanceof Error ? error.message : String(error))
                 return ''
             })
@@ -216,7 +321,9 @@ async function handleResult(result) {
             const sent = await trySendDiscord({
                 status: 'DOWN',
                 color: 0xef4444,
-                title: `Database dashboard unavailable: ${reasonLabel(result.reason)}`,
+                title: backupFailure
+                    ? `Threat-intelligence backup unavailable: ${reasonLabel(result.reason)}`
+                    : `Database dashboard unavailable: ${reasonLabel(result.reason)}`,
                 description: `${failureImpact(result.reason)} ${result.detail}`,
                 fields: resultFields(result),
             })
@@ -224,7 +331,7 @@ async function handleResult(result) {
         }
     }
 
-    await writeState(next)
+    await writeState(next, resultStatePath)
     console.log(JSON.stringify(next))
 
     async function trySendDiscord(payload) {
@@ -235,6 +342,31 @@ async function handleResult(result) {
             alertErrors.push(error instanceof Error ? error.message : String(error))
             return false
         }
+    }
+}
+
+async function sendStatusIngest(service, checkName, result) {
+    if (!statusIngestToken) {
+        throw new Error('HANASAND_STATUS_INGEST_TOKEN is required to persist monitor results and send email alerts')
+    }
+    const response = await fetch(`${statusIngestBaseUrl}/api/status/ingest`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: {
+            Authorization: `Bearer ${statusIngestToken}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            service,
+            check_name: checkName,
+            status: result.ok ? 'up' : 'down',
+            latency_ms: result.latencyMs,
+            message: result.detail,
+        }),
+    })
+    if (!response.ok) {
+        const body = await response.text().catch(() => '')
+        throw new Error(`Status ingest failed ${response.status}: ${truncate(body, 240)}`)
     }
 }
 
@@ -315,14 +447,22 @@ function buildDiscordPayload({ status, color, title, description, fields }) {
 function resultFields(result) {
     const metrics = result.metrics || {}
     const screenshot = result.failureScreenshotUrl || failureScreenshotPath
+    const backupFailure = String(result.reason || '').startsWith('ti_backup_')
     return [
         { name: 'Cause', value: reasonLabel(result.reason), inline: true },
         { name: 'Action', value: operatorAction(result.reason), inline: false },
-        { name: 'Evidence', value: result.ok ? `${baseUrl}${dashboardPath}` : `${baseUrl}${dashboardPath}\nScreenshot: ${screenshot}`, inline: false },
+        {
+            name: 'Evidence',
+            value: backupFailure
+                ? `${backupStatusPath}\n/home/hanasand/monitor-state/threat-intel-backup.log`
+                : result.ok ? `${baseUrl}${dashboardPath}` : `${baseUrl}${dashboardPath}\nScreenshot: ${screenshot}`,
+            inline: false,
+        },
         ...(result.ok || !result.failureScreenshotUrl ? [] : [{ name: 'Screenshot', value: result.failureScreenshotUrl, inline: false }]),
         { name: 'Clusters', value: String(metrics.clusters ?? 'unknown'), inline: true },
         { name: 'Databases', value: String(metrics.databases ?? 'unknown'), inline: true },
         { name: 'Storage', value: metrics.storageBytes ? formatBytes(metrics.storageBytes) : 'unknown', inline: true },
+        ...(metrics.backupStatus ? [{ name: 'TI backup', value: `${metrics.backupStatus}${metrics.backupFinishedAt ? ` · ${metrics.backupFinishedAt}` : ''}`, inline: true }] : []),
         { name: 'Latency', value: `${result.latencyMs}ms`, inline: true },
         { name: 'Monitor user', value: username || 'not configured', inline: true },
     ]
@@ -331,10 +471,15 @@ function resultFields(result) {
 function reasonLabel(reason) {
     return String(reason || 'monitor failure')
         .replace(/^db_dashboard_/, '')
+        .replace(/^ti_backup_/, 'TI backup ')
         .replace(/_/g, ' ')
 }
 
 function failureImpact(reason) {
+    if (reason === 'ti_backup_missing') return 'No threat-intelligence backup result is available.'
+    if (reason === 'ti_backup_invalid') return 'The threat-intelligence backup result cannot be trusted.'
+    if (reason === 'ti_backup_failed') return 'The latest threat-intelligence backup failed.'
+    if (reason === 'ti_backup_stale') return 'No recent successful threat-intelligence backup is available.'
     if (reason === 'missing_credentials') return 'The monitor cannot sign in because credentials are not configured.'
     if (reason === 'db_dashboard_unavailable') return 'The dashboard rendered an unavailable or reconnecting telemetry state.'
     if (reason === 'db_dashboard_missing_clusters') return 'The dashboard did not show a PostgreSQL cluster.'
@@ -345,6 +490,7 @@ function failureImpact(reason) {
 }
 
 function operatorAction(reason) {
+    if (String(reason || '').startsWith('ti_backup_')) return 'Open LATEST-STATUS and the threat-intelligence backup log, repair the failure, then rerun the backup.'
     if (reason === 'missing_credentials') return 'Restore HANASAND_DB_MONITOR_USER and HANASAND_DB_MONITOR_PASSWORD, then run the monitor once.'
     if (reason === 'db_dashboard_unavailable') return 'Check API auth, PostgreSQL telemetry views, and the dashboard screenshot.'
     if (reason === 'db_dashboard_missing_clusters' || reason === 'db_dashboard_missing_databases' || reason === 'db_dashboard_missing_storage') return 'Check the database telemetry collector and dashboard API response.'
@@ -352,17 +498,17 @@ function operatorAction(reason) {
     return 'Open the failure screenshot and rerun the monitor after the dependency is fixed.'
 }
 
-async function readState() {
+async function readState(path = statePath) {
     try {
-        return JSON.parse(await readFile(statePath, 'utf8'))
+        return JSON.parse(await readFile(path, 'utf8'))
     } catch {
         return {}
     }
 }
 
-async function writeState(state) {
-    await mkdir(dirname(statePath), { recursive: true })
-    await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
+async function writeState(state, path = statePath) {
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(path, `${JSON.stringify(state, null, 2)}\n`)
 }
 
 function normalizeFailure(error) {
@@ -535,6 +681,42 @@ function runSelfTest() {
         No active query details available.
     `)
     assert.equal(previousUiCopy.ok, true)
+
+    const backupCheckedAt = new Date('2026-07-24T12:00:00.000Z')
+    const healthyBackup = evaluateThreatIntelBackupStatus(`
+        format=hanasand.threat_intel_backup_status.v2
+        status=succeeded
+        exit_code=0
+        phase=complete
+        reason=none
+        finished_at=2026-07-24T11:00:00Z
+        archive=/home/hanasand/backups/threat-intel/20260724T105900Z
+    `, backupCheckedAt)
+    assert.equal(healthyBackup.ok, true)
+
+    const failedBackup = evaluateThreatIntelBackupStatus(`
+        format=hanasand.threat_intel_backup_status.v2
+        status=failed
+        exit_code=1
+        phase=backup
+        reason=command_failed
+        finished_at=2026-07-24T11:00:00Z
+        archive=/home/hanasand/backups/threat-intel/20260724T105900Z
+    `, backupCheckedAt)
+    assert.equal(failedBackup.ok, false)
+    assert.equal(failedBackup.reason, 'ti_backup_failed')
+
+    const staleBackup = evaluateThreatIntelBackupStatus(`
+        format=hanasand.threat_intel_backup_status.v2
+        status=succeeded
+        exit_code=0
+        phase=complete
+        reason=none
+        finished_at=2026-07-22T11:00:00Z
+        archive=/home/hanasand/backups/threat-intel/20260722T105900Z
+    `, backupCheckedAt)
+    assert.equal(staleBackup.ok, false)
+    assert.equal(staleBackup.reason, 'ti_backup_stale')
 
     console.log('Database dashboard monitor self-test passed.')
 }

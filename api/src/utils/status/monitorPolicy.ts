@@ -19,7 +19,7 @@ export function activityCountDrop(
     const priorDropBaseline = Number(String(previous?.message ?? '').match(/drop from ([\d,]+)/)?.[1].replaceAll(',', ''))
     const baseline = Number.isFinite(priorDropBaseline) ? priorDropBaseline : previousTotal
     const dropped = Number.isFinite(baseline) && baseline - total >= 100 && total < baseline * 0.8
-    if (!dropped || previous?.message?.includes('confirmed drop')) return undefined
+    if (!dropped) return undefined
     return {
         status: 'down',
         message: `${total} retained records; ${previous?.status === 'down' ? 'confirmed' : 'possible'} drop from ${baseline}.`,

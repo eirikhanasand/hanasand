@@ -17,6 +17,15 @@ const possibleDrop = activityCountDrop(2_000, { status: 'up', message: 'Latest c
 assert.deepEqual(possibleDrop, { status: 'down', message: '2000 retained records; possible drop from 5000.' })
 const confirmedDrop = activityCountDrop(2_000, { status: 'down', message: possibleDrop?.message })
 assert.deepEqual(confirmedDrop, { status: 'down', message: '2000 retained records; confirmed drop from 5000.' })
-assert.equal(activityCountDrop(2_000, { status: 'down', message: confirmedDrop?.message }), undefined)
+const persistentDrop = activityCountDrop(2_000, { status: 'down', message: confirmedDrop?.message })
+assert.deepEqual(
+    persistentDrop,
+    { status: 'down', message: '2000 retained records; confirmed drop from 5000.' }
+)
+assert.deepEqual(
+    activityCountDrop(2_000, { status: 'down', message: persistentDrop?.message }),
+    { status: 'down', message: '2000 retained records; confirmed drop from 5000.' }
+)
+assert.equal(activityCountDrop(5_000, { status: 'down', message: confirmedDrop?.message }), undefined)
 
 console.log('production monitor policy smoke passed')
