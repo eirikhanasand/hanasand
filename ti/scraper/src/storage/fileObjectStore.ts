@@ -25,6 +25,22 @@ export class FileObjectEvidenceStore implements ObjectEvidenceStore {
     const key = `${input.tenantId ?? "global"}/${input.sourceId}/${input.captureId}/${input.contentHash}.bin`;
     const objectPath = fileObjectPathForKey(this.rootDir, key);
     mkdirSync(dirname(objectPath), { recursive: true });
+    const metadataPath = `${objectPath}.json`;
+    if (existsSync(objectPath) || existsSync(metadataPath)) {
+      if (!existsSync(objectPath) || !existsSync(metadataPath)) throw new Error("Evidence object is incomplete");
+      const existing = JSON.parse(readFileSync(metadataPath, "utf8")) as ObjectEvidenceRecord;
+      const existingBytes = readFileSync(objectPath);
+      if (
+        existing.ref.key !== key
+        || existing.captureId !== input.captureId
+        || existing.sourceId !== input.sourceId
+        || existing.contentHash !== input.contentHash
+        || !existingBytes.equals(Buffer.from(bytes))
+      ) {
+        throw new Error("Evidence object is immutable");
+      }
+      return existing;
+    }
     writeFileSync(objectPath, bytes);
 
     const ref: ObjectStoreRef = {
@@ -35,7 +51,7 @@ export class FileObjectEvidenceStore implements ObjectEvidenceStore {
       sha256: createHash("sha256").update(bytes).digest("hex")
     };
     const record = fileObjectRecordFor(ref, input);
-    writeFileSync(`${objectPath}.json`, JSON.stringify(record, null, 2));
+    writeFileSync(metadataPath, JSON.stringify(record, null, 2));
     return record;
   }
 

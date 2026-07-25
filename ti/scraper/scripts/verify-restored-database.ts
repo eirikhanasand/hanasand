@@ -169,7 +169,7 @@ async function inspectObject(
     || metadataRef.bucket !== reference.bucket
     || metadataRef.key !== reference.key
     || metadataRef.versionId !== reference.versionId
-    || metadataRef.sha256 !== reference.refContentHash
+    || ![reference.refContentHash, objectSha256].includes(metadataRef.sha256)
     || metadataRef.sizeBytes !== reference.sizeBytes
     || reference.versionId !== reference.contentHash
     || objectBytes.byteLength !== reference.sizeBytes

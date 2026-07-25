@@ -110,6 +110,52 @@ describe("restored object evidence reconciliation", () => {
     }
   });
 
+  test("accepts an on-disk byte-hash upgrade while the database still has its legacy semantic ref", async () => {
+    await withFixture(async ({ body, capture, references }, evidenceRoot) => {
+      const legacyReferences = references.map((row) => ({ ...row, refContentHash: capture.contentHash }));
+      const rows = await buildObjectLedger(legacyReferences, evidenceRoot);
+      expect(rows[0]?.refContentHash).toBe(capture.contentHash);
+      expect(rows[0]?.objectSha256).toBe(createHash("sha256").update(body).digest("hex"));
+      expect(await reconcileRestoredObjectEvidence(
+        [{ ...capture, objectRef: { ...capture.objectRef, sha256: capture.contentHash } }],
+        evidenceRoot,
+        formatObjectLedger(rows),
+      )).toMatchObject({ linked: 1, resolved: 1, missing: 0, mismatched: 0 });
+    });
+  });
+
+  test("never rewrites an existing evidence object or its metadata", async () => {
+    const evidenceRoot = mkdtempSync(join(tmpdir(), "ti-immutable-objects-"));
+    try {
+      const first = fixture(evidenceRoot, true);
+      const store = new FileObjectEvidenceStore({ rootDir: join(evidenceRoot, "objects") });
+      const metadataBefore = readFileSync(`${first.objectPath}.json`);
+      const duplicate = store.putObject({
+        tenantId: first.capture.tenantId,
+        sourceId: first.capture.sourceId,
+        captureId: first.capture.id,
+        body: first.body,
+        mediaType: first.capture.mediaType,
+        contentHash: first.capture.contentHash,
+        retentionClass: first.capture.retentionClass,
+      });
+      expect(duplicate.ref.sha256).toBe(first.capture.contentHash);
+      expect(readFileSync(`${first.objectPath}.json`)).toEqual(metadataBefore);
+      expect(() => store.putObject({
+        tenantId: first.capture.tenantId,
+        sourceId: first.capture.sourceId,
+        captureId: first.capture.id,
+        body: "different bytes under the same immutable identity",
+        mediaType: first.capture.mediaType,
+        contentHash: first.capture.contentHash,
+        retentionClass: first.capture.retentionClass,
+      })).toThrow("Evidence object is immutable");
+      expect(readFileSync(first.objectPath, "utf8")).toBe(first.body);
+    } finally {
+      rmSync(evidenceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("preserves and reports historical database/file retention differences exactly", async () => {
     await withFixture(async ({ capture, references }, evidenceRoot) => {
       const legacyReferences = references.map((row) => ({ ...row, retentionClass: "standard" }));
