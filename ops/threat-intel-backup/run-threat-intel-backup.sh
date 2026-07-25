@@ -83,9 +83,11 @@ run_phase=backup
 archive="$backup_root/$(date -u +%Y%m%dT%H%M%SZ)"
 [ ! -e "$archive" ] || { run_reason=archive_exists; echo "backup archive already exists" >&2; exit 1; }
 partial="$archive.partial.$$"
+prior_object_ledger=$(find "$backup_root" -mindepth 2 -maxdepth 2 -type f \
+  -path "$backup_root/$archive_pattern/OBJECT-LEDGER.tsv" -print | LC_ALL=C sort -r | sed -n '1p')
 
 cd "$repo"
-"$backup_script" backup "$partial"
+TI_BACKUP_PRIOR_OBJECT_LEDGER="$prior_object_ledger" "$backup_script" backup "$partial"
 
 if [ "${TI_BACKUP_ALWAYS_DRILL:-false}" = "true" ] || [ "$(date -u +%u)" = "${TI_BACKUP_DRILL_WEEKDAY:-7}" ]; then
   run_phase=drill

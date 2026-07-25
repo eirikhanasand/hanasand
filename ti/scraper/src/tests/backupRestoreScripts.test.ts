@@ -23,6 +23,22 @@ function writeSums(root: string, output: string, names: string[]): void {
   writeFileSync(join(root, output), names.map((name) => `${sha256(join(root, name))}  ${name}\n`).join(""));
 }
 
+const objectLedgerHeader = "capture_id\ttenant_id\tsource_id\tmedia_type\tretention_class\tcontent_hash\tbucket\tobject_key\tversion_id\tref_content_hash\tsize_bytes\tmetadata_tenant_id\tmetadata_media_type\tmetadata_retention_class\tobject_sha256\tmetadata_sha256";
+
+function objectLedger(objectSha256: string): string {
+  const contentHash = "1".repeat(64);
+  return [
+    objectLedgerHeader,
+    [
+      "cap_continuity", "global", "src_continuity", "text/plain", "public_report", contentHash,
+      "public-canary-evidence", `global/src_continuity/cap_continuity/${contentHash}.bin`,
+      contentHash, contentHash, "10", "global", "text/plain", "public_report",
+      objectSha256, "2".repeat(64),
+    ].join("\t"),
+    "",
+  ].join("\n");
+}
+
 function makeArchive(root: string): { archive: string; priorReceipt: string } {
   const archive = join(root, "archive");
   const evidence = join(root, "evidence");
@@ -316,6 +332,9 @@ describe("backup and restore scripts", () => {
       expect(manifest).toContain("source_postgres_image_id=sha256:source-postgres-image\n");
       expect(manifest).toContain("verifier_image_id=sha256:fake-scraper-image\n");
       expect(manifest).toContain("restore_postgres_image_id=sha256:fake-postgres-image\n");
+      expect(manifest).toContain("object_continuity=initial_no_prior_structured_archive\n");
+      expect(manifest).toContain("object_continuity_prior_archive=none\n");
+      expect(manifest).toContain("object_continuity_compared_objects=0\n");
 
       const dockerRuns = readFileSync(log, "utf8").trim().split("\n");
       expect(dockerRuns.filter((line) => line.startsWith("compose ps -q ti-scraper"))).toHaveLength(1);
@@ -323,6 +342,83 @@ describe("backup and restore scripts", () => {
       expect(dockerRuns.some((line) => line.startsWith("exec fake-source-scraper-container "))).toBe(true);
       expect(dockerRuns.some((line) => line.startsWith("exec -i fake-source-postgres-container "))).toBe(true);
       expect(dockerRuns.some((line) => line.includes("replacement-source-"))).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("backup verifies unchanged object bytes against the prior published ledger", () => {
+    const root = mkdtempSync(join(tmpdir(), "ti-backup-continuity-"));
+    try {
+      const archive = join(root, "archive");
+      const prior = join(root, "20260723T010000Z");
+      const priorLedger = join(prior, "OBJECT-LEDGER.tsv");
+      const currentLedger = join(root, "current-object-ledger.tsv");
+      mkdirSync(prior);
+      writeFileSync(priorLedger, objectLedger("a".repeat(64)));
+      writeSums(prior, "SHA256SUMS", ["OBJECT-LEDGER.tsv"]);
+      writeFileSync(currentLedger, objectLedger("a".repeat(64)));
+      const { databaseBundle, evidenceArchive } = makeBackupInputs(root);
+      const { bin, failMarker, log } = makeFakeDocker(root, archive);
+      unlinkSync(failMarker);
+      const backup = Bun.spawnSync({
+        cmd: ["sh", backupScript, "backup", archive],
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          FAKE_DATABASE_BUNDLE: databaseBundle,
+          FAKE_DATABASE_INVENTORY: join(root, "backup-source", "DATABASE-INVENTORY.tsv"),
+          FAKE_OBJECT_LEDGER: currentLedger,
+          FAKE_EVIDENCE_ARCHIVE: evidenceArchive,
+          FAKE_FAIL_MARKER: failMarker,
+          FAKE_DOCKER_LOG: log,
+          TI_BACKUP_PRIOR_OBJECT_LEDGER: priorLedger,
+        },
+      });
+
+      if (backup.exitCode !== 0) throw new Error(backup.stderr.toString());
+      const manifest = readFileSync(join(archive, "BACKUP-MANIFEST"), "utf8");
+      expect(manifest).toContain("object_continuity=verified\n");
+      expect(manifest).toContain("object_continuity_prior_archive=20260723T010000Z\n");
+      expect(manifest).toContain("object_continuity_compared_objects=1\n");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("backup rejects same-key evidence bytes changed since the prior archive", () => {
+    const root = mkdtempSync(join(tmpdir(), "ti-backup-continuity-tamper-"));
+    try {
+      const archive = join(root, "archive");
+      const prior = join(root, "20260723T010000Z");
+      const priorLedger = join(prior, "OBJECT-LEDGER.tsv");
+      const currentLedger = join(root, "current-object-ledger.tsv");
+      mkdirSync(prior);
+      writeFileSync(priorLedger, objectLedger("a".repeat(64)));
+      writeSums(prior, "SHA256SUMS", ["OBJECT-LEDGER.tsv"]);
+      writeFileSync(currentLedger, objectLedger("b".repeat(64)));
+      const { databaseBundle, evidenceArchive } = makeBackupInputs(root);
+      const { bin, failMarker, log } = makeFakeDocker(root, archive);
+      unlinkSync(failMarker);
+      const backup = Bun.spawnSync({
+        cmd: ["sh", backupScript, "backup", archive],
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          FAKE_DATABASE_BUNDLE: databaseBundle,
+          FAKE_DATABASE_INVENTORY: join(root, "backup-source", "DATABASE-INVENTORY.tsv"),
+          FAKE_OBJECT_LEDGER: currentLedger,
+          FAKE_EVIDENCE_ARCHIVE: evidenceArchive,
+          FAKE_FAIL_MARKER: failMarker,
+          FAKE_DOCKER_LOG: log,
+          TI_BACKUP_PRIOR_OBJECT_LEDGER: priorLedger,
+        },
+      });
+
+      expect(backup.exitCode).not.toBe(0);
+      expect(backup.stderr.toString()).toContain("immutable evidence object changed between backups: cap_continuity");
+      expect(backup.stderr.toString()).toContain("object byte continuity check failed");
+      expect(() => readFileSync(join(archive, "BACKUP-MANIFEST"), "utf8")).toThrow();
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

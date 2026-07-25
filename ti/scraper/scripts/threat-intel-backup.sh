@@ -18,6 +18,7 @@ postgres_image_ref=${TI_RESTORE_POSTGRES_IMAGE:-postgres:15}
 verifier_image_ref=${TI_RESTORE_SCRAPER_IMAGE:-hanasand_ti_scraper}
 postgres_image=
 verifier_image=
+prior_object_ledger=${TI_BACKUP_PRIOR_OBJECT_LEDGER:-}
 repo_root=$(CDPATH= cd -- "$script_dir/../../.." && pwd)
 
 usage() {
@@ -101,9 +102,71 @@ inspect_evidence_archive() (
   docker run --rm \
     -v "$evidence_tmp:/evidence:ro" \
     -v "$references_path:/backup/OBJECT-REFERENCES.tsv:ro" \
-    "$verifier_image" \
+  "$verifier_image" \
     bun scripts/verify-restored-database.ts ledger /backup/OBJECT-REFERENCES.tsv /evidence > "$ledger_output"
 )
+
+verify_object_continuity() {
+  object_continuity_status=initial_no_prior_structured_archive
+  object_continuity_prior_archive=none
+  object_continuity_compared_objects=0
+  [ -n "$prior_object_ledger" ] || return 0
+  [ -f "$prior_object_ledger" ] && [ ! -L "$prior_object_ledger" ] || {
+    echo "prior object ledger is not a regular file" >&2
+    exit 1
+  }
+  prior_archive=$(CDPATH= cd -- "$(dirname -- "$prior_object_ledger")" && pwd)
+  prior_checksums="$prior_archive/SHA256SUMS"
+  [ -f "$prior_checksums" ] && [ ! -L "$prior_checksums" ] || {
+    echo "prior object ledger has no trusted checksum manifest" >&2
+    exit 1
+  }
+  prior_expected_hash=$(awk '$2 == "OBJECT-LEDGER.tsv" { count += 1; hash = $1 } END { if (count != 1) exit 1; print hash }' "$prior_checksums") || {
+    echo "prior object ledger checksum is missing or ambiguous" >&2
+    exit 1
+  }
+  prior_actual_hash=$(shasum -a 256 "$prior_object_ledger" | awk '{ print $1 }')
+  [ "$prior_expected_hash" = "$prior_actual_hash" ] || {
+    echo "prior object ledger checksum does not match its published archive" >&2
+    exit 1
+  }
+  if ! object_continuity_compared_objects=$(awk -F '\t' '
+    NR == FNR {
+      if (FNR == 1) {
+        header = $0
+        next
+      }
+      prior[$1 FS $7 FS $8 FS $9] = $15
+      next
+    }
+    FNR == 1 {
+      if ($0 != header) {
+        print "object ledger header changed between backups" > "/dev/stderr"
+        exit 2
+      }
+      next
+    }
+    {
+      key = $1 FS $7 FS $8 FS $9
+      if (key in prior) {
+        compared += 1
+        if (prior[key] != $15) {
+          print "immutable evidence object changed between backups: " $1 > "/dev/stderr"
+          changed = 1
+        }
+      }
+    }
+    END {
+      if (changed) exit 1
+      print compared + 0
+    }
+  ' "$prior_object_ledger" "$object_ledger"); then
+    echo "object byte continuity check failed" >&2
+    exit 1
+  fi
+  object_continuity_status=verified
+  object_continuity_prior_archive=$(basename -- "$prior_archive")
+}
 
 verify() (
   set -eu
@@ -199,6 +262,7 @@ case "$action" in
 
     docker exec "$source_scraper_container" tar -C /var/lib/ti-scraper/evidence -czf - . > "$objects"
     inspect_evidence_archive "$objects" "$evidence_inventory" "$object_ledger"
+    verify_object_continuity
 
     database_schemas=$(awk -F '\t' 'NR > 1 { seen[$1] = 1 } END { for (schema in seen) count += 1; print count + 0 }' "$database_inventory")
     database_tables=$(awk 'NR > 1 { count += 1 } END { print count + 0 }' "$database_inventory")
@@ -233,6 +297,9 @@ case "$action" in
       printf 'referenced_objects=%s\n' "$object_count"
       printf 'object_ledger_sha256=%s\n' "$object_hash"
       printf 'object_retention_differences=%s\n' "$object_retention_differences"
+      printf 'object_continuity=%s\n' "$object_continuity_status"
+      printf 'object_continuity_prior_archive=%s\n' "$object_continuity_prior_archive"
+      printf 'object_continuity_compared_objects=%s\n' "$object_continuity_compared_objects"
       printf 'restore_policy=isolated_ephemeral_postgresql_only\n'
     } > "$manifest"
     rm -f -- "$archive/SOURCE-DATABASE"
