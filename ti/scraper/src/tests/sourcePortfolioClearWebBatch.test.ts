@@ -20,7 +20,7 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(34);
+    expect(batch.sources).toHaveLength(38);
     expect(batch.exclusions).toHaveLength(73);
 
     const ids = new Set<string>();
@@ -109,6 +109,26 @@ describe("clear-web source portfolio batch", () => {
       ["JPCERT Coordination Center Threat Research", [15, "2026-07-23T02:32:28.000Z"]],
       ["Japan Vulnerability Notes Updates", [20, "2026-07-23T06:00:30.000Z"]],
       ["HashiCorp Product Security Updates", [25, "2026-07-08T20:18:59.000Z"]],
+    ] as const);
+    const sources = batch.sources.filter((source: any) => expected.has(source.name));
+    expect(sources).toHaveLength(expected.size);
+    for (const source of sources) {
+      const [observedItemCount, latestPublishedAt] = expected.get(source.name)!;
+      expect(source.id).toBe(`src_portfolio_cw_${hash(source.url).slice(0, 20)}`);
+      expect(source.metadata.sourcePortfolioVerification).toMatchObject({ observedItemCount, latestPublishedAt });
+      expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
+      expect(source.metadata).not.toHaveProperty("countsAsCoverage");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
+    }
+  });
+
+  test("keeps ledger 011 current and candidate-only until productive scheduled cycles exist", () => {
+    const expected = new Map([
+      ["Fortinet Threat Research Blog", [10, "2026-07-22T13:00:00.000Z"]],
+      ["Canadian Centre for Cyber Security Alerts and Advisories", [50, "2026-07-24T19:38:17.000Z"]],
+      ["Ireland NCSC Security Alerts", [225, "2026-07-22T00:00:00.000Z"]],
+      ["CERT.at Security Warnings", [50, "2026-07-20T09:01:31.000Z"]],
     ] as const);
     const sources = batch.sources.filter((source: any) => expected.has(source.name));
     expect(sources).toHaveLength(expected.size);
