@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
@@ -23,6 +23,7 @@ describe("deploy hygiene", () => {
     expect(report.checks.find((item) => item.name === "backup.complete_database_inventory")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "backup.snapshot_object_references")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "backup.object_integrity")?.ok).toBe(true);
+    expect(report.checks.find((item) => item.name === "backup.object_continuity")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "backup.exact_restore_reconciliation")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "backup.atomic_restore_receipt")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "backup.restore_provenance")?.ok).toBe(true);
@@ -74,6 +75,7 @@ describe("deploy hygiene", () => {
         },
       });
 
+      if (result.exitCode !== 0) throw new Error(result.stderr.toString());
       expect(result.exitCode).toBe(0);
       expect(result.stdout.toString()).toContain("status=skipped phase=lock reason=already_running");
       expect(readFileSync(join(root, "LATEST-STATUS"), "utf8")).toBe(status);
@@ -112,6 +114,50 @@ describe("deploy hygiene", () => {
         "phase=complete",
         "reason=none",
       ].join("\n"));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("passes only the newest published object ledger into the next backup", () => {
+    const root = mkdtempSync(join(tmpdir(), "ti-backup-prior-ledger-"));
+    const bin = join(root, "bin");
+    const backupRoot = join(root, "backups");
+    const backup = join(root, "backup");
+    const older = join(backupRoot, "20260722T010000Z");
+    const newer = join(backupRoot, "20260723T010000Z");
+    const partial = join(backupRoot, "20260724T010000Z.partial.1");
+    try {
+      mkdirSync(bin);
+      mkdirSync(older, { recursive: true });
+      mkdirSync(newer);
+      mkdirSync(partial);
+      writeFileSync(join(older, "OBJECT-LEDGER.tsv"), "older\n");
+      writeFileSync(join(newer, "OBJECT-LEDGER.tsv"), "newer\n");
+      writeFileSync(join(partial, "OBJECT-LEDGER.tsv"), "must not be selected\n");
+      writeFileSync(join(bin, "flock"), "#!/bin/sh\nexit 0\n");
+      writeFileSync(backup, "#!/bin/sh\nmkdir -p \"$2\"\nprintf '%s\\n' \"${TI_BACKUP_PRIOR_OBJECT_LEDGER:-}\" > \"$2/PRIOR-OBJECT-LEDGER\"\n");
+      chmodSync(join(bin, "flock"), 0o755);
+      chmodSync(backup, 0o755);
+
+      const result = Bun.spawnSync({
+        cmd: ["sh", resolve(import.meta.dir, "../../../../ops/threat-intel-backup/run-threat-intel-backup.sh")],
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          HANASAND_REPO: root,
+          TI_BACKUP_ROOT: backupRoot,
+          TI_BACKUP_SCRIPT: backup,
+          TI_BACKUP_DRILL_WEEKDAY: "0",
+        },
+      });
+
+      if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+      expect(result.exitCode).toBe(0);
+      const published = readdirSync(backupRoot)
+        .filter((name) => /^\d{8}T\d{6}Z$/.test(name) && !["20260722T010000Z", "20260723T010000Z"].includes(name));
+      expect(published).toHaveLength(1);
+      expect(readFileSync(join(backupRoot, published[0]!, "PRIOR-OBJECT-LEDGER"), "utf8").trim()).toBe(join(newer, "OBJECT-LEDGER.tsv"));
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
