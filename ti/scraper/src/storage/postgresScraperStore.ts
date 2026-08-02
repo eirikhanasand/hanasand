@@ -279,6 +279,26 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const tenantId = input.tenantId ?? null;
     const sourceId = input.sourceId?.trim() || null;
     const executableOnly = input.executableOnly === true;
+    if (!sourceId && tenantId === null && limit === 1) {
+      const [first] = await this.sql`
+        SELECT id
+        FROM threat_intel.sources
+        WHERE tenant_id IS NULL
+          AND (NOT ${executableOnly}::boolean OR collection_executable)
+        ORDER BY lower(name), id
+        LIMIT 1
+      `;
+      const [countRow] = await this.sql`
+        SELECT count(*)::int AS total
+        FROM threat_intel.sources
+        WHERE tenant_id IS NULL
+          AND (NOT ${executableOnly}::boolean OR collection_executable)
+      `;
+      if (!first?.id) return { rows: [], totals: {}, total: 0 };
+      const page = await this.querySourceOperationalPage({ ...input, sourceId: first.id, offset: 0, limit: 1 });
+      const total = Number(countRow?.total ?? 0);
+      return { ...page, total, nextCursor: total > 1 ? "1" : undefined };
+    }
     const [rows, totalRows] = await Promise.all([
       this.sql.unsafe(`
         WITH page AS (
