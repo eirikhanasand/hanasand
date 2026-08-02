@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { ageBucket, bucket, countBy, rate } from "./frontierScoring.ts";
 
 export function buildFrontierMetrics(frontier: any, now: Date) {

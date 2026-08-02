@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { clampScore } from "../utils.ts";
 
 const cti = ["apt", "actor", "campaign", "cve", "exploit", "indicator", "ioc", "malware", "ransomware", "threat", "ttp", "victim", "vulnerability"];

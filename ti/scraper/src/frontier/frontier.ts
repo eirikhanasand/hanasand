@@ -1,7 +1,7 @@
-// @ts-nocheck
 import { clampScore, stableId } from "../utils.ts";
 import { buildFrontierGroupedSnapshot, buildFrontierMetrics } from "./frontierMetrics.ts";
 import { classifierFor, classify, fallbackScore, taskToCandidate, textOf, threshold, totalScore, workRank } from "./frontierScoring.ts";
+import type { FocusedFrontierOptions } from "./frontierTypes.ts";
 export type * from "./frontierTypes.ts";
 
 export class FocusedFrontier {
@@ -11,7 +11,7 @@ export class FocusedFrontier {
   constructor(options: FocusedFrontierOptions = {}) {
     this.o = { strategy: "balanced", maxQueueSize: 10_000, enqueueThreshold: threshold(options.strategy ?? "balanced"), reviewThreshold: 0.35, defaultPerSourceConcurrency: 2, defaultRetryBudget: 3, baseBackoffMs: 30_000, taskLeaseMs: 300_000, now: () => new Date(), ...options };
     for (const [key, limit] of Object.entries(options.crawlBudgets ?? {})) this.budgets.set(key, { taskLimit: Number(limit), byteLimit: Infinity, tasksLeased: 0, bytesReserved: 0 });
-    for (const [key, b] of Object.entries(options.crawlBudgetPolicies ?? {})) this.budgets.set(key, { taskLimit: b.taskLimit ?? Infinity, byteLimit: b.byteLimit ?? Infinity, deadlineAt: b.deadlineAt, tasksLeased: 0, bytesReserved: 0 });
+    for (const [key, b] of Object.entries(options.crawlBudgetPolicies ?? {})) { const policy = b as any; this.budgets.set(key, { taskLimit: policy.taskLimit ?? Infinity, byteLimit: policy.byteLimit ?? Infinity, deadlineAt: policy.deadlineAt, tasksLeased: 0, bytesReserved: 0 }); }
   }
   add(candidate: any) { const score = this.score(candidate); if (score.decision === "enqueue") this.enqueueTask(this.toTask(candidate, score)); return score; }
   enqueueTask(task: any) { const item = { ...task, task, candidate: taskToCandidate(task), score: task.scoreBreakdown ?? fallbackScore(task, this.o.strategy) }; this.queue.set(task.id, item); this.trim(); return item; }
@@ -68,7 +68,7 @@ export class FocusedFrontier {
   metrics(now = this.o.now()) { return buildFrontierMetrics(this, now); } groupedSnapshot(now = this.o.now()) { return buildFrontierGroupedSnapshot(this, now); }
   private toTask(c: any, score: any) { return { id: stableId("task", `${c.source.id}:${c.url}:${c.discoveredAt}`), tenantId: c.tenantId, sourceId: c.source.id, sourceType: c.source.type, targetUrl: c.url, queuedAt: c.discoveredAt, availableAt: c.availableAt, deadlineAt: c.deadlineAt, priority: score.total, reason: score.reason, retryCount: 0, maxBytes: c.maxBytes, crawlBudgetKey: c.budgetKey, planning: c.planning, scoreBreakdown: score, fairnessKey: c.fairnessKey, intelRequestId: c.intelRequestId }; }
   private scoreObj(c: any, total: number, decision: string, reason: string, safetyPenalty = 0) { const classifier = classifierFor(c, this.o.strategy); return { total: clampScore(total), decision, reason, strategy: this.o.strategy, relevance: classifier.relevance, novelty: c.novelty ?? 0.5, freshness: c.freshness ?? 0.5, sourceTrust: c.source?.trustScore ?? 0.5, safetyPenalty, classifier }; }
-  private sorted(now: Date) { return this.snapshot().sort((a, b) => workRank[(a.task?.planning ?? a.planning)?.budgetClass] - workRank[(b.task?.planning ?? b.planning)?.budgetClass] || Number((a.tenantId ?? "") === this.lastTenant) - Number((b.tenantId ?? "") === this.lastTenant) || b.priority - a.priority || a.queuedAt.localeCompare(b.queuedAt)); }
+  private sorted(now: Date) { return this.snapshot().sort((a: any, b: any) => workRank[(a.task?.planning ?? a.planning)?.budgetClass] - workRank[(b.task?.planning ?? b.planning)?.budgetClass] || Number((a.tenantId ?? "") === this.lastTenant) - Number((b.tenantId ?? "") === this.lastTenant) || b.priority - a.priority || a.queuedAt.localeCompare(b.queuedAt)); }
   private reserveBudget(item: any, now: Date) { const key = item.crawlBudgetKey; if (!key) return true; const b = this.budgets.get(key); if (!b || (b.deadlineAt && Date.parse(b.deadlineAt) < +now) || b.tasksLeased >= b.taskLimit || b.bytesReserved + (item.maxBytes ?? 0) > b.byteLimit) return false; b.tasksLeased++; b.bytesReserved += item.maxBytes ?? 0; return true; }
   private ack(task: any, status: string, reason: string) { this.release(task); this.counters[status]++; return { status, taskId: task.id, task, reason }; }
   private release(task: any, removeLease = true) { if (removeLease) this.leased.delete(task.id); this.running.set(task.sourceId, Math.max(0, (this.running.get(task.sourceId) ?? 1) - 1)); }
