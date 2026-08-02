@@ -273,7 +273,7 @@ export default async function runSyntheticMonitor() {
             if (configured > 0 && runtime === 0) {
                 return { status: 'down', message: `Customer watchlists exist for ${configured} organizations but none are in the scraper runtime.` }
             }
-            if (configured > 0 && runtime < 1) {
+            if (configured > 0 && runtime < configured) {
                 return { status: 'degraded', message: `Customer watchlist synchronization is incomplete (${runtime} runtime organizations for ${configured} configured organizations).` }
             }
             return `Customer watchlists are represented in the scraper runtime (${runtime} runtime organizations for ${configured} configured organizations).`
