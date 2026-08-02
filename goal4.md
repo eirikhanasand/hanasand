@@ -229,7 +229,7 @@ Acceptance:
 - The TI page and scraper have materially less dead/duplicated code, with no loss of live behavior.
 - Type checks, focused tests, production builds, restart hydration, live API probes, database checks, and representative browser workflows pass.
 
-Read-only repository audit at 2026-08-03 found no `darkwebIndexFixtureRecords`, `sampleDwmProductSnapshot`, or `ti/scraper/src/pipeline/evaluation.ts` in the production tree; evaluation metrics code itself has no `@ts-nocheck`. The STIX, frontier, planner, and canary type suppressions were removed and type-check cleanly in commits `f533b7f7`, `fd879b64`, `b1bca714`, and `13006652`; 33 `@ts-nocheck` occurrences remain in broader legacy scraper modules and still require a scoped maintainability review before this final requirement can be closed.
+Read-only repository audit at 2026-08-03 found no `darkwebIndexFixtureRecords`, `sampleDwmProductSnapshot`, or `ti/scraper/src/pipeline/evaluation.ts` in the production tree; evaluation metrics code itself has no `@ts-nocheck`. The STIX, frontier, planner, and canary type suppressions were removed and type-check cleanly in commits `f533b7f7`, `fd879b64`, `b1bca714`, `13006652`, and `cc0777ca`; 27 `@ts-nocheck` occurrences remain in broader legacy scraper modules and still require a scoped maintainability review before this final requirement can be closed.
 
 ## Completion Rule
 
