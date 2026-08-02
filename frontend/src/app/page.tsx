@@ -448,7 +448,7 @@ function HomeOperatorPaths() {
 
 async function loadExposureQueue(): Promise<ExposureQueue | null> {
     try {
-        const response = await fetchSharedExposureQueue(new URLSearchParams({ limit: '10', offset: '0' }), { timeoutMs: 3500 })
+        const response = await fetchSharedExposureQueue(new URLSearchParams({ limit: '10', offset: '0' }), { timeoutMs: 12000 })
         if (!response.ok) return null
         return normalizeExposureQueue(await response.json())
     } catch {

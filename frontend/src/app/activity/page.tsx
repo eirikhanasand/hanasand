@@ -20,7 +20,7 @@ export default async function ActivityPage() {
 
 async function loadExposureQueue(): Promise<ExposureQueue | null> {
     try {
-        const response = await fetchSharedExposureQueue(new URLSearchParams({ limit: '50', offset: '0' }), { timeoutMs: 3500 })
+        const response = await fetchSharedExposureQueue(new URLSearchParams({ limit: '50', offset: '0' }), { timeoutMs: 12000 })
         if (!response.ok) return null
         return normalizeExposureQueue(await response.json())
     } catch {
