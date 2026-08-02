@@ -7,6 +7,7 @@ describe("api v1", () => {
     store.saveSource(source({ id: "one" }));
     store.saveSource(source({ id: "two", name: "Second" }));
     store.saveAnalystMetadataReviewTask({ id: "review_pressure", recordKind: "automatic_intelligence_review_task", state: "queued", queuedAt: "2026-07-23T00:00:00.000Z", unsafeMaterialAccessed: false });
+    store.saveAnalystMetadataReviewTask({ id: "review_pressure_event", recordKind: "automatic_intelligence_review_event", state: "running", queuedAt: "2026-07-23T00:00:00.000Z", unsafeMaterialAccessed: false });
     store.saveEvaluationBenchmark({ id: "evaluation_pressure", reviewMode: "automatic_model", status: "annotating", manifest: [{ id: "evaluation_task", automation: { status: "retry_scheduled" } }] });
     const reviewInventory = store.listAnalystMetadataReviewTasks.bind(store);
     const evaluationInventory = store.listEvaluationBenchmarks.bind(store);
