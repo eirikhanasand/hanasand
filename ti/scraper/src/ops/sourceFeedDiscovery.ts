@@ -165,6 +165,15 @@ export async function runSourceFeedDiscoveryCycle(options: DiscoveryOptions, gen
         processReference({ store, fetcher, reference, generatedAt, signal: controller.signal, maxFeeds: positiveInteger(options.sourceFeedDiscoveryMaxFeedsPerReference, 4, 8) })));
       results.push(...processed.filter((result): result is ProcessedReference => Boolean(result)));
     }
+  } catch (error) {
+    return {
+      ...emptyResult(generatedAt, error instanceof Error ? error.message : String(error)),
+      consideredPublisherCount: selected.references.length,
+      processedPublisherCount: results.length,
+      deferredPublisherCount: Math.max(0, selected.references.length - results.length),
+      rejectedReferenceCount: selected.rejectedReferenceCount,
+      failedPublisherCount: results.length
+    };
   } finally {
     clearTimeout(cycleTimeout);
   }
