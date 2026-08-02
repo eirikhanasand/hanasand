@@ -189,9 +189,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
               AND NOT EXISTS (
                 SELECT 1
                 FROM threat_intel.actor_profiles profile
-                WHERE profile.id = workflow.record->>'subjectId'
-                  AND profile.tenant_id IS NOT DISTINCT FROM workflow.tenant_id
-                  AND COALESCE(profile.record->>'identityResolutionState', 'active') <> 'archived'
+              WHERE profile.id = workflow.record->>'subjectId'
+                AND profile.tenant_id IS NOT DISTINCT FROM workflow.tenant_id
               )
               AND NOT EXISTS (
                 SELECT 1

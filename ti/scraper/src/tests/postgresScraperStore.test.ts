@@ -330,6 +330,37 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await verified.close();
   });
 
+  test("keeps archived actor history from making storage unhealthy", async () => {
+    const profileId = "actor_archived_history_health";
+    const record = {
+      id: profileId,
+      tenantId: "default",
+      canonicalName: "Archived history actor",
+      normalizedName: `archived:${profileId}`,
+      identityResolutionState: "archived",
+      aliases: [],
+      captureIds: []
+    };
+    await admin`
+      INSERT INTO threat_intel.actor_profiles (
+        id, tenant_id, canonical_name, normalized_name, actor_type, confidence,
+        evidence_count, updated_at, record
+      ) VALUES (
+        ${profileId}, 'default', 'Archived history actor', ${`archived:${profileId}`},
+        'threat_actor', 0.5, 0, ${collectedAt}, ${JSON.stringify(record)}::jsonb
+      )
+    `;
+    await admin`
+      INSERT INTO threat_intel.workflow_records (record_type, id, tenant_id, created_at, updated_at, record)
+      VALUES ('evidence_delta', 'delta_archived_history_health', 'default', ${collectedAt}, ${collectedAt}, ${JSON.stringify({
+        id: 'delta_archived_history_health', subjectType: 'actor_profile', subjectId: profileId
+      })}::jsonb)
+    `;
+    const store = await PostgresScraperStore.create({ databaseUrl });
+    expect(await store.databaseHealth()).toMatchObject({ ok: true, actorProfileScopeReady: true });
+    await store.close();
+  });
+
   test("persists bounded automatic evaluation task transitions across restart", async () => {
     const at = "2026-07-21T07:00:00.000Z";
     const first = await PostgresScraperStore.create({ databaseUrl });
