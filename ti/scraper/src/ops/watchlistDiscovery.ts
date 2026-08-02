@@ -28,9 +28,11 @@ export async function scheduleWatchlistDiscoveryRuns(options: any, generatedAt =
     .filter((job) => {
       const existing = existingPlans.get(job.id);
       if (!existing) return true;
+      const existingRun = store.getRun?.(stableId("watchlist-discovery-run", job.id));
+      if (!existingRun) return false;
       const watchlistUpdatedAt = Date.parse(String(job.updatedAt ?? ""));
-      const planUpdatedAt = Date.parse(String(existing.updatedAt ?? existing.createdAt ?? ""));
-      return Number.isFinite(watchlistUpdatedAt) && Number.isFinite(planUpdatedAt) && watchlistUpdatedAt > planUpdatedAt;
+      const runUpdatedAt = Date.parse(String(existingRun.updatedAt ?? existingRun.completedAt ?? existingRun.createdAt ?? existing.updatedAt ?? existing.createdAt ?? ""));
+      return Number.isFinite(watchlistUpdatedAt) && Number.isFinite(runUpdatedAt) && watchlistUpdatedAt > runUpdatedAt;
     });
   const maxTasks = Math.max(1, Math.min(Number(options.maxTasks ?? 25), 25));
   const maxJobs = Math.max(1, Math.min(Number(options.watchlistDiscoveryMaxJobs ?? 5), Math.floor(maxTasks / providers.length)));
