@@ -3,7 +3,7 @@ import { readFile, stat, writeFile, chmod, chown } from 'node:fs/promises'
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { getBackgroundJobRuntime, type BackgroundJobRuntime } from './backgroundJobRuntime.ts'
-import { canRunApiCronJobNow, isApiCronJobPaused, runApiCronJobNow, setApiCronJobPaused } from './cron.ts'
+import { canRunApiCronJobNow, HOST_UPDATE_MONITOR_JOB_ID, isApiCronJobPaused, runApiCronJobNow, setApiCronJobPaused } from './cron.ts'
 import { getVulnerabilityReport, isVulnerabilityScanActive, setVulnerabilityScannerPaused, startTrackedVulnerabilityScan, VULNERABILITY_SCAN_CADENCE_SECONDS, VULNERABILITY_SCAN_JOB_ID } from './vulnerabilities/scanner.ts'
 import { collectDatabaseBackupServices, createDatabaseBackup, DATABASE_BACKUP_JOB_ID, setDatabaseBackupSchedulePaused } from './db/backups.ts'
 import { ORGANIZATION_RETENTION_JOB_ID } from './organizationPrivacy.ts'
@@ -256,6 +256,16 @@ const apiBackgroundJobDefinitions: Array<{
         schedule: 'Every minute',
         cadenceSeconds: API_CRON_CADENCE_SECONDS,
         source: 'api/src/utils/status/logMonitors.ts',
+        controls: [],
+    },
+    {
+        id: HOST_UPDATE_MONITOR_JOB_ID,
+        name: 'Host update monitor',
+        description: 'Persists the hanasand host updater check-in, pending package list, installed packages, and failure state for the admin console.',
+        category: 'Other/System',
+        schedule: 'Every minute',
+        cadenceSeconds: API_CRON_CADENCE_SECONDS,
+        source: 'api/src/utils/aptUpdates.ts',
         controls: [],
     },
     {

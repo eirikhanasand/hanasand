@@ -13,6 +13,9 @@ import { runDueVulnerabilityScan, VULNERABILITY_SCAN_JOB_ID } from './vulnerabil
 import { DATABASE_BACKUP_JOB_ID, runDueDatabaseBackup } from './db/backups.ts'
 import run, { queryOnce } from '#db'
 import { ORGANIZATION_RETENTION_JOB_ID, runOrganizationRetentionWorker } from './organizationPrivacy.ts'
+import { persistHostUpdateStatus, readHostUpdateStatus } from './aptUpdates.ts'
+
+export const HOST_UPDATE_MONITOR_JOB_ID = 'api-host-update-monitor'
 
 const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
     'api-auth-token-cleanup': invalidateOldTokens,
@@ -20,6 +23,12 @@ const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
     'api-deleted-account-purge': purgeDeletedAccounts,
     'api-synthetic-monitor': runSyntheticMonitor,
     'api-production-log-monitor': runProductionLogMonitors,
+    [HOST_UPDATE_MONITOR_JOB_ID]: async() => {
+        const { status, runId } = await readHostUpdateStatus()
+        if (!runId) throw new Error(String(status.last_error || 'Host update status has not checked in yet.'))
+        await persistHostUpdateStatus(status, runId)
+        return status
+    },
     'api-vm-ensure-running': ensureAlwaysRunningVms,
     [VULNERABILITY_SCAN_JOB_ID]: runDueVulnerabilityScan,
     [DATABASE_BACKUP_JOB_ID]: runDueDatabaseBackup,
@@ -87,6 +96,7 @@ export default function cron() {
                 runDueApiCronJob('api-deleted-account-purge'),
                 runDueApiCronJob('api-synthetic-monitor'),
                 runDueApiCronJob('api-production-log-monitor'),
+                runDueApiCronJob(HOST_UPDATE_MONITOR_JOB_ID),
                 runDueApiCronJob('api-vm-ensure-running'),
                 runDueApiCronJob(VULNERABILITY_SCAN_JOB_ID),
                 runDueApiCronJob(DATABASE_BACKUP_JOB_ID),
