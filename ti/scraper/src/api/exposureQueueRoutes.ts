@@ -75,12 +75,12 @@ export async function listExposureQueue(request: Request, url: URL, options: Api
   const claimAgeMinutes = ageMinutes(at, latestClaimAt);
   const collectionAgeMinutes = ageMinutes(at, latestCollectedAt);
   const sourceIds = new Set(allItems.map((item: any) => item.sourceId).filter(Boolean));
-  const latestCollectionCheckAt = latestTime((options.store.listSourceHealthObservations?.() ?? [])
-    .filter((observation: any) =>
-      observation.success === true
-      && sourceIds.has(observation.sourceId)
-      && (!observation.tenantId || observation.tenantId === tenantId))
-    .map((observation: any) => observation.checkedAt));
+  const latestCollectionCheckAt = latestTime([...sourceIds].flatMap((sourceId) => {
+    const source = options.store.getSource?.(sourceId);
+    if (source?.tenantId && source.tenantId !== tenantId) return [];
+    const health = source?.health ?? {};
+    return health.lastSuccessAt || (health.status === "healthy" ? health.checkedAt : undefined);
+  }));
   const collectionCheckAgeMinutes = ageMinutes(at, latestCollectionCheckAt);
   const age = collectionAgeMinutes ?? claimAgeMinutes;
   const activityFresh = (collectionAgeMinutes !== undefined && collectionAgeMinutes <= 60) || (claimAgeMinutes !== undefined && claimAgeMinutes <= 60);
