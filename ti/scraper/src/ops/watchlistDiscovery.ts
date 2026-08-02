@@ -28,7 +28,17 @@ export async function scheduleWatchlistDiscoveryRuns(options: any, generatedAt =
     .filter((job) => !existingPlanIds.has(job.id));
   const maxTasks = Math.max(1, Math.min(Number(options.maxTasks ?? 25), 25));
   const maxJobs = Math.max(1, Math.min(Number(options.watchlistDiscoveryMaxJobs ?? 5), Math.floor(maxTasks / providers.length)));
-  const selected = jobs.slice(0, maxJobs);
+  const lastRunAt = new Map<string, number>();
+  for (const plan of store.listPlans?.() ?? []) {
+    const organizationId = String(plan?.request?.organizationId ?? plan?.organizationId ?? "").trim();
+    const updatedAt = Date.parse(String(plan?.updatedAt ?? plan?.createdAt ?? plan?.request?.createdAt ?? ""));
+    if (!organizationId || !Number.isFinite(updatedAt)) continue;
+    lastRunAt.set(organizationId, Math.max(lastRunAt.get(organizationId) ?? 0, updatedAt));
+  }
+  const selected = jobs
+    .sort((left, right) => (lastRunAt.get(left.organizationId) ?? 0) - (lastRunAt.get(right.organizationId) ?? 0)
+      || `${left.tenantId}:${left.organizationId}:${left.id}`.localeCompare(`${right.tenantId}:${right.organizationId}:${right.id}`))
+    .slice(0, maxJobs);
   const prepared: Array<{ runId: string }> = [];
 
   for (const job of selected) {

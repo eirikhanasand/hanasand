@@ -133,6 +133,20 @@ describe("scheduled organization watchlist discovery", () => {
     expect(store.listPlans()).toHaveLength(1);
   });
 
+  test("rotates organizations instead of starving later watchlists", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(provider());
+    for (let index = 0; index < 6; index++) {
+      store.saveDwmWatchlist(watchlist(`watch_fair_${index}`, `tenant_fair_${index}`, `org_fair_${index}`, `Company ${index}`));
+    }
+    const executor = async () => undefined;
+    const firstDay = await scheduleWatchlistDiscoveryRuns({ store, frontier: new FocusedFrontier(), runExecutor: executor, maxTasks: 10 }, "2026-08-01T00:00:00.000Z");
+    expect(firstDay.scheduledRunCount).toBe(5);
+    const secondDay = await scheduleWatchlistDiscoveryRuns({ store, frontier: new FocusedFrontier(), runExecutor: executor, maxTasks: 10 }, "2026-08-02T00:00:00.000Z");
+    expect(secondDay.scheduledRunCount).toBe(5);
+    expect((secondDay.runIds ?? []).map((id) => store.getRun(id)?.tenantId)).toContain("tenant_fair_5");
+  });
+
   test("rehydrates one queued job and does not duplicate it after restart", async () => {
     const dir = mkdtempSync(join(tmpdir(), "watchlist-discovery-"));
     const snapshotPath = join(dir, "store.json");
