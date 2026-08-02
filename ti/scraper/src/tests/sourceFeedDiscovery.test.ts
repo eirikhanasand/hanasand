@@ -314,8 +314,11 @@ describe("scheduled public feed discovery", () => {
 
   test("scheduler revalidates only expired approved public RSS portfolio candidates", async () => {
     const store = new InMemoryScraperStore();
-    const eligible = expiredPortfolioRss("portfolio-rss", "https://portfolio.example/security.xml");
-    store.saveSource(eligible);
+    const google = expiredPortfolioRss("portfolio-google", "https://cloud.google.com/feeds/compute-engine-security-bulletins.xml");
+    const cyberCentre = expiredPortfolioRss("portfolio-cyber-centre", "https://www.cyber.gc.ca/api/cccs/rss/v1/get?feed=alerts_advisories&lang=en");
+    const collision = expiredPortfolioRss("portfolio-collision", "https://collision.example/old.xml");
+    const collisionOwner = source({ id: "existing-effective-feed", url: "https://collision.example/current.xml", status: "active" });
+    for (const candidate of [google, cyberCentre, collision, collisionOwner]) store.saveSource(candidate);
     store.saveSource(expiredPortfolioRss("unapproved-rss", "https://unapproved.example/security.xml", {
       governance: { approvalRequired: true, approvalState: "pending" }
     }));
@@ -336,7 +339,12 @@ describe("scheduled public feed discovery", () => {
       sourceFeedDiscoveryFetch: async (input: string | URL | Request) => {
         const url = String(input instanceof Request ? input.url : input);
         fetched.push(url);
-        return response(rss("CVE-2026-5252", "https://portfolio.example/CVE-2026-5252", generatedAt), url, "application/rss+xml");
+        const effectiveUrl = url === google.url
+          ? "https://docs.cloud.google.com/feeds/compute-engine-security-bulletins.xml"
+          : url === cyberCentre.url
+            ? "https://www.cyber.gc.ca/api/cccs/atom/v1/get?feed=alerts_advisories&lang=en"
+            : collisionOwner.url;
+        return response(rss("CVE-2026-5252", `${effectiveUrl}#CVE-2026-5252`, generatedAt), effectiveUrl, "application/rss+xml");
       }
     });
     loop.setEnabled(true);
@@ -344,22 +352,31 @@ describe("scheduled public feed discovery", () => {
     await loop.stop();
 
     expect(loop.getState().latestResult.sourceFeedDiscovery).toMatchObject({
-      processedPublisherCount: 1,
-      revalidatedSourceCount: 1,
+      processedPublisherCount: 3,
+      revalidatedSourceCount: 2,
+      duplicateSourceCount: 1,
       importedSourceCount: 0,
       failedPublisherCount: 0
     });
-    expect(fetched).toEqual([eligible.url]);
-    expect(store.getSource(eligible.id)).toMatchObject({
-      id: eligible.id,
-      status: "candidate",
-      countsAsCoverage: false,
-      metadata: {
-        productionCollection: false,
-        sourcePortfolioVerification: { verifiedAt: generatedAt, outcome: "content_parsed" }
-      }
-    });
-    expect(store.getSource(eligible.id)?.metadata?.sourcePortfolioStatus).toBeUndefined();
+    expect(fetched).toEqual([collision.url, cyberCentre.url, google.url]);
+    for (const [candidate, effectiveUrl] of [
+      [google, "https://docs.cloud.google.com/feeds/compute-engine-security-bulletins.xml"],
+      [cyberCentre, "https://www.cyber.gc.ca/api/cccs/atom/v1/get?feed=alerts_advisories&lang=en"]
+    ] as const) {
+      expect(store.getSource(candidate.id)).toMatchObject({
+        id: candidate.id,
+        url: effectiveUrl,
+        status: "candidate",
+        countsAsCoverage: false,
+        metadata: {
+          productionCollection: false,
+          sourcePortfolioVerification: { verifiedAt: generatedAt, outcome: "content_parsed" }
+        }
+      });
+      expect(store.getSource(candidate.id)?.metadata?.sourcePortfolioStatus).toBeUndefined();
+    }
+    expect(store.getSource(collision.id)).toMatchObject({ url: collision.url, metadata: { sourcePortfolioStatus: "verification_expired" } });
+    expect(store.getSource(collisionOwner.id)?.url).toBe(collisionOwner.url);
     expect(store.listSources().filter((row: any) => row.metadata?.sourceFeedDiscovery)).toEqual([]);
 
     let duplicateFetches = 0;
@@ -369,7 +386,7 @@ describe("scheduled public feed discovery", () => {
     }, generatedAt);
     expect(second).toMatchObject({ status: "skipped", processedPublisherCount: 0 });
     expect(duplicateFetches).toBe(0);
-    expect(store.listPlans().filter((plan: any) => plan.requestId === "req_source_feed_discovery")).toHaveLength(1);
+    expect(store.listPlans().filter((plan: any) => plan.requestId === "req_source_feed_discovery")).toHaveLength(3);
   });
 
   test("failed portfolio RSS revalidation uses the durable discovery backoff", async () => {

@@ -587,7 +587,12 @@ function admitSourceFeedDiscovery(
   if (input.revalidationSourceId) {
     const target = store.getSource?.(input.revalidationSourceId)
       ?? store.listSources().find((source) => source.id === input.revalidationSourceId);
-    if (!target || existing?.id !== target.id || !expiredPortfolioRssCandidate(target, input.generatedAt)) {
+    if (existing && existing.id !== target?.id) {
+      return { outcome: "duplicate", sourceId: existing.id, feedEndpointKey: input.feedEndpointKey };
+    }
+    const verifiedUrl = safePublicReference(input.source.url);
+    if (!target || !verifiedUrl || canonicalFeedKey(verifiedUrl) !== input.feedEndpointKey
+      || !expiredPortfolioRssCandidate(target, input.generatedAt)) {
       throw new Error("Portfolio RSS revalidation target is missing, duplicated, or no longer eligible.");
     }
     const metadata = {
@@ -595,7 +600,7 @@ function admitSourceFeedDiscovery(
       sourcePortfolioVerification: { ...target.metadata?.sourcePortfolioVerification, ...input.verification }
     };
     delete metadata.sourcePortfolioStatus;
-    const saved = store.saveSource({ ...target, updatedAt: input.generatedAt, metadata });
+    const saved = store.saveSource({ ...target, url: verifiedUrl, updatedAt: input.generatedAt, metadata });
     return { outcome: "revalidated", sourceId: saved.id, feedEndpointKey: input.feedEndpointKey };
   }
   if (!existing) {

@@ -1121,14 +1121,19 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           admission = { outcome: "duplicate", sourceId: existing.id, feedEndpointKey: input.feedEndpointKey };
           return;
         }
-        let safeUrl = false;
+        let safeUrl = false, verifiedUrl: string | undefined;
         try {
           const url = new URL(String(existing?.url ?? ""));
           safeUrl = url.protocol === "https:" && !url.username && !url.password && !privateTarget(url.hostname);
+          const effective = new URL(String(input.source?.url ?? ""));
+          if (effective.protocol === "https:" && !effective.username && !effective.password && !privateTarget(effective.hostname)) {
+            verifiedUrl = effective.toString();
+          }
         } catch {}
         const metadata = existing?.metadata ?? {};
         if (!existing
-          || row.canonical_feed_key !== input.feedEndpointKey
+          || row.canonical_feed_key && row.canonical_feed_key !== canonicalFeedKey(existing.url)
+          || !verifiedUrl || canonicalFeedKey(verifiedUrl) !== input.feedEndpointKey
           || existing.tenantId !== undefined && existing.tenantId !== null && existing.tenantId !== ""
           || existing.status !== "candidate"
           || existing.type !== "rss"
@@ -1153,7 +1158,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           sourcePortfolioVerification: { ...metadata.sourcePortfolioVerification, ...input.verification }
         };
         delete updatedMetadata.sourcePortfolioStatus;
-        stored = { ...existing, updatedAt: input.generatedAt, metadata: updatedMetadata };
+        stored = { ...existing, url: verifiedUrl, updatedAt: input.generatedAt, metadata: updatedMetadata };
         await this.persistSource(stored, sql);
         admission = { outcome: "revalidated", sourceId: stored.id, feedEndpointKey: input.feedEndpointKey };
         return;
