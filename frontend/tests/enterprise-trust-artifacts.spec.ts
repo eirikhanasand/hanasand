@@ -7,15 +7,15 @@ const artifacts = [
     },
     {
         path: '/trust/dpa-and-data',
-        required: [/DPA readiness/i, /Signed DPA/i, /Retention posture/i, /breach notification/i],
+        required: [/Data processing review/i, /not an executed data processing agreement/i, /Retention posture/i, /automated lifecycle enforcement/i],
     },
     {
         path: '/trust/subprocessors',
-        required: [/Subprocessor register/i, /Hosting\/runtime/i, /Customer-selected destinations/i, /named provider\/region/i],
+        required: [/Subprocessor register/i, /Hosting\/runtime/i, /Customer-selected destinations/i, /not a complete named subprocessor register/i],
     },
     {
         path: '/trust/sla-onboarding',
-        required: [/Enterprise onboarding/i, /Support and SLA/i, /SSO\/SAML\/OIDC/i, /SCIM/i, /Procurement intake checklist/i, /vendor portal or questionnaire link/i],
+        required: [/Enterprise onboarding/i, /No published SLA/i, /service-credit schedule/i, /SSO\/SAML\/OIDC/i, /SCIM/i, /Procurement intake checklist/i],
     },
 ] as const
 
@@ -33,6 +33,7 @@ test.describe('enterprise trust artifacts', () => {
             }
 
             expect(body, `${artifact.path} must not claim certification`).not.toMatch(/\b(SOC 2|ISO 27001)\s+(certified|compliant)\b/i)
+            expect(body, `${artifact.path} must not promise unavailable procurement artifacts`).not.toMatch(/DPA available on request|SLA (?:and support terms )?available on request/i)
         })
     }
 })

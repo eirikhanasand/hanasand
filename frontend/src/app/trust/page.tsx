@@ -22,15 +22,15 @@ const assuranceCards = [
     },
     {
         title: 'DPA and contract pack',
-        status: 'Available on request',
-        detail: 'Data processing terms, confidentiality language, order-form notes, and security questionnaire responses for procurement.',
+        status: 'Review copy only',
+        detail: 'Current data-processing facts and contract gaps for procurement. No standard signed DPA or MSA is claimed.',
         icon: FileText,
         href: '/trust/dpa-and-data',
     },
     {
         title: 'Subprocessor register',
-        status: 'Published by category',
-        detail: 'Infrastructure, database, mail/notification, payment, and customer-selected integration categories are listed below.',
+        status: 'Category inventory',
+        detail: 'Infrastructure, database, mail, payment, and customer-selected integration categories are listed; named deployment providers are not.',
         icon: ServerCog,
         href: '/trust/subprocessors',
     },
@@ -48,8 +48,8 @@ const controlRows = [
     ['Audit trails', 'Available now', 'Admin/support actions, alert workflow events, delivery attempts, and operational status are tracked in product surfaces where the backing API is enabled.'],
     ['Webhook safety', 'Available now', 'Webhook destinations use scoped endpoints, delivery status, retry state, and customer-owned downstream routing. Signing-key review is part of enterprise setup.'],
     ['Data handling', 'Available now', 'Monitoring is metadata-first: watch terms, source references, alert fields, hashes, timestamps, notes, and review states. Raw leak material is not the normal buyer workflow.'],
-    ['DPA / MSA / order form', 'Available on request', 'Use the procurement request path and include organization name, jurisdiction, vendor portal, and deadline.'],
-    ['SLA and support terms', 'Available on request', 'Pilot terms are lightweight; enterprise terms can include response targets, notification path, and escalation contacts.'],
+    ['DPA / MSA / order form', 'Not published', 'The public data-processing review is not an executed DPA or MSA. Use procurement intake to negotiate written terms.'],
+    ['SLA and support terms', 'No standard SLA', 'Measured history is public at /status, but no standard response target, uptime commitment, or credit schedule is claimed.'],
     ['SSO / SAML / OIDC / SCIM', 'Roadmap / scoped deal', 'Password accounts exist today. Enterprise identity requirements should be raised before purchase so implementation scope is explicit.'],
     ['SOC 2 / ISO 27001', 'Not certified', 'Security review can inspect current controls, but no independent SOC 2 or ISO certificate is claimed.'],
 ]
@@ -81,7 +81,7 @@ const dataHandling = [
 ]
 
 const subprocessorRows = [
-    ['Hosting and runtime', 'Application, API, worker, processing, and scheduled-job infrastructure used to deliver the service.', 'Provider details supplied in the DPA docs until the public register is finalized.'],
+    ['Hosting and runtime', 'Application, API, worker, processing, and scheduled-job infrastructure used to deliver the service.', 'Named provider, legal entity, region, and transfer mechanism are not published yet and must be supplied before production approval.'],
     ['Database and storage', 'PostgreSQL-backed application data, alert records, audit events, and operational state.', 'Customer-managed deployments can replace Hanasand-managed storage by agreement.'],
     ['Account and support mail', 'Account recovery, commercial requests, support, and operational email paths where configured.', 'Only the data required to deliver the message is sent. Monitoring alerts use the product webhook, case, and API paths.'],
     ['Payment and billing', 'Subscription, invoice, and plan administration if a paid plan uses external billing rails.', 'Not used for customers handled by invoice/order form.'],
@@ -122,7 +122,7 @@ export default function TrustPage() {
                             <p className='text-xs font-semibold uppercase text-ui-muted'>Current assurance state</p>
                             <div className='mt-4 grid gap-3'>
                                 <TrustStat label='SOC 2 / ISO' value='Not certified' tone='warning' />
-                                <TrustStat label='DPA / MSA' value='Request path live' tone='ready' />
+                                <TrustStat label='DPA / MSA' value='Not published' tone='warning' />
                                 <TrustStat label='Security overview' value='Published' tone='ready' />
                                 <TrustStat label='SSO / SCIM' value='Scoped deal' tone='warning' />
                             </div>

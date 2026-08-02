@@ -75,17 +75,17 @@ export const trustArtifacts: TrustArtifact[] = [
     },
     {
         slug: 'dpa-and-data',
-        label: 'DPA and data handling',
-        eyebrow: 'DPA readiness',
+        label: 'Data processing overview',
+        eyebrow: 'Data processing review',
         title: 'Data processing notes for security and legal review.',
-        description: 'A buyer-readable preview of data categories, retention posture, transfer questions, and breach-notification routing. A signed DPA is still handled by request.',
-        status: 'DPA available on request',
-        updated: 'July 3, 2026',
+        description: 'A buyer-readable review of data categories, retention boundaries, transfer questions, and breach-notification routing. This is not an executed data processing agreement.',
+        status: 'Public review copy',
+        updated: 'July 22, 2026',
         summary: [
-            ['Signed DPA', 'Available by request for paid pilots and enterprise review.'],
+            ['Contract status', 'No public standard DPA is offered today; signed processing terms require a written agreement.'],
             ['Customer data', 'Watchlists, alert records, user/account data, webhook settings, and support context.'],
             ['Raw leak material', 'Not required for the default alerting workflow.'],
-            ['Deletion/export', 'Handled through account, support, or contract path today.'],
+            ['Deletion/export', 'Watchlist alert-term export exists; broader customer-data export and deletion are handled through support.'],
         ],
         sections: [
             {
@@ -98,7 +98,7 @@ export const trustArtifacts: TrustArtifact[] = [
             },
             {
                 title: 'Retention posture',
-                body: 'Retention depends on plan, deployment, and contract. Default product data is kept while needed to provide monitoring, support, security, dispute resolution, auditability, and legal compliance. Enterprise customers should set alert retention, audit retention, and deletion expectations in the order/DPA.',
+                body: 'Organization settings store a retention period, but automated lifecycle enforcement for every customer record is not claimed as generally available. A production order must identify the records in scope, the deletion mechanism, legal-hold handling, and the evidence used to verify enforcement.',
             },
             {
                 title: 'Incident and breach notification',
@@ -116,9 +116,9 @@ export const trustArtifacts: TrustArtifact[] = [
             ],
         },
         nextSteps: [
-            'Send jurisdiction, template DPA, vendor portal, and deadline through /contact?intent=procurement.',
-            'Specify retention, deletion, audit-log, and regional hosting expectations before a production rollout.',
-            'Ask for a signed DPA/order form before processing sensitive customer watchlists at scale.',
+            'Send jurisdiction, required DPA template, vendor portal, and deadline through /contact?intent=procurement.',
+            'Do not approve production until retention, deletion, audit-log, and regional hosting requirements are written and technically verified.',
+            'Execute a signed DPA or equivalent processing terms before processing sensitive customer watchlists at scale.',
         ],
     },
     {
@@ -126,19 +126,19 @@ export const trustArtifacts: TrustArtifact[] = [
         label: 'Subprocessors',
         eyebrow: 'Subprocessor register',
         title: 'Current service-provider and integration categories.',
-        description: 'A public register of the systems that may support Hanasand delivery. Exact provider names and regions are confirmed in the DPA/order form for the target deployment.',
-        status: 'Published by category',
-        updated: 'July 3, 2026',
+        description: 'A public category-level inventory of systems that may support Hanasand delivery. It is not a complete named subprocessor register.',
+        status: 'Category inventory',
+        updated: 'July 22, 2026',
         summary: [
             ['Default posture', 'Hanasand-operated container services and database storage for the core product.'],
             ['External processors', 'Limited to hosting/runtime, mail, billing, alert processing, and customer-selected integrations where configured.'],
             ['Customer control', 'Webhook, SIEM/SOAR, ticketing, and chat destinations are customer-selected.'],
-            ['Provider details', 'Named providers and regions are confirmed for each contracted deployment.'],
+            ['Provider details', 'Named providers and regions must be supplied and approved for each production deployment.'],
         ],
         sections: [
             {
                 title: 'Why the register is scoped',
-                body: 'The product can run with a mostly self-hosted stack. Some customers may use invoice-only billing, customer-managed deployments, or their own downstream integrations. Because provider use can change by deployment, the signed docs should identify the exact providers and regions for that customer.',
+                body: 'The product can run with a mostly self-hosted stack. Some customers may use invoice-only billing, customer-managed deployments, or their own downstream integrations. This page does not substitute for a named provider, legal entity, processing location, and transfer-mechanism list for the production deployment.',
             },
             {
                 title: 'Customer-selected destinations',
@@ -148,7 +148,7 @@ export const trustArtifacts: TrustArtifact[] = [
         table: {
             columns: ['Category', 'Purpose', 'Current disclosure'],
             rows: [
-                ['Hosting/runtime', 'Application, API, worker, processing, Tor/onion session, and scheduled-job infrastructure', 'Hanasand-managed infrastructure; named provider/region supplied in the order/DPA'],
+                ['Hosting/runtime', 'Application, API, worker, processing, Tor/onion session, and scheduled-job infrastructure', 'Hanasand-managed deployment; named infrastructure provider and region are not published here'],
                 ['Database/storage', 'Account, organization, watchlist, alert, audit, and operational state', 'PostgreSQL-backed storage in the deployment environment'],
                 ['Mail', 'Account recovery, commercial requests, support, and operational messages', 'Hanasand mail stack or configured mail provider by deployment; monitoring alerts use webhook, case, and API paths'],
                 ['Alert processing', 'Structure source records into safer alert fields when enabled', 'Hanasand-controlled model endpoint or explicitly approved provider'],
@@ -157,24 +157,24 @@ export const trustArtifacts: TrustArtifact[] = [
             ],
         },
         nextSteps: [
-            'Request named provider, hosting region, and transfer details for the target deployment.',
+            'Require the named provider, legal entity, hosting region, and transfer details for the target deployment.',
             'List any prohibited subprocessors before procurement approval.',
             'Confirm whether you need customer-managed deployment, invoice-only billing, or restricted integration routing.',
         ],
     },
     {
         slug: 'sla-onboarding',
-        label: 'SLA and onboarding',
+        label: 'Support and onboarding',
         eyebrow: 'Enterprise onboarding',
         title: 'Pilot-to-production path, support terms, and current identity gaps.',
-        description: 'A practical onboarding outline for security teams that need procurement, alert delivery, support, and identity requirements clarified before rollout.',
-        status: 'Available for pilots',
-        updated: 'July 3, 2026',
+        description: 'A practical onboarding outline for security teams. Hanasand publishes measured service history, but no standard contractual SLA or credit schedule today.',
+        status: 'No published SLA',
+        updated: 'July 22, 2026',
         summary: [
             ['Pilot path', 'Watchlist, delivery route, reviewer, and success criteria.'],
-            ['Support terms', 'Response targets are agreed in order form/SLA for enterprise customers.'],
+            ['Support terms', 'No standard response-time commitment or service-credit schedule is published today.'],
             ['Identity', 'Roles and organization admin today; SSO/SCIM scoped before rollout.'],
-            ['Procurement', 'Security questionnaire, DPA, subprocessors, and SLA notes by request.'],
+            ['Procurement', 'Security questions and contract requirements use the durable procurement intake path.'],
         ],
         sections: [
             {
@@ -189,7 +189,7 @@ export const trustArtifacts: TrustArtifact[] = [
             },
             {
                 title: 'Support and SLA',
-                body: 'Self-serve pilots use lightweight support. Enterprise terms can define support hours, initial response targets, incident notification path, escalation contacts, uptime expectations, and maintenance notice routing.',
+                body: 'The public status page reports measured service history. It is operational evidence, not a contractual uptime promise. Any support hours, response targets, incident notification windows, maintenance notices, or service credits must be explicit in a signed order; none are standard or generally available today.',
             },
             {
                 title: 'Admin onboarding',
@@ -218,12 +218,12 @@ export const trustArtifacts: TrustArtifact[] = [
                 ['Alert reviewer', 'Alerts and cases can be routed to product surfaces', 'Name SOC/vendor-risk owner and escalation path'],
                 ['Delivery route', 'Email, API, and webhook paths are represented', 'Choose destination and verify payload fields'],
                 ['Procurement intake', 'Company is required for enterprise/security review contact requests', 'Send owner, portal, deadline, DPA, identity, retention, and support requirements'],
-                ['Support/SLA', 'By request for enterprise terms', 'Agree response targets and notification window'],
+                ['Support/SLA', 'No published standard commitment', 'Write response targets, notification window, exclusions, and credits into the signed order'],
                 ['SSO/SCIM', 'Scoped deal, not generally available', 'Decide whether rollout depends on implementation'],
             ],
         },
         nextSteps: [
-            'Use /contact?intent=procurement to send vendor portal, identity requirements, and support targets.',
+            'Use /contact?intent=procurement to send vendor portal, identity requirements, and proposed support targets.',
             'Start with a watchlist small enough to manually review every alert during the pilot.',
             'Do not approve a broad rollout until SSO, retention, delivery, and escalation requirements are contractually clear.',
         ],
