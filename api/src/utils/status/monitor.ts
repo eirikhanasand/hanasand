@@ -249,6 +249,18 @@ export default async function runSyntheticMonitor() {
                   )::int AS stalled_evaluations,
                   (
                     SELECT count(*)::int
+                    FROM threat_intel.sources source
+                    WHERE source.collection_executable
+                      AND COALESCE(source.record->'metadata'->'automaticSourceReview'->>'state', '') <> 'approved'
+                      AND EXISTS (
+                        SELECT 1
+                        FROM threat_intel.captures capture
+                        WHERE capture.source_id = source.id
+                          AND capture.tenant_id IS NOT DISTINCT FROM source.tenant_id
+                      )
+                  ) AS unreviewed_sources,
+                  (
+                    SELECT count(*)::int
                     FROM public.dwm_webhook_deliveries failed
                     WHERE failed.status = 'failed'
                       AND failed.updated_at >= NOW() - INTERVAL '24 hours'
@@ -267,12 +279,13 @@ export default async function runSyntheticMonitor() {
             const staleReviews = Number(counts.stale_reviews ?? 0)
             const overdueDiscovery = Number(counts.overdue_discovery ?? 0)
             const stalledEvaluations = Number(counts.stalled_evaluations ?? 0)
+            const unreviewedSources = Number(counts.unreviewed_sources ?? 0)
             const recentDeliveryFailures = Number(counts.recent_delivery_failures ?? 0)
-            const message = `${staleReviews} stale reviews, ${overdueDiscovery} overdue discovery jobs, ${stalledEvaluations} stalled evaluations, ${recentDeliveryFailures} recent delivery failures.`
-            if (staleReviews >= 1_000 || overdueDiscovery >= 10 || stalledEvaluations >= 2 || recentDeliveryFailures >= 10) {
+            const message = `${staleReviews} stale reviews, ${overdueDiscovery} overdue discovery jobs, ${stalledEvaluations} stalled evaluations, ${unreviewedSources} captured sources without automatic review, ${recentDeliveryFailures} recent delivery failures.`
+            if (staleReviews >= 1_000 || overdueDiscovery >= 10 || stalledEvaluations >= 2 || unreviewedSources >= 1_000 || recentDeliveryFailures >= 10) {
                 return { status: 'down', message }
             }
-            if (staleReviews || overdueDiscovery || stalledEvaluations || recentDeliveryFailures >= 3) {
+            if (staleReviews || overdueDiscovery || stalledEvaluations || unreviewedSources || recentDeliveryFailures >= 3) {
                 return { status: 'degraded', message }
             }
             return message
