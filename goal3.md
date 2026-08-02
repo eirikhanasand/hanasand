@@ -125,15 +125,11 @@ The product must distinguish observables, source URLs, software assets, page imp
 
 Labels that restate source metadata do not satisfy the thesis analysis objectives.
 
-### 8. The Commercial Monitoring Surface Is A Demo
+### 8. The Commercial Monitoring Surface Requires Live Proof
 
-- `/dwm` imports `sampleDwmProductSnapshot()` directly.
-- It generates fictional Acme/Northwind alerts relative to the current clock and hardcodes illustrative source coverage.
-- The sample itself reports `blocked_missing_live_sources`.
-- Production organization data consists of six `Commercial Acceptance` test organizations, all watching `apt29`.
-- Of four customer-like webhook deliveries, one failed with `results.sort is not a function`.
+The earlier sample-path findings are stale: the current tree has no `sampleDwmProductSnapshot()` reference, no `/solutions/dwm` page, and the live homepage/activity surface is backed by the scraper API. That removes the known fictional-data path, but it does not by itself prove the full tenant workflow.
 
-The production DWM page must be driven by authenticated tenant data, real watchlists, real evidence-linked alerts, review state, and durable delivery history.
+Remaining proof is an authenticated fresh-tenant run using real watchlists, evidence-linked alerts, review state, durable delivery history, retry/idempotency, and an independently readable receiver. Historical test organizations or synthetic rows do not count toward that proof.
 
 ### 9. The Public API Is Narrow And Contract-Inconsistent
 
@@ -323,7 +319,7 @@ Acceptance:
 
 ### Phase 7: Replace The Demo Monitoring Workflow
 
-- Remove `sampleDwmProductSnapshot()` from production product paths.
+- The sample DWM path is removed from production product paths; retain this as a verified invariant.
 - Drive DWM views from authenticated tenant organizations, watchlists, evidence matches, alerts, reviews, cases, and delivery attempts.
 - Ensure alerts require a real watchlist match and evidence-supported entity resolution.
 - Make retries, failures, idempotency, replay, and customer notification durable and observable.
