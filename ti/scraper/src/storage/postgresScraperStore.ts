@@ -273,7 +273,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return { records, total, nextCursor: offset + records.length < total ? String(offset + records.length) : undefined };
   }
 
-  async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; sourceId?: string; executableOnly?: boolean } ) {
+  async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; sourceId?: string; executableOnly?: boolean; skipOperationalTotals?: boolean } ) {
     const limit = Math.max(1, Math.min(500, Number(input.limit ?? 100)));
     const offset = Math.max(0, Number(input.offset ?? 0));
     const tenantId = input.tenantId ?? null;
@@ -295,12 +295,12 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           AND (NOT ${executableOnly}::boolean OR collection_executable)
       `;
       if (!first?.id) return { rows: [], totals: {}, total: 0 };
-      const page = await this.querySourceOperationalPage({ ...input, sourceId: first.id, offset: 0, limit: 1 });
+      const page = await this.querySourceOperationalPage({ ...input, sourceId: first.id, offset: 0, limit: 1, skipOperationalTotals: true });
       const total = Number(countRow?.total ?? 0);
       return { ...page, total, nextCursor: total > 1 ? "1" : undefined };
     }
     const [rows, totalRows] = await Promise.all([
-      this.sql.unsafe(`
+      input.skipOperationalTotals ? Promise.resolve([]) : this.sql.unsafe(`
         WITH page AS (
           SELECT source.*
           FROM threat_intel.sources source
