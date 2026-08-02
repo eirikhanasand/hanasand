@@ -227,6 +227,8 @@ Acceptance:
 - The TI page and scraper have materially less dead/duplicated code, with no loss of live behavior.
 - Type checks, focused tests, production builds, restart hydration, live API probes, database checks, and representative browser workflows pass.
 
+Read-only repository audit at 2026-08-03 found no `darkwebIndexFixtureRecords`, `sampleDwmProductSnapshot`, or `ti/scraper/src/pipeline/evaluation.ts` in the production tree; evaluation metrics code itself has no `@ts-nocheck`. Remaining `@ts-nocheck` occurrences are in broader legacy scraper modules and still require a scoped maintainability review before this final requirement can be closed.
+
 ## Completion Rule
 
 Do not mark `goal4.md` or the persistent Codex goal complete until all ten goals pass in order on the live system and `goal.md`, `goal2.md`, and `goal3.md` have been reconciled against the resulting production state.
