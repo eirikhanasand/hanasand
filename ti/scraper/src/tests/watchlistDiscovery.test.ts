@@ -147,6 +147,19 @@ describe("scheduled organization watchlist discovery", () => {
     expect((secondDay.runIds ?? []).map((id) => store.getRun(id)?.tenantId)).toContain("tenant_fair_5");
   });
 
+  test("reschedules a daily plan after a watchlist changes", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(provider());
+    const initial = watchlist("watch_changed", "tenant_changed", "org_changed", "Changed Corp");
+    store.saveDwmWatchlist(initial);
+    await scheduleWatchlistDiscoveryRuns({ store, frontier: new FocusedFrontier(), runExecutor: async () => undefined, maxTasks: 1 }, "2026-08-02T00:00:00.000Z");
+    store.savePlan({ ...store.listPlans()[0], updatedAt: "2026-08-02T00:01:00.000Z" });
+    store.saveDwmWatchlist({ ...initial, updatedAt: "2026-08-02T01:00:00.000Z", terms: [{ id: "term_watch_changed", value: "Changed Corp Updated", kind: "company" }] });
+
+    const result = await scheduleWatchlistDiscoveryRuns({ store, frontier: new FocusedFrontier(), runExecutor: async () => undefined, maxTasks: 1 }, "2026-08-02T02:00:00.000Z");
+    expect(result.scheduledRunCount).toBe(1);
+  });
+
   test("rehydrates one queued job and does not duplicate it after restart", async () => {
     const dir = mkdtempSync(join(tmpdir(), "watchlist-discovery-"));
     const snapshotPath = join(dir, "store.json");

@@ -23,9 +23,15 @@ export async function scheduleWatchlistDiscoveryRuns(options: any, generatedAt =
     crawlState: { ...(source.crawlState ?? {}), nextEligibleAt: source.crawlState?.backoffUntil }
   }));
 
-  const existingPlanIds = new Set((store.listPlans?.() ?? []).map((plan: any) => plan.id));
+  const existingPlans = new Map<string, any>((store.listPlans?.() ?? []).map((plan: any) => [String(plan.id), plan]));
   const jobs = organizationJobs(store.listDwmWatchlists(), generatedAt)
-    .filter((job) => !existingPlanIds.has(job.id));
+    .filter((job) => {
+      const existing = existingPlans.get(job.id);
+      if (!existing) return true;
+      const watchlistUpdatedAt = Date.parse(String(job.updatedAt ?? ""));
+      const planUpdatedAt = Date.parse(String(existing.updatedAt ?? existing.createdAt ?? ""));
+      return Number.isFinite(watchlistUpdatedAt) && Number.isFinite(planUpdatedAt) && watchlistUpdatedAt > planUpdatedAt;
+    });
   const maxTasks = Math.max(1, Math.min(Number(options.maxTasks ?? 25), 25));
   const maxJobs = Math.max(1, Math.min(Number(options.watchlistDiscoveryMaxJobs ?? 5), Math.floor(maxTasks / providers.length)));
   const lastRunAt = new Map<string, number>();
@@ -238,13 +244,14 @@ export function activeWatchlistDiscoveryTerms(store: any, task: any) {
 }
 
 function organizationJobs(watchlists: any[], generatedAt: string) {
-  const groups = new Map<string, { tenantId: string; organizationId: string; watchlistIds: Set<string>; terms: Map<string, any> }>();
+  const groups = new Map<string, { tenantId: string; organizationId: string; watchlistIds: Set<string>; terms: Map<string, any>; updatedAt: string }>();
   for (const watchlist of watchlists) {
     const tenantId = String(watchlist?.tenantId ?? "").trim();
     const organizationId = String(watchlist?.organizationId ?? "").trim();
     if (watchlist?.status !== "active" || !tenantId || !organizationId) continue;
     const key = `${tenantId}:${organizationId}`;
-    const group = groups.get(key) ?? { tenantId, organizationId, watchlistIds: new Set(), terms: new Map() };
+    const group = groups.get(key) ?? { tenantId, organizationId, watchlistIds: new Set(), terms: new Map(), updatedAt: "" };
+    if (String(watchlist.updatedAt ?? "") > group.updatedAt) group.updatedAt = String(watchlist.updatedAt ?? "");
     group.watchlistIds.add(String(watchlist.id));
     for (const [index, raw] of (Array.isArray(watchlist.terms) ? watchlist.terms : []).entries()) {
       const value = cleanTerm(typeof raw === "string" ? raw : raw?.value);
@@ -266,6 +273,7 @@ function organizationJobs(watchlists: any[], generatedAt: string) {
       tenantId: group.tenantId,
       organizationId: group.organizationId,
       watchlistIds: [...group.watchlistIds].sort(),
+      updatedAt: group.updatedAt,
       terms,
       query,
       cadenceWindow
