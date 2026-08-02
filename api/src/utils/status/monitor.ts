@@ -179,6 +179,14 @@ export default async function runSyntheticMonitor() {
             if (response.status !== 200 || !summary || !Number.isFinite(Number(summary.sourceCount))) {
                 throw new Error(`Threat-intelligence source operations are unavailable (${response.status}).`)
             }
+            const failed = Number(summary.failedSourceCount ?? 0)
+            const degraded = Number(summary.degradedSourceCount ?? 0)
+            if (failed > 0 || degraded > 0) {
+                return {
+                    status: 'degraded',
+                    message: `Source operations returned ${String(summary.sourceCount)} sources; ${failed} failed and ${degraded} degraded.`,
+                }
+            }
             return `Source operations returned ${String(summary.sourceCount)} registered sources.`
         }, { degraded: 3_000, down: 15_000 }),
         check('threat-intelligence', 'AI model service', async () => {
