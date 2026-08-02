@@ -120,7 +120,7 @@ export default async function runSyntheticMonitor() {
             return 'A canonical threat-intelligence search completed successfully.'
         }, { degraded: 3_000, down: 10_000 }),
         check('threat-intelligence', 'Scraper health', async () => {
-            const { response, body } = await fetchJson('/v1/health', {}, scraperBase)
+            const { response, body } = await fetchJson('/v1/health', { signal: AbortSignal.timeout(45_000) }, scraperBase)
             const health = object(body)
             const storage = object(health?.storage)
             if (response.status !== 200 || health?.ok !== true || storage?.ok !== true) {
@@ -140,7 +140,7 @@ export default async function runSyntheticMonitor() {
                 .filter(([, loop]) => loop?.enabled !== false)
             const stale = loops.filter(([, loop]) => {
                 const intervalMs = Math.max(60_000, Number(loop?.intervalSeconds ?? 300) * 3_000)
-                const lastSuccess = Date.parse(String(loop?.lastSuccessAt ?? ''))
+                const lastSuccess = Date.parse(String(loop?.lastSuccessAt ?? loop?.lastCycleAt ?? ''))
                 return !Number.isFinite(lastSuccess) || Date.now() - lastSuccess > intervalMs
             })
             const errors = loops.filter(([, loop]) =>
