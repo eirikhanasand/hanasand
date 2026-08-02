@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { PipelineResult, RawCapture, StixBundle, StixExportOptions, StixObject } from "../types.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { mapAttackTechniqueCandidates } from "./attack.ts";
@@ -16,7 +15,7 @@ export function exportPipelineResultToStixBundle(result: PipelineResult, options
   const objects = new Map<string, StixObject>();
   const identity = identityObject(options);
   objects.set(identity.id, identity);
-  for (const entity of result.entities) objects.set(stixId(kindForEntity(entity.type), entity.value), domainObject(kindForEntity(entity.type), entity.value, entity.confidence, options.generatedAt, entity.provenance ?? []));
+  for (const entity of result.entities as Array<{ type: string; value: string; confidence?: number; provenance?: any[] }>) objects.set(stixId(kindForEntity(entity.type), entity.value), domainObject(kindForEntity(entity.type), entity.value, entity.confidence ?? 0, options.generatedAt, entity.provenance ?? []));
   for (const indicator of result.indicators) {
     const indicatorStix = indicatorObject(indicator.type, indicator.value, indicator.confidence, options.generatedAt, indicator.provenance ?? []);
     const observedStix = observedObject(indicator.type, indicator.value, options.generatedAt);
@@ -33,8 +32,10 @@ export function exportPipelineResultToStixBundle(result: PipelineResult, options
     const sourceNode = graphNodes.get(relationship.sourceRef);
     const targetNode = graphNodes.get(relationship.targetRef);
     if (!sourceNode || !targetNode) continue;
-    const source = stixId(kindForEntity(sourceNode.type), sourceNode.value);
-    const target = stixId(kindForEntity(targetNode.type), targetNode.value);
+    const sourceEntity = sourceNode as { type: string; value: string };
+    const targetEntity = targetNode as { type: string; value: string };
+    const source = stixId(kindForEntity(sourceEntity.type), sourceEntity.value);
+    const target = stixId(kindForEntity(targetEntity.type), targetEntity.value);
     if (objects.has(source) && objects.has(target)) {
       const object = relationshipObject(relationship.type, source, target, relationship.confidence, options.generatedAt, relationship.provenance);
       objects.set(object.id, object);

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { StixObject } from "../types.ts";
 import { issue, ISO_RE, type StixValidationIssue } from "./stixValidationCore.ts";
 
