@@ -109,13 +109,21 @@ export default async function runSyntheticMonitor() {
             return 'The public website rendered successfully.'
         }),
         check('threat-intelligence', 'Public search', async () => {
-            const { response, body } = await fetchJson('/ti/search', {
+            const request = () => fetchJson('/ti/search', {
                 method: 'POST',
                 body: JSON.stringify({ query: 'APT29' }),
             }, publicApiBase)
-            const result = object(body)
-            if (response.status !== 200 || result?.mode !== 'scraper' || !Array.isArray(result.sources) || !Array.isArray(result.recentActivity)) {
-                throw new Error(`Threat intelligence search is unavailable (${response.status})`)
+            let result = await request()
+            const valid = (value: typeof result) => {
+                const body = object(value.body)
+                return value.response.status === 200 && body?.mode === 'scraper' && Array.isArray(body.sources) && Array.isArray(body.recentActivity)
+            }
+            for (let attempt = 0; !valid(result) && attempt < 2; attempt += 1) {
+                await new Promise((resolve) => setTimeout(resolve, 1_000))
+                result = await request()
+            }
+            if (!valid(result)) {
+                throw new Error(`Threat intelligence search is unavailable (${result.response.status})`)
             }
             return 'A canonical threat-intelligence search completed successfully.'
         }, { degraded: 3_000, down: 10_000 }),
@@ -195,7 +203,13 @@ export default async function runSyntheticMonitor() {
             return 'The authenticated dark-web monitoring workspace rendered successfully.'
         }),
         check('dark-web-monitoring', 'Latest activity', async () => {
-            const { response, body } = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase)
+            let { response, body } = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase)
+            for (let attempt = 0; response.status >= 500 && attempt < 2; attempt += 1) {
+                await new Promise((resolve) => setTimeout(resolve, 1_000))
+                const retry = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase)
+                response = retry.response
+                body = retry.body
+            }
             const queue = object(body)
             const counts = object(queue?.counts)
             const freshness = object(queue?.freshness)
