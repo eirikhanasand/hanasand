@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const JOURNALISM_CANARY_FEEDS = [
   src("src_canary_theregister_security", "The Register Security", "rss", "https://www.theregister.com/security/headlines.atom", ["breach", "ransomware", "malware"], "journalism"),
   src("src_canary_techcrunch_security", "TechCrunch Security", "rss", "https://techcrunch.com/category/security/feed/", ["breach", "ransomware", "hack"], "journalism"),

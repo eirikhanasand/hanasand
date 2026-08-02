@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const CLOUD_CANARY_FEEDS = [
   src("src_canary_stairwell", "Stairwell Blog", "rss", "https://stairwell.com/blog/feed/", ["malware", "APT", "threat"], "vendor"),
   src("src_canary_threatdown", "ThreatDown Blog", "rss", "https://www.threatdown.com/blog/feed/", ["malware", "ransomware", "threat"], "vendor"),

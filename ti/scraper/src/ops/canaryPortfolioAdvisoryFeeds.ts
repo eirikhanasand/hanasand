@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const ADVISORY_CANARY_FEEDS = [
   src("src_canary_cisco_psirt", "Cisco PSIRT Advisories", "rss", "https://sec.cloudapps.cisco.com/security/center/psirtrss20/CiscoSecurityAdvisory.xml", ["CVE", "exploit", "vulnerability"], "vendor"),
   src("src_canary_gitlab_releases", "GitLab Security Releases", "rss", "https://about.gitlab.com/security-releases.xml", ["CVE", "vulnerability", "supply-chain"], "vendor"),
