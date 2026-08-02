@@ -382,6 +382,9 @@ async function relatedPublisherFeedProofs(html: string, pageUrl: string, fetcher
 
 async function abortable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) throw signal.reason;
+  // Keep a handler on the underlying fetch as well as the race. Some runtimes
+  // report a late abort rejection as unhandled after the race has settled.
+  void operation.catch(() => undefined);
   let abort!: () => void;
   const aborted = new Promise<never>((_, reject) => {
     abort = () => reject(signal.reason);
