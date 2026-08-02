@@ -46,7 +46,7 @@ export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygien
     check("compose.internal_scraper_url", /TI_SCRAPER_API_BASE:\s*\$\{TI_SCRAPER_API_BASE:-http:\/\/ti-scraper:8097\}/.test(compose), "api uses internal scraper URL by default"),
     check("compose.scraper_memory_target", /SCRAPER_MEMORY_TARGET_MB:\s*8192/.test(compose), "scraper target memory is 8 GB"),
     check("compose.scraper_memory_ceiling", /SCRAPER_MEMORY_CEILING_MB:\s*14336/.test(compose), "scraper normal ceiling is 14 GB"),
-    check("compose.scraper_mem_limit", /ti-scraper:[\s\S]*mem_limit:\s*16g/.test(compose), "scraper container mem_limit is 16g"),
+    check("compose.scraper_mem_limit", /ti-scraper:[\s\S]*mem_limit:\s*24g/.test(compose), "scraper container mem_limit is 24g"),
     check("compose.scraper_stop_grace", /ti-scraper:[\s\S]*stop_grace_period:\s*10m/.test(compose), "scraper has enough bounded grace for in-flight collection and AI work"),
     check("compose.scraper_review_concurrency", /HANASAND_AI_REVIEW_CONCURRENCY:\s*\$\{HANASAND_AI_REVIEW_CONCURRENCY:-3\}/.test(compose), "automatic review has an explicit three-task concurrency ceiling"),
     check("compose.postgres_mem_limit", /postgres:[\s\S]*mem_limit:\s*2g/.test(compose), "PostgreSQL has a 2 GB cgroup budget"),

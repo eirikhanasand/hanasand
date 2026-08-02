@@ -181,7 +181,7 @@ describe("deploy hygiene", () => {
       "    environment:",
       "      TI_SCRAPER_API_BASE: ${TI_SCRAPER_API_BASE:-http://ti-scraper:8097}",
       "  ti-scraper:",
-      "    mem_limit: 16g",
+      "    mem_limit: 24g",
       "    environment:",
       "      SCRAPER_MEMORY_TARGET_MB: 8192",
       "      SCRAPER_MEMORY_CEILING_MB: 14336",

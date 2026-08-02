@@ -310,7 +310,7 @@ services:
   ti-scraper:
     container_name: hanasand_ti_scraper
     image: hanasand_ti_scraper
-    mem_limit: 16g
+    mem_limit: 24g
     cpus: "8.0"
     restart: always
     stop_grace_period: 10m
