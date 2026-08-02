@@ -45,7 +45,8 @@ export function startApiServer(options: ApiServerOptions): ApiServerHandle {
 async function handleDurableApiRequest(request: Request, options: ApiServerOptions): Promise<Response> {
   const response = await handleApiRequest(request, options);
   const pathname = new URL(request.url).pathname;
-  if ((request.method === "GET" && pathname === "/v1/health") || ["/v1/intel/search", "/api/ti/search"].includes(pathname)) return response;
+  const readOnlyExposureQueue = request.method === "GET" && ["/v1/dwm/exposure-queue", "/api/dwm/exposure-queue"].includes(pathname);
+  if ((request.method === "GET" && pathname === "/v1/health") || ["/v1/intel/search", "/api/ti/search"].includes(pathname) || readOnlyExposureQueue) return response;
   try {
     await (options.store as any).flush?.();
     return response;

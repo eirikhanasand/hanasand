@@ -75,4 +75,24 @@ describe("health route", () => {
       await server.stop();
     }
   });
+
+  test("keeps the live exposure queue responsive while mutations wait for storage", async () => {
+    const store = new InMemoryScraperStore();
+    let release = () => {};
+    const blockedFlush = new Promise<void>((resolve) => { release = resolve; });
+    (store as any).flush = () => blockedFlush;
+    const server = startApiServer({ port: 0, store, frontier: new FocusedFrontier(), serviceToken: "queue-test-secret" });
+
+    try {
+      const response = await Promise.race([
+        fetch(`http://127.0.0.1:${server.port}/v1/dwm/exposure-queue?limit=1&tenantId=default`, { headers: { "x-hanasand-service-token": "queue-test-secret" } }),
+        Bun.sleep(200).then(() => undefined),
+      ]);
+      expect(response).toBeInstanceOf(Response);
+      expect(await response!.json()).toMatchObject({ schemaVersion: "dwm.exposure_queue.v1", page: { total: 0 } });
+    } finally {
+      release();
+      await server.stop();
+    }
+  });
 });
