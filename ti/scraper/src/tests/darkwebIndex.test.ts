@@ -3,7 +3,14 @@ import { buildDarkwebIndexStatus, darkwebIndexContract, searchDarkwebIndex } fro
 
 describe("compact darkweb metadata index", () => {
   test("derives counts and search rows from persisted captures", () => {
-    const sources = [{ id: "source-akira", type: "tor_metadata" }, { id: "source-public", type: "rss" }];
+    const sources = [{
+      id: "source-akira",
+      type: "tor_metadata",
+      status: "active",
+      accessMethod: "approved_proxy",
+      legalNotes: "Metadata-only research collection.",
+      governance: { metadataOnly: true, approvalState: "approved", approvedAt: "2026-07-20T08:00:00.000Z", approvedBy: "operator" }
+    }, { id: "source-public", type: "rss" }];
     const captures = [{
       id: "capture-akira-acme",
       sourceId: "source-akira",
@@ -61,6 +68,26 @@ describe("compact darkweb metadata index", () => {
         restrictedRecordCount: 0,
       },
     });
+  });
+
+  test("does not promote unapproved or raw restricted captures", () => {
+    const source = {
+      id: "source-pending",
+      type: "tor_metadata",
+      status: "needs_review",
+      accessMethod: "approved_proxy",
+      legalNotes: "Metadata-only research collection.",
+      governance: { metadataOnly: true, approvalState: "pending", approvedAt: undefined, approvedBy: undefined }
+    };
+    const capture = {
+      id: "capture-pending",
+      sourceId: source.id,
+      storageKind: "metadata_only",
+      collectedAt: "2026-07-21T08:00:00.000Z",
+      metadata: { leakSite: { actorName: "Akira", victimName: "Acme Industries" } }
+    };
+    expect(searchDarkwebIndex({ sources: [source], captures: [capture], q: "akira" })).toMatchObject({ count: 0, rows: [] });
+    expect(searchDarkwebIndex({ sources: [{ ...source, status: "active", governance: { ...source.governance, approvalState: "approved", approvedAt: "2026-07-20T08:00:00.000Z", approvedBy: "operator" } }], captures: [{ ...capture, storageKind: "inline_text" }], q: "akira" })).toMatchObject({ count: 0, rows: [] });
   });
 
   test("documents the public API contract without unsafe output", () => {

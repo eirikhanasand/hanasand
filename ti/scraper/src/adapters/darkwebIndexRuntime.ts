@@ -1,5 +1,6 @@
 import type { DarkwebIndexRecord } from "./darkwebIndexTypes.ts";
 import { hash, networks, valueScore } from "./darkwebIndexHelpers.ts";
+import { evaluateMetadataOnlySource } from "../policy/metadataCollectionPolicy.ts";
 
 export function rowsFromRuntime(input: { sources?: any[]; captures?: any[] }): DarkwebIndexRecord[] {
   const sources = new Map(((input as any).sources ?? []).map((source: any) => [source.id, source]));
@@ -7,7 +8,12 @@ export function rowsFromRuntime(input: { sources?: any[]; captures?: any[] }): D
     const leak = capture.metadata?.leakSite ?? {};
     const source: any = sources.get(capture.sourceId);
     const network = networks.find((candidate) => candidate === String(source?.type ?? "").replace("_metadata", ""));
-    if (!network) return [];
+    if (!network || capture.storageKind !== "metadata_only") return [];
+    try {
+      if (!evaluateMetadataOnlySource(source).allowed) return [];
+    } catch {
+      return [];
+    }
     const actorName = meaningfulHint(leak.actorName);
     const victimName = meaningfulHint(leak.victimName);
     const datasetHint = meaningfulHint(leak.claimedDataCategory);

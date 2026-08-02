@@ -3,7 +3,14 @@ import { api, body, describe, expect, FocusedFrontier, handleApiRequest, InMemor
 describe("api v1", () => {
   test("searches restricted metadata by actor victim country and sector without locators", async () => {
     const store = new InMemoryScraperStore();
-    store.saveSource(source({ id: "src_runtime_tor", type: "tor_metadata", url: "http://runtime.onion/posts", accessMethod: "approved_proxy", status: "active" }));
+    store.saveSource(source({
+      id: "src_runtime_tor",
+      type: "tor_metadata",
+      url: "http://runtime.onion/posts",
+      accessMethod: "approved_proxy",
+      status: "active",
+      governance: { metadataOnly: true, approvalState: "approved", approvedAt: "2026-05-23T00:00:00.000Z", approvedBy: "test" }
+    }));
     store.saveCapture({
       id: "akira",
       sourceId: "src_runtime_tor",
