@@ -273,34 +273,35 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return { records, total, nextCursor: offset + records.length < total ? String(offset + records.length) : undefined };
   }
 
-  async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; sourceId?: string; executableOnly?: boolean; skipOperationalTotals?: boolean } ) {
+  async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; sourceId?: string; executableOnly?: boolean } ) {
     const limit = Math.max(1, Math.min(500, Number(input.limit ?? 100)));
     const offset = Math.max(0, Number(input.offset ?? 0));
     const tenantId = input.tenantId ?? null;
     const sourceId = input.sourceId?.trim() || null;
     const executableOnly = input.executableOnly === true;
     if (!sourceId && tenantId === null && limit === 1) {
-      const [first] = await this.sql`
-        SELECT id
+      const [first, countRow] = await Promise.all([
+        this.sql`
+        SELECT id, record, collection_executable
         FROM threat_intel.sources
         WHERE tenant_id IS NULL
           AND (NOT ${executableOnly}::boolean OR collection_executable)
         ORDER BY lower(name), id
         LIMIT 1
-      `;
-      const [countRow] = await this.sql`
+      `,
+        this.sql`
         SELECT count(*)::int AS total
         FROM threat_intel.sources
         WHERE tenant_id IS NULL
           AND (NOT ${executableOnly}::boolean OR collection_executable)
-      `;
+      `
+      ]);
       if (!first?.id) return { rows: [], totals: {}, total: 0 };
-      const page = await this.querySourceOperationalPage({ ...input, sourceId: first.id, offset: 0, limit: 1, skipOperationalTotals: true });
       const total = Number(countRow?.total ?? 0);
-      return { ...page, total, nextCursor: total > 1 ? "1" : undefined };
+      return { rows: [{ record: first.record, collection_executable: first.collection_executable }], totals: {}, total, nextCursor: total > 1 ? "1" : undefined };
     }
     const [rows, totalRows] = await Promise.all([
-      input.skipOperationalTotals ? Promise.resolve([]) : this.sql.unsafe(`
+      this.sql.unsafe(`
         WITH page AS (
           SELECT source.*
           FROM threat_intel.sources source
