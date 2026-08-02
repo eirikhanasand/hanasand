@@ -210,6 +210,7 @@ export async function buildSourceOperationsSummary(store: any, input: { tenantId
 
 function operationalQuerySnapshot(result: any, input: any, generatedAt: string) {
   const totals = result.totals ?? {};
+  const operationalMetricsMeasured = totals.operationalMetricsMeasured !== false;
   const sources = (result.rows ?? []).map((row: any) => operationalQueryRow(row, generatedAt));
   const clearWeb = Number(totals.qualifyingClearWebSourceCount ?? 0);
   const lawfulDarkWeb = Number(totals.qualifyingLawfulDarkWebSourceCount ?? 0);
@@ -223,6 +224,7 @@ function operationalQuerySnapshot(result: any, input: any, generatedAt: string) 
     total: Number(result.total ?? 0),
     nextCursor: result.nextCursor,
     summary: {
+      measurementState: operationalMetricsMeasured ? "measured" : "source_counts_only",
       sourceCount: Number(totals.sourceCount ?? 0),
       retainedSourceCount: Number(totals.retainedSourceCount ?? 0),
       inactiveSourceCount: Number(totals.inactiveSourceCount ?? 0),
@@ -230,28 +232,31 @@ function operationalQuerySnapshot(result: any, input: any, generatedAt: string) 
       rejectedSourceCount: Number(totals.rejectedSourceCount ?? 0),
       retiredSourceCount: Number(totals.retiredSourceCount ?? 0),
       activeSourceCount: Number(totals.activeSourceCount ?? 0),
-      observedSourceCount: Number(totals.observedSourceCount ?? 0),
-      checkedSourceCount: Number(totals.checkedSourceCount ?? 0),
-      successfulSourceCount: Number(totals.successfulSourceCount ?? 0),
-      everUsefulSourceCount: Number(totals.everUsefulSourceCount ?? totals.usefulSourceCount ?? 0),
-      usefulSourceCount: Number(totals.usefulSourceCount ?? 0),
-      latestUsefulSourceCount: Number(totals.latestUsefulSourceCount ?? 0),
-      sustainedUsefulSourceCount: Number(totals.sustainedUsefulSourceCount ?? 0),
-      checkedWithin24hSourceCount: Number(totals.checkedWithin24hSourceCount ?? 0),
-      successfulWithin24hSourceCount: Number(totals.successfulWithin24hSourceCount ?? 0),
-      usefulWithin24hSourceCount: Number(totals.usefulWithin24hSourceCount ?? 0),
-      captureProducingSourceCount: Number(totals.captureProducingSourceCount ?? 0),
-      recentlySeenSourceCount: Number(totals.recentlySeenSourceCount ?? 0),
-      backoffSourceCount: Number(totals.backoffSourceCount ?? 0),
-      neverObservedSourceCount: Number(totals.neverObservedSourceCount ?? 0),
-      healthySourceCount: Number(totals.healthySourceCount ?? 0),
-      degradedSourceCount: Number(totals.degradedSourceCount ?? 0),
-      failedSourceCount: Number(totals.failedSourceCount ?? 0),
-      unobservedSourceCount: Number(totals.neverObservedSourceCount ?? 0),
-      falsePositiveMeasuredSourceCount: Number(totals.falsePositiveMeasuredSourceCount ?? 0)
+      ...(operationalMetricsMeasured ? {
+        observedSourceCount: Number(totals.observedSourceCount ?? 0),
+        checkedSourceCount: Number(totals.checkedSourceCount ?? 0),
+        successfulSourceCount: Number(totals.successfulSourceCount ?? 0),
+        everUsefulSourceCount: Number(totals.everUsefulSourceCount ?? totals.usefulSourceCount ?? 0),
+        usefulSourceCount: Number(totals.usefulSourceCount ?? 0),
+        latestUsefulSourceCount: Number(totals.latestUsefulSourceCount ?? 0),
+        sustainedUsefulSourceCount: Number(totals.sustainedUsefulSourceCount ?? 0),
+        checkedWithin24hSourceCount: Number(totals.checkedWithin24hSourceCount ?? 0),
+        successfulWithin24hSourceCount: Number(totals.successfulWithin24hSourceCount ?? 0),
+        usefulWithin24hSourceCount: Number(totals.usefulWithin24hSourceCount ?? 0),
+        captureProducingSourceCount: Number(totals.captureProducingSourceCount ?? 0),
+        recentlySeenSourceCount: Number(totals.recentlySeenSourceCount ?? 0),
+        backoffSourceCount: Number(totals.backoffSourceCount ?? 0),
+        neverObservedSourceCount: Number(totals.neverObservedSourceCount ?? 0),
+        healthySourceCount: Number(totals.healthySourceCount ?? 0),
+        degradedSourceCount: Number(totals.degradedSourceCount ?? 0),
+        failedSourceCount: Number(totals.failedSourceCount ?? 0),
+        unobservedSourceCount: Number(totals.neverObservedSourceCount ?? 0),
+        falsePositiveMeasuredSourceCount: Number(totals.falsePositiveMeasuredSourceCount ?? 0)
+      } : {})
     },
     qualification: {
       schemaVersion: "ti.source_portfolio_qualification.v1",
+      measurementState: operationalMetricsMeasured ? "measured" : "not_measured",
       baseline: SOURCE_PORTFOLIO_BASELINE,
       counts,
       gaps: {

@@ -315,7 +315,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           candidateSourceCount: Number(counts.candidate ?? 0),
           rejectedSourceCount: Number(counts.rejected ?? 0),
           retiredSourceCount: Number(counts.retired ?? 0),
-          executableSourceCount: Number(counts.executable ?? 0)
+          executableSourceCount: Number(counts.executable ?? 0),
+          operationalMetricsMeasured: false
         },
         total,
         nextCursor: total > 1 ? "1" : undefined
