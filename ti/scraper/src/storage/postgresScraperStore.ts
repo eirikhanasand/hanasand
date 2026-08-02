@@ -748,9 +748,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           SELECT h.success, h.parser_warning_count
           FROM threat_intel.source_health h
           WHERE h.source_id = source.id AND h.tenant_id IS NOT DISTINCT FROM source.tenant_id
-          ORDER BY h.checked_at DESC, h.id DESC
-          LIMIT 1
-        ) latest ON TRUE
+            ORDER BY h.checked_at DESC, h.id DESC
+            LIMIT 1
+        ) latest ON source.collection_executable
         WHERE source.tenant_id IS NOT DISTINCT FROM $1::text
       )
       SELECT jsonb_build_object(
