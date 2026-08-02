@@ -2,7 +2,7 @@ import { publicAdvisoryFetcher } from "../api/exposureQueueRoutes.ts";
 import { parseRssItems } from "../adapters/rssXml.ts";
 import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
-import { validateSourcePortfolioBatch } from "../registry/sourcePortfolioBatch.ts";
+import { isCurrentSourcePortfolioVerification, validateSourcePortfolioBatch } from "../registry/sourcePortfolioBatch.ts";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 import { importSeedBundle, seedDuplicateKey } from "../registry/sourceSeeds.ts";
 import { prepareRuntimeSource } from "../runtime/sourceBootstrap.ts";
@@ -28,6 +28,8 @@ type DiscoverySource = {
   risk: string;
   metadata?: Record<string, unknown> & {
     productionCollection?: boolean;
+    countsAsCoverage?: boolean;
+    sourcePortfolioStatus?: string;
     sourcePortfolioVerification?: { outcome?: string };
     sourceFeedDiscovery?: { workflow?: string; publisherKey?: string; parentSourceId?: string; evidenceCaptureId?: string };
   };
@@ -94,6 +96,7 @@ type PublisherReference = {
   parentSourceId: string;
   captureId: string;
   capturedAt?: string;
+  revalidationSourceId?: string;
 };
 type FeedProof = { url: string; feedEndpointKey: string; observedItemCount: number; parserVersion: string };
 type Admission = { outcome: "imported" | "duplicate" | "revalidated"; sourceId: string; feedEndpointKey: string };
@@ -124,7 +127,11 @@ export async function runSourceFeedDiscoveryCycle(options: DiscoveryOptions, gen
     return emptyResult(generatedAt, "store_unavailable");
   }
 
-  const selected = retainedPublisherReferences(store);
+  const retained = retainedPublisherReferences(store);
+  const selected = {
+    references: [...expiredPortfolioRssReferences(store, generatedAt), ...retained.references],
+    rejectedReferenceCount: retained.rejectedReferenceCount
+  };
   const now = Date.parse(generatedAt);
   const due = selected.references
     .filter((reference) => {
@@ -279,6 +286,42 @@ function retainedPublisherReferences(store: DiscoveryStore) {
   return { references: [...byPublisher.values()].sort((left, right) => left.publisherKey.localeCompare(right.publisherKey)), rejectedReferenceCount };
 }
 
+function expiredPortfolioRssReferences(store: DiscoveryStore, generatedAt: string): PublisherReference[] {
+  return store.listSources()
+    .filter((source) => expiredPortfolioRssCandidate(source, generatedAt))
+    .map((source) => ({
+      publisherKey: `portfolio-revalidation:${source.id}`,
+      referenceUrl: safePublicReference(source.url)!,
+      parentSourceId: source.id,
+      captureId: "",
+      revalidationSourceId: source.id
+    }))
+    .sort((left, right) => left.publisherKey.localeCompare(right.publisherKey));
+}
+
+function expiredPortfolioRssCandidate(source: DiscoverySource, generatedAt: string) {
+  const metadata = source.metadata ?? {};
+  return tenantAbsent(source.tenantId)
+    && source.status === "candidate"
+    && source.type === "rss"
+    && source.accessMethod === "public_http"
+    && source.risk === "low"
+    && (source.governance as any)?.approvalState === "approved"
+    && typeof source.legalNotes === "string"
+    && source.legalNotes.trim().length > 0
+    && metadata.productionCollection === false
+    && source.countsAsCoverage !== true
+    && metadata.countsAsCoverage !== true
+    && metadata.sourcePortfolioStatus === "verification_expired"
+    && metadata.sourcePortfolioVerification?.outcome === "content_parsed"
+    && metadata.sourcePortfolioExcluded !== true
+    && !metadata.sourceFeedDiscovery
+    && !isCurrentSourcePortfolioVerification(source, generatedAt)
+    && !Object.entries(metadata).some(([key, value]) => value === true
+      && /generated|padded|padding|requiresAuthentication|authenticationRequired|authRequired|credentialRequired|privateChannel|inviteOnly|captchaRequired|disabledByDefault/i.test(key))
+    && Boolean(safePublicReference(source.url));
+}
+
 async function advertisedFeedProofs(html: string, pageUrl: string, fetcher: CanaryFetch, generatedAt: string, maxFeeds: number, signal: AbortSignal) {
   const proofs: FeedProof[] = [];
   for (const url of alternateFeedUrls(html, pageUrl).slice(0, maxFeeds)) {
@@ -427,7 +470,8 @@ async function admitFeed(store: DiscoveryStore, reference: PublisherReference, p
     parentSourceId: reference.parentSourceId,
     evidenceCaptureId: reference.captureId,
     verification,
-    generatedAt
+    generatedAt,
+    revalidationSourceId: reference.revalidationSourceId
   };
   return store.admitSourceFeedDiscovery
     ? await store.admitSourceFeedDiscovery(admission)
@@ -521,9 +565,24 @@ function admitSourceFeedDiscovery(
     evidenceCaptureId: string;
     verification: Record<string, unknown>;
     generatedAt: string;
+    revalidationSourceId?: string;
   }
 ): Admission {
   const existing = store.listSources().find((source) => seedDuplicateKey(source) === input.feedEndpointKey);
+  if (input.revalidationSourceId) {
+    const target = store.getSource?.(input.revalidationSourceId)
+      ?? store.listSources().find((source) => source.id === input.revalidationSourceId);
+    if (!target || existing?.id !== target.id || !expiredPortfolioRssCandidate(target, input.generatedAt)) {
+      throw new Error("Portfolio RSS revalidation target is missing, duplicated, or no longer eligible.");
+    }
+    const metadata = {
+      ...target.metadata,
+      sourcePortfolioVerification: { ...target.metadata?.sourcePortfolioVerification, ...input.verification }
+    };
+    delete metadata.sourcePortfolioStatus;
+    const saved = store.saveSource({ ...target, updatedAt: input.generatedAt, metadata });
+    return { outcome: "revalidated", sourceId: saved.id, feedEndpointKey: input.feedEndpointKey };
+  }
   if (!existing) {
     const saved = store.saveSource(input.source);
     return { outcome: "imported", sourceId: saved.id, feedEndpointKey: input.feedEndpointKey };
