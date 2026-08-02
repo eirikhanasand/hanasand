@@ -168,6 +168,19 @@ export default async function runSyntheticMonitor() {
             }
             return `Storage is healthy with ${pendingWrites} pending writes and ${loops.length} current collection loops.`
         }),
+        check('threat-intelligence', 'Source operations', async () => {
+            const token = process.env.TI_SCRAPER_SERVICE_TOKEN
+            if (!token) throw new Error('Threat-intelligence source-operations authentication is not configured.')
+            const { response, body } = await fetchJson('/v1/intel/source-operations?limit=1', {
+                headers: { 'x-hanasand-service-token': token },
+                signal: AbortSignal.timeout(20_000),
+            }, scraperBase)
+            const summary = object(object(body)?.summary)
+            if (response.status !== 200 || !summary || !Number.isFinite(Number(summary.sourceCount))) {
+                throw new Error(`Threat-intelligence source operations are unavailable (${response.status}).`)
+            }
+            return `Source operations returned ${String(summary.sourceCount)} registered sources.`
+        }, { degraded: 3_000, down: 15_000 }),
         check('threat-intelligence', 'AI model service', async () => {
             let response: Response
             let body: unknown
