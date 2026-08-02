@@ -131,6 +131,8 @@ The earlier sample-path findings are stale: the current tree has no `sampleDwmPr
 
 The previously reported homepage `0/0` exposure display is also resolved, not an open defect: a fresh production read on 2026-08-03 returned `status: live` and `total: 2,781` with current exposure items. Do not reopen or change this path unless a new live check reproduces the failure.
 
+The visible exposure total must not be compared directly with the evidence database: the same production snapshot contains 8,243 captures, 2,338 incidents, 12,408 claims, 151 actor profiles, and 47 alerts. The homepage intentionally shows the filtered exposure queue (2,781), so the lower number does not indicate data loss.
+
 Remaining proof is an authenticated fresh-tenant run using real watchlists, evidence-linked alerts, review state, durable delivery history, retry/idempotency, and an independently readable receiver. Historical test organizations or synthetic rows do not count toward that proof.
 
 ### 9. The Public API Is Narrow And Contract-Inconsistent
