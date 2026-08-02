@@ -151,7 +151,19 @@ export default async function runSyntheticMonitor() {
             return `Storage is healthy with ${pendingWrites} pending writes and ${loops.length} current collection loops.`
         }),
         check('threat-intelligence', 'AI model service', async () => {
-            const { response, body } = await fetchJson('/health', {}, modelClientBase)
+            let response: Response
+            let body: unknown
+            try {
+                ({ response, body } = await fetchJson('/health', {}, modelClientBase))
+            } catch (error) {
+                // The model client intentionally uses host networking, so its
+                // container name is unreachable from the API container. The
+                // API's local runtime endpoint is the authoritative fallback.
+                ({ response, body } = await fetchJson('/ai/models'))
+                const connected = object(body)?.connected
+                if (response.status !== 200 || !Array.isArray(connected) || connected.length === 0) throw error
+                return 'Hanasand AI model service is ready through the connected API runtime.'
+            }
             const health = object(body)
             const modelHealth = object(health?.modelHealth)
             if (response.status !== 200 || health?.connected !== true || modelHealth?.ready !== true) {
