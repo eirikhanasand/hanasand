@@ -312,6 +312,95 @@ describe("scheduled public feed discovery", () => {
     expect(updatedPlan.audit.at(-1)).toMatchObject({ at: "2026-07-31T12:00:00.000Z", outcome: "feeds_proven", runId: expect.any(String) });
   });
 
+  test("scheduler revalidates only expired approved public RSS portfolio candidates", async () => {
+    const store = new InMemoryScraperStore();
+    const eligible = expiredPortfolioRss("portfolio-rss", "https://portfolio.example/security.xml");
+    store.saveSource(eligible);
+    store.saveSource(expiredPortfolioRss("unapproved-rss", "https://unapproved.example/security.xml", {
+      governance: { approvalRequired: true, approvalState: "pending" }
+    }));
+    store.saveSource(expiredPortfolioRss("non-rss", "https://api.example/security.json", { type: "json_api" }));
+    store.saveSource(expiredPortfolioRss("unsafe-rss", "https://user:secret@unsafe.example/security.xml"));
+    store.saveSource(expiredPortfolioRss("retired-rss", "https://retired.example/security.xml", { status: "retired" }));
+    store.saveSource(expiredPortfolioRss("generated-rss", "https://generated.example/security.xml", {
+      metadata: { generatedPublicSourcePack: true }
+    }));
+    const fetched: string[] = [];
+    const loop = startCanaryCollectionLoop({
+      store,
+      frontier: new FocusedFrontier(),
+      enabled: false,
+      sourceIds: ["no-canary-source"],
+      scheduleWatchlistDiscovery: false,
+      now: () => generatedAt,
+      sourceFeedDiscoveryFetch: async (input: string | URL | Request) => {
+        const url = String(input instanceof Request ? input.url : input);
+        fetched.push(url);
+        return response(rss("CVE-2026-5252", "https://portfolio.example/CVE-2026-5252", generatedAt), url, "application/rss+xml");
+      }
+    });
+    loop.setEnabled(true);
+    await loop.runOnce();
+    await loop.stop();
+
+    expect(loop.getState().latestResult.sourceFeedDiscovery).toMatchObject({
+      processedPublisherCount: 1,
+      revalidatedSourceCount: 1,
+      importedSourceCount: 0,
+      failedPublisherCount: 0
+    });
+    expect(fetched).toEqual([eligible.url]);
+    expect(store.getSource(eligible.id)).toMatchObject({
+      id: eligible.id,
+      status: "candidate",
+      countsAsCoverage: false,
+      metadata: {
+        productionCollection: false,
+        sourcePortfolioVerification: { verifiedAt: generatedAt, outcome: "content_parsed" }
+      }
+    });
+    expect(store.getSource(eligible.id)?.metadata?.sourcePortfolioStatus).toBeUndefined();
+    expect(store.listSources().filter((row: any) => row.metadata?.sourceFeedDiscovery)).toEqual([]);
+
+    let duplicateFetches = 0;
+    const second = await runSourceFeedDiscoveryCycle({
+      store,
+      sourceFeedDiscoveryFetch: async () => { duplicateFetches++; throw new Error("same-day revalidation must not repeat"); }
+    }, generatedAt);
+    expect(second).toMatchObject({ status: "skipped", processedPublisherCount: 0 });
+    expect(duplicateFetches).toBe(0);
+    expect(store.listPlans().filter((plan: any) => plan.requestId === "req_source_feed_discovery")).toHaveLength(1);
+  });
+
+  test("failed portfolio RSS revalidation uses the durable discovery backoff", async () => {
+    const store = new InMemoryScraperStore();
+    const candidate = expiredPortfolioRss("failed-portfolio-rss", "https://failed-portfolio.example/security.xml");
+    store.saveSource(candidate);
+    let fetches = 0;
+    const options = {
+      store,
+      sourceFeedDiscoveryFetch: async () => { fetches++; throw new Error("publisher unavailable"); }
+    };
+
+    expect(await runSourceFeedDiscoveryCycle(options, generatedAt)).toMatchObject({
+      failedPublisherCount: 1,
+      revalidatedSourceCount: 0
+    });
+    expect(await runSourceFeedDiscoveryCycle(options, "2026-07-23T12:30:00.000Z")).toMatchObject({
+      status: "skipped",
+      reason: "not_due",
+      processedPublisherCount: 0
+    });
+    expect(fetches).toBe(1);
+    expect(store.listPlans().find((plan: any) => plan.requestId === "req_source_feed_discovery")).toMatchObject({
+      status: "failed",
+      attemptCount: 1,
+      consecutiveFailureCount: 1,
+      nextEligibleAt: "2026-07-23T13:00:00.000Z"
+    });
+    expect(store.getSource(candidate.id)?.metadata?.sourcePortfolioStatus).toBe("verification_expired");
+  });
+
   test("bounds stuck auxiliary work before the canonical run and remains restart-idempotent", async () => {
     const directory = mkdtempSync(join(tmpdir(), "source-feed-discovery-timeout-"));
     const snapshotPath = join(directory, "store.json");
@@ -1138,6 +1227,31 @@ function response(body: string, url: string, contentType: string, status = 200, 
   const result = new Response(body, { status, headers: { "content-type": contentType, ...headers } });
   Object.defineProperty(result, "url", { value: url });
   return result;
+}
+
+function expiredPortfolioRss(id: string, url: string, overrides: Record<string, any> = {}) {
+  return {
+    ...source({
+      id,
+      url,
+      status: "candidate",
+      governance: { approvalRequired: false, approvalState: "approved", approvedAt: "2026-07-01T12:00:00.000Z" },
+      ...overrides,
+      metadata: {
+        productionCollection: false,
+        countsAsCoverage: false,
+        sourcePortfolioStatus: "verification_expired",
+        sourcePortfolioVerification: {
+          outcome: "content_parsed",
+          observedItemCount: 2,
+          verifiedAt: "2026-07-01T12:00:00.000Z",
+          legalBasisVerifiedAt: "2026-07-01T12:00:00.000Z"
+        },
+        ...(overrides.metadata ?? {})
+      }
+    } as any),
+    countsAsCoverage: false
+  };
 }
 
 function reviewableCandidate(store: InMemoryScraperStore, sourceId: string) {

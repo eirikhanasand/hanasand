@@ -32,6 +32,8 @@ import { InMemoryScraperStore, linkedAlertCaptureIds } from "./memoryStore.ts";
 import { persistActorIdentityCatalog } from "./postgresActorIdentityCatalog.ts";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
+import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
+import { privateTarget } from "../registry/sourceRegistry.ts";
 import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion } from "../policy/sourceAutomaticReview.ts";
 
 const DEFAULT_MIGRATIONS = [
@@ -1097,15 +1099,65 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     let stored: any;
     await this.sql.begin(async (sql) => {
       await sql`SELECT pg_advisory_xact_lock(hashtext(${`source-feed-discovery-source:${input.feedEndpointKey}`}))`;
-      const [row] = await sql`
+      const rows = await sql`
         SELECT id, canonical_feed_key, record
         FROM threat_intel.sources
-        WHERE canonical_feed_key = ${input.feedEndpointKey} OR id = ${input.source.id}
+        WHERE canonical_feed_key = ${input.feedEndpointKey}
+           OR id = ${input.source.id}
+           OR id = ${input.revalidationSourceId ?? input.source.id}
         ORDER BY CASE WHEN canonical_feed_key = ${input.feedEndpointKey} THEN 0 ELSE 1 END, id
-        LIMIT 1
         FOR UPDATE
       `;
+      const revalidationRow = input.revalidationSourceId
+        ? rows.find((candidate: any) => candidate.id === input.revalidationSourceId)
+        : undefined;
+      const duplicateRow = input.revalidationSourceId
+        ? rows.find((candidate: any) => candidate.canonical_feed_key === input.feedEndpointKey && candidate.id !== input.revalidationSourceId)
+        : undefined;
+      const row = duplicateRow ?? revalidationRow ?? rows[0];
       const existing = row ? readRecord(row) : undefined;
+      if (input.revalidationSourceId) {
+        if (duplicateRow) {
+          admission = { outcome: "duplicate", sourceId: existing.id, feedEndpointKey: input.feedEndpointKey };
+          return;
+        }
+        let safeUrl = false;
+        try {
+          const url = new URL(String(existing?.url ?? ""));
+          safeUrl = url.protocol === "https:" && !url.username && !url.password && !privateTarget(url.hostname);
+        } catch {}
+        const metadata = existing?.metadata ?? {};
+        if (!existing
+          || row.canonical_feed_key !== input.feedEndpointKey
+          || existing.tenantId !== undefined && existing.tenantId !== null && existing.tenantId !== ""
+          || existing.status !== "candidate"
+          || existing.type !== "rss"
+          || existing.accessMethod !== "public_http"
+          || existing.risk !== "low"
+          || existing.governance?.approvalState !== "approved"
+          || typeof existing.legalNotes !== "string" || !existing.legalNotes.trim()
+          || metadata.productionCollection !== false
+          || existing.countsAsCoverage === true || metadata.countsAsCoverage === true
+          || metadata.sourcePortfolioStatus !== "verification_expired"
+          || metadata.sourcePortfolioVerification?.outcome !== "content_parsed"
+          || metadata.sourcePortfolioExcluded === true
+          || metadata.sourceFeedDiscovery
+          || isCurrentSourcePortfolioVerification(existing, input.generatedAt)
+          || Object.entries(metadata).some(([key, value]) => value === true
+            && /generated|padded|padding|requiresAuthentication|authenticationRequired|authRequired|credentialRequired|privateChannel|inviteOnly|captchaRequired|disabledByDefault/i.test(key))
+          || !safeUrl) {
+          throw new Error("Portfolio RSS revalidation target is missing, duplicated, or no longer eligible.");
+        }
+        const updatedMetadata = {
+          ...metadata,
+          sourcePortfolioVerification: { ...metadata.sourcePortfolioVerification, ...input.verification }
+        };
+        delete updatedMetadata.sourcePortfolioStatus;
+        stored = { ...existing, updatedAt: input.generatedAt, metadata: updatedMetadata };
+        await this.persistSource(stored, sql);
+        admission = { outcome: "revalidated", sourceId: stored.id, feedEndpointKey: input.feedEndpointKey };
+        return;
+      }
       if (!existing) {
         stored = input.source;
         await this.persistSource(stored, sql);

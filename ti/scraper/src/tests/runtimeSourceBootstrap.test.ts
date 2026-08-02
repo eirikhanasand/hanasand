@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { describe, expect, FileBackedScraperStore, fixtureCapture, FocusedFrontier, handleApiRequest, InMemoryScraperStore, join, mkdtempSync, rmSync, runCanaryCollectionCycle, test } from "./apiTestHarness.ts";
+import { describe, expect, FileBackedScraperStore, fixtureCapture, FocusedFrontier, handleApiRequest, InMemoryScraperStore, join, mkdtempSync, rmSync, runCanaryCollectionCycle, startCanaryCollectionLoop, test } from "./apiTestHarness.ts";
 import { tmpdir } from "node:os";
 import { bootstrapRuntimeSources } from "../runtime/sourceBootstrap.ts";
 import { dirname } from "node:path";
@@ -127,6 +127,25 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       const restarted = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-01T13:00:00.000Z" });
       const expiredAdmissionStore = new InMemoryScraperStore();
       const firstAdmission = bootstrapRuntimeSources(expiredAdmissionStore, { seedPaths: [seedPath], generatedAt: "2026-08-01T12:00:00.000Z" });
+      const expiredDefaultCandidate = expiredAdmissionStore.getSource("src_portfolio_current")!;
+      expiredAdmissionStore.saveSource({
+        ...expiredDefaultCandidate,
+        metadata: {
+          ...expiredDefaultCandidate.metadata,
+          sourcePortfolioStatus: "verification_expired"
+        }
+      });
+      const globalRevalidationSourceId = "src_portfolio_current_global";
+      expiredAdmissionStore.saveSource({
+        ...expiredDefaultCandidate,
+        id: globalRevalidationSourceId,
+        tenantId: undefined,
+        url: "https://security.example.test/current-global.xml",
+        metadata: {
+          ...expiredDefaultCandidate.metadata,
+          sourcePortfolioStatus: "verification_expired"
+        }
+      });
       const expiredAdmissionCycle = await runCanaryCollectionCycle({
         store: expiredAdmissionStore,
         frontier: new FocusedFrontier(),
@@ -136,6 +155,20 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
         now: () => "2026-08-01T13:00:00.000Z",
         fetch: async () => { throw new Error("expired admission must not fetch"); }
       });
+      const revalidationLoop = startCanaryCollectionLoop({
+        store: expiredAdmissionStore,
+        frontier: new FocusedFrontier(),
+        enabled: false,
+        sourceIds: ["no-canary-source"],
+        scheduleWatchlistDiscovery: false,
+        now: () => "2026-08-01T13:00:00.000Z",
+        sourceFeedDiscoveryFetch: async () => new Response(feed("2026-08-01T12:30:00Z", "1003"), {
+          headers: { "content-type": "application/rss+xml" }
+        })
+      });
+      revalidationLoop.setEnabled(true);
+      await revalidationLoop.runOnce();
+      await revalidationLoop.stop();
 
       expect(current).toMatchObject({ importedSourceCount: 1, activeSourceCount: 0 });
       expect(store.getSource("src_portfolio_current")?.metadata?.queryClass).toBe("threat-intel");
@@ -152,6 +185,16 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       expect(restarted).toMatchObject({ importedSourceCount: 0, activeSourceCount: 1, totalSourceCount: 1 });
       expect(firstAdmission).toMatchObject({ importedSourceCount: 1, activeSourceCount: 0 });
       expect(expiredAdmissionCycle).toMatchObject({ activeSourceCount: 0, queuedTaskCount: 0 });
+      expect(revalidationLoop.getState().latestResult.sourceFeedDiscovery).toMatchObject({ revalidatedSourceCount: 1, importedSourceCount: 0 });
+      expect(expiredAdmissionStore.getSource(globalRevalidationSourceId)).toMatchObject({
+        status: "candidate",
+        metadata: {
+          productionCollection: false,
+          sourcePortfolioVerification: { verifiedAt: "2026-08-01T13:00:00.000Z", outcome: "content_parsed" }
+        }
+      });
+      expect(expiredAdmissionStore.getSource(globalRevalidationSourceId)?.metadata?.sourcePortfolioStatus).toBeUndefined();
+      expect(expiredAdmissionStore.getSource("src_portfolio_current")?.metadata?.sourcePortfolioStatus).toBe("verification_expired");
       for (const checkedAt of ["2026-08-31T11:00:00.000Z", "2026-09-01T11:00:00.000Z"]) {
         store.saveSourceHealthObservation({
           id: `empty-${checkedAt}`,

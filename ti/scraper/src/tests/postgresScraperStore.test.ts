@@ -18,6 +18,7 @@ import { hashContent, stableId } from "../utils.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
 import { fixtureCapture } from "./helpers/storageFixtures.ts";
 import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
+import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 
 const collectedAt = "2026-07-19T12:00:00.000Z";
 
@@ -275,6 +276,95 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       second.admitSourceFeedDiscovery(admissionInput)
     ]);
     expect(admissions.map((row) => row.outcome).sort()).toEqual(["imported", "revalidated"]);
+
+    const expiredVerification = {
+      outcome: "content_parsed",
+      observedItemCount: 2,
+      verifiedAt: "2026-07-01T12:00:00.000Z",
+      legalBasisVerifiedAt: "2026-07-01T12:00:00.000Z"
+    };
+    const staticFeedEndpointKey = "https://portfolio.example/security.xml";
+    const staticCandidate = {
+      ...source({
+        id: "src_static_portfolio_rss",
+        url: staticFeedEndpointKey,
+        status: "candidate",
+        governance: { approvalRequired: false, approvalState: "approved" },
+        metadata: {
+          productionCollection: false,
+          countsAsCoverage: false,
+          sourcePortfolioStatus: "verification_expired",
+          sourcePortfolioVerification: expiredVerification
+        }
+      }),
+      countsAsCoverage: false
+    };
+    first.saveSource(staticCandidate);
+    await first.flush();
+    const staticAdmission = {
+      ...admissionInput,
+      source: { ...candidate, id: stableId("src", staticFeedEndpointKey), url: staticFeedEndpointKey },
+      feedEndpointKey: staticFeedEndpointKey,
+      publisherKey: `portfolio-revalidation:${staticCandidate.id}`,
+      parentSourceId: staticCandidate.id,
+      evidenceCaptureId: "",
+      revalidationSourceId: staticCandidate.id,
+      verification: {
+        ...expiredVerification,
+        verifiedAt: generatedAt,
+        legalBasisVerifiedAt: generatedAt
+      }
+    };
+    expect(await second.admitSourceFeedDiscovery(staticAdmission)).toMatchObject({
+      outcome: "revalidated",
+      sourceId: staticCandidate.id
+    });
+    expect(second.getSource(staticCandidate.id)).toMatchObject({
+      status: "candidate",
+      countsAsCoverage: false,
+      metadata: {
+        productionCollection: false,
+        sourcePortfolioVerification: { verifiedAt: generatedAt, outcome: "content_parsed" }
+      }
+    });
+    expect(second.getSource(staticCandidate.id)?.metadata?.sourcePortfolioStatus).toBeUndefined();
+    expect(second.getSource(staticCandidate.id)?.metadata?.sourceFeedDiscovery).toBeUndefined();
+
+    for (const rejected of [
+      { id: "src_portfolio_non_rss", url: "https://non-rss.example/security.json", type: "json_api" },
+      { id: "src_portfolio_unsafe", url: "https://user:secret@unsafe.example/security.xml" },
+      { id: "src_portfolio_generated", url: "https://generated.example/security.xml", metadata: { generatedSourcePack: true } }
+    ]) {
+      const rejectedSource = {
+        ...source({
+          id: rejected.id,
+          url: rejected.url,
+          type: rejected.type ?? "rss",
+          status: "candidate",
+          governance: { approvalRequired: false, approvalState: "approved" },
+          metadata: {
+            productionCollection: false,
+            countsAsCoverage: false,
+            sourcePortfolioStatus: "verification_expired",
+            sourcePortfolioVerification: expiredVerification,
+            ...rejected.metadata
+          }
+        }),
+        countsAsCoverage: false
+      };
+      first.saveSource(rejectedSource);
+      await first.flush();
+      await expect(second.admitSourceFeedDiscovery({
+        ...staticAdmission,
+        source: { ...candidate, id: stableId("src", rejected.url), url: rejected.url },
+        feedEndpointKey: canonicalFeedKey(rejected.url),
+        revalidationSourceId: rejected.id
+      })).rejects.toThrow("no longer eligible");
+    }
+    expect(await second.admitSourceFeedDiscovery({
+      ...staticAdmission,
+      revalidationSourceId: "src_missing_portfolio_target"
+    })).toMatchObject({ outcome: "duplicate", sourceId: staticCandidate.id });
 
     const tenantFeedEndpointKey = "https://tenant.example/security.xml";
     const tenantSource = source({
