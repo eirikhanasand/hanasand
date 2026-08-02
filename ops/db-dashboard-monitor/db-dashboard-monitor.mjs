@@ -123,10 +123,10 @@ export function evaluateDashboardText(text) {
     const unavailableMatch = fullText.match(unavailablePattern)
     const metrics = {
         clusters: parseIntegerMetric(lines, 'Clusters'),
-        databases: parseIntegerMetric(lines, 'Databases'),
+        databases: parseIntegerMetric(lines, ['Databases', 'DBs']),
         storageBytes: parseStorageMetric(lines, 'Storage'),
-        activeQueries: parseIntegerMetric(lines, 'Active queries'),
-        longRunning: parseIntegerMetric(lines, 'Long-running'),
+        activeQueries: parseIntegerMetric(lines, ['Active queries', 'Active']),
+        longRunning: parseIntegerMetric(lines, ['Long-running', 'Longest running query']),
     }
 
     if (unavailableMatch) {
@@ -533,8 +533,8 @@ function linesFromText(text) {
         .filter(Boolean)
 }
 
-function parseIntegerMetric(lines, label) {
-    const value = metricValue(lines, label)
+function parseIntegerMetric(lines, labels) {
+    const value = metricValue(lines, labels)
     if (!value) return null
     const parsed = Number(value.replace(/,/g, ''))
     return Number.isFinite(parsed) ? parsed : null
@@ -551,8 +551,9 @@ function parseStorageMetric(lines, label) {
     return Number.isFinite(amount) ? amount * multiplier : null
 }
 
-function metricValue(lines, label) {
-    const index = lines.findIndex(line => line.toLowerCase() === label.toLowerCase())
+function metricValue(lines, labels) {
+    const expected = Array.isArray(labels) ? labels : [labels]
+    const index = lines.findIndex(line => expected.some(label => line.toLowerCase() === label.toLowerCase()))
     if (index === -1) return null
     return lines[index + 1] || null
 }
@@ -617,6 +618,23 @@ function runSelfTest() {
     assert.equal(healthy.metrics.clusters, 1)
     assert.equal(healthy.metrics.databases, 2)
     assert.ok(healthy.metrics.storageBytes > 0)
+
+    const currentDashboardLabels = evaluateDashboardText(`
+        Operations
+        Database
+        Clusters
+        1
+        DBs
+        2
+        Storage
+        108.00 MB
+        Active
+        0
+        Longest running query
+        No active query details available.
+    `)
+    assert.equal(currentDashboardLabels.ok, true)
+    assert.equal(currentDashboardLabels.metrics.databases, 2)
 
     const unavailable = evaluateDashboardText(`
         Operations
