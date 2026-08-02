@@ -8,7 +8,10 @@ const statusPath = process.env.APT_UPDATE_STATUS_PATH || '/host/var/lib/hanasand
 
 async function requireSystemAdmin(req: FastifyRequest, res: FastifyReply) {
     const access = await tokenWrapper(req, res)
-    if (!access.valid) return false
+    if (!access.valid) {
+        res.status(401).send({ error: access.error || 'Unauthorized.' })
+        return false
+    }
     const role = await hasRole(req, res, 'system_admin')
     if (!role.valid) {
         res.status(403).send({ error: 'System administrator access is required.' })
