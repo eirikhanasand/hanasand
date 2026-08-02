@@ -141,6 +141,8 @@ type ReviewIndex = {
   actorIdentities: ActorIdentityRecord[];
 };
 
+const MAX_STALE_TASKS_SUPERSEDED_PER_CYCLE = 250;
+
 export async function handleAutomaticReviewRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
   const url = new URL(request.url);
   if (url.pathname !== "/v1/intel/automatic-reviews"
@@ -233,7 +235,7 @@ export async function runAutomaticReviewCycle(options: ApiServerOptions, input: 
   const at = validIso(input.now) ?? nowIso();
   const modelVersion = input.modelVersion ?? configuredModelVersion(options);
   const index = buildReviewIndex(store);
-  const superseded = supersedeStaleTasks(store, index.tasks, input, at, modelVersion);
+  const superseded = supersedeStaleTasks(store, index.tasks, input, at, modelVersion, MAX_STALE_TASKS_SUPERSEDED_PER_CYCLE);
   const queued = syncQueueWithIndex(store, index, input, at, modelVersion);
   const recovered = recoverExpiredLeases(store, index.tasks, at, input);
   const eligible = index.tasks
@@ -270,9 +272,10 @@ function fairDueTasks(tasks: AutomaticReviewTask[], limit: number) {
   return selected;
 }
 
-function supersedeStaleTasks(store: any, tasks: AutomaticReviewTask[], input: Pick<CycleInput, "tenantId" | "allTenants">, at: string, modelVersion: string) {
+function supersedeStaleTasks(store: any, tasks: AutomaticReviewTask[], input: Pick<CycleInput, "tenantId" | "allTenants">, at: string, modelVersion: string, limit: number) {
   let count = 0;
   for (const task of tasks) {
+    if (count >= limit) break;
     const currentPromptVersion = reviewPromptVersion(task.subject);
     const replaceable = (task.promptVersion !== currentPromptVersion && REPLACEABLE_PROMPT_VERSIONS.has(String(task.promptVersion)))
       || (task.promptVersion === currentPromptVersion && task.requestedModelVersion !== modelVersion);
