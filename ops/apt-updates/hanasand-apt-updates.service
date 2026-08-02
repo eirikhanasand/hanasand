@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=oneshot
 ExecStart=/usr/local/sbin/hanasand-apt-update
 User=root
-NoNewPrivileges=true
+# APT needs to drop to its _apt sandbox user; NoNewPrivileges would block it.
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=read-only
