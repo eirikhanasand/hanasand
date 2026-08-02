@@ -1048,8 +1048,13 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       const now = Date.parse(input.generatedAt);
       const due = Date.parse(String(current?.nextEligibleAt ?? ""));
       const expires = Date.parse(String(current?.runExpiresAt ?? ""));
+      const completedAt = Date.parse(String(current?.updatedAt ?? current?.completedAt ?? ""));
+      const dailyRefreshDue = current?.status === "completed"
+        && current?.result?.outcome === "feeds_proven"
+        && Number.isFinite(completedAt)
+        && now - completedAt >= 86_400 * 1_000;
       if ((current?.activeRunId && Number.isFinite(expires) && expires > now)
-        || (Number.isFinite(due) && due > now)) return;
+        || (Number.isFinite(due) && due > now && !dailyRefreshDue)) return;
       claimed = {
         ...current,
         id: input.planId,
