@@ -294,7 +294,7 @@ describe("scheduled public feed discovery", () => {
     const plan = store.getPlan(stableId("source-feed-discovery-plan", publisherKey))!;
     store.savePlan({
       ...plan,
-      nextEligibleAt: "2026-07-30T12:00:00.000Z",
+      nextEligibleAt: "2026-07-24T12:00:00.000Z",
       audit: Array.from({ length: 100 }, (_, index) => ({ at: generatedAt, outcome: `old-${index}` }))
     });
 

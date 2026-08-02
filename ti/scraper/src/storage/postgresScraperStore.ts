@@ -1098,7 +1098,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       const consecutiveFailureCount = failed ? Number(current.consecutiveFailureCount ?? 0) + 1 : 0;
       const delaySeconds = failed
         ? Math.min(7 * 86_400, 3_600 * 2 ** Math.min(7, Math.max(0, consecutiveFailureCount - 1)))
-        : input.result?.outcome === "feeds_proven" ? 7 * 86_400 : 30 * 86_400;
+        : input.result?.outcome === "feeds_proven" ? 86_400 : 30 * 86_400;
       finished = {
         ...current,
         status: failed ? "failed" : "completed",

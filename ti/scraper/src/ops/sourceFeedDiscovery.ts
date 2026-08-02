@@ -556,7 +556,7 @@ async function finishAttempt(
   const consecutiveFailureCount = failed ? Number(current.consecutiveFailureCount ?? 0) + 1 : 0;
   const nextEligibleAt = failed
     ? addSeconds(generatedAt, failureBackoffSeconds(consecutiveFailureCount))
-    : addSeconds(generatedAt, result.outcome === "feeds_proven" ? 7 * DAY_SECONDS : 30 * DAY_SECONDS);
+    : addSeconds(generatedAt, result.outcome === "feeds_proven" ? DAY_SECONDS : 30 * DAY_SECONDS);
   return store.savePlan({
     ...current,
     status: failed ? "failed" : "completed",
