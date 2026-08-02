@@ -140,7 +140,7 @@ export async function runSourceFeedDiscoveryCycle(options: DiscoveryOptions, gen
       const next = Date.parse(String(plan?.nextEligibleAt ?? ""));
       return !plan || !Number.isFinite(next) || next <= now;
     })
-    .slice(0, positiveInteger(options.sourceFeedDiscoveryMaxReferences, 8, 50));
+    .slice(0, positiveInteger(options.sourceFeedDiscoveryMaxReferences, 50, 50));
   if (!due.length) {
     return {
       ...emptyResult(generatedAt, selected.references.length ? "not_due" : "no_useful_global_references"),
@@ -152,7 +152,7 @@ export async function runSourceFeedDiscoveryCycle(options: DiscoveryOptions, gen
 
   const requestTimeoutMs = positiveInteger(options.sourceFeedDiscoveryTimeoutMs ?? options.timeoutMs, 8_000, 30_000);
   const fetcher = publicAdvisoryFetcher((options.sourceFeedDiscoveryFetch ?? options.fetch) as typeof fetch | undefined, requestTimeoutMs);
-  const concurrency = positiveInteger(options.sourceFeedDiscoveryMaxConcurrent, 2, 8);
+  const concurrency = positiveInteger(options.sourceFeedDiscoveryMaxConcurrent, 4, 8);
   const controller = new AbortController();
   const cycleTimeout = setTimeout(
     () => controller.abort(),
