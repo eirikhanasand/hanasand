@@ -140,7 +140,7 @@ export async function runSourceFeedDiscoveryCycle(options: DiscoveryOptions, gen
       const next = Date.parse(String(plan?.nextEligibleAt ?? ""));
       return !plan || !Number.isFinite(next) || next <= now || successfulPlanRefreshDue(plan, generatedAt);
     })
-    .slice(0, positiveInteger(options.sourceFeedDiscoveryMaxReferences, 50, 50));
+    .slice(0, positiveInteger(options.sourceFeedDiscoveryMaxReferences, 100, 100));
   if (!due.length) {
     return {
       ...emptyResult(generatedAt, selected.references.length ? "not_due" : "no_useful_global_references"),
