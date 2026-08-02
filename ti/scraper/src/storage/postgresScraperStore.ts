@@ -463,6 +463,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           SELECT * FROM canonical_sources
           WHERE ($2::text IS NULL OR id = $2::text)
             AND (NOT $3::boolean OR collection_executable)
+        ), active_scoped AS (
+          SELECT * FROM scoped
+          WHERE collection_executable
         ), per_source AS (
           SELECT source.id, source.tenant_id, source.status, source.source_type, source.collection_executable,
             source.canonical_feed_key, source.canonical_rank, source.record,
@@ -470,7 +473,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             health.last_useful_at, health.successful_cycles, health.useful_cycles,
             health.latest_success, health.latest_useful, health.latest_status, health.latest_parser_warning_count,
             captures.capture_count, captures.last_content_at
-          FROM scoped source
+          FROM active_scoped source
           CROSS JOIN LATERAL (
             SELECT count(*) AS observation_count,
               max(checked_at) AS last_checked_at,
@@ -688,11 +691,11 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           ORDER BY updated_at DESC LIMIT 1
         )
         SELECT jsonb_build_object(
-          'sourceCount', count(*),
-          'retainedSourceCount', count(*) FILTER (WHERE collection_executable),
-          'inactiveSourceCount', count(*) FILTER (WHERE NOT collection_executable),
-          'retiredSourceCount', count(*) FILTER (WHERE status = 'retired'),
-          'activeSourceCount', count(*) FILTER (WHERE collection_executable),
+          'sourceCount', (SELECT count(*) FROM scoped),
+          'retainedSourceCount', count(*),
+          'inactiveSourceCount', (SELECT count(*) FROM scoped WHERE NOT collection_executable),
+          'retiredSourceCount', (SELECT count(*) FROM scoped WHERE status = 'retired'),
+          'activeSourceCount', count(*),
           'observedSourceCount', count(*) FILTER (WHERE collection_executable AND observation_count > 0),
           'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND observation_count > 0),
           'successfulSourceCount', count(*) FILTER (WHERE collection_executable AND last_success_at IS NOT NULL),
