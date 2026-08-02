@@ -551,6 +551,23 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           ) captures
         ), ranked AS (
           SELECT per_source.*,
+            CASE WHEN collection_executable
+              AND btrim(COALESCE(record->>'legalNotes', '')) <> ''
+              AND successful_cycles >= 2
+              AND useful_cycles >= 2
+              AND capture_count > 0
+              AND last_checked_at >= $4::timestamptz - make_interval(secs => GREATEST(86400, COALESCE((record->>'crawlFrequencySeconds')::int, 86400) * 3))
+              AND last_useful_at >= $4::timestamptz - make_interval(secs => GREATEST(
+                86400,
+                COALESCE((record->>'crawlFrequencySeconds')::int, 86400) * 3,
+                COALESCE((record->'metadata'->>'activityWindowSeconds')::int, 2592000)
+              ))
+              AND last_content_at >= $4::timestamptz - make_interval(secs => GREATEST(
+                86400,
+                COALESCE((record->>'crawlFrequencySeconds')::int, 86400) * 3,
+                COALESCE((record->'metadata'->>'activityWindowSeconds')::int, 2592000)
+              ))
+            THEN (
             collection_executable
               AND btrim(COALESCE(record->>'legalNotes', '')) <> ''
               AND successful_cycles >= 2
@@ -654,7 +671,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                 COALESCE((record->>'crawlFrequencySeconds')::int, 86400) * 3,
                 COALESCE((record->'metadata'->>'activityWindowSeconds')::int, 2592000)
               ))
-              AS runtime_qualifies
+              ) ELSE FALSE END AS runtime_qualifies
           FROM per_source
         ), latest_run AS (
           SELECT record
