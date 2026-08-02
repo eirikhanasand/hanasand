@@ -45,7 +45,7 @@ export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygien
     check("compose.api_depends_on_scraper", /api:[\s\S]*depends_on:[\s\S]*ti-scraper:[\s\S]*condition:\s*service_healthy/.test(compose), "api waits for scraper service_healthy"),
     check("compose.internal_scraper_url", /TI_SCRAPER_API_BASE:\s*\$\{TI_SCRAPER_API_BASE:-http:\/\/ti-scraper:8097\}/.test(compose), "api uses internal scraper URL by default"),
     check("compose.scraper_memory_target", /SCRAPER_MEMORY_TARGET_MB:\s*8192/.test(compose), "scraper target memory is 8 GB"),
-    check("compose.scraper_memory_ceiling", /SCRAPER_MEMORY_CEILING_MB:\s*14336/.test(compose), "scraper normal ceiling is 14 GB"),
+    check("compose.scraper_memory_ceiling", /SCRAPER_MEMORY_CEILING_MB:\s*20480/.test(compose), "scraper normal ceiling is 20 GB"),
     check("compose.scraper_mem_limit", /ti-scraper:[\s\S]*mem_limit:\s*24g/.test(compose), "scraper container mem_limit is 24g"),
     check("compose.scraper_stop_grace", /ti-scraper:[\s\S]*stop_grace_period:\s*10m/.test(compose), "scraper has enough bounded grace for in-flight collection and AI work"),
     check("compose.scraper_review_concurrency", /HANASAND_AI_REVIEW_CONCURRENCY:\s*\$\{HANASAND_AI_REVIEW_CONCURRENCY:-3\}/.test(compose), "automatic review has an explicit three-task concurrency ceiling"),

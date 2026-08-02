@@ -184,7 +184,7 @@ describe("deploy hygiene", () => {
       "    mem_limit: 24g",
       "    environment:",
       "      SCRAPER_MEMORY_TARGET_MB: 8192",
-      "      SCRAPER_MEMORY_CEILING_MB: 14336",
+      "      SCRAPER_MEMORY_CEILING_MB: 20480",
       "      TI_CANARY_AUTO_ACTIVATE: \"true\""
     ].join("\n"));
 
