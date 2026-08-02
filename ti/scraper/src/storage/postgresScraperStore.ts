@@ -567,6 +567,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                 COALESCE((record->>'crawlFrequencySeconds')::int, 86400) * 3,
                 COALESCE((record->'metadata'->>'activityWindowSeconds')::int, 2592000)
               ))
+              AND COALESCE((record->>'countsAsCoverage')::boolean, FALSE)
+              AND COALESCE((record->'metadata'->>'productionCollection')::boolean, FALSE)
             THEN (
             collection_executable
               AND btrim(COALESCE(record->>'legalNotes', '')) <> ''
