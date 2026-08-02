@@ -254,6 +254,30 @@ export default async function runSyntheticMonitor() {
             if (drop) return drop
             return `Latest customer activity returned ${total} retained records; newest successful collection check is ${ageMinutes} minutes old.`
         }, { degraded: 3_000, down: 10_000 }),
+        check('dark-web-monitoring', 'Watchlist processing', async () => {
+            const result = await run(`
+                SELECT
+                  (SELECT count(DISTINCT item.organization_id)::int
+                   FROM public.organization_watchlist_items item
+                   JOIN public.organizations organization ON organization.id = item.organization_id
+                   WHERE item.status = 'active' AND item.archived_at IS NULL AND organization.status = 'active') AS configured_organizations,
+                  (SELECT count(DISTINCT record->>'organizationId')::int
+                   FROM threat_intel.workflow_records
+                   WHERE record_type = 'dwm_watchlist'
+                     AND record->>'orgSharedWatchlist' = 'true'
+                     AND record->>'status' = 'active') AS runtime_organizations
+            `)
+            const row = result.rows[0] as { configured_organizations?: number; runtime_organizations?: number } | undefined
+            const configured = Number(row?.configured_organizations ?? 0)
+            const runtime = Number(row?.runtime_organizations ?? 0)
+            if (configured > 0 && runtime === 0) {
+                return { status: 'down', message: `Customer watchlists exist for ${configured} organizations but none are in the scraper runtime.` }
+            }
+            if (configured > 0 && runtime < 1) {
+                return { status: 'degraded', message: `Customer watchlist synchronization is incomplete (${runtime} runtime organizations for ${configured} configured organizations).` }
+            }
+            return `Customer watchlists are represented in the scraper runtime (${runtime} runtime organizations for ${configured} configured organizations).`
+        }),
         check('threat-intelligence', 'Processing backlog', async () => {
             const result = await run(`
                 SELECT
