@@ -195,7 +195,7 @@ describe("source operations", () => {
             actor_stats: { count: 0, values: [] },
             label_stats: { classified: 0, falsePositive: 0 }
           }],
-          totals: { sourceCount: 1, activeSourceCount: 1, retainedSourceCount: 1, sustainedUsefulSourceCount: 1 },
+          totals: { sourceCount: 1, activeSourceCount: 1, retainedSourceCount: 1, inactiveSourceCount: 0, candidateSourceCount: 0, rejectedSourceCount: 0, sustainedUsefulSourceCount: 1 },
           total: 1
         };
       },
@@ -208,6 +208,7 @@ describe("source operations", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({ sourceId: "src_scale_06100", limit: undefined, offset: undefined });
     expect(payload.sources).toHaveLength(1);
+    expect(payload.summary).toMatchObject({ sourceCount: 1, retainedSourceCount: 1, inactiveSourceCount: 0, candidateSourceCount: 0, rejectedSourceCount: 0 });
     expect(payload.sources[0]).toMatchObject({ id: "src_scale_06100", coverage: { captureCount: 4 } });
   });
 

@@ -226,6 +226,8 @@ function operationalQuerySnapshot(result: any, input: any, generatedAt: string) 
       sourceCount: Number(totals.sourceCount ?? 0),
       retainedSourceCount: Number(totals.retainedSourceCount ?? 0),
       inactiveSourceCount: Number(totals.inactiveSourceCount ?? 0),
+      candidateSourceCount: Number(totals.candidateSourceCount ?? 0),
+      rejectedSourceCount: Number(totals.rejectedSourceCount ?? 0),
       retiredSourceCount: Number(totals.retiredSourceCount ?? 0),
       activeSourceCount: Number(totals.activeSourceCount ?? 0),
       observedSourceCount: Number(totals.observedSourceCount ?? 0),

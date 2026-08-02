@@ -293,6 +293,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         SELECT count(*)::int AS total,
           count(*) FILTER (WHERE status = 'active')::int AS active,
           count(*) FILTER (WHERE status = 'candidate')::int AS candidate,
+          count(*) FILTER (WHERE status = 'rejected')::int AS rejected,
           count(*) FILTER (WHERE status = 'retired')::int AS retired,
           count(*) FILTER (WHERE collection_executable)::int AS executable
         FROM threat_intel.sources
@@ -309,8 +310,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         totals: {
           sourceCount: total,
           activeSourceCount: Number(counts.active ?? 0),
-          retainedSourceCount: total - Number(counts.retired ?? 0),
+          retainedSourceCount: Number(counts.executable ?? 0),
+          inactiveSourceCount: total - Number(counts.executable ?? 0),
           candidateSourceCount: Number(counts.candidate ?? 0),
+          rejectedSourceCount: Number(counts.rejected ?? 0),
           retiredSourceCount: Number(counts.retired ?? 0),
           executableSourceCount: Number(counts.executable ?? 0)
         },
