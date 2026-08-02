@@ -1,4 +1,3 @@
-// @ts-nocheck
 export function kindForEntity(type: string): string {
   if (type === "actor") return "intrusion-set";
   if (type === "cve") return "vulnerability";
