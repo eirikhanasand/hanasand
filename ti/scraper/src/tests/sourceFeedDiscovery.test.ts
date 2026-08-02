@@ -312,6 +312,19 @@ describe("scheduled public feed discovery", () => {
     expect(updatedPlan.audit.at(-1)).toMatchObject({ at: "2026-07-31T12:00:00.000Z", outcome: "feeds_proven", runId: expect.any(String) });
   });
 
+  test("rechecks an existing successful plan after one day despite its old weekly due date", async () => {
+    const store = new InMemoryScraperStore();
+    usefulCapture(store, "daily-refresh-parent", undefined, "run-daily-refresh", ["https://daily-refresh.example/security.xml"]);
+    const fetcher = async (input: string | URL | Request) =>
+      response(rss("CVE-2026-4246", "https://daily-refresh.example/CVE-2026-4246", generatedAt), String(input), "application/rss+xml");
+    await runSourceFeedDiscoveryCycle({ store, sourceFeedDiscoveryFetch: fetcher }, generatedAt);
+    const plan = store.getPlan(stableId("source-feed-discovery-plan", "https://daily-refresh.example/"))!;
+    expect(plan).toMatchObject({ status: "completed", result: { outcome: "feeds_proven" }, updatedAt: generatedAt });
+    store.savePlan({ ...plan, nextEligibleAt: "2026-07-30T12:00:00.000Z", updatedAt: generatedAt });
+    const result = await runSourceFeedDiscoveryCycle({ store, sourceFeedDiscoveryFetch: fetcher }, "2026-07-24T12:00:00.000Z");
+    expect(result.processedPublisherCount).toBe(1);
+  });
+
   test("scheduler revalidates only expired approved public RSS portfolio candidates", async () => {
     const store = new InMemoryScraperStore();
     const google = expiredPortfolioRss("portfolio-google", "https://cloud.google.com/feeds/compute-engine-security-bulletins.xml");
