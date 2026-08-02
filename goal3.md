@@ -129,6 +129,8 @@ Labels that restate source metadata do not satisfy the thesis analysis objective
 
 The earlier sample-path findings are stale: the current tree has no `sampleDwmProductSnapshot()` reference, no `/solutions/dwm` page, and the live homepage/activity surface is backed by the scraper API. That removes the known fictional-data path, but it does not by itself prove the full tenant workflow.
 
+The previously reported homepage `0/0` exposure display is also resolved, not an open defect: a fresh production read on 2026-08-03 returned `status: live` and `total: 2,781` with current exposure items. Do not reopen or change this path unless a new live check reproduces the failure.
+
 Remaining proof is an authenticated fresh-tenant run using real watchlists, evidence-linked alerts, review state, durable delivery history, retry/idempotency, and an independently readable receiver. Historical test organizations or synthetic rows do not count toward that proof.
 
 ### 9. The Public API Is Narrow And Contract-Inconsistent
