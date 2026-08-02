@@ -426,6 +426,26 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(repeated).toMatchObject({ superseded: 0, queued: 0, attempted: 0 });
   });
 
+  test("retries legacy queued tasks that predate nextAttemptAt", async () => {
+    const store = seededClaimStore();
+    syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" });
+    const task = store.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task");
+    const { nextAttemptAt: _nextAttemptAt, ...legacy } = task as any;
+    store.saveAnalystMetadataReviewTask(legacy);
+
+    const cycle = await runAutomaticReviewCycle(options(store), {
+      now: firstAt,
+      allTenants: true,
+      limit: 1,
+      modelVersion: "hanasand",
+      fetcher: directFetcher((request) => supportedDecision(request)),
+      aiBase: "http://ai.test"
+    });
+
+    expect(cycle.attempted).toBe(1);
+    expect(store.getAnalystMetadataReviewTask(task.id)).toMatchObject({ state: "terminal", attempt: 1 });
+  });
+
   test("prioritizes a newly due retry across a thousand older claims while still interleaving incidents", async () => {
     const store = seededClaimStore();
     for (let index = 0; index < 1_001; index++) {

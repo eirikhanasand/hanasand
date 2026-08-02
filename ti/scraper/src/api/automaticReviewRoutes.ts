@@ -241,7 +241,8 @@ export async function runAutomaticReviewCycle(options: ApiServerOptions, input: 
   const eligible = index.tasks
     .filter((task) => input.allTenants || inTenantScope(task, input.tenantId))
     .filter((task) => task.promptVersion === reviewPromptVersion(task.subject) && task.requestedModelVersion === modelVersion)
-    .filter((task) => ["queued", "retrying"].includes(task.state) && Date.parse(task.nextAttemptAt) <= Date.parse(at));
+    .filter((task) => ["queued", "retrying"].includes(task.state)
+      && Date.parse(task.nextAttemptAt ?? task.updatedAt ?? task.queuedAt) <= Date.parse(at));
   const due = fairDueTasks(eligible, boundedInteger(input.limit, 50, 1, 50));
   const results: Array<Record<string, unknown>> = new Array(due.length);
   let cursor = 0;
@@ -379,6 +380,7 @@ async function processTask(options: ApiServerOptions, original: AutomaticReviewT
   const store = options.store as any;
   const startedAt = executionTime(input);
   let task = store.getAnalystMetadataReviewTask(original.id) as AutomaticReviewTask;
+  if (!task.nextAttemptAt) task = { ...task, nextAttemptAt: task.updatedAt ?? task.queuedAt };
   if (!["queued", "retrying"].includes(task.state)) return { taskId: task.id, state: task.state, outcome: task.outcome };
   if (!sourceTaskIsCurrent(store, task)) return supersedeSourceTask(store, task, startedAt);
   if (subjectHasHumanDecision(task.subject, index)) {
