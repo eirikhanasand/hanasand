@@ -40,7 +40,7 @@ export default function MillSolutionPage() {
                     <p className='text-sm font-semibold uppercase text-ui-primary'>First release scope</p>
                     <h2 className='text-2xl font-semibold'>A working MDR starting point, not a generic log dump.</h2>
                     <p className='text-sm leading-6 text-ui-muted'>Mill is built on the existing Hanasand organization, API-key, tenant, and analyst workflows. Vendor adapters and broader rule families can feed the same event model later without creating a second portal.</p>
-                    <ul className='grid gap-3 text-sm text-ui-text'><li>• Suspicious login review queue</li><li>• Impossible-travel evidence</li><li>• Tenant-scoped raw and normalized events</li><li>• Extensible path for Sigma and Hanasand rules</li></ul>
+                    <ul className='grid gap-3 text-sm text-ui-text'><li>• Suspicious login findings</li><li>• Impossible-travel evidence</li><li>• Tenant-scoped raw and normalized events</li><li>• Extensible path for Sigma and Hanasand rules</li></ul>
                 </div>
             </section>
         </main>
