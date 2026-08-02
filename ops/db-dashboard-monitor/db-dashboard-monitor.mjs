@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { dirname } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
@@ -24,6 +25,18 @@ const backupMaxAgeHours = Math.max(Number(process.env.HANASAND_TI_BACKUP_MAX_AGE
 const statusIngestBaseUrl = trimSlash(process.env.HANASAND_STATUS_INGEST_BASE_URL || 'https://api.hanasand.com')
 const statusIngestToken = process.env.HANASAND_STATUS_INGEST_TOKEN || ''
 const now = new Date()
+
+async function loadPlaywright() {
+    try {
+        return await import('playwright')
+    } catch {
+        // The monitor is deployed beside the frontend, whose dependency tree
+        // already contains Playwright. Reuse it instead of creating a second
+        // dependency installation for this small host-side check.
+        const requireFromFrontend = createRequire(new URL('../../frontend/package.json', import.meta.url))
+        return requireFromFrontend('playwright')
+    }
+}
 
 class MonitorFailure extends Error {
     constructor(reason, message, metrics) {
@@ -55,7 +68,7 @@ const started = performance.now()
 let browser
 
 try {
-    const { chromium } = await import('playwright')
+    const { chromium } = await loadPlaywright()
     browser = await chromium.launch({ headless: true })
     const context = await browser.newContext({
         viewport: { width: 1280, height: 760 },
