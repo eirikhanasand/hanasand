@@ -126,6 +126,10 @@ export default async function runSyntheticMonitor() {
             if (response.status !== 200 || health?.ok !== true || storage?.ok !== true) {
                 throw new Error(`Threat-intelligence storage or service is unhealthy (${response.status}).`)
             }
+            const memory = object(health?.memory)
+            if (memory?.status === 'critical') {
+                throw new Error(`Threat-intelligence scraper memory is critical (${String(memory.containerHeadroomMb ?? 'unknown')} MB headroom).`)
+            }
             const pendingWrites = Number(storage.pendingWrites ?? 0)
             if (storage.lastWriteError) {
                 throw new Error('Threat-intelligence storage has a write error.')
@@ -146,6 +150,12 @@ export default async function runSyntheticMonitor() {
                 return {
                     status: stale.length ? 'down' : 'degraded',
                     message: `Collection problems: ${[...new Set([...stale, ...errors].map(([name]) => name))].join(', ')}.`,
+                }
+            }
+            if (memory?.status === 'warn') {
+                return {
+                    status: 'degraded',
+                    message: `Scraper memory is near its limit (${String(memory.containerHeadroomMb ?? 'unknown')} MB headroom).`,
                 }
             }
             return `Storage is healthy with ${pendingWrites} pending writes and ${loops.length} current collection loops.`
