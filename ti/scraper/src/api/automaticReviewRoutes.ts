@@ -290,15 +290,15 @@ function supersedeStaleTasks(store: any, tasks: AutomaticReviewTask[], input: Pi
   return count;
 }
 
-export function startAutomaticReviewWorker(options: ApiServerOptions, input: { intervalMs?: number; limit?: number; concurrency?: number } = {}) {
+export function startAutomaticReviewWorker(options: ApiServerOptions, input: { intervalMs?: number; limit?: number; concurrency?: number; onCycle?: (result: Record<string, unknown>) => void; onError?: (error: unknown) => void } = {}) {
   const intervalMs = Math.max(30_000, input.intervalMs ?? 60_000);
   let stopped = false;
   let active: Promise<void> | undefined;
   const tick = () => {
     if (active) return active;
-    active = runAutomaticReviewCycle(options, { limit: input.limit ?? 50, concurrency: input.concurrency, allTenants: true })
-      .then(() => undefined)
-      .catch((caught) => console.error("automatic intelligence review worker failed", safeError(caught)))
+    active = runAutomaticReviewCycle(options, { limit: input.limit ?? 10, concurrency: input.concurrency, allTenants: true })
+      .then((result) => { input.onCycle?.(result); })
+      .catch((caught) => { input.onError?.(caught); console.error("automatic intelligence review worker failed", safeError(caught)); })
       .finally(() => { active = undefined; });
     return active;
   };
