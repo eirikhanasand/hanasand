@@ -3,6 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { matchApiKeyScope, validateApiKey } from '#utils/auth/apiKeys.ts'
+import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
 
 type MillEvent = Record<string, unknown>
 type MillBody = { source?: Record<string, unknown>, events?: unknown }
@@ -101,6 +102,14 @@ export async function postMillFindingAction(req: FastifyRequest<{ Params: { id: 
         RETURNING id, status, analyst_note, assignee_id, updated_at
     `, [req.params.id, access.organizationId, status, note, assigneeId])
     if (!result.rows[0]) return res.status(404).send({ error: 'Finding not found.' })
+    await recordAdminAuditEvent(req, {
+        actionType: 'mill.finding.updated',
+        actorId: access.userId,
+        organizationId: access.organizationId,
+        targetType: 'mill_finding',
+        targetId: req.params.id,
+        context: { status, noteProvided: note !== null, assigneeId },
+    })
     return res.send({ finding: result.rows[0] })
 }
 
@@ -126,7 +135,7 @@ async function organizationAccess(req: FastifyRequest, res: FastifyReply) {
         res.status(403).send({ error: 'Organization access denied.' })
         return null
     }
-    return { organizationId }
+    return { organizationId, userId }
 }
 
 async function createMillFindings(organizationId: string, eventId: string, event: NormalizedEvent) {

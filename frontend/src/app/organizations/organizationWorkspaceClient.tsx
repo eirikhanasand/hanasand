@@ -48,6 +48,7 @@ type OrganizationMember = {
     joinedAt?: string
     invitedBy?: string | null
 }
+type OrganizationApiKey = { id: string, enabled?: boolean, keyPrefix?: string, key_prefix?: string, expiresAt?: string, expires_at?: string }
 
 type OrganizationInvite = {
     id: string
@@ -153,6 +154,7 @@ type OrgBundle = {
     webhooks: WebhookDestination[]
     deliveries: DeliveryRow[]
     alertCaseVisibility: Record<string, unknown> | null
+    apiKeys: OrganizationApiKey[]
     loadErrors: string[]
 }
 
@@ -318,6 +320,7 @@ const initialBundle: OrgBundle = {
     webhooks: [],
     deliveries: [],
     alertCaseVisibility: null,
+    apiKeys: [],
     loadErrors: [],
 }
 
@@ -711,6 +714,7 @@ export default function OrganizationWorkspaceClient() {
         setError('')
         const endpoints = [
             ['settings', `/api/organizations/${encodeURIComponent(organizationId)}/settings`],
+            ['apiKeys', `/api/organizations/${encodeURIComponent(organizationId)}/api-keys`],
             ['privacy', `/api/organizations/${encodeURIComponent(organizationId)}/privacy`],
             ['members', `/api/organizations/${encodeURIComponent(organizationId)}/members`],
             ['invites', `/api/organizations/${encodeURIComponent(organizationId)}/invites`],
@@ -736,6 +740,9 @@ export default function OrganizationWorkspaceClient() {
             const payload = result.value
             if (key === 'settings') {
                 nextBundle.settings = objectValue(payload.settings)
+            }
+            if (key === 'apiKeys') {
+                nextBundle.apiKeys = arrayValue<OrganizationApiKey>(payload.apiKeys)
             }
             if (key === 'privacy') {
                 nextBundle.privacy = payload as OrganizationPrivacyState
@@ -1415,6 +1422,7 @@ export default function OrganizationWorkspaceClient() {
                                     canManage={canManage}
                                     hasWatchlists={bundle.watchlists.length > 0}
                                     hasDestination={hasConfiguredDestination}
+                                    hasMillKey={bundle.apiKeys.some(key => key.enabled !== false)}
                                 />
                                 <PermissionStrip
                                     role={selectedOrganization.role || 'member'}
@@ -1788,7 +1796,7 @@ function DwmHandoffBanner({ organization, bundle, selectedSubject, alertId, case
     )
 }
 
-function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, hasDestination }: { organizationId: string, alertId: string, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean }) {
+function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, hasDestination, hasMillKey }: { organizationId: string, alertId: string, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean, hasMillKey: boolean }) {
     const actions: Array<{ href: string, icon: ReactNode, label: string, disabled?: boolean, disabledReason?: string }> = []
     actions.push({
         href: '#watchlists',
@@ -1816,6 +1824,7 @@ function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, has
                 : undefined,
     })
     if (alertId) actions.push({ href: `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}&organizationId=${encodeURIComponent(organizationId)}`, icon: <CircleAlert className='h-4 w-4' />, label: 'Open DWM alert' })
+    actions.push({ href: `/dashboard/mill?organizationId=${encodeURIComponent(organizationId)}`, icon: <ShieldCheck className='h-4 w-4' />, label: hasMillKey ? 'Open Mill' : 'Open Mill · key needed' })
     if (hasDestination || hasWatchlists) actions.push({ href: '#audit', icon: <CheckCircle2 className='h-4 w-4' />, label: 'Audit' })
     const nextStep = !canManage
         ? 'Owner or admin access unlocks setup actions.'
@@ -1823,9 +1832,11 @@ function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, has
             ? 'Start with a shared watchlist term.'
             : !hasDestination
                 ? 'Test and save a delivery destination.'
-                : alertId
-                    ? ''
-                    : 'Reviewed alerts will appear after a watchlist match.'
+                : !hasMillKey
+                    ? 'Create an organization API key before sending logs to Mill.'
+                    : alertId
+                        ? ''
+                        : 'Reviewed alerts will appear after a watchlist match.'
     return (
         <nav className='flex flex-wrap items-center gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel' aria-label='Organization actions' data-org-action-strip='true'>
             {actions.map(action => <ActionAnchor key={action.label} href={action.href} icon={action.icon} label={action.label} disabled={action.disabled} disabledReason={action.disabledReason} />)}

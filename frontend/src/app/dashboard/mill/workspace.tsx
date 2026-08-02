@@ -7,13 +7,19 @@ import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/das
 type Organization = { id: string, name?: string, slug?: string }
 type Finding = { id: string, rule_id: string, severity: string, status: string, summary: string, evidence: Record<string, unknown>, event_ids: string[], first_observed: string, last_observed: string, analyst_note?: string }
 type Event = { id: string, event_timestamp: string, event_type: string, action: string, outcome: string, user_id?: string, user_email?: string, source_ip?: string, source_country?: string, source_city?: string, source_vendor: string, source_product: string, original: Record<string, unknown> }
+type Member = { userId: string, name?: string, email?: string, role?: string, status?: string }
 
 export default function MillWorkspace() {
     const [organizations, setOrganizations] = useState<Organization[]>([])
     const [organizationId, setOrganizationId] = useState('')
     const [findings, setFindings] = useState<Finding[]>([])
     const [events, setEvents] = useState<Event[]>([])
+    const [members, setMembers] = useState<Member[]>([])
     const [selectedId, setSelectedId] = useState('')
+    const [statusFilter, setStatusFilter] = useState('all')
+    const [severityFilter, setSeverityFilter] = useState('all')
+    const [note, setNote] = useState('')
+    const [assigneeId, setAssigneeId] = useState('')
     const [status, setStatus] = useState('')
     const [error, setError] = useState('')
 
@@ -33,24 +39,27 @@ export default function MillWorkspace() {
     async function loadMill(id: string) {
         try {
             setError('')
-            const [findingPayload, eventPayload] = await Promise.all([
+            const [findingPayload, eventPayload, memberPayload] = await Promise.all([
                 requestJson<{ findings?: Finding[] }>(`/api/mill/findings?organizationId=${encodeURIComponent(id)}`),
                 requestJson<{ events?: Event[] }>(`/api/mill/events?organizationId=${encodeURIComponent(id)}&limit=80`),
+                requestJson<{ members?: Member[] }>(`/api/organizations/${encodeURIComponent(id)}/members`),
             ])
             setFindings(findingPayload.findings || [])
             setEvents(eventPayload.events || [])
+            setMembers((memberPayload.members || []).filter(member => member.status !== 'removed'))
         } catch (cause) { setError(errorMessage(cause)); setFindings([]); setEvents([]) }
     }
 
     async function updateFinding(nextStatus: string) {
         if (!selected) return
         try {
-            await requestJson(`/api/mill/findings/${encodeURIComponent(selected.id)}/actions?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ status: nextStatus }) })
+            await requestJson(`/api/mill/findings/${encodeURIComponent(selected.id)}/actions?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ status: nextStatus, note: note || undefined, assigneeId: assigneeId || undefined }) })
             setStatus(`Finding marked ${nextStatus}.`)
             await loadMill(organizationId)
         } catch (cause) { setError(errorMessage(cause)) }
     }
 
+    const visibleFindings = findings.filter(finding => (statusFilter === 'all' || finding.status === statusFilter) && (severityFilter === 'all' || finding.severity === severityFilter))
     const relatedEvents = selected ? events.filter(event => selected.event_ids?.includes(event.id)) : []
     const openCount = findings.filter(finding => !['resolved', 'benign', 'suppressed'].includes(finding.status)).length
 
@@ -66,13 +75,13 @@ export default function MillWorkspace() {
             </section>
             <div className='grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)]'>
                 <DashboardPanel className='overflow-hidden p-0'>
-                    <div className='border-b border-ui-border bg-ui-raised p-4'><h2 className='font-semibold'>Findings queue</h2><p className='mt-1 text-sm text-ui-muted'>Prioritized by severity and recent activity.</p></div>
+                    <div className='grid gap-3 border-b border-ui-border bg-ui-raised p-4'><div><h2 className='font-semibold'>Findings queue</h2><p className='mt-1 text-sm text-ui-muted'>Prioritized by severity and recent activity.</p></div><div className='flex flex-wrap gap-2'><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)} className='h-9 rounded-md border border-ui-border bg-ui-panel px-2 text-xs text-ui-text' aria-label='Filter by status'><option value='all'>All statuses</option><option value='new'>New</option><option value='investigating'>Investigating</option><option value='benign'>Benign</option><option value='resolved'>Resolved</option><option value='suppressed'>Suppressed</option></select><select value={severityFilter} onChange={event => setSeverityFilter(event.target.value)} className='h-9 rounded-md border border-ui-border bg-ui-panel px-2 text-xs text-ui-text' aria-label='Filter by severity'><option value='all'>All severities</option><option value='critical'>Critical</option><option value='high'>High</option><option value='medium'>Medium</option><option value='low'>Low</option></select></div></div>
                     <div className='divide-y divide-ui-border'>
-                        {findings.length === 0 ? <div className='p-6 text-sm text-ui-muted'>No findings for this organization yet. Send JSON authentication events to <code>api.hanasand.com/mill</code> to begin analysis.</div> : findings.map(finding => <button type='button' key={finding.id} onClick={() => setSelectedId(finding.id)} className={`grid w-full gap-2 p-4 text-left transition hover:bg-ui-raised ${selected?.id === finding.id ? 'bg-ui-primary/10' : ''}`}><div className='flex items-center justify-between gap-3'><span className={`rounded-full border px-2 py-0.5 text-xs font-semibold uppercase ${finding.severity === 'high' ? 'border-red-400/40 text-red-300' : 'border-ui-border text-ui-primary'}`}>{finding.severity}</span><span className='text-xs text-ui-muted'>{finding.status}</span></div><span className='font-semibold text-ui-text'>{finding.summary}</span><span className='text-xs text-ui-muted'>{finding.rule_id} · {formatDate(finding.last_observed)}</span></button>)}
+                        {visibleFindings.length === 0 ? <div className='p-6 text-sm text-ui-muted'>{findings.length ? 'No findings match these filters.' : <>No findings for this organization yet. Send JSON authentication events to <code>api.hanasand.com/mill</code> to begin analysis.</>}</div> : visibleFindings.map(finding => <button type='button' key={finding.id} onClick={() => { setSelectedId(finding.id); setNote(finding.analyst_note || ''); setAssigneeId('') }} className={`grid w-full gap-2 p-4 text-left transition hover:bg-ui-raised ${selected?.id === finding.id ? 'bg-ui-primary/10' : ''}`}><div className='flex items-center justify-between gap-3'><span className={`rounded-full border px-2 py-0.5 text-xs font-semibold uppercase ${finding.severity === 'high' ? 'border-red-400/40 text-red-300' : 'border-ui-border text-ui-primary'}`}>{finding.severity}</span><span className='text-xs text-ui-muted'>{finding.status}</span></div><span className='font-semibold text-ui-text'>{finding.summary}</span><span className='text-xs text-ui-muted'>{finding.rule_id} · {formatDate(finding.last_observed)}</span></button>)}
                     </div>
                 </DashboardPanel>
                 <DashboardPanel className='overflow-hidden p-0'>
-                    {!selected ? <div className='grid min-h-64 place-items-center p-8 text-center text-sm text-ui-muted'><CheckCircle2 className='mb-3 h-7 w-7 text-ui-primary' /><p>Select a finding when Mill identifies suspicious activity.</p></div> : <><div className='border-b border-ui-border bg-ui-raised p-4'><div className='flex flex-wrap items-start justify-between gap-3'><div><p className='text-xs font-semibold uppercase text-ui-primary'>Finding detail</p><h2 className='mt-1 text-xl font-semibold'>{selected.summary}</h2><p className='mt-1 text-sm text-ui-muted'>{selected.rule_id} · first observed {formatDate(selected.first_observed)}</p></div><div className='flex flex-wrap gap-2'>{['investigating', 'benign', 'resolved'].map(next => <button key={next} type='button' onClick={() => updateFinding(next)} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text hover:border-ui-primary'>{next}</button>)}</div></div></div><div className='grid gap-5 p-4'><div><h3 className='text-sm font-semibold'>Evidence</h3><pre className='mt-2 max-h-48 overflow-auto rounded-lg border border-ui-border bg-ui-canvas p-3 text-xs text-ui-muted'>{JSON.stringify(selected.evidence, null, 2)}</pre></div><div><h3 className='text-sm font-semibold'>Related events</h3><div className='mt-2 grid gap-2'>{relatedEvents.length ? relatedEvents.map(event => <div key={event.id} className='rounded-lg border border-ui-border bg-ui-raised p-3 text-sm'><div className='flex flex-wrap justify-between gap-2'><span className='font-semibold'>{event.user_email || event.user_id || 'Unknown user'}</span><span className='text-xs text-ui-muted'>{formatDate(event.event_timestamp)}</span></div><p className='mt-1 text-xs text-ui-muted'>{event.outcome} login · {event.source_country || 'unknown country'} · {event.source_ip || 'unknown IP'} · {event.source_vendor}/{event.source_product}</p></div>) : <p className='text-sm text-ui-muted'>Related event details are not in the current sample.</p>}</div></div><div><h3 className='text-sm font-semibold'>Original event sample</h3><pre className='mt-2 max-h-56 overflow-auto rounded-lg border border-ui-border bg-ui-canvas p-3 text-xs text-ui-muted'>{JSON.stringify(relatedEvents[0]?.original || {}, null, 2)}</pre></div></div></>}
+                    {!selected ? <div className='grid min-h-64 place-items-center p-8 text-center text-sm text-ui-muted'><CheckCircle2 className='mb-3 h-7 w-7 text-ui-primary' /><p>Select a finding when Mill identifies suspicious activity.</p></div> : <><div className='border-b border-ui-border bg-ui-raised p-4'><div className='flex flex-wrap items-start justify-between gap-3'><div><p className='text-xs font-semibold uppercase text-ui-primary'>Finding detail</p><h2 className='mt-1 text-xl font-semibold'>{selected.summary}</h2><p className='mt-1 text-sm text-ui-muted'>{selected.rule_id} · first observed {formatDate(selected.first_observed)}</p></div><div className='flex flex-wrap gap-2'><button type='button' onClick={() => updateFinding(selected.status)} className='rounded-md bg-ui-text px-3 py-2 text-xs font-semibold text-ui-canvas'>Save decision</button>{['investigating', 'benign', 'resolved'].map(next => <button key={next} type='button' onClick={() => updateFinding(next)} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text hover:border-ui-primary'>{next}</button>)}</div></div></div><div className='grid gap-5 p-4'><div><h3 className='text-sm font-semibold'>Evidence</h3><pre className='mt-2 max-h-48 overflow-auto rounded-lg border border-ui-border bg-ui-canvas p-3 text-xs text-ui-muted'>{JSON.stringify(selected.evidence, null, 2)}</pre></div><div><h3 className='text-sm font-semibold'>Related events</h3><div className='mt-2 grid gap-2'>{relatedEvents.length ? relatedEvents.map(event => <div key={event.id} className='rounded-lg border border-ui-border bg-ui-raised p-3 text-sm'><div className='flex flex-wrap justify-between gap-2'><span className='font-semibold'>{event.user_email || event.user_id || 'Unknown user'}</span><span className='text-xs text-ui-muted'>{formatDate(event.event_timestamp)}</span></div><p className='mt-1 text-xs text-ui-muted'>{event.outcome} login · {event.source_country || 'unknown country'} · {event.source_ip || 'unknown IP'} · {event.source_vendor}/{event.source_product}</p></div>) : <p className='text-sm text-ui-muted'>Related event details are not in the current sample.</p>}</div></div><div><h3 className='text-sm font-semibold'>Analyst decision</h3><div className='mt-2 grid gap-2 sm:grid-cols-[1fr_auto]'><textarea value={note} onChange={event => setNote(event.target.value)} placeholder='Why is this finding benign, escalated, or resolved?' className='min-h-20 rounded-lg border border-ui-border bg-ui-canvas p-3 text-sm text-ui-text' aria-label='Analyst note' /><select value={assigneeId} onChange={event => setAssigneeId(event.target.value)} className='h-10 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text' aria-label='Assign analyst'><option value=''>Keep current assignee</option>{members.map(member => <option key={member.userId} value={member.userId}>{member.name || member.email || member.userId}</option>)}</select></div></div><div><h3 className='text-sm font-semibold'>Original event sample</h3><pre className='mt-2 max-h-56 overflow-auto rounded-lg border border-ui-border bg-ui-canvas p-3 text-xs text-ui-muted'>{JSON.stringify(relatedEvents[0]?.original || {}, null, 2)}</pre></div></div></>}
                 </DashboardPanel>
             </div>
         </DashboardPage>
