@@ -35,6 +35,7 @@ import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
 import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion } from "../policy/sourceAutomaticReview.ts";
+import { orgWatchlistContractToRuntimeDwmWatchlists } from "./dwmOrgWatchlistBridge.ts";
 
 const DEFAULT_MIGRATIONS = [
   { version: "006_threat_intelligence_store", path: fileURLToPath(new URL("../../migrations/006_threat_intelligence_store.sql", import.meta.url)) },
@@ -118,6 +119,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       await store.migrate();
       await store.hydrate();
       await store.backfillSourceOperationalKeys();
+      await store.syncOrganizationWatchlists();
       await store.databaseHealth();
       return store;
     } catch (error) {
@@ -1446,6 +1448,87 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           AND (canonical_feed_key IS NULL OR collection_executable IS DISTINCT FROM ${executable})
       `;
     }
+  }
+
+  private async syncOrganizationWatchlists(): Promise<void> {
+    const [table] = await this.sql<{ table_name: string | null }[]>`
+      SELECT to_regclass('public.organization_watchlist_items')::text AS table_name
+    `;
+    if (!table?.table_name) return;
+    const items = await this.sql<any[]>`
+      SELECT organization.id AS organization_id,
+        organization.status AS organization_status,
+        organization.alert_visibility_policy,
+        item.id AS watchlist_item_id,
+        item.kind,
+        item.value,
+        item.created_by,
+        item.updated_by,
+        item.lifecycle_reason,
+        item.lifecycle_request_id
+      FROM public.organizations organization
+      JOIN public.organization_watchlist_items item
+        ON item.organization_id = organization.id
+       AND item.status = 'active'
+       AND item.archived_at IS NULL
+      WHERE organization.status = 'active'
+      ORDER BY organization.id, item.id
+    `;
+    const destinations = await this.sql<{ organization_id: string; id: string }[]>`
+      SELECT DISTINCT ON (org_id) org_id AS organization_id, id
+      FROM public.dwm_webhook_destinations
+      WHERE status = 'active'
+      ORDER BY org_id, updated_at DESC, id DESC
+    `.catch(() => []);
+    const destinationByOrganization = new Map<string, string>();
+    for (const row of destinations) destinationByOrganization.set(row.organization_id, row.id);
+    const grouped = new Map<string, any[]>();
+    for (const item of items) {
+      const group = grouped.get(item.organization_id) ?? [];
+      group.push(item);
+      grouped.set(item.organization_id, group);
+    }
+    const desired = new Set<string>();
+    const syncedAt = new Date().toISOString();
+    for (const [organizationId, rows] of grouped) {
+      const runtime = orgWatchlistContractToRuntimeDwmWatchlists({
+        schemaVersion: "organization.shared_watchlist_contract.v1",
+        organizationId,
+        tenantId: organizationId,
+        ownerOrganizationId: organizationId,
+        visibilityPolicy: rows[0].alert_visibility_policy,
+        canGenerateAlerts: true,
+        activeTerms: rows.map((row) => ({
+          watchlistId: `org_shared_watchlist:${organizationId}:${row.watchlist_item_id}`,
+          watchlistItemId: row.watchlist_item_id,
+          organizationId,
+          tenantId: organizationId,
+          kind: row.kind,
+          term: row.value,
+          value: row.value,
+          status: "active",
+          createdBy: row.created_by,
+          updatedBy: row.updated_by,
+          lifecycleReason: row.lifecycle_reason,
+          lifecycleRequestId: row.lifecycle_request_id
+        }))
+      });
+      for (const watchlist of runtime) {
+        desired.add(watchlist.id);
+        this.saveDwmWatchlist({
+          ...watchlist,
+          orgSharedWatchlist: true,
+          webhookDestinationId: destinationByOrganization.get(organizationId),
+          updatedAt: syncedAt
+        });
+      }
+    }
+    for (const watchlist of this.listDwmWatchlists()) {
+      if (watchlist.orgSharedWatchlist && !desired.has(watchlist.id) && watchlist.status !== "paused") {
+        this.saveDwmWatchlist({ ...watchlist, status: "paused", updatedAt: syncedAt });
+      }
+    }
+    await this.flush();
   }
 
   private hasStoredData(): boolean {
