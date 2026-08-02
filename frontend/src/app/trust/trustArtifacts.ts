@@ -189,7 +189,7 @@ export const trustArtifacts: TrustArtifact[] = [
             },
             {
                 title: 'Support and SLA',
-                body: 'The public status page reports measured service history. It is operational evidence, not a contractual uptime promise. Any support hours, response targets, incident notification windows, maintenance notices, or service credits must be explicit in a signed order; none are standard or generally available today.',
+                body: 'The public status page reports measured service history. It is a service record, not a contractual uptime promise. Any support hours, response targets, incident notification windows, maintenance notices, or service credits must be explicit in a signed order; none are standard or generally available today.',
             },
             {
                 title: 'Admin onboarding',
