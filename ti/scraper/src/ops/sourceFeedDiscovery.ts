@@ -155,7 +155,7 @@ export async function runSourceFeedDiscoveryCycle(options: DiscoveryOptions, gen
   const concurrency = positiveInteger(options.sourceFeedDiscoveryMaxConcurrent, 2, 8);
   const controller = new AbortController();
   const cycleTimeout = setTimeout(
-    () => controller.abort(new Error("Public feed discovery cycle timed out.")),
+    () => controller.abort(),
     positiveInteger(options.sourceFeedDiscoveryCycleTimeoutMs, Math.min(60_000, requestTimeoutMs * 2), 60_000)
   );
   const results: ProcessedReference[] = [];
@@ -229,7 +229,7 @@ async function processReference(input: {
       importedSourceCount: 0,
       duplicateSourceCount: 0,
       revalidatedSourceCount: 0,
-      error: boundedError(error)
+      error: input.signal.aborted ? "Public feed discovery cycle timed out." : boundedError(error)
     };
     const saved = await finishAttempt(input.store, input.reference, input.generatedAt, activeRunId, result);
     return saved ? { planId: saved.id, ...result } : undefined;
