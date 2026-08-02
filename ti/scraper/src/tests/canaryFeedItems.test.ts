@@ -77,6 +77,18 @@ describe("canary feed item extraction", () => {
     });
   });
 
+  test("recognizes the live NVD source by canonical URL for independent evaluation", () => {
+    const nvd = {
+      ...source,
+      id: "src_seed_nvd_recent_cves",
+      type: "api",
+      url: "https://services.nvd.nist.gov/rest/json/cves/2.0"
+    };
+    const items = feedItems(nvd, { ...task, targetUrl: nvd.url }, JSON.stringify({ vulnerabilities: [{ cve: { id: "CVE-2026-4242", descriptions: [{ lang: "en", value: "CVE-2026-4242 remote code execution vulnerability." }] } }] }), "2026-06-22T00:00:00.000Z", metadata);
+    expect(items[0]).toMatchObject({ metadata: { structuredFields: { cveID: "CVE-2026-4242" } } });
+    expect((items[0] as any).evaluationCveSet).toMatchObject({ values: ["CVE-2026-4242"], complete: true });
+  });
+
   test("extracts locator-free ransomware group communication metadata", () => {
     const groups = { ...source, id: "src_seed_ransomwarelive_groups", type: "api", catalog: { canonicalId: "community:ransomwarelive:groups" } };
     const onion = `${"a".repeat(56)}.onion`;

@@ -7,6 +7,7 @@ import { evidenceIndependence } from "../storage/memoryStore.ts";
 import { activatePublicCanarySources, pausePublicCanarySources, reconcilePublicSourceProductivity } from "./canaryActivation.ts";
 import { canaryQueries, PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 import { detachedState, externalize, fetchItems, health, maxItemsFor, tasksForSource } from "./canaryHelpers.ts";
+import { isNvdCveSource } from "./canaryFeedItems.ts";
 import { isSellableIntelText, sellableReason } from "../value/sellableIntel.ts";
 import { sourceActivityWindowDays, sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
 import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
@@ -149,14 +150,9 @@ function retainedCveId(capture: any) {
 }
 
 function isCisaKevSource(source: any) {
-  return source?.id === "src_canary_cisa_known_exploited_json"
-    && /^https:\/\/www\.cisa\.gov\/sites\/default\/files\/feeds\/known_exploited_vulnerabilities\.json(?:[?#].*)?$/i.test(String(source.url ?? ""));
+  return /^https:\/\/www\.cisa\.gov\/sites\/default\/files\/feeds\/known_exploited_vulnerabilities\.json(?:[?#].*)?$/i.test(String(source?.url ?? ""));
 }
 
-function isNvdCveSource(source: any) {
-  return source?.id === "src_canary_nvd_recent"
-    && /^https:\/\/services\.nvd\.nist\.gov\/rest\/json\/cves\/2\.0(?:[?#].*)?$/i.test(String(source.url ?? ""));
-}
 export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { enabled?: boolean; intervalSeconds?: number; queueLimit?: number; onCycle?: (r: any) => void; onError?: (e: unknown) => void }): CanaryCollectionLoopHandle {
   const state = detachedState(options.now?.() ?? nowIso(), options.queueLimit ?? 500), intervalMs = Math.max(5, options.intervalSeconds ?? 300) * 1000; let timer: Timer | undefined, startupTimer: Timer | undefined, active: Promise<void> | undefined;
   const cycle = () => {
@@ -255,7 +251,7 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
       for (const entity of pipeline.entities ?? []) if (["actor", "ransomware_family"].includes(entity.type)) taskMetrics.actorIds.add(String(entity.normalizedValue ?? entity.value));
       if (!task.planning?.watchlistDiscovery && !actorIdentityCatalogSnapshot && !catalogEvidenceOnly && await saveExposureClaimFromCollectedItem(options.store, collected, generatedAt)) counters.exposureClaimCount++;
       latestCaptureIds.push(saved.capture.id);
-      if (source.id === "src_canary_nvd_recent") completeEvaluationCaptures.push({ capture: completeEvaluationCapture, evaluationCveSet: collected.evaluationCveSet });
+      if (isNvdCveSource(source)) completeEvaluationCaptures.push({ capture: completeEvaluationCapture, evaluationCveSet: collected.evaluationCveSet });
     }
     counters.completedTaskCount++; options.frontier.complete(task);
     const checkedAt = options.now?.() ?? nowIso(), useful = taskMetrics.captureCount > 0;

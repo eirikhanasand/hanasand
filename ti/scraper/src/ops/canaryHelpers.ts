@@ -165,6 +165,11 @@ export function maxItemsFor(source: any, task?: any) {
 }
 
 function publicFetchUrl(source: any, targetUrl: string) {
+  if (/^https:\/\/services\.nvd\.nist\.gov\/rest\/json\/cves\/2\.0(?:[?#].*)?$/i.test(String(targetUrl))) {
+    const url = new URL(targetUrl);
+    if (!url.searchParams.has("resultsPerPage")) url.searchParams.set("resultsPerPage", "40");
+    return url.toString();
+  }
   if (source.type !== "telegram_public") return targetUrl;
   const match = targetUrl.match(/(?:https?:\/\/)?t\.me\/(?:s\/)?([a-zA-Z0-9_]+)/);
   const searchQuery = typeof source.metadata?.searchQuery === "string" ? source.metadata.searchQuery.trim().slice(0, 100) : "";
