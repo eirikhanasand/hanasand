@@ -1060,7 +1060,7 @@ function replayAutomaticReview(options: ApiServerOptions, taskId: string, tenant
 
 function recoverExpiredLeases(store: any, taskRecords: AutomaticReviewTask[], at: string, input: Pick<CycleInput, "tenantId" | "allTenants">) {
   for (const task of taskRecords) {
-    if ((!input.allTenants && !inTenantScope(task, input.tenantId)) || task.promptVersion !== reviewPromptVersion(task.subject) || task.state !== "running" || !task.leaseExpiresAt || Date.parse(task.leaseExpiresAt) > Date.parse(at)) continue;
+    if ((!input.allTenants && !inTenantScope(task, input.tenantId)) || task.promptVersion !== reviewPromptVersion(task.subject) || task.state !== "running" || (task.leaseExpiresAt && Date.parse(task.leaseExpiresAt) > Date.parse(at))) continue;
     const recovered = saveTask(store, task, { state: "retrying", nextAttemptAt: at, leaseExpiresAt: undefined, updatedAt: at, lastError: "Worker lease expired before a terminal decision was persisted" });
     Object.assign(task, recovered);
     saveEvent(store, recovered, "restart_recovered", at);
