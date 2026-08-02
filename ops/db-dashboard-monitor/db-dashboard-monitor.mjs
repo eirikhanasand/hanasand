@@ -534,7 +534,7 @@ function linesFromText(text) {
 }
 
 function parseIntegerMetric(lines, label) {
-    const value = metricValue(lines, label)
+    const value = metricValue(lines, label) || (label === 'Databases' ? metricValue(lines, 'DBs') : null)
     if (!value) return null
     const parsed = Number(value.replace(/,/g, ''))
     return Number.isFinite(parsed) ? parsed : null
@@ -617,6 +617,24 @@ function runSelfTest() {
     assert.equal(healthy.metrics.clusters, 1)
     assert.equal(healthy.metrics.databases, 2)
     assert.ok(healthy.metrics.storageBytes > 0)
+
+    const abbreviated = evaluateDashboardText(`
+        Operations
+        Database
+        Live
+        Clusters
+        1
+        DBs
+        2
+        Storage
+        108.00 MB
+        Active queries
+        0
+        Long-running
+        0
+    `)
+    assert.equal(abbreviated.ok, true)
+    assert.equal(abbreviated.metrics.databases, 2)
 
     const unavailable = evaluateDashboardText(`
         Operations
