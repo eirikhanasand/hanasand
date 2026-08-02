@@ -58,6 +58,7 @@ async function loadStatusPayload() {
             SELECT DISTINCT ON (service, check_name)
                 service, check_name, status, latency_ms, message, checked_at
             FROM service_monitor_results
+            WHERE NOT (service = 'core' AND check_name = 'API index')
             ORDER BY service, check_name, checked_at DESC
         ),
         uptime AS (
@@ -71,6 +72,7 @@ async function loadStatusPayload() {
                 ) AS uptime_30d
             FROM service_monitor_results
             WHERE checked_at >= NOW() - INTERVAL '90 days'
+              AND NOT (service = 'core' AND check_name = 'API index')
             GROUP BY service, check_name
         )
         SELECT latest.*, COALESCE(uptime.uptime_30d, 0)::text AS uptime_30d
@@ -90,6 +92,7 @@ async function loadStatusPayload() {
             END AS status
         FROM service_monitor_results
         WHERE checked_at >= CURRENT_DATE - INTERVAL '89 days'
+          AND NOT (service = 'core' AND check_name = 'API index')
         GROUP BY service, check_name, checked_at::date
         ORDER BY service ASC, check_name ASC, date ASC
     `)
@@ -98,6 +101,7 @@ async function loadStatusPayload() {
         FROM service_monitor_results
         WHERE checked_at >= NOW() - INTERVAL '90 days'
           AND status <> 'up'
+          AND NOT (service = 'core' AND check_name = 'API index')
         ORDER BY service ASC, check_name ASC, checked_at ASC
     `)
 
