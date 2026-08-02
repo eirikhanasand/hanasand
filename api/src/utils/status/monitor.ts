@@ -1,6 +1,6 @@
 import run from '#db'
 import crypto from 'crypto'
-import { activityCountDrop, latencyStatus, type MonitorStatus } from './monitorPolicy.ts'
+import { activityCountDrop, activityFreshnessMinutes, latencyStatus, type MonitorStatus } from './monitorPolicy.ts'
 import { recordMonitorResult } from './record.ts'
 
 const apiBase = process.env.MONITOR_API_BASE || `http://127.0.0.1:${Number(process.env.PORT) || 8081}/api`
@@ -238,10 +238,9 @@ export default async function runSyntheticMonitor() {
             if (response.status !== 200 || !['live', 'stale'].includes(String(queue?.status)) || !Array.isArray(queue?.items) || !queue.items.length || total < 1) {
                 throw new Error(`Latest customer activity is unavailable or empty (${response.status})`)
             }
-            const collectionCheckAgeMinutes = Number(freshness?.collectionCheckAgeMinutes)
-            const ageMinutes = Number.isFinite(collectionCheckAgeMinutes) ? collectionCheckAgeMinutes : Number(freshness?.collectionAgeMinutes)
+            const ageMinutes = activityFreshnessMinutes(freshness ?? {})
             const maxAgeMinutes = Number(freshness?.maxLiveAgeMinutes)
-            if (!Number.isFinite(ageMinutes) || !Number.isFinite(maxAgeMinutes) || ageMinutes > maxAgeMinutes) {
+            if (ageMinutes === undefined || !Number.isFinite(ageMinutes) || !Number.isFinite(maxAgeMinutes) || ageMinutes > maxAgeMinutes) {
                 throw new Error(`Latest customer activity is stale (${Number.isFinite(ageMinutes) ? ageMinutes : 'unknown'} minutes).`)
             }
             const prior = await run(`
