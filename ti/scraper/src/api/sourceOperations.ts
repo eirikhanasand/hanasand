@@ -271,13 +271,16 @@ function operationalQuerySnapshot(result: any, input: any, generatedAt: string) 
         && totalQualifying >= SOURCE_PORTFOLIO_BASELINE.total
     },
     operationalTotals: {
-      dailySourceCount: Number(totals.dailySourceCount ?? 0),
-      dailyAttemptedCount: Number(totals.dailyAttemptedCount ?? 0),
-      dailyCoveredCount: Number(totals.dailyCoveredCount ?? 0),
-      requiredChecksPerDay: Number(totals.requiredChecksPerDay ?? 0),
-      nextEligibleAt: timeOf(totals, "nextEligibleAt"),
-      latestRun: totals.latestRun,
-      lastSuccessfulRun: totals.lastSuccessfulRun
+      measurementState: operationalMetricsMeasured ? "measured" : "not_measured",
+      ...(operationalMetricsMeasured ? {
+        dailySourceCount: Number(totals.dailySourceCount ?? 0),
+        dailyAttemptedCount: Number(totals.dailyAttemptedCount ?? 0),
+        dailyCoveredCount: Number(totals.dailyCoveredCount ?? 0),
+        requiredChecksPerDay: Number(totals.requiredChecksPerDay ?? 0),
+        nextEligibleAt: timeOf(totals, "nextEligibleAt"),
+        latestRun: totals.latestRun,
+        lastSuccessfulRun: totals.lastSuccessfulRun
+      } : {})
     },
     sources,
     safeOutput: { sourceUrlsExposed: false, rawCapturesExposed: false, restrictedPayloadsExposed: false }
