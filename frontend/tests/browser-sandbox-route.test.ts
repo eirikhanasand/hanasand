@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import path from 'node:path'
 import { sanitizeHistory } from '../src/app/browser/pageClient'
@@ -24,6 +24,9 @@ test('regular browser sandbox route and broker contract are wired', () => {
 
     assert(routeSource.includes('path: \'/browser\''), 'browser route metadata should use the canonical public route path.')
     assert(routeSource.includes('<BrowserPageClient />'), 'browser route should render the unified client.')
+    assert(!existsSync(path.join(root, 'src/app/browser-obfuscated/page.tsx')), 'the browser obfuscation test fixture must not ship as a production route.')
+    assert(!existsSync(path.join(root, 'src/app/browser-download/page.tsx')), 'the browser download test fixture must not ship as a production route.')
+    assert(!existsSync(path.join(root, 'src/app/dev/vm-smoke/page.tsx')), 'the VM control test fixture must not ship as a production route.')
     assert(legacyBrowserSource.includes('redirect(\'/browser\')'), 'legacy regular sandbox route should redirect to the unified browser.')
     assert(legacyOnionSource.includes('redirect(\'/browser\')'), 'legacy onion route should redirect to the unified browser.')
     assert(solutionsSource.includes('href: \'/browser\''), 'solutions page should link to the unified browser.')
