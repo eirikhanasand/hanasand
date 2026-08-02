@@ -66,7 +66,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "032_reconcile_actor_profile_scope_lineage", path: fileURLToPath(new URL("../../migrations/032_reconcile_actor_profile_scope_lineage.sql", import.meta.url)) },
   { version: "033_bound_source_operations", path: fileURLToPath(new URL("../../migrations/033_bound_source_operations.sql", import.meta.url)) },
   { version: "034_reconcile_incomplete_collection_runs", path: fileURLToPath(new URL("../../migrations/034_reconcile_incomplete_collection_runs.sql", import.meta.url)) },
-  { version: "035_preserve_unknown_delivery_completion", path: fileURLToPath(new URL("../../migrations/035_preserve_unknown_delivery_completion.sql", import.meta.url)) }
+  { version: "035_preserve_unknown_delivery_completion", path: fileURLToPath(new URL("../../migrations/035_preserve_unknown_delivery_completion.sql", import.meta.url)) },
+  { version: "036_source_operations_runtime_indexes", path: fileURLToPath(new URL("../../migrations/036_source_operations_runtime_indexes.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
