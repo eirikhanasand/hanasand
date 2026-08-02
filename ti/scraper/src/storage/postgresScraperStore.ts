@@ -296,9 +296,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           AND (NOT ${executableOnly}::boolean OR collection_executable)
       `
       ]);
-      if (!first?.id) return { rows: [], totals: {}, total: 0 };
-      const total = Number(countRow?.total ?? 0);
-      return { rows: [{ record: first.record, collection_executable: first.collection_executable }], totals: {}, total, nextCursor: total > 1 ? "1" : undefined };
+      const firstRow = first[0];
+      if (!firstRow?.id) return { rows: [], totals: {}, total: 0 };
+      const total = Number(countRow[0]?.total ?? 0);
+      return { rows: [{ record: firstRow.record, collection_executable: firstRow.collection_executable }], totals: {}, total, nextCursor: total > 1 ? "1" : undefined };
     }
     const [rows, totalRows] = await Promise.all([
       this.sql.unsafe(`
