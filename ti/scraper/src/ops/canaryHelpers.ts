@@ -22,7 +22,7 @@ export function tasksForSource(source: any, at: string, runId: string, maxBytes:
 }
 
 export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, mode: string, at: string, maxBytes: number, timeoutMs = 12_000, maxItems?: number) {
-  const started = Date.now(), requestedUrl = publicFetchUrl(source, task.targetUrl);
+  const started = Date.now(), requestedUrl = publicFetchUrl(source, task.targetUrl, at);
   const extractionProfile = task.planning?.extractionProfile ?? source.metadata?.extractionProfile;
   if (source.catalog?.canonicalId === "gov:us:cisa:known-exploited-vulnerabilities") maxBytes = Math.max(maxBytes, 4_000_000);
   if (source.catalog?.canonicalId === "community:ransomwarelive:groups") maxBytes = Math.max(maxBytes, 2_000_000);
@@ -164,10 +164,16 @@ export function maxItemsFor(source: any, task?: any) {
   return source.metadata?.maxItemsPerFetch;
 }
 
-function publicFetchUrl(source: any, targetUrl: string) {
+function publicFetchUrl(source: any, targetUrl: string, at = new Date().toISOString()) {
   if (/^https:\/\/services\.nvd\.nist\.gov\/rest\/json\/cves\/2\.0(?:[?#].*)?$/i.test(String(targetUrl))) {
     const url = new URL(targetUrl);
     if (!url.searchParams.has("resultsPerPage")) url.searchParams.set("resultsPerPage", "40");
+    if (!url.searchParams.has("pubStartDate") && !url.searchParams.has("lastModStartDate")) {
+      const end = new Date(at);
+      const start = new Date(end.getTime() - 120 * 24 * 60 * 60 * 1_000);
+      url.searchParams.set("pubStartDate", start.toISOString());
+      url.searchParams.set("pubEndDate", end.toISOString());
+    }
     return url.toString();
   }
   if (source.type !== "telegram_public") return targetUrl;

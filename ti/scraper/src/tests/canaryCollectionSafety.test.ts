@@ -482,7 +482,10 @@ describe("public collection boundary", () => {
       512_000
     );
 
-    expect(new URL(requestedUrl).searchParams.get("resultsPerPage")).toBe("40");
+    const request = new URL(requestedUrl);
+    expect(request.searchParams.get("resultsPerPage")).toBe("40");
+    expect(request.searchParams.get("pubStartDate")).toBe("2026-03-31T00:00:00.000Z");
+    expect(request.searchParams.get("pubEndDate")).toBe("2026-07-29T00:00:00.000Z");
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ metadata: { parserWarnings: ["JSON source contained no supported records"] } });
 
