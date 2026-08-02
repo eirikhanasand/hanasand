@@ -90,8 +90,10 @@ export async function listExposureQueue(request: Request, url: URL, options: Api
   const collectionCheckAgeMinutes = ageMinutes(at, latestCollectionCheckAt);
   const age = collectionAgeMinutes ?? claimAgeMinutes;
   const activityFresh = (collectionAgeMinutes !== undefined && collectionAgeMinutes <= 60) || (claimAgeMinutes !== undefined && claimAgeMinutes <= 60);
-  const collectorFresh = collectionCheckAgeMinutes !== undefined && collectionCheckAgeMinutes <= 60;
-  const fresh = collectorFresh || (collectionCheckAgeMinutes === undefined && activityFresh);
+  // A successful empty check proves the collector ran, not that customer-visible
+  // activity is current. Keep stale content stale until a new claim or capture is
+  // actually retained.
+  const fresh = activityFresh;
   return json({
     schemaVersion: "dwm.exposure_queue.v1",
     generatedAt: at,

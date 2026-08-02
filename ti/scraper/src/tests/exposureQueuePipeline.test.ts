@@ -561,8 +561,8 @@ describe("DWM exposure queue pipeline", () => {
     });
     const checked = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?limit=5"), options);
     const checkedBody = await checked.json() as any;
-    expect(checkedBody.status).toBe("live");
-    expect(checkedBody.scheduler.state).toBe("fresh");
+    expect(checkedBody.status).toBe("stale");
+    expect(checkedBody.scheduler.state).toBe("due");
     expect(checkedBody.freshness.collectionCheckAgeMinutes).toBe(0);
     expect(checkedBody.freshness.claimAgeMinutes).toBeGreaterThan(60);
   });
@@ -628,6 +628,30 @@ describe("DWM exposure queue pipeline", () => {
     expect(secondBody.items).toHaveLength(4);
     expect(secondBody.page).toMatchObject({ limit: 4, offset: 4, total: 9, nextOffset: 8, hasMore: true });
     expect(new Set([...firstBody.items, ...secondBody.items].map((item: any) => item.id)).size).toBe(8);
+  });
+
+  test("does not call stale activity live after a successful empty source check", async () => {
+    const store = new InMemoryScraperStore();
+    const oldAt = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+    await saveExposureClaimFromCollectedItem(store, {
+      sourceId: "src_stale_activity",
+      source: { name: "Stale activity source", url: "https://example.test/feed" },
+      title: "Akira has just published a new victim: Old Company",
+      rawText: "Akira victim: Old Company. 10 GB claimed from public actor page.",
+      url: "https://example.test/old-company",
+      collectedAt: oldAt,
+      publishedAt: oldAt,
+      metadata: { adapter: "rss", sourceFamily: "public_actor_claims" }
+    } as any);
+    const source = store.getSource("src_stale_activity");
+    expect(source).toBeTruthy();
+    store.saveSource({ ...source!, health: { checkedAt: new Date().toISOString(), lastSuccessAt: new Date().toISOString() } });
+
+    const response = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=1"), { store, frontier: new FocusedFrontier(), port: 0 } as any);
+    const body = await response.json() as any;
+    expect(body.status).toBe("stale");
+    expect(body.scheduler.state).toBe("due");
+    expect(body.freshness.collectionCheckAgeMinutes).toBeLessThan(1);
   });
 
   test("does not promote generic advisory or ATT&CK text as victim claims", async () => {
