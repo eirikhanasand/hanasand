@@ -59,6 +59,13 @@ async function loadStatusPayload() {
                 service, check_name, status, latency_ms, message, checked_at
             FROM service_monitor_results
             WHERE NOT (service = 'core' AND check_name = 'API index')
+              -- Alert delivery is event-driven. An old mail failure remains
+              -- useful history, but must not hold the live status down forever.
+              AND NOT (
+                service = 'production-monitor'
+                AND check_name = 'Alert delivery'
+                AND checked_at < NOW() - INTERVAL '30 minutes'
+              )
             ORDER BY service, check_name, checked_at DESC
         ),
         uptime AS (
