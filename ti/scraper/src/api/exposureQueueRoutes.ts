@@ -67,7 +67,9 @@ export async function listExposureQueue(request: Request, url: URL, options: Api
   const filters = exposureQueueFilters(url);
   const at = nowIso();
   const allItems = exposureClaimsFromStore(options.store, filters, { tenantId });
-  const items = exposureClaimsFromStore(options.store, filters, { limit, offset, tenantId });
+  // The full filtered list is already materialized for totals/freshness; slicing it
+  // here avoids a second full capture-store scan on every public read.
+  const items = allItems.slice(offset, offset + limit);
   const latestClaimAt = latestTime(allItems.map((item: any) => item.claimTime));
   const latestCollectedAt = latestTime(allItems.map((item: any) => item.collectedAt));
   const claimAgeMinutes = ageMinutes(at, latestClaimAt);
