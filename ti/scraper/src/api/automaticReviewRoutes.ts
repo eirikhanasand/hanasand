@@ -1354,7 +1354,12 @@ function publicTask(task: AutomaticReviewTask, index: ReviewIndex, allEvents: an
 function keyed(items: any[]) { return new Map(items.map((item) => [item.id, item])); }
 function grouped(items: any[], key: string) {
   const result = new Map<string, any[]>();
-  for (const item of items) if (item?.[key]) result.set(item[key], [...(result.get(item[key]) ?? []), item]);
+  for (const item of items) {
+    if (!item?.[key]) continue;
+    const group = result.get(item[key]);
+    if (group) group.push(item);
+    else result.set(item[key], [item]);
+  }
   return result;
 }
 
