@@ -156,7 +156,7 @@ export async function runSourceFeedDiscoveryCycle(options: DiscoveryOptions, gen
   const controller = new AbortController();
   const cycleTimeout = setTimeout(
     () => controller.abort(),
-    positiveInteger(options.sourceFeedDiscoveryCycleTimeoutMs, Math.min(60_000, requestTimeoutMs * 2), 60_000)
+    positiveInteger(options.sourceFeedDiscoveryCycleTimeoutMs, Math.max(60_000, requestTimeoutMs * 16), 300_000)
   );
   const results: ProcessedReference[] = [];
   try {
