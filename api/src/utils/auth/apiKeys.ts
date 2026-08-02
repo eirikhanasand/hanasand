@@ -145,6 +145,7 @@ export async function findEnabledOrganizationApiKey(organizationId: string, quer
 
 export function organizationPublicApiScopes(): ApiKeyScopeRule[] {
     const routes = [
+        ['POST', '/mill'],
         ['POST', '/api/v1/ti/search'],
         ['POST', '/api/v1/ti/search/batch'],
         ...['actors', 'aliases', 'incidents', 'claims', 'evidence', 'sources', 'validations', 'alerts', 'evaluation', 'timeliness']

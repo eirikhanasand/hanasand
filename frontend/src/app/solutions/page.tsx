@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, BellRing, Code2, Database, Gauge, Globe2, LockKeyhole, Network, Radar, ShieldCheck, Waypoints } from 'lucide-react'
+import { AlertTriangle, ArrowRight, BellRing, Code2, Database, Gauge, Globe2, LockKeyhole, Network, Radar, ShieldCheck, Waypoints } from 'lucide-react'
 import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
@@ -11,6 +11,15 @@ export const metadata: Metadata = buildRouteMetadata({
 })
 
 const primarySolutions = [
+    {
+        title: 'Mill',
+        eyebrow: 'MDR log monitoring',
+        detail: 'Send JSON security events to one endpoint and review suspicious logins, impossible travel, and detection evidence in the Hanasand analyst workspace.',
+        href: '/solutions/mill',
+        icon: AlertTriangle,
+        points: ['Single JSON ingestion endpoint', 'Tenant-scoped event and finding review', 'Open rule path for Sigma and Hanasand detections'],
+        price: 'Pilot workflow',
+    },
     {
         title: 'Dark Web Monitoring',
         eyebrow: 'Monitoring',

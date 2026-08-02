@@ -212,6 +212,7 @@ import { getBrowserRunReport, getBrowserRuns, postBrowserRunReport } from './han
 import { getCommercialContactRequests, postCommercialContactRequest } from './handlers/commercialContactRequests.ts'
 import { getOrganizationPrivacy, postOrganizationPrivacy } from './handlers/organizationPrivacy.ts'
 import { getAptUpdates } from './handlers/aptUpdates.ts'
+import { getMillEvents, getMillFindings, ingestMill, postMillFindingAction } from './handlers/mill.ts'
 
 /**
  * Defines the routes available in the API.
@@ -549,4 +550,10 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/logs/services', getLogServices)
     fastify.get('/logs/realtime', getRealtimeLogs)
     fastify.post('/logs/ingest', ingestLog)
+
+    // Mill: customer event ingestion and tenant-scoped analyst workflow
+    fastify.post('/mill', ingestMill)
+    fastify.get('/mill/events', getMillEvents)
+    fastify.get('/mill/findings', getMillFindings)
+    fastify.post('/mill/findings/:id/actions', postMillFindingAction)
 }

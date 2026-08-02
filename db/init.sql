@@ -329,6 +329,50 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_one_active_org ON api_keys(organi
 CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
 CREATE INDEX IF NOT EXISTS idx_api_key_scopes_key_route ON api_key_scopes(api_key_id, method, route);
 
+CREATE TABLE IF NOT EXISTS mill_events (
+    id TEXT PRIMARY KEY,
+    ingestion_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    source_vendor TEXT NOT NULL DEFAULT 'custom',
+    source_product TEXT NOT NULL DEFAULT 'generic-json',
+    event_timestamp TIMESTAMPTZ NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    event_type TEXT NOT NULL DEFAULT 'unknown',
+    action TEXT NOT NULL DEFAULT 'unknown',
+    outcome TEXT NOT NULL DEFAULT 'unknown',
+    user_id TEXT,
+    user_email TEXT,
+    source_ip TEXT,
+    source_country TEXT,
+    source_city TEXT,
+    device_id TEXT,
+    normalized JSONB NOT NULL DEFAULT '{}'::jsonb,
+    original JSONB NOT NULL DEFAULT '{}'::jsonb,
+    processing_status TEXT NOT NULL DEFAULT 'processed',
+    UNIQUE (organization_id, ingestion_id, id)
+);
+CREATE INDEX IF NOT EXISTS idx_mill_events_org_time ON mill_events(organization_id, event_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_mill_events_org_user_time ON mill_events(organization_id, user_id, event_timestamp DESC);
+
+CREATE TABLE IF NOT EXISTS mill_findings (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    finding_key TEXT NOT NULL UNIQUE,
+    rule_id TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'medium',
+    status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'investigating', 'benign', 'resolved', 'suppressed')),
+    summary TEXT NOT NULL,
+    evidence JSONB NOT NULL DEFAULT '{}'::jsonb,
+    event_ids TEXT[] NOT NULL DEFAULT '{}',
+    first_observed TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_observed TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    assignee_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    analyst_note TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mill_findings_org_status ON mill_findings(organization_id, status, last_observed DESC);
+
 -- Certificates
 CREATE TABLE IF NOT EXISTS certificates (
     id SERIAL PRIMARY KEY,

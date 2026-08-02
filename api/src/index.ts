@@ -16,6 +16,7 @@ import { provisionExistingMailAccounts } from '#utils/mail/accounts.ts'
 import { isAllowedApiOrigin, TRUSTED_API_PROXIES } from '#utils/http/publicBoundary.ts'
 import publicTiApi from './handlers/ti/publicApi.ts'
 import { randomUUID } from 'node:crypto'
+import { ingestMill } from './handlers/mill.ts'
 
 process.on('uncaughtException', error => {
     if (isBunWebSocketErrorEvent(error)) {
@@ -73,6 +74,7 @@ if (!browserWorkerOnly) {
     })
     fastify.register(publicTiApi, { prefix: '/api/v1' })
     fastify.register(apiRoutes, { prefix: '/api' })
+    fastify.post('/mill', ingestMill)
 }
 if (browserWorkerOnly) {
     fastify.get('/', async () => ({ ok: true, service: 'browser-worker' }))
