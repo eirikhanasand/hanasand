@@ -251,6 +251,10 @@ export default async function runSyntheticMonitor() {
                     SELECT count(*)::int
                     FROM threat_intel.sources source
                     WHERE source.collection_executable
+                      AND (
+                        source.record->'metadata'->'sourcePortfolioVerification' IS NOT NULL
+                        OR source.record->'metadata'->'sourceFeedDiscovery' IS NOT NULL
+                      )
                       AND COALESCE(source.record->'metadata'->'automaticSourceReview'->>'state', '') <> 'approved'
                       AND EXISTS (
                         SELECT 1
