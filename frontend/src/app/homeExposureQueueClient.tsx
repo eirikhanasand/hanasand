@@ -92,7 +92,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                     <Marquee text={subtitle} className='text-xs text-ui-muted' />
                 </div>
                 <div className='flex flex-wrap items-center gap-2'>
-                    <span className='landing-surface-border rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-muted'>{items.length}/{total}</span>
+                    <span className='landing-surface-border rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-muted'>{queue.status === 'unavailable' ? 'Unavailable' : `${items.length}/${total}`}</span>
                     <span className='text-xs text-ui-muted'>{formatRefreshCadence(queue.scheduler?.cadenceSeconds)}</span>
                     <button type='button' onClick={() => void refresh()} disabled={refreshing} className='landing-surface-border rounded-md border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-primary transition hover:border-ui-primary disabled:cursor-wait disabled:opacity-60'>
                         {refreshing ? 'Checking...' : 'Check now'}

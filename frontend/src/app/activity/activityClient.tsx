@@ -116,7 +116,7 @@ export default function ActivityClient({ initialQueue }: Props) {
                     <div className='min-w-0'>
                         <p className='text-xs font-semibold uppercase text-ui-primary'>Activity</p>
                         <h1 className='mt-1 text-2xl font-semibold tracking-normal text-ui-text md:text-3xl'>Latest company mentions</h1>
-                        <p className='mt-1 text-sm text-ui-muted'>{visibleItems.length}/{total} loaded · latest {formatClaimTime(newest)}</p>
+                        <p className='mt-1 text-sm text-ui-muted'>{queue.status === 'unavailable' ? 'Live activity unavailable' : `${visibleItems.length}/${total} loaded`} · latest {formatClaimTime(newest)}</p>
                     </div>
                     <div className='flex flex-wrap items-center gap-2'>
                         <button type='button' onClick={() => void replace()} disabled={loading} className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary disabled:cursor-wait disabled:opacity-60'>
