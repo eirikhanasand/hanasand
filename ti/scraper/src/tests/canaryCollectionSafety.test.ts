@@ -463,6 +463,30 @@ describe("public collection boundary", () => {
     expect(cycle).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 0 });
   });
 
+  test("bounds the live NVD request before parsing its JSON envelope", async () => {
+    const nvd = source({
+      id: "src_seed_nvd_recent_cves",
+      type: "api",
+      url: "https://services.nvd.nist.gov/rest/json/cves/2.0"
+    });
+    let requestedUrl = "";
+    const items = await fetchItems(
+      nvd,
+      { id: "task_nvd", targetUrl: nvd.url },
+      async (url: string) => {
+        requestedUrl = url;
+        return new Response(JSON.stringify({ vulnerabilities: [] }), { headers: { "content-type": "application/json" } });
+      },
+      "native_live_http",
+      "2026-07-29T00:00:00.000Z",
+      512_000
+    );
+
+    expect(new URL(requestedUrl).searchParams.get("resultsPerPage")).toBe("40");
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ metadata: { parserWarnings: ["JSON source contained no supported records"] } });
+  });
+
   test("captures structured ransomware group profiles without manufacturing incidents", async () => {
     const groups = source({
       id: "src_seed_ransomwarelive_groups", type: "api", url: "https://data.ransomware.live/groups.json",
