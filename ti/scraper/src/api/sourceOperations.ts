@@ -199,6 +199,15 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
   };
 }
 
+export async function buildSourceOperationsSummary(store: any, input: { tenantId?: string; generatedAt?: string } = {}) {
+  const generatedAt = input.generatedAt ?? nowIso();
+  if (typeof store?.querySourceOperationalSummary === "function") {
+    return store.querySourceOperationalSummary({ tenantId: input.tenantId, generatedAt });
+  }
+  const snapshot = await buildSourceOperationsSnapshot(store, { tenantId: input.tenantId, generatedAt, limit: 1 });
+  return { schemaVersion: "ti.source_operations_summary.v1", generatedAt, tenantId: input.tenantId ?? "global", summary: snapshot.summary };
+}
+
 function operationalQuerySnapshot(result: any, input: any, generatedAt: string) {
   const totals = result.totals ?? {};
   const sources = (result.rows ?? []).map((row: any) => operationalQueryRow(row, generatedAt));

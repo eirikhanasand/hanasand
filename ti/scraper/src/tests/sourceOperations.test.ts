@@ -61,6 +61,9 @@ describe("source operations", () => {
     const global = await handleApiRequest(authenticatedApi("/v1/intel/source-operations"), options);
     expect(await global.json() as any).toMatchObject({ tenantId: "global", summary: { sourceCount: 0, retainedSourceCount: 0 } });
 
+    const summary = await handleApiRequest(authenticatedApi("/v1/intel/source-operations?summary=true", "tenant_a"), options);
+    expect(await summary.json() as any).toMatchObject({ schemaVersion: "ti.source_operations_summary.v1", summary: { sourceCount: 1, failedSourceCount: 1 } });
+
     const mismatch = await handleApiRequest(api("/v1/intel/source-operations?tenantId=tenant_b", { headers: { "x-tenant-id": "tenant_a", "x-hanasand-service-token": "source-ops-test" } }), options);
     expect(mismatch.status).toBe(403);
 

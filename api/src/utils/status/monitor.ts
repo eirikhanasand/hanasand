@@ -171,7 +171,7 @@ export default async function runSyntheticMonitor() {
         check('threat-intelligence', 'Source operations', async () => {
             const token = process.env.TI_SCRAPER_SERVICE_TOKEN
             if (!token) throw new Error('Threat-intelligence source-operations authentication is not configured.')
-            const { response, body } = await fetchJson('/v1/intel/source-operations?limit=1', {
+            const { response, body } = await fetchJson('/v1/intel/source-operations?summary=true', {
                 headers: { 'x-hanasand-service-token': token },
                 signal: AbortSignal.timeout(20_000),
             }, scraperBase)

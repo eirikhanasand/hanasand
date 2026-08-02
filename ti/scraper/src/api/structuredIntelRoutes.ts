@@ -3,7 +3,7 @@ import { sanitizeDwmApiPayload, sanitizeDwmCustomerText } from "../product/dwmCu
 import { toSafeCaptureDto } from "./captureDtos.ts";
 import { booleanQuery, error, json, numberQuery, readJson } from "./http.ts";
 import { toSafeSourceDto } from "./sourceRoutes.ts";
-import { buildSourceOperationsSnapshot } from "./sourceOperations.ts";
+import { buildSourceOperationsSnapshot, buildSourceOperationsSummary } from "./sourceOperations.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
 import { buildEvaluationMetrics } from "../pipeline/evaluationMetrics.ts";
@@ -51,12 +51,15 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
     if (scope.error) return scope.error;
     const accessError = authorizeOperatorScope(authentication.identity, options, scope.tenantId);
     if (accessError) return accessError;
-    return json(await buildSourceOperationsSnapshot(options.store, {
+    const input = {
       tenantId: scope.tenantId,
       limit: numberQuery(url.searchParams.get("limit")),
       cursor: numberQuery(url.searchParams.get("cursor")),
       sourceId: url.searchParams.get("sourceId")?.trim() || undefined
-    }));
+    };
+    return json(url.searchParams.get("summary") === "true"
+      ? await buildSourceOperationsSummary(options.store, { tenantId: input.tenantId })
+      : await buildSourceOperationsSnapshot(options.store, input));
   }
   if (url.pathname === "/v1/intel/actor-identity-coverage" && request.method === "GET") {
     const scope = resolveTenantScope(request, url);

@@ -733,6 +733,43 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return { rows, totals, total, nextCursor: offset + rows.length < total ? String(offset + rows.length) : undefined };
   }
 
+  async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string }) {
+    const [row] = await this.sql.unsafe(`
+      WITH scoped AS (
+        SELECT source.id, source.collection_executable,
+          EXISTS (
+            SELECT 1 FROM threat_intel.source_health h
+            WHERE h.source_id = source.id AND h.tenant_id IS NOT DISTINCT FROM source.tenant_id
+          ) AS observed,
+          latest.success AS latest_success,
+          latest.parser_warning_count AS latest_parser_warning_count
+        FROM threat_intel.sources source
+        LEFT JOIN LATERAL (
+          SELECT h.success, h.parser_warning_count
+          FROM threat_intel.source_health h
+          WHERE h.source_id = source.id AND h.tenant_id IS NOT DISTINCT FROM source.tenant_id
+          ORDER BY h.checked_at DESC, h.id DESC
+          LIMIT 1
+        ) latest ON TRUE
+        WHERE source.tenant_id IS NOT DISTINCT FROM $1::text
+      )
+      SELECT jsonb_build_object(
+        'sourceCount', count(*),
+        'retainedSourceCount', count(*) FILTER (WHERE collection_executable),
+        'inactiveSourceCount', count(*) FILTER (WHERE NOT collection_executable),
+        'activeSourceCount', count(*) FILTER (WHERE collection_executable),
+        'observedSourceCount', count(*) FILTER (WHERE collection_executable AND observed),
+        'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND observed),
+        'successfulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_success),
+        'healthySourceCount', count(*) FILTER (WHERE collection_executable AND latest_success AND COALESCE(latest_parser_warning_count, 0) = 0),
+        'degradedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_success AND COALESCE(latest_parser_warning_count, 0) > 0),
+        'failedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_success = FALSE)
+      ) AS summary
+      FROM scoped
+    `, [input.tenantId ?? null]);
+    return { schemaVersion: "ti.source_operations_summary.v1", generatedAt: input.generatedAt, tenantId: input.tenantId ?? "global", summary: row?.summary ?? {} };
+  }
+
   override async listActorProfilesForOwnership(): Promise<any[]> {
     return (await this.sql`SELECT record FROM threat_intel.actor_profiles ORDER BY first_seen_at, id`).map(readRecord);
   }
