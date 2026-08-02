@@ -737,35 +737,38 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const [row] = await this.sql.unsafe(`
       WITH scoped AS (
         SELECT source.id, source.collection_executable,
-          EXISTS (
-            SELECT 1 FROM threat_intel.source_health h
-            WHERE h.source_id = source.id AND h.tenant_id IS NOT DISTINCT FROM source.tenant_id
-          ) AS observed,
-          latest.success AS latest_success,
-          latest.parser_warning_count AS latest_parser_warning_count
+          source.tenant_id
         FROM threat_intel.sources source
-        LEFT JOIN LATERAL (
-          SELECT h.success, h.parser_warning_count
-          FROM threat_intel.source_health h
-          WHERE h.source_id = source.id AND h.tenant_id IS NOT DISTINCT FROM source.tenant_id
-            ORDER BY h.checked_at DESC, h.id DESC
-            LIMIT 1
-        ) latest ON source.collection_executable
         WHERE source.tenant_id IS NOT DISTINCT FROM $1::text
+      ), latest_health AS (
+        SELECT DISTINCT ON (h.source_id, h.tenant_id)
+          h.source_id,
+          h.tenant_id,
+          h.success AS latest_success,
+          h.parser_warning_count AS latest_parser_warning_count
+        FROM threat_intel.source_health h
+        JOIN scoped source
+          ON source.id = h.source_id
+         AND source.tenant_id IS NOT DISTINCT FROM h.tenant_id
+        WHERE source.collection_executable
+        ORDER BY h.source_id, h.tenant_id, h.checked_at DESC, h.id DESC
       )
       SELECT jsonb_build_object(
         'sourceCount', count(*),
         'retainedSourceCount', count(*) FILTER (WHERE collection_executable),
         'inactiveSourceCount', count(*) FILTER (WHERE NOT collection_executable),
         'activeSourceCount', count(*) FILTER (WHERE collection_executable),
-        'observedSourceCount', count(*) FILTER (WHERE collection_executable AND observed),
-        'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND observed),
-        'successfulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_success),
-        'healthySourceCount', count(*) FILTER (WHERE collection_executable AND latest_success AND COALESCE(latest_parser_warning_count, 0) = 0),
-        'degradedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_success AND COALESCE(latest_parser_warning_count, 0) > 0),
-        'failedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_success = FALSE)
+        'observedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
+        'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
+        'successfulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.latest_success),
+        'healthySourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.latest_success AND COALESCE(latest_health.latest_parser_warning_count, 0) = 0),
+        'degradedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.latest_success AND COALESCE(latest_health.latest_parser_warning_count, 0) > 0),
+        'failedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.latest_success = FALSE)
       ) AS summary
       FROM scoped
+      LEFT JOIN latest_health
+        ON latest_health.source_id = scoped.id
+       AND latest_health.tenant_id IS NOT DISTINCT FROM scoped.tenant_id
     `, [input.tenantId ?? null]);
     return { schemaVersion: "ti.source_operations_summary.v1", generatedAt: input.generatedAt, tenantId: input.tenantId ?? "global", summary: row?.summary ?? {} };
   }
