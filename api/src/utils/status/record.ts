@@ -37,5 +37,16 @@ export async function recordMonitorResult(
             message,
             `Observed at ${new Date().toISOString()}.`,
         ].filter(Boolean).join('\n'),
-    }).catch(error => console.error(`[production-monitor] notification failed: ${error instanceof Error ? error.message : String(error)}`))
+    }).catch(async error => {
+        const message = `Monitor alert delivery failed: ${error instanceof Error ? error.message : String(error)}`
+        console.error(`[production-monitor] notification failed: ${message}`)
+        try {
+            await withTransaction(query => query(`
+                INSERT INTO service_monitor_results (service, check_name, status, latency_ms, message)
+                VALUES ('production-monitor', 'Alert delivery', 'down', 0, $1)
+            `, [message]))
+        } catch (recordingError) {
+            console.error(`[production-monitor] failed to record alert-delivery failure: ${recordingError instanceof Error ? recordingError.message : String(recordingError)}`)
+        }
+    })
 }
