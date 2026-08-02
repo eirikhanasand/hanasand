@@ -4,6 +4,7 @@ import { ArrowRight, Building2, ChevronRight, ExternalLink, Search, ShieldCheck,
 import LogoutClient from '@/components/logout/logoutClient'
 import Marquee from '@/components/shared/marquee'
 import { fetchSharedExposureQueue } from '@/utils/dwm/sharedExposureQueue'
+import { exposureQueueFallback } from './exposureQueue'
 import { buildRouteMetadata } from './seo'
 import { homepageFaqs } from './faqData'
 import HomeExposureQueueClient from './homeExposureQueueClient'
@@ -179,8 +180,7 @@ export default async function Page({
 }) {
     const params = await searchParams
     const logout = Boolean(firstParam(params.logout)) || false
-    const generatedAt = new Date().toISOString()
-    const exposureQueue = await loadExposureQueue() || emptyExposureQueue(generatedAt)
+    const exposureQueue = await loadExposureQueue()
 
     return (
         <main className='min-h-full bg-transparent text-ui-text'>
@@ -446,13 +446,13 @@ function HomeOperatorPaths() {
     )
 }
 
-async function loadExposureQueue(): Promise<ExposureQueue | null> {
+async function loadExposureQueue(): Promise<ExposureQueue> {
     try {
         const response = await fetchSharedExposureQueue(new URLSearchParams({ limit: '10', offset: '0' }), { timeoutMs: 3500 })
-        if (!response.ok) return null
+        if (!response.ok) return exposureQueueFallback('unavailable', 10)
         return normalizeExposureQueue(await response.json())
-    } catch {
-        return null
+    } catch (error) {
+        return exposureQueueFallback(isTimeoutError(error) ? 'checking' : 'unavailable', 10)
     }
 }
 
@@ -509,16 +509,8 @@ function normalizeExposureQueue(value: unknown): ExposureQueue {
     }
 }
 
-function emptyExposureQueue(generatedAt: string): ExposureQueue {
-    return {
-        generatedAt,
-        status: 'unavailable',
-        freshness: { latestClaimAt: null, ageMinutes: null, maxLiveAgeMinutes: 60 },
-        scheduler: { state: 'unavailable', cadenceSeconds: 300 },
-        counts: { visible: 0, needsReview: 0, metadataOnly: 0 },
-        page: { limit: 10, offset: 0, total: 0, nextOffset: null, hasMore: false },
-        items: [],
-    }
+function isTimeoutError(error: unknown) {
+    return error instanceof Error && error.name === 'TimeoutError'
 }
 
 function firstParam(value: string | string[] | undefined) {

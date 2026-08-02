@@ -1,5 +1,7 @@
 import { strict as assert } from 'node:assert'
+import { readFileSync } from 'node:fs'
 import { fetchSharedExposureQueue } from '../src/utils/dwm/sharedExposureQueue'
+import { exposureQueueFallback } from '../src/app/exposureQueue'
 
 let requested: URL | undefined
 let presentedToken = ''
@@ -36,4 +38,48 @@ const unavailable = await fetchSharedExposureQueue(new URLSearchParams(), {
 })
 assert.equal(unavailable.status, 503)
 
+const delayed = await fetchSharedExposureQueue(new URLSearchParams({ limit: '1' }), {
+    env: {
+        NODE_ENV: 'production',
+        TI_SCRAPER_API_BASE: 'http://ti-scraper:8097',
+        TI_SCRAPER_SERVICE_TOKEN: 'service-token',
+    },
+    fetcher: (async (_input, init) => {
+        await waitForBackend(3_600, init?.signal)
+        return Response.json({
+            status: 'stale',
+            counts: { total: 2_781 },
+            items: [{ id: 'capture-stale', actor: 'Observed actor', company: 'Observed company' }],
+        })
+    }) as typeof fetch,
+})
+const delayedPayload = await delayed.json() as { status?: string, counts?: { total?: number }, items?: unknown[] }
+assert.equal(delayed.status, 200)
+assert.equal(delayedPayload.status, 'stale')
+assert.equal(delayedPayload.counts?.total, 2_781)
+assert.equal(delayedPayload.items?.length, 1)
+
+const checking = exposureQueueFallback('checking', 10)
+assert.equal(checking.status, 'checking')
+assert.equal(checking.counts?.total, undefined)
+assert.equal(checking.page?.total, undefined)
+
+const homePageSource = readFileSync(new URL('../src/app/page.tsx', import.meta.url), 'utf8')
+const activityPageSource = readFileSync(new URL('../src/app/activity/page.tsx', import.meta.url), 'utf8')
+const homeClientSource = readFileSync(new URL('../src/app/homeExposureQueueClient.tsx', import.meta.url), 'utf8')
+assert(!homePageSource.includes('|| emptyExposureQueue'))
+assert(!activityPageSource.includes('|| emptyExposureQueue'))
+assert(homeClientSource.includes('initialQueue.status') && homeClientSource.includes('void refresh()'))
+assert(homeClientSource.includes('Feed is stale'))
+
 console.log('shared exposure activity contract ok')
+
+function waitForBackend(delayMs: number, signal?: AbortSignal | null) {
+    return new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, delayMs)
+        signal?.addEventListener('abort', () => {
+            clearTimeout(timer)
+            reject(signal.reason)
+        }, { once: true })
+    })
+}

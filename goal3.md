@@ -129,7 +129,7 @@ Labels that restate source metadata do not satisfy the thesis analysis objective
 
 The earlier sample-path findings are stale: the current tree has no `sampleDwmProductSnapshot()` reference, no `/solutions/dwm` page, and the live homepage/activity surface is backed by the scraper API. That removes the known fictional-data path, but it does not by itself prove the full tenant workflow.
 
-The previously reported homepage `0/0` exposure display is also resolved, not an open defect: a fresh production read on 2026-08-03 returned `status: live` and `total: 2,781` with current exposure items. Do not reopen or change this path unless a new live check reproduces the failure.
+The previously reported homepage `0/0` exposure display is resolved, not an open defect: a fresh production read returned `status: live` and `total: 2,781` with current exposure items. The current UI now represents timeout/unavailable states as checking or unavailable and does not fabricate a zero count. Do not reopen this path unless a new live check reproduces the failure.
 
 The visible exposure total must not be compared directly with the evidence database: the same production snapshot contains 8,243 captures, 2,338 incidents, 12,408 claims, 151 actor profiles, and 47 alerts. The homepage intentionally shows the filtered exposure queue (2,781), so the lower number does not indicate data loss.
 

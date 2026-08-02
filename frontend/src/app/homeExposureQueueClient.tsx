@@ -63,6 +63,12 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
     }, [fetchQueue, loadingMore, mergeQueue, nextOffset])
 
     useEffect(() => {
+        if (initialQueue.status === 'checking' || initialQueue.status === 'unavailable') {
+            void refresh()
+        }
+    }, [initialQueue.status, refresh])
+
+    useEffect(() => {
         const timer = window.setInterval(() => {
             void refresh()
         }, REFRESH_MS)
@@ -92,7 +98,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                     <Marquee text={subtitle} className='text-xs text-ui-muted' />
                 </div>
                 <div className='flex flex-wrap items-center gap-2'>
-                    <span className='landing-surface-border rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-muted'>{queue.status === 'unavailable' ? 'Unavailable' : `${items.length}/${total}`}</span>
+                    <span className='landing-surface-border rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-muted'>{queue.status === 'unavailable' ? 'Unavailable' : queue.status === 'checking' ? 'Checking' : `${items.length}/${total}`}</span>
                     <span className='text-xs text-ui-muted'>{formatRefreshCadence(queue.scheduler?.cadenceSeconds)}</span>
                     <button type='button' onClick={() => void refresh()} disabled={refreshing} className='landing-surface-border rounded-md border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-primary transition hover:border-ui-primary disabled:cursor-wait disabled:opacity-60'>
                         {refreshing ? 'Checking...' : 'Check now'}
@@ -149,6 +155,9 @@ function latestActivitySubtitle(queue: ExposureQueue, items: ExposureQueueItem[]
     const age = queue.freshness?.collectionAgeMinutes ?? queue.freshness?.ageMinutes
     if (queue.status === 'live' && typeof age === 'number') {
         return `New company mentions found; latest ${age}m ago`
+    }
+    if (queue.status === 'stale' && items.length) {
+        return `Feed is stale; latest mention ${formatClaimTime(queue.freshness?.latestClaimAt || items[0]?.claimTime)}`
     }
     if (items.length) {
         return `Latest mention ${formatClaimTime(queue.freshness?.latestClaimAt || items[0]?.claimTime)}`

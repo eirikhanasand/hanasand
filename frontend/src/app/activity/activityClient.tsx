@@ -116,7 +116,7 @@ export default function ActivityClient({ initialQueue }: Props) {
                     <div className='min-w-0'>
                         <p className='text-xs font-semibold uppercase text-ui-primary'>Activity</p>
                         <h1 className='mt-1 text-2xl font-semibold tracking-normal text-ui-text md:text-3xl'>Latest company mentions</h1>
-                        <p className='mt-1 text-sm text-ui-muted'>{queue.status === 'unavailable' ? 'Live activity unavailable' : `${visibleItems.length}/${total} loaded`} · latest {formatClaimTime(newest)}</p>
+                        <p className='mt-1 text-sm text-ui-muted'>{activityStatus(queue.status, visibleItems.length, total)} · latest {formatClaimTime(newest)}</p>
                     </div>
                     <div className='flex flex-wrap items-center gap-2'>
                         <button type='button' onClick={() => void replace()} disabled={loading} className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary disabled:cursor-wait disabled:opacity-60'>
@@ -179,6 +179,13 @@ export default function ActivityClient({ initialQueue }: Props) {
             {error ? <p className='border-t border-ui-danger/35 bg-ui-danger/10 px-4 py-2 text-xs font-semibold text-ui-danger'>{error}</p> : null}
         </main>
     )
+}
+
+function activityStatus(status: string, visible: number, total: number) {
+    if (status === 'unavailable') return 'Live activity unavailable'
+    if (status === 'checking') return 'Checking live activity'
+    if (status === 'stale') return `${visible}/${total} loaded · feed stale`
+    return `${visible}/${total} loaded`
 }
 
 function ActivityRow({ item }: { item: ExposureQueueItem }) {

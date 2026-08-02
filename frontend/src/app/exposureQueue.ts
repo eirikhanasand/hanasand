@@ -42,6 +42,17 @@ export type ExposureQueue = {
     items: ExposureQueueItem[]
 }
 
+export function exposureQueueFallback(status: 'checking' | 'unavailable', limit: number): ExposureQueue {
+    return {
+        generatedAt: new Date().toISOString(),
+        status,
+        freshness: { latestClaimAt: null, ageMinutes: null, maxLiveAgeMinutes: 60 },
+        scheduler: { state: status, cadenceSeconds: 300 },
+        page: { limit, offset: 0 },
+        items: [],
+    }
+}
+
 export function normalizeExposureQueue(value: unknown): ExposureQueue {
     const record = isRecord(value) ? value : {}
     const generatedAt = typeof record.generatedAt === 'string' ? record.generatedAt : new Date().toISOString()
