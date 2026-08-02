@@ -332,6 +332,13 @@ describe("scheduled public feed discovery", () => {
     const collision = expiredPortfolioRss("portfolio-collision", "https://collision.example/old.xml");
     const collisionOwner = source({ id: "existing-effective-feed", url: "https://collision.example/current.xml", status: "active" });
     for (const candidate of [google, cyberCentre, collision, collisionOwner]) store.saveSource(candidate);
+  test("scheduler revalidates only expired approved public RSS portfolio candidates", async () => {
+    const store = new InMemoryScraperStore();
+    const google = expiredPortfolioRss("portfolio-google", "https://cloud.google.com/feeds/compute-engine-security-bulletins.xml");
+    const cyberCentre = expiredPortfolioRss("portfolio-cyber-centre", "https://www.cyber.gc.ca/api/cccs/rss/v1/get?feed=alerts_advisories&lang=en");
+    const collision = expiredPortfolioRss("portfolio-collision", "https://collision.example/old.xml");
+    const collisionOwner = source({ id: "existing-effective-feed", url: "https://collision.example/current.xml", status: "active" });
+    for (const candidate of [google, cyberCentre, collision, collisionOwner]) store.saveSource(candidate);
     store.saveSource(expiredPortfolioRss("unapproved-rss", "https://unapproved.example/security.xml", {
       governance: { approvalRequired: true, approvalState: "pending" }
     }));
@@ -357,6 +364,7 @@ describe("scheduled public feed discovery", () => {
           : url === cyberCentre.url
             ? "https://www.cyber.gc.ca/api/cccs/atom/v1/get?feed=alerts_advisories&lang=en"
             : collisionOwner.url;
+        return response(rss("CVE-2026-5252", `${effectiveUrl}#CVE-2026-5252`, generatedAt), effectiveUrl, "application/rss+xml");
         return response(rss("CVE-2026-5252", `${effectiveUrl}#CVE-2026-5252`, generatedAt), effectiveUrl, "application/rss+xml");
       }
     });
