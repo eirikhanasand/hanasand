@@ -119,6 +119,7 @@ export default function DashboardSidebar({
             { href: '/dashboard/db/backups', label: 'Backup', icon: <DatabaseBackup className='h-4 w-4' /> },
             { href: '/dashboard/system/rate-limits', label: 'Rate Limits', icon: <Gauge className='h-4 w-4' /> },
             { href: '/dashboard/cron-jobs', label: 'Cron Jobs', icon: <CalendarClock className='h-4 w-4' /> },
+            { href: '/dashboard/system/updates', label: 'Host Updates', icon: <ShieldCheck className='h-4 w-4' /> },
             { href: '/dashboard/system/impersonation', label: 'Helpdesk', icon: <UserRoundCheck className='h-4 w-4' /> },
             { href: '/dashboard/management', label: 'Management', icon: <ShieldCheck className='h-4 w-4' /> },
         )

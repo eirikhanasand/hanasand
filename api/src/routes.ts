@@ -211,6 +211,7 @@ import { getBrowserSandboxProfiles, putBrowserSandboxProfiles } from './handlers
 import { getBrowserRunReport, getBrowserRuns, postBrowserRunReport } from './handlers/browserSandboxRuns.ts'
 import { getCommercialContactRequests, postCommercialContactRequest } from './handlers/commercialContactRequests.ts'
 import { getOrganizationPrivacy, postOrganizationPrivacy } from './handlers/organizationPrivacy.ts'
+import { getAptUpdates } from './handlers/aptUpdates.ts'
 
 /**
  * Defines the routes available in the API.
@@ -477,6 +478,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/vulnerabilities/scan', postVulnerabilityScan)
     fastify.get('/system/cron', getSystemCronJobs)
     fastify.put('/system/cron/:id', putSystemCronJob)
+    fastify.get('/system/updates', getAptUpdates)
 
     // Rate limiting
     fastify.get('/rate-limit/settings', getRateLimitSettingsHandler)

@@ -298,6 +298,30 @@ export default async function ensureSchema() {
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_created_at ON service_logs(created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_service_level ON service_logs(service, level, created_at DESC)')
+    await run(`
+        CREATE TABLE IF NOT EXISTS host_update_snapshots (
+            host TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            checked_at TIMESTAMPTZ NOT NULL,
+            payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run(`
+        CREATE TABLE IF NOT EXISTS host_update_events (
+            id BIGSERIAL PRIMARY KEY,
+            host TEXT NOT NULL,
+            run_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            occurred_at TIMESTAMPTZ NOT NULL,
+            packages JSONB NOT NULL DEFAULT '[]'::jsonb,
+            error TEXT,
+            payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+            UNIQUE(host, run_id)
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_host_update_events_host_occurred ON host_update_events(host, occurred_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_http_errors ON service_logs((metadata->>\'category\'), created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_http_error_code ON service_logs((metadata->>\'error_code\'), created_at DESC) WHERE metadata->>\'category\' = \'http_response_error\'')
     await run(`

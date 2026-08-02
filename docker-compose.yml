@@ -74,6 +74,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/snap/lxd/common/lxd/unix.socket:/var/snap/lxd/common/lxd/unix.socket
       - /var/spool/cron/crontabs:/host/cron/crontabs
+      - /var/lib/hanasand:/host/var/lib/hanasand:ro
       - api_state:/var/lib/hanasand
       - ${HANASAND_APP_UPDATE_DIR:-/srv/hanasand/app-updates}:/srv/hanasand/app-updates
     extra_hosts:

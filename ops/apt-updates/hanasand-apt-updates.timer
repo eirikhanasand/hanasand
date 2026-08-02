@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Hanasand staged Ubuntu update monitor every six hours
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=6h
+Persistent=true
+RandomizedDelaySec=20min
+
+[Install]
+WantedBy=timers.target
