@@ -331,6 +331,28 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(store.listClaimReviews()).toHaveLength(0);
   });
 
+  test("bounds restart recovery when running tasks have no lease timestamp", async () => {
+    const store = seededClaimStore();
+    syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" });
+    const template = store.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task")!;
+    for (let index = 0; index < 105; index++) {
+      store.saveAnalystMetadataReviewTask({ ...template, id: `abandoned-${index}`, state: "running", outcome: undefined, completedAt: undefined, leaseExpiresAt: undefined });
+    }
+
+    const cycle = await runAutomaticReviewCycle(options(store), {
+      now: "2026-07-22T10:02:00.000Z",
+      allTenants: true,
+      limit: 1,
+      modelVersion: "hanasand",
+      fetcher: async () => { throw new Error("recovered task should remain bounded"); },
+      aiBase: "http://ai.test"
+    });
+
+    expect(cycle.recovered).toBe(100);
+    expect(store.listAnalystMetadataReviewTasks().filter((item: any) => item.id.startsWith("abandoned-") && item.state === "retrying")).toHaveLength(100);
+    expect(store.listAnalystMetadataReviewTasks().filter((item: any) => item.id.startsWith("abandoned-") && item.state === "running")).toHaveLength(5);
+  });
+
   test("does not trust a generic error that copies the validator message", async () => {
     const store = seededClaimStore();
     const originalGetClaim = store.getIntelligenceClaim.bind(store);

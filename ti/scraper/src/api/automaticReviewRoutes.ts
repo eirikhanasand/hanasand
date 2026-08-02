@@ -235,7 +235,7 @@ export async function runAutomaticReviewCycle(options: ApiServerOptions, input: 
   const index = buildReviewIndex(store);
   const superseded = supersedeStaleTasks(store, index.tasks, input, at, modelVersion);
   const queued = syncQueueWithIndex(store, index, input, at, modelVersion);
-  recoverExpiredLeases(store, index.tasks, at, input);
+  const recovered = recoverExpiredLeases(store, index.tasks, at, input);
   const eligible = index.tasks
     .filter((task) => input.allTenants || inTenantScope(task, input.tenantId))
     .filter((task) => task.promptVersion === reviewPromptVersion(task.subject) && task.requestedModelVersion === modelVersion)
@@ -251,7 +251,7 @@ export async function runAutomaticReviewCycle(options: ApiServerOptions, input: 
     }
   }));
   await store.flush?.();
-  return { queued, superseded, attempted: due.length, concurrency, results };
+  return { queued, superseded, recovered, attempted: due.length, concurrency, results };
 }
 
 function fairDueTasks(tasks: AutomaticReviewTask[], limit: number) {
@@ -1059,12 +1059,17 @@ function replayAutomaticReview(options: ApiServerOptions, taskId: string, tenant
 }
 
 function recoverExpiredLeases(store: any, taskRecords: AutomaticReviewTask[], at: string, input: Pick<CycleInput, "tenantId" | "allTenants">) {
+  const maxRecoveries = 100;
+  let recoveredCount = 0;
   for (const task of taskRecords) {
+    if (recoveredCount >= maxRecoveries) break;
     if ((!input.allTenants && !inTenantScope(task, input.tenantId)) || task.promptVersion !== reviewPromptVersion(task.subject) || task.state !== "running" || (task.leaseExpiresAt && Date.parse(task.leaseExpiresAt) > Date.parse(at))) continue;
     const recovered = saveTask(store, task, { state: "retrying", nextAttemptAt: at, leaseExpiresAt: undefined, updatedAt: at, lastError: "Worker lease expired before a terminal decision was persisted" });
     Object.assign(task, recovered);
     saveEvent(store, recovered, "restart_recovered", at);
+    recoveredCount++;
   }
+  return recoveredCount;
 }
 
 function claimEligible(claim: any, reviews: any[], modelVersion: string) {
