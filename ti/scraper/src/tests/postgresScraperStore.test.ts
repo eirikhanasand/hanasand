@@ -283,7 +283,8 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       verifiedAt: "2026-07-01T12:00:00.000Z",
       legalBasisVerifiedAt: "2026-07-01T12:00:00.000Z"
     };
-    const staticFeedEndpointKey = "https://portfolio.example/security.xml";
+    const staticFeedEndpointKey = "https://cloud.google.com/feeds/compute-engine-security-bulletins.xml";
+    const effectiveStaticFeedEndpointKey = "https://docs.cloud.google.com/feeds/compute-engine-security-bulletins.xml";
     const staticCandidate = {
       ...source({
         id: "src_static_portfolio_rss",
@@ -303,8 +304,8 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await first.flush();
     const staticAdmission = {
       ...admissionInput,
-      source: { ...candidate, id: stableId("src", staticFeedEndpointKey), url: staticFeedEndpointKey },
-      feedEndpointKey: staticFeedEndpointKey,
+      source: { ...candidate, id: stableId("src", effectiveStaticFeedEndpointKey), url: effectiveStaticFeedEndpointKey },
+      feedEndpointKey: effectiveStaticFeedEndpointKey,
       publisherKey: `portfolio-revalidation:${staticCandidate.id}`,
       parentSourceId: staticCandidate.id,
       evidenceCaptureId: "",
@@ -320,6 +321,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       sourceId: staticCandidate.id
     });
     expect(second.getSource(staticCandidate.id)).toMatchObject({
+      url: effectiveStaticFeedEndpointKey,
       status: "candidate",
       countsAsCoverage: false,
       metadata: {
@@ -329,6 +331,55 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     });
     expect(second.getSource(staticCandidate.id)?.metadata?.sourcePortfolioStatus).toBeUndefined();
     expect(second.getSource(staticCandidate.id)?.metadata?.sourceFeedDiscovery).toBeUndefined();
+
+    const cyberCentre = {
+      ...staticCandidate,
+      id: "src_static_portfolio_cyber_centre",
+      url: "https://www.cyber.gc.ca/api/cccs/rss/v1/get?feed=alerts_advisories&lang=en",
+      metadata: { ...staticCandidate.metadata, sourcePortfolioStatus: "verification_expired", sourcePortfolioVerification: expiredVerification }
+    };
+    first.saveSource(cyberCentre);
+    await first.flush();
+    const cyberCentreEffective = "https://www.cyber.gc.ca/api/cccs/atom/v1/get?feed=alerts_advisories&lang=en";
+    expect(await second.admitSourceFeedDiscovery({
+      ...staticAdmission,
+      source: { ...candidate, id: stableId("src", cyberCentreEffective), url: cyberCentreEffective },
+      feedEndpointKey: cyberCentreEffective,
+      publisherKey: `portfolio-revalidation:${cyberCentre.id}`,
+      parentSourceId: cyberCentre.id,
+      revalidationSourceId: cyberCentre.id
+    })).toMatchObject({ outcome: "revalidated", sourceId: cyberCentre.id });
+    expect(second.getSource(cyberCentre.id)).toMatchObject({
+      url: cyberCentreEffective,
+      status: "candidate",
+      metadata: { sourcePortfolioVerification: { verifiedAt: generatedAt } }
+    });
+    expect(second.getSource(cyberCentre.id)?.metadata?.sourcePortfolioStatus).toBeUndefined();
+
+    const collisionTarget = {
+      ...staticCandidate,
+      id: "src_static_portfolio_redirect_collision",
+      url: "https://collision.example/old.xml",
+      metadata: { ...staticCandidate.metadata, sourcePortfolioStatus: "verification_expired", sourcePortfolioVerification: expiredVerification }
+    };
+    const collisionOwner = source({ id: "src_existing_effective_feed", url: "https://collision.example/current.xml", status: "active" });
+    first.saveSource(collisionTarget);
+    first.saveSource(collisionOwner);
+    await first.flush();
+    expect(await second.admitSourceFeedDiscovery({
+      ...staticAdmission,
+      source: { ...candidate, id: stableId("src", collisionOwner.url), url: collisionOwner.url },
+      feedEndpointKey: canonicalFeedKey(collisionOwner.url),
+      publisherKey: `portfolio-revalidation:${collisionTarget.id}`,
+      parentSourceId: collisionTarget.id,
+      revalidationSourceId: collisionTarget.id
+    })).toMatchObject({ outcome: "duplicate", sourceId: collisionOwner.id });
+    const collisionCheck = await PostgresScraperStore.create({ databaseUrl });
+    expect(collisionCheck.getSource(collisionTarget.id)).toMatchObject({
+      url: collisionTarget.url,
+      metadata: { sourcePortfolioStatus: "verification_expired", sourcePortfolioVerification: expiredVerification }
+    });
+    await collisionCheck.close();
 
     for (const rejected of [
       { id: "src_portfolio_non_rss", url: "https://non-rss.example/security.json", type: "json_api" },
