@@ -171,6 +171,8 @@ Acceptance:
 - No response contains `{ goal: "add payworthy fresh rows" }` or equivalent placeholder language.
 - The endpoint either does not exist anywhere or drives a verified production workflow with persisted real inputs and outcomes.
 
+Read-only production verification at 2026-08-02T23:24:52Z returned HTTP 404 for `/v1/sources/coverage-plan`; repository reachability search found no live caller. This requirement is resolved, while the broader source-coverage objective remains open.
+
 ### 8. Remove The Sample DWM Product Path
 
 Required implementation:
@@ -183,6 +185,8 @@ Acceptance:
 
 - No production-reachable page imports or renders sample DWM data.
 - The canonical DWM workspace operates on real tenant-scoped persistence and live alerts/deliveries.
+
+Read-only production verification at 2026-08-02T23:24:52Z returned HTTP 308 from `/solutions/dwm` to `/dwm`, followed by HTTP 200. The sample route is not the serving product path; the remaining requirement is fresh-tenant workflow proof on `/dwm`.
 
 ### 9. Complete Third-Party Reporting
 
