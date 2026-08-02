@@ -138,7 +138,7 @@ export async function runSourceFeedDiscoveryCycle(options: DiscoveryOptions, gen
       const plan = store.getPlan?.(planId(reference.publisherKey))
         ?? store.listPlans?.().find((row) => row.requestId === REQUEST_ID && row.publisherKey === reference.publisherKey);
       const next = Date.parse(String(plan?.nextEligibleAt ?? ""));
-      return !plan || !Number.isFinite(next) || next <= now;
+      return !plan || !Number.isFinite(next) || next <= now || successfulPlanRefreshDue(plan, generatedAt);
     })
     .slice(0, positiveInteger(options.sourceFeedDiscoveryMaxReferences, 50, 50));
   if (!due.length) {
@@ -717,7 +717,14 @@ function claimable(plan: DiscoveryPlan | undefined, generatedAt: string) {
   const due = Date.parse(String(plan.nextEligibleAt ?? ""));
   const expires = Date.parse(String(plan.runExpiresAt ?? ""));
   return (!plan.activeRunId || !Number.isFinite(expires) || expires <= now)
-    && (!Number.isFinite(due) || due <= now);
+    && (!Number.isFinite(due) || due <= now || successfulPlanRefreshDue(plan, generatedAt));
+}
+function successfulPlanRefreshDue(plan: DiscoveryPlan | undefined, generatedAt: string) {
+  const updatedAt = Date.parse(String(plan?.updatedAt ?? plan?.completedAt ?? ""));
+  return plan?.status === "completed"
+    && plan.result?.outcome === "feeds_proven"
+    && Number.isFinite(updatedAt)
+    && Date.parse(generatedAt) - updatedAt >= DAY_SECONDS * 1_000;
 }
 function failureBackoffSeconds(count: number) {
   return Math.min(7 * DAY_SECONDS, 3_600 * 2 ** Math.min(7, Math.max(0, count - 1)));
