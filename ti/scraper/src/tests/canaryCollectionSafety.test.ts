@@ -485,6 +485,17 @@ describe("public collection boundary", () => {
     expect(new URL(requestedUrl).searchParams.get("resultsPerPage")).toBe("40");
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ metadata: { parserWarnings: ["JSON source contained no supported records"] } });
+
+    const store = new InMemoryScraperStore();
+    store.saveSource(nvd);
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      maxSources: 1,
+      maxTasks: 1,
+      fetch: async () => new Response(JSON.stringify({ vulnerabilities: [{ cve: { id: "CVE-2026-4242", descriptions: [{ lang: "en", value: "CVE-2026-4242 remote code execution vulnerability." }] } }] }), { headers: { "content-type": "application/json" } })
+    });
+    expect(cycle).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 0 });
   });
 
   test("captures structured ransomware group profiles without manufacturing incidents", async () => {
