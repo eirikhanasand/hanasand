@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const IDENTITY_CANARY_FEEDS = [
   src("src_canary_flare", "Flare Threat Intelligence", "rss", "https://flare.io/feed/", ["infostealer", "credential", "identity"], "vendor"),
   src("src_canary_constella", "Constella Intelligence", "rss", "https://constellaintelligence.com/feed/", ["infostealer", "identity", "phishing"], "vendor")

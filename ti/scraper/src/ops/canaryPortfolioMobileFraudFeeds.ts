@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const MOBILE_FRAUD_CANARY_FEEDS = [
   src("src_canary_zimperium", "Zimperium zLabs", "rss", "https://www.zimperium.com/blog/rss.xml", ["mobile", "malware", "smishing"], "vendor"),
   src("src_canary_groupib", "Group-IB Blog", "rss", "https://www.group-ib.com/blog/rss.xml", ["phishing", "fraud", "intrusion"], "vendor")
