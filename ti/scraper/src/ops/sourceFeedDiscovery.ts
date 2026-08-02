@@ -161,9 +161,12 @@ export async function runSourceFeedDiscoveryCycle(options: DiscoveryOptions, gen
   const results: ProcessedReference[] = [];
   try {
     for (let index = 0; index < due.length && !controller.signal.aborted; index += concurrency) {
-      const processed = await Promise.all(due.slice(index, index + concurrency).map((reference) =>
+      const processed = await Promise.allSettled(due.slice(index, index + concurrency).map((reference) =>
         processReference({ store, fetcher, reference, generatedAt, signal: controller.signal, maxFeeds: positiveInteger(options.sourceFeedDiscoveryMaxFeedsPerReference, 4, 8) })));
-      results.push(...processed.filter((result): result is ProcessedReference => Boolean(result)));
+      results.push(...processed
+        .filter((result): result is PromiseFulfilledResult<ProcessedReference | undefined> => result.status === "fulfilled")
+        .map((result) => result.value)
+        .filter((result): result is ProcessedReference => Boolean(result)));
     }
   } catch (error) {
     return {
