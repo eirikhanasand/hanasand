@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Archive, BellRing, Building2, CheckCircle2, CircleAlert, Copy, ExternalLink, Loader2, Pause, Pencil, Play, RefreshCw, Settings, ShieldCheck, Trash2, UserPlus, Users, Webhook } from 'lucide-react'
+import { Archive, BellRing, Building2, CheckCircle2, CircleAlert, Copy, ExternalLink, KeyRound, Loader2, Pause, Pencil, Play, RefreshCw, Settings, ShieldCheck, Trash2, UserPlus, Users, Webhook } from 'lucide-react'
 
 type OrganizationRole = 'owner' | 'admin' | 'member' | 'viewer' | 'support'
 type OrganizationStatus = 'active' | 'archived' | 'deleted' | string
@@ -619,6 +619,7 @@ export default function OrganizationWorkspaceClient() {
     const [error, setError] = useState('')
     const [message, setMessage] = useState('')
     const [messageTone, setMessageTone] = useState<'success' | 'warning'>('success')
+    const [newApiKeySecret, setNewApiKeySecret] = useState('')
     const [createName, setCreateName] = useState('')
     const [workspaceQuery, setWorkspaceQuery] = useState('')
     const [createFirstWatchlist, setCreateFirstWatchlist] = useState({ kind: 'domain' as WatchlistKind, value: '', notes: '' })
@@ -958,6 +959,26 @@ export default function OrganizationWorkspaceClient() {
             ].filter(Boolean).join(', ') + '.',
         }
     }, 'organization-create')
+
+    const createMillApiKey = () => selectedOrganization && runAction('create-mill-api-key', async () => {
+        requireManage()
+        const payload = await requestJson<{ apiKey?: OrganizationApiKey, secret?: string }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/api-keys`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ name: 'Mill ingestion' }),
+        })
+        if (!payload.secret) throw new Error('The API key was created without a secret. Contact support before sending logs.')
+        setNewApiKeySecret(payload.secret)
+        return { message: 'Organization API key created. Copy the secret now; it will not be shown again.' }
+    }, 'mill-api-key', { type: 'organization', id: selectedOrganization.id })
+
+    const revokeMillApiKey = (apiKey: OrganizationApiKey) => selectedOrganization && runAction('revoke-mill-api-key', async () => {
+        requireManage()
+        if (!window.confirm('Revoke this organization API key? Existing Mill senders will stop working.')) return 'No changes made.'
+        await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/api-keys/${encodeURIComponent(apiKey.id)}`, { method: 'DELETE' })
+        setNewApiKeySecret('')
+        return 'Organization API key revoked.'
+    }, 'mill-api-key', { type: 'organization', id: selectedOrganization.id })
 
     const saveSettings = () => selectedOrganization && runAction('save-settings', async () => {
         requireManage()
@@ -1445,6 +1466,7 @@ export default function OrganizationWorkspaceClient() {
                                 <section className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
                                     <div className='grid gap-5'>
                                         <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} rowMessage={rowMessages.settings} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />
+                                        <MillApiKeyPanel apiKeys={bundle.apiKeys} secret={newApiKeySecret} canManage={canManage} busy={busy} rowMessage={rowMessages['mill-api-key']} onCreate={() => void createMillApiKey()} onRevoke={key => void revokeMillApiKey(key)} onClearSecret={() => setNewApiKeySecret('')} />
                                         <PrivacyLifecyclePanel organization={selectedOrganization} privacy={bundle.privacy} retentionDays={Number(bundle.settings?.retentionDays || 365)} canManage={canManage} busy={busy} rowMessage={rowMessages.privacy} onRun={() => void runRetention()} onExport={() => void exportPrivacyData()} onDelete={(confirmation, currentPassword) => void requestPrivacyDeletion(confirmation, currentPassword)} />
                                         <WatchlistPanel
                                             watchlists={bundle.watchlists}
@@ -1994,6 +2016,66 @@ function OrgSetupProgress({ organizationId, canManage, memberCount, inviteCount,
                 </div>
             </div>
         </section>
+    )
+}
+
+function MillApiKeyPanel({ apiKeys, secret, canManage, busy, rowMessage, onCreate, onRevoke, onClearSecret }: { apiKeys: OrganizationApiKey[], secret: string, canManage: boolean, busy: string, rowMessage?: RowMessage, onCreate: () => void, onRevoke: (apiKey: OrganizationApiKey) => void, onClearSecret: () => void }) {
+    const activeKey = apiKeys.find(key => key.enabled !== false)
+    const [copyStatus, setCopyStatus] = useState<RowMessage | undefined>()
+    const creating = busy === 'create-mill-api-key'
+    const revoking = busy === 'revoke-mill-api-key'
+    const copySecret = async () => {
+        try {
+            await navigator.clipboard.writeText(secret)
+            setCopyStatus({ ok: true, text: 'Secret copied.' })
+        } catch {
+            setCopyStatus({ ok: false, text: 'Copy failed. Select the secret and copy it manually.' })
+        }
+    }
+    return (
+        <details id='mill-api-key' open className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-mill-api-key>
+            <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                <SectionTitle icon={<KeyRound className='h-4 w-4' />} title='Mill ingestion access' detail='One organization API key for sending JSON logs to Hanasand.' />
+                <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>{activeKey ? 'Configured' : 'Setup required'}</span>
+            </summary>
+            <div className='grid gap-3 border-t border-ui-border p-4 dark:border-ui-border'>
+                <div className='rounded-md border border-ui-border bg-ui-raised p-3 text-sm dark:border-ui-border dark:bg-ui-canvas'>
+                    <p className='font-semibold text-ui-text dark:text-ui-text'>Endpoint</p>
+                    <code className='mt-1 block break-all text-xs text-ui-muted dark:text-ui-muted'>https://api.hanasand.com/mill</code>
+                    <p className='mt-2 text-xs text-ui-muted dark:text-ui-muted'>Send a JSON object with the organization API key in the <code>x-api-key</code> header. The key also supports other organization API access.</p>
+                </div>
+                {activeKey ? (
+                    <div className='flex flex-col gap-3 rounded-md border border-ui-border p-3 dark:border-ui-border sm:flex-row sm:items-center sm:justify-between'>
+                        <div className='min-w-0'>
+                            <p className='text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>Active organization key</p>
+                            <p className='mt-1 truncate font-mono text-sm text-ui-text dark:text-ui-text'>{activeKey.keyPrefix || activeKey.key_prefix || 'prefix unavailable'}••••</p>
+                            <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>Expires {formatDate(activeKey.expiresAt || activeKey.expires_at) || 'according to organization policy'}</p>
+                        </div>
+                        <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => onRevoke(activeKey)} title={!canManage ? 'Owner or admin required' : 'Revoke organization API key'}>
+                            {revoking ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />} Revoke key
+                        </button>
+                    </div>
+                ) : (
+                    <div className='flex flex-col gap-3 rounded-md border border-dashed border-ui-border p-3 dark:border-ui-border sm:flex-row sm:items-center sm:justify-between'>
+                        <p className='text-sm text-ui-muted dark:text-ui-muted'>Create one key to start sending logs. Owners and administrators can create or revoke it.</p>
+                        <button type='button' className={primaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={onCreate} title={!canManage ? 'Owner or admin required' : 'Create organization API key'}>
+                            {creating ? <Loader2 className='h-4 w-4 animate-spin' /> : <KeyRound className='h-4 w-4' />} Create key
+                        </button>
+                    </div>
+                )}
+                {secret && <div className='rounded-md border border-ui-primary/40 bg-ui-primary/5 p-3 dark:border-ui-primary/40 dark:bg-ui-primary/10' role='status'>
+                    <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>Copy this secret now</p>
+                    <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>It is shown once and will not be recoverable after leaving this page.</p>
+                    <code className='mt-2 block break-all rounded-md bg-ui-canvas p-2 text-xs text-ui-text dark:bg-ui-canvas dark:text-ui-text'>{secret}</code>
+                    <div className='mt-2 flex flex-wrap items-center gap-2'>
+                        <button type='button' className={secondaryButtonClass} onClick={() => void copySecret()}><Copy className='h-4 w-4' /> Copy secret</button>
+                        <button type='button' className={secondaryButtonClass} onClick={onClearSecret}>Hide secret</button>
+                        <RowStatus message={copyStatus} />
+                    </div>
+                </div>}
+            </div>
+            <div className='border-t border-ui-border px-4 py-3 dark:border-ui-border'><RowStatus message={rowMessage} /></div>
+        </details>
     )
 }
 
