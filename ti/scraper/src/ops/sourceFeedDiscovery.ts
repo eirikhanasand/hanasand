@@ -722,7 +722,7 @@ function claimable(plan: DiscoveryPlan | undefined, generatedAt: string) {
 function successfulPlanRefreshDue(plan: DiscoveryPlan | undefined, generatedAt: string) {
   const updatedAt = Date.parse(String(plan?.updatedAt ?? plan?.completedAt ?? ""));
   return plan?.status === "completed"
-    && plan.result?.outcome === "feeds_proven"
+    && (plan.result as { outcome?: unknown } | undefined)?.outcome === "feeds_proven"
     && Number.isFinite(updatedAt)
     && Date.parse(generatedAt) - updatedAt >= DAY_SECONDS * 1_000;
 }
