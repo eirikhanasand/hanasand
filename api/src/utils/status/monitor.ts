@@ -206,6 +206,7 @@ export default async function runSyntheticMonitor() {
                   count(*) FILTER (
                     WHERE record_type = 'evaluation_benchmark'
                       AND record->>'status' = 'annotating'
+                      AND record->'protocol'->>'version' = 'ti.independent_extraction_benchmark.v4'
                       AND updated_at < NOW() - INTERVAL '4 hours'
                   )::int AS stalled_evaluations,
                   (
