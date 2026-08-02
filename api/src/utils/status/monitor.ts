@@ -7,6 +7,7 @@ const apiBase = process.env.MONITOR_API_BASE || `http://127.0.0.1:${Number(proce
 const publicApiBase = (process.env.MONITOR_PUBLIC_API_BASE || 'https://api.hanasand.com/api/v1').replace(/\/$/, '')
 const webBase = (process.env.MONITOR_WEB_BASE || 'https://hanasand.com').replace(/\/$/, '')
 const scraperBase = (process.env.TI_SCRAPER_API_BASE || 'http://ti-scraper:8097').replace(/\/$/, '')
+const modelClientBase = (process.env.HANASAND_MODEL_CLIENT_HEALTH_BASE || 'http://hanasand_ai_model_client:18182').replace(/\/$/, '')
 type CheckResult = string | void | { status: MonitorStatus, message: string }
 
 async function check(
@@ -148,6 +149,16 @@ export default async function runSyntheticMonitor() {
                 }
             }
             return `Storage is healthy with ${pendingWrites} pending writes and ${loops.length} current collection loops.`
+        }),
+        check('threat-intelligence', 'AI model service', async () => {
+            const { response, body } = await fetchJson('/health', {}, modelClientBase)
+            const health = object(body)
+            const modelHealth = object(health?.modelHealth)
+            if (response.status !== 200 || health?.connected !== true || modelHealth?.ready !== true) {
+                const blocker = typeof health?.blocker === 'string' ? ` ${health.blocker}` : ''
+                throw new Error(`Hanasand AI model service is unavailable (${response.status}).${blocker}`)
+            }
+            return `Hanasand AI model service is ready (${String(health.model ?? 'unknown')}).`
         }),
         check('browser-sandbox', 'Browser workspace', async () => {
             const { response, body } = await fetchPage('/browser')
