@@ -23,6 +23,10 @@ export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
     if (events.length > 500) {
         return res.status(413).send({ error: { code: 'mill_batch_too_large', message: 'Mill accepts at most 500 events per request.' } })
     }
+    const invalidFields = validateMillEventFields(events as MillEvent[])
+    if (invalidFields.length) {
+        return res.status(400).send({ error: { code: 'invalid_mill_event_fields', message: 'Correct the invalid event fields and try again.', fields: invalidFields } })
+    }
 
     const source = body?.source && typeof body.source === 'object' && !Array.isArray(body.source) ? body.source : {}
     const ingestionId = `mill_${randomUUID()}`
@@ -148,7 +152,10 @@ async function createMillFindings(organizationId: string, eventId: string, event
         LIMIT 30
     `, [organizationId, event.userId, eventId])
     const rows = previous.rows as Array<{ id: string, event_timestamp: string, outcome: string, source_country: string | null, normalized: MillEvent }>
-    const failures = rows.filter(row => row.outcome === 'failure' && Date.parse(event.timestamp) - Date.parse(row.event_timestamp) <= 15 * 60_000)
+    const failures = rows.filter(row => {
+        const elapsed = Date.parse(event.timestamp) - Date.parse(row.event_timestamp)
+        return row.outcome === 'failure' && elapsed >= 0 && elapsed <= 15 * 60_000
+    })
     if (event.outcome === 'success' && failures.length >= 3) {
         await insertFinding(organizationId, 'auth.brute_force_success.v1', 'high', 'Successful login after repeated failures', [eventId, ...failures.slice(0, 5).map(row => row.id)], { successfulEventId: eventId, failedEventIds: failures.slice(0, 5).map(row => row.id) })
     }
@@ -216,9 +223,24 @@ function normalizeEvent(event: MillEvent, source: Record<string, unknown>): Norm
     }
 }
 
+export function validateMillEventFields(events: MillEvent[]) {
+    return events.flatMap((event, index) => {
+        if (event.timestamp === undefined) return []
+        if (typeof event.timestamp !== 'string' || Number.isNaN(Date.parse(event.timestamp))) {
+            return [{ field: `events[${index}].timestamp`, message: 'timestamp must be a valid ISO-8601 date string.' }]
+        }
+        return []
+    })
+}
+
 function object(value: unknown): MillEvent { return value && typeof value === 'object' && !Array.isArray(value) ? value as MillEvent : {} }
 function stringValue(value: unknown): string | null { return typeof value === 'string' && value.trim() ? value.trim() : null }
-function bearer(req: FastifyRequest) { const value = req.headers.authorization; return typeof value === 'string' && value.startsWith('Bearer ') ? value.slice(7).trim() : '' }
+function bearer(req: FastifyRequest) {
+    const apiKey = req.headers['x-api-key']
+    if (typeof apiKey === 'string' && apiKey.trim()) return apiKey.trim()
+    const value = req.headers.authorization
+    return typeof value === 'string' && value.startsWith('Bearer ') ? value.slice(7).trim() : ''
+}
 function redact(value: unknown): MillEvent {
     if (Array.isArray(value)) return value.map(redact) as unknown as MillEvent
     if (!value || typeof value !== 'object') return value as MillEvent
