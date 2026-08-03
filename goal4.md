@@ -61,6 +61,8 @@ The scheduler timeout was fixed in `9955ace1` and the follow-up measurement fix 
 
 The TI source-management page had a related client timeout: it requested 100 joined source rows while the server-rendered fetch allowed only 2.5 seconds. Commit `a001ed48` bounds the default page to 25 rows, keeps pagination for the full inventory, and gives the bounded read a 10-second budget. The canonical frontend was rebuilt with all tests, ESLint, guardrails, TypeScript, and Next production generation passing; image digest `sha256:92c11ae2925326856ac9476fd9b3ea759e366e1f7d2fcfc62f44d5ed6284327a`, container `40750a5b8bd53e39346d40b32cce33148d9e3ead1bd6373908ba3bed4cc117c8`, healthy at `2026-08-03T01:17:03Z`. The source route returns the normal authenticated login redirect when unauthenticated; API and PostgreSQL containers were not replaced.
 
+After the evaluation-cache rollout, an authenticated global source-operations request with `limit=1` completed in 1.61 seconds and the scraper remained healthy with zero pending writes. The source inventory is therefore readable again; its qualification totals still remain far below the required 6,100 live sources.
+
 Required minimum operating baseline: at least 5,000 qualifying clear-web feeds, 1,000 qualifying lawful dark-web/Tor feeds, and 100 qualifying public Telegram feeds, for at least 6,100 unique active intelligence-producing feeds. These are minimums, not completion caps; automatic discovery and validation must continue beyond them toward 10,000–100,000+ feeds where legitimate, relevant, useful feeds actually exist.
 
 Required implementation:
