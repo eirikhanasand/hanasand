@@ -13,7 +13,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
     const scope = params?.scope === 'default' ? 'default' : 'global'
     const tenantId = scope === 'default' ? 'default' : null
     const [overview, otherScope] = await Promise.all([
-        getTiAdminOverview(tenantId, { cursor, limit: 100 }),
+        getTiAdminOverview(tenantId, { cursor, limit: 25 }),
         getTiAdminOverview(scope === 'default' ? null : 'default', { limit: 1, includeSamples: false }),
     ])
     const scopeTotals = scope === 'global'

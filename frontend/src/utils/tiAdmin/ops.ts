@@ -115,7 +115,7 @@ export type TiAdminOverview = {
 }
 
 type ApiPayload = Record<string, unknown>
-const TI_ADMIN_FETCH_TIMEOUT_MS = 2_500
+const TI_ADMIN_FETCH_TIMEOUT_MS = 10_000
 
 export async function getTiAdminOverview(tenantId: string | null = 'default', page: { cursor?: number, limit?: number, sourceId?: string, includeSamples?: boolean } = {}): Promise<TiAdminOverview> {
     const base = tiScraperApiBase()
@@ -125,7 +125,7 @@ export async function getTiAdminOverview(tenantId: string | null = 'default', pa
         page.includeSamples === false ? emptyResource('collection-runs') : fetchResource(base, '/v1/intel/collection-runs', 'collectionRuns', tenantId, sampleFilter),
         fetchResource(base, '/v1/intel/source-operations', 'sources', tenantId, {
             cursor: Math.max(0, page.cursor || 0),
-            limit: Math.max(1, Math.min(500, page.limit || 100)),
+            limit: Math.max(1, Math.min(500, page.limit || 25)),
             sourceId: page.sourceId,
         }),
     ])
@@ -150,7 +150,7 @@ export async function getTiAdminOverview(tenantId: string | null = 'default', pa
         sourcePage: {
             total: operationsResult.total,
             cursor: Math.max(0, page.cursor || 0),
-            limit: Math.max(1, Math.min(500, page.limit || 100)),
+            limit: Math.max(1, Math.min(500, page.limit || 25)),
             nextCursor: operationsResult.nextCursor,
         },
         sourceTotals: sourceTotals(operationsResult.payload),

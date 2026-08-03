@@ -61,10 +61,10 @@ describe('TI admin bounded source operations', () => {
 
     test('can render an authoritative source page without loading capture or run samples', async () => {
         process.env.HANASAND_TI_SCRAPER_LOCAL_BASE = 'https://scraper.example.test'
-        const requested: string[] = []
+        const requested: URL[] = []
         globalThis.fetch = (async (input: RequestInfo | URL) => {
             const url = new URL(String(input))
-            requested.push(url.pathname)
+            requested.push(url)
             return Response.json({
                 total: 0,
                 summary: { activeSourceCount: 0 },
@@ -75,7 +75,8 @@ describe('TI admin bounded source operations', () => {
 
         await getTiAdminOverview('default', { includeSamples: false })
 
-        assert.deepEqual(requested, ['/v1/intel/source-operations'])
+        assert.deepEqual(requested.map(url => url.pathname), ['/v1/intel/source-operations'])
+        assert.equal(requested[0]?.searchParams.get('limit'), '25')
     })
 
     test('omits tenant scope for the global operator inventory', async () => {
