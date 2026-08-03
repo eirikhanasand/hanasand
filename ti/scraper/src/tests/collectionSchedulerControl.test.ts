@@ -15,7 +15,7 @@ describe("collection scheduler control", () => {
 
     await collectionSchedulerStatus(options as any);
 
-    expect(calls[0]).toMatchObject({ limit: 1, offset: undefined });
+    expect(calls[0]).toMatchObject({ limit: 2, offset: undefined });
   });
 
   test("returns actionable scheduler blockers controls and per-source health", async () => {

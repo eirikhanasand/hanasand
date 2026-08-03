@@ -179,9 +179,9 @@ async function boundedCollectionSchedulerStatus(
     tenantId,
     generatedAt,
     // The dashboard consumes aggregate totals; a full 100-row join makes the
-    // default scheduler probe time out on the production fleet. Callers that
-    // need a source page can still request an explicit limit.
-    limit: page.limit ?? 1,
+    // default scheduler probe time out on the production fleet. Two rows is
+    // the smallest bounded query that also keeps operational totals measured.
+    limit: page.limit ?? 2,
     cursor: page.cursor,
     executableOnly: true
   }) as any;
