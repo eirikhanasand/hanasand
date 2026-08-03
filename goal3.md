@@ -135,6 +135,8 @@ The visible exposure total must not be compared directly with the evidence datab
 
 Remaining proof is an authenticated fresh-tenant run using real watchlists, evidence-linked alerts, review state, durable delivery history, retry/idempotency, and an independently readable receiver. Historical test organizations or synthetic rows do not count toward that proof.
 
+Current read-only production check (2026-08-03T01:20Z) confirms the five Hanasand research-monitor tenants are present and scheduled: Coop, TINE, Norsk Tipping, mnemonic, and NTNU each have 20 active watchlist terms and one configured destination. Their collection plans were updated during the current scheduler cycle, but they currently have zero source-backed alerts; each has only one or two older acceptance delivery rows. This is evidence that scheduling exists, not completion of the fresh-tenant alert and receiver proof.
+
 ### 9. The Public API Is Narrow And Contract-Inconsistent
 
 - Public OpenAPI exposes only `/ti/search` and `/ti/search/batch`.
