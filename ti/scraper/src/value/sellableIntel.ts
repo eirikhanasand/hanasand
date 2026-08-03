@@ -1,4 +1,3 @@
-// @ts-nocheck
 const TERM_RE = /\b(APT|ransomware|RaaS|breach|CVE-\d|malware|phishing|exploit|exploited|vulnerability|vulnerabilities|victim|leak|intrusion|campaign|credential|info.?stealer|stealer|espionage|backdoor|botnet|supply-chain|zero-day|data leak|threat actor|attack|compromised|exposed|exfiltration|trojan|wiper|RAT|C2|command and control)\b/i;
 const ACTOR_ID_RE = /\b(?:APT\d{1,4}|UAC-\d{4})\b/i;
 const MULTILINGUAL_TERM_RE = /(?:кібератак|кіберінцид|кібершпигун|шкідлив|зловмисник|хакерськ(?:е|а|і) угрупован|фішинг|вразлив|ciberataque|ciberamenaza|vulnerabilidad|grupo de amenazas|amenaza persistente|intrusión|campaña de phishing|explotación activa|credenciales comprometid|haavoittuv|tietoturv|kyberhyökk|haittaohjelm|sårbar|säkerhetsbrist|cyberattack|skadlig kod|podatno|cyberatak|złośliw|vulnérabil|cyberattaque|rançongiciel|logiciel malveillant|kwetsbaar|cyberaanval)/iu;

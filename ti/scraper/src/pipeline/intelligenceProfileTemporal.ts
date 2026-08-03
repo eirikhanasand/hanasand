@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { PipelineResult } from "../types.ts";
 import type { TemporalExtraction } from "./intelligenceProfileTypes.ts";
 
