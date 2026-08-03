@@ -5,7 +5,7 @@ import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Solutions',
-    description: 'Threat monitoring, browser sandbox workspaces, dark web monitoring, and private exposure-checking solutions from Hanasand.',
+    description: 'Security monitoring, exposure intelligence, and safe investigation workflows from Hanasand.',
     path: '/solutions',
     keywords: ['onion session workspace', 'dark web monitoring', 'ransomware monitoring', 'company exposure alerts', 'threat intelligence API'],
 })
@@ -13,69 +13,69 @@ export const metadata: Metadata = buildRouteMetadata({
 const primarySolutions = [
     {
         title: 'Security Monitoring',
-        eyebrow: 'MDR log monitoring',
-        detail: 'Send JSON security events to one endpoint and review suspicious logins, impossible travel, and detection evidence in the Hanasand analyst workspace. Mill is the ingestion service behind it.',
+        eyebrow: 'DETECTION & RESPONSE',
+        detail: 'Turn security activity into investigations your team can act on. Hanasand connects suspicious behavior with the evidence, context, and next steps needed to decide what matters.',
         href: '/solutions/mill',
         icon: AlertTriangle,
-        points: ['Single JSON ingestion endpoint', 'Tenant-scoped event and finding review', 'Open rule path for Sigma and Hanasand detections'],
-        price: 'Pilot workflow',
+        points: ['Surface suspicious authentication and account activity', 'Review evidence in one analyst workspace', 'Route findings into your existing response process'],
+        price: 'Prioritize real threats',
     },
     {
         title: 'Dark Web Monitoring',
-        eyebrow: 'Monitoring',
-        detail: 'Watch companies, domains, executives, brands, and vendors across leak-site updates, public indexes, advisories, and approved source records.',
+        eyebrow: 'EXPOSURE INTELLIGENCE',
+        detail: 'Know when your company, people, brands, or suppliers appear in places where attackers operate—before an exposure becomes an incident.',
         href: '/dwm',
         icon: ShieldCheck,
-        points: ['Mapped source coverage with active health checks', 'Company, vendor, group, and source-change signals', 'Alert with confidence, source context, and next action'],
-        price: 'Sales scoped',
+        points: ['Monitor the assets and relationships that matter', 'Track changes across relevant threat sources', 'Give analysts the context to validate and respond'],
+        price: 'Detect exposure earlier',
     },
     {
         title: 'Browser',
-        eyebrow: 'URL analysis',
-        detail: 'Open untrusted regular-web and onion URLs in one isolated browser workspace with automatic routing, redirect capture, and saved SOC triage profiles.',
+        eyebrow: 'SAFE INVESTIGATION',
+        detail: 'Investigate suspicious websites and links without putting your analysts or devices in the line of fire. Preserve the evidence and keep the investigation moving.',
         href: '/browser',
         icon: Globe2,
-        points: ['Regular and Tor modes under one queue', 'Saved VirusTotal, urlquery, and WebCrack profiles', 'Screenshot timeline with analyst summary'],
-        price: 'Self-serve allowance',
+        points: ['Examine regular-web and onion destinations safely', 'Capture redirects, screenshots, and supporting evidence', 'Keep triage work organized in one investigation flow'],
+        price: 'Investigate without exposure',
     },
     {
         title: 'Threat Intelligence Search',
-        eyebrow: 'Console',
-        detail: 'Search criminal groups, companies, CVEs, and monitored source changes from one clean UI while preserving review state and alert context.',
+        eyebrow: 'INVESTIGATOR CONSOLE',
+        detail: 'Move from a name, domain, actor, or vulnerability to an informed answer. Connect related evidence and understand what deserves attention now.',
         href: '/ti',
         icon: Radar,
-        points: ['Criminal-group overviews', 'Company exposure search', 'Alert context'],
-        price: 'Console',
+        points: ['Investigate actors, companies, vulnerabilities, and infrastructure', 'Connect exposure to the entities it affects', 'Preserve context as findings move into review'],
+        price: 'Turn intelligence into decisions',
     },
 ]
 
 const utilitySolutions = [
     {
         title: 'Bloom Hash Exposure Lookup',
-        eyebrow: 'Separate utility',
-        detail: 'Check exposure from a SHA-1 hash through the standalone prefix lookup. This stays separate from company exposure monitoring.',
+        eyebrow: 'EXPOSURE CHECK',
+        detail: 'Check a sensitive value for known exposure without uploading the underlying data or turning it into a public record.',
         href: '/pwned',
         icon: LockKeyhole,
-        points: ['Hash-only utility flow', 'Exact-match result', 'Prefix-only range request'],
-        price: 'Utility',
+        points: ['Privacy-conscious lookup flow', 'Clear match or no-match result', 'Designed for quick analyst verification'],
+        price: 'Verify exposure privately',
     },
     {
         title: 'Endpoint Checks',
-        eyebrow: 'Separate utility',
-        detail: 'Run checks against URLs you control. This is a service-checking utility, separate from company exposure monitoring.',
+        eyebrow: 'SERVICE CHECKS',
+        detail: 'Run a permitted check against a URL you control, share the result with your team, and keep launch or incident work moving.',
         href: '/test',
         icon: Gauge,
-        points: ['5-check evaluation allowance', 'Manual checks against permitted targets', 'Shareable result links'],
-        price: 'Evaluation utility',
+        points: ['Start with a small evaluation allowance', 'Check permitted targets on demand', 'Share results with the people who need them'],
+        price: 'Check what matters',
     },
 ]
 
 const platformItems = [
-    { title: 'Short-span access', detail: 'Session controls for short-lived onion review, with source safety boundaries built into the workspace.', icon: Network },
-    { title: 'API delivery', detail: 'Structured fields for criminal group, company, source, date, exposure summary, and recommended action.', icon: Code2 },
-    { title: 'Investigation pivots', detail: 'Jump between group, named company, sector, country, source, and CVE context without losing the alert.', icon: Waypoints },
-    { title: 'Notification pipeline', detail: 'Reviewable alerts delivered through webhooks, case workflows, and scoped APIs.', icon: BellRing },
-    { title: 'Exposure index', detail: 'Searchable company and criminal-group records without exposing raw leaked material.', icon: Database },
+    { title: 'Relevant coverage', detail: 'Monitor the sources, assets, and relationships that matter to your organization.', icon: Network },
+    { title: 'Built for your stack', detail: 'Deliver findings into the systems your team already uses.', icon: Code2 },
+    { title: 'Investigation context', detail: 'Connect actors, companies, infrastructure, vulnerabilities, and evidence in one workflow.', icon: Waypoints },
+    { title: 'Actionable alerts', detail: 'See what changed, why it matters, and what should happen next.', icon: BellRing },
+    { title: 'Privacy-conscious intelligence', detail: 'Work from structured exposure records without turning sensitive material into a public data store.', icon: Database },
 ]
 
 export default function SolutionsPage() {
@@ -85,13 +85,13 @@ export default function SolutionsPage() {
                 <div className='mx-auto grid max-w-7xl gap-10 px-4 py-16 md:px-8 md:py-22'>
                     <div className='grid max-w-4xl gap-5'>
                         <p className='text-sm font-semibold uppercase text-ui-primary'>Solutions</p>
-                        <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Fast company exposure monitoring, packaged for teams that need answers now.</h1>
+                        <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Find what puts your business at risk. Know what to do next.</h1>
                         <p className='max-w-3xl text-lg leading-8 text-ui-muted'>
-                            Hanasand turns leak sites, public indexes, and watched sources into alerts and API records that show your team who was mentioned, what data was listed, when it changed, and what to review next.
+                            Hanasand brings security monitoring, exposure intelligence, and safe investigation into one focused workspace—so your team can move from scattered alerts to clear, defensible decisions.
                         </p>
                         <div className='flex flex-wrap gap-3'>
                             <Link href='/dwm' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
-                                View dark web monitoring
+                                Explore the platform
                                 <ArrowRight className='h-4 w-4' />
                             </Link>
                             <Link href='/contact' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
@@ -127,7 +127,7 @@ export default function SolutionsPage() {
                                         ))}
                                     </div>
                                     <span className='inline-flex items-center gap-2 text-sm font-semibold text-ui-primary'>
-                                        Open solution
+                                        Explore {solution.title}
                                         <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
                                     </span>
                                 </Link>
@@ -140,8 +140,9 @@ export default function SolutionsPage() {
             <section className='bg-ui-canvas'>
                 <div className='mx-auto grid max-w-7xl gap-6 px-4 py-14 md:px-8 lg:grid-cols-[0.72fr_1.28fr]'>
                     <div className='grid content-start gap-3'>
-                        <p className='text-sm font-semibold uppercase text-ui-primary'>Platform fit</p>
-                        <h2 className='text-3xl font-semibold'>Built for notification and review workflows, not data dumps.</h2>
+                        <p className='text-sm font-semibold uppercase text-ui-primary'>One workspace</p>
+                        <h2 className='text-3xl font-semibold'>From first alert to informed action.</h2>
+                        <p className='text-sm leading-6 text-ui-muted'>Hanasand keeps the evidence, relationships, and decisions around a security event together—so analysts spend less time assembling context and more time responding.</p>
                     </div>
                     <div className='grid gap-4 md:grid-cols-2'>
                         {platformItems.map((item) => {
@@ -163,8 +164,8 @@ export default function SolutionsPage() {
             <section className='border-t border-ui-border bg-ui-panel'>
                 <div className='mx-auto grid max-w-7xl gap-4 px-4 py-10 md:px-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-center'>
                     <div>
-                        <p className='text-sm font-semibold uppercase text-ui-muted'>Also available</p>
-                        <h2 className='mt-2 text-2xl font-semibold text-ui-text'>Utilities stay separate from the monitoring buyer journey.</h2>
+                        <p className='text-sm font-semibold uppercase text-ui-muted'>Additional tools</p>
+                        <h2 className='mt-2 text-2xl font-semibold text-ui-text'>Verify exposure and investigate services when you need to.</h2>
                     </div>
                     <div className='grid gap-4 md:grid-cols-2'>
                         {utilitySolutions.map((solution) => {
@@ -180,7 +181,7 @@ export default function SolutionsPage() {
                                     <h3 className='text-lg font-semibold text-ui-text'>{solution.title}</h3>
                                     <p className='text-sm leading-6 text-ui-muted'>{solution.detail}</p>
                                     <span className='inline-flex items-center gap-2 text-sm font-semibold text-ui-primary'>
-                                        Open utility
+                                        Explore {solution.title}
                                         <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
                                     </span>
                                 </Link>
