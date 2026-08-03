@@ -49,8 +49,8 @@ export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
             INSERT INTO mill_events (
                 id, ingestion_id, organization_id, source_vendor, source_product, event_timestamp,
                 event_type, action, outcome, user_id, user_email, source_ip, source_country,
-                source_city, device_id, normalized, original, processing_status
-            ) VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'processed')
+                source_city, device_id, normalized, original, parser_version, processing_status
+            ) VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'mill.v1', 'processed')
         `, [
             eventId, ingestionId, key.organizationId, normalized.sourceVendor, normalized.sourceProduct,
             normalized.timestamp, normalized.eventType, normalized.action, normalized.outcome,
@@ -73,7 +73,7 @@ export async function getMillEvents(req: FastifyRequest, res: FastifyReply) {
     const result = await run(`
         SELECT id, ingestion_id, source_vendor, source_product, event_timestamp, received_at,
                event_type, action, outcome, user_id, user_email, source_ip, source_country,
-               source_city, device_id, normalized, original, processing_status
+               source_city, device_id, normalized, original, parser_version, processing_status
         FROM mill_events
         WHERE organization_id = $1
         ORDER BY event_timestamp DESC, received_at DESC

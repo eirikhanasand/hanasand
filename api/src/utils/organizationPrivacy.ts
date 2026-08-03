@@ -269,6 +269,20 @@ function publicCandidates(retentionRun: RetentionRun, input: { heldAlertIds: str
                AND NOT (delivery.alert_id = ANY($5::text[]))
                AND (delivery.payload <> '{}'::jsonb OR delivery.response_body IS NOT NULL OR delivery.error IS NOT NULL
                     OR delivery.endpoint_hint <> '' OR delivery.watchlist_name IS NOT NULL OR delivery.route IS NOT NULL OR delivery.case_path IS NOT NULL)
+            UNION ALL
+            SELECT 'mill_event', event.id, 'delete',
+                   CASE WHEN $2::boolean THEN 'organization_privacy_deletion' ELSE 'organization_retention_expired' END,
+                   event.event_timestamp
+              FROM mill_events event
+             WHERE event.organization_id = $1
+               AND ($2::boolean OR event.event_timestamp <= $3)
+            UNION ALL
+            SELECT 'mill_finding', finding.id, 'delete',
+                   CASE WHEN $2::boolean THEN 'organization_privacy_deletion' ELSE 'organization_retention_expired' END,
+                   finding.last_observed
+              FROM mill_findings finding
+             WHERE finding.organization_id = $1
+               AND ($2::boolean OR finding.last_observed <= $3)
         )
         SELECT candidate.record_type, candidate.record_id, candidate.action, candidate.reason
           FROM candidates candidate
@@ -311,6 +325,14 @@ async function mutateAndRecordPublicCandidate(retentionRun: RetentionRun, candid
              WHERE org_id = $1 AND id = $2 AND NOT (alert_id = ANY($3::text[]))
              RETURNING id
         `, [...params, input.heldAlertIds], retentionRun, item)
+        return
+    }
+    if (candidate.record_type === 'mill_event') {
+        await mutateAndRecord('DELETE FROM mill_events WHERE organization_id = $1 AND id = $2 RETURNING id', params, retentionRun, item)
+        return
+    }
+    if (candidate.record_type === 'mill_finding') {
+        await mutateAndRecord('DELETE FROM mill_findings WHERE organization_id = $1 AND id = $2 RETURNING id', params, retentionRun, item)
         return
     }
     throw new Error(`Unsupported organization retention record type: ${candidate.record_type}`)

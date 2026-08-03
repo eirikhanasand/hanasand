@@ -1157,10 +1157,12 @@ export default async function ensureSchema() {
             device_id TEXT,
             normalized JSONB NOT NULL DEFAULT '{}'::jsonb,
             original JSONB NOT NULL DEFAULT '{}'::jsonb,
+            parser_version TEXT NOT NULL DEFAULT 'mill.v1',
             processing_status TEXT NOT NULL DEFAULT 'processed',
             UNIQUE (organization_id, ingestion_id, id)
         )
     `)
+    await run('ALTER TABLE mill_events ADD COLUMN IF NOT EXISTS parser_version TEXT NOT NULL DEFAULT \'mill.v1\'')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_org_time ON mill_events(organization_id, event_timestamp DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_org_user_time ON mill_events(organization_id, user_id, event_timestamp DESC)')
     await run(`
