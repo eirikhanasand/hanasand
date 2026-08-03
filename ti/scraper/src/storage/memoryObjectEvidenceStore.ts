@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { createHash } from "node:crypto";
 import type { ObjectStoreRef } from "../types.ts";
 import { nowIso, stableId } from "../utils.ts";

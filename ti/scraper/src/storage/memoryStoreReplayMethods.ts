@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { nowIso, stableId } from "../utils.ts";
 import { replayDiff } from "./memoryStoreHelpers.ts";
 

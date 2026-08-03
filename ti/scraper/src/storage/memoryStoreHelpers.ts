@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { CaptureDedupeKey, CaptureReplayJob, DiscoveryPromotion, EvidenceDelta, EvidenceDeltaKind, LiveSearchSnapshot, PipelineResult, RawCapture } from "../types.ts";
 import { hashContent, normalizeWhitespace, stableId } from "../utils.ts";
 

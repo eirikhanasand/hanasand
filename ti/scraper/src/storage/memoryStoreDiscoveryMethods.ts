@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { stableId } from "../utils.ts";
 import { deltaForSnapshot, evidenceCursor, evidenceMetadata, readPromotionMetadata } from "./memoryStoreHelpers.ts";
 
