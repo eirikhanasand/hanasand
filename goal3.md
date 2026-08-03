@@ -137,6 +137,8 @@ Remaining proof is an authenticated fresh-tenant run using real watchlists, evid
 
 Current read-only production check (2026-08-03T01:20Z) confirms the five Hanasand research-monitor tenants are present and scheduled: Coop, TINE, Norsk Tipping, mnemonic, and NTNU each have 20 active watchlist terms and one configured destination. Their collection plans were updated during the current scheduler cycle, but they currently have zero source-backed alerts; each has only one or two older acceptance delivery rows. This is evidence that scheduling exists, not completion of the fresh-tenant alert and receiver proof.
 
+The evaluation endpoint was rechecked after the production scraper restart on 2026-08-03: the test split returns a 128,565-byte JSON response in 7.05 seconds with `quality.status=diagnostic_only`, `evaluatedUnitCount=0`, and no independent metrics. A request-scoped cache for repeated capture/source/reference lookups was deployed in scraper commit `550217b6`; the scraper is healthy with PostgreSQL storage and `pendingWrites=0`. This improves availability without promoting diagnostic labels; independent evaluation remains open.
+
 ### 9. The Public API Is Narrow And Contract-Inconsistent
 
 - Public OpenAPI exposes only `/ti/search` and `/ti/search/batch`.
