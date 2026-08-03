@@ -1,4 +1,4 @@
-import { acceptedEvaluationLabelSet } from "../api/evaluationBenchmarkRoutes.ts";
+import { acceptedEvaluationLabelSet, createEvaluationLookup } from "../api/evaluationBenchmarkRoutes.ts";
 import type {
   CaptureMetadataStore,
   EvaluationAdjudicationRecord,
@@ -97,11 +97,12 @@ export function buildEvaluationMetrics(store: CaptureMetadataStore, input: { ten
   const benchmarkTasks = new Map<string, EvaluationTaskRecord>(completedBenchmarks.flatMap((benchmark) => (benchmark.manifest ?? []).map((task) => [`${benchmark.id}\u0000${task.id}`, task] as [string, EvaluationTaskRecord])));
   const groupedAdjudications = recordsByTask(adjudications.filter((adjudication) => adjudication.benchmarkId && completedBenchmarkIds.has(adjudication.benchmarkId)));
   const groupedLabels = recordsByTask(allLabelEvents.filter((label) => label.benchmarkId && completedBenchmarkIds.has(label.benchmarkId)));
+  const evaluationLookup = createEvaluationLookup();
   const independentLabels = [...benchmarkTasks].flatMap(([key, task]) => {
     const benchmark = completedBenchmarkById.get(key.slice(0, key.indexOf("\u0000")));
     const taskLabels = groupedLabels.get(key) ?? [];
     const taskAdjudications = groupedAdjudications.get(key) ?? [];
-    return benchmark && acceptedEvaluationLabelSet(store, benchmark, task, taskAdjudications, taskLabels) ? taskLabels : [];
+    return benchmark && acceptedEvaluationLabelSet(store, benchmark, task, taskAdjudications, taskLabels, evaluationLookup) ? taskLabels : [];
   });
   const diagnosticLabels = labels.filter((label) => !independentLabels.includes(label));
   const rows = independentLabels.map((label) => labelRow(label, subjects, captureById, sourceById));

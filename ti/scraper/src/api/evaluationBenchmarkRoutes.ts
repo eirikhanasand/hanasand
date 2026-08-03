@@ -132,6 +132,24 @@ type AutomaticEvaluationCycleOptions = {
   onCycle?: (result: AutomaticEvaluationCycleResult) => void;
   onError?: (error: unknown) => void;
 };
+type EvaluationLookup = {
+  captures: Map<string, RawCapture | undefined>;
+  sources: Map<string, SourceRecord | undefined>;
+  validations: Map<string, EvaluationValidationRecord | undefined>;
+  annotations: Map<string, EvaluationAnnotationRecord | undefined>;
+};
+export function createEvaluationLookup(): EvaluationLookup {
+  return { captures: new Map(), sources: new Map(), validations: new Map(), annotations: new Map() };
+}
+function lookupRecord<T>(cache: Map<string, T | undefined>, id: string | undefined, load: () => T | undefined) {
+  if (!id) return undefined;
+  if (!cache.has(id)) cache.set(id, load());
+  return cache.get(id);
+}
+function lookupCapture(store: CaptureMetadataStore, lookup: EvaluationLookup, id: string | undefined) { return lookupRecord(lookup.captures, id, () => store.getCapture?.(id!)); }
+function lookupSource(store: CaptureMetadataStore, lookup: EvaluationLookup, id: string | undefined) { return lookupRecord(lookup.sources, id, () => store.getSource?.(id!)); }
+function lookupValidation(store: CaptureMetadataStore, lookup: EvaluationLookup, id: string | undefined) { return lookupRecord(lookup.validations, id, () => store.getValidationRecord?.(id!)); }
+function lookupAnnotation(store: CaptureMetadataStore, lookup: EvaluationLookup, id: string | undefined) { return lookupRecord(lookup.annotations, id, () => store.getEvaluationAnnotation?.(id!)); }
 type EvaluationSubjectRecord = EvaluationStoreRecord & {
   captureId?: string;
   captureIds?: string[];
@@ -624,8 +642,8 @@ export function evaluationLabelsForAdjudication(_store: CaptureMetadataStore, be
   });
 }
 
-export function acceptedEvaluationLabelSet(store: CaptureMetadataStore, benchmark: EvaluationBenchmarkRecord, task: EvaluationTaskRecord, adjudications: EvaluationAdjudicationRecord[], labels: EvaluationLabelRecord[]) {
-  if (adjudications.length !== 1 || !acceptedEvaluationAdjudication(store, benchmark, task, adjudications[0])) return false;
+export function acceptedEvaluationLabelSet(store: CaptureMetadataStore, benchmark: EvaluationBenchmarkRecord, task: EvaluationTaskRecord, adjudications: EvaluationAdjudicationRecord[], labels: EvaluationLabelRecord[], lookup = createEvaluationLookup()) {
+  if (adjudications.length !== 1 || !acceptedEvaluationAdjudication(store, benchmark, task, adjudications[0], lookup)) return false;
   const expected = evaluationLabelsForAdjudication(store, benchmark, task, adjudications[0]);
   if (labels.length !== expected.length || new Set(labels.map((label) => label.id)).size !== labels.length) return false;
   const actualById = new Map(labels.map((label) => [label.id, label]));
@@ -672,7 +690,7 @@ function benchmarkSummary(store: CaptureMetadataStore, benchmark: EvaluationBenc
   const annotationsByTask = rowsByTask(annotations);
   const adjudicationsByTask = rowsByTask(adjudications);
   const labelsByTask = rowsByTask(store.listEvaluationLabels().filter((row) => row.benchmarkId === benchmark.id));
-  const acceptedTaskIds = independentlyAcceptedTaskIds(store, benchmark, labelsByTask, adjudicationsByTask);
+  const acceptedTaskIds = independentlyAcceptedTaskIds(store, benchmark, labelsByTask, adjudicationsByTask, createEvaluationLookup());
   const acceptedAnnotations = annotations.filter((row) => acceptedTaskIds.has(row.taskId));
   const acceptedAdjudications = adjudications.filter((row) => acceptedTaskIds.has(row.taskId));
   const compared = tasks.filter((task) => acceptedTaskIds.has(task.id)).map((task) => (annotationsByTask.get(task.id) ?? []).slice(0, benchmark.requiredReviewers)).filter((rows) => rows.length === benchmark.requiredReviewers);
@@ -1686,17 +1704,17 @@ function authoritativeTaskValues(task: EvaluationTaskRecord): string[] | undefin
 function searchableEvidence(value: unknown) {
   return typeof value === "string" ? value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim() : "";
 }
-export function acceptedEvaluationAdjudication(store: CaptureMetadataStore, benchmark: EvaluationBenchmarkRecord, task: EvaluationTaskRecord, adjudication: EvaluationAdjudicationRecord) {
+export function acceptedEvaluationAdjudication(store: CaptureMetadataStore, benchmark: EvaluationBenchmarkRecord, task: EvaluationTaskRecord, adjudication: EvaluationAdjudicationRecord, lookup = createEvaluationLookup()) {
   if (benchmark.protocol?.version !== BENCHMARK_PROTOCOL_VERSION) return false;
   if (!task.captureId) return false;
-  const capture = store.getCapture?.(task.captureId);
+  const capture = lookupCapture(store, lookup, task.captureId);
   const evidence = exhaustiveEvidenceText(capture);
-  if (!capture || !evidence || !taskEvidenceMatches(task, capture, evidence) || !taskReferenceEvidenceMatches(store, task) || task.independenceContext?.governedEvidenceComplete !== true || task.independenceContext?.authoritativeReferenceSetComplete !== true) return false;
+  if (!capture || !evidence || !taskEvidenceMatches(task, capture, evidence) || !taskReferenceEvidenceMatches(store, task, lookup) || task.independenceContext?.governedEvidenceComplete !== true || task.independenceContext?.authoritativeReferenceSetComplete !== true) return false;
   if (!Array.isArray(adjudication.expectedValues) || !expectedValuesGrounded(task, adjudication.expectedValues, evidence, true)) return false;
   if (adjudication.reviewKind !== "automatic_model_adjudication") return adjudication.independenceAttested === true;
   if (!validAutomaticIndependence(adjudication.independenceContext ?? task.independenceContext)) return false;
   const annotationIds = Array.isArray(adjudication.annotationIds) ? adjudication.annotationIds : [];
-  const annotations = annotationIds.map((id) => store.getEvaluationAnnotation(id)).filter((row): row is EvaluationAnnotationRecord => Boolean(row));
+  const annotations = annotationIds.map((id) => lookupAnnotation(store, lookup, id)).filter((row): row is EvaluationAnnotationRecord => Boolean(row));
   const requiredReviewers = Math.max(2, Number(benchmark.requiredReviewers ?? 2));
   if (annotations.length !== annotationIds.length
     || annotations.length < requiredReviewers
@@ -1771,16 +1789,16 @@ function rowsByTask<T extends { taskId?: string }>(rows: T[]) {
   for (const row of rows) if (row.taskId) grouped.set(row.taskId, [...(grouped.get(row.taskId) ?? []), row]);
   return grouped;
 }
-function independentlyAcceptedTaskIds(store: CaptureMetadataStore, benchmark: EvaluationBenchmark, labelsByTask: Map<string, EvaluationLabelRecord[]>, adjudicationsByTask: Map<string, EvaluationAdjudication[]>) {
+function independentlyAcceptedTaskIds(store: CaptureMetadataStore, benchmark: EvaluationBenchmark, labelsByTask: Map<string, EvaluationLabelRecord[]>, adjudicationsByTask: Map<string, EvaluationAdjudication[]>, lookup = createEvaluationLookup()) {
   const accepted = new Set<string>();
   if (benchmark.protocol?.version !== BENCHMARK_PROTOCOL_VERSION) return accepted;
   for (const task of benchmarkTasks(benchmark)) {
     const labels = labelsByTask.get(task.id) ?? [];
     const adjudications = adjudicationsByTask.get(task.id) ?? [];
-    if (!labels.length || adjudications.length !== 1 || task.independenceContext?.governedEvidenceComplete !== true || !authoritativeTaskValues(task) || !taskReferenceEvidenceMatches(store, task)) continue;
+    if (!labels.length || adjudications.length !== 1 || task.independenceContext?.governedEvidenceComplete !== true || !authoritativeTaskValues(task) || !taskReferenceEvidenceMatches(store, task, lookup)) continue;
     const adjudication = adjudications[0];
     if (expectedValuesMatchAuthoritativeSet(task, adjudication.expectedValues)
-      && acceptedEvaluationLabelSet(store, benchmark, task, adjudications, labels)) accepted.add(task.id);
+      && acceptedEvaluationLabelSet(store, benchmark, task, adjudications, labels, lookup)) accepted.add(task.id);
   }
   return accepted;
 }
@@ -2043,15 +2061,15 @@ function truthSnapshotHash(capture: RawCapture, evidence: string, truth: Authori
   }));
 }
 
-function taskReferenceEvidenceMatches(store: CaptureMetadataStore, task: EvaluationTaskRecord) {
+function taskReferenceEvidenceMatches(store: CaptureMetadataStore, task: EvaluationTaskRecord, lookup = createEvaluationLookup()) {
   const values = authoritativeTaskValues(task);
   const context = task.independenceContext;
   const reference = task.referenceEvidence?.find((row) => row.kind === "independent_authoritative_reference");
-  const validation = context?.truthReferenceValidationId && store.getValidationRecord(context.truthReferenceValidationId);
-  const target = task.captureId && store.getCapture(task.captureId);
-  const referenceCapture = context?.truthReferenceCaptureId && store.getCapture(context.truthReferenceCaptureId);
-  const targetSource = target && store.getSource(target.sourceId);
-  const referenceSource = referenceCapture && store.getSource(referenceCapture.sourceId);
+  const validation = lookupValidation(store, lookup, context?.truthReferenceValidationId);
+  const target = lookupCapture(store, lookup, task.captureId);
+  const referenceCapture = lookupCapture(store, lookup, context?.truthReferenceCaptureId);
+  const targetSource = target && lookupSource(store, lookup, target.sourceId);
+  const referenceSource = referenceCapture && lookupSource(store, lookup, referenceCapture.sourceId);
   const targetEvidence = exhaustiveEvidenceText(target);
   const referenceEvidence = exhaustiveEvidenceText(referenceCapture);
   if (!values
