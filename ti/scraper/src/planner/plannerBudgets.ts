@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const BUDGETS = {
   interactive_live_search: [10, 3, 192_000, 30_000, 45_000],
   interactive_search: [12, 4, 256_000, 60_000, 90_000],

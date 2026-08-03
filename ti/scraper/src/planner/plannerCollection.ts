@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { iso, profile } from "./plannerBudgets.ts";
@@ -10,8 +9,8 @@ export function createCollectionPlan(input, sources, frontier = new FocusedFront
   const createdAt = input.createdAt ?? nowIso(), budget = profile(input);
   const request = { id: input.id ?? stableId("intel", `${input.entityType}:${input.query}:${createdAt}`), tenantId: input.tenantId, query: input.query, entityType: input.entityType, includeClearWeb: input.includeClearWeb ?? true, includeTelegram: input.includeTelegram ?? true, includeDarknetMetadata: input.includeDarknetMetadata ?? budget.includeDarknetMetadata ?? false, maxTasks: Math.min(input.maxTasks ?? budget.maxTasks, budget.maxTasks), createdAt, requesterId: input.requesterId, priority: input.priority ?? "normal", reason: input.reason, budgetClass: budget.class };
   const deadlineAt = iso(createdAt, budget.deadlineMs), backgroundAvailableAt = budget.backgroundDelayMs ? iso(createdAt, budget.backgroundDelayMs) : undefined;
-  const queryTerms = expandQueryTerms(request.query, request.entityType, input.actorIdentities);
-  const tasks: any[] = [], reviewRequired: any[] = [], rejected: any[] = [], explanations: any[] = [], seen = new Set();
+  const queryTerms: string[] = expandQueryTerms(request.query, request.entityType, input.actorIdentities);
+  const tasks: any[] = [], reviewRequired: any[] = [], rejected: any[] = [], explanations: any[] = [], seen = new Set<string>();
   for (const source of rankedSources(sources, queryTerms, createdAt)) {
     const scoped = sourceMatchesScope(source, request, queryTerms), allowed = allowedSource(source);
     if (!scoped || !allowed.ok) { handleBlocked(source, request, tasks, reviewRequired, rejected, explanations, queryTerms, createdAt, deadlineAt, budget, scoped, allowed); continue; }

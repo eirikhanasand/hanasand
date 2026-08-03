@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { clampScore, stableId } from "../utils.ts";
 import { sourceFreshness, target } from "./plannerSources.ts";
 

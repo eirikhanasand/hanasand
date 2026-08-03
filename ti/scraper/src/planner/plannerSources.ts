@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { clampScore } from "../utils.ts";
 
 export function allowedSource(source) {
@@ -16,7 +15,7 @@ export function sourceAvailableAt(source, at) {
   return [source.crawlState?.backoffUntil, source.crawlState?.nextEligibleAt].filter((value) => value && Date.parse(value) > Date.parse(at)).sort().at(-1);
 }
 
-export function sourceMatchesScope(source, request, terms = []) {
+export function sourceMatchesScope(source, request, terms: string[] = []) {
   const queryTerm = source.metadata?.queryTerm;
   if (queryTerm && terms.length && !terms.some((term) => normalized(term) === normalized(queryTerm))) return false;
   return source.type === "telegram_public" ? request.includeTelegram : source.type?.endsWith("_metadata") ? request.includeDarknetMetadata : request.includeClearWeb;

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { resolveMitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
 
 export function expandQueryTerms(query, entityType, actorIdentities) {
