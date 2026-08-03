@@ -3,6 +3,21 @@ import { collectionSchedulerStatus } from "../api/collectionSchedulerStatus.ts";
 import { handleApiRequest } from "../api/server.ts";
 
 describe("collection scheduler control", () => {
+  test("bounds the default production scheduler status page", async () => {
+    const calls: any[] = [];
+    const options = optionsWithCanaryLoop();
+    options.store = {
+      querySourceOperationalPage: async (input: any) => {
+        calls.push(input);
+        return { rows: [], totals: { sourceCount: 0, activeSourceCount: 0, operationalMetricsMeasured: false }, total: 0 };
+      }
+    };
+
+    await collectionSchedulerStatus(options as any);
+
+    expect(calls[0]).toMatchObject({ limit: 1, offset: undefined });
+  });
+
   test("returns actionable scheduler blockers controls and per-source health", async () => {
     const options = optionsWithCanaryLoop({ enabled: true, runOnce: async () => {} });
     options.store.listSources = () => [
