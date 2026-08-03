@@ -14,7 +14,7 @@ The route is intentionally a single JSON endpoint. Customer organizations use th
 
 ## Implementation status
 
-The initial ingestion and analyst slice is deployed. The next completion slice adds analyst filtering, persisted decision notes and assignment, audit events, and organization-workspace visibility for the existing API key used by Mill. Keep this section current as the goal is delivered in slices; the acceptance criteria below remain the source of truth.
+The deployed slices now cover JSON ingestion through `https://api.hanasand.com/mill`, existing organization API-key creation/revocation, field-level timestamp validation, tenant-scoped analyst review with status/severity/source/user filters, persisted notes and assignment, and audit events. The remaining completion work is broader detection/rule coverage and production-quality evidence/rule management. Keep this section current as the goal is delivered in slices; the acceptance criteria below remain the source of truth.
 
 ## First implementation slice
 
