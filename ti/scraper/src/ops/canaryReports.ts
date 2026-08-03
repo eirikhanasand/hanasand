@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { nowIso } from "../utils.ts";
 import type {
   CanaryOperatorSummary,

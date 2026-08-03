@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { createHash } from "node:crypto";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.ts";
@@ -27,7 +26,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const productivity = reconcilePublicSourceProductivity({ ...options, now: generatedAt });
   const activation = options.activateSources ? activatePublicCanarySources({ ...options, now: generatedAt }) : { activated: [], alreadyActive: [], rejected: [] };
   const maxSources = Math.max(1, options.maxSources ?? 10), maxTasks = Math.max(1, options.maxTasks ?? 5), maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
-  const selectedSourceIds = new Set(options.sourceIds ?? []);
+  const selectedSourceIds = new Set<string>(options.sourceIds ?? []);
   const supersededTaskCount = supersedeCoveredQueuedTasks(options, generatedAt, selectedSourceIds);
   const queuedTasks = options.frontier.snapshot().map(frontierTask).filter((task: any) => taskInScope(options, task, selectedSourceIds));
   const leasedTasks = options.frontier.leasedSnapshot().filter((task: any) => taskInScope(options, task, selectedSourceIds));
