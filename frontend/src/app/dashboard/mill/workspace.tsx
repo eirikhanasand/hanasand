@@ -8,6 +8,7 @@ type Organization = { id: string, name?: string, slug?: string }
 type Finding = { id: string, rule_id: string, severity: string, status: string, summary: string, evidence: Record<string, unknown>, event_ids: string[], first_observed: string, last_observed: string, analyst_note?: string }
 type Event = { id: string, event_timestamp: string, event_type: string, action: string, outcome: string, user_id?: string, user_email?: string, source_ip?: string, source_country?: string, source_city?: string, source_vendor: string, source_product: string, original: Record<string, unknown> }
 type Member = { userId: string, name?: string, email?: string, role?: string, status?: string }
+type MillRule = { id: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[] }
 
 export default function MillWorkspace() {
     const [organizations, setOrganizations] = useState<Organization[]>([])
@@ -15,6 +16,7 @@ export default function MillWorkspace() {
     const [findings, setFindings] = useState<Finding[]>([])
     const [events, setEvents] = useState<Event[]>([])
     const [members, setMembers] = useState<Member[]>([])
+    const [rules, setRules] = useState<MillRule[]>([])
     const [selectedId, setSelectedId] = useState('')
     const [statusFilter, setStatusFilter] = useState('all')
     const [severityFilter, setSeverityFilter] = useState('all')
@@ -41,15 +43,17 @@ export default function MillWorkspace() {
     async function loadMill(id: string) {
         try {
             setError('')
-            const [findingPayload, eventPayload, memberPayload] = await Promise.all([
+            const [findingPayload, eventPayload, memberPayload, rulePayload] = await Promise.all([
                 requestJson<{ findings?: Finding[] }>(`/api/mill/findings?organizationId=${encodeURIComponent(id)}`),
                 requestJson<{ events?: Event[] }>(`/api/mill/events?organizationId=${encodeURIComponent(id)}&limit=80`),
                 requestJson<{ members?: Member[] }>(`/api/organizations/${encodeURIComponent(id)}/members`),
+                requestJson<{ rules?: MillRule[] }>(`/api/mill/rules?organizationId=${encodeURIComponent(id)}`),
             ])
             setFindings(findingPayload.findings || [])
             setEvents(eventPayload.events || [])
             setMembers((memberPayload.members || []).filter(member => member.status !== 'removed'))
-        } catch (cause) { setError(errorMessage(cause)); setFindings([]); setEvents([]) }
+            setRules(rulePayload.rules || [])
+        } catch (cause) { setError(errorMessage(cause)); setFindings([]); setEvents([]); setRules([]) }
     }
 
     async function updateFinding(nextStatus: string) {
@@ -71,6 +75,7 @@ export default function MillWorkspace() {
             && (userFilter === 'all' || related.some(event => (event.user_email || event.user_id) === userFilter))
     })
     const relatedEvents = selected ? events.filter(event => selected.event_ids?.includes(event.id)) : []
+    const selectedRule = selected ? rules.find(rule => rule.id === selected.rule_id) : undefined
     const openCount = findings.filter(finding => !['resolved', 'benign', 'suppressed'].includes(finding.status)).length
 
     return (
@@ -84,6 +89,7 @@ export default function MillWorkspace() {
                 <Metric label='Detection rules' value={String(new Set(findings.map(finding => finding.rule_id)).size)} icon={<FileSearch className='h-4 w-4' />} />
             </section>
             <div className='grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)]'>
+                {selected && <DashboardPanel className='overflow-hidden p-0'><div className='border-b border-ui-border bg-ui-raised p-4'><h2 className='font-semibold'>Rule explanation</h2><p className='mt-1 text-sm font-semibold text-ui-text'>{selectedRule?.name || selected.rule_id}</p><p className='mt-1 text-sm text-ui-muted'>{selectedRule?.explanation || 'Rule metadata is unavailable for this finding.'}</p>{selectedRule?.evidence.length ? <p className='mt-2 text-xs text-ui-muted'>Evidence expected: {selectedRule.evidence.join(', ')}.</p> : null}</div></DashboardPanel>}
                 <DashboardPanel className='overflow-hidden p-0'>
                     <div className='grid gap-3 border-b border-ui-border bg-ui-raised p-4'><div><h2 className='font-semibold'>Findings queue</h2><p className='mt-1 text-sm text-ui-muted'>Prioritized by severity and recent activity.</p></div><div className='flex flex-wrap gap-2'><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)} className='h-9 rounded-md border border-ui-border bg-ui-panel px-2 text-xs text-ui-text' aria-label='Filter by status'><option value='all'>All statuses</option><option value='new'>New</option><option value='investigating'>Investigating</option><option value='benign'>Benign</option><option value='resolved'>Resolved</option><option value='suppressed'>Suppressed</option></select><select value={severityFilter} onChange={event => setSeverityFilter(event.target.value)} className='h-9 rounded-md border border-ui-border bg-ui-panel px-2 text-xs text-ui-text' aria-label='Filter by severity'><option value='all'>All severities</option><option value='critical'>Critical</option><option value='high'>High</option><option value='medium'>Medium</option><option value='low'>Low</option></select><select value={sourceFilter} onChange={event => setSourceFilter(event.target.value)} className='h-9 max-w-full rounded-md border border-ui-border bg-ui-panel px-2 text-xs text-ui-text' aria-label='Filter by source'><option value='all'>All sources</option>{sourceOptions.map(source => <option key={source} value={source}>{source}</option>)}</select><select value={userFilter} onChange={event => setUserFilter(event.target.value)} className='h-9 max-w-full rounded-md border border-ui-border bg-ui-panel px-2 text-xs text-ui-text' aria-label='Filter by user'><option value='all'>All users</option>{userOptions.map(user => <option key={user} value={user}>{user}</option>)}</select></div></div>
                     <div className='divide-y divide-ui-border'>

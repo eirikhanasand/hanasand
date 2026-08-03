@@ -7,6 +7,15 @@ import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
 
 type MillEvent = Record<string, unknown>
 type MillBody = { source?: Record<string, unknown>, events?: unknown }
+type MillRule = { id: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[] }
+
+export const MILL_RULES: MillRule[] = [
+    { id: 'auth.brute_force_success.v1', version: '1', name: 'Brute-force success', family: 'Authentication', severity: 'high', explanation: 'A successful login followed multiple failed logins for the same user within 15 minutes.', evidence: ['failed event IDs', 'successful event ID', 'time window'] },
+    { id: 'auth.password_spray.v1', version: '1', name: 'Password spray', family: 'Authentication', severity: 'high', explanation: 'One source IP produced failed logins for multiple users within 15 minutes.', evidence: ['source IP', 'target user IDs', 'failed event IDs', 'time window'] },
+    { id: 'auth.impossible_travel.v1', version: '1', name: 'Impossible travel', family: 'Authentication', severity: 'high', explanation: 'Successful logins for one user occurred more than 500 km apart within 12 hours, with coordinates present in both events.', evidence: ['coordinates', 'distance', 'elapsed time', 'related event IDs'] },
+    { id: 'auth.new_country.v1', version: '1', name: 'New country', family: 'Authentication', severity: 'medium', explanation: 'A successful login came from a country not seen in the user’s recent successful login history.', evidence: ['current country', 'previous country', 'related event IDs'] },
+    { id: 'auth.new_device.v1', version: '1', name: 'New device', family: 'Authentication', severity: 'medium', explanation: 'A successful login used a device identifier not seen in the user’s recent successful login history.', evidence: ['current device', 'previous device', 'related event IDs'] },
+]
 
 export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
     const secret = bearer(req)
@@ -69,6 +78,14 @@ export async function getMillEvents(req: FastifyRequest, res: FastifyReply) {
         LIMIT $2
     `, [access.organizationId, limit])
     return res.send({ organizationId: access.organizationId, events: result.rows })
+}
+
+export async function getMillRules(req: FastifyRequest, res: FastifyReply) {
+    const access = await organizationAccess(req, res)
+    if (!access) return
+    const query = req.query as { organizationId?: string }
+    if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
+    return res.send({ organizationId: access.organizationId, rules: MILL_RULES })
 }
 
 export async function getMillFindings(req: FastifyRequest, res: FastifyReply) {
@@ -152,6 +169,21 @@ async function createMillFindings(organizationId: string, eventId: string, event
         LIMIT 30
     `, [organizationId, event.userId, eventId])
     const rows = previous.rows as Array<{ id: string, event_timestamp: string, outcome: string, source_country: string | null, normalized: MillEvent }>
+    if (event.outcome === 'failure' && event.sourceIp) {
+        const spray = await run(`
+            SELECT id, user_id, event_timestamp
+            FROM mill_events
+            WHERE organization_id = $1 AND source_ip = $2 AND outcome = 'failure' AND id <> $3
+              AND event_timestamp BETWEEN ($4::timestamptz - INTERVAL '15 minutes') AND $4::timestamptz
+            ORDER BY event_timestamp DESC
+            LIMIT 100
+        `, [organizationId, event.sourceIp, eventId, event.timestamp])
+        const sprayRows = spray.rows as Array<{ id: string, user_id: string | null }>
+        const targetUsers = Array.from(new Set([event.userId, ...sprayRows.map(row => row.user_id)].filter(Boolean)))
+        if (targetUsers.length >= 3) {
+            await insertFinding(organizationId, 'auth.password_spray.v1', 'high', 'Failed logins for multiple users from one source', [eventId, ...sprayRows.slice(0, 10).map(row => row.id)], { sourceIp: event.sourceIp, userIds: targetUsers, failedEventIds: [eventId, ...sprayRows.slice(0, 10).map(row => row.id)], windowMinutes: 15 })
+        }
+    }
     const failures = rows.filter(row => {
         const elapsed = Date.parse(event.timestamp) - Date.parse(row.event_timestamp)
         return row.outcome === 'failure' && elapsed >= 0 && elapsed <= 15 * 60_000
@@ -163,6 +195,11 @@ async function createMillFindings(organizationId: string, eventId: string, event
     const priorSuccess = rows.find(row => row.outcome === 'success' && row.source_country && event.sourceCountry && row.source_country !== event.sourceCountry)
     if (priorSuccess) {
         await insertFinding(organizationId, 'auth.new_country.v1', 'medium', `Login from new country: ${event.sourceCountry}`, [eventId, priorSuccess.id], { currentCountry: event.sourceCountry, previousCountry: priorSuccess.source_country })
+    }
+    const currentDevice = event.deviceId
+    const priorDevice = currentDevice && rows.find(row => row.outcome === 'success' && deviceIdFor(row.normalized) && deviceIdFor(row.normalized) !== currentDevice)
+    if (priorDevice) {
+        await insertFinding(organizationId, 'auth.new_device.v1', 'medium', 'Successful login from a new device', [eventId, priorDevice.id], { currentDevice, previousDevice: deviceIdFor(priorDevice.normalized) })
     }
     const coordinates = coordinatesFor(event.normalized)
     const priorCoordinates = rows.map(row => ({ row, coordinates: coordinatesFor(row.normalized) })).find(item => item.row.outcome === 'success' && item.coordinates && coordinates)
@@ -235,6 +272,7 @@ export function validateMillEventFields(events: MillEvent[]) {
 
 function object(value: unknown): MillEvent { return value && typeof value === 'object' && !Array.isArray(value) ? value as MillEvent : {} }
 function stringValue(value: unknown): string | null { return typeof value === 'string' && value.trim() ? value.trim() : null }
+function deviceIdFor(event: MillEvent) { return stringValue(object(event.device).id || event.device_id) }
 function bearer(req: FastifyRequest) {
     const apiKey = req.headers['x-api-key']
     if (typeof apiKey === 'string' && apiKey.trim()) return apiKey.trim()
