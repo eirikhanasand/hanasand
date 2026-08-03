@@ -82,6 +82,33 @@ export async function getMillEvents(req: FastifyRequest, res: FastifyReply) {
     return res.send({ organizationId: access.organizationId, events: result.rows })
 }
 
+export async function postMillEventAction(req: FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string }, Body: { action?: unknown } }>, res: FastifyReply) {
+    const access = await organizationAccess(req, res)
+    if (!access) return
+    if (req.body?.action !== 'replay') return res.status(400).send({ error: 'Action must be replay.' })
+    const result = await run(`
+        SELECT id, event_timestamp, event_type, action, outcome, user_id, user_email,
+               source_ip, source_country, source_city, device_id, source_vendor, source_product,
+               normalized, original
+        FROM mill_events
+        WHERE id = $1 AND organization_id = $2
+    `, [req.params.id, access.organizationId])
+    const row = result.rows[0]
+    if (!row) return res.status(404).send({ error: 'Mill event not found.' })
+    const event: NormalizedEvent = {
+        timestamp: new Date(row.event_timestamp).toISOString(),
+        eventType: String(row.event_type), action: String(row.action), outcome: String(row.outcome),
+        userId: row.user_id ? String(row.user_id) : null, userEmail: row.user_email ? String(row.user_email) : null,
+        sourceIp: row.source_ip ? String(row.source_ip) : null, sourceCountry: row.source_country ? String(row.source_country) : null,
+        sourceCity: row.source_city ? String(row.source_city) : null, deviceId: row.device_id ? String(row.device_id) : null,
+        sourceVendor: String(row.source_vendor), sourceProduct: String(row.source_product),
+        normalized: object(row.normalized), original: object(row.original),
+    }
+    await createMillFindings(access.organizationId, String(row.id), event, await loadConfiguredMillRules(access.organizationId))
+    await recordAdminAuditEvent(req, { actionType: 'mill.event.replayed', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_event', targetId: req.params.id, context: { eventType: event.eventType } })
+    return res.send({ replayed: true, eventId: req.params.id })
+}
+
 export async function getMillRules(req: FastifyRequest, res: FastifyReply) {
     const access = await organizationAccess(req, res)
     if (!access) return
