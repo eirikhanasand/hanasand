@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { RawCapture, StixBundle, StixExportOptions, StixObject } from "../types.ts";
 import { sanitizeDwmCustomerText } from "../product/dwmCustomerDisplay.ts";
 import { indicatorPattern, stixConfidence, stixId } from "./stixIds.ts";
