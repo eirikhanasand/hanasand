@@ -1846,7 +1846,7 @@ function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, has
                 : undefined,
     })
     if (alertId) actions.push({ href: `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}&organizationId=${encodeURIComponent(organizationId)}`, icon: <CircleAlert className='h-4 w-4' />, label: 'Open DWM alert' })
-    actions.push({ href: `/dashboard/mill?organizationId=${encodeURIComponent(organizationId)}`, icon: <ShieldCheck className='h-4 w-4' />, label: hasMillKey ? 'Open Mill' : 'Open Mill · key needed' })
+    actions.push({ href: `/dashboard/mill?organizationId=${encodeURIComponent(organizationId)}`, icon: <ShieldCheck className='h-4 w-4' />, label: hasMillKey ? 'Open Security Monitoring' : 'Open Security Monitoring · key needed' })
     if (hasDestination || hasWatchlists) actions.push({ href: '#audit', icon: <CheckCircle2 className='h-4 w-4' />, label: 'Audit' })
     const nextStep = !canManage
         ? 'Owner or admin access unlocks setup actions.'
@@ -1855,7 +1855,7 @@ function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, has
             : !hasDestination
                 ? 'Test and save a delivery destination.'
                 : !hasMillKey
-                    ? 'Create an organization API key before sending logs to Mill.'
+                    ? 'Create an organization API key before sending logs to Security Monitoring.'
                     : alertId
                         ? ''
                         : 'Reviewed alerts will appear after a watchlist match.'
@@ -2035,7 +2035,7 @@ function MillApiKeyPanel({ apiKeys, secret, canManage, busy, rowMessage, onCreat
     return (
         <details id='mill-api-key' open className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-mill-api-key>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                <SectionTitle icon={<KeyRound className='h-4 w-4' />} title='Mill ingestion access' detail='One organization API key for sending JSON logs to Hanasand.' />
+                <SectionTitle icon={<KeyRound className='h-4 w-4' />} title='Security Monitoring access' detail='One organization API key for sending JSON logs to Hanasand Security Monitoring.' />
                 <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>{activeKey ? 'Configured' : 'Setup required'}</span>
             </summary>
             <div className='grid gap-3 border-t border-ui-border p-4 dark:border-ui-border'>

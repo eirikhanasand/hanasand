@@ -9,6 +9,7 @@ type Finding = { id: string, rule_id: string, severity: string, status: string, 
 type Event = { id: string, event_timestamp: string, event_type: string, action: string, outcome: string, user_id?: string, user_email?: string, source_ip?: string, source_country?: string, source_city?: string, source_vendor: string, source_product: string, original: Record<string, unknown> }
 type Member = { userId: string, name?: string, email?: string, role?: string, status?: string }
 type MillRule = { id: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { conditions?: Array<{ path: string, operator: string, value: string }> } }
+type MillUsage = { events_24h?: number, events_30d?: number, findings_30d?: number, active_rules?: number }
 
 export default function MillWorkspace() {
     const [organizations, setOrganizations] = useState<Organization[]>([])
@@ -17,6 +18,7 @@ export default function MillWorkspace() {
     const [events, setEvents] = useState<Event[]>([])
     const [members, setMembers] = useState<Member[]>([])
     const [rules, setRules] = useState<MillRule[]>([])
+    const [usage, setUsage] = useState<MillUsage>({})
     const [ruleName, setRuleName] = useState('')
     const [ruleExplanation, setRuleExplanation] = useState('')
     const [ruleSeverity, setRuleSeverity] = useState('medium')
@@ -27,6 +29,10 @@ export default function MillWorkspace() {
     const [packVersion, setPackVersion] = useState('')
     const [packReference, setPackReference] = useState('')
     const [packJson, setPackJson] = useState('{"rules":[{"id":"example-login","name":"Example login rule","description":"Example imported rule for review.","level":"medium","conditions":[{"path":"event_type","operator":"equals","value":"authentication"}]}]}')
+    const [sigmaPackName, setSigmaPackName] = useState('')
+    const [sigmaPackVersion, setSigmaPackVersion] = useState('')
+    const [sigmaPackReference, setSigmaPackReference] = useState('')
+    const [sigmaYaml, setSigmaYaml] = useState('title: Suspicious authentication event\nstatus: experimental\nlogsource:\n  product: identity\ndetection:\n  selection:\n    event_type: authentication\n    outcome: failure\n  condition: selection\nlevel: high\n')
     const [selectedId, setSelectedId] = useState('')
     const [statusFilter, setStatusFilter] = useState('all')
     const [severityFilter, setSeverityFilter] = useState('all')
@@ -53,16 +59,18 @@ export default function MillWorkspace() {
     async function loadMill(id: string) {
         try {
             setError('')
-            const [findingPayload, eventPayload, memberPayload, rulePayload] = await Promise.all([
+            const [findingPayload, eventPayload, memberPayload, rulePayload, usagePayload] = await Promise.all([
                 requestJson<{ findings?: Finding[] }>(`/api/mill/findings?organizationId=${encodeURIComponent(id)}`),
                 requestJson<{ events?: Event[] }>(`/api/mill/events?organizationId=${encodeURIComponent(id)}&limit=80`),
                 requestJson<{ members?: Member[] }>(`/api/organizations/${encodeURIComponent(id)}/members`),
                 requestJson<{ rules?: MillRule[] }>(`/api/mill/rules?organizationId=${encodeURIComponent(id)}`),
+                requestJson<{ metering?: MillUsage }>(`/api/mill/usage?organizationId=${encodeURIComponent(id)}`),
             ])
             setFindings(findingPayload.findings || [])
             setEvents(eventPayload.events || [])
             setMembers((memberPayload.members || []).filter(member => member.status !== 'removed'))
             setRules(rulePayload.rules || [])
+            setUsage(usagePayload.metering || {})
         } catch (cause) { setError(errorMessage(cause)); setFindings([]); setEvents([]); setRules([]) }
     }
 
@@ -113,6 +121,16 @@ export default function MillWorkspace() {
         } catch (cause) { setError(cause instanceof SyntaxError ? 'Signature pack JSON is invalid.' : errorMessage(cause)) }
     }
 
+    async function importSigmaPack() {
+        if (!organizationId) return
+        try {
+            await requestJson(`/api/mill/rules/sigma?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ packName: sigmaPackName, packVersion: sigmaPackVersion, sourceReference: sigmaPackReference, yaml: sigmaYaml }) })
+            setStatus('Sigma rules imported and enabled for new events.')
+            setSigmaPackName(''); setSigmaPackVersion(''); setSigmaPackReference('')
+            await loadMill(organizationId)
+        } catch (cause) { setError(errorMessage(cause)) }
+    }
+
     const sourceOptions = Array.from(new Set(events.map(event => `${event.source_vendor}/${event.source_product}`).filter(Boolean))).sort()
     const userOptions = Array.from(new Set(events.map(event => event.user_email || event.user_id || '').filter(Boolean))).sort()
     const visibleFindings = findings.filter(finding => {
@@ -131,13 +149,14 @@ export default function MillWorkspace() {
 
     return (
         <DashboardPage>
-            <DashboardHeader eyebrow='Managed detection' title='Mill' description='Review suspicious activity from customer log events.' actions={<select value={organizationId} onChange={event => setOrganizationId(event.target.value)} className='h-10 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text' aria-label='Organization'>{organizations.map(org => <option key={org.id} value={org.id}>{org.name || org.slug || org.id}</option>)}</select>} />
+            <DashboardHeader eyebrow='Managed detection' title='Security Monitoring' description='Review suspicious activity from customer security logs.' actions={<select value={organizationId} onChange={event => setOrganizationId(event.target.value)} className='h-10 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text' aria-label='Organization'>{organizations.map(org => <option key={org.id} value={org.id}>{org.name || org.slug || org.id}</option>)}</select>} />
             {error && <div role='alert' className='rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-200'>{error}</div>}
             {status && <div className='rounded-lg border border-ui-primary/40 bg-ui-primary/10 p-3 text-sm text-ui-text'>{status}</div>}
-            <section className='grid gap-3 sm:grid-cols-3'>
+            <section className='grid gap-3 sm:grid-cols-4'>
                 <Metric label='Open findings' value={String(openCount)} icon={<ShieldAlert className='h-4 w-4' />} />
                 <Metric label='Events received' value={String(events.length)} icon={<Radio className='h-4 w-4' />} />
                 <Metric label='Detection rules' value={String(new Set(findings.map(finding => finding.rule_id)).size)} icon={<FileSearch className='h-4 w-4' />} />
+                <Metric label='30-day processed' value={String(usage.events_30d || 0)} icon={<Radio className='h-4 w-4' />} />
             </section>
             <DashboardPanel className='grid gap-4' data-mill-rules='true'>
                 <div><h2 className='font-semibold'>Detection rules</h2><p className='mt-1 text-sm text-ui-muted'>Built-in rules can be tuned per organization. Custom rules match normalized JSON fields on new events.</p></div>
@@ -152,10 +171,17 @@ export default function MillWorkspace() {
                 </form>
                 <form className='grid gap-2 rounded-lg border border-dashed border-ui-border p-3' onSubmit={event => { event.preventDefault(); void importRulePack() }}>
                     <p className='text-sm font-semibold'>Import open-source signature pack</p>
-                    <p className='text-xs text-ui-muted'>Use the bounded Mill JSON shape; raw Sigma YAML and executable rule code are not accepted at this boundary.</p>
+                    <p className='text-xs text-ui-muted'>Use the bounded JSON shape for vendor packs. Sigma YAML has its own importer below and is compiled into auditable field rules.</p>
                     <div className='grid gap-2 md:grid-cols-3'><input value={packName} onChange={event => setPackName(event.target.value)} placeholder='Pack name' aria-label='Pack name' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><input value={packVersion} onChange={event => setPackVersion(event.target.value)} placeholder='Version' aria-label='Pack version' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><input value={packReference} onChange={event => setPackReference(event.target.value)} placeholder='https://source.example/rules' aria-label='Pack source reference' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /></div>
                     <textarea value={packJson} onChange={event => setPackJson(event.target.value)} aria-label='Pack JSON' className='min-h-32 rounded-md border border-ui-border bg-ui-canvas p-2 font-mono text-xs text-ui-text' />
                     <button type='submit' className='h-9 justify-self-start rounded-md bg-ui-text px-3 text-xs font-semibold text-ui-canvas disabled:opacity-50' disabled={!canManageRules || !packName.trim() || !packVersion.trim() || !packReference.trim()}>Import pack</button>
+                </form>
+                <form className='grid gap-2 rounded-lg border border-dashed border-ui-border p-3' onSubmit={event => { event.preventDefault(); void importSigmaPack() }}>
+                    <p className='text-sm font-semibold'>Import Sigma YAML</p>
+                    <p className='text-xs text-ui-muted'>Supports common selection, OR, and 1-of selection forms. Rules are bounded to normalized JSON fields; executable transforms are never run.</p>
+                    <div className='grid gap-2 md:grid-cols-3'><input value={sigmaPackName} onChange={event => setSigmaPackName(event.target.value)} placeholder='Sigma pack name' aria-label='Sigma pack name' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><input value={sigmaPackVersion} onChange={event => setSigmaPackVersion(event.target.value)} placeholder='Version' aria-label='Sigma pack version' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><input value={sigmaPackReference} onChange={event => setSigmaPackReference(event.target.value)} placeholder='https://github.com/.../rule.yml' aria-label='Sigma pack source reference' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /></div>
+                    <textarea value={sigmaYaml} onChange={event => setSigmaYaml(event.target.value)} aria-label='Sigma YAML' className='min-h-48 rounded-md border border-ui-border bg-ui-canvas p-2 font-mono text-xs text-ui-text' />
+                    <button type='submit' className='h-9 justify-self-start rounded-md bg-ui-text px-3 text-xs font-semibold text-ui-canvas disabled:opacity-50' disabled={!canManageRules || !sigmaPackName.trim() || !sigmaPackVersion.trim() || !sigmaPackReference.trim() || !sigmaYaml.trim()}>Import Sigma</button>
                 </form>
             </DashboardPanel>
             <div className='grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)]'>

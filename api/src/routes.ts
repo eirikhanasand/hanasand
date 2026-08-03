@@ -212,7 +212,7 @@ import { getBrowserRunReport, getBrowserRuns, postBrowserRunReport } from './han
 import { getCommercialContactRequests, postCommercialContactRequest } from './handlers/commercialContactRequests.ts'
 import { getOrganizationPrivacy, postOrganizationPrivacy } from './handlers/organizationPrivacy.ts'
 import { getAptUpdates } from './handlers/aptUpdates.ts'
-import { getMillEvents, getMillFindings, getMillRules, ingestMill, postMillEventAction, postMillFindingAction, postMillRule, postMillRuleAction, postMillRulePack } from './handlers/mill.ts'
+import { getMillEvents, getMillFindings, getMillRules, getMillUsage, ingestMill, postMillEventAction, postMillFindingAction, postMillRule, postMillRuleAction, postMillRulePack, postMillSigmaPack } from './handlers/mill.ts'
 
 /**
  * Defines the routes available in the API.
@@ -557,8 +557,10 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/mill/events/:id/actions', postMillEventAction)
     fastify.get('/mill/findings', getMillFindings)
     fastify.get('/mill/rules', getMillRules)
+    fastify.get('/mill/usage', getMillUsage)
     fastify.post('/mill/rules', postMillRule)
     fastify.post('/mill/rules/packs', postMillRulePack)
+    fastify.post('/mill/rules/sigma', postMillSigmaPack)
     fastify.post('/mill/rules/:id/actions', postMillRuleAction)
     fastify.post('/mill/findings/:id/actions', postMillFindingAction)
 }

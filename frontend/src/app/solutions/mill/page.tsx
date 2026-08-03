@@ -4,8 +4,8 @@ import { ArrowRight, FileSearch, Radio, ShieldAlert } from 'lucide-react'
 import { buildRouteMetadata } from '../../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
-    title: 'Mill log monitoring',
-    description: 'Send JSON security events to Hanasand Mill for suspicious-login detection and analyst review.',
+    title: 'Security Monitoring',
+    description: 'Managed security monitoring for JSON security events, suspicious-login detection, and analyst review.',
     path: '/solutions/mill',
     keywords: ['MDR log monitoring', 'suspicious login detection', 'impossible travel', 'JSON security events'],
 })
@@ -16,11 +16,11 @@ export default function MillSolutionPage() {
             <section className='border-b border-ui-border bg-ui-panel'>
                 <div className='mx-auto grid max-w-7xl gap-8 px-4 py-16 md:px-8 md:py-24'>
                     <div className='grid max-w-4xl gap-5'>
-                        <p className='text-sm font-semibold uppercase text-ui-primary'>Mill · managed detection</p>
+                        <p className='text-sm font-semibold uppercase text-ui-primary'>Security Monitoring · managed detection</p>
                         <h1 className='text-4xl font-semibold md:text-6xl'>Turn security logs into findings your team can investigate.</h1>
-                        <p className='max-w-3xl text-lg leading-8 text-ui-muted'>Send JSON events to one Hanasand endpoint. Mill preserves the event context, checks authentication behavior, and gives analysts evidence for suspicious logins and impossible travel.</p>
+                        <p className='max-w-3xl text-lg leading-8 text-ui-muted'>Send JSON events to one Hanasand endpoint. Security Monitoring preserves event context, checks authentication behavior, and gives analysts evidence for suspicious logins, impossible travel, and other threats. Mill is the API service that processes the feed.</p>
                         <div className='flex flex-wrap gap-3'>
-                            <Link href='/dashboard/mill' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas'>Open Mill workspace <ArrowRight className='h-4 w-4' /></Link>
+                            <Link href='/dashboard/mill' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas'>Open Security Monitoring <ArrowRight className='h-4 w-4' /></Link>
                             <Link href='/developers' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text'>View API docs</Link>
                         </div>
                     </div>
@@ -37,9 +37,9 @@ export default function MillSolutionPage() {
                     <pre className='mt-4 overflow-auto rounded-lg border border-ui-border bg-ui-canvas p-4 text-xs leading-6 text-ui-muted'>{'POST https://api.hanasand.com/mill\nAuthorization: Bearer hsk_<organization-key>\nContent-Type: application/json\n\n{\n  "events": [{\n    "timestamp": "2026-08-03T08:15:00Z",\n    "event_type": "authentication",\n    "action": "login",\n    "outcome": "success",\n    "user": {"id": "user-123"},\n    "source": {"ip": "203.0.113.10", "country": "NO"}\n  }]\n}'}</pre>
                 </div>
                 <div className='grid content-start gap-4 rounded-lg border border-ui-border bg-ui-panel p-5'>
-                    <p className='text-sm font-semibold uppercase text-ui-primary'>First release scope</p>
+                    <p className='text-sm font-semibold uppercase text-ui-primary'>Security Monitoring scope</p>
                     <h2 className='text-2xl font-semibold'>A working MDR starting point, not a generic log dump.</h2>
-                    <p className='text-sm leading-6 text-ui-muted'>Mill is built on the existing Hanasand organization, API-key, tenant, and analyst workflows. Vendor adapters and broader rule families can feed the same event model later without creating a second portal.</p>
+                    <p className='text-sm leading-6 text-ui-muted'>Security Monitoring is built on the existing Hanasand organization, API-key, tenant, and analyst workflows. The Mill ingestion service keeps one stable endpoint while vendor adapters and broader rule families feed the same event model.</p>
                     <ul className='grid gap-3 text-sm text-ui-text'><li>• Suspicious login findings</li><li>• Impossible-travel evidence</li><li>• Tenant-scoped raw and normalized events</li><li>• Extensible path for Sigma and Hanasand rules</li></ul>
                 </div>
             </section>

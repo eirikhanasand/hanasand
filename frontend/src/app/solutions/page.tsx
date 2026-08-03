@@ -12,9 +12,9 @@ export const metadata: Metadata = buildRouteMetadata({
 
 const primarySolutions = [
     {
-        title: 'Mill',
+        title: 'Security Monitoring',
         eyebrow: 'MDR log monitoring',
-        detail: 'Send JSON security events to one endpoint and review suspicious logins, impossible travel, and detection evidence in the Hanasand analyst workspace.',
+        detail: 'Send JSON security events to one endpoint and review suspicious logins, impossible travel, and detection evidence in the Hanasand analyst workspace. Mill is the ingestion service behind it.',
         href: '/solutions/mill',
         icon: AlertTriangle,
         points: ['Single JSON ingestion endpoint', 'Tenant-scoped event and finding review', 'Open rule path for Sigma and Hanasand detections'],

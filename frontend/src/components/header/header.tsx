@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation'
 import ShareIcon from '@/components/menu/shareIcon'
 import ThemeSwitch from '@/components/theme/themeSwitch'
-import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, Gauge, LockKeyhole, MenuIcon, Network, Radar, Search, ShieldCheck, X } from 'lucide-react'
+import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, Gauge, LockKeyhole, MenuIcon, Network, Radar, Search, ShieldAlert, ShieldCheck, X } from 'lucide-react'
 import Login from '@/components/login/login'
 import Logout from '@/components/logout/logout'
 import Dashboard from '@/components/dashboard/dashboard'
@@ -27,6 +27,7 @@ const productItems = [
 const solutionItems = [
     { title: 'All Solutions', detail: 'Company exposure monitoring, API delivery, and review workflows.', href: '/solutions', icon: ShieldCheck },
     { title: 'Dark Web Monitoring', detail: 'Company and vendor alerts from watched exposure sources.', href: '/dwm', icon: BellRing },
+    { title: 'Security Monitoring', detail: 'Managed detection from customer security logs, suspicious logins, and analyst evidence.', href: '/solutions/mill', icon: ShieldAlert },
     { title: 'Threat Search', detail: 'Open the public intelligence workspace for companies and groups.', href: '/ti', icon: Radar },
     { title: 'Browser', detail: 'Regular and Tor browser runs with isolated capture, profiles, and queueing.', href: '/browser', icon: Network },
 ]

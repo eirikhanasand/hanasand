@@ -1,8 +1,8 @@
-# Hanasand Mill — implementation goal
+# Hanasand Security Monitoring — implementation goal
 
 ## Product decision
 
-Build Hanasand Mill as the log-monitoring and MDR workflow inside the existing Hanasand product. The public ingestion address is:
+Build Hanasand Security Monitoring as the log-monitoring and MDR workflow inside the existing Hanasand product. “Security Monitoring” is the customer-facing product name; Mill is the stable API/service name. The public ingestion address is:
 
 ```text
 https://api.hanasand.com/mill
@@ -10,11 +10,11 @@ https://api.hanasand.com/mill
 
 The route is intentionally a single JSON endpoint. Customer organizations use the existing Hanasand organization API-key flow; the key identifies the tenant and the ingestion scope. The authenticated analyst experience stays inside the existing Hanasand dashboard and organization model.
 
-“Mill” is the working product name because it describes raw events being processed into useful findings. It does not require a separate product identity or a second tenant system.
+The product is discoverable from the Solutions dropdown, solution catalog, site search, organization workspace, and dashboard navigation. It does not require a separate product identity or a second tenant system.
 
 ## Implementation status
 
-The deployed slices now cover JSON ingestion through `https://api.hanasand.com/mill`, existing organization API-key creation/revocation, field-level timestamp validation, tenant-scoped analyst review with status/severity/source/user filters, persisted notes and assignment, audit events, a tenant-scoped rule catalog with explanations, writable built-in overrides, owned JSON conditions, evidence-backed password-spray and new-device detections, versioned open-source-style signature-pack provenance with validated JSON import, an explicit chronological evidence timeline, parser-version persistence, Mill participation in organization retention/privacy deletion runs, and tenant-scoped analyst replay of stored events through the current rule set. The generic vendor/product source envelope and preserved original JSON provide the future Azure/Defender adapter seam without adding those collectors now. This goal's required product slice is complete; full upstream Sigma ingestion, external collectors, packet Snort/Suricata inspection, CVE exploit attribution without asset context, billing, and large-scale streaming remain deliberately deferred as documented below. Keep this section current as the goal is delivered in slices; the acceptance criteria below remain the source of truth.
+The deployed slices cover JSON ingestion through `https://api.hanasand.com/mill`, existing organization API-key creation/revocation, tenant-scoped analyst review, persisted decisions and audit events, built-in and owned rules, JSON and Sigma YAML imports with provenance, Azure/Entra and Defender normalization, Suricata/Snort EVE-compatible network signature records, asset-aware CVE findings, evidence replay, parser-version persistence, retention/privacy deletion, usage metering, and bounded concurrent batches up to 5,000 events. The customer-facing workflow is Security Monitoring; Mill remains the transport contract. Keep this section current as the goal is delivered in slices; the acceptance criteria below remain the source of truth.
 
 ## First implementation slice
 
@@ -32,7 +32,7 @@ The first slice must be real and usable:
 7. Let an analyst inspect evidence and move a finding through review states.
 8. Reuse existing organization membership, API-key, role, audit, API, database, and visual patterns.
 
-This slice does not implement Azure, Defender, external collectors, packet inspection, or a large third-party rule catalog. The schema and normalized event shape must leave room for those adapters later.
+Vendor integrations are accepted through the same JSON endpoint using a source envelope and adapters; no separate vendor credential collectors are required for this first end-to-end provider. Packet capture is outside the JSON contract, while compatible EVE/Snort/Suricata alert records are analyzed immediately.
 
 ## API contract
 
@@ -71,6 +71,8 @@ Authenticated routes should be tenant-scoped through the selected organization:
 - `GET /mill/events?organizationId=...`
 - `GET /mill/findings?organizationId=...`
 - `POST /mill/findings/:id/actions`
+- `GET /mill/usage?organizationId=...`
+- `POST /mill/rules/sigma?organizationId=...`
 
 These routes must use the existing session and organization membership checks. A user must never see another organization’s events or findings.
 
@@ -136,7 +138,7 @@ The event and finding model must support later additions for:
 - Snort/Suricata-compatible network records when the source provides compatible fields;
 - future Azure, Defender, and other vendor adapters.
 
-Snort signatures are not applied blindly to arbitrary JSON. They need network metadata or a source adapter that can provide equivalent fields.
+Snort/Suricata signatures are not applied blindly to arbitrary JSON. EVE-compatible alert records are normalized when network metadata and a signature are present; packet-level inspection is intentionally outside this JSON service.
 
 ## Mill analyst workflow
 
@@ -180,12 +182,11 @@ The organization page should link to Mill and show whether the organization has 
 - Existing organization, API-key, DWM, TI, and internal service-log behavior remains intact.
 - The UI uses existing Hanasand layout tokens, controls, themes, and navigation patterns.
 
-## Deliberately deferred
+## Scope boundaries
 
-- Separate collectors for Azure or Defender.
-- Packet-level Snort/Suricata inspection.
-- Full Sigma repository ingestion.
-- CVE exploit attribution without asset context.
-- Customer-facing billing and packaging.
-- Large-scale streaming infrastructure.
-- A separate tenant, identity, or permissions system.
+- Azure/Entra and Defender records are supported as JSON adapters; separate credential-based collectors are a later integration surface.
+- Sigma import is intentionally bounded to auditable field selections and common `selection`, `or`, and `1 of selection*` conditions. Unsupported executable transforms and packet-only semantics are rejected.
+- CVE findings require a CVE plus asset identity and version. A CVE without asset context is retained as an event but does not become a prioritized finding.
+- Security Monitoring has a product plan identifier and tenant usage metering. Payment collection, invoices, and checkout remain a commercial integration task.
+- Ingestion uses bounded concurrent batches and durable PostgreSQL event storage. A distributed streaming bus is a scale-out task beyond this product slice.
+- The separate tenant, identity, and permissions system remains out of scope; existing Hanasand organization membership and API-key scope remain authoritative.

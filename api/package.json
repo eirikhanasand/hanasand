@@ -68,7 +68,8 @@
     "nodemailer": "^8.0.5",
     "openapi-fetch": "^0.17.0",
     "pg": "^8.20.0",
-    "ws": "^8.20.0"
+    "ws": "^8.20.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

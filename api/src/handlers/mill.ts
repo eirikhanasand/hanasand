@@ -4,6 +4,7 @@ import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { matchApiKeyScope, validateApiKey } from '#utils/auth/apiKeys.ts'
 import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
+import { parse as parseYaml } from 'yaml'
 
 type MillEvent = Record<string, unknown>
 type MillBody = { source?: Record<string, unknown>, events?: unknown }
@@ -16,6 +17,8 @@ export const MILL_RULES: MillRule[] = [
     { id: 'auth.impossible_travel.v1', version: '1', name: 'Impossible travel', family: 'Authentication', severity: 'high', explanation: 'Successful logins for one user occurred more than 500 km apart within 12 hours, with coordinates present in both events.', evidence: ['coordinates', 'distance', 'elapsed time', 'related event IDs'] },
     { id: 'auth.new_country.v1', version: '1', name: 'New country', family: 'Authentication', severity: 'medium', explanation: 'A successful login came from a country not seen in the user’s recent successful login history.', evidence: ['current country', 'previous country', 'related event IDs'] },
     { id: 'auth.new_device.v1', version: '1', name: 'New device', family: 'Authentication', severity: 'medium', explanation: 'A successful login used a device identifier not seen in the user’s recent successful login history.', evidence: ['current device', 'previous device', 'related event IDs'] },
+    { id: 'network.signature_alert.v1', version: '1', name: 'Network signature alert', family: 'Network Detection', severity: 'high', explanation: 'A network telemetry record reported a matched signature with protocol and flow context.', evidence: ['signature ID or name', 'source and destination', 'protocol', 'event ID'] },
+    { id: 'vulnerability.cve_asset_context.v1', version: '1', name: 'CVE on identified asset', family: 'Vulnerability', severity: 'high', explanation: 'A vulnerability event linked a CVE to an identified asset and version, giving analysts context for prioritization.', evidence: ['CVE', 'asset ID or hostname', 'asset version', 'event ID'] },
 ]
 
 export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
@@ -30,8 +33,8 @@ export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
     if (!events.length || events.some(event => !event || typeof event !== 'object' || Array.isArray(event))) {
         return res.status(400).send({ error: { code: 'invalid_mill_payload', message: 'Send one JSON event or an events array containing JSON objects.' } })
     }
-    if (events.length > 500) {
-        return res.status(413).send({ error: { code: 'mill_batch_too_large', message: 'Mill accepts at most 500 events per request.' } })
+    if (events.length > 5000) {
+        return res.status(413).send({ error: { code: 'mill_batch_too_large', message: 'Mill accepts at most 5,000 events per request.' } })
     }
     const invalidFields = validateMillEventFields(events as MillEvent[])
     if (invalidFields.length) {
@@ -42,23 +45,24 @@ export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
     const ingestionId = `mill_${randomUUID()}`
     const configuredRules = await loadConfiguredMillRules(key.organizationId)
     const accepted: string[] = []
-    for (const event of events as MillEvent[]) {
-        const normalized = normalizeEvent(event, source)
-        const eventId = randomUUID()
-        await run(`
+    const normalizedEvents = (events as MillEvent[]).map(event => ({ normalized: normalizeMillEvent(event, source), eventId: randomUUID() }))
+    for (let offset = 0; offset < normalizedEvents.length; offset += 50) {
+        await Promise.all(normalizedEvents.slice(offset, offset + 50).map(async ({ normalized, eventId }) => {
+            await run(`
             INSERT INTO mill_events (
                 id, ingestion_id, organization_id, source_vendor, source_product, event_timestamp,
                 event_type, action, outcome, user_id, user_email, source_ip, source_country,
                 source_city, device_id, normalized, original, parser_version, processing_status
-            ) VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'mill.v1', 'processed')
-        `, [
-            eventId, ingestionId, key.organizationId, normalized.sourceVendor, normalized.sourceProduct,
-            normalized.timestamp, normalized.eventType, normalized.action, normalized.outcome,
-            normalized.userId, normalized.userEmail, normalized.sourceIp, normalized.sourceCountry,
-            normalized.sourceCity, normalized.deviceId, JSON.stringify(normalized.normalized), JSON.stringify(normalized.original),
-        ])
-        accepted.push(eventId)
-        await createMillFindings(key.organizationId, eventId, normalized, configuredRules)
+            ) VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'processed')
+            `, [
+                eventId, ingestionId, key.organizationId, normalized.sourceVendor, normalized.sourceProduct,
+                normalized.timestamp, normalized.eventType, normalized.action, normalized.outcome,
+                normalized.userId, normalized.userEmail, normalized.sourceIp, normalized.sourceCountry,
+                normalized.sourceCity, normalized.deviceId, JSON.stringify(normalized.normalized), JSON.stringify(normalized.original), normalized.parserVersion,
+            ])
+            accepted.push(eventId)
+            await createMillFindings(key.organizationId!, eventId, normalized, configuredRules)
+        }))
     }
 
     return res.status(202).send({ accepted: true, ingestion_id: ingestionId, accepted_events: accepted.length, rejected_events: 0 })
@@ -89,7 +93,7 @@ export async function postMillEventAction(req: FastifyRequest<{ Params: { id: st
     const result = await run(`
         SELECT id, event_timestamp, event_type, action, outcome, user_id, user_email,
                source_ip, source_country, source_city, device_id, source_vendor, source_product,
-               normalized, original
+               normalized, original, parser_version
         FROM mill_events
         WHERE id = $1 AND organization_id = $2
     `, [req.params.id, access.organizationId])
@@ -101,7 +105,7 @@ export async function postMillEventAction(req: FastifyRequest<{ Params: { id: st
         userId: row.user_id ? String(row.user_id) : null, userEmail: row.user_email ? String(row.user_email) : null,
         sourceIp: row.source_ip ? String(row.source_ip) : null, sourceCountry: row.source_country ? String(row.source_country) : null,
         sourceCity: row.source_city ? String(row.source_city) : null, deviceId: row.device_id ? String(row.device_id) : null,
-        sourceVendor: String(row.source_vendor), sourceProduct: String(row.source_product),
+        sourceVendor: String(row.source_vendor), sourceProduct: String(row.source_product), parserVersion: String(row.parser_version || 'mill.v1'),
         normalized: object(row.normalized), original: object(row.original),
     }
     await createMillFindings(access.organizationId, String(row.id), event, await loadConfiguredMillRules(access.organizationId))
@@ -115,6 +119,21 @@ export async function getMillRules(req: FastifyRequest, res: FastifyReply) {
     const query = req.query as { organizationId?: string }
     if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
     return res.send({ organizationId: access.organizationId, rules: await loadConfiguredMillRules(access.organizationId) })
+}
+
+export async function getMillUsage(req: FastifyRequest, res: FastifyReply) {
+    const access = await organizationAccess(req, res)
+    if (!access) return
+    const query = req.query as { organizationId?: string }
+    if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
+    const result = await run(`
+        SELECT
+            (SELECT COUNT(*) FROM mill_events WHERE organization_id = $1 AND received_at >= NOW() - INTERVAL '24 hours')::int AS events_24h,
+            (SELECT COUNT(*) FROM mill_events WHERE organization_id = $1 AND received_at >= NOW() - INTERVAL '30 days')::int AS events_30d,
+            (SELECT COUNT(*) FROM mill_findings WHERE organization_id = $1 AND created_at >= NOW() - INTERVAL '30 days')::int AS findings_30d,
+            (SELECT COUNT(*) FROM mill_rules WHERE organization_id = $1 AND enabled = TRUE)::int AS active_rules
+    `, [access.organizationId])
+    return res.send({ organizationId: access.organizationId, plan: 'security-monitoring', metering: result.rows[0] })
 }
 
 export async function postMillRule(req: FastifyRequest, res: FastifyReply) {
@@ -174,6 +193,37 @@ export async function postMillRulePack(req: FastifyRequest, res: FastifyReply) {
     }
     await recordAdminAuditEvent(req, { actionType: 'mill.rule_pack.imported', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule_pack', targetId: `${packSlug}@${packVersion}`, context: { packName, packVersion, sourceReference, ruleCount: prepared.length } })
     return res.status(201).send({ imported: prepared.length, pack: { name: packName, version: packVersion, sourceReference } })
+}
+
+export async function postMillSigmaPack(req: FastifyRequest, res: FastifyReply) {
+    const access = await organizationAccess(req, res)
+    if (!access) return
+    if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Owner or admin access is required to import Sigma rules.' })
+    const body = req.body as { packName?: unknown, packVersion?: unknown, sourceReference?: unknown, yaml?: unknown } | undefined
+    const packName = typeof body?.packName === 'string' ? body.packName.trim() : ''
+    const packVersion = typeof body?.packVersion === 'string' ? body.packVersion.trim() : ''
+    const sourceReference = typeof body?.sourceReference === 'string' ? body.sourceReference.trim() : ''
+    if (packName.length < 2 || packName.length > 100 || packVersion.length < 1 || packVersion.length > 40) return res.status(400).send({ error: 'Pack name must contain 2-100 characters and version 1-40 characters.' })
+    let reference: URL
+    try { reference = new URL(sourceReference) } catch { return res.status(400).send({ error: 'Sigma source reference must be an HTTPS URL of at most 300 characters.' }) }
+    if (reference.protocol !== 'https:' || !reference.hostname || sourceReference.length > 300) return res.status(400).send({ error: 'Sigma source reference must be an HTTPS URL of at most 300 characters.' })
+    if (typeof body?.yaml !== 'string' || body.yaml.length > 200_000) return res.status(400).send({ error: 'Provide one Sigma YAML document up to 200,000 characters.' })
+    let document: unknown
+    try { document = parseYaml(body.yaml) } catch (error) { return res.status(400).send({ error: 'Sigma YAML is invalid.', detail: error instanceof Error ? error.message.slice(0, 300) : 'Unable to parse YAML.' }) }
+    const compiled = compileSigmaDocument(document)
+    if ('error' in compiled) return res.status(400).send({ error: compiled.error })
+    const packSlug = packName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
+    if (!packSlug) return res.status(400).send({ error: 'Pack name must contain letters or numbers.' })
+    for (const rule of compiled.rules) {
+        const ruleId = `sigma.${packSlug}.${rule.id}.v1`
+        await run(`
+            INSERT INTO mill_rules (id, organization_id, rule_id, version, name, family, severity, explanation, definition, source, source_reference, enabled, created_by)
+            VALUES ($1, $2, $3, '1', $4, 'Sigma', $5, $6, $7, 'open_source', $8, TRUE, $9)
+            ON CONFLICT (organization_id, rule_id) DO UPDATE SET name = EXCLUDED.name, severity = EXCLUDED.severity, explanation = EXCLUDED.explanation, definition = EXCLUDED.definition, source = EXCLUDED.source, source_reference = EXCLUDED.source_reference, updated_at = NOW()
+        `, [randomUUID(), access.organizationId, ruleId, rule.name, rule.severity, rule.explanation, JSON.stringify({ match: 'all', conditions: rule.conditions }), sourceReference, access.userId])
+    }
+    await recordAdminAuditEvent(req, { actionType: 'mill.sigma_pack.imported', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_sigma_pack', targetId: `${packSlug}@${packVersion}`, context: { packName, packVersion, sourceReference, ruleCount: compiled.rules.length } })
+    return res.status(201).send({ imported: compiled.rules.length, pack: { name: packName, version: packVersion, sourceReference } })
 }
 
 export async function postMillRuleAction(req: FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string }, Body: { action?: unknown } }>, res: FastifyReply) {
@@ -302,6 +352,17 @@ async function createMillFindings(organizationId: string, eventId: string, event
             await insertFinding(organizationId, rule.id, rule.severity, rule.name, [eventId], { ruleId: rule.id, matchedConditions: rule.definition.conditions, eventId })
         }
     }
+    if (enabled.has('network.signature_alert.v1') && event.eventType === 'network' && (event.action === 'alert' || stringValue(event.normalized.signature_id) || stringValue(event.normalized.signature))) {
+        await insertFinding(organizationId, 'network.signature_alert.v1', 'high', `Network signature matched: ${stringValue(event.normalized.signature) || stringValue(event.normalized.signature_id) || 'unlabelled signature'}`, [eventId], { signatureId: stringValue(event.normalized.signature_id), signature: stringValue(event.normalized.signature), protocol: stringValue(object(event.normalized.protocol).name || event.normalized.proto || object(event.normalized.flow).proto), sourceIp: event.sourceIp, destinationIp: stringValue(event.normalized.dest_ip || event.normalized.destip), eventId })
+    }
+    const vulnerability = object(event.normalized.vulnerability)
+    const asset = object(event.normalized.asset)
+    const cve = stringValue(event.normalized.cve || event.normalized.cve_id || vulnerability.cve || vulnerability.cve_id)
+    const assetId = stringValue(asset.id || asset.asset_id || asset.hostname || event.normalized.asset_id || event.normalized.hostname)
+    const assetVersion = stringValue(asset.version || asset.software_version || event.normalized.asset_version || event.normalized.version)
+    if (enabled.has('vulnerability.cve_asset_context.v1') && event.eventType === 'vulnerability' && cve && /^CVE-\d{4}-\d{4,}$/i.test(cve) && assetId && assetVersion) {
+        await insertFinding(organizationId, 'vulnerability.cve_asset_context.v1', 'high', `${cve} reported on ${assetId}`, [eventId], { cve, assetId, assetVersion, eventId })
+    }
     if (event.eventType !== 'authentication' || event.action !== 'login') return
     const previous = await run(`
         SELECT id, event_timestamp, outcome, source_country, normalized
@@ -377,30 +438,57 @@ type NormalizedEvent = {
     deviceId: string | null
     sourceVendor: string
     sourceProduct: string
+    parserVersion: string
     normalized: MillEvent
     original: MillEvent
 }
 
-function normalizeEvent(event: MillEvent, source: Record<string, unknown>): NormalizedEvent {
-    const user = object(event.user)
-    const sourceContext = object(event.source)
-    const timestamp = typeof event.timestamp === 'string' && !Number.isNaN(Date.parse(event.timestamp)) ? new Date(event.timestamp).toISOString() : new Date().toISOString()
+export function normalizeMillEvent(event: MillEvent, source: Record<string, unknown>): NormalizedEvent {
+    const adapted = adaptVendorEvent(event, source)
+    const user = object(adapted.user)
+    const sourceContext = object(adapted.source)
+    const timestamp = typeof adapted.timestamp === 'string' && !Number.isNaN(Date.parse(adapted.timestamp)) ? new Date(adapted.timestamp).toISOString() : new Date().toISOString()
+    const vendor = stringValue(source.vendor) || 'custom'
+    const product = stringValue(source.product) || 'generic-json'
+    const parserVersion = vendor.toLowerCase().includes('azure') || product.toLowerCase().includes('entra') ? 'mill.azure-entra.v1' : vendor.toLowerCase().includes('defender') || product.toLowerCase().includes('defender') ? 'mill.defender.v1' : /suricata|snort|eve|network/i.test(`${vendor} ${product}`) ? 'mill.network-eve.v1' : 'mill.v1'
     return {
         timestamp,
-        eventType: stringValue(event.event_type || event.category) || 'unknown',
-        action: stringValue(event.action) || 'unknown',
-        outcome: stringValue(event.outcome || event.result) || 'unknown',
-        userId: stringValue(user.id || event.user_id),
-        userEmail: stringValue(user.email || event.user_email),
-        sourceIp: stringValue(sourceContext.ip || event.source_ip),
-        sourceCountry: stringValue(sourceContext.country || event.country),
-        sourceCity: stringValue(sourceContext.city || event.city),
-        deviceId: stringValue(object(event.device).id || event.device_id),
-        sourceVendor: stringValue(source.vendor) || 'custom',
-        sourceProduct: stringValue(source.product) || 'generic-json',
-        normalized: redact({ ...event, timestamp }),
+        eventType: stringValue(adapted.event_type || adapted.category) || 'unknown',
+        action: stringValue(adapted.action) || 'unknown',
+        outcome: stringValue(adapted.outcome || adapted.result) || 'unknown',
+        userId: stringValue(user.id || adapted.user_id),
+        userEmail: stringValue(user.email || adapted.user_email),
+        sourceIp: stringValue(sourceContext.ip || adapted.source_ip),
+        sourceCountry: stringValue(sourceContext.country || adapted.country),
+        sourceCity: stringValue(sourceContext.city || adapted.city),
+        deviceId: stringValue(object(adapted.device).id || adapted.device_id),
+        sourceVendor: vendor,
+        sourceProduct: product,
+        parserVersion,
+        normalized: redact({ ...adapted, timestamp }),
         original: redact(event),
     }
+}
+
+export function adaptVendorEvent(event: MillEvent, source: Record<string, unknown>): MillEvent {
+    const vendor = `${stringValue(source.vendor) || ''} ${stringValue(source.product) || ''}`.toLowerCase()
+    if (/azure|entra|azure ad|microsoft identity/.test(vendor)) {
+        const location = object(event.location)
+        const detail = object(event.deviceDetail || event.device_detail)
+        const resultType = event.resultType ?? event.result_type
+        const geo = object(location.geoCoordinates)
+        return { ...event, timestamp: event.timestamp || event.timeGenerated || event.TimeGenerated, event_type: event.event_type || 'authentication', action: event.action || 'login', outcome: event.outcome || (String(resultType ?? '').toLowerCase() === '0' || String(resultType ?? '').toLowerCase() === 'success' ? 'success' : resultType !== undefined ? 'failure' : 'unknown'), user: event.user || { id: event.user_id || event.userId || event.userPrincipalName || event.user_principal_name, email: event.user_email || event.userPrincipalName || event.user_principal_name }, source: { ...object(event.source), ip: object(event.source).ip || event.callerIpAddress || event.caller_ip_address, country: object(event.source).country || location.countryOrRegion || location.country, city: object(event.source).city || location.city, coordinates: object(event.source).coordinates || { latitude: geo.latitude, longitude: geo.longitude } }, device: event.device || { id: event.device_id || detail.deviceId || detail.device_id } }
+    }
+    if (/defender|endpoint/.test(vendor)) {
+        const result = event.ResultType ?? event.resultType ?? event.result
+        const actionType = event.ActionType || event.action_type
+        return { ...event, timestamp: event.timestamp || event.Timestamp || event.timeGenerated, event_type: event.event_type || 'authentication', action: event.action || (actionType ? 'login' : 'unknown'), outcome: event.outcome || (String(result ?? '').toLowerCase() === 'success' || String(result ?? '') === '0' ? 'success' : result !== undefined ? 'failure' : 'unknown'), user: event.user || { id: event.user_id || event.AccountSid || event.accountSid || event.AccountName || event.accountName, email: event.user_email || event.AccountName || event.accountName }, source: { ...object(event.source), ip: object(event.source).ip || event.IpAddress || event.IPAddress || event.RemoteIP, country: object(event.source).country || event.CountryCode, city: object(event.source).city || event.City }, device: event.device || { id: event.device_id || event.DeviceId || event.MachineId || event.machineId } }
+    }
+    if (/suricata|snort|eve|network/.test(vendor)) {
+        const alert = object(event.alert)
+        return { ...event, timestamp: event.timestamp || event.tstamp || event.Timestamp, event_type: event.event_type || (alert.signature_id || alert.signature ? 'network' : event.event_type), action: event.action || (alert.signature_id || alert.signature ? 'alert' : 'network'), outcome: event.outcome || (alert.signature_id || alert.signature ? 'detected' : 'unknown'), source: { ...object(event.source), ip: object(event.source).ip || event.src_ip || event.srcip, city: object(event.source).city || event.src_port, country: object(event.source).country || event.proto }, signature_id: event.signature_id || alert.signature_id, signature: event.signature || alert.signature }
+    }
+    return event
 }
 
 export function validateMillEventFields(events: MillEvent[]) {
@@ -436,6 +524,63 @@ export function normalizeMillConditions(value: unknown): { conditions: MillCondi
     }
     return { conditions }
 }
+
+export function compileSigmaDocument(value: unknown): { rules: Array<{ id: string, name: string, severity: string, explanation: string, conditions: MillCondition[] }> } | { error: string } {
+    const document = object(value)
+    const title = stringValue(document.title)
+    const detection = object(document.detection)
+    if (!title || !Object.keys(detection).length) return { error: 'Sigma document must contain title and detection.' }
+    const conditionText = stringValue(detection.condition) || 'selection'
+    const selectors = Object.entries(detection).filter(([key]) => key !== 'condition')
+    const selectorMap = new Map<string, MillCondition[]>()
+    for (const [selectorName, selectorValue] of selectors) {
+        const conditions = sigmaSelectionConditions(selectorValue)
+        if ('error' in conditions) return { error: `${selectorName}: ${conditions.error}` }
+        selectorMap.set(selectorName, conditions.conditions)
+    }
+    const names = Array.from(selectorMap.keys())
+    const groups = conditionText.toLowerCase().includes(' or ')
+        ? conditionText.split(/\s+or\s+/i).map(item => item.trim())
+        : conditionText.match(/^\s*\d+\s+of\s+([a-z0-9_*.-]+)\s*$/i)
+            ? names.filter(name => name.startsWith(conditionText.match(/^\s*\d+\s+of\s+([a-z0-9_*.-]+)\s*$/i)![1].replace('*', '')))
+            : [conditionText.trim()]
+    const rules = []
+    for (const [index, group] of groups.entries()) {
+        const referenced = [...group.matchAll(/[a-zA-Z0-9_.-]+/g)].map(match => match[0]).filter(name => selectorMap.has(name))
+        const conditions = (referenced.length ? referenced : [group]).flatMap(name => selectorMap.get(name) || [])
+        if (!conditions.length || conditions.length > 8 || /\bnot\b|\bnear\b|\bwithin\b|\bregex\b/i.test(group)) return { error: `Unsupported Sigma condition '${group}'. Use bounded selection, OR, or 1 of selection* syntax.` }
+        rules.push({ id: `${slug(title)}-${index + 1}`, name: referenced.length > 1 ? `${title} (${referenced.join(' + ')})` : title, severity: sigmaSeverity(document.level), explanation: `Imported Sigma rule from ${stringValue(object(document.logsource).product) || 'declared log source'} using bounded field selections.`, conditions })
+    }
+    return { rules }
+}
+
+function sigmaSelectionConditions(value: unknown): { conditions: MillCondition[] } | { error: string } {
+    const selection = object(value)
+    const entries = Object.entries(selection)
+    if (!entries.length) return { error: 'selection must contain fields.' }
+    const conditions: MillCondition[] = []
+    for (const [rawPath, rawValue] of entries) {
+        const [path, modifier] = rawPath.split('|', 2)
+        if (!/^[a-zA-Z0-9_.-]{1,80}$/.test(path)) return { error: `field '${path}' is outside the bounded field syntax.` }
+        const values = Array.isArray(rawValue) ? rawValue : [rawValue]
+        const strings = values.map(value => typeof value === 'string' ? value : String(value)).filter(Boolean)
+        if (!strings.length || strings.join('|').length > 200) return { error: `field '${path}' has an invalid value.` }
+        if (strings.length > 1) {
+            conditions.push({ path, operator: 'regex', value: `^(?:${strings.map(escapeRegex).join('|')})$` })
+            continue
+        }
+        const valueText = strings[0]
+        if (modifier === 're') conditions.push({ path, operator: 'regex', value: valueText })
+        else if (modifier === 'startswith') conditions.push({ path, operator: 'regex', value: `^${escapeRegex(valueText)}` })
+        else if (modifier === 'endswith') conditions.push({ path, operator: 'regex', value: `${escapeRegex(valueText)}$` })
+        else if (modifier === 'contains' || valueText.includes('*')) conditions.push({ path, operator: 'contains', value: valueText.replaceAll('*', '') })
+        else conditions.push({ path, operator: 'equals', value: valueText })
+    }
+    return { conditions }
+}
+function sigmaSeverity(value: unknown) { return value === 'critical' || value === 'high' || value === 'medium' || value === 'low' ? value : 'medium' }
+function slug(value: string) { return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'rule' }
+function escapeRegex(value: string) { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
 function millConditionEvidence(value: unknown) {
     const conditions = (value as { conditions?: unknown })?.conditions
     return Array.isArray(conditions) ? conditions.map(condition => typeof condition === 'object' && condition && 'path' in condition ? String(condition.path) : 'condition') : []

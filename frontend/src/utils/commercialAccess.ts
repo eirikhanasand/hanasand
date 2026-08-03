@@ -20,7 +20,7 @@ export const commercialAccessPlans = [
         id: 'monitoring',
         name: 'Monitoring',
         priceLabel: 'Sales scoped',
-        bestFor: 'Security teams that need organization watchlists, reviewable alerts, case routing, and delivery history.',
+        bestFor: 'Security teams that need security monitoring, suspicious-login detections, reviewable alerts, case routing, and delivery history.',
         access: 'Provisioned workspace',
         delivery: 'Webhook and cases',
         review: 'Order-form scope',
@@ -28,6 +28,7 @@ export const commercialAccessPlans = [
         href: '/contact?plan=monitoring',
         features: [
             'Organization watchlists',
+            'Security Monitoring with JSON log ingestion',
             'Dark-web alert review and cases',
             'Webhook destinations and delivery history',
             'Coverage and limits recorded in the order form',
