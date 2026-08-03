@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { MILL_RULES, validateMillEventFields } from '../src/handlers/mill.ts'
+import { MILL_RULES, matchesMillRule, normalizeMillConditions, validateMillEventFields } from '../src/handlers/mill.ts'
 
 describe('Mill detection catalog', () => {
     test('keeps rule identifiers unique and explanations evidence-backed', () => {
@@ -11,5 +11,15 @@ describe('Mill detection catalog', () => {
         expect(validateMillEventFields([{ timestamp: 'not-a-date' }, {}, { timestamp: '2026-08-03T08:15:00Z' }])).toEqual([
             { field: 'events[0].timestamp', message: 'timestamp must be a valid ISO-8601 date string.' },
         ])
+    })
+
+    test('matches bounded normalized JSON conditions without executing code', () => {
+        const normalized = normalizeMillConditions([
+            { path: 'event_type', operator: 'equals', value: 'authentication' },
+            { path: 'source.product', operator: 'contains', value: 'identity' },
+        ])
+        expect(normalized.error).toBeUndefined()
+        expect(matchesMillRule({ event_type: 'authentication', source: { product: 'customer-identity' } }, normalized.conditions)).toBe(true)
+        expect(matchesMillRule({ event_type: 'file', source: { product: 'customer-identity' } }, normalized.conditions)).toBe(false)
     })
 })

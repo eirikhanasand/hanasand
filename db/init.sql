@@ -354,6 +354,25 @@ CREATE TABLE IF NOT EXISTS mill_events (
 CREATE INDEX IF NOT EXISTS idx_mill_events_org_time ON mill_events(organization_id, event_timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_mill_events_org_user_time ON mill_events(organization_id, user_id, event_timestamp DESC);
 
+CREATE TABLE IF NOT EXISTS mill_rules (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    rule_id TEXT NOT NULL,
+    version TEXT NOT NULL DEFAULT '1',
+    name TEXT NOT NULL,
+    family TEXT NOT NULL DEFAULT 'Custom',
+    severity TEXT NOT NULL DEFAULT 'medium',
+    explanation TEXT NOT NULL,
+    definition JSONB NOT NULL DEFAULT '{}'::jsonb,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (organization_id, rule_id),
+    CHECK (severity IN ('low', 'medium', 'high', 'critical'))
+);
+CREATE INDEX IF NOT EXISTS idx_mill_rules_org_enabled ON mill_rules(organization_id, enabled, updated_at DESC);
+
 CREATE TABLE IF NOT EXISTS mill_findings (
     id TEXT PRIMARY KEY,
     organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

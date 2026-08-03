@@ -7,7 +7,8 @@ import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
 
 type MillEvent = Record<string, unknown>
 type MillBody = { source?: Record<string, unknown>, events?: unknown }
-type MillRule = { id: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[] }
+type MillCondition = { path: string, operator: 'equals' | 'contains' | 'regex', value: string }
+type MillRule = { id: string, recordId?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'custom', definition?: { match: 'all', conditions: MillCondition[] } }
 
 export const MILL_RULES: MillRule[] = [
     { id: 'auth.brute_force_success.v1', version: '1', name: 'Brute-force success', family: 'Authentication', severity: 'high', explanation: 'A successful login followed multiple failed logins for the same user within 15 minutes.', evidence: ['failed event IDs', 'successful event ID', 'time window'] },
@@ -39,6 +40,7 @@ export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
 
     const source = body?.source && typeof body.source === 'object' && !Array.isArray(body.source) ? body.source : {}
     const ingestionId = `mill_${randomUUID()}`
+    const configuredRules = await loadConfiguredMillRules(key.organizationId)
     const accepted: string[] = []
     for (const event of events as MillEvent[]) {
         const normalized = normalizeEvent(event, source)
@@ -56,7 +58,7 @@ export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
             normalized.sourceCity, normalized.deviceId, JSON.stringify(normalized.normalized), JSON.stringify(normalized.original),
         ])
         accepted.push(eventId)
-        await createMillFindings(key.organizationId, eventId, normalized)
+        await createMillFindings(key.organizationId, eventId, normalized, configuredRules)
     }
 
     return res.status(202).send({ accepted: true, ingestion_id: ingestionId, accepted_events: accepted.length, rejected_events: 0 })
@@ -85,7 +87,57 @@ export async function getMillRules(req: FastifyRequest, res: FastifyReply) {
     if (!access) return
     const query = req.query as { organizationId?: string }
     if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
-    return res.send({ organizationId: access.organizationId, rules: MILL_RULES })
+    return res.send({ organizationId: access.organizationId, rules: await loadConfiguredMillRules(access.organizationId) })
+}
+
+export async function postMillRule(req: FastifyRequest, res: FastifyReply) {
+    const access = await organizationAccess(req, res)
+    if (!access) return
+    if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Owner or admin access is required to manage Mill rules.' })
+    const body = req.body as { name?: unknown, explanation?: unknown, severity?: unknown, conditions?: unknown } | undefined
+    const name = typeof body?.name === 'string' ? body.name.trim() : ''
+    const explanation = typeof body?.explanation === 'string' ? body.explanation.trim() : ''
+    const severity = typeof body?.severity === 'string' && ['low', 'medium', 'high', 'critical'].includes(body.severity) ? body.severity : 'medium'
+    const conditionResult = normalizeMillConditions(body?.conditions)
+    if (name.length < 2 || name.length > 120) return res.status(400).send({ error: 'Rule name must contain 2-120 characters.' })
+    if (explanation.length < 10 || explanation.length > 500) return res.status(400).send({ error: 'Rule explanation must contain 10-500 characters.' })
+    if (!conditionResult.conditions.length || conditionResult.error) return res.status(400).send({ error: conditionResult.error || 'Add at least one valid rule condition.' })
+    const ruleId = `custom.${randomUUID().replaceAll('-', '').slice(0, 20)}.v1`
+    const result = await run(`
+        INSERT INTO mill_rules (id, organization_id, rule_id, version, name, family, severity, explanation, definition, enabled, created_by)
+        VALUES ($1, $2, $3, '1', $4, 'Custom', $5, $6, $7, TRUE, $8)
+        RETURNING id, rule_id, version, name, family, severity, explanation, definition, enabled, created_at, updated_at
+    `, [randomUUID(), access.organizationId, ruleId, name, severity, explanation, JSON.stringify({ match: 'all', conditions: conditionResult.conditions }), access.userId])
+    await recordAdminAuditEvent(req, { actionType: 'mill.rule.created', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule', targetId: result.rows[0].id, context: { ruleId, severity, conditionCount: conditionResult.conditions.length } })
+    return res.status(201).send({ rule: { ...result.rows[0], source: 'custom' } })
+}
+
+export async function postMillRuleAction(req: FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string }, Body: { action?: unknown } }>, res: FastifyReply) {
+    const access = await organizationAccess(req, res)
+    if (!access) return
+    if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Owner or admin access is required to manage Mill rules.' })
+    const action = req.body?.action === 'enable' || req.body?.action === 'disable' ? req.body.action : null
+    if (!action) return res.status(400).send({ error: 'Action must be enable or disable.' })
+    const builtIn = MILL_RULES.find(rule => rule.id === req.params.id)
+    if (builtIn) {
+        const result = await run(`
+            INSERT INTO mill_rules (id, organization_id, rule_id, version, name, family, severity, explanation, definition, enabled, created_by)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, '{}'::jsonb, $9, $10)
+            ON CONFLICT (organization_id, rule_id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()
+            RETURNING id, rule_id, version, name, family, severity, explanation, definition, enabled, updated_at
+        `, [randomUUID(), access.organizationId, builtIn.id, builtIn.version, builtIn.name, builtIn.family, builtIn.severity, builtIn.explanation, action === 'enable', access.userId])
+        await recordAdminAuditEvent(req, { actionType: 'mill.rule.updated', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule', targetId: result.rows[0].id, context: { action, ruleId: builtIn.id } })
+        return res.send({ rule: { ...result.rows[0], id: builtIn.id, source: 'hanasand' } })
+    }
+    const result = await run(`
+        UPDATE mill_rules
+        SET enabled = $3, updated_at = NOW()
+        WHERE id = $1 AND organization_id = $2
+        RETURNING id, rule_id, version, name, family, severity, explanation, definition, enabled, updated_at
+    `, [req.params.id, access.organizationId, action === 'enable'])
+    if (!result.rows[0]) return res.status(404).send({ error: 'Custom Mill rule not found.' })
+    await recordAdminAuditEvent(req, { actionType: 'mill.rule.updated', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule', targetId: req.params.id, context: { action } })
+    return res.send({ rule: { ...result.rows[0], source: 'custom' } })
 }
 
 export async function getMillFindings(req: FastifyRequest, res: FastifyReply) {
@@ -147,7 +199,7 @@ async function organizationAccess(req: FastifyRequest, res: FastifyReply) {
         return null
     }
     const result = await run(`
-        SELECT o.id
+        SELECT o.id, om.role
         FROM organizations o
         JOIN organization_members om ON om.organization_id = o.id AND om.user_id = $2 AND om.status = 'active'
         WHERE o.id = $1 AND o.status = 'active'
@@ -156,11 +208,37 @@ async function organizationAccess(req: FastifyRequest, res: FastifyReply) {
         res.status(403).send({ error: 'Organization access denied.' })
         return null
     }
-    return { organizationId, userId }
+    return { organizationId, userId, role: result.rows[0].role as string }
 }
 
-async function createMillFindings(organizationId: string, eventId: string, event: NormalizedEvent) {
-    if (event.eventType !== 'authentication' || event.action !== 'login' || !event.userId) return
+async function loadConfiguredMillRules(organizationId: string): Promise<MillRule[]> {
+    const result = await run(`
+        SELECT id, rule_id, version, name, family, severity, explanation, definition, enabled
+        FROM mill_rules
+        WHERE organization_id = $1
+        ORDER BY created_at ASC
+    `, [organizationId])
+    const overrides = new Map((result.rows as Array<Record<string, unknown>>).map(row => [String(row.rule_id), row]))
+    const builtIns = MILL_RULES.map(rule => {
+        const override = overrides.get(rule.id)
+        return { ...rule, enabled: override ? Boolean(override.enabled) : true, source: 'hanasand' as const }
+    })
+    const custom = (result.rows as Array<Record<string, unknown>>)
+        .filter(row => !MILL_RULES.some(rule => rule.id === row.rule_id))
+        .map(row => ({
+            id: String(row.rule_id), recordId: String(row.id), version: String(row.version), name: String(row.name), family: String(row.family), severity: String(row.severity), explanation: String(row.explanation), evidence: millConditionEvidence(row.definition), enabled: Boolean(row.enabled), source: 'custom' as const, definition: row.definition as MillRule['definition'],
+        }))
+    return [...builtIns, ...custom]
+}
+
+async function createMillFindings(organizationId: string, eventId: string, event: NormalizedEvent, rules: MillRule[]) {
+    const enabled = new Set(rules.filter(rule => rule.enabled !== false).map(rule => rule.id))
+    for (const rule of rules.filter(rule => rule.source === 'custom' && rule.enabled !== false)) {
+        if (rule.definition && matchesMillRule(event.normalized, rule.definition.conditions)) {
+            await insertFinding(organizationId, rule.id, rule.severity, rule.name, [eventId], { ruleId: rule.id, matchedConditions: rule.definition.conditions, eventId })
+        }
+    }
+    if (event.eventType !== 'authentication' || event.action !== 'login') return
     const previous = await run(`
         SELECT id, event_timestamp, outcome, source_country, normalized
         FROM mill_events
@@ -169,7 +247,7 @@ async function createMillFindings(organizationId: string, eventId: string, event
         LIMIT 30
     `, [organizationId, event.userId, eventId])
     const rows = previous.rows as Array<{ id: string, event_timestamp: string, outcome: string, source_country: string | null, normalized: MillEvent }>
-    if (event.outcome === 'failure' && event.sourceIp) {
+    if (enabled.has('auth.password_spray.v1') && event.outcome === 'failure' && event.sourceIp) {
         const spray = await run(`
             SELECT id, user_id, event_timestamp
             FROM mill_events
@@ -184,26 +262,27 @@ async function createMillFindings(organizationId: string, eventId: string, event
             await insertFinding(organizationId, 'auth.password_spray.v1', 'high', 'Failed logins for multiple users from one source', [eventId, ...sprayRows.slice(0, 10).map(row => row.id)], { sourceIp: event.sourceIp, userIds: targetUsers, failedEventIds: [eventId, ...sprayRows.slice(0, 10).map(row => row.id)], windowMinutes: 15 })
         }
     }
+    if (!event.userId) return
     const failures = rows.filter(row => {
         const elapsed = Date.parse(event.timestamp) - Date.parse(row.event_timestamp)
         return row.outcome === 'failure' && elapsed >= 0 && elapsed <= 15 * 60_000
     })
-    if (event.outcome === 'success' && failures.length >= 3) {
+    if (enabled.has('auth.brute_force_success.v1') && event.outcome === 'success' && failures.length >= 3) {
         await insertFinding(organizationId, 'auth.brute_force_success.v1', 'high', 'Successful login after repeated failures', [eventId, ...failures.slice(0, 5).map(row => row.id)], { successfulEventId: eventId, failedEventIds: failures.slice(0, 5).map(row => row.id) })
     }
     if (event.outcome !== 'success') return
     const priorSuccess = rows.find(row => row.outcome === 'success' && row.source_country && event.sourceCountry && row.source_country !== event.sourceCountry)
-    if (priorSuccess) {
+    if (enabled.has('auth.new_country.v1') && priorSuccess) {
         await insertFinding(organizationId, 'auth.new_country.v1', 'medium', `Login from new country: ${event.sourceCountry}`, [eventId, priorSuccess.id], { currentCountry: event.sourceCountry, previousCountry: priorSuccess.source_country })
     }
     const currentDevice = event.deviceId
     const priorDevice = currentDevice && rows.find(row => row.outcome === 'success' && deviceIdFor(row.normalized) && deviceIdFor(row.normalized) !== currentDevice)
-    if (priorDevice) {
+    if (enabled.has('auth.new_device.v1') && priorDevice) {
         await insertFinding(organizationId, 'auth.new_device.v1', 'medium', 'Successful login from a new device', [eventId, priorDevice.id], { currentDevice, previousDevice: deviceIdFor(priorDevice.normalized) })
     }
     const coordinates = coordinatesFor(event.normalized)
     const priorCoordinates = rows.map(row => ({ row, coordinates: coordinatesFor(row.normalized) })).find(item => item.row.outcome === 'success' && item.coordinates && coordinates)
-    if (priorCoordinates && coordinates) {
+    if (enabled.has('auth.impossible_travel.v1') && priorCoordinates && coordinates) {
         const minutes = Math.abs(Date.parse(event.timestamp) - Date.parse(priorCoordinates.row.event_timestamp)) / 60_000
         const distanceKm = distance(coordinates, priorCoordinates.coordinates!)
         if (minutes < 12 * 60 && distanceKm > 500) {
@@ -272,7 +351,44 @@ export function validateMillEventFields(events: MillEvent[]) {
 
 function object(value: unknown): MillEvent { return value && typeof value === 'object' && !Array.isArray(value) ? value as MillEvent : {} }
 function stringValue(value: unknown): string | null { return typeof value === 'string' && value.trim() ? value.trim() : null }
+function canManageMillRules(role: string) { return role === 'owner' || role === 'admin' }
 function deviceIdFor(event: MillEvent) { return stringValue(object(event.device).id || event.device_id) }
+export function normalizeMillConditions(value: unknown): { conditions: MillCondition[], error?: string } {
+    if (!Array.isArray(value) || value.length < 1 || value.length > 8) return { conditions: [], error: 'Conditions must contain 1-8 items.' }
+    const conditions: MillCondition[] = []
+    for (const item of value) {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return { conditions: [], error: 'Each condition must be an object.' }
+        const condition = item as Record<string, unknown>
+        const path = typeof condition.path === 'string' ? condition.path.trim() : ''
+        const operator = condition.operator
+        const conditionValue = typeof condition.value === 'string' ? condition.value : ''
+        if (!/^[a-zA-Z0-9_.-]{1,80}$/.test(path)) return { conditions: [], error: 'Condition paths may contain only letters, numbers, dots, hyphens, and underscores.' }
+        if (operator !== 'equals' && operator !== 'contains' && operator !== 'regex') return { conditions: [], error: 'Condition operators must be equals, contains, or regex.' }
+        if (!conditionValue || conditionValue.length > 200) return { conditions: [], error: 'Condition values must contain 1-200 characters.' }
+        if (operator === 'regex') {
+            try { new RegExp(conditionValue) } catch { return { conditions: [], error: 'Regex condition is invalid.' } }
+        }
+        conditions.push({ path, operator, value: conditionValue })
+    }
+    return { conditions }
+}
+function millConditionEvidence(value: unknown) {
+    const conditions = (value as { conditions?: unknown })?.conditions
+    return Array.isArray(conditions) ? conditions.map(condition => typeof condition === 'object' && condition && 'path' in condition ? String(condition.path) : 'condition') : []
+}
+export function matchesMillRule(event: MillEvent, conditions: MillCondition[]) {
+    return conditions.every(condition => {
+        const value = getMillPath(event, condition.path)
+        if (value === undefined || value === null || typeof value === 'object') return false
+        const actual = String(value)
+        if (condition.operator === 'equals') return actual.toLowerCase() === condition.value.toLowerCase()
+        if (condition.operator === 'contains') return actual.toLowerCase().includes(condition.value.toLowerCase())
+        try { return new RegExp(condition.value, 'i').test(actual) } catch { return false }
+    })
+}
+function getMillPath(value: MillEvent, path: string): unknown {
+    return path.split('.').reduce<unknown>((current, part) => current && typeof current === 'object' && !Array.isArray(current) ? (current as MillEvent)[part] : undefined, value)
+}
 function bearer(req: FastifyRequest) {
     const apiKey = req.headers['x-api-key']
     if (typeof apiKey === 'string' && apiKey.trim()) return apiKey.trim()
