@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { createHash } from "node:crypto";
 import type { CaptureReplayJob, DiscoveryEvidence, EvidenceDelta, IncidentCandidate, LiveSearchSnapshot, PipelineResult, RawCapture, ReplayPipelineInput, SourceRecord } from "../types.ts";
 import type {
@@ -58,7 +57,7 @@ export class InMemoryScraperStore implements ScraperStore {
     if (duplicate) return { capture: duplicate, status: "duplicate", duplicateOf: duplicate.id, dedupeKey: captureDedupeKey(prepared) };
     return { capture: this.insertCapture(prepared, true), status: "inserted", dedupeKey: captureDedupeKey(prepared) };
   }
-  private insertCapture(capture: RawCapture, delta: boolean) { this.captures.set(capture.id, capture); for (const key of dedupeIndexKeys(capture)) this.dedupe.set(key, capture.id); if (delta) this.recordCaptureDelta("added", capture); return capture; }
+  private insertCapture(capture: RawCapture, delta: boolean) { this.captures.set(capture.id, capture); for (const key of dedupeIndexKeys(capture)) this.dedupe.set(key, capture.id); if (delta) (this as any).recordCaptureDelta("added", capture); return capture; }
   getCapture(id: string) { return this.captures.get(id); }
   updateCaptureMetadata(id: string, update: (metadata: any) => any) { const previous = this.mustCapture(id); this.assertOrganizationWritable(previous); const next = { ...previous, metadata: update(previous.metadata ?? {}) }; this.captures.set(id, next); this.invalidateSourceReviewForCapture(previous, next); return next; }
   replaceCaptureForRetention(capture: RawCapture) { const previous = this.mustCapture(capture.id); if (previous.contentHash !== capture.contentHash || previous.sourceId !== capture.sourceId || previous.tenantId !== capture.tenantId) throw new Error(`Retention cannot change capture identity: ${capture.id}`); this.captures.set(capture.id, capture); this.invalidateSourceReviewForCapture(previous, capture); return capture; }
@@ -113,7 +112,7 @@ export class InMemoryScraperStore implements ScraperStore {
     if (incident) {
       const relationshipExists = this.listEvidenceLinks().some((record: any) => record.captureId === capture.id && record.subjectType === "incident" && record.subjectId === incident.id && record.relationship === "supports");
       this.saveEvidenceLink(link(capture, "incident", incident.id, "supports", incident.confidence, extractorVersion));
-      if (!relationshipExists) this.recordExtractionDelta("added", capture, incident.id);
+      if (!relationshipExists) (this as any).recordExtractionDelta("added", capture, incident.id);
     }
     const actorEntities = entities.filter((entity: any) => entity.type === "actor" || entity.type === "ransomware_family");
     const characterize = new Set(actorEntities.map(normalized)).size === 1;
@@ -258,7 +257,7 @@ export class InMemoryScraperStore implements ScraperStore {
     if (incomingIds.size !== snapshot.identities.length || snapshot.counts.totalIdentityCount !== snapshot.identities.length) throw new Error("Actor identity catalog count mismatch.");
     const importedAt = provenance.importedAt ?? snapshot.retrievedAt;
     const previous = this.actorIdentityCatalogs.get(snapshot.catalogId);
-    if (previous?.authoritativeManifestValidated && snapshot.authoritativeManifestValidated) {
+    if (previous?.authoritativeManifestValidated && (snapshot as any).authoritativeManifestValidated) {
       const missingIds = (previous.identityIds ?? []).filter((id: string) => !incomingIds.has(id));
       if (missingIds.length) throw new Error(`Actor identity catalog ${snapshot.catalogId} omitted ${missingIds.length} identities from the last accepted authoritative manifest.`);
     }
