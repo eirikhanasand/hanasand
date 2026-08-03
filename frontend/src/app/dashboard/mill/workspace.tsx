@@ -18,6 +18,8 @@ export default function MillWorkspace() {
     const [selectedId, setSelectedId] = useState('')
     const [statusFilter, setStatusFilter] = useState('all')
     const [severityFilter, setSeverityFilter] = useState('all')
+    const [sourceFilter, setSourceFilter] = useState('all')
+    const [userFilter, setUserFilter] = useState('all')
     const [note, setNote] = useState('')
     const [assigneeId, setAssigneeId] = useState('')
     const [status, setStatus] = useState('')
@@ -59,7 +61,15 @@ export default function MillWorkspace() {
         } catch (cause) { setError(errorMessage(cause)) }
     }
 
-    const visibleFindings = findings.filter(finding => (statusFilter === 'all' || finding.status === statusFilter) && (severityFilter === 'all' || finding.severity === severityFilter))
+    const sourceOptions = Array.from(new Set(events.map(event => `${event.source_vendor}/${event.source_product}`).filter(Boolean))).sort()
+    const userOptions = Array.from(new Set(events.map(event => event.user_email || event.user_id || '').filter(Boolean))).sort()
+    const visibleFindings = findings.filter(finding => {
+        const related = events.filter(event => finding.event_ids?.includes(event.id))
+        return (statusFilter === 'all' || finding.status === statusFilter)
+            && (severityFilter === 'all' || finding.severity === severityFilter)
+            && (sourceFilter === 'all' || related.some(event => `${event.source_vendor}/${event.source_product}` === sourceFilter))
+            && (userFilter === 'all' || related.some(event => (event.user_email || event.user_id) === userFilter))
+    })
     const relatedEvents = selected ? events.filter(event => selected.event_ids?.includes(event.id)) : []
     const openCount = findings.filter(finding => !['resolved', 'benign', 'suppressed'].includes(finding.status)).length
 
@@ -75,7 +85,7 @@ export default function MillWorkspace() {
             </section>
             <div className='grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)]'>
                 <DashboardPanel className='overflow-hidden p-0'>
-                    <div className='grid gap-3 border-b border-ui-border bg-ui-raised p-4'><div><h2 className='font-semibold'>Findings queue</h2><p className='mt-1 text-sm text-ui-muted'>Prioritized by severity and recent activity.</p></div><div className='flex flex-wrap gap-2'><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)} className='h-9 rounded-md border border-ui-border bg-ui-panel px-2 text-xs text-ui-text' aria-label='Filter by status'><option value='all'>All statuses</option><option value='new'>New</option><option value='investigating'>Investigating</option><option value='benign'>Benign</option><option value='resolved'>Resolved</option><option value='suppressed'>Suppressed</option></select><select value={severityFilter} onChange={event => setSeverityFilter(event.target.value)} className='h-9 rounded-md border border-ui-border bg-ui-panel px-2 text-xs text-ui-text' aria-label='Filter by severity'><option value='all'>All severities</option><option value='critical'>Critical</option><option value='high'>High</option><option value='medium'>Medium</option><option value='low'>Low</option></select></div></div>
+                    <div className='grid gap-3 border-b border-ui-border bg-ui-raised p-4'><div><h2 className='font-semibold'>Findings queue</h2><p className='mt-1 text-sm text-ui-muted'>Prioritized by severity and recent activity.</p></div><div className='flex flex-wrap gap-2'><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)} className='h-9 rounded-md border border-ui-border bg-ui-panel px-2 text-xs text-ui-text' aria-label='Filter by status'><option value='all'>All statuses</option><option value='new'>New</option><option value='investigating'>Investigating</option><option value='benign'>Benign</option><option value='resolved'>Resolved</option><option value='suppressed'>Suppressed</option></select><select value={severityFilter} onChange={event => setSeverityFilter(event.target.value)} className='h-9 rounded-md border border-ui-border bg-ui-panel px-2 text-xs text-ui-text' aria-label='Filter by severity'><option value='all'>All severities</option><option value='critical'>Critical</option><option value='high'>High</option><option value='medium'>Medium</option><option value='low'>Low</option></select><select value={sourceFilter} onChange={event => setSourceFilter(event.target.value)} className='h-9 max-w-full rounded-md border border-ui-border bg-ui-panel px-2 text-xs text-ui-text' aria-label='Filter by source'><option value='all'>All sources</option>{sourceOptions.map(source => <option key={source} value={source}>{source}</option>)}</select><select value={userFilter} onChange={event => setUserFilter(event.target.value)} className='h-9 max-w-full rounded-md border border-ui-border bg-ui-panel px-2 text-xs text-ui-text' aria-label='Filter by user'><option value='all'>All users</option>{userOptions.map(user => <option key={user} value={user}>{user}</option>)}</select></div></div>
                     <div className='divide-y divide-ui-border'>
                         {visibleFindings.length === 0 ? <div className='p-6 text-sm text-ui-muted'>{findings.length ? 'No findings match these filters.' : <>No findings for this organization yet. Send JSON authentication events to <code>api.hanasand.com/mill</code> to begin analysis.</>}</div> : visibleFindings.map(finding => <button type='button' key={finding.id} onClick={() => { setSelectedId(finding.id); setNote(finding.analyst_note || ''); setAssigneeId('') }} className={`grid w-full gap-2 p-4 text-left transition hover:bg-ui-raised ${selected?.id === finding.id ? 'bg-ui-primary/10' : ''}`}><div className='flex items-center justify-between gap-3'><span className={`rounded-full border px-2 py-0.5 text-xs font-semibold uppercase ${finding.severity === 'high' ? 'border-red-400/40 text-red-300' : 'border-ui-border text-ui-primary'}`}>{finding.severity}</span><span className='text-xs text-ui-muted'>{finding.status}</span></div><span className='font-semibold text-ui-text'>{finding.summary}</span><span className='text-xs text-ui-muted'>{finding.rule_id} · {formatDate(finding.last_observed)}</span></button>)}
                     </div>
