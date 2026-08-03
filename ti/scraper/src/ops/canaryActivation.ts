@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { nowIso } from "../utils.ts";
 import type { CanaryActivationResult, CanaryDeactivationResult } from "./canaryCollectionTypes.ts";
 import { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";

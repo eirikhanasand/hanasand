@@ -1,4 +1,3 @@
-// @ts-nocheck
 export type * from "./evidenceStoreTypes.ts";
 
 const now = () => new Date().toISOString();

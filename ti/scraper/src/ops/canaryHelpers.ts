@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { hashContent, stableId } from "../utils.ts";
 import type { CanaryFetch, CanaryLoopState } from "./canaryCollectionTypes.ts";
 import { feedItems } from "./canaryFeedItems.ts";
@@ -130,7 +129,7 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
   return feedItems(source, task, fetched, at, metadata, maxItemsFor(source, task) ?? maxItems);
 }
 
-export const fetchItem = async (...args: any[]) => (await fetchItems(...args))[0];
+export const fetchItem = async (source: any, task: any, fetcher: CanaryFetch, mode: string, at: string, maxBytes: number, timeoutMs = 12_000, maxItems?: number) => (await fetchItems(source, task, fetcher, mode, at, maxBytes, timeoutMs, maxItems))[0];
 
 export function externalize(capture: any, objectStore: any) {
   const body = capture.body ?? "";

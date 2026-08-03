@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { isSellableIntelText } from "../value/sellableIntel.ts";
 import { derivedHints } from "./searchDerivedHints.ts";
 import { termRegex } from "./searchTerm.ts";
@@ -36,7 +35,7 @@ function docsForStore(store: any): SearchDoc[] {
   const incidents = store.listIncidents?.() ?? [];
   const sources = new Map((store.listSources?.() ?? []).map((source: any) => [source.id, source]));
   const incidentTitles = new Map(incidents.map((incident: any) => [incident.captureId, incident.title]));
-  const latestSourceUpdate = [...sources.values()].reduce((latest, source: any) => String(source.updatedAt ?? "") > latest ? String(source.updatedAt) : latest, "");
+  const latestSourceUpdate = [...sources.values()].reduce((latest: string, source: any) => String(source.updatedAt ?? "") > latest ? String(source.updatedAt) : latest, "");
   const signature = `${captures.length}:${captures.at(-1)?.id ?? ""}:${captures.at(-1)?.contentHash ?? ""}:${incidents.length}:${incidents.at(-1)?.id ?? ""}:${sources.size}:${latestSourceUpdate}`;
   const previous = cache.get(store);
   if (previous?.signature === signature) return previous.docs;

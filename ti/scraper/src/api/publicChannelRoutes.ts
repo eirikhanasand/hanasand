@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { buildTelegramPublicActorReadinessDto, buildTelegramPublicCanaryRollout, buildTelegramPublicCompactSearchSummary, buildTelegramPublicCutoverReport, buildTelegramPublicEvidencePromotionProgram, buildTelegramPublicIncrementalPollDto, buildTelegramPublicOperatorControlEffects, buildTelegramPublicOperatorStates, buildTelegramPublicPromotionCanaryProof, buildTelegramPublicPromotionCertification, buildTelegramPublicReliabilityReport, buildTelegramPublicSlaReport, buildTelegramPublicSourcePackCompatibility, buildTelegramPublicSourcePackReadiness, planTelegramPublicSearchBackfill, publicChannelEvidenceFromCapture } from "../adapters/telegramPublic.ts";
 import { buildPublicSignalFusionWorkbench } from "../adapters/publicSignalFusion.ts";
 import type { ScraperStore } from "../storage/memoryStore.ts";
@@ -30,10 +29,10 @@ export function buildPublicChannelStatusRouteResponse(input: any, options: Publi
   const evidence = captures.map((capture) => {
     const item = publicChannelEvidenceFromCapture(capture);
     return item ? { ...item, sourceId: capture.sourceId } : undefined;
-  }).filter(Boolean).filter((e) => terms.some((term) => `${e.channel} ${e.snippet} ${e.extractedUrls.join(" ")}`.toLowerCase().includes(term))).slice(0, 20);
+  }).filter((e): e is NonNullable<typeof e> => Boolean(e)).filter((e) => terms.some((term) => `${e.channel} ${e.snippet} ${e.extractedUrls.join(" ")}`.toLowerCase().includes(term))).slice(0, 20);
   const cutoverReport = buildTelegramPublicCutoverReport({ query: input.query, entityType: input.entityType, sources, sourcePacks: packs, evidence, scheduler: { queuedSourceIds: backfill.tasks.map((t) => t.sourceId) }, generatedAt });
-  cutoverReport.reconciliation.summary.high_edit_delete_churn ??= 0;
-  const previousUrls = sources.flatMap((s) => strings(s.metadata?.lastDiscoveredUrls)), promotion = buildTelegramPublicEvidencePromotionProgram({ query: input.query, sources, evidence, previousUrls, generatedAt });
+  (cutoverReport.reconciliation.summary as Record<string, unknown>).high_edit_delete_churn ??= 0;
+  const previousUrls = sources.flatMap((s) => strings(s.metadata?.lastDiscoveredUrls)), promotion: any = buildTelegramPublicEvidencePromotionProgram({ query: input.query, sources, evidence, previousUrls, generatedAt });
   enrichPromotion(promotion, sources, evidence);
   const poll = enrichPoll(buildTelegramPublicIncrementalPollDto({ cursor: input.cursor, evidence, promotedExtractionIds: promotion.promoted.map((item) => item.promotedExtractionId).filter(Boolean), rateLimitResetAt: promotion.rateLimitBackoff[0]?.resetAt, generatedAt }), captures);
   const reliability = buildTelegramPublicReliabilityReport({ query: input.query, entityType: input.entityType, sources, evidence, generatedAt });

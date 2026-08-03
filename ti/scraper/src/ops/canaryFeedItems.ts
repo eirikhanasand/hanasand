@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { createHash } from "node:crypto";
 import { hashContent } from "../utils.ts";
 import { parseRssItems } from "../adapters/rssXml.ts";
