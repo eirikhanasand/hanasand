@@ -8,7 +8,7 @@ type Organization = { id: string, name?: string, slug?: string, role?: string }
 type Finding = { id: string, rule_id: string, severity: string, status: string, summary: string, evidence: Record<string, unknown>, event_ids: string[], first_observed: string, last_observed: string, analyst_note?: string }
 type Event = { id: string, event_timestamp: string, event_type: string, action: string, outcome: string, user_id?: string, user_email?: string, source_ip?: string, source_country?: string, source_city?: string, source_vendor: string, source_product: string, original: Record<string, unknown> }
 type Member = { userId: string, name?: string, email?: string, role?: string, status?: string }
-type MillRule = { id: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'custom', definition?: { conditions?: Array<{ path: string, operator: string, value: string }> } }
+type MillRule = { id: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { conditions?: Array<{ path: string, operator: string, value: string }> } }
 
 export default function MillWorkspace() {
     const [organizations, setOrganizations] = useState<Organization[]>([])
@@ -23,6 +23,10 @@ export default function MillWorkspace() {
     const [rulePath, setRulePath] = useState('event_type')
     const [ruleOperator, setRuleOperator] = useState('equals')
     const [ruleValue, setRuleValue] = useState('')
+    const [packName, setPackName] = useState('')
+    const [packVersion, setPackVersion] = useState('')
+    const [packReference, setPackReference] = useState('')
+    const [packJson, setPackJson] = useState('{"rules":[{"id":"example-login","name":"Example login rule","description":"Example imported rule for review.","level":"medium","conditions":[{"path":"event_type","operator":"equals","value":"authentication"}]}]}')
     const [selectedId, setSelectedId] = useState('')
     const [statusFilter, setStatusFilter] = useState('all')
     const [severityFilter, setSeverityFilter] = useState('all')
@@ -90,6 +94,17 @@ export default function MillWorkspace() {
         } catch (cause) { setError(errorMessage(cause)) }
     }
 
+    async function importRulePack() {
+        if (!organizationId) return
+        try {
+            const parsed = JSON.parse(packJson) as { rules?: unknown }
+            await requestJson(`/api/mill/rules/packs?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ packName, packVersion, sourceReference: packReference, rules: parsed.rules }) })
+            setStatus('Signature pack imported and enabled for new events.')
+            setPackName(''); setPackVersion(''); setPackReference('')
+            await loadMill(organizationId)
+        } catch (cause) { setError(cause instanceof SyntaxError ? 'Signature pack JSON is invalid.' : errorMessage(cause)) }
+    }
+
     const sourceOptions = Array.from(new Set(events.map(event => `${event.source_vendor}/${event.source_product}`).filter(Boolean))).sort()
     const userOptions = Array.from(new Set(events.map(event => event.user_email || event.user_id || '').filter(Boolean))).sort()
     const visibleFindings = findings.filter(finding => {
@@ -118,13 +133,20 @@ export default function MillWorkspace() {
             <DashboardPanel className='grid gap-4' data-mill-rules='true'>
                 <div><h2 className='font-semibold'>Detection rules</h2><p className='mt-1 text-sm text-ui-muted'>Built-in rules can be tuned per organization. Custom rules match normalized JSON fields on new events.</p></div>
                 <div className='grid gap-2 md:grid-cols-2 xl:grid-cols-3'>
-                    {rules.map(rule => <div key={rule.id} className='rounded-lg border border-ui-border bg-ui-raised p-3'><div className='flex items-start justify-between gap-2'><div><p className='font-semibold text-ui-text'>{rule.name}</p><p className='mt-1 text-xs text-ui-muted'>{rule.family} · {rule.severity} · {rule.source === 'custom' ? 'owned rule' : 'Hanasand rule'}</p></div><button type='button' className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text disabled:opacity-50' disabled={!canManageRules} onClick={() => void toggleRule(rule)}>{rule.enabled === false ? 'Enable' : 'Disable'}</button></div><p className='mt-2 text-xs text-ui-muted'>{rule.explanation}</p></div>)}
+                    {rules.map(rule => <div key={rule.id} className='rounded-lg border border-ui-border bg-ui-raised p-3'><div className='flex items-start justify-between gap-2'><div><p className='font-semibold text-ui-text'>{rule.name}</p><p className='mt-1 text-xs text-ui-muted'>{rule.family} · {rule.severity} · {rule.source === 'open_source' ? 'open-source pack' : rule.source === 'owned' ? 'owned rule' : 'Hanasand rule'}</p></div><button type='button' className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text disabled:opacity-50' disabled={!canManageRules} onClick={() => void toggleRule(rule)}>{rule.enabled === false ? 'Enable' : 'Disable'}</button></div><p className='mt-2 text-xs text-ui-muted'>{rule.explanation}</p>{rule.sourceReference && <a className='mt-2 block truncate text-xs text-ui-primary hover:underline' href={rule.sourceReference} target='_blank' rel='noreferrer'>Source reference</a>}</div>)}
                 </div>
                 <form className='grid gap-2 rounded-lg border border-dashed border-ui-border p-3' onSubmit={event => { event.preventDefault(); void createRule() }}>
                     <p className='text-sm font-semibold'>Add owned JSON rule</p>
                     <div className='grid gap-2 md:grid-cols-3'><input value={ruleName} onChange={event => setRuleName(event.target.value)} placeholder='Rule name' aria-label='Rule name' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><select value={ruleSeverity} onChange={event => setRuleSeverity(event.target.value)} aria-label='Rule severity' className='h-9 rounded-md border border-ui-border bg-ui-panel px-2 text-sm text-ui-text'><option value='low'>Low</option><option value='medium'>Medium</option><option value='high'>High</option><option value='critical'>Critical</option></select><input value={ruleExplanation} onChange={event => setRuleExplanation(event.target.value)} placeholder='Why this matters (10-500 chars)' aria-label='Rule explanation' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /></div>
                     <div className='grid gap-2 md:grid-cols-[1fr_auto_1fr_auto]'><input value={rulePath} onChange={event => setRulePath(event.target.value)} placeholder='event_type' aria-label='Rule field path' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><select value={ruleOperator} onChange={event => setRuleOperator(event.target.value)} aria-label='Rule operator' className='h-9 rounded-md border border-ui-border bg-ui-panel px-2 text-sm text-ui-text'><option value='equals'>equals</option><option value='contains'>contains</option><option value='regex'>regex</option></select><input value={ruleValue} onChange={event => setRuleValue(event.target.value)} placeholder='authentication' aria-label='Rule value' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><button type='submit' className='h-9 rounded-md bg-ui-text px-3 text-xs font-semibold text-ui-canvas disabled:opacity-50' disabled={!canManageRules || !ruleName.trim() || !ruleExplanation.trim() || !rulePath.trim() || !ruleValue.trim()}>Create rule</button></div>
                     {!canManageRules && <p className='text-xs text-ui-muted'>Owner or admin access is required to change organization rules.</p>}
+                </form>
+                <form className='grid gap-2 rounded-lg border border-dashed border-ui-border p-3' onSubmit={event => { event.preventDefault(); void importRulePack() }}>
+                    <p className='text-sm font-semibold'>Import open-source signature pack</p>
+                    <p className='text-xs text-ui-muted'>Use the bounded Mill JSON shape; raw Sigma YAML and executable rule code are not accepted at this boundary.</p>
+                    <div className='grid gap-2 md:grid-cols-3'><input value={packName} onChange={event => setPackName(event.target.value)} placeholder='Pack name' aria-label='Pack name' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><input value={packVersion} onChange={event => setPackVersion(event.target.value)} placeholder='Version' aria-label='Pack version' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><input value={packReference} onChange={event => setPackReference(event.target.value)} placeholder='https://source.example/rules' aria-label='Pack source reference' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /></div>
+                    <textarea value={packJson} onChange={event => setPackJson(event.target.value)} aria-label='Pack JSON' className='min-h-32 rounded-md border border-ui-border bg-ui-canvas p-2 font-mono text-xs text-ui-text' />
+                    <button type='submit' className='h-9 justify-self-start rounded-md bg-ui-text px-3 text-xs font-semibold text-ui-canvas disabled:opacity-50' disabled={!canManageRules || !packName.trim() || !packVersion.trim() || !packReference.trim()}>Import pack</button>
                 </form>
             </DashboardPanel>
             <div className='grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)]'>

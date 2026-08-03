@@ -364,6 +364,8 @@ CREATE TABLE IF NOT EXISTS mill_rules (
     severity TEXT NOT NULL DEFAULT 'medium',
     explanation TEXT NOT NULL,
     definition JSONB NOT NULL DEFAULT '{}'::jsonb,
+    source TEXT NOT NULL DEFAULT 'owned' CHECK (source IN ('owned', 'open_source', 'hanasand')),
+    source_reference TEXT,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -1174,6 +1174,8 @@ export default async function ensureSchema() {
             severity TEXT NOT NULL DEFAULT 'medium',
             explanation TEXT NOT NULL,
             definition JSONB NOT NULL DEFAULT '{}'::jsonb,
+            source TEXT NOT NULL DEFAULT 'owned',
+            source_reference TEXT,
             enabled BOOLEAN NOT NULL DEFAULT TRUE,
             created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1182,6 +1184,10 @@ export default async function ensureSchema() {
             CHECK (severity IN ('low', 'medium', 'high', 'critical'))
         )
     `)
+    await run('ALTER TABLE mill_rules ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT \'owned\'')
+    await run('ALTER TABLE mill_rules ADD COLUMN IF NOT EXISTS source_reference TEXT')
+    await run('ALTER TABLE mill_rules DROP CONSTRAINT IF EXISTS mill_rules_source_check')
+    await run('ALTER TABLE mill_rules ADD CONSTRAINT mill_rules_source_check CHECK (source IN (\'owned\', \'open_source\', \'hanasand\'))')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_rules_org_enabled ON mill_rules(organization_id, enabled, updated_at DESC)')
     await run(`
         CREATE TABLE IF NOT EXISTS mill_findings (
