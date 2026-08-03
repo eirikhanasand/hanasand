@@ -14,7 +14,7 @@ The route is intentionally a single JSON endpoint. Customer organizations use th
 
 ## Implementation status
 
-The deployed slices now cover JSON ingestion through `https://api.hanasand.com/mill`, existing organization API-key creation/revocation, field-level timestamp validation, tenant-scoped analyst review with status/severity/source/user filters, persisted notes and assignment, audit events, a tenant-scoped rule catalog with explanations, and evidence-backed password-spray and new-device detections. The remaining completion work is writable rule management, broader signature/adaptor coverage, and production-quality evidence timelines. Keep this section current as the goal is delivered in slices; the acceptance criteria below remain the source of truth.
+The deployed slices now cover JSON ingestion through `https://api.hanasand.com/mill`, existing organization API-key creation/revocation, field-level timestamp validation, tenant-scoped analyst review with status/severity/source/user filters, persisted notes and assignment, audit events, a tenant-scoped rule catalog with explanations, writable built-in overrides, owned JSON conditions, and evidence-backed password-spray and new-device detections. The remaining completion work is broader open-source/signature-pack coverage, future vendor-adapter contracts, and production-quality evidence timelines. Keep this section current as the goal is delivered in slices; the acceptance criteria below remain the source of truth.
 
 ## First implementation slice
 
