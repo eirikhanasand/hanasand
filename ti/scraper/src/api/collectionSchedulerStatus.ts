@@ -178,7 +178,10 @@ async function boundedCollectionSchedulerStatus(
   const operations = await buildSourceOperationsSnapshot(options.store, {
     tenantId,
     generatedAt,
-    limit: page.limit,
+    // The dashboard consumes aggregate totals; a full 100-row join makes the
+    // default scheduler probe time out on the production fleet. Callers that
+    // need a source page can still request an explicit limit.
+    limit: page.limit ?? 1,
     cursor: page.cursor,
     executableOnly: true
   }) as any;
