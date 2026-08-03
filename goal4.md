@@ -63,6 +63,8 @@ The TI source-management page had a related client timeout: it requested 100 joi
 
 After the evaluation-cache rollout, an authenticated global source-operations request with `limit=1` completed in 1.61 seconds and the scraper remained healthy with zero pending writes. The source inventory is therefore readable again; its qualification totals still remain far below the required 6,100 live sources.
 
+The independent-evaluation producer had a separate live data problem: NVD was only requesting a rolling recent-CVE page, while the retained CISA Known Exploited Vulnerability captures were older and therefore never overlapped. Commit `1602f4fd` now selects one unmatched retained CISA CVE for each NVD collection task and requests that exact NVD record, while keeping the rolling request as fallback; a focused regression and the full scraper suite pass. The scraper was rebuilt from canonical main and recreated as container `5eda66636e17` from image `sha256:ad284df05057711af66e6a519ac17596fd699f900abc23b0741ff6da94425e47`; it is healthy with restart count 0. The NVD source is next due at `2026-08-03T07:44:49Z`; the current reference-record count is still 0 and must be checked after the natural scheduled run, without fabricating validation rows.
+
 Required minimum operating baseline: at least 5,000 qualifying clear-web feeds, 1,000 qualifying lawful dark-web/Tor feeds, and 100 qualifying public Telegram feeds, for at least 6,100 unique active intelligence-producing feeds. These are minimums, not completion caps; automatic discovery and validation must continue beyond them toward 10,000–100,000+ feeds where legitimate, relevant, useful feeds actually exist.
 
 Required implementation:
