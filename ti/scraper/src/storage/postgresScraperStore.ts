@@ -279,49 +279,6 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const tenantId = input.tenantId ?? null;
     const sourceId = input.sourceId?.trim() || null;
     const executableOnly = input.executableOnly === true;
-    if (!sourceId && tenantId === null && limit === 1) {
-      const [first, countRow] = await Promise.all([
-        this.sql`
-        SELECT id, record, collection_executable
-        FROM threat_intel.sources
-        WHERE tenant_id IS NULL
-          AND (NOT ${executableOnly}::boolean OR collection_executable)
-        ORDER BY lower(name), id
-        LIMIT 1
-      `,
-        this.sql`
-        SELECT count(*)::int AS total,
-          count(*) FILTER (WHERE status = 'active')::int AS active,
-          count(*) FILTER (WHERE status = 'candidate')::int AS candidate,
-          count(*) FILTER (WHERE status = 'rejected')::int AS rejected,
-          count(*) FILTER (WHERE status = 'retired')::int AS retired,
-          count(*) FILTER (WHERE collection_executable)::int AS executable
-        FROM threat_intel.sources
-        WHERE tenant_id IS NULL
-          AND (NOT ${executableOnly}::boolean OR collection_executable)
-      `
-      ]);
-      const firstRow = first[0];
-      if (!firstRow?.id) return { rows: [], totals: {}, total: 0 };
-      const counts = countRow[0] ?? {};
-      const total = Number(counts.total ?? 0);
-      return {
-        rows: [{ record: firstRow.record, collection_executable: firstRow.collection_executable }],
-        totals: {
-          sourceCount: total,
-          activeSourceCount: Number(counts.active ?? 0),
-          retainedSourceCount: Number(counts.executable ?? 0),
-          inactiveSourceCount: total - Number(counts.executable ?? 0),
-          candidateSourceCount: Number(counts.candidate ?? 0),
-          rejectedSourceCount: Number(counts.rejected ?? 0),
-          retiredSourceCount: Number(counts.retired ?? 0),
-          executableSourceCount: Number(counts.executable ?? 0),
-          operationalMetricsMeasured: false
-        },
-        total,
-        nextCursor: total > 1 ? "1" : undefined
-      };
-    }
     const [rows, totalRows] = await Promise.all([
       this.sql.unsafe(`
         WITH page AS (
