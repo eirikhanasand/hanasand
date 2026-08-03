@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { ADVISORY_CANARY_FEEDS } from "./canaryPortfolioAdvisoryFeeds.ts";
 import { CLOUD_CANARY_FEEDS } from "./canaryPortfolioCloudFeeds.ts";
 import { EXPLOIT_CANARY_FEEDS } from "./canaryPortfolioExploitFeeds.ts";

@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const REVENUE_CANARY_FEEDS = [
   src("src_canary_cso", "CSO Online", "rss", "https://www.csoonline.com/feed/", ["APT", "breach", "ransomware"], "journalism"),
   src("src_canary_infosecurity_mag", "Infosecurity Magazine", "rss", "https://www.infosecurity-magazine.com/rss/news/", ["breach", "ransomware", "CVE"], "journalism"),
