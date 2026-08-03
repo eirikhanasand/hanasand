@@ -203,7 +203,8 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
 }
 export async function runLeasedTask(options: any, runId: string, generatedAt: string, fetcher: any, mode: string, maxBytes: number, counters: any, latestCaptureIds: string[], errors: any[], completeEvaluationCaptures: any[] = []) {
   const leased = options.frontier.next(new Date(generatedAt), (task: any) => task.runId === runId); if (!leased) return;
-  const task = leased.task, source = options.store.getSource?.(task.sourceId), startedMs = Date.now(); counters.leasedTaskCount++;
+  const originalTask = leased.task, source = options.store.getSource?.(originalTask.sourceId), startedMs = Date.now(); counters.leasedTaskCount++;
+  const task = source && isNvdCveSource(source) ? nvdEvaluationTask(options.store, originalTask, source) : originalTask;
   const taskMetrics: any = { itemCount: 0, captureCount: 0, incidentCount: 0, duplicateCount: 0, parserWarningCount: 0, actorIds: new Set<string>(), publishedAt: [], productivePublishedAt: [] };
   try {
     if (!source) throw new Error("source missing");
@@ -309,6 +310,19 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
       });
     }
   }
+}
+
+function nvdEvaluationTask(store: any, task: any, source: any) {
+  const cve = [...new Set<string>((store.listCaptures?.() ?? [])
+    .filter((capture: any) => isCisaKevSource(store.getSource?.(capture.sourceId)))
+    .map((capture: any) => retainedCveId(capture))
+    .filter(Boolean) as string[])]
+    .find((candidate: string) => !(store.listCaptures?.() ?? [])
+      .some((capture: any) => capture.sourceId === source.id && retainedCveId(capture) === candidate));
+  if (!cve) return task;
+  const url = new URL(task.targetUrl);
+  url.searchParams.set("cveId", cve);
+  return { ...task, targetUrl: url.toString(), planning: { ...(task.planning ?? {}), evaluationCveId: cve } };
 }
 function recordWatchlistEvidenceHealth(store: any, collected: any, task: any, runId: string, checkedAt: string, duplicate: boolean, incident: boolean) {
   const evidenceSource = store.getSource?.(collected.sourceId);

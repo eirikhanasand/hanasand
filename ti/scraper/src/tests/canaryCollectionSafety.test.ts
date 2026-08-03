@@ -501,6 +501,20 @@ describe("public collection boundary", () => {
     expect(cycle).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 0 });
   });
 
+  test("aligns an NVD request with an unmatched retained CISA CVE", async () => {
+    const store = new InMemoryScraperStore();
+    const cisa = source({ id: "src_seed_cisa_known_exploited_vulns", type: "api", url: "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json", catalog: { canonicalId: "gov:us:cisa:known-exploited-vulnerabilities" } });
+    const nvd = source({ id: "src_seed_nvd_recent_cves", type: "api", url: "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=40", metadata: { productionCollection: true } });
+    store.saveSource(cisa);
+    store.saveSource(nvd);
+    store.saveCapture({ id: "cap_cisa_reference", sourceId: cisa.id, url: cisa.url, canonicalUrl: cisa.url, collectedAt: "2026-07-20T00:00:00.000Z", publishedAt: "2026-07-20T00:00:00.000Z", contentHash: "cisa-hash", storageKind: "external_object", sensitive: false, metadata: { structuredFields: { cveID: "CVE-2026-4242" }, fetchProvenance: { truncated: false } } });
+    let requestedUrl = "";
+    await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), sourceIds: [nvd.id], maxSources: 1, maxTasks: 1, now: () => "2026-07-29T00:00:00.000Z", fetch: async (url: string) => { requestedUrl = url; return new Response(JSON.stringify({ vulnerabilities: [{ cve: { id: "CVE-2026-4242", descriptions: [{ lang: "en", value: "CVE-2026-4242 remote code execution vulnerability." }] } }] }), { headers: { "content-type": "application/json" } }); } });
+    const request = new URL(requestedUrl);
+    expect(request.searchParams.get("cveId")).toBe("CVE-2026-4242");
+    expect(request.searchParams.has("pubStartDate")).toBe(false);
+  });
+
   test("captures structured ransomware group profiles without manufacturing incidents", async () => {
     const groups = source({
       id: "src_seed_ransomwarelive_groups", type: "api", url: "https://data.ransomware.live/groups.json",

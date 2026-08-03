@@ -167,7 +167,7 @@ function publicFetchUrl(source: any, targetUrl: string, at = new Date().toISOStr
   if (/^https:\/\/services\.nvd\.nist\.gov\/rest\/json\/cves\/2\.0(?:[?#].*)?$/i.test(String(targetUrl))) {
     const url = new URL(targetUrl);
     if (!url.searchParams.has("resultsPerPage")) url.searchParams.set("resultsPerPage", "40");
-    if (!url.searchParams.has("pubStartDate") && !url.searchParams.has("lastModStartDate")) {
+    if (!url.searchParams.has("cveId") && !url.searchParams.has("pubStartDate") && !url.searchParams.has("lastModStartDate")) {
       const end = new Date(at);
       const start = new Date(end.getTime() - 120 * 24 * 60 * 60 * 1_000);
       url.searchParams.set("pubStartDate", start.toISOString());
