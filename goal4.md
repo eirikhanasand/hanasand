@@ -55,7 +55,7 @@ Acceptance:
 
 Historical baseline: 1,473 registered sources, 795 active, 357 capture-producing, and nine with `last_seen_at`.
 
-Current live snapshot (2026-08-02T23:36:59Z, authenticated `/v1/intel/source-operations?summary=true`): 1,235 registered sources, 58 active/executable, 58 checked, 52 successful, 50 healthy, two degraded, and six failed. This is an inventory snapshot only; it does not satisfy the 6,100 qualifying-feed requirement, and the older baseline above is retained for historical comparison.
+Current live snapshot (2026-08-03T00:31:27Z, authenticated `/v1/intel/source-operations?summary=true`): 1,235 registered sources, 58 active/executable, 58 checked, 52 successful, 50 healthy, two degraded, and six failed. This is an inventory snapshot only; it does not satisfy the 6,100 qualifying-feed requirement, and the older baseline above is retained for historical comparison.
 
 Required minimum operating baseline: at least 5,000 qualifying clear-web feeds, 1,000 qualifying lawful dark-web/Tor feeds, and 100 qualifying public Telegram feeds, for at least 6,100 unique active intelligence-producing feeds. These are minimums, not completion caps; automatic discovery and validation must continue beyond them toward 10,000–100,000+ feeds where legitimate, relevant, useful feeds actually exist.
 
