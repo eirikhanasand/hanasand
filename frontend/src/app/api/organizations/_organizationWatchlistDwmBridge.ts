@@ -214,7 +214,7 @@ async function mirrorOrganizationWatchlistToDwm(request: NextRequest, organizati
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
             ...(id ? { id } : {}),
         }
-        return mirrorOrganizationWatchlistToDwmResult({ base, organizationId, mirrorPayloads, authHeaders })
+        return await mirrorOrganizationWatchlistToDwmResult({ base, organizationId, mirrorPayloads, authHeaders })
     } catch (error) {
         const first = mirrorPayloads[0]
         return {

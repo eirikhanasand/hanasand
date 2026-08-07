@@ -84,7 +84,7 @@ test('organization watchlist save mirrors the same scope and failed sync is expl
         }
         if (url === 'http://scraper.test/v1/dwm/watchlists') {
             scraperCalls.push({ headers: new Headers(init?.headers), body: JSON.parse(String(init?.body)) })
-            if (mirrorFails) return Response.json({ error: { code: 'temporary_unavailable' } }, { status: 503 })
+            if (mirrorFails) throw new Error('scraper unavailable')
             return Response.json({ watchlist: { id: 'org_term-1' }, alertRebuild: { savedAlertCount: 0, alertIds: [] } }, { status: 201 })
         }
         throw new Error(`Unexpected fetch: ${url}`)
