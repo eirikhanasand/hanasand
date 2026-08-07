@@ -72,7 +72,8 @@ assert(!homePageSource.includes('|| emptyExposureQueue'))
 assert(!activityPageSource.includes('|| emptyExposureQueue'))
 assert(homeClientSource.includes('initialQueue.status') && homeClientSource.includes('void refresh()'))
 assert(homeClientSource.includes('Feed is stale'))
-assert(activityClientSource.includes("if (status === 'checking') return 'Checking live activity.'"))
+assert(activityClientSource.includes('emptyActivityTitle(queue.status)'))
+assert(activityClientSource.includes('Checking live activity.'))
 
 console.log('shared exposure activity contract ok')
 
