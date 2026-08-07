@@ -66,11 +66,13 @@ assert.equal(checking.page?.total, undefined)
 
 const homePageSource = readFileSync(new URL('../src/app/page.tsx', import.meta.url), 'utf8')
 const activityPageSource = readFileSync(new URL('../src/app/activity/page.tsx', import.meta.url), 'utf8')
+const activityClientSource = readFileSync(new URL('../src/app/activity/activityClient.tsx', import.meta.url), 'utf8')
 const homeClientSource = readFileSync(new URL('../src/app/homeExposureQueueClient.tsx', import.meta.url), 'utf8')
 assert(!homePageSource.includes('|| emptyExposureQueue'))
 assert(!activityPageSource.includes('|| emptyExposureQueue'))
 assert(homeClientSource.includes('initialQueue.status') && homeClientSource.includes('void refresh()'))
 assert(homeClientSource.includes('Feed is stale'))
+assert(activityClientSource.includes("if (status === 'checking') return 'Checking live activity.'"))
 
 console.log('shared exposure activity contract ok')
 

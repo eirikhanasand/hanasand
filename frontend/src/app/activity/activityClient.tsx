@@ -166,8 +166,8 @@ export default function ActivityClient({ initialQueue }: Props) {
                         {visibleItems.map(item => <ActivityRow key={item.id} item={item} />)}
                         {!visibleItems.length && (
                             <div className='grid gap-2 px-6 py-12 text-sm'>
-                                <p className='font-semibold text-ui-text'>{queue.status === 'unavailable' ? 'Activity is temporarily unavailable.' : 'No rows match these filters.'}</p>
-                                <p className='text-ui-muted'>{queue.status === 'unavailable' ? 'The activity service did not respond. Existing records have not been deleted.' : 'Clear a filter or scroll/load more activity before narrowing again.'}</p>
+                                <p className='font-semibold text-ui-text'>{emptyActivityTitle(queue.status)}</p>
+                                <p className='text-ui-muted'>{emptyActivityDetail(queue.status)}</p>
                             </div>
                         )}
                     </div>
@@ -186,6 +186,18 @@ function activityStatus(status: string, visible: number, total: number) {
     if (status === 'checking') return 'Checking live activity'
     if (status === 'stale') return `${visible}/${total} loaded · feed stale`
     return `${visible}/${total} loaded`
+}
+
+function emptyActivityTitle(status: string) {
+    if (status === 'checking') return 'Checking live activity.'
+    if (status === 'unavailable') return 'Activity is temporarily unavailable.'
+    return 'No rows match these filters.'
+}
+
+function emptyActivityDetail(status: string) {
+    if (status === 'checking') return 'Existing records will appear when the live feed responds.'
+    if (status === 'unavailable') return 'The activity service did not respond. Existing records have not been deleted.'
+    return 'Clear a filter or scroll/load more activity before narrowing again.'
 }
 
 function ActivityRow({ item }: { item: ExposureQueueItem }) {
