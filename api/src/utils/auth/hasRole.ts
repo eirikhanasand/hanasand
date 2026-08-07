@@ -40,7 +40,7 @@ export default async function hasRole(req: FastifyRequest, res: FastifyReply, ro
         const roleQuery = await loadSQL('hasRole.sql')
         const { rows } = await run(roleQuery, [id!, role])
 
-        if (!rows.length) {
+        if (rows[0]?.has_role !== true) {
             return { valid: false, error: 'Unauthorized.' }
         }
 

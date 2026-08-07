@@ -19,6 +19,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const coreTasks: TestTask[] = [
     scriptTask('notes-unit', 'Notes unit contract', 'smoke-notes.ts'),
     scriptTask('roles-unit', 'Role permission contract', 'smoke-role-permissions.ts'),
+    scriptTask('role-authorization', 'Role authorization contract', 'smoke-has-role.ts'),
     scriptTask('user-delete-unit', 'User delete contract', 'smoke-user-delete-contract.ts'),
     scriptTask('ai-stack-contracts', 'AI stack detection contract', 'smoke-ai-stack-contracts.ts'),
     scriptTask('ai-metrics-readiness', 'AI metrics readiness contract', 'smoke-ai-metrics-readiness.ts'),
