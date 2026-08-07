@@ -306,7 +306,7 @@ type WatchlistSuggestion = {
     disabled: boolean
 }
 
-type ApiError = Error & { status?: number }
+type ApiError = Error & { status?: number, code?: string }
 
 const initialBundle: OrgBundle = {
     settings: null,
@@ -869,6 +869,9 @@ export default function OrganizationWorkspaceClient() {
             }
         } catch (err) {
             const detail = errorMessage(err)
+            if (err && typeof err === 'object' && 'code' in err && err.code === 'dwm_watchlist_sync_failed' && selectedOrganization?.id) {
+                await loadOrganizationBundle(selectedOrganization.id)
+            }
             setError(detail)
             if (rowKey) {
                 setRowMessages(current => ({ ...current, [rowKey]: { ok: false, text: detail } }))
@@ -1116,7 +1119,7 @@ export default function OrganizationWorkspaceClient() {
         if (isDuplicateWatchlistTerm(bundle.watchlists, draft.kind, draft.value, item.id)) {
             throw new Error('This watchlist term already exists in this organization.')
         }
-        if (!watchlistDraftChanged(item, draft)) return 'No watchlist changes.'
+        const changed = watchlistDraftChanged(item, draft)
         const payload = await requestJson<{ dwmAlertBridge?: DwmAlertBridgeResult }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists/${encodeURIComponent(item.id)}`, {
             method: 'PUT',
             body: JSON.stringify({
@@ -1132,7 +1135,7 @@ export default function OrganizationWorkspaceClient() {
             delete next[item.id]
             return next
         })
-        return watchlistMutationMessage(payload.dwmAlertBridge, `${draft.value.trim()} updated.`)
+        return watchlistMutationMessage(payload.dwmAlertBridge, `${draft.value.trim()} ${changed ? 'updated' : 'synchronized'}.`)
     }, `watchlist-${item.id}`)
 
     const watchlistAction = (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => selectedOrganization && runAction(`${action}-watchlist`, async () => {
@@ -2970,9 +2973,9 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                                     {editDuplicate && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-semibold text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning md:col-span-2'>This term already exists in this organization.</p>}
                                     {!editDuplicate && !editChanged && <p className='rounded-md bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted md:col-span-2'>Watchlist term is current.</p>}
                                     <div className='flex flex-wrap gap-2 md:col-span-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
-                                        <button type='button' className={primaryButtonClass} disabled={!canManage || !edit.value.trim() || editDuplicate || !editChanged || Boolean(busy)} onClick={() => onSave(item)}>
+                                        <button type='button' className={primaryButtonClass} disabled={!canManage || !edit.value.trim() || editDuplicate || Boolean(busy)} onClick={() => onSave(item)}>
                                             <CheckCircle2 className='h-4 w-4' />
-                                            Save
+                                            {editChanged ? 'Save' : 'Sync'}
                                         </button>
                                         <button type='button' className={secondaryButtonClass} disabled={Boolean(busy)} onClick={() => setEditing(current => {
                                             const next = { ...current }
@@ -3731,6 +3734,8 @@ async function requestJson<T = Record<string, unknown>>(url: string, init: Reque
     if (!response.ok) {
         const error = new Error(apiErrorMessage(payload, response.status)) as ApiError
         error.status = response.status
+        const code = objectValue(objectValue(payload)?.error)?.code
+        if (typeof code === 'string') error.code = code
         throw error
     }
     return payload as T
@@ -3754,6 +3759,9 @@ function apiErrorMessage(payload: unknown, status: number) {
 }
 
 function errorMessage(error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'dwm_watchlist_sync_failed' && error instanceof Error) {
+        return error.message
+    }
     if (error && typeof error === 'object' && 'status' in error && (error.status === 401 || error.status === 403)) {
         return 'Sign in with an organization account to manage organizations.'
     }

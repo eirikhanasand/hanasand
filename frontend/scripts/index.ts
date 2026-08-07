@@ -87,6 +87,11 @@ const tasks: TestTask[] = [
         command: [bun, 'scripts/check-dwm-analyst-brief.mjs'],
     },
     {
+        id: 'organization-customer-boundaries',
+        title: 'Organization customer boundaries',
+        command: [bun, 'test', 'tests/organization-customer-boundaries.test.mjs'],
+    },
+    {
         id: 'browser-report-evidence',
         title: 'Browser report evidence contract',
         command: [bun, 'scripts/check-browser-report-evidence.mjs'],

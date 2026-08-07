@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { Activity, AlertTriangle, Radio, Radar, Search, ShieldAlert } from 'lucide-react'
+import { Activity, AlertTriangle, Radio, Radar, ShieldAlert } from 'lucide-react'
 import { getMonitoringOverview } from '@/utils/monitoring/data'
 import getStatus from '@/utils/status/getStatus'
 import { toPublicServiceStatus } from '@/utils/status/publicStatus'
@@ -30,12 +30,6 @@ export default async function Page() {
     const serviceIssues = publicStatus.checks.filter(check => check.status !== 'up')
     const slowestChecks = [...publicStatus.checks].sort((a, b) => (b.latency_ms || 0) - (a.latency_ms || 0)).slice(0, 5)
     const actions = [
-        overview.criticalVulnerabilities ? {
-            href: '/dashboard/vulnerabilities',
-            title: 'Fix critical vulnerabilities',
-            detail: `${formatNumber(overview.criticalVulnerabilities)} critical findings across monitored images.`,
-            tone: 'bad' as const,
-        } : null,
         overview.activeDomains ? {
             href: '/monitor',
             title: 'Review monitored domains',
@@ -74,10 +68,9 @@ export default async function Page() {
                 </div>
             </DashboardPanel>
 
-            <div className='grid gap-3 md:grid-cols-3'>
+            <div className='grid gap-3 md:grid-cols-2'>
                 <OverviewCard href='/monitor' title='Domains watched' value={formatNumber(overview.activeDomains)} detail='open the monitored domain list' icon={<Radar className='h-4 w-4' />} tone={overview.activeDomains ? 'ok' : 'watch'} />
-                <OverviewCard title='Critical vulnerabilities' value={formatNumber(overview.criticalVulnerabilities)} detail={`${formatNumber(overview.totalVulnerabilities)} total findings across images`} icon={<ShieldAlert className='h-4 w-4' />} tone={overview.criticalVulnerabilities ? 'bad' : 'ok'} />
-                <OverviewCard title='Scanner' value={overview.scanRunning ? 'running' : formatNumber(overview.imagesScanned)} detail={overview.scanRunning ? 'image scan is active now' : 'monitored images'} icon={<Search className='h-4 w-4' />} tone={overview.scanRunning ? 'watch' : overview.imagesScanned ? 'ok' : 'neutral'} />
+                <OverviewCard title='Vulnerability monitoring' value='Not configured' detail='no organization-scoped image scanner' icon={<ShieldAlert className='h-4 w-4' />} tone='neutral' />
             </div>
 
             <div className='grid gap-3 xl:grid-cols-[1fr_0.9fr]'>

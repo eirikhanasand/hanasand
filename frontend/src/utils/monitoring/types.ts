@@ -119,8 +119,4 @@ export type MonitoringOverview = {
     requestsThisMonth: number
     requestsTotal: number
     activeDomains: number
-    totalVulnerabilities: number
-    criticalVulnerabilities: number
-    imagesScanned: number
-    scanRunning: boolean
 }
