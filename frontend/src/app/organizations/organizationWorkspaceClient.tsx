@@ -4905,7 +4905,7 @@ function payloadPreviewFromPayload(payload: unknown, delivery: DeliveryRow): Del
 
 function watchlistMutationMessage(bridge: DwmAlertBridgeResult | undefined, fallback: string) {
     if (!bridge) return fallback
-    if (bridge.skipped) return `${fallback} Alert sync skipped: ${humanizeBridgeReason(bridge.reason)}.`
+    if (bridge.skipped) return { message: `${fallback} Alert sync skipped: ${humanizeBridgeReason(bridge.reason)}.`, warning: true }
     if (bridge.savedAlertCount && bridge.savedAlertCount > 0) {
         const firstAlert = bridge.firstAlert
         const matched = firstAlert?.matchedTerm || bridge.matchedTerms?.[0]
@@ -4925,7 +4925,7 @@ function watchlistMutationMessage(bridge: DwmAlertBridgeResult | undefined, fall
         const terms = bridge.matchedTerms?.length ? ` for ${bridge.matchedTerms.join(', ')}` : ''
         return `${fallback} No matching captures found${terms}.`
     }
-    return `${fallback} Alert sync did not complete${bridge.reason ? `: ${humanizeBridgeReason(bridge.reason)}` : ''}.`
+    return { message: `${fallback} Alert sync did not complete${bridge.reason ? `: ${humanizeBridgeReason(bridge.reason)}` : ''}.`, warning: true }
 }
 
 function humanizeBridgeReason(value: unknown) {

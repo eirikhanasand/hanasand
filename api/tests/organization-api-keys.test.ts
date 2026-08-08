@@ -48,7 +48,7 @@ describe('organization API key onboarding', () => {
         }, fakeRun as any)
         expect(created.secret).toMatch(/^hsk_[a-f0-9]{12}_[a-f0-9]{48}$/)
         expect(created.apiKey).toMatchObject({ organizationId: 'org-a', name: 'Developer API', tier: 'starter', enabled: true })
-        expect(created.apiKey.scopes).toHaveLength(12)
+        expect(created.apiKey.scopes).toHaveLength(13)
         expect(created.apiKey.scopes.find(scope => scope.route === '/api/v1/ti/search/batch')?.limits).toEqual({
             perSecond: 1,
             perMinute: 12,
