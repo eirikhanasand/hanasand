@@ -1050,7 +1050,7 @@ function buildEvidencePriority(input: {
     const victimRows = input.victimObservations.map((item, index) => priorityRow({
         rowId: queueRowId('victim', index, '', item.victim),
         label: item.victim,
-        score: baseScore(item.confidence, /microsoft|solarwinds|federal|government|diplomatic/i.test(`${item.victim} ${item.sector}`) ? 'high' : 'medium'),
+        score: baseScore(item.confidence, item.confidence >= 0.85 ? 'high' : item.confidence >= 0.65 ? 'medium' : 'low'),
         state: priorityState(),
         sourceIds: uniqueStrings([...item.sourceIds, ...sourceIds]),
         captureIds,
