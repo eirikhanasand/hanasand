@@ -2,7 +2,11 @@ import type { SourceRecord } from "../types.ts";
 import { familyForSource } from "./publicSignalFamilies.ts";
 
 export function selectSources(sources: SourceRecord[], query: string, limit: number) {
-  return sources.map((source) => ({ ...sourceSummary(source), family: familyForSource(source), selected: true, score: scoreSource(source, query), reliability: source.trustScore ?? 0.5, freshness: 0.7 })).sort((a, b) => b.score - a.score).slice(0, limit);
+  return sources
+    .filter((source) => source.status === "active" && source.countsAsCoverage !== false)
+    .map((source) => ({ ...sourceSummary(source), family: familyForSource(source), selected: true, score: scoreSource(source, query), reliability: source.trustScore ?? 0.5, freshness: 0.7 }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
 }
 
 function sourceSummary(source: SourceRecord) {

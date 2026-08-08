@@ -66,4 +66,23 @@ describe("compact public signal fusion", () => {
     expect(fusion.publicSignalDeltas).toEqual([]);
     expect(fusion.publicSignalValueImpact.sellableRows).toBe(0);
   });
+
+  test("does not promote evidence from inactive or non-coverage sources", () => {
+    const fusion = buildPublicSignalFusionWorkbench({
+      query: "APT29",
+      sources: [
+        ...sources,
+        { ...sources[0], id: "src_retired", status: "retired" },
+        { ...sources[0], id: "src_held", status: "active", countsAsCoverage: false },
+      ],
+      advisorySignals: [
+        { ...advisory, sourceId: "src_retired" },
+        { ...advisory, id: "adv_held", sourceId: "src_held" },
+      ],
+    });
+
+    expect(fusion.publicSignalDeltas).toEqual([]);
+    expect(fusion.publicSignalValueImpact.sellableRows).toBe(0);
+    expect(fusion.selectedSources.map((source: any) => source.id)).not.toEqual(expect.arrayContaining(["src_retired", "src_held"]));
+  });
 });

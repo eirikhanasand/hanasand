@@ -10,13 +10,13 @@ export function buildPublicSignalFusionWorkbench(input: PublicSignalFusionInput)
   const generatedAt = input.generatedAt ?? nowIso();
   const sourceRecords = input.sources ?? [];
   const selectedSources = selectSources(sourceRecords, input.query, input.maxSelectedSources ?? 25);
-  const sourceIds = new Set(sourceRecords.map((source: any) => String(source.id)));
+  const sourceIds = new Set(selectedSources.map((source: any) => String(source.id)));
   const publicSignalDeltas = [
     ...((input.evidence ?? []).map((item: any) => deltaFromEvidence(item, generatedAt))),
     ...((input.advisorySignals ?? []).map((item: any) => deltaFromAdvisory(item, generatedAt))),
     ...((input.darkwebMetadataSignals ?? []).map((item: any) => deltaFromDarkweb(item, generatedAt)))
   ].filter((delta) => (delta.summary || delta.title || delta.matchedEntities) && sourceIds.has(String(delta.sourceId ?? "")));
-  const actorSourceCoverageMatrix = buildActorSourceCoverageMatrix({ query: input.query, sources: sourceRecords, deltas: publicSignalDeltas, generatedAt });
+  const actorSourceCoverageMatrix = buildActorSourceCoverageMatrix({ query: input.query, sources: selectedSources, deltas: publicSignalDeltas, generatedAt });
   const publicSignalLiveCollectionLoop = buildPublicSignalLiveCollectionLoopDto({ query: input.query, sources: selectedSources, deltas: publicSignalDeltas, generatedAt });
   const observedFamilies = actorSourceCoverageMatrix.rows.filter((row: any) => row.status === "ready").map((row: any) => row.family);
   const missingObservedFamilies = FAMILIES.filter((family) => !observedFamilies.includes(family));
