@@ -85,7 +85,7 @@ export const trustArtifacts: TrustArtifact[] = [
             ['Contract status', 'No public standard DPA is offered today; signed processing terms require a written agreement.'],
             ['Customer data', 'Watchlists, alert records, user/account data, webhook settings, and support context.'],
             ['Raw leak material', 'Not required for the default alerting workflow.'],
-            ['Deletion/export', 'Watchlist alert-term export exists; broader customer-data export and deletion are handled through support.'],
+            ['Deletion/export', 'Organization-scoped JSON export and bounded purge requests are available; retention enforcement and protected-evidence handling remain explicitly bounded.'],
         ],
         sections: [
             {
@@ -98,7 +98,7 @@ export const trustArtifacts: TrustArtifact[] = [
             },
             {
                 title: 'Retention posture',
-                body: 'Organization settings store a retention period, but automated lifecycle enforcement for every customer record is not claimed as generally available. A production order must identify the records in scope, the deletion mechanism, legal-hold handling, and the evidence used to verify enforcement.',
+                body: 'The organization workspace exposes the configured retention period, a JSON privacy export, and a confirmation-gated bounded purge request. Automated lifecycle enforcement for every customer record is not claimed as generally available; a production order must identify records in scope, purge timing, protected-evidence handling, legal holds, and the evidence used to verify enforcement.',
             },
             {
                 title: 'Incident and breach notification',
@@ -117,7 +117,7 @@ export const trustArtifacts: TrustArtifact[] = [
         },
         nextSteps: [
             'Send jurisdiction, required DPA template, vendor portal, and deadline through /contact?intent=procurement.',
-            'Do not approve production until retention, deletion, audit-log, and regional hosting requirements are written and technically verified.',
+            'Do not approve production until retention, export, purge, protected-evidence, audit-log, and regional hosting requirements are written and technically verified.',
             'Execute a signed DPA or equivalent processing terms before processing sensitive customer watchlists at scale.',
         ],
     },
