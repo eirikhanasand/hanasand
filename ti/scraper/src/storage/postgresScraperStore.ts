@@ -1374,8 +1374,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   private async hydrate(): Promise<void> {
-    const workflowEventLimit = Math.max(0, Math.min(100_000, Number(Bun.env.TI_WORKFLOW_HYDRATION_EVENT_LIMIT ?? "10000") || 10000));
-    const [sources, captures, incidents, entities, indicators, actorProfiles, actorIdentityCatalogs, actorIdentities, evidenceLinks, validations, alerts, evaluationLabels, sourceHealth, timeliness, runs, claims, claimEvidence, claimReviews, workflows, workflowEvents] = await Promise.all([
+    const workflowHistoryLimit = Math.max(0, Math.min(100_000, Number(Bun.env.TI_WORKFLOW_HYDRATION_HISTORY_LIMIT ?? "5000") || 5000));
+    const [sources, captures, incidents, entities, indicators, actorProfiles, actorIdentityCatalogs, actorIdentities, evidenceLinks, validations, alerts, evaluationLabels, sourceHealth, timeliness, runs, claims, claimEvidence, claimReviews, workflows, reviewTasks, workflowEvents] = await Promise.all([
       this.sql`SELECT record FROM threat_intel.sources ORDER BY created_at`,
       this.sql`SELECT record FROM threat_intel.captures ORDER BY collected_at`,
       this.sql`SELECT record FROM threat_intel.incidents ORDER BY first_seen_at`,
@@ -1394,12 +1394,15 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       this.sql`SELECT record FROM threat_intel.intelligence_claims ORDER BY first_seen_at`,
       this.sql`SELECT record FROM threat_intel.claim_evidence ORDER BY created_at`,
       this.sql`SELECT record FROM threat_intel.claim_reviews ORDER BY reviewed_at`,
-      // Keep the current workflow inventory in memory, but do not make startup
-      // proportional to an unbounded audit-event history. The full history
-      // remains durable in PostgreSQL for retention/export paths.
-      this.sql`SELECT record_type, record FROM threat_intel.workflow_records WHERE record->>'recordKind' IS DISTINCT FROM 'automatic_intelligence_review_event' ORDER BY created_at`,
-      workflowEventLimit > 0
-        ? this.sql`SELECT record_type, record FROM threat_intel.workflow_records WHERE record->>'recordKind' = 'automatic_intelligence_review_event' ORDER BY created_at DESC LIMIT ${workflowEventLimit}`
+      // Keep operational workflow records in memory, but do not make startup
+      // proportional to the automatic-review history. The full history remains
+      // durable in PostgreSQL for retention/export paths.
+      this.sql`SELECT record_type, record FROM threat_intel.workflow_records WHERE record_type <> 'analyst_metadata_review_task' ORDER BY created_at`,
+      workflowHistoryLimit > 0
+        ? this.sql`SELECT record_type, record FROM threat_intel.workflow_records WHERE record_type = 'analyst_metadata_review_task' AND record->>'recordKind' = 'automatic_intelligence_review_task' ORDER BY created_at DESC LIMIT ${workflowHistoryLimit}`
+        : Promise.resolve([]),
+      workflowHistoryLimit > 0
+        ? this.sql`SELECT record_type, record FROM threat_intel.workflow_records WHERE record_type = 'analyst_metadata_review_task' AND record->>'recordKind' = 'automatic_intelligence_review_event' ORDER BY created_at DESC LIMIT ${workflowHistoryLimit}`
         : Promise.resolve([])
     ]);
     this.hydrateWithoutOrganizationWriteGuard(() => {
@@ -1424,7 +1427,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     for (const row of claims) super.saveIntelligenceClaim(readRecord(row));
     for (const row of claimEvidence) super.saveClaimEvidence(readRecord(row));
     for (const row of claimReviews) super.saveClaimReview(readRecord(row));
-    for (const row of [...workflows, ...workflowEvents]) this.hydrateWorkflow(String(row.record_type), readRecord(row));
+    for (const row of [...workflows, ...reviewTasks, ...workflowEvents]) this.hydrateWorkflow(String(row.record_type), readRecord(row));
     });
     this.pipelineDepth++;
     const reconciledAt = new Date().toISOString();
