@@ -4,9 +4,11 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { isAllowedApiOrigin, verifiedClientIp } from '#utils/http/publicBoundary.ts'
 import { credentialPeriodLimits, resolveRateLimitActor } from '#plugins/rateLimit.ts'
 import { organizationPublicApiScopes } from '#utils/auth/apiKeys.ts'
-import postTiSearch, { normalizeBatchQueries, postTiSearchBatch, TI_BATCH_MAX_QUERIES } from '../src/handlers/ti/search.ts'
+import postTiSearch, { normalizeBatchQueries } from '../src/handlers/ti/search.ts'
 import { TRUSTED_API_PROXIES } from '../src/utils/http/publicBoundary.ts'
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 
 describe('public TI API boundary', () => {
     test('uses Fastify verified client IP instead of a caller-supplied forwarding header', () => {
@@ -96,7 +98,7 @@ describe('public TI API boundary', () => {
         expect(normalizeBatchQueries(['x', 'x'.repeat(201)])).toEqual([])
     })
 
-    test('allows one anonymous read-only search while protecting batch search', async () => {
+    test('allows one anonymous read-only search', async () => {
         const single = reply()
         const singleResult = await postTiSearch({ body: { query: 'APT29' } } as FastifyRequest<{ Body: { query: string } }>, single as unknown as FastifyReply) as any
         expect(singleResult.statusCode).toBe(200)
@@ -107,23 +109,13 @@ describe('public TI API boundary', () => {
         const unexpectedResult = await postTiSearch({ body: { query: 'APT29', tenantId: 'other' } } as any, unexpected as unknown as FastifyReply) as any
         expect(unexpectedResult.statusCode).toBe(400)
         expect(unexpectedResult.payload.error).toBe('invalid_request')
+    })
 
-        const anonymous = reply()
-        const anonymousResult = await postTiSearchBatch({ body: { queries: ['APT29'] } } as FastifyRequest<{ Body: { queries: string[] } }>, anonymous as unknown as FastifyReply) as any
-        expect(anonymousResult.statusCode).toBe(401)
-        expect(anonymousResult.payload.error).toBe('authentication_required')
-        expect(anonymousResult.headers['cache-control']).toBe('no-store, max-age=0')
-
-        const authenticated = reply()
-        const queries = Array.from({ length: TI_BATCH_MAX_QUERIES + 1 }, (_, index) => `actor-${index}`)
-        const oversizedResult = await postTiSearchBatch({ body: { queries }, apiKeyAuth: {} } as any, authenticated as unknown as FastifyReply) as any
-        expect(oversizedResult.statusCode).toBe(400)
-        expect(oversizedResult.payload.error).toBe('too_many_queries')
-
-        const duplicateFlood = reply()
-        const duplicateFloodResult = await postTiSearchBatch({ body: { queries: Array(TI_BATCH_MAX_QUERIES + 1).fill('APT29') }, apiKeyAuth: {} } as any, duplicateFlood as unknown as FastifyReply) as any
-        expect(duplicateFloodResult.statusCode).toBe(400)
-        expect(duplicateFloodResult.payload.error).toBe('too_many_queries')
+    test('ships batch search only through the canonical versioned API', async () => {
+        const routes = await readFile(new URL('../src/routes.ts', import.meta.url), 'utf8')
+        expect(routes).not.toContain("fastify.post('/ti/search/batch'")
+        expect(routes).not.toContain('postTiSearchBatch')
+        expect(existsSync(fileURLToPath(new URL('../../frontend/src/app/api/ti/search/batch/route.ts', import.meta.url)))).toBe(false)
     })
 })
 

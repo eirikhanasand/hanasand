@@ -166,7 +166,7 @@ import {
     postSupportSessionRevoke,
 } from './handlers/adminSupport.ts'
 import { deleteProject, deleteShare, getProject, getShare, getShareTree, getUserProjects, getUserShares, postShare, putShare, toggleShareLock } from './handlers/share.ts'
-import postTiSearch, { postTiSearchBatch } from './handlers/ti/search.ts'
+import postTiSearch from './handlers/ti/search.ts'
 import { getTiEnrichment, postTiEnrichmentRun } from './handlers/ti/enrichment.ts'
 import {
     deleteOrganizationWatchlist,
@@ -307,7 +307,6 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
 
     // Threat intelligence
     fastify.post('/ti/search', postTiSearch)
-    fastify.post('/ti/search/batch', postTiSearchBatch)
     fastify.get('/ti/enrichment', getTiEnrichment)
     fastify.post('/ti/enrichment/run', postTiEnrichmentRun)
 
