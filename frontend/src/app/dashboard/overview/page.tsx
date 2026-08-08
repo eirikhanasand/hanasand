@@ -7,6 +7,7 @@ import { getMonitoringOverview } from '@/utils/monitoring/data'
 import getStatus from '@/utils/status/getStatus'
 import { toPublicServiceStatus } from '@/utils/status/publicStatus'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
+import DwmOverviewPanel from './dwmOverviewPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,11 +53,13 @@ export default async function Page() {
                 eyebrow='Dashboard'
             />
 
+            <DwmOverviewPanel />
+
             <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
                 <div className='flex items-center justify-between gap-3'>
                     <div>
-                        <h2 className='text-base font-semibold text-ui-text'>Traffic</h2>
-                        <p className='mt-1 text-sm text-ui-muted'>Requests grouped by clear time periods.</p>
+                        <h2 className='text-base font-semibold text-ui-text'>Platform traffic</h2>
+                        <p className='mt-1 text-sm text-ui-muted'>Legacy service telemetry across monitored surfaces; not an organization alert metric.</p>
                     </div>
                     <Activity className={`h-4 w-4 ${overview.requestsToday ? 'text-ui-success' : 'text-ui-warning'}`} />
                 </div>
