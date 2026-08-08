@@ -23,6 +23,24 @@ describe("api v1", () => {
 
   });
 
+  test("serves actor search from scoped indexes without scanning complete evidence tables", async () => {
+    const store = new InMemoryScraperStore();
+    seedActorIdentityCatalog(store, [apt29]);
+    store.saveSource(source({ id: "src_indexed_search", tenantId: "tenant_api", name: "Indexed public report" }));
+    store.saveCapture(fixtureCapture({ id: "cap_indexed_search", sourceId: "src_indexed_search", title: "APT29 phishing campaign", body: "APT29 launched a credential phishing campaign against diplomatic organizations using malware.", publishedAt: "2026-07-20T00:00:00.000Z" }));
+    store.saveExtractedEntity({ id: "entity_indexed_search", tenantId: "tenant_api", captureId: "cap_indexed_search", sourceId: "src_indexed_search", type: "actor", value: "APT29", normalizedValue: "apt29", assertionKind: "observed", extractionMethod: "source_specific", confidence: 0.9 });
+    store.saveIndicator({ id: "indicator_indexed_search", tenantId: "tenant_api", captureId: "cap_indexed_search", sourceId: "src_indexed_search", type: "domain", value: "example.org", confidence: 0.8 });
+    store.saveIntelligenceClaim({ id: "claim_indexed_search", tenantId: "tenant_api", sourceIds: ["src_indexed_search"], captureIds: ["cap_indexed_search"], claimType: "actor_activity", value: { actor: "APT29" }, summary: "APT29 activity", confidence: 0.8, reviewState: "needs_review", corroborationState: "single_source" });
+    for (const method of ["listExtractedEntities", "listIndicators", "listIntelligenceClaims", "listClaimEvidence", "listClaimReviews"]) {
+      (store as any)[method] = () => { throw new Error(`${method} performed a complete-table scan`); };
+    }
+
+    const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&entityType=actor&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
+    expect(response.rows.map((row: any) => row.id)).toEqual(["cap_indexed_search"]);
+    expect(response.claims.map((claim: any) => claim.id)).toEqual(["claim_indexed_search"]);
+    expect(response.actorIntelligence.indicators).toEqual(["example.org"]);
+  });
+
   test("does not present same-source captures as cross-source corroboration", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "src_single", tenantId: "tenant_api", name: "Single publisher" }));

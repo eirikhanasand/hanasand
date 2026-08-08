@@ -24,12 +24,22 @@ export type ActorIdentityCatalogSnapshot = MitreActorCatalogSnapshot | Ransomwar
 export type ActorIdentityCatalogProvenance = { sourceId: string; captureId: string; importedAt?: string };
 const mapValues = <T>(map: Map<string, T>) => [...map.values()];
 const put = <T extends { id: string }>(map: Map<string, T>, item: T) => (map.set(item.id, item), item);
+const indexKeys = (index: Map<string, Set<string>>, id: string, previous: unknown[], next: unknown[]) => {
+  for (const key of previous.map(String)) { const ids = index.get(key); ids?.delete(id); if (!ids?.size) index.delete(key); }
+  for (const key of next.map(String)) index.set(key, new Set([...(index.get(key) ?? []), id]));
+};
+const indexedValues = <T extends { id: string; tenantId?: string }>(index: Map<string, Set<string>>, keys: Iterable<string>, records: Map<string, T>, tenantId?: string) => {
+  const ids = new Set([...keys].flatMap((key) => [...(index.get(key) ?? [])]));
+  return [...ids].flatMap((id) => { const record = records.get(id); return record && (record.tenantId || undefined) === tenantId ? [record] : []; });
+};
 export class InMemoryScraperStore implements ScraperStore {
   private captures = new Map<string, RawCapture>(); private exposureQueueCaptureIds = new Set<string>(); private dedupe = new Map<string, string>(); private incidents = new Map<string, IncidentCandidate>(); private sources = new Map<string, SourceRecord>(); private plans = new Map<string, any>(); private runs = new Map<string, any>();
   private extractedEntities = new Map<string, any>(); private indicators = new Map<string, any>(); private actorProfiles = new Map<string, any>(); private actorAliases = new Map<string, any>(); private actorIdentityCatalogs = new Map<string, any>(); private actorIdentities = new Map<string, any>(); private evidenceLinks = new Map<string, any>(); private validationRecords = new Map<string, EvaluationValidationRecord>(); private evaluationLabels = new Map<string, EvaluationLabelRecord>();
+  private entityIdsByCapture = new Map<string, Set<string>>(); private entityIdsByType = new Map<string, Set<string>>(); private indicatorIdsByCapture = new Map<string, Set<string>>();
   private sourceHealthObservations = new Map<string, any>(); private timelinessRecords = new Map<string, any>();
   private evaluationBenchmarks = new Map<string, EvaluationBenchmarkRecord>(); private evaluationBenchmarkTaskIndexes = new Map<string, Map<string, number>>(); private evaluationAnnotations = new Map<string, EvaluationAnnotationRecord>(); private evaluationAdjudications = new Map<string, EvaluationAdjudicationRecord>();
   private intelligenceClaims = new Map<string, any>(); private claimEvidence = new Map<string, any>(); private claimReviews = new Map<string, any>();
+  private claimIdsByCapture = new Map<string, Set<string>>(); private claimEvidenceIdsByCapture = new Map<string, Set<string>>(); private claimEvidenceIdsBySubject = new Map<string, Set<string>>(); private claimReviewIdsByClaim = new Map<string, Set<string>>();
   private analystMetadataReviewTasks = new Map<string, any>(); private analystSourceActivationPackets = new Map<string, any>(); private analystVictimNotificationPackets = new Map<string, any>(); private analystClaimLedgerEntries = new Map<string, any>(); private analystLoopSnapshots = new Map<string, any>();
   private organizations = new Map<string, any>(); private organizationMembers = new Map<string, any>(); private organizationInvites = new Map<string, any>(); private webhookDestinations = new Map<string, any>();
   private cases = new Map<string, any>();
@@ -163,8 +173,13 @@ export class InMemoryScraperStore implements ScraperStore {
   listEvidenceDeltas() { return mapValues(this.evidenceDeltas); }
   queries() { return this.evidenceQueries; }
   saveIncident(candidate: IncidentCandidate) { return this.putScoped(this.incidents, candidate); } getIncident(id: string) { return this.incidents.get(id); } listIncidents() { return mapValues(this.incidents); }
-  saveExtractedEntity(entity: any) { return this.putScoped(this.extractedEntities, entity); } getExtractedEntity(id: string) { return this.extractedEntities.get(id); } listExtractedEntities() { return mapValues(this.extractedEntities); }
-  saveIndicator(indicator: any) { return this.putScoped(this.indicators, indicator); } getIndicator(id: string) { return this.indicators.get(id); } listIndicators() { return mapValues(this.indicators); }
+  saveExtractedEntity(entity: any) { const previous = this.extractedEntities.get(entity.id); const stored = this.putScoped(this.extractedEntities, entity); indexKeys(this.entityIdsByCapture, stored.id, [previous?.captureId].filter(Boolean), [stored.captureId].filter(Boolean)); indexKeys(this.entityIdsByType, stored.id, [previous?.type].filter(Boolean), [stored.type].filter(Boolean)); return stored; }
+  getExtractedEntity(id: string) { return this.extractedEntities.get(id); } listExtractedEntities() { return mapValues(this.extractedEntities); }
+  listExtractedEntitiesByCaptureIds(captureIds: Iterable<string>, tenantId?: string) { return indexedValues(this.entityIdsByCapture, captureIds, this.extractedEntities, tenantId); }
+  listExtractedEntitiesByTypes(types: Iterable<string>, tenantId?: string) { return indexedValues(this.entityIdsByType, types, this.extractedEntities, tenantId); }
+  saveIndicator(indicator: any) { const previous = this.indicators.get(indicator.id); const stored = this.putScoped(this.indicators, indicator); indexKeys(this.indicatorIdsByCapture, stored.id, [previous?.captureId].filter(Boolean), [stored.captureId].filter(Boolean)); return stored; }
+  getIndicator(id: string) { return this.indicators.get(id); } listIndicators() { return mapValues(this.indicators); }
+  listIndicatorsByCaptureIds(captureIds: Iterable<string>, tenantId?: string) { return indexedValues(this.indicatorIdsByCapture, captureIds, this.indicators, tenantId); }
   saveActorProfile(profile: any) {
     const stored = this.putScoped(this.actorProfiles, profile);
     const aliases = activeActorProfile(profile) ? unique([...(profile.aliases ?? []), profile.canonicalName]) : [];
@@ -322,14 +337,21 @@ export class InMemoryScraperStore implements ScraperStore {
   getEvaluationBenchmark(id: string) { return this.evaluationBenchmarks.get(id); } listEvaluationBenchmarks() { return mapValues(this.evaluationBenchmarks); }
   saveEvaluationAnnotation(record: EvaluationAnnotationRecord) { this.assertOrganizationWritable(record); const previous = this.evaluationAnnotations.get(record.id); if (previous && canonicalJson(previous) !== canonicalJson(record)) throw new Error(`Evaluation annotation is immutable: ${record.id}`); return previous ?? put(this.evaluationAnnotations, record); } getEvaluationAnnotation(id: string) { return this.evaluationAnnotations.get(id); } listEvaluationAnnotations() { return mapValues(this.evaluationAnnotations); }
   saveEvaluationAdjudication(record: EvaluationAdjudicationRecord) { this.assertOrganizationWritable(record); const previous = this.evaluationAdjudications.get(record.id); if (previous && canonicalJson(previous) !== canonicalJson(record)) throw new Error(`Evaluation adjudication is immutable: ${record.id}`); return previous ?? put(this.evaluationAdjudications, record); } getEvaluationAdjudication(id: string) { return this.evaluationAdjudications.get(id); } listEvaluationAdjudications() { return mapValues(this.evaluationAdjudications); }
-  saveIntelligenceClaim(claim: any) { return this.putScoped(this.intelligenceClaims, claim); } getIntelligenceClaim(id: string) { return this.intelligenceClaims.get(id); } listIntelligenceClaims() { return mapValues(this.intelligenceClaims); }
-  saveClaimEvidence(evidence: any) { return this.putScoped(this.claimEvidence, evidence); } getClaimEvidence(id: string) { return this.claimEvidence.get(id); } listClaimEvidence() { return mapValues(this.claimEvidence); }
+  saveIntelligenceClaim(claim: any) { const previous = this.intelligenceClaims.get(claim.id); const stored = this.putScoped(this.intelligenceClaims, claim); indexKeys(this.claimIdsByCapture, stored.id, previous?.captureIds ?? [], stored.captureIds ?? []); return stored; }
+  getIntelligenceClaim(id: string) { return this.intelligenceClaims.get(id); } listIntelligenceClaims() { return mapValues(this.intelligenceClaims); }
+  listIntelligenceClaimsByCaptureIds(captureIds: Iterable<string>, tenantId?: string) { return indexedValues(this.claimIdsByCapture, captureIds, this.intelligenceClaims, tenantId); }
+  saveClaimEvidence(evidence: any) { const previous = this.claimEvidence.get(evidence.id); const stored = this.putScoped(this.claimEvidence, evidence); indexKeys(this.claimEvidenceIdsByCapture, stored.id, [previous?.captureId].filter(Boolean), [stored.captureId].filter(Boolean)); indexKeys(this.claimEvidenceIdsBySubject, stored.id, [previous?.subjectId].filter(Boolean), [stored.subjectId].filter(Boolean)); return stored; }
+  getClaimEvidence(id: string) { return this.claimEvidence.get(id); } listClaimEvidence() { return mapValues(this.claimEvidence); }
+  listClaimEvidenceByCaptureIds(captureIds: Iterable<string>, tenantId?: string) { return indexedValues(this.claimEvidenceIdsByCapture, captureIds, this.claimEvidence, tenantId); }
+  listClaimEvidenceBySubjectIds(subjectIds: Iterable<string>, tenantId?: string) { return indexedValues(this.claimEvidenceIdsBySubject, subjectIds, this.claimEvidence, tenantId); }
   saveClaimReview(review: any) {
     this.assertOrganizationWritable(review);
     const claim = this.getIntelligenceClaim(review.claimId);
     if (!claim) throw new Error(`Unknown intelligence claim: ${review.claimId}`);
     const nextState = claimStateForReview(review.action, claim.reviewState);
+    const previous = this.claimReviews.get(review.id);
     const storedReview = put(this.claimReviews, { ...review, previousState: claim.reviewState, nextState });
+    indexKeys(this.claimReviewIdsByClaim, storedReview.id, [previous?.claimId].filter(Boolean), [storedReview.claimId].filter(Boolean));
     const legalHold = review.action === "attach_legal_hold" ? true : review.action === "release_legal_hold" ? false : claim.legalHold ?? false;
     const updated = this.saveIntelligenceClaim({
       ...claim,
@@ -345,6 +367,7 @@ export class InMemoryScraperStore implements ScraperStore {
     return { review: storedReview, claim: updated };
   }
   getClaimReview(id: string) { return this.claimReviews.get(id); } listClaimReviews() { return mapValues(this.claimReviews); }
+  listClaimReviewsByClaimIds(claimIds: Iterable<string>, tenantId?: string) { return indexedValues(this.claimReviewIdsByClaim, claimIds, this.claimReviews, tenantId); }
   saveSourceHealthObservation(observation: any) { return this.putScoped(this.sourceHealthObservations, observation); } getSourceHealthObservation(id: string) { return this.sourceHealthObservations.get(id); } listSourceHealthObservations() { return mapValues(this.sourceHealthObservations); }
   saveTimelinessRecord(record: any) { assertTimelinessOrder(record); return this.putScoped(this.timelinessRecords, record); }
   hydrateTimelinessSnapshot(record: any) { return put(this.timelinessRecords, record); }

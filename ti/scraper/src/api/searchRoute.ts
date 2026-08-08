@@ -314,18 +314,22 @@ function compactPublicChannel(status: any, packs: any[] = [], query: string) {
 
 function searchRecords(store: any, tenantId: string | undefined, captureIds: Set<string>, sourceIds: Set<string>) {
   const scoped = (method: string) => (typeof store[method] === "function" ? store[method]() : []).filter((record: any) => (record.tenantId || undefined) === tenantId);
-  const restrictedCaptureIds = new Set(scoped("listCaptures").filter(isMetadataOnlyCapture).map((record: any) => record.id));
+  const indexed = (method: string, fallback: string, ids: Set<string>) => typeof store[method] === "function" ? store[method](ids, tenantId) : scoped(fallback);
+  const restrictedCaptureIds = new Set([...captureIds].filter((id) => isMetadataOnlyCapture(store.getCapture?.(id))));
   const safeCapture = (id: string) => captureIds.has(id) && !restrictedCaptureIds.has(id);
   const safeAggregate = (ids: string[] = []) => ids.some(safeCapture) && !ids.some((id) => restrictedCaptureIds.has(id));
-  const allEntities = scoped("listExtractedEntities");
+  const allEntities = indexed("listExtractedEntitiesByCaptureIds", "listExtractedEntities", captureIds);
   const entities = allEntities.filter((record: any) => safeCapture(record.captureId));
   const businessEntityCandidates = allEntities.filter((record: any) => captureIds.has(record.captureId) && isSafeBusinessMechanism(record));
   const businessEntityIds = new Set(businessEntityCandidates.map((record: any) => record.id));
-  const indicators = scoped("listIndicators").filter((record: any) => safeCapture(record.captureId));
+  const indicators = indexed("listIndicatorsByCaptureIds", "listIndicators", captureIds).filter((record: any) => safeCapture(record.captureId));
   const incidents = scoped("listIncidents").filter((record: any) => safeCapture(record.captureId));
-  const allClaims = scoped("listIntelligenceClaims");
-  const businessClaimEvidence = scoped("listClaimEvidence").filter((record: any) => captureIds.has(record.captureId) && record.subjectType === "entity" && businessEntityIds.has(record.subjectId));
+  const businessClaimEvidence = indexed("listClaimEvidenceByCaptureIds", "listClaimEvidence", captureIds).filter((record: any) => record.subjectType === "entity" && businessEntityIds.has(record.subjectId));
   const businessClaimIds = new Set(businessClaimEvidence.map((record: any) => record.claimId));
+  const allClaims = uniqueBy([
+    ...indexed("listIntelligenceClaimsByCaptureIds", "listIntelligenceClaims", captureIds),
+    ...[...businessClaimIds].flatMap((id) => store.getIntelligenceClaim?.(id) ?? []),
+  ], (record: any) => record.id);
   const businessEntitiesById = new Map<string, any>(businessEntityCandidates.map((record: any) => [record.id, record]));
   const actorBusinessClaims = new Map(allClaims.filter((record: any) => businessClaimIds.has(record.id)).map((record: any) => {
     const evidence = businessClaimEvidence.filter((item: any) => item.claimId === record.id);
@@ -510,21 +514,42 @@ function businessObservations(store: any, findings: any[], reviewed: boolean) {
 
 function actorBusinessEvidenceCatalog(store: any, tenantId: string | undefined, query: string, generatedAt: string) {
   const inScope = (record: any) => Boolean(record) && (!record.tenantId || (record.tenantId || undefined) === tenantId);
+  const indexedInScope = (method: string, keys: Iterable<string>) => {
+    const values = [...keys];
+    return uniqueBy([
+      ...store[method](values, undefined),
+      ...(tenantId ? store[method](values, tenantId) : []),
+    ], (record: any) => record.id);
+  };
   const sources = (store.listSources?.() ?? []).filter(inScope);
   const allSourceById = uniqueMap(sources);
   const sourceById = uniqueMap(sources.filter((source: any) => source.status === "active"));
-  const captureById = uniqueMap((store.listCaptures?.() ?? []).filter(inScope));
-  const entities = (store.listExtractedEntities?.() ?? []).filter(inScope);
+  const entities = typeof store.listExtractedEntitiesByTypes === "function"
+    ? indexedInScope("listExtractedEntitiesByTypes", SOURCE_BACKED_BUSINESS_TYPES).filter(isSafeBusinessMechanism)
+    : (store.listExtractedEntities?.() ?? []).filter(inScope).filter(isSafeBusinessMechanism);
   const entityById = uniqueMap(entities);
+  const candidateCaptureIds = new Set(entities.map((entity: any) => entity.captureId));
+  const captureById = new Map([...candidateCaptureIds].flatMap((id) => { const capture = store.getCapture?.(id); return capture && inScope(capture) ? [[id, capture] as const] : []; }));
   const actorEntitiesByCapture = new Map<string, any[]>();
-  for (const entity of entities) {
+  const actorEntities = typeof store.listExtractedEntitiesByTypes === "function"
+    ? indexedInScope("listExtractedEntitiesByTypes", ["actor", "ransomware_family"])
+    : (store.listExtractedEntities?.() ?? []).filter(inScope);
+  for (const entity of actorEntities) {
+    if (!candidateCaptureIds.has(entity.captureId)) continue;
     if (!["actor", "ransomware_family"].includes(entity.type) || ["mention", "inferred"].includes(entity.assertionKind)) continue;
     actorEntitiesByCapture.set(entity.captureId, [...(actorEntitiesByCapture.get(entity.captureId) ?? []), entity]);
   }
-  const claimEvidence = (store.listClaimEvidence?.() ?? []).filter(inScope);
-  const claimsById = uniqueMap((store.listIntelligenceClaims?.() ?? []).filter(inScope));
+  const entityIds = new Set(entityById.keys());
+  const claimEvidence = typeof store.listClaimEvidenceBySubjectIds === "function"
+    ? indexedInScope("listClaimEvidenceBySubjectIds", entityIds)
+    : (store.listClaimEvidence?.() ?? []).filter(inScope).filter((evidence: any) => entityById.has(evidence.subjectId));
+  const claimIds = new Set<string>(claimEvidence.map((evidence: any) => String(evidence.claimId)));
+  const claimsById = new Map([...claimIds].flatMap((id) => { const claim = store.getIntelligenceClaim?.(id); return claim && inScope(claim) ? [[id, claim] as const] : []; }));
   const reviewsByClaim = new Map<string, any[]>();
-  for (const review of (store.listClaimReviews?.() ?? []).filter(inScope)) {
+  const claimReviews = typeof store.listClaimReviewsByClaimIds === "function"
+    ? indexedInScope("listClaimReviewsByClaimIds", claimIds)
+    : (store.listClaimReviews?.() ?? []).filter(inScope).filter((review: any) => claimIds.has(review.claimId));
+  for (const review of claimReviews) {
     reviewsByClaim.set(review.claimId, [...(reviewsByClaim.get(review.claimId) ?? []), review]);
   }
   const identities = (store.listActorIdentities?.() ?? []).filter((identity: any) => identity.status === "current");
@@ -942,7 +967,8 @@ function searchCaptures(store: any, query: string, entityType: SearchEntityType,
   const candidates = findActorSearchCaptures(store, identity.terms, limit, tenantId)
     .sort((a: any, b: any) => String(b.collectedAt ?? "").localeCompare(String(a.collectedAt ?? "")));
   const entitiesByCapture = new Map<string, any[]>();
-  for (const entity of store.listExtractedEntities?.() ?? []) {
+  const actorEntities = typeof store.listExtractedEntitiesByTypes === "function" ? store.listExtractedEntitiesByTypes(["actor", "ransomware_family"], tenantId) : store.listExtractedEntities?.() ?? [];
+  for (const entity of actorEntities) {
     if ((entity.tenantId || undefined) !== tenantId || !["actor", "ransomware_family"].includes(entity.type)) continue;
     const rows = entitiesByCapture.get(entity.captureId) ?? [];
     rows.push(entity);
@@ -957,7 +983,8 @@ function actorIdentity(store: any, tenantId: string | undefined, query: string) 
   const catalogResolution = resolveMitreActorIdentity(query, registeredIdentities);
   const profiles = (store.listActorProfiles?.() ?? []).filter((profile: any) => (profile.tenantId || undefined) === tenantId);
   const aliases = (store.listActorAliases?.() ?? []).filter((alias: any) => (alias.tenantId || undefined) === tenantId);
-  const observedActorMatched = (store.listExtractedEntities?.() ?? []).some((entity: any) =>
+  const actorEntities = typeof store.listExtractedEntitiesByTypes === "function" ? store.listExtractedEntitiesByTypes(["actor", "ransomware_family"], tenantId) : store.listExtractedEntities?.() ?? [];
+  const observedActorMatched = actorEntities.some((entity: any) =>
     (entity.tenantId || undefined) === tenantId
     && ["actor", "ransomware_family"].includes(entity.type)
     && !["mention", "inferred"].includes(entity.assertionKind)
