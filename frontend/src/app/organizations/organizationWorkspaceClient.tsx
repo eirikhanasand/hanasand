@@ -109,6 +109,7 @@ type WebhookDestination = {
     deliveryReady?: boolean
     createdAt?: string
     updatedAt?: string
+    signingSecret?: string
 }
 
 type ScopedAlert = {
@@ -630,6 +631,7 @@ export default function OrganizationWorkspaceClient() {
     const [message, setMessage] = useState('')
     const [messageTone, setMessageTone] = useState<'success' | 'warning'>('success')
     const [newApiKeySecret, setNewApiKeySecret] = useState('')
+    const [newWebhookSigningSecret, setNewWebhookSigningSecret] = useState('')
     const [createName, setCreateName] = useState('')
     const [workspaceQuery, setWorkspaceQuery] = useState('')
     const [createFirstWatchlist, setCreateFirstWatchlist] = useState({ kind: 'domain' as WatchlistKind, value: '', notes: '' })
@@ -1223,7 +1225,7 @@ export default function OrganizationWorkspaceClient() {
         const kind = destinationCreateDraft.kind
         const name = normalizeDestinationName(destinationCreateDraft.name) || defaultDestinationName(kind)
         if (destinationNameInUse(bundle.webhooks, name)) throw new Error('Destination name already exists.')
-        await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks`, {
+        const payload = await requestJson<{ destination?: WebhookDestination }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks`, {
             method: 'POST',
             body: JSON.stringify({
                 name,
@@ -1234,6 +1236,7 @@ export default function OrganizationWorkspaceClient() {
                 requestId: `org-ui-${Date.now()}`,
             }),
         })
+        if (payload.destination?.signingSecret) setNewWebhookSigningSecret(payload.destination.signingSecret)
         setDestinationCreateDraft({ name: '', kind: 'discord', url: '' })
         return `${name} destination added.`
     }, 'destination-create')
@@ -1252,10 +1255,11 @@ export default function OrganizationWorkspaceClient() {
             requestId: `org-ui-${Date.now()}`,
         }
         if (url) body.endpointUrl = url
-        await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/${encodeURIComponent(destination.id)}`, {
+        const payload = await requestJson<{ destination?: WebhookDestination }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/${encodeURIComponent(destination.id)}`, {
             method: 'PATCH',
             body: JSON.stringify(body),
         })
+        if (payload.destination?.signingSecret) setNewWebhookSigningSecret(payload.destination.signingSecret)
         setEditingDestinations(current => {
             const next = { ...current }
             delete next[destination.id]
@@ -1513,7 +1517,7 @@ export default function OrganizationWorkspaceClient() {
                                         </div>
                                         <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
                                         <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
-                                        <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={selectActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onDelete={destination => void deleteSavedDestination(destination)} />
+                                        <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={selectActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onDelete={destination => void deleteSavedDestination(destination)} signingSecret={newWebhookSigningSecret} onClearSigningSecret={() => setNewWebhookSigningSecret('')} />
                                     </div>
                                 </section>
 
@@ -2680,7 +2684,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
     )
 }
 
-function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessages, selectedSubject, createDraft, setCreateDraft, editing, setEditing, onSelectSubject, onCreate, onTest, onUpdate, onDelete }: { destinations: WebhookDestination[], deliveries: DeliveryRow[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, createDraft: DestinationCreateDraft, setCreateDraft: (next: DestinationCreateDraft) => void, editing: Record<string, DestinationEditDraft>, setEditing: (next: Record<string, DestinationEditDraft> | ((current: Record<string, DestinationEditDraft>) => Record<string, DestinationEditDraft>)) => void, onSelectSubject: (subject: ActivitySubject) => void, onCreate: () => void, onTest: (destination: WebhookDestination) => void, onUpdate: (destination: WebhookDestination, draft: DestinationEditDraft) => void, onDelete: (destination: WebhookDestination) => void }) {
+function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessages, selectedSubject, createDraft, setCreateDraft, editing, setEditing, onSelectSubject, onCreate, onTest, onUpdate, onDelete, signingSecret, onClearSigningSecret }: { destinations: WebhookDestination[], deliveries: DeliveryRow[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, createDraft: DestinationCreateDraft, setCreateDraft: (next: DestinationCreateDraft) => void, editing: Record<string, DestinationEditDraft>, setEditing: (next: Record<string, DestinationEditDraft> | ((current: Record<string, DestinationEditDraft>) => Record<string, DestinationEditDraft>)) => void, onSelectSubject: (subject: ActivitySubject) => void, onCreate: () => void, onTest: (destination: WebhookDestination) => void, onUpdate: (destination: WebhookDestination, draft: DestinationEditDraft) => void, onDelete: (destination: WebhookDestination) => void, signingSecret: string, onClearSigningSecret: () => void }) {
     const [destinationQuery, setDestinationQuery] = useState('')
     const [destinationStatusFilter, setDestinationStatusFilter] = useState('all')
     const [destinationKindFilter, setDestinationKindFilter] = useState('all')
@@ -2714,6 +2718,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
             </summary>
             <div className='grid gap-2 border-t border-ui-border p-4 dark:border-ui-border'>
                 {busyLabel && <InlineBusy label={busyLabel} marker='data-org-destination-busy' />}
+                {signingSecret && <WebhookSigningSecret secret={signingSecret} onClear={onClearSigningSecret} />}
                 {destinations.length > 0 && (
                     <div className='flex flex-wrap gap-2' data-org-destination-status-counts='true'>
                         <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Configured: {activeDestinationCount}</span>
@@ -2901,6 +2906,35 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                 })}
             </div>
         </details>
+    )
+}
+
+function WebhookSigningSecret({ secret, onClear }: { secret: string, onClear: () => void }) {
+    const [copied, setCopied] = useState(false)
+    const copy = async () => {
+        try {
+            await navigator.clipboard.writeText(secret)
+            setCopied(true)
+            window.setTimeout(() => setCopied(false), 1800)
+        } catch {
+            setCopied(false)
+        }
+    }
+    return (
+        <div role='alert' className='grid gap-2 rounded-lg border border-ui-warning/40 bg-ui-warning/10 p-3 text-sm dark:border-ui-warning/40 dark:bg-ui-warning/10' data-org-webhook-signing-secret='true'>
+            <div className='flex flex-wrap items-start justify-between gap-2'>
+                <div>
+                    <p className='font-semibold text-ui-text dark:text-ui-text'>Save this signing secret now</p>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>Hanasand signs live deliveries with HMAC-SHA256. The secret is shown only after create or URL rotation; use the v1 signature headers to verify the raw request body.</p>
+                </div>
+                <button type='button' className={secondaryButtonClass} onClick={onClear}>Dismiss</button>
+            </div>
+            <code className='break-all rounded-md border border-ui-border bg-ui-canvas px-3 py-2 text-xs text-ui-text dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text'>{secret}</code>
+            <div className='flex flex-wrap gap-2 text-xs'>
+                <button type='button' className={secondaryButtonClass} onClick={() => void copy()}><Copy className='h-4 w-4' />{copied ? 'Copied' : 'Copy secret'}</button>
+                <span className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 font-mono text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>x-hanasand-delivery-signature</span>
+            </div>
+        </div>
     )
 }
 

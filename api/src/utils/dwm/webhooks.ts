@@ -90,6 +90,8 @@ export type DwmWebhookDestinationInput = {
     endpoint_url?: unknown
     webhookUrl?: unknown
     webhook_url?: unknown
+    signingSecret?: unknown
+    signing_secret?: unknown
     url?: unknown
     channel?: unknown
     channelName?: unknown
@@ -368,6 +370,7 @@ type NormalizedDestinationInput = {
     endpointEncrypted: string | null
     endpointHint: string | null
     endpointHash: string | null
+    signingSecret: string | null
     status: DwmWebhookStatus
     events: DwmAlertEventType[]
 }
@@ -480,6 +483,9 @@ export function normalizeDwmWebhookDestinationInput(
 ): NormalizedDestinationInput {
     const rawEndpoint = firstClean(input.endpointUrl, input.endpoint_url, input.webhookUrl, input.webhook_url, input.url)
     const endpointUrl = rawEndpoint ? normalizeWebhookUrl(rawEndpoint) : null
+    const signingSecret = endpointUrl
+        ? firstClean(input.signingSecret, input.signing_secret) || crypto.randomBytes(32).toString('hex')
+        : null
     const kind = parseKind(input.kind ?? input.type, endpointUrl, existing?.kind)
     const channelName = firstClean(input.channelName, input.channel_name, input.channel)
     const name = firstClean(input.name, input.label, channelName) || existing?.name || (kind === 'discord' ? 'Discord alerts' : 'Webhook alerts')
@@ -492,9 +498,10 @@ export function normalizeDwmWebhookDestinationInput(
         name: name.slice(0, 120),
         kind,
         endpointUrl,
-        endpointEncrypted: endpointUrl ? encryptWebhookSecret(endpointUrl) : null,
+        endpointEncrypted: endpointUrl && signingSecret ? encryptWebhookTarget(endpointUrl, signingSecret) : null,
         endpointHint: endpointUrl ? redactWebhookEndpoint(endpointUrl) : null,
         endpointHash: endpointUrl ? hashValue('endpoint', endpointUrl) : null,
+        signingSecret,
         status,
         events,
     }
@@ -578,7 +585,7 @@ export async function createDwmWebhookDestination(ownerId: string, input: DwmWeb
         },
     })
 
-    return toDwmWebhookDestination(destination)
+    return { ...toDwmWebhookDestination(destination), signingSecret: normalized.signingSecret }
 }
 
 export async function updateDwmWebhookDestination(ownerId: string, id: string, input: DwmWebhookDestinationInput) {
@@ -630,7 +637,10 @@ export async function updateDwmWebhookDestination(ownerId: string, id: string, i
         },
     })
 
-    return toDwmWebhookDestination(destination)
+    return {
+        ...toDwmWebhookDestination(destination),
+        ...(normalized.endpointUrl && normalized.signingSecret ? { signingSecret: normalized.signingSecret } : {}),
+    }
 }
 
 export async function archiveDwmWebhookDestination(ownerId: string, id: string) {
@@ -764,8 +774,8 @@ export async function listDwmWebhookAuditEvents(ownerId: string, orgId?: string)
 
 const DEFAULT_CONTROLLED_RECEIVER_URL = 'https://hanasand.com/api/dwm/webhook-sink'
 
-export function signDwmWebhookDeliveryBody(body: string, target: string, secret = process.env.TI_SCRAPER_SERVICE_TOKEN || '') {
-    return secret ? `sha256=${crypto.createHmac('sha256', secret).update(`${normalizeWebhookUrl(target)}\n${body}`).digest('hex')}` : ''
+export function signDwmWebhookDeliveryBody(body: string, target: string, secret = process.env.TI_SCRAPER_SERVICE_TOKEN || '', timestamp = '') {
+    return secret ? `sha256=${crypto.createHmac('sha256', secret).update(`${normalizeWebhookUrl(target)}\n${timestamp}\n${body}`).digest('hex')}` : ''
 }
 
 function constantTimeEqual(expected: string, presented: string) {
@@ -7281,7 +7291,7 @@ export async function testDwmWebhookDestination(ownerId: string, id: string, inp
 export async function deliverDwmAlertNotification(
     ownerId: string,
     input: DwmAlertNotificationInput,
-    sender: (endpoint: string, body: string) => Promise<{ status: number, body: string }> = postPublicWebhook
+    sender: (endpoint: string, body: string, signingSecret?: string) => Promise<{ status: number, body: string }> = postPublicWebhook
 ) {
     const dispatch = buildDwmAlertWebhookDispatchPlan({
         ownerId,
@@ -7346,7 +7356,7 @@ export async function retryDwmWebhookDelivery(
     ownerId: string,
     orgId: string,
     deliveryId: string,
-    sender: (endpoint: string, body: string) => Promise<{ status: number, body: string }> = postPublicWebhook
+    sender: (endpoint: string, body: string, signingSecret?: string) => Promise<{ status: number, body: string }> = postPublicWebhook
 ) {
     const priorResult = await run(`
         SELECT *
@@ -7442,8 +7452,8 @@ export async function retryDwmWebhookDelivery(
         let error: string | null
         let status: DwmWebhookDeliveryRow['status'] = 'failed'
         try {
-            const endpoint = decryptWebhookSecret(destination.endpoint_encrypted)
-            const response = await sender(endpoint, payloadBody)
+            const target = decryptWebhookTarget(destination.endpoint_encrypted)
+            const response = await sender(target.endpoint, payloadBody, target.signingSecret)
             responseStatus = response.status
             responseBody = sanitizeDwmWebhookDeliveryDiagnostic(response.body)
             status = response.status >= 200 && response.status < 300 ? 'delivered' : 'failed'
@@ -8778,7 +8788,7 @@ async function deliverToDwmWebhookDestinationWithLineageGuard(input: {
     dryRun: boolean
     live: boolean
     markTested: boolean
-    sender?: (endpoint: string, body: string) => Promise<{ status: number, body: string }>
+    sender?: (endpoint: string, body: string, signingSecret?: string) => Promise<{ status: number, body: string }>
 }) {
     const normalizedAlert = normalizeAlert(input.alert)
     const idempotencyKey = buildIdempotencyKey(
@@ -8821,7 +8831,7 @@ async function deliverToDwmWebhookDestination({
     dryRun: boolean
     live: boolean
     markTested: boolean
-    sender?: (endpoint: string, body: string) => Promise<{ status: number, body: string }>
+    sender?: (endpoint: string, body: string, signingSecret?: string) => Promise<{ status: number, body: string }>
 }) {
     const deliveryId = crypto.randomUUID()
     const payload = buildDwmAlertDeliveryPayload({ destination, alert, eventType, deliveryId })
@@ -8849,8 +8859,8 @@ async function deliverToDwmWebhookDestination({
 
     if (shouldSendLive) {
         try {
-            const endpoint = decryptWebhookSecret(destination.endpoint_encrypted)
-            const response = await sender(endpoint, payloadBody)
+            const target = decryptWebhookTarget(destination.endpoint_encrypted)
+            const response = await sender(target.endpoint, payloadBody, target.signingSecret)
             responseStatus = response.status
             responseBody = sanitizeDwmWebhookDeliveryDiagnostic(response.body)
             status = response.status >= 200 && response.status < 300 ? 'delivered' : 'failed'
@@ -9509,13 +9519,25 @@ async function resolvePublicWebhookTarget(value: string, resolver: WebhookResolv
     return { normalized, addresses }
 }
 
-async function postPublicWebhook(endpoint: string, body: string) {
+async function postPublicWebhook(endpoint: string, body: string, signingSecret = '') {
     const { normalized, addresses } = await resolvePublicWebhookTarget(endpoint)
     const url = new URL(normalized)
     const timeoutMs = Math.max(1000, Math.min(Number(process.env.DWM_WEBHOOK_TIMEOUT_MS || 8000), 30000))
-    const signature = controlledReceiverUrls().includes(normalized)
-        ? signDwmWebhookDeliveryBody(body, normalized)
-        : ''
+    const signatureTimestamp = signingSecret ? new Date().toISOString() : ''
+    const signature = signingSecret
+        ? signDwmWebhookDeliveryBody(body, normalized, signingSecret, signatureTimestamp)
+        : controlledReceiverUrls().includes(normalized)
+            ? signDwmWebhookDeliveryBody(body, normalized)
+            : ''
+    let deliveryContext: Record<string, unknown> = {}
+    let payloadContext: Record<string, unknown> = {}
+    try {
+        const payload = JSON.parse(body) as Record<string, unknown>
+        payloadContext = recordOrEmpty(payload._hanasand)
+        deliveryContext = recordOrEmpty(payloadContext.delivery)
+    } catch {
+        // The payload was already canonicalized and validated before sending.
+    }
 
     return new Promise<{ status: number, body: string }>((resolve, reject) => {
         const request = httpsRequest(url, {
@@ -9525,6 +9547,12 @@ async function postPublicWebhook(endpoint: string, body: string) {
                 'content-length': Buffer.byteLength(body),
                 'user-agent': 'hanasand-dwm-webhooks/1.0',
                 ...(signature ? { 'x-hanasand-delivery-signature': signature } : {}),
+                ...(signingSecret ? {
+                    'x-hanasand-signature-version': 'v1',
+                    'x-hanasand-signature-timestamp': signatureTimestamp,
+                    ...(typeof deliveryContext.id === 'string' ? { 'x-hanasand-delivery-id': deliveryContext.id } : {}),
+                    ...(typeof payloadContext.idempotencyKey === 'string' ? { 'x-hanasand-idempotency-key': payloadContext.idempotencyKey } : {}),
+                } : {}),
             },
             lookup: pinnedWebhookLookup(addresses),
         }, response => {
@@ -12064,6 +12092,10 @@ function encryptWebhookSecret(value: string) {
     return `${iv.toString('base64')}.${tag.toString('base64')}.${encrypted.toString('base64')}`
 }
 
+function encryptWebhookTarget(endpoint: string, signingSecret: string) {
+    return encryptWebhookSecret(JSON.stringify({ endpoint, signingSecret }))
+}
+
 function decryptWebhookSecret(value: string) {
     const [ivB64, tagB64, dataB64] = value.split('.')
     if (!ivB64 || !tagB64 || !dataB64) return value
@@ -12071,6 +12103,19 @@ function decryptWebhookSecret(value: string) {
     decipher.setAuthTag(Buffer.from(tagB64, 'base64'))
     const decrypted = Buffer.concat([decipher.update(Buffer.from(dataB64, 'base64')), decipher.final()])
     return decrypted.toString('utf8')
+}
+
+function decryptWebhookTarget(value: string) {
+    const decrypted = decryptWebhookSecret(value)
+    try {
+        const target = JSON.parse(decrypted) as { endpoint?: unknown, signingSecret?: unknown }
+        if (typeof target.endpoint === 'string' && typeof target.signingSecret === 'string') {
+            return { endpoint: target.endpoint, signingSecret: target.signingSecret }
+        }
+    } catch {
+        // Legacy destinations stored only the encrypted endpoint.
+    }
+    return { endpoint: decrypted, signingSecret: '' }
 }
 
 function truncate(value: string, max: number) {
