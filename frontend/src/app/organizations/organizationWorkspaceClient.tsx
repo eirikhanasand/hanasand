@@ -133,6 +133,12 @@ type ScopedCase = {
     assignedOwner?: string
     organizationId?: string
     createdAt?: string
+    timeline?: Array<{
+        timestamp?: string
+        eventType?: string
+        toStatus?: string
+        workflowState?: { action?: string }
+    }>
     updatedAt?: string
 }
 
@@ -2039,6 +2045,18 @@ function PilotMetricsPanel({ bundle }: { bundle: OrgBundle }) {
         return Number.isFinite(latency) && latency >= 0 && latency <= 30 * 86_400_000 ? [latency] : []
     })
     const medianDetectionLatency = median(detectionLatencies)
+    const triageLatencies = bundle.cases.flatMap(caseRecord => {
+        const createdAt = caseRecord.createdAt
+        const triageEvent = caseRecord.timeline?.find(event => {
+            const status = (event.toStatus || '').toLowerCase()
+            const action = (event.workflowState?.action || '').toLowerCase()
+            return status === 'triaged' || status === 'investigating' || action === 'review' || action === 'triage' || action === 'investigate'
+        })
+        if (!createdAt || !triageEvent?.timestamp) return []
+        const latency = Date.parse(triageEvent.timestamp) - Date.parse(createdAt)
+        return Number.isFinite(latency) && latency >= 0 && latency <= 30 * 86_400_000 ? [latency] : []
+    })
+    const medianTriageLatency = median(triageLatencies)
     const rows = [
         {
             id: 'coverage',
@@ -2064,9 +2082,9 @@ function PilotMetricsPanel({ bundle }: { bundle: OrgBundle }) {
         {
             id: 'triage',
             label: 'Time to triage',
-            value: 'Not measured',
-            detail: 'Case action timestamps are not yet recorded as a pilot metric.',
-            tone: 'review',
+            value: medianTriageLatency === null ? 'Not measured' : formatDuration(medianTriageLatency),
+            detail: triageLatencies.length ? `Median across ${triageLatencies.length} case${triageLatencies.length === 1 ? '' : 's'} with a recorded review or triage transition.` : 'Waiting for a case review or triage transition.',
+            tone: medianTriageLatency === null ? 'review' : 'ready',
         },
     ] as const
     return (

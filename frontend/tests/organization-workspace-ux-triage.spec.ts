@@ -29,7 +29,7 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('function PilotMetricsPanel')
     expect(page).toContain('Time to detection')
     expect(page).toContain('Time to triage')
-    expect(page).toContain('Case action timestamps are not yet recorded as a pilot metric.')
+    expect(page).toContain('Waiting for a case review or triage transition.')
     expect(page).toContain('data-org-setup-step-reason')
     expect(page).not.toContain('data-org-setup-blocked-count')
     expect(page).not.toContain('{lockedCount} needs access')
