@@ -34,6 +34,7 @@ const indexedValues = <T extends { id: string; tenantId?: string }>(index: Map<s
 };
 export class InMemoryScraperStore implements ScraperStore {
   private captures = new Map<string, RawCapture>(); private exposureQueueCaptureIds = new Set<string>(); private dedupe = new Map<string, string>(); private incidents = new Map<string, IncidentCandidate>(); private sources = new Map<string, SourceRecord>(); private plans = new Map<string, any>(); private runs = new Map<string, any>();
+  private captureIdsBySource = new Map<string, Set<string>>(); private incidentIdsByCapture = new Map<string, Set<string>>(); private searchCaptureRevisions = new Map<string, number>(); private searchCaptureRevision = 0;
   private extractedEntities = new Map<string, any>(); private indicators = new Map<string, any>(); private actorProfiles = new Map<string, any>(); private actorAliases = new Map<string, any>(); private actorIdentityCatalogs = new Map<string, any>(); private actorIdentities = new Map<string, any>(); private evidenceLinks = new Map<string, any>(); private validationRecords = new Map<string, EvaluationValidationRecord>(); private evaluationLabels = new Map<string, EvaluationLabelRecord>();
   private entityIdsByCapture = new Map<string, Set<string>>(); private entityIdsByType = new Map<string, Set<string>>(); private indicatorIdsByCapture = new Map<string, Set<string>>();
   private sourceHealthObservations = new Map<string, any>(); private timelinessRecords = new Map<string, any>();
@@ -68,10 +69,10 @@ export class InMemoryScraperStore implements ScraperStore {
     if (duplicate) return { capture: duplicate, status: "duplicate", duplicateOf: duplicate.id, dedupeKey: captureDedupeKey(prepared) };
     return { capture: this.insertCapture(prepared, true), status: "inserted", dedupeKey: captureDedupeKey(prepared) };
   }
-  private insertCapture(capture: RawCapture, delta: boolean) { this.captures.set(capture.id, capture); this.indexExposureQueueCapture(capture); for (const key of dedupeIndexKeys(capture)) this.dedupe.set(key, capture.id); if (delta) (this as any).recordCaptureDelta("added", capture); return capture; }
+  private insertCapture(capture: RawCapture, delta: boolean) { this.captures.set(capture.id, capture); indexKeys(this.captureIdsBySource, capture.id, [], [capture.sourceId]); this.touchSearchCapture(capture.id); this.indexExposureQueueCapture(capture); for (const key of dedupeIndexKeys(capture)) this.dedupe.set(key, capture.id); if (delta) (this as any).recordCaptureDelta("added", capture); return capture; }
   getCapture(id: string) { return this.captures.get(id); }
-  updateCaptureMetadata(id: string, update: (metadata: any) => any) { const previous = this.mustCapture(id); this.assertOrganizationWritable(previous); const next = { ...previous, metadata: update(previous.metadata ?? {}) }; this.captures.set(id, next); this.indexExposureQueueCapture(next); this.invalidateSourceReviewForCapture(previous, next); return next; }
-  replaceCaptureForRetention(capture: RawCapture) { const previous = this.mustCapture(capture.id); if (previous.contentHash !== capture.contentHash || previous.sourceId !== capture.sourceId || previous.tenantId !== capture.tenantId) throw new Error(`Retention cannot change capture identity: ${capture.id}`); this.captures.set(capture.id, capture); this.indexExposureQueueCapture(capture); this.invalidateSourceReviewForCapture(previous, capture); return capture; }
+  updateCaptureMetadata(id: string, update: (metadata: any) => any) { const previous = this.mustCapture(id); this.assertOrganizationWritable(previous); const next = { ...previous, metadata: update(previous.metadata ?? {}) }; this.captures.set(id, next); this.touchSearchCapture(id); this.indexExposureQueueCapture(next); this.invalidateSourceReviewForCapture(previous, next); return next; }
+  replaceCaptureForRetention(capture: RawCapture) { const previous = this.mustCapture(capture.id); if (previous.contentHash !== capture.contentHash || previous.sourceId !== capture.sourceId || previous.tenantId !== capture.tenantId) throw new Error(`Retention cannot change capture identity: ${capture.id}`); this.captures.set(capture.id, capture); this.touchSearchCapture(capture.id); this.indexExposureQueueCapture(capture); this.invalidateSourceReviewForCapture(previous, capture); return capture; }
   private invalidateSourceReviewForCapture(previous: RawCapture, capture: RawCapture) {
     if (JSON.stringify(sourceReviewProjectionInput(previous)) === JSON.stringify(sourceReviewProjectionInput(capture))) return;
     const source = this.sources.get(previous.sourceId);
@@ -92,6 +93,13 @@ export class InMemoryScraperStore implements ScraperStore {
   }
   findDuplicateCapture(capture: RawCapture) { const prepared = prepareCapture(capture); for (const key of dedupeIndexKeys(prepared)) { const id = this.dedupe.get(key); if (id) return this.captures.get(id); } }
   listCaptures() { return mapValues(this.captures); }
+  listSearchCaptureChanges(afterRevision = 0) {
+    return {
+      revision: this.searchCaptureRevision,
+      captures: [...this.searchCaptureRevisions].flatMap(([id, revision]) => revision > afterRevision ? this.captures.get(id) ?? [] : [])
+    };
+  }
+  private touchSearchCapture(id: unknown) { const captureId = String(id ?? ""); if (captureId && this.captures.has(captureId)) this.searchCaptureRevisions.set(captureId, ++this.searchCaptureRevision); }
   listExposureQueueCaptures() { return [...this.exposureQueueCaptureIds].flatMap((id) => this.captures.get(id) ?? []); }
   private indexExposureQueueCapture(capture: RawCapture) {
     if (mayContainExposureQueueClaim(capture, this.sources.get(capture.sourceId))) this.exposureQueueCaptureIds.add(capture.id);
@@ -172,7 +180,11 @@ export class InMemoryScraperStore implements ScraperStore {
   protected hydrateEvidenceDeltaSnapshot(delta: EvidenceDelta) { return (this as any).storeDelta(delta, false); }
   listEvidenceDeltas() { return mapValues(this.evidenceDeltas); }
   queries() { return this.evidenceQueries; }
-  saveIncident(candidate: IncidentCandidate) { return this.putScoped(this.incidents, candidate); } getIncident(id: string) { return this.incidents.get(id); } listIncidents() { return mapValues(this.incidents); }
+  saveIncident(candidate: IncidentCandidate) { const previous = this.incidents.get(candidate.id); const stored = this.putScoped(this.incidents, candidate); indexKeys(this.incidentIdsByCapture, stored.id, [previous?.captureId].filter(Boolean), [stored.captureId].filter(Boolean)); this.touchSearchCapture(previous?.captureId); this.touchSearchCapture(stored.captureId); return stored; } getIncident(id: string) { return this.incidents.get(id); } listIncidents() { return mapValues(this.incidents); }
+  listIncidentsByCaptureIds(captureIds: Iterable<string>) {
+    const ids = new Set([...captureIds].flatMap((captureId) => [...(this.incidentIdsByCapture.get(captureId) ?? [])]));
+    return [...ids].flatMap((id) => this.incidents.get(id) ?? []);
+  }
   saveExtractedEntity(entity: any) { const previous = this.extractedEntities.get(entity.id); const stored = this.putScoped(this.extractedEntities, entity); indexKeys(this.entityIdsByCapture, stored.id, [previous?.captureId].filter(Boolean), [stored.captureId].filter(Boolean)); indexKeys(this.entityIdsByType, stored.id, [previous?.type].filter(Boolean), [stored.type].filter(Boolean)); return stored; }
   getExtractedEntity(id: string) { return this.extractedEntities.get(id); } listExtractedEntities() { return mapValues(this.extractedEntities); }
   listExtractedEntitiesByCaptureIds(captureIds: Iterable<string>, tenantId?: string) { return indexedValues(this.entityIdsByCapture, captureIds, this.extractedEntities, tenantId); }
@@ -375,6 +387,7 @@ export class InMemoryScraperStore implements ScraperStore {
   saveSource(source: SourceRecord) {
     const previous = this.sources.get(source.id);
     const stored = this.putScoped(this.sources, source);
+    for (const captureId of this.captureIdsBySource.get(stored.id) ?? []) this.touchSearchCapture(captureId);
     if (!previous || sourceExposureIdentity(previous) !== sourceExposureIdentity(stored)) {
       for (const capture of this.captures.values()) if (capture.sourceId === stored.id) this.indexExposureQueueCapture(capture);
     }
@@ -444,8 +457,10 @@ export class InMemoryScraperStore implements ScraperStore {
     const target = records[recordType];
     if (!target?.has(record.id)) return undefined;
     target.set(record.id, record);
-    if (recordType === "capture") this.indexExposureQueueCapture(record);
+    if (recordType === "capture") { this.touchSearchCapture(record.id); this.indexExposureQueueCapture(record); }
+    if (recordType === "incident") this.touchSearchCapture(record.captureId);
     if (recordType === "source") {
+      for (const captureId of this.captureIdsBySource.get(record.id) ?? []) this.touchSearchCapture(captureId);
       for (const capture of this.captures.values()) if (capture.sourceId === record.id) this.indexExposureQueueCapture(capture);
     }
     return record;

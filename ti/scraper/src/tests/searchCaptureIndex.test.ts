@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { findSearchCaptures } from "../api/searchCaptureIndex.ts";
+import { findSearchCaptures, warmSearchCaptureIndex } from "../api/searchCaptureIndex.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { fixtureCapture } from "./helpers/apiFixtures.ts";
 import { source } from "./helpers/plannerFixtures.ts";
@@ -30,5 +30,45 @@ describe("search capture index", () => {
 
     store.updateCaptureMetadata("cap_old", (metadata) => ({ ...metadata, safeExcerpt: "A retained credential phishing report no longer names the queried actor or activity cluster." }));
     expect(findSearchCaptures(store, "APT29", 10, "tenant_api").map((capture) => capture.id)).toEqual(["cap_new"]);
+  });
+
+  test("queries only matching postings without enumerating or scoring unrelated captures", () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_bounded_search", metadata: { queryClass: "threat-intel" } }));
+    store.saveCapture(fixtureCapture({ id: "cap_match", sourceId: "src_bounded_search", body: undefined, contentHash: "bounded-match", metadata: { safeExcerpt: "APT29 targeted diplomatic organizations with credential phishing." } }));
+    for (let i = 0; i < 2_000; i++) store.saveCapture(fixtureCapture({ id: `cap_noise_${i}`, sourceId: "src_bounded_search", body: undefined, contentHash: `bounded-noise-${i}`, metadata: { safeExcerpt: `Unrelated retained security bulletin ${i}.` } }));
+
+    expect(warmSearchCaptureIndex(store)).toEqual({ captureCount: 2_001, indexedCaptureCount: 1 });
+    expect(findSearchCaptures(store, "APT29", 10, "tenant_api").map((capture) => capture.id)).toEqual(["cap_match"]);
+    const noise = store.getCapture("cap_noise_0")!;
+    Object.defineProperty(noise, "sourceId", { configurable: true, enumerable: true, get: () => { throw new Error("unrelated capture was scored"); } });
+    (store as any).listCaptures = () => { throw new Error("complete capture enumeration is forbidden"); };
+
+    expect(findSearchCaptures(store, "APT29", 10, "tenant_api").map((capture) => capture.id)).toEqual(["cap_match"]);
+  });
+
+  test("refreshes tenant, source, incident, and retention projections", () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_projection", tenantId: "tenant_api", name: "Neutral publisher", metadata: { queryClass: "threat-intel" } }));
+    store.saveSource(source({ id: "src_projection_foreign", tenantId: "tenant_other", name: "APT29 foreign publisher", metadata: { queryClass: "threat-intel" } }));
+    store.saveCapture(fixtureCapture({ id: "cap_projection", sourceId: "src_projection", title: undefined, body: undefined, contentHash: "projection-capture", metadata: { safeExcerpt: "Lazarus Group credential phishing campaign targeted diplomatic organizations with malware." } }));
+    store.saveCapture(fixtureCapture({ id: "cap_projection_foreign", tenantId: "tenant_other", sourceId: "src_projection_foreign", body: undefined, contentHash: "projection-foreign", metadata: { safeExcerpt: "APT29 credential phishing campaign targeted diplomatic organizations." } }));
+
+    expect(findSearchCaptures(store, "APT29", 10, "tenant_api")).toEqual([]);
+    store.saveSource(source({ id: "src_projection", tenantId: "tenant_api", name: "APT29 public attribution", metadata: { queryClass: "threat-intel" } }));
+    expect(findSearchCaptures(store, "APT29", 10, "tenant_api").map((capture) => capture.id)).toEqual(["cap_projection"]);
+
+    store.saveSource(source({ id: "src_projection", tenantId: "tenant_api", name: "Neutral publisher", metadata: { queryClass: "threat-intel" } }));
+    store.saveIncident({ id: "incident_projection", tenantId: "tenant_api", captureId: "cap_projection", title: "APT29 credential phishing", firstSeenAt: "2026-05-23T00:00:00.000Z" } as any);
+    expect(findSearchCaptures(store, "APT29", 10, "tenant_api").map((capture) => capture.id)).toEqual(["cap_projection"]);
+
+    store.saveIncident({ id: "incident_projection", tenantId: "tenant_api", captureId: "cap_projection", title: "Credential phishing report", firstSeenAt: "2026-05-23T00:00:00.000Z" } as any);
+    expect(findSearchCaptures(store, "APT29", 10, "tenant_api")).toEqual([]);
+
+    store.updateCaptureMetadata("cap_projection", (metadata) => ({ ...metadata, safeExcerpt: "APT29 credential phishing campaign targeted diplomatic organizations." }));
+    expect(findSearchCaptures(store, "APT29", 10, "tenant_api").map((capture) => capture.id)).toEqual(["cap_projection"]);
+    store.replaceCaptureForRetention({ ...store.getCapture("cap_projection")!, body: undefined, rawText: undefined, metadata: { safeExcerpt: "Credential phishing report retained without actor attribution." } });
+    expect(findSearchCaptures(store, "APT29", 10, "tenant_api")).toEqual([]);
+    expect(findSearchCaptures(store, "APT29", 10, "tenant_other").map((capture) => capture.id)).toEqual(["cap_projection_foreign"]);
   });
 });

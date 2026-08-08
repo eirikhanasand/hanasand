@@ -13,6 +13,7 @@ import { buildRuntimeStores } from "./startupStores.ts";
 import { executeScheduledCollectionRun, recoverCollectionRuns } from "../ops/scheduledCollection.ts";
 import { startAutomaticReviewWorker } from "../api/automaticReviewRoutes.ts";
 import { startAutomaticEvaluationLoop } from "../api/evaluationBenchmarkRoutes.ts";
+import { warmSearchCaptureIndex } from "../api/searchCaptureIndex.ts";
 
 export function createScheduledRunBoundary(options: {
   execute: (runId: string) => Promise<any>;
@@ -117,6 +118,7 @@ export async function startScraperRuntime() {
   });
   const sourceBootstrap = await bootstrapRuntimeSources(store as any);
   startupPhase("sources_bootstrapped", { sourceCount: sourceBootstrap.totalSourceCount, importedSourceCount: sourceBootstrap.importedSourceCount });
+  startupPhase("search_index_built", warmSearchCaptureIndex(store));
   const scheduledRuns = createScheduledRunBoundary({
     execute: (runId) => executeScheduledCollectionRun({
       store,

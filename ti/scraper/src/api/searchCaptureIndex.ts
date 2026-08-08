@@ -3,61 +3,88 @@ import { derivedHints } from "./searchDerivedHints.ts";
 import { termRegex } from "./searchTerm.ts";
 import { sourceActivityWindowDays } from "../policy/sourceActivityWindow.ts";
 type SearchDoc = { capture: any; text: string; title: string; collectedAt: string };
-type CachedDoc = { capture: any; sourceKey: string; incidentTitle: unknown; doc?: SearchDoc };
-const cache = new WeakMap<object, { records: Map<string, CachedDoc>; docs: SearchDoc[] }>();
+type CachedDoc = { doc?: SearchDoc; postingKeys: string[]; tenantKey: string };
+type SearchIndex = { revision: number; records: Map<string, CachedDoc>; postings: Map<string, Set<string>>; tenantIds: Map<string, Set<string>> };
+const cache = new WeakMap<object, SearchIndex>();
 const norm = (value: unknown) => String(value ?? "").toLowerCase();
 const words = (query: string) => norm(query).split(/[^a-z0-9.-]+/).filter((w) => w.length > 1);
 const unique = (items: string[]) => [...new Set(items.filter(Boolean))];
+export function warmSearchCaptureIndex(store: any) {
+  const index = indexForStore(store);
+  return { captureCount: index.records.size, indexedCaptureCount: [...index.tenantIds.values()].reduce((count, ids) => count + ids.size, 0) };
+}
 export function findSearchCaptures(store: any, query: string, limit: number, tenantId?: string) {
-  const docs = docsForStore(store).filter((doc) => (doc.capture?.tenantId || undefined) === tenantId);
+  const index = indexForStore(store);
   const terms = words(query);
-  if (!terms.length) return docs.slice(0, limit).map((doc) => doc.capture);
+  const docs = docsForIds(index, terms.length ? intersectPostings(index, terms, tenantId) : index.tenantIds.get(tenantKey(tenantId)) ?? []);
+  if (!terms.length) return docs.sort(compareDocs).slice(0, limit).map((doc) => doc.capture);
   return docs
     .map((doc) => ({ doc, score: scoreDoc(doc, terms) }))
     .filter((hit) => hit.score > 0)
-    .sort((a, b) => b.score - a.score || b.doc.collectedAt.localeCompare(a.doc.collectedAt) || String(a.doc.capture.id).localeCompare(String(b.doc.capture.id)))
+    .sort((a, b) => b.score - a.score || compareDocs(a.doc, b.doc))
     .slice(0, limit)
     .map((hit) => hit.doc.capture);
 }
 
 export function findActorSearchCaptures(store: any, identities: string[], limit: number, tenantId?: string) {
-  const docs = docsForStore(store).filter((doc) => (doc.capture?.tenantId || undefined) === tenantId);
+  const index = indexForStore(store);
   const terms = unique(identities.map(normalizeIdentity).filter(Boolean));
   if (!terms.length) return [];
-  return docs
+  const ids = new Set(terms.flatMap((term) => [...intersectPostings(index, words(term), tenantId)]));
+  return docsForIds(index, ids)
     .map((doc) => ({ doc, score: scoreIdentityDoc(doc, terms) }))
     .filter((hit) => hit.score > 0)
-    .sort((a, b) => b.score - a.score || b.doc.collectedAt.localeCompare(a.doc.collectedAt) || String(a.doc.capture.id).localeCompare(String(b.doc.capture.id)))
+    .sort((a, b) => b.score - a.score || compareDocs(a.doc, b.doc))
     .slice(0, limit)
     .map((hit) => hit.doc.capture);
 }
-function docsForStore(store: any): SearchDoc[] {
-  const captures = store.listCaptures();
-  const incidents = store.listIncidents?.() ?? [];
-  const sources = new Map((store.listSources?.() ?? []).map((source: any) => [source.id, source]));
-  const incidentTitles = new Map(incidents.map((incident: any) => [incident.captureId, incident.title]));
-  const previous = cache.get(store) ?? { records: new Map<string, CachedDoc>(), docs: [] };
-  const seen = new Set<string>();
-  let changed = false;
-  for (const capture of captures) {
-    seen.add(capture.id);
-    const source = sources.get(capture.sourceId);
-    const sourceKey = searchSourceKey(source);
-    const incidentTitle = incidentTitles.get(capture.id);
-    const cached = previous.records.get(capture.id);
-    if (cached && cached.capture === capture && cached.sourceKey === sourceKey && cached.incidentTitle === incidentTitle) continue;
-    const candidate = withLegacyIncidentTitle(capture, incidentTitle);
-    previous.records.set(capture.id, { capture, sourceKey, incidentTitle, doc: sellableCapture(candidate, source) ? docFor(candidate, source) : undefined });
-    changed = true;
+function indexForStore(store: any): SearchIndex {
+  const index = cache.get(store) ?? { revision: 0, records: new Map(), postings: new Map(), tenantIds: new Map() };
+  const changes = store.listSearchCaptureChanges?.(index.revision);
+  if (!changes) throw new Error("Search capture change index is unavailable");
+  if (changes.revision === index.revision) return index;
+  const captureIds = changes.captures.map((capture: any) => capture.id);
+  const incidentTitles = new Map((store.listIncidentsByCaptureIds?.(captureIds) ?? []).map((incident: any) => [incident.captureId, incident.title]));
+  for (const capture of changes.captures) {
+    removeCachedDoc(index, capture.id);
+    const source = store.getSource?.(capture.sourceId);
+    const candidate = withLegacyIncidentTitle(capture, incidentTitles.get(capture.id));
+    const doc = sellableCapture(candidate, source) ? docFor(candidate, source) : undefined;
+    const tenant = tenantKey(capture.tenantId || undefined);
+    const postingKeys = doc ? indexedTerms(doc).map((term) => postingKey(tenant, term)) : [];
+    index.records.set(capture.id, { doc, postingKeys, tenantKey: tenant });
+    if (doc) {
+      addTo(index.tenantIds, tenant, capture.id);
+      for (const key of postingKeys) addTo(index.postings, key, capture.id);
+    }
   }
-  for (const id of previous.records.keys()) if (!seen.has(id)) { previous.records.delete(id); changed = true; }
-  if (changed) previous.docs = [...previous.records.values()].flatMap((entry) => entry.doc ?? [])
-    .sort((a, b) => b.collectedAt.localeCompare(a.collectedAt) || String(a.capture.id).localeCompare(String(b.capture.id)));
-  cache.set(store, previous);
-  return previous.docs;
+  index.revision = changes.revision;
+  cache.set(store, index);
+  return index;
 }
 
-function searchSourceKey(source: any) { return JSON.stringify([source?.name, source?.metadata?.sourceFamily, sourceActivityWindowDays(source)]); }
+function addTo(index: Map<string, Set<string>>, key: string, id: string) { index.set(key, new Set([...(index.get(key) ?? []), id])); }
+function removeFrom(index: Map<string, Set<string>>, key: string, id: string) { const ids = index.get(key); ids?.delete(id); if (!ids?.size) index.delete(key); }
+function removeCachedDoc(index: SearchIndex, id: string) {
+  const previous = index.records.get(id);
+  if (!previous?.doc) return;
+  removeFrom(index.tenantIds, previous.tenantKey, id);
+  for (const key of previous.postingKeys) removeFrom(index.postings, key, id);
+}
+function tenantKey(tenantId?: string) { return tenantId ?? ""; }
+function postingKey(tenant: string, term: string) { return `${tenant}\u0000${term}`; }
+function indexedTerms(doc: SearchDoc) {
+  const tokens = `${doc.title} ${doc.text} ${doc.capture.sourceId ?? ""}`.match(/[a-z0-9]+(?:[.-][a-z0-9]+)*/g) ?? [];
+  return unique(tokens.flatMap((token) => [token, ...token.split(/[.-]/)])).filter((term) => term.length > 1);
+}
+function intersectPostings(index: SearchIndex, terms: string[], tenantId?: string): Set<string> {
+  if (!terms.length) return new Set();
+  const tenant = tenantKey(tenantId);
+  const sets = terms.map((term) => index.postings.get(postingKey(tenant, term)) ?? new Set<string>()).sort((a, b) => a.size - b.size);
+  return new Set([...sets[0]].filter((id) => sets.slice(1).every((ids) => ids.has(id))));
+}
+function docsForIds(index: SearchIndex, ids: Iterable<string>) { return [...ids].flatMap((id) => index.records.get(id)?.doc ?? []); }
+function compareDocs(a: SearchDoc, b: SearchDoc) { return b.collectedAt.localeCompare(a.collectedAt) || String(a.capture.id).localeCompare(String(b.capture.id)); }
 
 function withLegacyIncidentTitle(capture: any, incidentTitle: unknown) {
   if (capture.title || capture.metadata?.title || typeof incidentTitle !== "string") return capture;
