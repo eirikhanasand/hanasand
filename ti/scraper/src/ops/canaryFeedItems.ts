@@ -6,6 +6,17 @@ import { sourceFieldReportTimestamp } from "../pipeline/sourceFieldReportTimesta
 
 const ITEM_RE = /<item\b[\s\S]*?<\/item>/gi;
 const ENTRY_RE = /<entry\b[\s\S]*?<\/entry>/gi;
+const PARSER_EMPTY_WARNINGS = new Set([
+  "feed contained no RSS or Atom entries",
+  "JSON source contained no supported records",
+  "public Telegram preview contained no messages"
+]);
+
+export function isParserEmptyFallback(item: any): boolean {
+  return item?.metadata?.feedItem === false
+    && Array.isArray(item.metadata.parserWarnings)
+    && item.metadata.parserWarnings.some((warning: unknown) => PARSER_EMPTY_WARNINGS.has(String(warning)));
+}
 
 export function feedItems(source: any, task: any, fetched: string, at: string, metadata: any, maxItems = 40) {
   if (source.type === "telegram_public") {

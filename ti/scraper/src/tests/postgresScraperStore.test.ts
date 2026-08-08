@@ -12,7 +12,7 @@ import type { MitreActorCatalogSnapshot, MitreActorIdentity } from "../pipeline/
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { parseCurrentRansomwareOperations } from "../pipeline/ransomwareOperationCatalog.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
-import { InMemoryScraperStore } from "../storage/memoryStore.ts";
+import { InMemoryObjectEvidenceStore, InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { PostgresScraperStore, normalizeLegacySourceForImport, toJson } from "../storage/postgresScraperStore.ts";
 import { hashContent, stableId } from "../utils.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
@@ -176,8 +176,10 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
   });
 
   beforeEach(async () => {
+    await admin.unsafe("DROP TABLE IF EXISTS public.dwm_webhook_deliveries");
     await admin.unsafe(`
       TRUNCATE TABLE
+        threat_intel.parser_diagnostic_cleanup_history,
         threat_intel.actor_profile_scope_lineage,
         threat_intel.actor_profile_identity_history,
         threat_intel.actor_identity_aliases,
@@ -206,6 +208,182 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         threat_intel.sources
       CASCADE;
     `);
+  });
+
+  test("archives parser-empty diagnostics and removes their live intelligence graph", async () => {
+    const sourceId = "src_parser_diagnostic_cleanup";
+    const runId = "run_parser_diagnostic_cleanup";
+    const taskId = "task_parser_diagnostic_cleanup";
+    const objectStore = new InMemoryObjectEvidenceStore();
+    const first = await PostgresScraperStore.create({ databaseUrl });
+    installApt29Catalog(first);
+    first.saveSource(source({ id: sourceId, type: "rss", url: "https://parser-cleanup.example/feed.xml" }));
+    first.saveRun({
+      id: runId, planId: "plan_parser_diagnostic_cleanup", requestId: "req_public_canary",
+      status: "completed", startedAt: collectedAt, completedAt: collectedAt, updatedAt: collectedAt,
+      captureCount: 1, captureIds: []
+    } as any);
+
+    const fallbackText = "APT29 malware operations referenced CVE-2026-9999 and https://fallback-only.example/path in page boilerplate.";
+    const fallback = processCollectedItem({
+      sourceId,
+      taskId,
+      url: "https://parser-cleanup.example/feed.xml",
+      collectedAt,
+      rawText: fallbackText,
+      contentHash: hashContent(fallbackText),
+      links: [],
+      metadata: {
+        runId,
+        feedItem: false,
+        parserWarnings: ["feed contained no RSS or Atom entries"],
+        fetchMode: "native_live_http"
+      },
+      sensitive: false
+    }, { actorIdentities: [actorIdentity("G0016", "APT29", ["Cozy Bear"])] });
+    fallback.entities = fallback.entities.map((entity) => entity.type === "actor" && entity.value === "APT29"
+      ? { ...entity, assertionKind: "source_attribution" }
+      : entity);
+    const object = objectStore.putObject({
+      sourceId,
+      captureId: fallback.capture.id,
+      mediaType: fallback.capture.mediaType,
+      body: fallbackText,
+      contentHash: fallback.capture.contentHash,
+      retentionClass: fallback.capture.retentionClass
+    });
+    fallback.capture = { ...fallback.capture, body: undefined, storageKind: "external_object", objectRef: object.ref };
+    const savedFallback = first.savePipelineResult(fallback);
+    first.saveSourceHealthObservation({
+      id: "health_parser_diagnostic_cleanup",
+      sourceId,
+      collectionRunId: runId,
+      taskId,
+      checkedAt: collectedAt,
+      status: "degraded",
+      success: true,
+      useful: true,
+      itemCount: 1,
+      captureCount: 1,
+      parserWarningCount: 1,
+      observedActorCount: 1,
+      legalMode: "public_content"
+    });
+
+    const fallbackOnlyClaim = first.listIntelligenceClaims().find((claim: any) => claim.claimType !== "actor" && claim.captureIds.includes(savedFallback.capture.id));
+    const fallbackOnlyEvidence = first.listClaimEvidence().find((evidence: any) => evidence.claimId === fallbackOnlyClaim.id);
+    first.saveClaimReview({
+      id: "review_parser_diagnostic_cleanup",
+      claimId: fallbackOnlyClaim.id,
+      action: "reject",
+      reviewerId: "hanasand-ai:automatic:hanasand",
+      reason: "The selected parser output is page boilerplate, not an intelligence assertion.",
+      reviewedAt: collectedAt,
+      selectedEvidenceIds: [fallbackOnlyEvidence.id]
+    });
+    first.saveEvaluationLabel({
+      id: "label_parser_diagnostic_cleanup",
+      captureId: savedFallback.capture.id,
+      labelType: "indicator_extraction",
+      expectedValue: "no extracted indicator",
+      observedValue: "fallback-only.example",
+      outcome: "false_positive",
+      datasetSplit: "validation",
+      labeledBy: "consensus:parser-cleanup",
+      labeledAt: collectedAt
+    });
+    first.saveActorProfile({
+      id: "actor_profile_parser_diagnostic_only",
+      canonicalName: "Parser Boilerplate Actor",
+      normalizedName: "parser boilerplate actor",
+      actorType: "threat_actor",
+      confidence: 0.6,
+      firstSeenAt: collectedAt,
+      lastSeenAt: collectedAt,
+      evidenceCount: 1,
+      captureIds: [savedFallback.capture.id],
+      sourceIds: [sourceId],
+      aliases: ["Parser Boilerplate Actor"],
+      characterization: {},
+      identityResolutionState: "canonical",
+      updatedAt: collectedAt
+    });
+    first.saveEvidenceLink({
+      id: "evidence_link_parser_diagnostic_profile",
+      captureId: savedFallback.capture.id,
+      subjectType: "actor_profile",
+      subjectId: "actor_profile_parser_diagnostic_only",
+      relationship: "supports",
+      confidence: 0.6,
+      extractorVersion: "parser-cleanup-test",
+      createdAt: collectedAt
+    });
+
+    const valid = first.savePipelineResult(pipeline(sourceId, undefined, " Independent retained reporting confirmed APT29 activity."));
+    const mixedProfile = first.listActorProfiles().find((profile: any) => profile.canonicalName === "APT29");
+    const mixedClaim = first.listIntelligenceClaims().find((claim: any) => claim.claimType === "actor");
+    expect(mixedProfile.captureIds).toContain(savedFallback.capture.id);
+    expect(mixedProfile.captureIds).toContain(valid.capture.id);
+    expect(mixedClaim.captureIds).toContain(savedFallback.capture.id);
+    expect(mixedClaim.captureIds).toContain(valid.capture.id);
+
+    await first.flush();
+    await first.close();
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '037_remove_parser_fallback_artifacts'`;
+
+    const migrated = await PostgresScraperStore.create({ databaseUrl });
+    expect(migrated.getCapture(savedFallback.capture.id)).toBeUndefined();
+    expect(migrated.getCapture(valid.capture.id)).toBeDefined();
+    expect(migrated.getIntelligenceClaim(fallbackOnlyClaim.id)).toBeUndefined();
+    expect(migrated.getIntelligenceClaim(mixedClaim.id)).toMatchObject({
+      captureIds: [valid.capture.id], evidenceCount: 1, sourceCount: 1
+    });
+    expect(migrated.getActorProfile(mixedProfile.id)).toMatchObject({
+      captureIds: [valid.capture.id], evidenceCount: 1
+    });
+    expect(migrated.listActorProfiles().some((profile: any) => profile.id === "actor_profile_parser_diagnostic_only")).toBe(false);
+    expect(migrated.listSourceHealthObservations()).toContainEqual(expect.objectContaining({
+      id: "health_parser_diagnostic_cleanup", useful: false, captureCount: 0, observedActorCount: 0
+    }));
+    expect(migrated.getRun(runId)).toMatchObject({ captureCount: 0 });
+
+    const history = await admin<{ record_type: string; original_id: string; reference_snapshot: any }[]>`
+      SELECT record_type, original_id, reference_snapshot
+      FROM threat_intel.parser_diagnostic_cleanup_history
+      ORDER BY record_type, original_id
+    `;
+    expect(history).toEqual(expect.arrayContaining([
+      expect.objectContaining({ record_type: "capture", original_id: savedFallback.capture.id }),
+      expect.objectContaining({
+        record_type: "claim",
+        original_id: fallbackOnlyClaim.id,
+        reference_snapshot: expect.objectContaining({ reviews: [expect.objectContaining({ id: "review_parser_diagnostic_cleanup" })] })
+      }),
+      expect.objectContaining({ record_type: "actor_profile", original_id: "actor_profile_parser_diagnostic_only" })
+    ]));
+    const [dangling] = await admin<{ count: number }[]>`
+      SELECT (
+        (SELECT count(*) FROM threat_intel.captures WHERE id = ${savedFallback.capture.id})
+        + (SELECT count(*) FROM threat_intel.entities WHERE capture_id = ${savedFallback.capture.id})
+        + (SELECT count(*) FROM threat_intel.indicators WHERE capture_id = ${savedFallback.capture.id})
+        + (SELECT count(*) FROM threat_intel.evidence_links WHERE capture_id = ${savedFallback.capture.id})
+        + (SELECT count(*) FROM threat_intel.claim_evidence WHERE capture_id = ${savedFallback.capture.id})
+        + (SELECT count(*) FROM threat_intel.evaluation_labels WHERE capture_id = ${savedFallback.capture.id})
+      )::int AS count
+    `;
+    expect(dangling.count).toBe(0);
+
+    expect(objectStore.getObject(object.ref)).toBeDefined();
+    expect(await migrated.purgeParserDiagnosticArchiveObjects(objectStore)).toEqual({ pendingCount: 1, deletedCount: 1, failedIds: [] });
+    expect(objectStore.getObject(object.ref)).toBeUndefined();
+    await migrated.close();
+
+    const restarted = await PostgresScraperStore.create({ databaseUrl });
+    expect(await restarted.purgeParserDiagnosticArchiveObjects(objectStore)).toEqual({ pendingCount: 0, deletedCount: 0, failedIds: [] });
+    expect(restarted.getCapture(savedFallback.capture.id)).toBeUndefined();
+    expect(restarted.getIntelligenceClaim(mixedClaim.id)?.captureIds).toEqual([valid.capture.id]);
+    expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '037_remove_parser_fallback_artifacts'`).toHaveLength(1);
+    await restarted.close();
   });
 
   afterAll(async () => {
@@ -542,17 +720,17 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await admin`
       INSERT INTO threat_intel.actor_profiles (
         id, tenant_id, canonical_name, normalized_name, actor_type, confidence,
-        evidence_count, updated_at, record
+        first_seen_at, last_seen_at, evidence_count, updated_at, record
       ) VALUES (
         ${profileId}, 'default', 'Archived history actor', ${`archived:${profileId}`},
-        'threat_actor', 0.5, 0, ${collectedAt}, ${JSON.stringify(record)}::jsonb
+        'threat_actor', 0.5, ${collectedAt}, ${collectedAt}, 1, ${collectedAt}, ${JSON.stringify(record)}::text::jsonb
       )
     `;
     await admin`
       INSERT INTO threat_intel.workflow_records (record_type, id, tenant_id, created_at, updated_at, record)
       VALUES ('evidence_delta', 'delta_archived_history_health', 'default', ${collectedAt}, ${collectedAt}, ${JSON.stringify({
         id: 'delta_archived_history_health', subjectType: 'actor_profile', subjectId: profileId
-      })}::jsonb)
+      })}::text::jsonb)
     `;
     const store = await PostgresScraperStore.create({ databaseUrl });
     expect(await store.databaseHealth()).toMatchObject({ ok: true, actorProfileScopeReady: true });
@@ -2052,7 +2230,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     `;
     expect(integrity).toEqual({ cross_scope_profiles: 0, cross_scope_evidence: 0, cross_scope_aliases: 0, unresolved_workflows: 0 });
     expect(await immutableSnapshot()).toEqual(immutableBefore);
-    expect(await migrated.databaseHealth()).toMatchObject({ ok: true, migrationVersion: "034_reconcile_incomplete_collection_runs", actorProfileScopeReady: true });
+    expect(await migrated.databaseHealth()).toMatchObject({ ok: true, migrationVersion: "037_remove_parser_fallback_artifacts", actorProfileScopeReady: true });
     await migrated.close();
 
     const restarted = await PostgresScraperStore.create({ databaseUrl });
@@ -2786,6 +2964,8 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       },
       sensitive: true
     });
+    verified.capture = { ...verified.capture, processedAt: "2026-07-21T11:39:00.000Z", firstVisibleAt: "2026-07-21T11:39:01.000Z" };
+    unknown.capture = { ...unknown.capture, processedAt: "2026-07-21T12:39:00.000Z", firstVisibleAt: "2026-07-21T12:39:01.000Z" };
     const savedVerified = store.savePipelineResult(verified);
     const savedUnknown = store.savePipelineResult(unknown);
     const alertCreatedAt = "2026-07-22T12:42:56.741Z";
@@ -2923,7 +3103,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       WHERE incident.id = ${savedVerified.incident!.id}
         AND capture.id = incident.capture_id
     `;
-    await admin`DELETE FROM threat_intel.schema_migrations WHERE version IN ('023_reconcile_delivery_and_event_times', '024_finish_timestamp_backfill', '025_reconcile_timeliness_capture', '026_align_timeliness_capture_record', '027_reconcile_delivery_latencies')`;
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version IN ('023_reconcile_delivery_and_event_times', '024_finish_timestamp_backfill', '025_reconcile_timeliness_capture', '026_align_timeliness_capture_record', '027_reconcile_delivery_latencies', '035_preserve_unknown_delivery_completion')`;
 
     const restarted = await PostgresScraperStore.create({ databaseUrl });
     restarted.savePipelineResult({
@@ -3361,7 +3541,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
 
     await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '034_reconcile_incomplete_collection_runs'`;
     const migrated = await PostgresScraperStore.create({ databaseUrl });
-    expect(await migrated.databaseHealth()).toMatchObject({ ok: true, migrationVersion: "034_reconcile_incomplete_collection_runs" });
+    expect(await migrated.databaseHealth()).toMatchObject({ ok: true, migrationVersion: "037_remove_parser_fallback_artifacts" });
     await migrated.close();
 
     const reconciled = await admin<{ id: string; status: string; error: string | null; record: any }[]>`

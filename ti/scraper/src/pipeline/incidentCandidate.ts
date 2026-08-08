@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { CollectedItem, ExtractedEntity, IncidentCandidate, Indicator } from "../types.ts";
 import { normalizeWhitespace } from "../utils.ts";
 import { canonicalizeUrl } from "../storage/memoryStoreHelpers.ts";
+import { isParserEmptyFallback } from "../ops/canaryFeedItems.ts";
 import { buildReviewReasons, reviewReasonDetail, scoreIncidentConfidence } from "./incidentScoring.ts";
 
 export const INCIDENT_CLASSIFIER_VERSION = "ti-incident-classifier-v3";
@@ -34,7 +35,7 @@ export function buildIncidentCandidate(
   indicators: Indicator[],
   entities: ExtractedEntity[]
 ): IncidentCandidate | undefined {
-  if (isCollectionFallback(item.metadata)) return undefined;
+  if (isParserEmptyFallback(item)) return undefined;
   if (!hasIncidentEvidence({
     title: item.title,
     text: item.rawText,
@@ -101,11 +102,6 @@ function normalizeCve(value: unknown): string | undefined {
 function normalizedTimestamp(value: unknown): string | undefined {
   const timestamp = Date.parse(String(value ?? ""));
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined;
-}
-
-function isCollectionFallback(metadata: Record<string, any> | undefined): boolean {
-  if (metadata?.feedItem !== false || !Array.isArray(metadata.parserWarnings)) return false;
-  return metadata.parserWarnings.some((warning: unknown) => typeof warning === "string" && /contained no (?:messages|rss|atom|supported records)|preview contained no messages/i.test(warning));
 }
 
 function safeIncidentSummary(item: CollectedItem): string {

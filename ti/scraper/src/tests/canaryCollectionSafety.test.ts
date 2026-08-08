@@ -41,6 +41,14 @@ describe("public collection boundary", () => {
 
     expect(cycle).toMatchObject({ activeSourceCount: 1, completedTaskCount: 1, failedTaskCount: 0 });
     expect(fetchCount).toBe(1);
+    expect(store.listCaptures()).toHaveLength(0);
+    expect(store.listExtractedEntities()).toHaveLength(0);
+    expect(store.listIndicators()).toHaveLength(0);
+    expect(store.listIntelligenceClaims()).toHaveLength(0);
+    expect(store.listSourceHealthObservations()).toContainEqual(expect.objectContaining({
+      status: "degraded", success: true, useful: false, itemCount: 1,
+      captureCount: 0, parserWarningCount: 1
+    }));
   });
 
   test("runs only explicitly selected due sources", async () => {

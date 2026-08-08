@@ -6,7 +6,7 @@ import { evidenceIndependence } from "../storage/memoryStore.ts";
 import { activatePublicCanarySources, pausePublicCanarySources, reconcilePublicSourceProductivity } from "./canaryActivation.ts";
 import { canaryQueries, PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 import { detachedState, externalize, fetchItems, health, maxItemsFor, tasksForSource } from "./canaryHelpers.ts";
-import { isCisaKevSource, isNvdCveSource } from "./canaryFeedItems.ts";
+import { isCisaKevSource, isNvdCveSource, isParserEmptyFallback } from "./canaryFeedItems.ts";
 import { isSellableIntelText, sellableReason } from "../value/sellableIntel.ts";
 import { sourceActivityWindowDays, sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
 import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
@@ -220,15 +220,16 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
       task.planning.watchlistDiscovery = { ...task.planning.watchlistDiscovery, terms: activeTerms };
     }
     const discoveredItems = await fetchItems(source, task, fetcher, mode, generatedAt, maxBytes, options.timeoutMs ?? 12_000, itemLimit(source, options, task));
+    const intelligenceItems = discoveredItems.filter((item: any) => !isParserEmptyFallback(item));
     const collectedItems = task.planning?.watchlistDiscovery
-      ? await collectWatchlistDiscoveryEvidence({ store: options.store, source, task, discoveryItems: discoveredItems, fetcher, generatedAt, timeoutMs: options.timeoutMs ?? 12_000, maxBytes: Math.max(maxBytes, 2_000_000), nativeFetch: mode === "native_live_http" })
-      : discoveredItems;
-    taskMetrics.itemCount = collectedItems.length;
-    taskMetrics.httpStatus = collectedItems[0]?.metadata?.fetchProvenance?.httpStatus;
-    taskMetrics.parserWarningCount = collectedItems.reduce((total: number, item: any) => total + (Array.isArray(item.metadata?.parserWarnings) ? item.metadata.parserWarnings.length : 0), 0);
-    taskMetrics.publishedAt = collectedItems.map((item: any) => item.publishedAt).filter(Boolean);
+      ? await collectWatchlistDiscoveryEvidence({ store: options.store, source, task, discoveryItems: intelligenceItems, fetcher, generatedAt, timeoutMs: options.timeoutMs ?? 12_000, maxBytes: Math.max(maxBytes, 2_000_000), nativeFetch: mode === "native_live_http" })
+      : intelligenceItems;
+    taskMetrics.itemCount = discoveredItems.length;
+    taskMetrics.httpStatus = discoveredItems[0]?.metadata?.fetchProvenance?.httpStatus;
+    taskMetrics.parserWarningCount = discoveredItems.reduce((total: number, item: any) => total + (Array.isArray(item.metadata?.parserWarnings) ? item.metadata.parserWarnings.length : 0), 0);
+    taskMetrics.publishedAt = discoveredItems.map((item: any) => item.publishedAt).filter(Boolean);
     const sellableItems = task.planning?.watchlistDiscovery ? collectedItems : collectedItems.filter((collected: any) => isNvdCveSource(source) || ["cisa_kev", "ransomware_group_metadata", "mitre_actor_catalog", "ransomware_operation_catalog", "ransomware_operation_activity_evidence"].includes(collected.metadata?.extractionProfile) || isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt, maxAgeDays: sourceActivityWindowDays(source) }));
-    counters.skippedLowValueCount += collectedItems.length - sellableItems.length;
+    counters.skippedLowValueCount += intelligenceItems.length - sellableItems.length;
     for (const collected of sellableItems.slice(0, itemLimit(source, options, task))) {
       collected.tenantId = task.tenantId ?? collected.tenantId ?? source.tenantId;
       collected.organizationId = task.planning?.watchlistDiscovery?.organizationId ?? collected.organizationId;

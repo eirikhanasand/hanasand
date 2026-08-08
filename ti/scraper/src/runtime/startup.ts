@@ -105,6 +105,8 @@ export async function startScraperRuntime() {
   const legacyImport = await store.importLegacySnapshot(paths.evidenceMetadataPath);
   startupPhase("legacy_snapshot_checked", { imported: legacyImport.imported });
   const objectStore = new FileObjectEvidenceStore({ rootDir: paths.evidenceObjectDir });
+  const parserDiagnosticObjectCleanup = await store.purgeParserDiagnosticArchiveObjects(objectStore);
+  startupPhase("parser_diagnostic_objects_cleaned", parserDiagnosticObjectCleanup);
   const retentionAssignments = normalizeDefaultRetentionClasses(store);
   const retention = await enforceDefaultRetentionPolicies(store, objectStore);
   startupPhase("retention_enforced", { retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0) });

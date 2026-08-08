@@ -68,7 +68,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "033_bound_source_operations", path: fileURLToPath(new URL("../../migrations/033_bound_source_operations.sql", import.meta.url)) },
   { version: "034_reconcile_incomplete_collection_runs", path: fileURLToPath(new URL("../../migrations/034_reconcile_incomplete_collection_runs.sql", import.meta.url)) },
   { version: "035_preserve_unknown_delivery_completion", path: fileURLToPath(new URL("../../migrations/035_preserve_unknown_delivery_completion.sql", import.meta.url)) },
-  { version: "036_source_operations_runtime_indexes", path: fileURLToPath(new URL("../../migrations/036_source_operations_runtime_indexes.sql", import.meta.url)) }
+  { version: "036_source_operations_runtime_indexes", path: fileURLToPath(new URL("../../migrations/036_source_operations_runtime_indexes.sql", import.meta.url)) },
+  { version: "037_remove_parser_fallback_artifacts", path: fileURLToPath(new URL("../../migrations/037_remove_parser_fallback_artifacts.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -1402,7 +1403,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         // durable in PostgreSQL for retention/export paths.
         this.sql`SELECT record_type, record FROM threat_intel.workflow_records
           WHERE record_type IN (
-            'collection_run', 'replay_job', 'discovery_evidence', 'live_search_snapshot',
+            'collection_plan', 'collection_run', 'replay_job', 'discovery_evidence', 'live_search_snapshot',
             'dwm_watchlist', 'dwm_webhook_delivery', 'organization', 'organization_member',
             'organization_invite', 'webhook_destination', 'case', 'actor_org_relevance_review',
             'analyst_source_activation_packet', 'analyst_victim_notification_packet',
@@ -1480,6 +1481,34 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     this.hydrateWithoutOrganizationWriteGuard(() => {
       for (const row of rows) super.saveClaimReview(readRecord(row));
     });
+  }
+
+  async purgeParserDiagnosticArchiveObjects(objectStore: { deleteObject: (reference: any, reason: string) => boolean | Promise<boolean> }) {
+    const rows = await this.sql<any[]>`
+      SELECT id, original_record->'object_ref' AS object_ref
+      FROM threat_intel.parser_diagnostic_cleanup_history
+      WHERE record_type = 'capture' AND object_deleted_at IS NULL
+      ORDER BY original_id
+    `;
+    let deleted = 0;
+    const failed: string[] = [];
+    for (const row of rows) {
+      try {
+        if (row.object_ref && await objectStore.deleteObject(row.object_ref, "parser-diagnostic-cleanup") !== true) {
+          failed.push(row.id);
+          continue;
+        }
+        await this.sql`
+          UPDATE threat_intel.parser_diagnostic_cleanup_history
+          SET object_deleted_at = now(), object_deletion_reason = ${row.object_ref ? "parser-diagnostic-cleanup" : "no-external-object"}
+          WHERE id = ${row.id} AND object_deleted_at IS NULL
+        `;
+        deleted++;
+      } catch {
+        failed.push(row.id);
+      }
+    }
+    return { pendingCount: rows.length, deletedCount: deleted, failedIds: failed };
   }
 
   private async backfillSourceOperationalKeys(): Promise<void> {
