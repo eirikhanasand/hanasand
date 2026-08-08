@@ -109,6 +109,7 @@ export async function proxy(req: NextRequest) {
             if (!roles.some((role) => roleMatchesStrictPath(role, strictPath.role))) {
                 const url = new URL('/dashboard', req.url)
                 url.searchParams.set('notAllowed', 'true')
+                url.searchParams.set('from', pathWithSearch)
                 const redirectResponse = NextResponse.redirect(url)
                 applyRefreshedAuthCookies(redirectResponse, refreshedCookieOptions, refreshedAuth)
                 return redirectResponse
