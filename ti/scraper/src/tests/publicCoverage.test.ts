@@ -25,6 +25,7 @@ describe("public coverage", () => {
     expect(body.usefulCoverage).toMatchObject({ measurementState: "measured", everUsefulSourceCount: 0, sustainedUsefulSourceCount: 0, captureProducingSourceCount: 0 });
     expect(body.qualification).toMatchObject({ measurementState: "measured", counts: { clearWeb: 0, lawfulDarkWeb: 0, publicTelegram: 0, total: 0 }, gaps: { clearWeb: 5_000, lawfulDarkWeb: 1_000, publicTelegram: 100, total: 6_100 }, baselineMet: false });
     expect(body.observedAlertLatencySeconds).toMatchObject({ sampleCount: 1, medianSeconds: 120, p95Seconds: 120 });
+    expect(body.collectionCadenceSeconds).toMatchObject({ status: "observed", sourceCount: 2, minimumSeconds: 3600, medianSeconds: 3600, maximumSeconds: 3600 });
     expect(JSON.stringify(body)).not.toContain("tenant_a");
   });
 

@@ -16,6 +16,7 @@ type Coverage = {
     usefulCoverage: { measurementState: string; everUsefulSourceCount: number | null; currentlyUsefulSourceCount: number | null; sustainedUsefulSourceCount: number | null; captureProducingSourceCount: number | null }
     qualification: { measurementState: string; baseline: Record<Family, number>; counts: MeasuredCounts; gaps: MeasuredCounts; baselineMet: boolean | null }
     observedAlertLatencySeconds: { sampleCount: number; medianSeconds: number | null; p95Seconds: number | null }
+    collectionCadenceSeconds: { status: string; sourceCount: number; minimumSeconds: number | null; medianSeconds: number | null; maximumSeconds: number | null }
     definitions: Record<string, string>
 }
 
@@ -33,6 +34,18 @@ function CoverageContent({ coverage }: { coverage: Coverage }) {
             <Metric icon={<Database className='h-5 w-5' />} label='Capture-producing feeds' value={formatMeasured(coverage.usefulCoverage.captureProducingSourceCount)} detail={`${formatMeasured(coverage.usefulCoverage.sustainedUsefulSourceCount)} sustained across repeated useful cycles`} />
             <Metric icon={<Timer className='h-5 w-5' />} label='Observed alert latency' value={latency.medianSeconds === null ? 'No observations' : formatSeconds(latency.medianSeconds)} detail={latency.p95Seconds === null ? 'Awaiting verified report-to-alert records' : `p95 ${formatSeconds(latency.p95Seconds)} · ${latency.sampleCount} samples`} />
         </section>
+        <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-5'>
+            <div>
+                <h2 className='text-lg font-semibold'>Collection cadence</h2>
+                <p className='mt-1 text-sm leading-6 text-ui-muted'>Observed configured polling intervals for the global source set. This is a collection schedule, not a promise that every source produces a match on each run.</p>
+            </div>
+            <div className='grid gap-3 sm:grid-cols-3'>
+                <Inventory label='Fastest source' value={formatCadence(coverage.collectionCadenceSeconds.minimumSeconds)} />
+                <Inventory label='Typical source' value={formatCadence(coverage.collectionCadenceSeconds.medianSeconds)} />
+                <Inventory label='Slowest source' value={formatCadence(coverage.collectionCadenceSeconds.maximumSeconds)} />
+            </div>
+            <p className='text-xs text-ui-muted'>{coverage.collectionCadenceSeconds.status === 'observed' ? `${coverage.collectionCadenceSeconds.sourceCount} source schedules included.` : 'Collection cadence is not measured for this deployment.'}</p>
+        </section>
         <QualificationTable qualification={coverage.qualification} />
         <section className='grid gap-4 border-t border-ui-border pt-6'><div><h2 className='text-lg font-semibold'>Source registry inventory</h2><p className='mt-1 text-sm text-ui-muted'>Inventory is reported separately and is never added to qualifying coverage.</p></div><div className='grid gap-3 sm:grid-cols-3'><Inventory label='Registered' value={coverage.registry.registeredSourceCount} /><Inventory label='Executable' value={coverage.registry.executableSourceCount} /><Inventory label='Inactive' value={coverage.registry.inactiveSourceCount} /></div></section>
         <section className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-5'><h2 className='text-lg font-semibold'>Measurement definitions</h2><div className='grid gap-3 text-sm leading-6 text-ui-muted md:grid-cols-2'>{Object.entries(coverage.definitions).map(([key, value]) => <div key={key}><p className='font-semibold capitalize text-ui-text'>{key}</p><p>{value}</p></div>)}</div><p className='border-t border-ui-border pt-3 text-sm text-ui-muted'>{coverage.coverageBoundary}</p><Link href='/trust' className='inline-flex items-center gap-2 text-sm font-semibold text-ui-primary'>Review the trust center <ArrowRight className='h-4 w-4' /></Link></section>
@@ -46,8 +59,9 @@ function QualificationTable({ qualification }: { qualification: Coverage['qualif
 }
 
 function Metric({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) { return <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-5'><span className='text-ui-primary'>{icon}</span><div><p className='text-sm text-ui-muted'>{label}</p><p className='mt-1 text-xl font-semibold'>{value}</p><p className='mt-1 text-xs text-ui-muted'>{detail}</p></div></div> }
-function Inventory({ label, value }: { label: string; value: number }) { return <div className='border-l-2 border-ui-border pl-3'><p className='text-xs font-semibold uppercase text-ui-muted'>{label}</p><p className='mt-1 text-xl font-semibold'>{value}</p></div> }
+function Inventory({ label, value }: { label: string; value: number | string }) { return <div className='border-l-2 border-ui-border pl-3'><p className='text-xs font-semibold uppercase text-ui-muted'>{label}</p><p className='mt-1 text-xl font-semibold'>{value}</p></div> }
 function formatMeasured(value: number | null) { return value === null ? 'Not measured' : String(value) }
 function formatSeconds(value: number) { return value < 60 ? `${Math.round(value)}s` : `${(value / 60).toFixed(value >= 3600 ? 1 : 0)}${value >= 3600 ? 'h' : 'm'}` }
+function formatCadence(value: number | null) { return value === null ? 'Not measured' : formatSeconds(value) }
 function Unavailable() { return <section className='rounded-lg border border-ui-border bg-ui-panel p-6'><h2 className='font-semibold'>Coverage data is unavailable</h2><p className='mt-2 text-sm leading-6 text-ui-muted'>The measurement service did not respond. No fallback counts are shown.</p></section> }
 async function loadCoverage(): Promise<Coverage | null> { try { const response = await fetch(new URL('/v1/public/coverage', tiScraperApiBase()), { cache: 'no-store', signal: AbortSignal.timeout(10_000) }); return response.ok ? await response.json() as Coverage : null } catch { return null } }

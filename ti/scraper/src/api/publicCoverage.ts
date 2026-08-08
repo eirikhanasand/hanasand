@@ -4,7 +4,7 @@ import type { ApiServerOptions } from "./serverTypes.ts";
 
 export async function publicCoverage(options: ApiServerOptions) {
   const generatedAt = nowIso();
-  const operations = await buildSourceOperationsSnapshot(options.store, { generatedAt, limit: 1 });
+  const operations = await buildSourceOperationsSnapshot(options.store, { generatedAt, limit: 500 });
   const summary: any = operations.summary ?? {};
   const sourceQualification: any = operations.qualification ?? {};
   const measured = summary.measurementState !== "source_counts_only" && sourceQualification.measurementState !== "not_measured";
@@ -34,6 +34,7 @@ export async function publicCoverage(options: ApiServerOptions) {
       baselineMet: measured ? sourceQualification.baselineMet === true : null,
     },
     observedAlertLatencySeconds: latency,
+    collectionCadenceSeconds: cadenceSummary(operations.sources ?? []),
     definitions: {
       qualifying: "A feed qualifies only after repeated successful and useful scheduled cycles, retained evidence, current content, legal basis, review approval where required, and duplicate exclusion.",
       useful: "Useful counts come from persisted retained captures linked to successful collection cycles; registration and health checks are insufficient.",
@@ -47,6 +48,18 @@ function latencySummary(records: any[]) {
   const values = records.map((record) => number(record.latencies?.reportToAlertSeconds)).filter(valid).filter((value) => value >= 0).sort((a, b) => a - b);
   if (!values.length) return { status: "not_enough_observations", sampleCount: 0, medianSeconds: null, p95Seconds: null };
   return { status: "observed", sampleCount: values.length, medianSeconds: percentile(values, 0.5), p95Seconds: percentile(values, 0.95) };
+}
+
+function cadenceSummary(sources: any[]) {
+  const values = sources.map((source) => number(source.collection?.cadenceSeconds)).filter(valid).sort((a, b) => a - b);
+  if (!values.length) return { status: "not_measured", sourceCount: 0, minimumSeconds: null, medianSeconds: null, maximumSeconds: null };
+  return {
+    status: "observed",
+    sourceCount: values.length,
+    minimumSeconds: values[0],
+    medianSeconds: percentile(values, 0.5),
+    maximumSeconds: values.at(-1),
+  };
 }
 
 function measuredCount(value: unknown, measured: boolean) { return measured ? Math.max(0, Number(value ?? 0)) : null; }
