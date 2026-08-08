@@ -21,6 +21,10 @@ export interface TiActivity {
     publisherCount?: number
     corroboratingSourceIds?: string[]
     contradictingSourceIds?: string[]
+    assertionKind?: 'source_claim'
+    reviewState?: string
+    corroborationState?: string
+    observationSummary?: string
 }
 
 export interface TiTarget {

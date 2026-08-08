@@ -272,6 +272,10 @@ export interface components {
             publisherCount?: number;
             corroboratingSourceIds?: string[];
             contradictingSourceIds?: string[];
+            assertionKind?: string;
+            reviewState?: string;
+            corroborationState?: string;
+            observationSummary?: string;
         };
         Target: {
             sector: string;

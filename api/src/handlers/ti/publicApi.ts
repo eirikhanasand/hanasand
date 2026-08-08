@@ -188,7 +188,7 @@ function publicSearchResult(result: TiSearchResponse) {
             date: text(item.date), title: text(item.title), detail: text(item.detail), confidence: confidence(item.confidence), sourceIds: strings(item.sourceIds),
             url: httpUrl(item.url), claimType: text(item.claimType), victimName: text(item.victimName), affectedSectors: strings(item.affectedSectors), countries: strings(item.countries),
             impact: text(item.impact), firstReportedAt: iso(item.firstReportedAt), lastReportedAt: iso(item.lastReportedAt), publisherCount: nonNegativeInteger(item.publisherCount),
-            corroboratingSourceIds: strings(item.corroboratingSourceIds), contradictingSourceIds: strings(item.contradictingSourceIds),
+            corroboratingSourceIds: strings(item.corroboratingSourceIds), contradictingSourceIds: strings(item.contradictingSourceIds), assertionKind: text(item.assertionKind), reviewState: text(item.reviewState), corroborationState: text(item.corroborationState), observationSummary: text(item.observationSummary),
         })),
         targets: array(result.targets).map(item => compact({ sector: text(item.sector), regions: strings(item.regions), rationale: text(item.rationale), confidence: confidence(item.confidence) })),
         ttps: array(result.ttps).map(item => compact({ name: text(item.name), attackId: text(item.attackId), tactic: text(item.tactic), detail: text(item.detail), confidence: confidence(item.confidence), extractionMethod: text(item.extractionMethod)?.slice(0, 120), extractorVersion: text(item.extractorVersion)?.slice(0, 120) })),

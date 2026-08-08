@@ -1269,6 +1269,18 @@
             "items": {
               "type": "string"
             }
+          },
+          "assertionKind": {
+            "type": "string"
+          },
+          "reviewState": {
+            "type": "string"
+          },
+          "corroborationState": {
+            "type": "string"
+          },
+          "observationSummary": {
+            "type": "string"
           }
         },
         "required": [
