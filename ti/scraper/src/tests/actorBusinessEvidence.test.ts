@@ -105,6 +105,23 @@ describe("actor business-model reviewed evidence", () => {
     });
   });
 
+  test("keeps current reviewed evidence when the aggregate claim also retains retired source history", async () => {
+    const store = actorStore(["BrainCipher"]);
+    store.saveSource(retainedGroupSource);
+    const active = groupResult("BrainCipher", brainCipher, { publishedAt });
+    const retired = groupResult("BrainCipher", brainCipher, { inputSource: retainedGroupSource, publishedAt });
+    store.savePipelineResult(active);
+    store.savePipelineResult(retired);
+    confirmBusinessClaims(store, active.capture.id);
+
+    const pricingClaim = businessClaimsForCapture(store, active.capture.id).find((claim: any) => claim.claimType === "pricing_claim");
+    expect(pricingClaim.sourceIds).toEqual(expect.arrayContaining([catalogSource.id, retainedGroupSource.id]));
+    const pricing = (await searchResult(store, "BrainCipher")).actorIntelligence.businessModel.pricingClaims[0];
+    expect(pricing).toMatchObject({ value: "$150,000 to $1,00,0000", reviewState: "confirmed", corroborationState: "single_source" });
+    expect(pricing.captureIds).toEqual([active.capture.id]);
+    expect(pricing.evidence.map((row: any) => row.captureId)).toEqual([active.capture.id]);
+  });
+
   test("treats equivalent ISO review timestamp forms identically", async () => {
     for (const reviewedAt of ["2026-07-20T16:00:00Z", "2026-07-20T16:00:00.000Z"]) {
       const store = actorStore(["DarkPower"]);

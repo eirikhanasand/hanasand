@@ -506,7 +506,9 @@ function businessObservations(store: any, findings: any[], reviewed: boolean) {
 
 function actorBusinessEvidenceCatalog(store: any, tenantId: string | undefined, query: string, generatedAt: string) {
   const inScope = (record: any) => Boolean(record) && (!record.tenantId || (record.tenantId || undefined) === tenantId);
-  const sourceById = uniqueMap((store.listSources?.() ?? []).filter((source: any) => inScope(source) && source.status === "active"));
+  const sources = (store.listSources?.() ?? []).filter(inScope);
+  const allSourceById = uniqueMap(sources);
+  const sourceById = uniqueMap(sources.filter((source: any) => source.status === "active"));
   const captureById = uniqueMap((store.listCaptures?.() ?? []).filter(inScope));
   const entities = (store.listExtractedEntities?.() ?? []).filter(inScope);
   const entityById = uniqueMap(entities);
@@ -532,7 +534,7 @@ function actorBusinessEvidenceCatalog(store: any, tenantId: string | undefined, 
     const claim: any = claimsById.get(evidence.claimId);
     const capture: any = captureById.get(evidence.captureId);
     const source: any = sourceById.get(evidence.sourceId);
-    if (!exactBusinessEvidenceChain({ entity, claim, evidence, capture, source, sourceById, captureById })) continue;
+    if (!exactBusinessEvidenceChain({ entity, claim, evidence, capture, source, allSourceById, captureById })) continue;
     const sourceActor = explicitBusinessActor(capture, actorEntitiesByCapture.get(entity.captureId) ?? []);
     if (!sourceActor) continue;
     const actorIdentity = resolveBusinessActor(sourceActor, identities, identityById, profiles, aliases);
@@ -638,7 +640,7 @@ function actorBusinessEvidenceCatalog(store: any, tenantId: string | undefined, 
   };
 }
 
-function exactBusinessEvidenceChain({ entity, claim, evidence, capture, source, sourceById, captureById }: any) {
+function exactBusinessEvidenceChain({ entity, claim, evidence, capture, source, allSourceById, captureById }: any) {
   if (!entity || !claim || !capture || !source || !isSafeBusinessMechanism(entity)) return false;
   if (evidence.subjectType !== "entity" || evidence.relationship !== "supports") return false;
   if (!["captured_page", "metadata_only_claim", "reviewed_promoted"].includes(evidence.evidenceStage)) return false;
@@ -655,10 +657,10 @@ function exactBusinessEvidenceChain({ entity, claim, evidence, capture, source, 
   return sourceIds.length > 0 && captureIds.length > 0
     && sourceIds.includes(evidence.sourceId)
     && captureIds.includes(evidence.captureId)
-    && sourceIds.every((id) => sourceById.has(id))
+    && sourceIds.every((id) => allSourceById.has(id))
     && captureIds.every((id) => {
       const linkedCapture: any = captureById.get(id);
-      return linkedCapture && sourceById.has(linkedCapture.sourceId) && linkedCapture.contentHash && exactProvenance(linkedCapture.provenance, linkedCapture.sourceId, linkedCapture.id, linkedCapture.contentHash);
+      return linkedCapture && allSourceById.has(linkedCapture.sourceId) && linkedCapture.contentHash && exactProvenance(linkedCapture.provenance, linkedCapture.sourceId, linkedCapture.id, linkedCapture.contentHash);
     });
 }
 
