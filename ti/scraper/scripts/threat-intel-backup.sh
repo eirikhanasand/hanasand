@@ -118,8 +118,13 @@ verify_object_continuity() {
   }
   prior_archive=$(CDPATH= cd -- "$(dirname -- "$prior_object_ledger")" && pwd)
   prior_checksums="$prior_archive/SHA256SUMS"
+  prior_evidence_inventory="$prior_archive/EVIDENCE-INVENTORY.tsv"
   [ -f "$prior_checksums" ] && [ ! -L "$prior_checksums" ] || {
     echo "prior object ledger has no trusted checksum manifest" >&2
+    exit 1
+  }
+  [ -f "$prior_evidence_inventory" ] && [ ! -L "$prior_evidence_inventory" ] || {
+    echo "prior object ledger has no evidence inventory" >&2
     exit 1
   }
   prior_expected_hash=$(awk '$2 == "OBJECT-LEDGER.tsv" { count += 1; hash = $1 } END { if (count != 1) exit 1; print hash }' "$prior_checksums") || {
@@ -131,13 +136,35 @@ verify_object_continuity() {
     echo "prior object ledger checksum does not match its published archive" >&2
     exit 1
   }
-  if ! object_continuity_compared_objects=$(awk -F '\t' '
-    NR == FNR {
+  prior_inventory_expected_hash=$(awk '$2 == "EVIDENCE-INVENTORY.tsv" { count += 1; hash = $1 } END { if (count != 1) exit 1; print hash }' "$prior_checksums") || {
+    echo "prior evidence inventory checksum is missing or ambiguous" >&2
+    exit 1
+  }
+  prior_inventory_actual_hash=$(shasum -a 256 "$prior_evidence_inventory" | awk '{ print $1 }')
+  [ "$prior_inventory_expected_hash" = "$prior_inventory_actual_hash" ] || {
+    echo "prior evidence inventory checksum does not match its published archive" >&2
+    exit 1
+  }
+  if ! object_continuity_counts=$(awk -F '\t' -v prior_ledger="$prior_object_ledger" -v prior_inventory="$prior_evidence_inventory" '
+    FILENAME == prior_ledger {
       if (FNR == 1) {
         header = $0
         next
       }
-      prior[$1 FS $7 FS $8 FS $9] = $15
+      key = $1 FS $7 FS $8 FS $9
+      prior_object[key] = $15
+      prior_metadata[key] = $16
+      next
+    }
+    FILENAME == prior_inventory {
+      if (FNR == 1) {
+        if ($1 != "path" || $2 != "sha256") {
+          print "prior evidence inventory header is invalid" > "/dev/stderr"
+          exit 2
+        }
+        next
+      }
+      prior_file[$1] = $2
       next
     }
     FNR == 1 {
@@ -149,28 +176,44 @@ verify_object_continuity() {
     }
     {
       key = $1 FS $7 FS $8 FS $9
-      if (key in prior) {
+      if (key in prior_object) {
         compared += 1
-        if (prior[key] != $15) {
+        if (prior_object[key] != $15) {
           print "immutable evidence object changed between backups: " $1 > "/dev/stderr"
           changed = 1
         }
+        if (prior_metadata[key] != $16) {
+          print "immutable evidence metadata changed between backups: " $1 > "/dev/stderr"
+          changed = 1
+        }
       } else if ($10 != $15) {
-        print "new legacy evidence object has no prior byte baseline: " $1 > "/dev/stderr"
-        changed = 1
+        object_path = "objects/" $8
+        metadata_path = object_path ".json"
+        if (object_path in prior_file && metadata_path in prior_file) {
+          if (prior_file[object_path] != $15 || prior_file[metadata_path] != $16) {
+            print "previously archived legacy evidence changed before its first database reference: " $1 > "/dev/stderr"
+            changed = 1
+          } else {
+            legacy_baselines += 1
+          }
+        } else {
+          print "new legacy evidence object has no prior byte baseline: " $1 > "/dev/stderr"
+          changed = 1
+        }
       }
     }
     END {
       if (changed) exit 1
-      print compared + 0
+      print compared + 0, legacy_baselines + 0
     }
-  ' "$prior_object_ledger" "$object_ledger"); then
+  ' "$prior_object_ledger" "$prior_evidence_inventory" "$object_ledger"); then
     echo "object byte continuity check failed" >&2
     exit 1
   fi
+  object_continuity_compared_objects=${object_continuity_counts%% *}
+  object_continuity_legacy_baseline_objects=${object_continuity_counts#* }
   object_continuity_status=verified
   object_continuity_prior_archive=$(basename -- "$prior_archive")
-  object_continuity_legacy_baseline_objects=0
 }
 
 verify() (

@@ -39,6 +39,14 @@ function objectLedger(objectSha256: string): string {
   ].join("\n");
 }
 
+function writePriorContinuityArchive(prior: string, ledger: string, evidenceInventory = "path\tsha256\n"): string {
+  mkdirSync(prior);
+  writeFileSync(join(prior, "OBJECT-LEDGER.tsv"), ledger);
+  writeFileSync(join(prior, "EVIDENCE-INVENTORY.tsv"), evidenceInventory);
+  writeSums(prior, "SHA256SUMS", ["OBJECT-LEDGER.tsv", "EVIDENCE-INVENTORY.tsv"]);
+  return join(prior, "OBJECT-LEDGER.tsv");
+}
+
 function makeArchive(root: string): { archive: string; priorReceipt: string } {
   const archive = join(root, "archive");
   const evidence = join(root, "evidence");
@@ -353,11 +361,8 @@ describe("backup and restore scripts", () => {
     try {
       const archive = join(root, "archive");
       const prior = join(root, "20260723T010000Z");
-      const priorLedger = join(prior, "OBJECT-LEDGER.tsv");
       const currentLedger = join(root, "current-object-ledger.tsv");
-      mkdirSync(prior);
-      writeFileSync(priorLedger, objectLedger("a".repeat(64)));
-      writeSums(prior, "SHA256SUMS", ["OBJECT-LEDGER.tsv"]);
+      const priorLedger = writePriorContinuityArchive(prior, objectLedger("a".repeat(64)));
       writeFileSync(currentLedger, objectLedger("a".repeat(64)));
       const { databaseBundle, evidenceArchive } = makeBackupInputs(root);
       const { bin, failMarker, log } = makeFakeDocker(root, archive);
@@ -425,11 +430,8 @@ describe("backup and restore scripts", () => {
     try {
       const archive = join(root, "archive");
       const prior = join(root, "20260723T010000Z");
-      const priorLedger = join(prior, "OBJECT-LEDGER.tsv");
       const currentLedger = join(root, "current-object-ledger.tsv");
-      mkdirSync(prior);
-      writeFileSync(priorLedger, objectLedger("a".repeat(64)));
-      writeSums(prior, "SHA256SUMS", ["OBJECT-LEDGER.tsv"]);
+      const priorLedger = writePriorContinuityArchive(prior, objectLedger("a".repeat(64)));
       const [header, priorRow] = objectLedger("a".repeat(64)).trimEnd().split("\n");
       const lateLegacyRow = objectLedger("b".repeat(64)).trimEnd().split("\n")[1]!
         .replaceAll("cap_continuity", "cap_late_legacy");
@@ -460,16 +462,59 @@ describe("backup and restore scripts", () => {
     }
   });
 
+  test("later backup recovers a newly linked legacy object from the trusted prior evidence inventory", () => {
+    const root = mkdtempSync(join(tmpdir(), "ti-backup-linked-legacy-continuity-"));
+    try {
+      const archive = join(root, "archive");
+      const prior = join(root, "20260723T010000Z");
+      const currentLedger = join(root, "current-object-ledger.tsv");
+      const [header, priorRow] = objectLedger("a".repeat(64)).trimEnd().split("\n");
+      const legacyRow = objectLedger("b".repeat(64)).trimEnd().split("\n")[1]!
+        .replaceAll("cap_continuity", "cap_linked_legacy")
+        .split("\t");
+      const objectPath = `objects/${legacyRow[7]}`;
+      const priorLedger = writePriorContinuityArchive(prior, `${header}\n${priorRow}\n`, [
+        "path\tsha256",
+        `${objectPath}\t${legacyRow[14]}`,
+        `${objectPath}.json\t${legacyRow[15]}`,
+        "",
+      ].join("\n"));
+      writeFileSync(currentLedger, `${header}\n${priorRow}\n${legacyRow.join("\t")}\n`);
+      const { databaseBundle, evidenceArchive } = makeBackupInputs(root);
+      const { bin, failMarker, log } = makeFakeDocker(root, archive);
+      unlinkSync(failMarker);
+      const backup = Bun.spawnSync({
+        cmd: ["sh", backupScript, "backup", archive],
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          FAKE_DATABASE_BUNDLE: databaseBundle,
+          FAKE_DATABASE_INVENTORY: join(root, "backup-source", "DATABASE-INVENTORY.tsv"),
+          FAKE_OBJECT_LEDGER: currentLedger,
+          FAKE_EVIDENCE_ARCHIVE: evidenceArchive,
+          FAKE_FAIL_MARKER: failMarker,
+          FAKE_DOCKER_LOG: log,
+          TI_BACKUP_PRIOR_OBJECT_LEDGER: priorLedger,
+        },
+      });
+
+      if (backup.exitCode !== 0) throw new Error(backup.stderr.toString());
+      const manifest = readFileSync(join(archive, "BACKUP-MANIFEST"), "utf8");
+      expect(manifest).toContain("object_continuity=verified\n");
+      expect(manifest).toContain("object_continuity_compared_objects=1\n");
+      expect(manifest).toContain("object_continuity_legacy_baseline_objects=1\n");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("later backup accepts a new object whose reference already binds its byte hash", () => {
     const root = mkdtempSync(join(tmpdir(), "ti-backup-new-byte-hash-continuity-"));
     try {
       const archive = join(root, "archive");
       const prior = join(root, "20260723T010000Z");
-      const priorLedger = join(prior, "OBJECT-LEDGER.tsv");
       const currentLedger = join(root, "current-object-ledger.tsv");
-      mkdirSync(prior);
-      writeFileSync(priorLedger, objectLedger("a".repeat(64)));
-      writeSums(prior, "SHA256SUMS", ["OBJECT-LEDGER.tsv"]);
+      const priorLedger = writePriorContinuityArchive(prior, objectLedger("a".repeat(64)));
       const [header, priorRow] = objectLedger("a".repeat(64)).trimEnd().split("\n");
       const byteHash = "b".repeat(64);
       const newRow = objectLedger(byteHash).trimEnd().split("\n")[1]!
@@ -510,11 +555,8 @@ describe("backup and restore scripts", () => {
     try {
       const archive = join(root, "archive");
       const prior = join(root, "20260723T010000Z");
-      const priorLedger = join(prior, "OBJECT-LEDGER.tsv");
       const currentLedger = join(root, "current-object-ledger.tsv");
-      mkdirSync(prior);
-      writeFileSync(priorLedger, objectLedger("a".repeat(64)));
-      writeSums(prior, "SHA256SUMS", ["OBJECT-LEDGER.tsv"]);
+      const priorLedger = writePriorContinuityArchive(prior, objectLedger("a".repeat(64)));
       writeFileSync(currentLedger, objectLedger("b".repeat(64)));
       const { databaseBundle, evidenceArchive } = makeBackupInputs(root);
       const { bin, failMarker, log } = makeFakeDocker(root, archive);
