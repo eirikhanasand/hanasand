@@ -212,6 +212,63 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await admin?.close({ timeout: 2 });
   });
 
+  test("hydrates evidence beyond the former startup limit for restart and search", async () => {
+    const tenantId = "tenant_complete_history";
+    const sourceId = "src_complete_history";
+    const historicalCaptureId = "cap_complete_history_old";
+    const recentCaptureId = "cap_complete_history_recent";
+    const observedAt = new Date().toISOString();
+    const first = await PostgresScraperStore.create({ databaseUrl });
+    first.saveSource(source({ id: sourceId, tenantId }));
+    first.saveCapture(fixtureCapture({ id: historicalCaptureId, tenantId, sourceId, body: "Historical sentinel ransomware attack intelligence retained from a public security advisory with verified incident context.", collectedAt: observedAt, publishedAt: observedAt }));
+    first.saveCapture(fixtureCapture({ id: recentCaptureId, tenantId, sourceId, url: "https://example.test/recent", body: "Unrelated recent intelligence.", collectedAt: observedAt, publishedAt: observedAt }));
+    await first.flush();
+    await first.close();
+
+    await admin.unsafe(`
+      INSERT INTO threat_intel.indicators (
+        id, tenant_id, source_id, capture_id, indicator_type, value,
+        normalized_value, confidence, extractor_version, provenance, created_at, record
+      )
+      SELECT
+        CASE WHEN sequence = 0 THEN 'indicator_complete_history_old' ELSE 'indicator_complete_history_' || sequence END,
+        $1::text,
+        $2::text,
+        CASE WHEN sequence = 0 THEN $3::text ELSE $4::text END,
+        'domain',
+        CASE WHEN sequence = 0 THEN 'historical-sentinel.example' ELSE 'recent-' || sequence || '.example' END,
+        CASE WHEN sequence = 0 THEN 'historical-sentinel.example' ELSE 'recent-' || sequence || '.example' END,
+        0.91,
+        'complete-history-test',
+        '[]'::jsonb,
+        '2000-01-01T00:00:00Z'::timestamptz + make_interval(secs => sequence),
+        jsonb_build_object(
+          'id', CASE WHEN sequence = 0 THEN 'indicator_complete_history_old' ELSE 'indicator_complete_history_' || sequence END,
+          'tenantId', $1::text,
+          'sourceId', $2::text,
+          'captureId', CASE WHEN sequence = 0 THEN $3::text ELSE $4::text END,
+          'type', 'domain',
+          'value', CASE WHEN sequence = 0 THEN 'historical-sentinel.example' ELSE 'recent-' || sequence || '.example' END,
+          'normalizedValue', CASE WHEN sequence = 0 THEN 'historical-sentinel.example' ELSE 'recent-' || sequence || '.example' END,
+          'confidence', 0.91,
+          'extractorVersion', 'complete-history-test',
+          'provenance', '[]'::jsonb,
+          'createdAt', '2000-01-01T00:00:00Z'::timestamptz + make_interval(secs => sequence)
+        )
+      FROM generate_series(0, 10000) AS rows(sequence)
+    `, [tenantId, sourceId, historicalCaptureId, recentCaptureId]);
+
+    const second = await PostgresScraperStore.create({ databaseUrl });
+    expect(second.listIndicators()).toHaveLength(10_001);
+    expect(second.getIndicator("indicator_complete_history_old")).toMatchObject({ captureId: historicalCaptureId, value: "historical-sentinel.example" });
+
+    const structured = await handleApiRequest(api(`/v1/intel/indicators?tenantId=${tenantId}&q=historical-sentinel.example`), { store: second, frontier: new FocusedFrontier() });
+    expect(await structured.json()).toMatchObject({ total: 1, indicators: [{ id: "indicator_complete_history_old" }] });
+    const search = await handleApiRequest(api(`/v1/intel/search?tenantId=${tenantId}&q=Historical%20sentinel&entityType=free_text&limit=1`), { store: second, frontier: new FocusedFrontier() });
+    expect(await search.json()).toMatchObject({ rows: [{ id: historicalCaptureId, confidence: 0.91 }] });
+    await second.close();
+  });
+
   test("serializes source discovery ownership and preserves approved source state", async () => {
     const generatedAt = "2026-07-24T12:00:00.000Z";
     const planId = stableId("source-feed-discovery-plan", "https://publisher.example/");

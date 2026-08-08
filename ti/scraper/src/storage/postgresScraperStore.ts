@@ -1382,81 +1382,58 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   private async hydrate(): Promise<void> {
     const workflowHistoryLimit = Math.max(0, Math.min(100_000, Number(Bun.env.TI_WORKFLOW_HYDRATION_HISTORY_LIMIT ?? "5000") || 5000));
-    // Keep startup bounded for append-only evidence indexes. PostgreSQL remains
-    // the durable source; the in-memory store only needs a recent working set.
-    const largeHistoryLimit = Math.max(0, Math.min(100_000, Number(Bun.env.TI_LARGE_HISTORY_HYDRATION_LIMIT ?? "0") || 0));
-    const [sources, captures, incidents, entities, indicators, actorProfiles, actorIdentityCatalogs, actorIdentities, evidenceLinks, validations, alerts, evaluationLabels, sourceHealth, timeliness, runs, claims, claimEvidence, claimReviews, workflows, reviewTasks, workflowEvents] = await Promise.all([
-      this.sql`SELECT record FROM threat_intel.sources ORDER BY created_at`,
-      this.sql`SELECT record FROM threat_intel.captures ORDER BY collected_at`,
-      this.sql`SELECT record FROM threat_intel.incidents ORDER BY first_seen_at`,
-      this.sql`SELECT record FROM threat_intel.entities ORDER BY created_at`,
-      largeHistoryLimit > 0
-        ? this.sql`SELECT record FROM threat_intel.indicators ORDER BY created_at DESC LIMIT ${largeHistoryLimit}`
-        : Promise.resolve([]),
-      this.sql`SELECT record FROM threat_intel.actor_profiles ORDER BY first_seen_at`,
-      this.sql`SELECT record FROM threat_intel.actor_identity_catalogs ORDER BY retrieved_at`,
-      this.sql`SELECT record FROM threat_intel.actor_identities ORDER BY catalog_id, external_id`,
-      largeHistoryLimit > 0
-        ? this.sql`SELECT record FROM threat_intel.evidence_links ORDER BY created_at DESC LIMIT ${largeHistoryLimit}`
-        : Promise.resolve([]),
-      this.sql`SELECT record FROM threat_intel.validation_records ORDER BY matched_at`,
-      this.sql`SELECT record FROM threat_intel.alerts ORDER BY first_seen_at`,
-      this.sql`SELECT record FROM threat_intel.evaluation_labels ORDER BY labeled_at`,
-      largeHistoryLimit > 0
-        ? this.sql`SELECT record FROM threat_intel.source_health ORDER BY checked_at DESC LIMIT ${largeHistoryLimit}`
-        : Promise.resolve([]),
-      this.sql`SELECT record FROM threat_intel.timeliness_records ORDER BY first_visible_at`,
-      this.sql`SELECT record FROM threat_intel.collection_runs ORDER BY started_at`,
-      this.sql`SELECT record FROM threat_intel.intelligence_claims ORDER BY first_seen_at`,
-      largeHistoryLimit > 0
-        ? this.sql`SELECT record FROM threat_intel.claim_evidence ORDER BY created_at DESC LIMIT ${largeHistoryLimit}`
-        : Promise.resolve([]),
-      largeHistoryLimit > 0
-        ? this.sql`SELECT record FROM threat_intel.claim_reviews ORDER BY reviewed_at DESC LIMIT ${largeHistoryLimit}`
-        : Promise.resolve([]),
-      // Keep operational workflow records in memory, but do not make startup
-      // proportional to the automatic-review history. The full history remains
-      // durable in PostgreSQL for retention/export paths.
-      this.sql`SELECT record_type, record FROM threat_intel.workflow_records
-        WHERE record_type IN (
-          'collection_run', 'replay_job', 'discovery_evidence', 'live_search_snapshot',
-          'dwm_watchlist', 'dwm_webhook_delivery', 'organization', 'organization_member',
-          'organization_invite', 'webhook_destination', 'case', 'actor_org_relevance_review',
-          'analyst_source_activation_packet', 'analyst_victim_notification_packet',
-          'analyst_claim_ledger_entry', 'analyst_loop_snapshot', 'evaluation_benchmark',
-          'evaluation_annotation', 'evaluation_adjudication'
-        ) ORDER BY created_at`,
-      workflowHistoryLimit > 0
-        ? this.sql`SELECT record_type, record FROM threat_intel.workflow_records WHERE record_type = 'analyst_metadata_review_task' AND record->>'recordKind' = 'automatic_intelligence_review_task' ORDER BY created_at DESC LIMIT ${workflowHistoryLimit}`
-        : Promise.resolve([]),
-      workflowHistoryLimit > 0
-        ? this.sql`SELECT record_type, record FROM threat_intel.workflow_records WHERE record_type = 'analyst_metadata_review_task' AND record->>'recordKind' = 'automatic_intelligence_review_event' ORDER BY created_at DESC LIMIT ${workflowHistoryLimit}`
-        : Promise.resolve([])
-    ]);
-    this.hydrateWithoutOrganizationWriteGuard(() => {
-    for (const row of sources) super.saveSource(readRecord(row));
-    for (const row of captures) this.hydrateCaptureSnapshot(readRecord(row));
-    for (const row of incidents) super.saveIncident(readRecord(row));
-    for (const row of entities) super.saveExtractedEntity(readRecord(row));
-    for (const row of indicators) super.saveIndicator(readRecord(row));
-    for (const row of actorProfiles) super.saveActorProfile(readRecord(row));
-    for (const row of actorIdentityCatalogs) this.hydrateActorIdentityCatalogSnapshot(readRecord(row));
-    for (const row of actorIdentities) this.hydrateActorIdentitySnapshot(readRecord(row));
-    for (const row of evidenceLinks) {
-      const record = readRecord(row);
-      if (record.subjectType !== "incident" || this.getIncident(record.subjectId)) super.saveEvidenceLink(record);
+    {
+      const [sources, captures, incidents, entities, actorProfiles, actorIdentityCatalogs, actorIdentities, validations, alerts, evaluationLabels, timeliness, runs, claims, workflows, reviewTasks, workflowEvents] = await Promise.all([
+        this.sql`SELECT record FROM threat_intel.sources ORDER BY created_at`,
+        this.sql`SELECT record FROM threat_intel.captures ORDER BY collected_at`,
+        this.sql`SELECT record FROM threat_intel.incidents ORDER BY first_seen_at`,
+        this.sql`SELECT record FROM threat_intel.entities ORDER BY created_at`,
+        this.sql`SELECT record FROM threat_intel.actor_profiles ORDER BY first_seen_at`,
+        this.sql`SELECT record FROM threat_intel.actor_identity_catalogs ORDER BY retrieved_at`,
+        this.sql`SELECT record FROM threat_intel.actor_identities ORDER BY catalog_id, external_id`,
+        this.sql`SELECT record FROM threat_intel.validation_records ORDER BY matched_at`,
+        this.sql`SELECT record FROM threat_intel.alerts ORDER BY first_seen_at`,
+        this.sql`SELECT record FROM threat_intel.evaluation_labels ORDER BY labeled_at`,
+        this.sql`SELECT record FROM threat_intel.timeliness_records ORDER BY first_visible_at`,
+        this.sql`SELECT record FROM threat_intel.collection_runs ORDER BY started_at`,
+        this.sql`SELECT record FROM threat_intel.intelligence_claims ORDER BY first_seen_at`,
+        // Keep operational workflow records in memory, but do not make startup
+        // proportional to the automatic-review history. The full history remains
+        // durable in PostgreSQL for retention/export paths.
+        this.sql`SELECT record_type, record FROM threat_intel.workflow_records
+          WHERE record_type IN (
+            'collection_run', 'replay_job', 'discovery_evidence', 'live_search_snapshot',
+            'dwm_watchlist', 'dwm_webhook_delivery', 'organization', 'organization_member',
+            'organization_invite', 'webhook_destination', 'case', 'actor_org_relevance_review',
+            'analyst_source_activation_packet', 'analyst_victim_notification_packet',
+            'analyst_claim_ledger_entry', 'analyst_loop_snapshot', 'evaluation_benchmark',
+            'evaluation_annotation', 'evaluation_adjudication'
+          ) ORDER BY created_at`,
+        workflowHistoryLimit > 0
+          ? this.sql`SELECT record_type, record FROM threat_intel.workflow_records WHERE record_type = 'analyst_metadata_review_task' AND record->>'recordKind' = 'automatic_intelligence_review_task' ORDER BY created_at DESC LIMIT ${workflowHistoryLimit}`
+          : Promise.resolve([]),
+        workflowHistoryLimit > 0
+          ? this.sql`SELECT record_type, record FROM threat_intel.workflow_records WHERE record_type = 'analyst_metadata_review_task' AND record->>'recordKind' = 'automatic_intelligence_review_event' ORDER BY created_at DESC LIMIT ${workflowHistoryLimit}`
+          : Promise.resolve([])
+      ]);
+      this.hydrateWithoutOrganizationWriteGuard(() => {
+        for (const row of sources) super.saveSource(readRecord(row));
+        for (const row of captures) this.hydrateCaptureSnapshot(readRecord(row));
+        for (const row of incidents) super.saveIncident(readRecord(row));
+        for (const row of entities) super.saveExtractedEntity(readRecord(row));
+        for (const row of actorProfiles) super.saveActorProfile(readRecord(row));
+        for (const row of actorIdentityCatalogs) this.hydrateActorIdentityCatalogSnapshot(readRecord(row));
+        for (const row of actorIdentities) this.hydrateActorIdentitySnapshot(readRecord(row));
+        for (const row of validations) super.saveValidationRecord(readRecord(row));
+        for (const row of alerts) super.saveDwmAlert(readRecord(row));
+        for (const row of evaluationLabels) super.saveEvaluationLabel(readRecord(row));
+        for (const row of timeliness) this.hydrateTimelinessSnapshot(readRecord(row));
+        for (const row of runs) super.saveRun(readRecord(row));
+        for (const row of claims) super.saveIntelligenceClaim(readRecord(row));
+        for (const row of [...workflows, ...reviewTasks, ...workflowEvents]) this.hydrateWorkflow(String(row.record_type), readRecord(row));
+      });
     }
-    for (const row of validations) super.saveValidationRecord(readRecord(row));
-    for (const row of alerts) super.saveDwmAlert(readRecord(row));
-    for (const row of evaluationLabels) super.saveEvaluationLabel(readRecord(row));
-    for (const row of sourceHealth) super.saveSourceHealthObservation(readRecord(row));
-    for (const row of timeliness) this.hydrateTimelinessSnapshot(readRecord(row));
-    for (const row of runs) super.saveRun(readRecord(row));
-    for (const row of claims) super.saveIntelligenceClaim(readRecord(row));
-    for (const row of claimEvidence) super.saveClaimEvidence(readRecord(row));
-    for (const row of claimReviews) super.saveClaimReview(readRecord(row));
-    for (const row of [...workflows, ...reviewTasks, ...workflowEvents]) this.hydrateWorkflow(String(row.record_type), readRecord(row));
-    });
+    await this.hydrateCompleteEvidenceHistory();
     this.pipelineDepth++;
     const reconciledAt = new Date().toISOString();
     let reconciliation = { archivedActorProfileIds: [] as string[], reboundActorProfileIds: [] as string[] };
@@ -1472,6 +1449,36 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         if (archivedIds.has(id)) await this.persistActorProfileArchiveHistory(id, reconciledAt, transaction);
         await this.persistActorProfile(this.getActorProfile(id), transaction);
       }
+    });
+  }
+
+  private async hydrateCompleteEvidenceHistory(): Promise<void> {
+    let rows = await this.sql`SELECT record FROM threat_intel.indicators ORDER BY created_at`;
+    this.hydrateWithoutOrganizationWriteGuard(() => {
+      for (const row of rows) super.saveIndicator(readRecord(row));
+    });
+
+    rows = await this.sql`SELECT record FROM threat_intel.evidence_links ORDER BY created_at`;
+    this.hydrateWithoutOrganizationWriteGuard(() => {
+      for (const row of rows) {
+        const record = readRecord(row);
+        if (record.subjectType !== "incident" || this.getIncident(record.subjectId)) super.saveEvidenceLink(record);
+      }
+    });
+
+    rows = await this.sql`SELECT record FROM threat_intel.source_health ORDER BY checked_at`;
+    this.hydrateWithoutOrganizationWriteGuard(() => {
+      for (const row of rows) super.saveSourceHealthObservation(readRecord(row));
+    });
+
+    rows = await this.sql`SELECT record FROM threat_intel.claim_evidence ORDER BY created_at`;
+    this.hydrateWithoutOrganizationWriteGuard(() => {
+      for (const row of rows) super.saveClaimEvidence(readRecord(row));
+    });
+
+    rows = await this.sql`SELECT record FROM threat_intel.claim_reviews ORDER BY reviewed_at`;
+    this.hydrateWithoutOrganizationWriteGuard(() => {
+      for (const row of rows) super.saveClaimReview(readRecord(row));
     });
   }
 
