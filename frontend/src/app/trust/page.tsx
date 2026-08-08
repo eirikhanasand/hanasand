@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowRight, BadgeCheck, ClipboardCheck, FileText, LockKeyhole, ServerCog, ShieldCheck, Siren, Webhook } from 'lucide-react'
+import { ArrowRight, BadgeCheck, ClipboardCheck, Database, FileText, LockKeyhole, ServerCog, ShieldCheck, Siren, Webhook } from 'lucide-react'
 import { buildRouteMetadata } from '../seo'
 import { trustArtifacts } from './trustArtifacts'
 
@@ -13,6 +13,13 @@ export const metadata: Metadata = buildRouteMetadata({
 })
 
 const assuranceCards = [
+    {
+        title: 'Data coverage',
+        status: 'Measured endpoint',
+        detail: 'Current source counts, configured freshness and cadence, regional metadata, and observed alert latency with clear measurement boundaries.',
+        icon: Database,
+        href: '/coverage',
+    },
     {
         title: 'Security overview',
         status: 'Published',
