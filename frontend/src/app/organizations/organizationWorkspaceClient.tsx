@@ -110,6 +110,7 @@ type WebhookDestination = {
     createdAt?: string
     updatedAt?: string
     signingSecret?: string
+    signingConfigured?: boolean
 }
 
 type ScopedAlert = {
@@ -1268,6 +1269,31 @@ export default function OrganizationWorkspaceClient() {
         return draft.status === 'active' ? `${name} destination updated.` : `${name} destination disabled.`
     }, `destination-${destination.id}`)
 
+    const refreshOrganizationAlerts = () => selectedOrganization && runAction('refresh-alerts', async () => {
+        requireManage()
+        const payload = await requestJson<{ savedAlertCount?: number, alertIds?: string[] }>('/api/dwm/alerts/rebuild', {
+            method: 'POST',
+            body: JSON.stringify({
+                organizationId: selectedOrganization.id,
+                tenantId: selectedOrganization.tenantId || selectedOrganization.id,
+                requestId: `org-ui-${Date.now()}`,
+            }),
+        })
+        await loadOrganizationBundle(selectedOrganization.id)
+        const count = Number(payload.savedAlertCount || payload.alertIds?.length || 0)
+        return count ? `${count} evidence-backed alert${count === 1 ? '' : 's'} refreshed from available captures.` : 'No matching alert was found in the available captures.'
+    }, 'watchlist-refresh')
+
+    const rotateDestinationSigningSecret = (destination: WebhookDestination) => selectedOrganization && runAction('rotate-destination-secret', async () => {
+        requireManage()
+        const payload = await requestJson<{ destination?: WebhookDestination }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/${encodeURIComponent(destination.id)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ rotateSigningSecret: true, requestId: `org-ui-${Date.now()}` }),
+        })
+        if (payload.destination?.signingSecret) setNewWebhookSigningSecret(payload.destination.signingSecret)
+        return `${destination.name || destination.id} signing secret rotated.`
+    }, `destination-${destination.id}`)
+
     const deleteSavedDestination = (destination: WebhookDestination) => selectedOrganization && runAction('delete-destination', async () => {
         requireManage()
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/${encodeURIComponent(destination.id)}`, {
@@ -1505,6 +1531,7 @@ export default function OrganizationWorkspaceClient() {
                                             alerts={bundle.alerts}
                                             deliveries={bundle.deliveries}
                                             onCleanup={() => void cleanupWatchlists()}
+                                            onRefreshAlerts={() => void refreshOrganizationAlerts()}
                                             rowMessages={rowMessages}
                                             draftDuplicate={watchlistDraftDuplicate}
                                             selectedSubject={selectedActivitySubject}
@@ -1517,7 +1544,7 @@ export default function OrganizationWorkspaceClient() {
                                         </div>
                                         <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
                                         <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
-                                        <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={selectActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onDelete={destination => void deleteSavedDestination(destination)} signingSecret={newWebhookSigningSecret} onClearSigningSecret={() => setNewWebhookSigningSecret('')} />
+                                        <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={selectActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onRotateSigningSecret={destination => void rotateDestinationSigningSecret(destination)} onDelete={destination => void deleteSavedDestination(destination)} signingSecret={newWebhookSigningSecret} onClearSigningSecret={() => setNewWebhookSigningSecret('')} />
                                     </div>
                                 </section>
 
@@ -2684,7 +2711,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
     )
 }
 
-function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessages, selectedSubject, createDraft, setCreateDraft, editing, setEditing, onSelectSubject, onCreate, onTest, onUpdate, onDelete, signingSecret, onClearSigningSecret }: { destinations: WebhookDestination[], deliveries: DeliveryRow[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, createDraft: DestinationCreateDraft, setCreateDraft: (next: DestinationCreateDraft) => void, editing: Record<string, DestinationEditDraft>, setEditing: (next: Record<string, DestinationEditDraft> | ((current: Record<string, DestinationEditDraft>) => Record<string, DestinationEditDraft>)) => void, onSelectSubject: (subject: ActivitySubject) => void, onCreate: () => void, onTest: (destination: WebhookDestination) => void, onUpdate: (destination: WebhookDestination, draft: DestinationEditDraft) => void, onDelete: (destination: WebhookDestination) => void, signingSecret: string, onClearSigningSecret: () => void }) {
+function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessages, selectedSubject, createDraft, setCreateDraft, editing, setEditing, onSelectSubject, onCreate, onTest, onUpdate, onRotateSigningSecret, onDelete, signingSecret, onClearSigningSecret }: { destinations: WebhookDestination[], deliveries: DeliveryRow[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, createDraft: DestinationCreateDraft, setCreateDraft: (next: DestinationCreateDraft) => void, editing: Record<string, DestinationEditDraft>, setEditing: (next: Record<string, DestinationEditDraft> | ((current: Record<string, DestinationEditDraft>) => Record<string, DestinationEditDraft>)) => void, onSelectSubject: (subject: ActivitySubject) => void, onCreate: () => void, onTest: (destination: WebhookDestination) => void, onUpdate: (destination: WebhookDestination, draft: DestinationEditDraft) => void, onRotateSigningSecret: (destination: WebhookDestination) => void, onDelete: (destination: WebhookDestination) => void, signingSecret: string, onClearSigningSecret: () => void }) {
     const [destinationQuery, setDestinationQuery] = useState('')
     const [destinationStatusFilter, setDestinationStatusFilter] = useState('all')
     const [destinationKindFilter, setDestinationKindFilter] = useState('all')
@@ -2872,6 +2899,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                         <span className='truncate'>Type: {destination.kind || destination.type || 'webhook'}</span>
                                         <span className='truncate'>Destination: {destinationDisplayState(destination)}</span>
                                         <span className='truncate' data-org-destination-route='true'>Route: {routeLabel}</span>
+                                        <span className={`truncate ${destination.signingConfigured ? 'text-ui-success' : 'text-ui-warning'}`}>Signing: {destination.signingConfigured ? 'HMAC v1 configured' : 'Secret rotation required'}</span>
                                         <span className='truncate' data-org-destination-history-count='true'>History: {destinationDeliveries.length} event{destinationDeliveries.length === 1 ? '' : 's'} · {dryRunCount} test{dryRunCount === 1 ? '' : 's'} · {failedDeliveryCount} failed</span>
                                     </span>
                                     <DestinationDeliverySummary delivery={latestDelivery} />
@@ -2885,6 +2913,10 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                             <Pencil className='h-4 w-4' />
                                             Edit
                                         </button>
+                                        {!destination.signingConfigured && destinationEnabled && <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} title={destinationManageReason || 'Generate a customer signing secret'} aria-label={destinationManageReason ? `Secure destination: ${destinationManageReason}` : 'Generate signing secret'} onClick={() => onRotateSigningSecret(destination)}>
+                                            <KeyRound className='h-4 w-4' />
+                                            Secure
+                                        </button>}
                                         {destinationEnabled ? (
                                             <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} title={destinationManageReason || 'Disable destination'} aria-label={destinationManageReason ? `Disable destination: ${destinationManageReason}` : 'Disable destination'} onClick={() => onUpdate(destination, { name: destinationName, kind: currentKind, url: '', status: 'paused' })}>
                                                 <Pause className='h-4 w-4' />
@@ -2939,7 +2971,7 @@ function WebhookSigningSecret({ secret, onClear }: { secret: string, onClear: ()
     )
 }
 
-function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, draft, setDraft, suggestions, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, onCleanup, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], members: OrganizationMember[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, suggestions: WatchlistSuggestion[], editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], onCleanup: () => void, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
+function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, draft, setDraft, suggestions, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, onCleanup, onRefreshAlerts, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], members: OrganizationMember[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, suggestions: WatchlistSuggestion[], editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], onCleanup: () => void, onRefreshAlerts: () => void, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
     const [watchlistQuery, setWatchlistQuery] = useState('')
     const [watchlistStatusFilter, setWatchlistStatusFilter] = useState('all')
     const activeCount = watchlists.filter(item => item.status.toLowerCase() === 'active').length
@@ -2958,10 +2990,16 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
         <section id='watchlists' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
                 <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Shared watchlists' detail='Customer-owned terms that drive DWM alerts, cases, and delivery destinations.' />
-                <button type='button' className={secondaryButtonClass} disabled={!canManage || archivedCount === 0 || Boolean(busy)} onClick={onCleanup}>
-                    <Archive className='h-4 w-4' />
-                    Cleanup archived
-                </button>
+                <div className='flex flex-wrap gap-2'>
+                    <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy) || activeTerms.length === 0} onClick={onRefreshAlerts} title='Rebuild alerts from already collected evidence'>
+                        <RefreshCw className='h-4 w-4' />
+                        Refresh alerts
+                    </button>
+                    <button type='button' className={secondaryButtonClass} disabled={!canManage || archivedCount === 0 || Boolean(busy)} onClick={onCleanup}>
+                        <Archive className='h-4 w-4' />
+                        Cleanup archived
+                    </button>
+                </div>
             </div>
             {watchlists.length > 0 && (
                 <div className='mt-3 flex flex-wrap gap-2' data-org-watchlist-status-counts='true'>
@@ -2971,6 +3009,7 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                 </div>
             )}
             {busyLabel && <InlineBusy label={busyLabel} marker='data-org-watchlist-busy' />}
+            <p className='text-xs leading-5 text-ui-muted'>Refresh checks the latest retained captures for these terms; it does not claim a new source collection run.</p>
             <div className='mt-2'><RowStatus message={rowMessages['watchlists-cleanup']} /></div>
             <details id='org-watchlist-create' className='mt-4 overflow-hidden rounded-lg border border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-canvas' data-org-watchlist-starter='true' data-org-watchlist-add-disclosure='true' open={watchlists.length === 0 ? true : undefined}>
                 <summary className='flex min-h-12 cursor-pointer list-none flex-col gap-2 px-3 py-2 outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>

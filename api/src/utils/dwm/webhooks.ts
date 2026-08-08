@@ -92,6 +92,8 @@ export type DwmWebhookDestinationInput = {
     webhook_url?: unknown
     signingSecret?: unknown
     signing_secret?: unknown
+    rotateSigningSecret?: unknown
+    rotate_signing_secret?: unknown
     url?: unknown
     channel?: unknown
     channelName?: unknown
@@ -395,6 +397,7 @@ const DISCORD_EMBED_FIELD_LIMIT = 25
 const DISCORD_EMBED_FOOTER_TEXT_LIMIT = 2048
 
 export function toDwmWebhookDestination(row: DwmWebhookDestinationRow) {
+    const target = decryptWebhookTarget(row.endpoint_encrypted)
     return {
         id: row.id,
         ownerId: row.owner_id,
@@ -413,6 +416,7 @@ export function toDwmWebhookDestination(row: DwmWebhookDestinationRow) {
         lastDeliveryAt: row.last_delivery_at,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
+        signingConfigured: Boolean(target.signingSecret) || controlledReceiverEndpointHashes().includes(row.endpoint_hash),
     }
 }
 
@@ -593,6 +597,17 @@ export async function updateDwmWebhookDestination(ownerId: string, id: string, i
     if (!existing) return null
 
     const normalized = normalizeDwmWebhookDestinationInput(input, ownerId, existing)
+    const rotateSigningSecret = parseBoolean(input.rotateSigningSecret ?? input.rotate_signing_secret, false)
+    const existingTarget = decryptWebhookTarget(existing.endpoint_encrypted)
+    if (rotateSigningSecret && controlledReceiverEndpointHashes().includes(existing.endpoint_hash)) {
+        throw new Error('The controlled Hanasand receiver uses managed signing and cannot be rotated here.')
+    }
+    const rotatedSigningSecret = rotateSigningSecret && existingTarget.endpoint
+        ? crypto.randomBytes(32).toString('hex')
+        : null
+    const endpointEncrypted = rotatedSigningSecret
+        ? encryptWebhookTarget(existingTarget.endpoint, rotatedSigningSecret)
+        : normalized.endpointEncrypted
     if (normalized.endpointUrl) await assertPublicWebhookTarget(normalized.endpointUrl)
     const result = await run(`
         UPDATE dwm_webhook_destinations
@@ -612,7 +627,7 @@ export async function updateDwmWebhookDestination(ownerId: string, id: string, i
         normalized.orgId,
         normalized.name,
         normalized.kind,
-        normalized.endpointEncrypted,
+        endpointEncrypted,
         normalized.endpointHint,
         normalized.endpointHash,
         normalized.status,
@@ -639,7 +654,9 @@ export async function updateDwmWebhookDestination(ownerId: string, id: string, i
 
     return {
         ...toDwmWebhookDestination(destination),
-        ...(normalized.endpointUrl && normalized.signingSecret ? { signingSecret: normalized.signingSecret } : {}),
+        ...((normalized.endpointUrl && normalized.signingSecret) || rotatedSigningSecret
+            ? { signingSecret: rotatedSigningSecret || normalized.signingSecret }
+            : {}),
     }
 }
 

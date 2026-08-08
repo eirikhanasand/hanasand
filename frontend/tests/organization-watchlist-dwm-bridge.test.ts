@@ -137,6 +137,11 @@ test('organization workspace exposes destination lifecycle controls safely', () 
     assert.match(dwmAnalystPortalSource, /params\.set\('watchlistId', input\.delivery\.watchlistId\)/, 'DWM delivery panel should preserve watchlist selection in organization workspace links.')
     assert.doesNotMatch(dwmAnalystPortalSource, /&focus=webhooks/, 'DWM delivery panel should not use the old webhook focus value.')
     assert.doesNotMatch(organizationWorkspaceSource, /token=[^'"]+|discord-secret|webhook secret/i, 'workspace source should not hard-code webhook secrets.')
+    assert.match(organizationWorkspaceSource, /rotateSigningSecret: true/, 'legacy destinations should have an explicit signing-secret rotation path.')
+    assert.match(organizationWorkspaceSource, /Signing: \{destination\.signingConfigured \? 'HMAC v1 configured' : 'Secret rotation required'\}/, 'destination rows should disclose whether customer-verifiable signing is configured.')
+    assert.match(organizationWorkspaceSource, /Refresh alerts/, 'watchlist setup should expose a real evidence refresh action.')
+    assert.match(organizationWorkspaceSource, /Rebuild alerts from already collected evidence/, 'refresh must state that it rebuilds retained evidence rather than claiming a new collection run.')
+    assert.match(organizationWorkspaceSource, /\/api\/dwm\/alerts\/rebuild/, 'refresh alerts should use the persisted DWM rebuild endpoint.')
 })
 
 test('builds DWM mirror payloads for org watchlist mutations', () => {
