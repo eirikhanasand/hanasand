@@ -116,10 +116,13 @@ type ScopedAlert = {
     title?: string
     status?: string
     severity?: string
+    reviewState?: string
     watchlistItemId?: string
     watchlistIds?: string[]
     watchlistItemIds?: string[]
     organizationId?: string
+    firstSeenAt?: string
+    alertedAt?: string
     updatedAt?: string
 }
 
@@ -129,6 +132,7 @@ type ScopedCase = {
     status?: string
     assignedOwner?: string
     organizationId?: string
+    createdAt?: string
     updatedAt?: string
 }
 
@@ -1465,6 +1469,7 @@ export default function OrganizationWorkspaceClient() {
                                     caseCount={bundle.cases.length}
                                     alertId={selectedAlertId}
                                 />
+                                <PilotMetricsPanel bundle={bundle} />
 
                                 <section className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
                                     <div className='grid gap-5'>
@@ -2020,6 +2025,91 @@ function OrgSetupProgress({ organizationId, canManage, memberCount, inviteCount,
             </div>
         </section>
     )
+}
+
+function PilotMetricsPanel({ bundle }: { bundle: OrgBundle }) {
+    const activeTerms = bundle.watchlists.filter(item => item.status.toLowerCase() === 'active').length
+    const finalReviews = bundle.alerts.filter(alert => ['confirmed', 'rejected', 'false_positive', 'resolved'].includes((alert.reviewState || '').toLowerCase()))
+    const confirmedReviews = finalReviews.filter(alert => (alert.reviewState || '').toLowerCase() === 'confirmed').length
+    const detectionLatencies = bundle.deliveries.flatMap(delivery => {
+        const evidenceTimestamp = delivery.payloadPreview?.context?.evidenceTimestamp
+        const attemptedAt = delivery.attemptedAt || delivery.createdAt
+        if (!evidenceTimestamp || !attemptedAt) return []
+        const latency = Date.parse(attemptedAt) - Date.parse(evidenceTimestamp)
+        return Number.isFinite(latency) && latency >= 0 && latency <= 30 * 86_400_000 ? [latency] : []
+    })
+    const medianDetectionLatency = median(detectionLatencies)
+    const rows = [
+        {
+            id: 'coverage',
+            label: 'Coverage',
+            value: activeTerms ? `${activeTerms} active term${activeTerms === 1 ? '' : 's'}` : 'Not configured',
+            detail: activeTerms ? 'Shared watchlist terms in this organization.' : 'Add a company, domain, vendor, actor, or keyword.',
+            tone: activeTerms ? 'ready' : 'review',
+        },
+        {
+            id: 'precision',
+            label: 'Alert review',
+            value: finalReviews.length ? `${confirmedReviews}/${finalReviews.length} confirmed` : 'Not measured',
+            detail: finalReviews.length ? 'Confirmed outcomes among closed review decisions.' : 'Review or close an alert to establish a precision baseline.',
+            tone: finalReviews.length ? 'ready' : 'review',
+        },
+        {
+            id: 'detection',
+            label: 'Time to detection',
+            value: medianDetectionLatency === null ? 'Not measured' : formatDuration(medianDetectionLatency),
+            detail: detectionLatencies.length ? `Median across ${detectionLatencies.length} delivery event${detectionLatencies.length === 1 ? '' : 's'} with source timestamps.` : 'Waiting for a delivery with source and attempted timestamps.',
+            tone: medianDetectionLatency === null ? 'review' : 'ready',
+        },
+        {
+            id: 'triage',
+            label: 'Time to triage',
+            value: 'Not measured',
+            detail: 'Case action timestamps are not yet recorded as a pilot metric.',
+            tone: 'review',
+        },
+    ] as const
+    return (
+        <section className='rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-pilot-metrics='true'>
+            <div className='flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between'>
+                <div className='min-w-0'>
+                    <h2 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
+                        <CheckCircle2 className='h-4 w-4 text-ui-primary' />
+                        Pilot measurement
+                    </h2>
+                    <p className='mt-1 max-w-3xl text-xs leading-5 text-ui-muted dark:text-ui-muted'>Coverage, alert review, and delivery latency are calculated from this organization’s records only. Empty metrics mean the pilot has not produced enough evidence yet.</p>
+                </div>
+                <a href='#audit' className={secondaryButtonClass} data-org-pilot-metrics-activity='true'>
+                    <ExternalLink className='h-4 w-4' />
+                    Inspect records
+                </a>
+            </div>
+            <div className='mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4'>
+                {rows.map(row => (
+                    <div key={row.id} className='grid min-h-24 gap-1 rounded-md border border-ui-border bg-ui-raised px-3 py-2 dark:border-ui-border dark:bg-ui-canvas' data-org-pilot-metric={row.id}>
+                        <span className='text-[11px] font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{row.label}</span>
+                        <span className='text-base font-semibold text-ui-text dark:text-ui-text'>{row.value}</span>
+                        <span className='text-xs leading-5 text-ui-muted dark:text-ui-muted'>{row.detail}</span>
+                    </div>
+                ))}
+            </div>
+        </section>
+    )
+}
+
+function median(values: number[]) {
+    if (!values.length) return null
+    const sorted = [...values].sort((left, right) => left - right)
+    const middle = Math.floor(sorted.length / 2)
+    return sorted.length % 2 ? sorted[middle] : Math.round((sorted[middle - 1] + sorted[middle]) / 2)
+}
+
+function formatDuration(milliseconds: number) {
+    const minutes = Math.round(milliseconds / 60_000)
+    if (minutes < 60) return `${minutes}m median`
+    const hours = Math.round(minutes / 60 * 10) / 10
+    if (hours < 24) return `${hours}h median`
+    return `${Math.round(hours / 24 * 10) / 10}d median`
 }
 
 function MillApiKeyPanel({ apiKeys, secret, canManage, busy, rowMessage, onCreate, onRevoke, onClearSecret }: { apiKeys: OrganizationApiKey[], secret: string, canManage: boolean, busy: string, rowMessage?: RowMessage, onCreate: () => void, onRevoke: (apiKey: OrganizationApiKey) => void, onClearSecret: () => void }) {
