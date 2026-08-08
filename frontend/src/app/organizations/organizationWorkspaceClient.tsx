@@ -1281,7 +1281,7 @@ export default function OrganizationWorkspaceClient() {
         })
         await loadOrganizationBundle(selectedOrganization.id)
         const count = Number(payload.savedAlertCount || payload.alertIds?.length || 0)
-        return count ? `${count} evidence-backed alert${count === 1 ? '' : 's'} refreshed from available captures.` : 'No matching alert was found in the available captures.'
+        return count ? `${count} alert${count === 1 ? '' : 's'} refreshed from captures.` : 'No matching alert was found in the available captures.'
     }, 'watchlist-refresh')
 
     const rotateDestinationSigningSecret = (destination: WebhookDestination) => selectedOrganization && runAction('rotate-destination-secret', async () => {
