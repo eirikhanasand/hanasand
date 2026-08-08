@@ -53,6 +53,13 @@ const pilotSteps = [
     ['4', 'Confirm commercial scope', 'Record watchlist size, destinations, API budgets, retention, support, and price in the order form before activation.'],
 ]
 
+const pilotMeasures = [
+    ['Coverage', 'Agreed watchlist terms active', 'Count active terms against the pilot scope; paused or unsynced terms do not count.'],
+    ['Precision', 'Confirmed ÷ reviewed alerts', 'Use only alerts with an analyst decision. Unreviewed or source-only matches stay out of the rate.'],
+    ['Detection', 'Median evidence-to-alert time', 'Measure from the retained evidence timestamp to alert creation, with invalid clocks excluded.'],
+    ['Triage', 'Median case-to-review time', 'Measure from case creation to the first triage or investigation transition.'],
+] as const
+
 const enterpriseReadiness = [
     {
         title: 'Security review',
@@ -188,6 +195,40 @@ export default function PricingPage() {
                                 </div>
                             </article>
                         ))}
+                    </div>
+                </div>
+            </section>
+
+            <section className='border-b border-ui-border bg-ui-canvas'>
+                <div className='mx-auto grid max-w-7xl gap-6 px-4 py-12 md:px-8 lg:grid-cols-[0.72fr_1.28fr]'>
+                    <div className='grid content-start gap-4'>
+                        <p className='text-sm font-semibold uppercase text-ui-primary'>Pilot evidence</p>
+                        <h2 className='text-3xl font-semibold'>Judge the pilot with numbers the console can actually produce.</h2>
+                        <p className='text-sm leading-6 text-ui-muted'>The organization workspace calculates these measures from one customer scope. A blank result means the pilot has not produced enough valid records yet, not that a value was guessed.</p>
+                        <div className='flex flex-wrap gap-3'>
+                            <Link href='/coverage' className='inline-flex h-10 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                                Inspect feed coverage
+                                <Gauge className='h-4 w-4 text-ui-primary' />
+                            </Link>
+                            <Link href='/register?path=%2Forganizations' className='inline-flex h-10 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                                Start a measured pilot
+                                <ArrowRight className='h-4 w-4' />
+                            </Link>
+                        </div>
+                    </div>
+                    <div className='grid gap-3 sm:grid-cols-2'>
+                        {pilotMeasures.map(([label, value, detail]) => (
+                            <article key={label} className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
+                                <p className='text-xs font-semibold uppercase text-ui-primary'>{label}</p>
+                                <h3 className='text-base font-semibold text-ui-text'>{value}</h3>
+                                <p className='text-sm leading-6 text-ui-muted'>{detail}</p>
+                            </article>
+                        ))}
+                        <article className='grid gap-2 rounded-lg border border-dashed border-ui-warning/50 bg-ui-panel p-4 shadow-sm sm:col-span-2'>
+                            <p className='text-xs font-semibold uppercase text-ui-warning'>Public customer evidence</p>
+                            <h3 className='text-base font-semibold text-ui-text'>No customer references or quantified production outcomes are published yet.</h3>
+                            <p className='text-sm leading-6 text-ui-muted'>Buyers should use the live evaluation and request references or a referenceable pilot outcome before treating this as enterprise proof.</p>
+                        </article>
                     </div>
                 </div>
             </section>
