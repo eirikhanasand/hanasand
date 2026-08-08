@@ -132,6 +132,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
     const [error, setError] = useState('')
     const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([])
     const [savedSearchesFromAccount, setSavedSearchesFromAccount] = useState(false)
+    const [savedSearchError, setSavedSearchError] = useState('')
     const activeQueryRef = useRef((initialResult?.query ?? initialQuery).trim().toLowerCase())
     const requestSeqRef = useRef(0)
     const inputRef = useRef<HTMLInputElement>(null)
@@ -152,8 +153,9 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                 .then(response => response.ok ? response.json() : null)
                 .then(payload => {
                     if (Array.isArray(payload?.savedSearches)) setSavedSearches(payload.savedSearches.slice(0, TI_SAVED_SEARCH_LIMIT))
+                    else setSavedSearchError('Account-saved searches are temporarily unavailable.')
                 })
-                .catch(() => undefined)
+                .catch(() => setSavedSearchError('Account-saved searches are temporarily unavailable.'))
             return
         }
         try {
@@ -256,25 +258,41 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
     async function saveCurrentSearch() {
         const clean = query.trim()
         if (!clean) return
+        setSavedSearchError('')
+        const previous = savedSearches
         const next = [{ query: clean, savedAt: new Date().toISOString() }, ...savedSearches.filter(item => item.query.toLowerCase() !== clean.toLowerCase())].slice(0, TI_SAVED_SEARCH_LIMIT)
         setSavedSearches(next)
         const token = getCookie('access_token')
         const id = getCookie('id')
         if (token && id) {
-            await fetch('/api/backend/ti/saved-searches', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, id }, body: JSON.stringify({ query: clean }) }).catch(() => undefined)
+            try {
+                const response = await fetch('/api/backend/ti/saved-searches', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, id }, body: JSON.stringify({ query: clean }) })
+                if (!response.ok) throw new Error('save_failed')
+            } catch {
+                setSavedSearches(previous)
+                setSavedSearchError('Could not save this search to your account. Try again.')
+            }
         } else {
             window.localStorage.setItem(TI_SAVED_SEARCHES_KEY, JSON.stringify(next))
         }
     }
 
     async function removeSavedSearch(queryToRemove: string) {
+        setSavedSearchError('')
+        const previous = savedSearches
         const next = savedSearches.filter(item => item.query !== queryToRemove)
         setSavedSearches(next)
         const token = getCookie('access_token')
         const id = getCookie('id')
         if (token && id) {
             const params = new URLSearchParams({ query: queryToRemove })
-            await fetch(`/api/backend/ti/saved-searches?${params}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}`, id } }).catch(() => undefined)
+            try {
+                const response = await fetch(`/api/backend/ti/saved-searches?${params}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}`, id } })
+                if (!response.ok) throw new Error('remove_failed')
+            } catch {
+                setSavedSearches(previous)
+                setSavedSearchError('Could not remove this search from your account. Try again.')
+            }
         } else {
             window.localStorage.setItem(TI_SAVED_SEARCHES_KEY, JSON.stringify(next))
         }
@@ -338,7 +356,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                 {error ? <p className='text-sm text-ui-danger'>{error}</p> : null}
             </form>
 
-            {savedSearches.length ? <section aria-label='Saved searches' className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm'>
+            {savedSearches.length || savedSearchError ? <section aria-label='Saved searches' className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm'>
                 <div className='flex items-center justify-between gap-3'>
                     <div>
                         <h2 className='text-sm font-semibold text-ui-text'>Saved searches</h2>
@@ -352,6 +370,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                         <button type='button' onClick={() => removeSavedSearch(item.query)} aria-label={`Remove saved search ${item.query}`} className='rounded p-2 text-ui-muted transition hover:bg-ui-raised hover:text-ui-danger'><Trash2 className='h-3.5 w-3.5' /></button>
                     </div>)}
                 </div>
+                {savedSearchError ? <p role='alert' className='text-xs leading-5 text-ui-danger'>{savedSearchError}</p> : null}
             </section> : null}
 
             {visible ? <Results result={visible} error={error} /> : <EmptyState />}
