@@ -12,6 +12,7 @@ describe("api gateway integration", () => {
     const body = await response.json() as any;
     expect(response.status).toBe(200);
     expect(body.publicTiAnswer.route.canonicalPath).toBe("/api/ti/search");
-    expect(body.status).toBe("searching");
+    expect(body.status).toBe("needs_source_activation");
+    expect(body.runId).toBeUndefined();
   });
 });

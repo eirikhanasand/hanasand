@@ -209,6 +209,8 @@ function scraperEntityType(query: string) {
 }
 
 function writeCache(key: string, result: TiSearchResponse) {
-    cache.set(key, { expiresAt: Date.now() + 60_000, result })
+    const pending = result.status === 'queued' || result.status === 'searching'
+    const ttlMs = pending ? Math.min(5_000, Math.max(0, Number(result.refreshAfterSeconds ?? 5) * 1_000)) : 60_000
+    cache.set(key, { expiresAt: Date.now() + ttlMs, result })
     if (cache.size > 500) cache.delete(cache.keys().next().value!)
 }

@@ -113,7 +113,8 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     extractionMethod: entity.extractionMethod,
     extractorVersion: entity.extractorVersion
   }));
-  const summary = searchSummary(query, rows.length, assessment);
+  const status = searchStatus(rows.length, assessment.ready, identity.catalogCandidates.length > 0, liveSearch.dto);
+  const summary = searchSummary(query, rows.length, assessment, status, liveSearch.dto.terminalRunStatus);
   const watchlistCandidates = uniqueBy([
     ...queryWatchlistCandidates(query, entityType),
     ...unique([...victims, ...records.indicators.filter((indicator) => indicator.type === "domain").map((indicator) => indicator.value)]).map((value) => ({
@@ -188,7 +189,6 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     extractorVersion: incident.extractorVersion,
     reviewReasons: incident.reviewReasons ?? []
   }));
-  const status = rows.length ? assessment.ready ? "ready" : "partial" : identity.catalogCandidates.length ? "partial" : "searching";
   const restricted = searchDarkwebIndex({ query, sources: sourcesInScope, captures: options.store.listCaptures(), limit: 20 });
   const restrictedSourceCount = sourcesInScope.filter((source: any) => String(source.type).endsWith("_metadata")).length;
   const restrictedDisabled = Number((options.config as any)?.limits?.maxConcurrentDarknetMetadataTasks) === 0;
@@ -199,8 +199,8 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     generatedAt,
     mode: "scraper",
     status,
-    runId: stableId("search", `${scope.tenantId ?? "global"}:${query}:${generatedAt}`),
-    refreshAfterSeconds: rows.length ? 300 : 15,
+    runId: liveSearch.dto.activeRunId ?? liveSearch.dto.terminalRunId,
+    refreshAfterSeconds: status === "searching" ? liveSearch.dto.nextPollSeconds : 300,
     summary,
     confidence: assessment.confidence,
     lastSeen,
@@ -242,9 +242,13 @@ export async function searchResponse(request: Request, options: ApiServerOptions
       displayState: status,
       query,
       summary: rows,
-      safeSummary: rows.length ? [summary] : ["Searching"],
-      waitReasons: rows.length ? [] : [{ code: "capture_promotion", message: "Waiting for captured evidence to be promoted." }],
-      nextPoll: { pollable: rows.length === 0, nextPollAfterSeconds: liveSearch.dto.nextPollSeconds, cursorRequired: rows.length === 0 },
+      safeSummary: status === "searching" ? ["Searching"] : [summary],
+      waitReasons: status === "searching"
+        ? [{ code: "capture_promotion", message: "Waiting for captured evidence to be promoted." }]
+        : liveSearch.dto.terminalRunStatus && liveSearch.dto.terminalRunStatus !== "completed"
+          ? [{ code: "collection_terminal", message: `Collection ended ${liveSearch.dto.terminalRunStatus}; no evidence was inferred.` }]
+          : [],
+      nextPoll: { pollable: status === "searching", nextPollAfterSeconds: liveSearch.dto.nextPollSeconds, cursorRequired: status === "searching" },
       claims,
       evidenceLedgerReferences: structuredProvenance,
       ux: { evidenceStageLabels: stageCounts(records.claims) }
@@ -271,7 +275,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
 }
 
 function scheduleLiveSearch(liveSearch: any, options: ApiServerOptions, generatedAt: string) {
-  if (!options.runExecutor || liveSearch.dto.activeRunId) return;
+  if (!options.runExecutor || liveSearch.dto.activeRunId || liveSearch.dto.terminalRunId) return;
   const tasks = liveSearch.plan.tasks.filter((task: any) => !task.availableAt || !task.deadlineAt || Date.parse(task.availableAt) <= Date.parse(task.deadlineAt));
   if (!tasks.length) return;
   const plan = { ...liveSearch.plan, tasks };
@@ -1057,8 +1061,22 @@ function missingFields(input: { query: string; entityType: SearchEntityType; act
   ].filter(Boolean);
 }
 
-function searchSummary(query: string, rowCount: number, assessment: ReturnType<typeof assess>) {
-  if (!rowCount) return `No captured public-intelligence evidence currently matches ${query}. Collection may still be in progress.`;
+function searchStatus(rowCount: number, ready: boolean, catalogMatched: boolean, planner: any) {
+  if (rowCount) return ready ? "ready" : "partial";
+  if (planner.terminalRunStatus === "completed") return "ready";
+  if (planner.terminalRunStatus) return "partial";
+  if (planner.activeRunId) return "searching";
+  if (catalogMatched) return "partial";
+  if (planner.backpressureState === "needs_source_activation" || planner.backpressureState === "blocked_by_policy") return "needs_source_activation";
+  return planner.zeroTaskReason === "none" || planner.zeroTaskReason === "all_sources_stale_or_backoff" ? "searching" : "partial";
+}
+
+function searchSummary(query: string, rowCount: number, assessment: ReturnType<typeof assess>, status: string, terminalRunStatus?: string) {
+  if (!rowCount && terminalRunStatus === "completed") return `No captured public-intelligence evidence matched ${query} after collection completed.`;
+  if (!rowCount && terminalRunStatus) return `No captured public-intelligence evidence matched ${query}; collection ended ${terminalRunStatus} and no result was inferred.`;
+  if (!rowCount && status === "needs_source_activation") return `No captured public-intelligence evidence matches ${query}; no approved executable source is available for this query.`;
+  if (!rowCount && status === "partial") return `No captured public-intelligence evidence matches ${query}; the query was not scheduled for collection.`;
+  if (!rowCount) return `No captured public-intelligence evidence currently matches ${query}. Collection is in progress.`;
   const state = assessment.ready ? "reviewed or corroborated evidence is available" : "the evidence remains partial and must not be treated as verified";
   return `${rowCount} captured public-intelligence record(s) match ${query}; ${state}.`;
 }

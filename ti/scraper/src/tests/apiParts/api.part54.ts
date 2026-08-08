@@ -7,7 +7,11 @@ describe("api v1", () => {
       frontier: new FocusedFrontier()
     }));
     expect(response.query).toBe("Scattered Spider");
-    expect(response.runId).toEqual(expect.any(String));
+    expect(response).toMatchObject({
+      status: "needs_source_activation",
+      summary: "No captured public-intelligence evidence matches Scattered Spider; no approved executable source is available for this query.",
+    });
+    expect(response.runId).toBeUndefined();
     expect(response.refreshAfterSeconds).toEqual(expect.any(Number));
     const serialized = JSON.stringify(response).toLowerCase();
     expect(serialized).not.toContain("authorization:");

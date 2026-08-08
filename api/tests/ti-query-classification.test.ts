@@ -87,6 +87,43 @@ test('retries canonical search after an unavailable response', async () => {
     }
 })
 
+test('refreshes a cached pending search before its advertised poll interval', async () => {
+    const previousScraperBase = process.env.TI_SCRAPER_API_BASE
+    const originalFetch = globalThis.fetch
+    const originalNow = Date.now
+    process.env.TI_SCRAPER_API_BASE = 'http://scraper.test'
+    let now = 1_786_194_000_000
+    let attempts = 0
+    Date.now = () => now
+    globalThis.fetch = async () => {
+        attempts++
+        return Response.json({
+            query: 'pending-cache-987654',
+            generatedAt: '2026-08-08T13:00:00.000Z',
+            mode: 'scraper',
+            status: attempts === 1 ? 'searching' : 'ready',
+            refreshAfterSeconds: 15,
+            summary: attempts === 1 ? 'Collection is in progress.' : 'Collection completed with no matching evidence.',
+            confidence: 0,
+            aliases: [], recentActivity: [], targets: [], ttps: [], datasets: [], sources: [], notes: [],
+        })
+    }
+
+    try {
+        expect((await searchThreatIntel({ query: 'pending-cache-987654' })).status).toBe('searching')
+        expect((await searchThreatIntel({ query: 'pending-cache-987654' })).status).toBe('searching')
+        expect(attempts).toBe(1)
+        now += 5_001
+        expect((await searchThreatIntel({ query: 'pending-cache-987654' })).status).toBe('ready')
+        expect(attempts).toBe(2)
+    } finally {
+        Date.now = originalNow
+        globalThis.fetch = originalFetch
+        if (previousScraperBase === undefined) delete process.env.TI_SCRAPER_API_BASE
+        else process.env.TI_SCRAPER_API_BASE = previousScraperBase
+    }
+})
+
 test('accepts the scraper canonicalizing actor query casing', async () => {
     const previousScraperBase = process.env.TI_SCRAPER_API_BASE
     const originalFetch = globalThis.fetch
