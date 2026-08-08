@@ -113,6 +113,19 @@ type WebhookDestination = {
     signingConfigured?: boolean
 }
 
+type CollectionRequest = {
+    requestId: string
+    status: 'queued' | 'running' | 'completed' | 'failed' | string
+    runIds?: string[]
+    captureCount?: number
+    alertCount?: number
+    alertIds?: string[]
+    createdAt?: string
+    updatedAt?: string
+    completedAt?: string
+    errors?: string[]
+}
+
 type ScopedAlert = {
     id: string
     title?: string
@@ -647,6 +660,7 @@ export default function OrganizationWorkspaceClient() {
     const [editingDestinations, setEditingDestinations] = useState<Record<string, DestinationEditDraft>>({})
     const [rowMessages, setRowMessages] = useState<Record<string, RowMessage>>({})
     const [activity, setActivity] = useState<ActivityItem[]>([])
+    const [collectionRequest, setCollectionRequest] = useState<CollectionRequest | null>(null)
     const [selectedActivitySubject, setSelectedActivitySubject] = useState<ActivitySubject>({ type: 'organization', id: 'organization' })
     const mountedRef = useRef(false)
     const organizationLoadRef = useRef(0)
@@ -1284,6 +1298,27 @@ export default function OrganizationWorkspaceClient() {
         return count ? `${count} alert${count === 1 ? '' : 's'} refreshed from captures.` : 'No matching alert was found in the available captures.'
     }, 'watchlist-refresh')
 
+    const requestFreshCollection = () => selectedOrganization && runAction('fresh-collection', async () => {
+        requireManage()
+        const payload = await requestJson<{ collectionRequest?: CollectionRequest }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/collection-requests`, {
+            method: 'POST',
+            headers: { 'idempotency-key': `org-ui-${selectedOrganization.id}-${Date.now()}` },
+            body: JSON.stringify({ organizationId: selectedOrganization.id, tenantId: selectedOrganization.tenantId || selectedOrganization.id }),
+        })
+        const next = payload.collectionRequest || null
+        setCollectionRequest(next)
+        await loadOrganizationBundle(selectedOrganization.id)
+        return next ? `Fresh collection ${next.status}; ${next.captureCount || 0} captures and ${next.alertCount || 0} alerts reported.` : 'Collection request accepted.'
+    }, 'fresh-collection')
+
+    const refreshCollectionStatus = () => selectedOrganization && collectionRequest && runAction('collection-status', async () => {
+        const payload = await requestJson<{ collectionRequest?: CollectionRequest }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/collection-requests/${encodeURIComponent(collectionRequest.requestId)}`)
+        const next = payload.collectionRequest || collectionRequest
+        setCollectionRequest(next)
+        if (next.status === 'completed' || next.status === 'failed') await loadOrganizationBundle(selectedOrganization.id)
+        return `Fresh collection ${next.status}; ${next.captureCount || 0} captures and ${next.alertCount || 0} alerts reported.`
+    }, 'collection-status')
+
     const rotateDestinationSigningSecret = (destination: WebhookDestination) => selectedOrganization && runAction('rotate-destination-secret', async () => {
         requireManage()
         const payload = await requestJson<{ destination?: WebhookDestination }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/${encodeURIComponent(destination.id)}`, {
@@ -1532,6 +1567,9 @@ export default function OrganizationWorkspaceClient() {
                                             deliveries={bundle.deliveries}
                                             onCleanup={() => void cleanupWatchlists()}
                                             onRefreshAlerts={() => void refreshOrganizationAlerts()}
+                                            onRequestFreshCollection={() => void requestFreshCollection()}
+                                            onRefreshCollectionStatus={() => void refreshCollectionStatus()}
+                                            collectionRequest={collectionRequest}
                                             rowMessages={rowMessages}
                                             draftDuplicate={watchlistDraftDuplicate}
                                             selectedSubject={selectedActivitySubject}
@@ -2971,7 +3009,7 @@ function WebhookSigningSecret({ secret, onClear }: { secret: string, onClear: ()
     )
 }
 
-function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, draft, setDraft, suggestions, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, onCleanup, onRefreshAlerts, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], members: OrganizationMember[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, suggestions: WatchlistSuggestion[], editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], onCleanup: () => void, onRefreshAlerts: () => void, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
+function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, draft, setDraft, suggestions, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, onCleanup, onRefreshAlerts, onRequestFreshCollection, onRefreshCollectionStatus, collectionRequest, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], members: OrganizationMember[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, suggestions: WatchlistSuggestion[], editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], onCleanup: () => void, onRefreshAlerts: () => void, onRequestFreshCollection: () => void, onRefreshCollectionStatus: () => void, collectionRequest: CollectionRequest | null, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
     const [watchlistQuery, setWatchlistQuery] = useState('')
     const [watchlistStatusFilter, setWatchlistStatusFilter] = useState('all')
     const activeCount = watchlists.filter(item => item.status.toLowerCase() === 'active').length
@@ -2991,6 +3029,10 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
                 <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Shared watchlists' detail='Customer-owned terms that drive DWM alerts, cases, and delivery destinations.' />
                 <div className='flex flex-wrap gap-2'>
+                    <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy) || activeTerms.length === 0} onClick={onRequestFreshCollection} title='Request a real source collection for the active organization watchlist terms'>
+                        <RefreshCw className='h-4 w-4' />
+                        Collect fresh evidence
+                    </button>
                     <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy) || activeTerms.length === 0} onClick={onRefreshAlerts} title='Rebuild alerts from already collected evidence'>
                         <RefreshCw className='h-4 w-4' />
                         Refresh alerts
@@ -3010,6 +3052,12 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
             )}
             {busyLabel && <InlineBusy label={busyLabel} marker='data-org-watchlist-busy' />}
             <p className='text-xs leading-5 text-ui-muted'>Refresh checks the latest retained captures for these terms; it does not claim a new source collection run.</p>
+            {collectionRequest && <div className='mt-2 flex flex-wrap items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs dark:border-ui-border dark:bg-ui-canvas' data-org-collection-request='true'>
+                <span className='font-semibold capitalize text-ui-text dark:text-ui-text'>Fresh collection: {collectionRequest.status}</span>
+                <span className='text-ui-muted dark:text-ui-muted'>{collectionRequest.captureCount || 0} captures · {collectionRequest.alertCount || 0} alerts</span>
+                {['queued', 'running'].includes(collectionRequest.status) && <button type='button' className='font-semibold text-ui-primary hover:underline' disabled={Boolean(busy)} onClick={onRefreshCollectionStatus}>Check status</button>}
+                {collectionRequest.errors?.[0] && <span className='text-ui-danger dark:text-ui-danger'>{collectionRequest.errors[0]}</span>}
+            </div>}
             <div className='mt-2'><RowStatus message={rowMessages['watchlists-cleanup']} /></div>
             <details id='org-watchlist-create' className='mt-4 overflow-hidden rounded-lg border border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-canvas' data-org-watchlist-starter='true' data-org-watchlist-add-disclosure='true' open={watchlists.length === 0 ? true : undefined}>
                 <summary className='flex min-h-12 cursor-pointer list-none flex-col gap-2 px-3 py-2 outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>

@@ -142,6 +142,10 @@ test('organization workspace exposes destination lifecycle controls safely', () 
     assert.match(organizationWorkspaceSource, /Refresh alerts/, 'watchlist setup should expose a real evidence refresh action.')
     assert.match(organizationWorkspaceSource, /Rebuild alerts from already collected evidence/, 'refresh must state that it rebuilds retained evidence rather than claiming a new collection run.')
     assert.match(organizationWorkspaceSource, /\/api\/dwm\/alerts\/rebuild/, 'refresh alerts should use the persisted DWM rebuild endpoint.')
+    assert.match(organizationWorkspaceSource, /Collect fresh evidence/, 'watchlist setup should expose a real collection request action.')
+    assert.match(organizationWorkspaceSource, /\/api\/organizations\/\$\{encodeURIComponent\(selectedOrganization\.id\)\}\/collection-requests/, 'fresh collection should use the organization-scoped request proxy.')
+    assert.match(organizationWorkspaceSource, /data-org-collection-request='true'/, 'fresh collection should show persisted request status and counts.')
+    assert.match(organizationWorkspaceSource, /Check status/, 'queued collection requests should expose an explicit status refresh.')
 })
 
 test('builds DWM mirror payloads for org watchlist mutations', () => {
