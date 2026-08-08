@@ -10,7 +10,7 @@ import { PUBLIC_TI_HANDOFF_ACTIONS, buildActorArtifactHandoffs, buildActorArtifa
 import { countryCentroids } from '@/utils/monitoring/geo'
 import { clampViewBox, getCountryFocusView, INITIAL_VIEWBOX, MAP_HEIGHT, MAP_WIDTH, project, type ViewBox, zoomViewBox } from '@/utils/monitoring/liveTrafficMap'
 import mapData from '@parent/public/world.json'
-import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Copy, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Move, Search, Send, ShieldAlert, ShieldCheck, UserPlus, XCircle } from 'lucide-react'
+import { Activity, BellRing, Bookmark, Building2, CheckCircle2, ClipboardList, Clock3, Copy, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Move, Search, Send, ShieldAlert, ShieldCheck, Trash2, UserPlus, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { SyntheticEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -118,6 +118,10 @@ const TI_ACTIVITY_TIMELINE_ROWS = 3
 const TI_SOURCE_REFERENCE_ROWS = 2
 const TI_DOSSIER_REASON_ROWS = 3
 const TI_DOSSIER_SOURCE_FAMILY_ROWS = 3
+const TI_SAVED_SEARCHES_KEY = 'hanasand:ti:saved-searches'
+const TI_SAVED_SEARCH_LIMIT = 8
+
+type SavedSearch = { query: string, savedAt: string }
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
     const router = useRouter()
@@ -125,6 +129,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
     const [result, setResult] = useState<TiSearchResponse | null>(initialResult)
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState('')
+    const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([])
     const activeQueryRef = useRef((initialResult?.query ?? initialQuery).trim().toLowerCase())
     const requestSeqRef = useRef(0)
     const inputRef = useRef<HTMLInputElement>(null)
@@ -133,6 +138,17 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
         document.body.dataset.publicTiRoute = 'true'
         return () => {
             delete document.body.dataset.publicTiRoute
+        }
+    }, [])
+
+    useEffect(() => {
+        try {
+            const stored = JSON.parse(window.localStorage.getItem(TI_SAVED_SEARCHES_KEY) || '[]')
+            if (Array.isArray(stored)) {
+                setSavedSearches(stored.filter((item): item is SavedSearch => Boolean(item && typeof item.query === 'string' && typeof item.savedAt === 'string')).slice(0, TI_SAVED_SEARCH_LIMIT))
+            }
+        } catch {
+            setSavedSearches([])
         }
     }, [])
 
@@ -192,10 +208,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
         return () => window.clearTimeout(timer)
     }, [result])
 
-    async function submit(event: SyntheticEvent<HTMLFormElement>) {
-        event.preventDefault()
-        const form = new FormData(event.currentTarget)
-        const clean = String(form.get('q') ?? inputRef.current?.value ?? query).trim()
+    async function executeSearch(clean: string) {
         if (!clean) return
 
         const requestSeq = requestSeqRef.current + 1
@@ -218,6 +231,26 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
         } finally {
             if (requestSeqRef.current === requestSeq) setBusy(false)
         }
+    }
+
+    async function submit(event: SyntheticEvent<HTMLFormElement>) {
+        event.preventDefault()
+        const form = new FormData(event.currentTarget)
+        await executeSearch(String(form.get('q') ?? inputRef.current?.value ?? query).trim())
+    }
+
+    function saveCurrentSearch() {
+        const clean = query.trim()
+        if (!clean) return
+        const next = [{ query: clean, savedAt: new Date().toISOString() }, ...savedSearches.filter(item => item.query.toLowerCase() !== clean.toLowerCase())].slice(0, TI_SAVED_SEARCH_LIMIT)
+        setSavedSearches(next)
+        window.localStorage.setItem(TI_SAVED_SEARCHES_KEY, JSON.stringify(next))
+    }
+
+    function removeSavedSearch(queryToRemove: string) {
+        const next = savedSearches.filter(item => item.query !== queryToRemove)
+        setSavedSearches(next)
+        window.localStorage.setItem(TI_SAVED_SEARCHES_KEY, JSON.stringify(next))
     }
 
     function handleQueryChange(value: string) {
@@ -265,9 +298,34 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                         <Search className='h-4 w-4' />
                         <span>{busy ? 'Searching' : 'Search'}</span>
                     </button>
+                    {query.trim() ? <button
+                        type='button'
+                        onClick={saveCurrentSearch}
+                        aria-label={`Save search ${query.trim()}`}
+                        className={`${visible ? 'h-10' : 'h-11'} inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised`}
+                    >
+                        <Bookmark className='h-4 w-4' />
+                        <span className='hidden sm:inline'>Save</span>
+                    </button> : null}
                 </div>
                 {error ? <p className='text-sm text-ui-danger'>{error}</p> : null}
             </form>
+
+            {savedSearches.length ? <section aria-label='Saved searches' className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm'>
+                <div className='flex items-center justify-between gap-3'>
+                    <div>
+                        <h2 className='text-sm font-semibold text-ui-text'>Saved searches</h2>
+                        <p className='mt-1 text-xs text-ui-muted'>Stored only in this browser. Select one to reopen the current result.</p>
+                    </div>
+                    <Bookmark className='h-4 w-4 text-ui-primary' />
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                    {savedSearches.map(item => <div key={`${item.query}:${item.savedAt}`} className='inline-flex max-w-full items-center gap-1 rounded-md border border-ui-border bg-ui-canvas pl-3 text-sm dark:border-ui-border dark:bg-ui-canvas'>
+                        <button type='button' onClick={() => void executeSearch(item.query)} className='max-w-56 truncate py-2 font-medium text-ui-text hover:text-ui-primary' title={`Open ${item.query}`}>{item.query}</button>
+                        <button type='button' onClick={() => removeSavedSearch(item.query)} aria-label={`Remove saved search ${item.query}`} className='rounded p-2 text-ui-muted transition hover:bg-ui-raised hover:text-ui-danger'><Trash2 className='h-3.5 w-3.5' /></button>
+                    </div>)}
+                </div>
+            </section> : null}
 
             {visible ? <Results result={visible} error={error} /> : <EmptyState />}
         </div>
