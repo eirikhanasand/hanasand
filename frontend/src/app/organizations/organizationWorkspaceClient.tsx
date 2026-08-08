@@ -2926,13 +2926,14 @@ function WebhookSigningSecret({ secret, onClear }: { secret: string, onClear: ()
                 <div>
                     <p className='font-semibold text-ui-text dark:text-ui-text'>Save this signing secret now</p>
                     <p className='mt-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>Hanasand signs live deliveries with HMAC-SHA256. The secret is shown only after create or URL rotation; use the v1 signature headers to verify the raw request body.</p>
+                    <code className='mt-2 block overflow-x-auto rounded-md border border-ui-border bg-ui-canvas px-2 py-2 text-[11px] leading-5 text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>HMAC(secret, `${'{'}destinationUrl{'}'}\n${'{'}x-hanasand-signature-timestamp{'}'}\n${'{'}rawBody{'}'}`) === x-hanasand-delivery-signature</code>
                 </div>
                 <button type='button' className={secondaryButtonClass} onClick={onClear}>Dismiss</button>
             </div>
             <code className='break-all rounded-md border border-ui-border bg-ui-canvas px-3 py-2 text-xs text-ui-text dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text'>{secret}</code>
             <div className='flex flex-wrap gap-2 text-xs'>
                 <button type='button' className={secondaryButtonClass} onClick={() => void copy()}><Copy className='h-4 w-4' />{copied ? 'Copied' : 'Copy secret'}</button>
-                <span className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 font-mono text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>x-hanasand-delivery-signature</span>
+                <span className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 font-mono text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>signature · timestamp · version v1</span>
             </div>
         </div>
     )
