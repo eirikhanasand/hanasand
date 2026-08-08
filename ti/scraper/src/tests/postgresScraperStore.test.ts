@@ -331,6 +331,80 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await first.close();
     await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '037_remove_parser_fallback_artifacts'`;
 
+    await admin.unsafe(`
+      INSERT INTO threat_intel.intelligence_claims (
+        id, claim_type, subject_type, subject_id, claim_value, summary,
+        confidence, evidence_stage, extraction_method, extractor_version,
+        review_state, corroboration_state, source_count, evidence_count,
+        first_seen_at, last_seen_at, created_at, updated_at, record
+      ) VALUES (
+        'claim_parser_cleanup_noise', 'context', 'analyst', 'migration-performance-noise', '"noise"'::jsonb,
+        'Unrelated retained migration performance row.', 0.5, 'source_observation',
+        'deterministic_extraction', 'migration-performance-test', 'unreviewed', 'single_source',
+        1, 50000, now(), now(), now(), now(), '{"id":"claim_parser_cleanup_noise"}'::jsonb
+      );
+
+      INSERT INTO threat_intel.claim_evidence (
+        id, claim_id, capture_id, source_id, subject_type, subject_id,
+        relationship, evidence_stage, confidence, extractor_version,
+        provenance, created_at, record
+      )
+      SELECT
+        'claim-evidence_parser-cleanup-noise-' || value,
+        'claim_parser_cleanup_noise',
+        '${valid.capture.id}',
+        '${sourceId}',
+        'analyst',
+        'migration-performance-noise-' || value,
+        'context',
+        'source_observation',
+        0.5,
+        'migration-performance-test',
+        '{}'::jsonb,
+        now(),
+        jsonb_build_object('id', 'claim-evidence_parser-cleanup-noise-' || value)
+      FROM generate_series(1, 50000) AS value;
+
+      INSERT INTO threat_intel.evidence_links (
+        id, capture_id, subject_type, subject_id, relationship,
+        confidence, extractor_version, created_at, record
+      )
+      SELECT
+        'evidence-link_parser-cleanup-noise-' || value,
+        '${valid.capture.id}',
+        'validation',
+        'migration-performance-noise-' || value,
+        'context',
+        0.5,
+        'migration-performance-test',
+        now(),
+        jsonb_build_object('id', 'evidence-link_parser-cleanup-noise-' || value)
+      FROM generate_series(1, 50000) AS value;
+    `);
+
+    const cleanupMigration = await Bun.file(new URL("../../migrations/037_remove_parser_fallback_artifacts.sql", import.meta.url)).text();
+    await expect(admin.begin(async (sql) => {
+      await sql.unsafe("SET LOCAL statement_timeout = '1ms'");
+      await sql.unsafe(cleanupMigration);
+    })).rejects.toThrow();
+    expect(await admin`SELECT id FROM threat_intel.captures WHERE id = ${savedFallback.capture.id}`).toHaveLength(1);
+    expect(await admin`SELECT original_id FROM threat_intel.parser_diagnostic_cleanup_history`).toHaveLength(0);
+    expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '037_remove_parser_fallback_artifacts'`).toHaveLength(0);
+
+    const migrationStartedAt = performance.now();
+    await admin.begin(async (sql) => {
+      await sql.unsafe("SET LOCAL statement_timeout = '15s'");
+      await sql.unsafe(cleanupMigration);
+      await sql`INSERT INTO threat_intel.schema_migrations (version) VALUES ('037_remove_parser_fallback_artifacts')`;
+    });
+    expect(performance.now() - migrationStartedAt).toBeLessThan(15_000);
+    expect((await admin<{ count: number }[]>`SELECT count(*)::int AS count FROM threat_intel.claim_evidence WHERE claim_id = 'claim_parser_cleanup_noise'`)[0]?.count).toBe(50_000);
+    expect((await admin<{ count: number }[]>`SELECT count(*)::int AS count FROM threat_intel.evidence_links WHERE id LIKE 'evidence-link_parser-cleanup-noise-%'`)[0]?.count).toBe(50_000);
+
+    await admin`DELETE FROM threat_intel.evidence_links WHERE id LIKE 'evidence-link_parser-cleanup-noise-%'`;
+    await admin`DELETE FROM threat_intel.claim_evidence WHERE claim_id = 'claim_parser_cleanup_noise'`;
+    await admin`DELETE FROM threat_intel.intelligence_claims WHERE id = 'claim_parser_cleanup_noise'`;
+
     const migrated = await PostgresScraperStore.create({ databaseUrl });
     expect(migrated.getCapture(savedFallback.capture.id)).toBeUndefined();
     expect(migrated.getCapture(valid.capture.id)).toBeDefined();

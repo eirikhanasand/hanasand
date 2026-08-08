@@ -42,6 +42,7 @@ WHERE capture.record->'metadata'->>'feedItem' = 'false'
 
 CREATE UNIQUE INDEX ON _parser_fallback_capture (id);
 CREATE INDEX ON _parser_fallback_capture (run_id, task_id, source_id);
+ANALYZE _parser_fallback_capture;
 
 CREATE TEMP TABLE _parser_fallback_entity ON COMMIT DROP AS
 SELECT entity.id
@@ -49,6 +50,7 @@ FROM threat_intel.entities AS entity
 JOIN _parser_fallback_capture AS capture ON capture.id = entity.capture_id;
 
 CREATE UNIQUE INDEX ON _parser_fallback_entity (id);
+ANALYZE _parser_fallback_entity;
 
 CREATE TEMP TABLE _parser_fallback_indicator ON COMMIT DROP AS
 SELECT indicator.id
@@ -56,21 +58,32 @@ FROM threat_intel.indicators AS indicator
 JOIN _parser_fallback_capture AS capture ON capture.id = indicator.capture_id;
 
 CREATE UNIQUE INDEX ON _parser_fallback_indicator (id);
+ANALYZE _parser_fallback_indicator;
 
 CREATE TEMP TABLE _parser_invalid_claim_evidence ON COMMIT DROP AS
 SELECT evidence.id, evidence.claim_id
 FROM threat_intel.claim_evidence AS evidence
-WHERE evidence.capture_id IN (SELECT id FROM _parser_fallback_capture)
-   OR (evidence.subject_type = 'entity' AND evidence.subject_id IN (SELECT id FROM _parser_fallback_entity))
-   OR (evidence.subject_type = 'indicator' AND evidence.subject_id IN (SELECT id FROM _parser_fallback_indicator));
+JOIN _parser_fallback_capture AS fallback ON fallback.id = evidence.capture_id
+UNION
+SELECT evidence.id, evidence.claim_id
+FROM threat_intel.claim_evidence AS evidence
+JOIN (
+  SELECT 'entity'::text AS subject_type, id AS subject_id FROM _parser_fallback_entity
+  UNION ALL
+  SELECT 'indicator'::text, id FROM _parser_fallback_indicator
+) AS invalid_subject
+  ON invalid_subject.subject_type = evidence.subject_type
+  AND invalid_subject.subject_id = evidence.subject_id;
 
 CREATE UNIQUE INDEX ON _parser_invalid_claim_evidence (id);
 CREATE INDEX ON _parser_invalid_claim_evidence (claim_id);
+ANALYZE _parser_invalid_claim_evidence;
 
 CREATE TEMP TABLE _parser_affected_claim ON COMMIT DROP AS
 SELECT DISTINCT claim_id FROM _parser_invalid_claim_evidence;
 
 CREATE UNIQUE INDEX ON _parser_affected_claim (claim_id);
+ANALYZE _parser_affected_claim;
 
 CREATE TEMP TABLE _parser_orphan_claim ON COMMIT DROP AS
 SELECT affected.claim_id
@@ -79,10 +92,13 @@ WHERE NOT EXISTS (
   SELECT 1
   FROM threat_intel.claim_evidence AS evidence
   WHERE evidence.claim_id = affected.claim_id
-    AND evidence.id NOT IN (SELECT id FROM _parser_invalid_claim_evidence)
+    AND NOT EXISTS (
+      SELECT 1 FROM _parser_invalid_claim_evidence AS invalid WHERE invalid.id = evidence.id
+    )
 );
 
 CREATE UNIQUE INDEX ON _parser_orphan_claim (claim_id);
+ANALYZE _parser_orphan_claim;
 
 CREATE TEMP TABLE _parser_profile_capture ON COMMIT DROP AS
 SELECT profile.id AS profile_id, item.value AS capture_id
@@ -100,13 +116,17 @@ JOIN threat_intel.evidence_links AS link
 JOIN threat_intel.captures AS capture ON capture.id = link.capture_id;
 
 CREATE UNIQUE INDEX ON _parser_profile_capture (profile_id, capture_id);
+ANALYZE _parser_profile_capture;
 
 CREATE TEMP TABLE _parser_affected_profile ON COMMIT DROP AS
 SELECT DISTINCT profile_id
-FROM _parser_profile_capture
-WHERE capture_id IN (SELECT id FROM _parser_fallback_capture);
+FROM _parser_profile_capture AS reference
+WHERE EXISTS (
+  SELECT 1 FROM _parser_fallback_capture AS fallback WHERE fallback.id = reference.capture_id
+);
 
 CREATE UNIQUE INDEX ON _parser_affected_profile (profile_id);
+ANALYZE _parser_affected_profile;
 
 CREATE TEMP TABLE _parser_orphan_profile ON COMMIT DROP AS
 SELECT affected.profile_id
@@ -115,10 +135,13 @@ WHERE NOT EXISTS (
   SELECT 1
   FROM _parser_profile_capture AS reference
   WHERE reference.profile_id = affected.profile_id
-    AND reference.capture_id NOT IN (SELECT id FROM _parser_fallback_capture)
+    AND NOT EXISTS (
+      SELECT 1 FROM _parser_fallback_capture AS invalid WHERE invalid.id = reference.capture_id
+    )
 );
 
 CREATE UNIQUE INDEX ON _parser_orphan_profile (profile_id);
+ANALYZE _parser_orphan_profile;
 
 INSERT INTO threat_intel.parser_diagnostic_cleanup_history (
   id, record_type, original_id, tenant_id, source_id, cleanup_reason,
@@ -213,10 +236,13 @@ SELECT
 FROM threat_intel.claim_evidence AS evidence
 JOIN _parser_affected_claim AS affected ON affected.claim_id = evidence.claim_id
 JOIN threat_intel.captures AS capture ON capture.id = evidence.capture_id
-WHERE evidence.id NOT IN (SELECT id FROM _parser_invalid_claim_evidence)
+WHERE NOT EXISTS (
+  SELECT 1 FROM _parser_invalid_claim_evidence AS invalid WHERE invalid.id = evidence.id
+)
 GROUP BY evidence.claim_id;
 
 CREATE UNIQUE INDEX ON _parser_claim_rebuild (claim_id);
+ANALYZE _parser_claim_rebuild;
 
 CREATE TEMP TABLE _parser_claim_independence ON COMMIT DROP AS
 WITH retained_groups AS (
@@ -262,48 +288,85 @@ FROM _parser_claim_rebuild AS rebuild
 LEFT JOIN grouped ON grouped.claim_id = rebuild.claim_id;
 
 CREATE UNIQUE INDEX ON _parser_claim_independence (claim_id);
+ANALYZE _parser_claim_independence;
 
 UPDATE threat_intel.evaluation_labels AS label
 SET claim_id = NULL,
   record = label.record - 'claimId'
-WHERE label.claim_id IN (SELECT claim_id FROM _parser_orphan_claim)
+WHERE EXISTS (
+    SELECT 1 FROM _parser_orphan_claim AS orphan WHERE orphan.claim_id = label.claim_id
+  )
   AND (
     label.incident_id IS NOT NULL
-    OR (label.capture_id IS NOT NULL AND label.capture_id NOT IN (SELECT id FROM _parser_fallback_capture))
-    OR (label.entity_id IS NOT NULL AND label.entity_id NOT IN (SELECT id FROM _parser_fallback_entity))
-    OR (label.indicator_id IS NOT NULL AND label.indicator_id NOT IN (SELECT id FROM _parser_fallback_indicator))
+    OR (label.capture_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM _parser_fallback_capture AS fallback WHERE fallback.id = label.capture_id
+    ))
+    OR (label.entity_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM _parser_fallback_entity AS fallback WHERE fallback.id = label.entity_id
+    ))
+    OR (label.indicator_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM _parser_fallback_indicator AS fallback WHERE fallback.id = label.indicator_id
+    ))
   );
 
 DELETE FROM threat_intel.evaluation_labels AS label
-WHERE label.capture_id IN (SELECT id FROM _parser_fallback_capture)
-   OR label.entity_id IN (SELECT id FROM _parser_fallback_entity)
-   OR label.indicator_id IN (SELECT id FROM _parser_fallback_indicator)
-   OR label.claim_id IN (SELECT claim_id FROM _parser_orphan_claim);
+WHERE EXISTS (SELECT 1 FROM _parser_fallback_capture AS invalid WHERE invalid.id = label.capture_id)
+   OR EXISTS (SELECT 1 FROM _parser_fallback_entity AS invalid WHERE invalid.id = label.entity_id)
+   OR EXISTS (SELECT 1 FROM _parser_fallback_indicator AS invalid WHERE invalid.id = label.indicator_id)
+   OR EXISTS (SELECT 1 FROM _parser_orphan_claim AS invalid WHERE invalid.claim_id = label.claim_id);
 
 UPDATE threat_intel.validation_records AS validation
 SET claim_id = NULL,
   record = validation.record - 'claimId'
-WHERE validation.claim_id IN (SELECT claim_id FROM _parser_orphan_claim)
+WHERE EXISTS (
+    SELECT 1 FROM _parser_orphan_claim AS orphan WHERE orphan.claim_id = validation.claim_id
+  )
   AND (
     validation.incident_id IS NOT NULL
-    OR (validation.capture_id IS NOT NULL AND validation.capture_id NOT IN (SELECT id FROM _parser_fallback_capture))
+    OR (validation.capture_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM _parser_fallback_capture AS fallback WHERE fallback.id = validation.capture_id
+    ))
   );
 
 DELETE FROM threat_intel.validation_records AS validation
-WHERE validation.capture_id IN (SELECT id FROM _parser_fallback_capture)
-   OR validation.claim_id IN (SELECT claim_id FROM _parser_orphan_claim);
+WHERE EXISTS (SELECT 1 FROM _parser_fallback_capture AS invalid WHERE invalid.id = validation.capture_id)
+   OR EXISTS (SELECT 1 FROM _parser_orphan_claim AS invalid WHERE invalid.claim_id = validation.claim_id);
+
+CREATE TEMP TABLE _parser_invalid_evidence_subject ON COMMIT DROP AS
+SELECT 'entity'::text AS subject_type, id AS subject_id FROM _parser_fallback_entity
+UNION ALL
+SELECT 'indicator'::text, id FROM _parser_fallback_indicator
+UNION ALL
+SELECT 'claim'::text, claim_id FROM _parser_orphan_claim;
+
+CREATE UNIQUE INDEX ON _parser_invalid_evidence_subject (subject_type, subject_id);
+ANALYZE _parser_invalid_evidence_subject;
+
+CREATE TEMP TABLE _parser_evidence_link_delete ON COMMIT DROP AS
+SELECT link.id
+FROM threat_intel.evidence_links AS link
+JOIN _parser_fallback_capture AS fallback ON fallback.id = link.capture_id
+UNION
+SELECT link.id
+FROM threat_intel.evidence_links AS link
+JOIN _parser_invalid_evidence_subject AS invalid
+  ON invalid.subject_type = link.subject_type
+  AND invalid.subject_id = link.subject_id;
+
+CREATE UNIQUE INDEX ON _parser_evidence_link_delete (id);
+ANALYZE _parser_evidence_link_delete;
 
 DELETE FROM threat_intel.evidence_links AS link
-WHERE link.capture_id IN (SELECT id FROM _parser_fallback_capture)
-   OR (link.subject_type = 'entity' AND link.subject_id IN (SELECT id FROM _parser_fallback_entity))
-   OR (link.subject_type = 'indicator' AND link.subject_id IN (SELECT id FROM _parser_fallback_indicator))
-   OR (link.subject_type = 'claim' AND link.subject_id IN (SELECT claim_id FROM _parser_orphan_claim));
+USING _parser_evidence_link_delete AS invalid
+WHERE link.id = invalid.id;
 
 DELETE FROM threat_intel.claim_evidence AS evidence
-WHERE evidence.id IN (SELECT id FROM _parser_invalid_claim_evidence);
+USING _parser_invalid_claim_evidence AS invalid
+WHERE evidence.id = invalid.id;
 
 DELETE FROM threat_intel.intelligence_claims AS claim
-WHERE claim.id IN (SELECT claim_id FROM _parser_orphan_claim);
+USING _parser_orphan_claim AS orphan
+WHERE claim.id = orphan.claim_id;
 
 UPDATE threat_intel.intelligence_claims AS claim
 SET
@@ -390,6 +453,9 @@ WHERE selected.invalid_selected > 0
   AND selected.valid_selected = 0
   AND claim.review_state NOT IN ('unreviewed', 'needs_review');
 
+CREATE UNIQUE INDEX ON _parser_review_invalidation (claim_id);
+ANALYZE _parser_review_invalidation;
+
 INSERT INTO threat_intel.claim_reviews (
   id, tenant_id, claim_id, action, previous_state, next_state,
   reviewer_id, reason, reviewed_at, record
@@ -453,7 +519,9 @@ WITH observations AS (
           THEN observations.value->'captureIds' ELSE '[]'::jsonb END
       ) AS capture_id(value)
       JOIN threat_intel.captures AS capture ON capture.id = capture_id.value
-      WHERE capture.id NOT IN (SELECT id FROM _parser_fallback_capture)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM _parser_fallback_capture AS invalid WHERE invalid.id = capture.id
+      )
     ), '[]'::jsonb) AS capture_ids,
     COALESCE((
       SELECT jsonb_agg(to_jsonb(entity_id.value) ORDER BY entity_id.value)
@@ -462,7 +530,9 @@ WITH observations AS (
           THEN observations.value->'entityIds' ELSE '[]'::jsonb END
       ) AS entity_id(value)
       JOIN threat_intel.entities AS entity ON entity.id = entity_id.value
-      WHERE entity.id NOT IN (SELECT id FROM _parser_fallback_entity)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM _parser_fallback_entity AS invalid WHERE invalid.id = entity.id
+      )
     ), '[]'::jsonb) AS entity_ids
   FROM observations
 ), retained AS (
@@ -495,6 +565,7 @@ FROM fields
 GROUP BY profile_id;
 
 CREATE UNIQUE INDEX ON _parser_profile_characterization (profile_id);
+ANALYZE _parser_profile_characterization;
 
 CREATE TEMP TABLE _parser_profile_rebuild ON COMMIT DROP AS
 SELECT
@@ -506,10 +577,13 @@ SELECT
 FROM _parser_profile_capture AS reference
 JOIN _parser_affected_profile AS affected ON affected.profile_id = reference.profile_id
 JOIN threat_intel.captures AS capture ON capture.id = reference.capture_id
-WHERE reference.capture_id NOT IN (SELECT id FROM _parser_fallback_capture)
+WHERE NOT EXISTS (
+  SELECT 1 FROM _parser_fallback_capture AS fallback WHERE fallback.id = reference.capture_id
+)
 GROUP BY reference.profile_id;
 
 CREATE UNIQUE INDEX ON _parser_profile_rebuild (profile_id);
+ANALYZE _parser_profile_rebuild;
 
 UPDATE threat_intel.actor_profiles AS profile
 SET
@@ -549,7 +623,8 @@ JOIN threat_intel.actor_profiles AS profile ON profile.id = rebuild.profile_id
 WHERE alias.actor_profile_id = rebuild.profile_id;
 
 DELETE FROM threat_intel.actor_aliases AS alias
-WHERE alias.actor_profile_id IN (SELECT profile_id FROM _parser_orphan_profile);
+USING _parser_orphan_profile AS orphan
+WHERE alias.actor_profile_id = orphan.profile_id;
 
 UPDATE threat_intel.actor_profiles AS profile
 SET
@@ -567,13 +642,17 @@ SET
       'identityResolutionReason', 'parser_diagnostic_only',
       'updatedAt', now()
     )
-WHERE profile.id IN (SELECT profile_id FROM _parser_orphan_profile);
+WHERE EXISTS (
+    SELECT 1 FROM _parser_orphan_profile AS orphan WHERE orphan.profile_id = profile.id
+  );
 
 DELETE FROM threat_intel.entities AS entity
-WHERE entity.id IN (SELECT id FROM _parser_fallback_entity);
+USING _parser_fallback_entity AS fallback
+WHERE entity.id = fallback.id;
 
 DELETE FROM threat_intel.indicators AS indicator
-WHERE indicator.id IN (SELECT id FROM _parser_fallback_indicator);
+USING _parser_fallback_indicator AS fallback
+WHERE indicator.id = fallback.id;
 
 CREATE TEMP TABLE _parser_task_rebuild ON COMMIT DROP AS
 SELECT
@@ -588,10 +667,15 @@ SELECT
       AND retained.tenant_id IS NOT DISTINCT FROM fallback.tenant_id
       AND NULLIF(retained.record->'metadata'->>'runId', '') IS NOT DISTINCT FROM fallback.run_id
       AND retained.task_id IS NOT DISTINCT FROM fallback.task_id
-      AND retained.id NOT IN (SELECT id FROM _parser_fallback_capture)
+      AND NOT EXISTS (
+        SELECT 1 FROM _parser_fallback_capture AS invalid WHERE invalid.id = retained.id
+      )
   ) AS retained_capture_count
 FROM _parser_fallback_capture AS fallback
 GROUP BY fallback.run_id, fallback.task_id, fallback.source_id, fallback.tenant_id;
+
+CREATE INDEX ON _parser_task_rebuild (run_id, task_id, source_id, tenant_id);
+ANALYZE _parser_task_rebuild;
 
 UPDATE threat_intel.source_health AS health
 SET
@@ -638,12 +722,16 @@ SET
     || CASE WHEN jsonb_typeof(run.record->'captureIds') = 'array' THEN jsonb_build_object('captureIds', COALESCE((
       SELECT jsonb_agg(to_jsonb(item.value) ORDER BY item.ordinality)
       FROM jsonb_array_elements_text(run.record->'captureIds') WITH ORDINALITY AS item(value, ordinality)
-      WHERE item.value NOT IN (SELECT id FROM _parser_fallback_capture)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM _parser_fallback_capture AS invalid WHERE invalid.id = item.value
+      )
     ), '[]'::jsonb)) ELSE '{}'::jsonb END
     || CASE WHEN jsonb_typeof(run.record->'latestCaptureIds') = 'array' THEN jsonb_build_object('latestCaptureIds', COALESCE((
       SELECT jsonb_agg(to_jsonb(item.value) ORDER BY item.ordinality)
       FROM jsonb_array_elements_text(run.record->'latestCaptureIds') WITH ORDINALITY AS item(value, ordinality)
-      WHERE item.value NOT IN (SELECT id FROM _parser_fallback_capture)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM _parser_fallback_capture AS invalid WHERE invalid.id = item.value
+      )
     ), '[]'::jsonb)) ELSE '{}'::jsonb END
 FROM (
   SELECT
@@ -652,7 +740,9 @@ FROM (
   FROM (SELECT DISTINCT run_id FROM _parser_fallback_capture WHERE run_id IS NOT NULL) AS fallback
   LEFT JOIN threat_intel.captures AS retained
     ON NULLIF(retained.record->'metadata'->>'runId', '') = fallback.run_id
-    AND retained.id NOT IN (SELECT id FROM _parser_fallback_capture)
+    AND NOT EXISTS (
+      SELECT 1 FROM _parser_fallback_capture AS invalid WHERE invalid.id = retained.id
+    )
   GROUP BY fallback.run_id
 ) AS counts
 WHERE run.id = counts.run_id;
@@ -662,7 +752,9 @@ SET
   evidence_capture_ids = COALESCE((
     SELECT jsonb_agg(to_jsonb(item.value) ORDER BY item.ordinality)
     FROM jsonb_array_elements_text(lineage.evidence_capture_ids) WITH ORDINALITY AS item(value, ordinality)
-    WHERE item.value NOT IN (SELECT id FROM _parser_fallback_capture)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM _parser_fallback_capture AS invalid WHERE invalid.id = item.value
+    )
   ), '[]'::jsonb),
   evidence_link_ids = COALESCE((
     SELECT jsonb_agg(to_jsonb(item.value) ORDER BY item.ordinality)
@@ -670,7 +762,7 @@ SET
     WHERE EXISTS (SELECT 1 FROM threat_intel.evidence_links AS link WHERE link.id = item.value)
   ), '[]'::jsonb),
   evidence_fingerprint = md5(
-    COALESCE((SELECT string_agg(item.value, E'\n' ORDER BY item.value) FROM jsonb_array_elements_text(lineage.evidence_capture_ids) AS item(value) WHERE item.value NOT IN (SELECT id FROM _parser_fallback_capture)), '')
+    COALESCE((SELECT string_agg(item.value, E'\n' ORDER BY item.value) FROM jsonb_array_elements_text(lineage.evidence_capture_ids) AS item(value) WHERE NOT EXISTS (SELECT 1 FROM _parser_fallback_capture AS invalid WHERE invalid.id = item.value)), '')
     || ':' || COALESCE((SELECT string_agg(item.value, E'\n' ORDER BY item.value) FROM jsonb_array_elements_text(lineage.evidence_link_ids) AS item(value) WHERE EXISTS (SELECT 1 FROM threat_intel.evidence_links AS link WHERE link.id = item.value)), '')
   ),
   record = lineage.record || jsonb_build_object('parserDiagnosticEvidenceRemovedAt', now())
@@ -680,7 +772,8 @@ WHERE EXISTS (
 );
 
 DELETE FROM threat_intel.captures AS capture
-WHERE capture.id IN (SELECT id FROM _parser_fallback_capture);
+USING _parser_fallback_capture AS fallback
+WHERE capture.id = fallback.id;
 
 DO $$
 BEGIN
