@@ -4,7 +4,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { isAllowedApiOrigin, verifiedClientIp } from '#utils/http/publicBoundary.ts'
 import { credentialPeriodLimits, resolveRateLimitActor } from '#plugins/rateLimit.ts'
 import { organizationPublicApiScopes } from '#utils/auth/apiKeys.ts'
-import postTiSearch, { normalizeBatchQueries } from '../src/handlers/ti/search.ts'
+import postTiSearch, { normalizeBatchQueries, sanitizeBrowserSearchResult } from '../src/handlers/ti/search.ts'
 import IndexHandler from '../src/handlers/index.ts'
 import { TRUSTED_API_PROXIES } from '../src/utils/http/publicBoundary.ts'
 import { existsSync } from 'node:fs'
@@ -119,11 +119,33 @@ describe('public TI API boundary', () => {
         expect(singleResult.statusCode).toBe(200)
         expect(singleResult.payload.query).toBe('APT29')
         expect(singleResult.headers['cache-control']).toBe('no-store, max-age=0')
+        for (const field of ['planner', 'graph', 'publicChannel', 'restrictedMetadata', 'darknetMetadata']) {
+            expect(singleResult.payload).not.toHaveProperty(field)
+        }
 
         const unexpected = reply()
         const unexpectedResult = await postTiSearch({ body: { query: 'APT29', tenantId: 'other' } } as any, unexpected as unknown as FastifyReply) as any
         expect(unexpectedResult.statusCode).toBe(400)
         expect(unexpectedResult.payload.error).toBe('invalid_request')
+    })
+
+    test('does not expose scraper planning or restricted-operation internals through the browser search', () => {
+        const result = sanitizeBrowserSearchResult({
+            query: 'APT29',
+            sources: [{ id: 'src-public' }],
+            analystLoop: { resultState: 'ready' },
+            planner: { blockedSourceCount: 83, recommendedSourceActivations: [{ sourceId: 'src-internal' }] },
+            graph: { endpoint: '/v1/intel/search.graph', reviewQueue: { total: 44 } },
+            publicChannel: { activationRecommendations: [{ sourceId: 'src-internal' }] },
+            restrictedMetadata: { results: [] },
+            darknetMetadata: { results: [] },
+        })
+
+        expect(result).toMatchObject({ query: 'APT29', sources: [{ id: 'src-public' }], analystLoop: { resultState: 'ready' } })
+        for (const field of ['planner', 'graph', 'publicChannel', 'restrictedMetadata', 'darknetMetadata']) {
+            expect(result).not.toHaveProperty(field)
+        }
+        expect(JSON.stringify(result)).not.toContain('src-internal')
     })
 
     test('ships batch search only through the canonical versioned API', async () => {

@@ -20,7 +20,15 @@ export default async function postTiSearch(req: FastifyRequest<{ Body: SearchBod
     }
 
     const result = await searchThreatIntel({ query })
-    return res.send(result)
+    return res.send(sanitizeBrowserSearchResult(result))
+}
+
+const internalSearchFields = ['planner', 'graph', 'publicChannel', 'restrictedMetadata', 'darknetMetadata'] as const
+
+export function sanitizeBrowserSearchResult<T extends Record<string, unknown>>(result: T): Omit<T, typeof internalSearchFields[number]> {
+    const publicResult = { ...result } as T & Partial<Record<typeof internalSearchFields[number], unknown>>
+    for (const field of internalSearchFields) delete publicResult[field]
+    return publicResult as Omit<T, typeof internalSearchFields[number]>
 }
 
 export function normalizeBatchQueries(input?: unknown) {
