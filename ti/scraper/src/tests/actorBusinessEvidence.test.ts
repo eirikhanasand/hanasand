@@ -134,8 +134,8 @@ describe("actor business-model reviewed evidence", () => {
   });
 
   test("extracts an exact dated single-actor public report and rejects undated or multi-actor reports", async () => {
-    const identities = [identity("Everest", []), identity("LockBit", [])];
-    const store = actorStore(["Everest", "LockBit"]);
+    const identities = [identity("Everest", []), identity("Helix", []), identity("LockBit", [])];
+    const store = actorStore(["Everest", "Helix", "LockBit"]);
     store.saveSource(publicReportSource);
     const text = "Stadler Rail says the Everest ransomware gang demanded about $12.3 million after breaching its supplier platform.";
     const report = publicReportResult(text, identities);
@@ -156,6 +156,26 @@ describe("actor business-model reviewed evidence", () => {
 
     expect(publicReportResult(text, identities, { publishedAt: undefined }).entities.some((entity: any) => entity.type === "pricing_claim")).toBe(false);
     expect(publicReportResult(`${text} LockBit was also discussed in the report.`, identities).entities.some((entity: any) => entity.type === "pricing_claim")).toBe(false);
+
+    const communication = publicReportResult("Helix has just published a new victim: Morguard. Morguard reached out, took extensions, then ignored the negotiation with no real offer. Contacting us and stalling is not a strategy. Deadlines stand. Silence after outreach gets a private board and a countdown then publication.", identities);
+    const { reportTimestamps: _legacyReportTimestamps, ...legacyMetadata } = communication.capture.metadata ?? {};
+    store.savePipelineResult({ capture: { ...communication.capture, metadata: legacyMetadata }, entities: communication.entities.filter((entity: any) => entity.extractionMethod === "deterministic_fallback"), indicators: [] });
+    const savedCommunication = store.savePipelineResult(communication);
+    expect(savedCommunication.capture.metadata?.reportTimestamps).toBeUndefined();
+    expect(communication.entities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "buyer_seller_communication", value: "Victim outreach followed by stalled negotiation without an offer", assertionKind: "third_party_report", extractionMethod: "source_specific" }),
+    ]));
+    expect((await searchResult(store, "Helix")).actorIntelligence.businessModel.pendingFindings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "buyer_seller_communication", value: "Victim outreach followed by stalled negotiation without an offer", sourceIds: [publicReportSource.id], captureIds: [communication.capture.id] }),
+    ]));
+    const communicationClaim = store.listIntelligenceClaims().find((claim: any) => claim.claimType === "buyer_seller_communication" && claim.captureIds.includes(communication.capture.id));
+    review(store, communicationClaim, "confirm");
+    expect((await searchResult(store, "Helix")).actorIntelligence.businessModel.buyerSellerCommunications[0]).toMatchObject({
+      value: "Victim outreach followed by stalled negotiation without an offer",
+      reviewState: "confirmed",
+      evidence: [expect.objectContaining({ captureId: communication.capture.id, sourceId: publicReportSource.id })],
+    });
+    expect(publicReportResult("Helix says: If you are listed by mistake, contact us.", identities).entities.some((entity: any) => entity.type === "buyer_seller_communication")).toBe(false);
   });
 
   test("treats equivalent ISO review timestamp forms identically", async () => {

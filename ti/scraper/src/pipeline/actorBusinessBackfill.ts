@@ -2,7 +2,7 @@ import type { CollectedItem, ExtractedEntity, RawCapture } from "../types.ts";
 import { extractActorBusinessEvidence } from "./actorBusinessEvidence.ts";
 import { extractEntities, type ExtractionContext } from "./extractors.ts";
 import type { ActorIdentityRecord } from "./mitreActorCatalog.ts";
-import { extractSourceSpecificEntities } from "./sourceSpecificExtraction.ts";
+import { extractSourceSpecificEntities, SOURCE_SPECIFIC_EXTRACTOR_VERSION } from "./sourceSpecificExtraction.ts";
 
 const BUSINESS_TYPES = new Set([
   "extortion_model", "advertised_product", "advertised_data", "pricing_claim", "payment_claim", "revenue_claim",
@@ -50,7 +50,7 @@ export function actorBusinessLineageCounts(
 ) {
   const entities = store.listExtractedEntities().filter((row: any) =>
     captureIds.has(row.captureId)
-    && row.extractorVersion === "ti-source-specific-extractor-v3"
+    && row.extractorVersion === SOURCE_SPECIFIC_EXTRACTOR_VERSION
     && BUSINESS_TYPES.has(row.type)
   );
   const entityIds = new Set(entities.map((row: any) => row.id));
