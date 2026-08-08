@@ -54,4 +54,16 @@ describe("compact public signal fusion", () => {
     expect(fusion.familyCoverage).toMatchObject({ familiesCovered: [], diversityScore: 0, evidenceBacked: true });
     expect(fusion.sourceCoverageGaps.every((row: any) => row.reason === "no retained evidence observed")).toBe(true);
   });
+
+  test("does not promote deltas whose source is not in the monitored registry", () => {
+    const fusion = buildPublicSignalFusionWorkbench({
+      query: "APT29",
+      sources,
+      advisorySignals: [{ ...advisory, sourceId: "unregistered_source" }],
+    });
+
+    expect(fusion.status).toBe("partial");
+    expect(fusion.publicSignalDeltas).toEqual([]);
+    expect(fusion.publicSignalValueImpact.sellableRows).toBe(0);
+  });
 });
