@@ -114,15 +114,15 @@ export async function proxyOrganizationWatchlistMutation(request: NextRequest, p
 
     const dwmAlertBridge = await mirrorOrganizationWatchlistToDwm(request, input.organizationId, organizationResult.payload)
     if (!dwmAlertBridge.ok) {
-        // The organization database is the source of truth. DWM is a downstream
-        // projection and can be reconciled by repeating the same watchlist save.
         return NextResponse.json({
             ...organizationResult.payload,
-            warning: true,
-            syncWarning: 'The watchlist term was saved, but DWM sync is pending. Save it again to retry reconciliation.',
+            error: {
+                code: 'dwm_watchlist_sync_failed',
+                message: 'The watchlist term was saved, but DWM sync failed. Sync the saved term again to reconcile it.',
+            },
             retryable: true,
             dwmAlertBridge,
-        }, { status: organizationResult.status, headers: { 'cache-control': 'no-store' } })
+        }, { status: 502, headers: { 'cache-control': 'no-store' } })
     }
     return NextResponse.json({ ...organizationResult.payload, dwmAlertBridge }, { status: organizationResult.status, headers: { 'cache-control': 'no-store' } })
 }

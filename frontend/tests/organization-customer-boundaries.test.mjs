@@ -100,9 +100,8 @@ test('organization watchlist save mirrors the same scope and failed sync is expl
 
     const failed = await POST(request(), context)
     const failedPayload = await failed.json()
-    assert.equal(failed.status, 201)
-    assert.equal(failedPayload.warning, true)
-    assert.match(failedPayload.syncWarning, /saved.*DWM sync is pending/i)
+    assert.equal(failed.status, 502)
+    assert.equal(failedPayload.error.code, 'dwm_watchlist_sync_failed')
     assert.equal(failedPayload.retryable, true)
     assert.equal(failedPayload.watchlistItem.id, 'term-1')
 
