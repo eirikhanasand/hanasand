@@ -130,9 +130,9 @@ describe("independent evaluation benchmark", () => {
     const comprehensiveResponse = await call("/v1/intel/evaluation/benchmarks", "reviewer_one", { tenantId: "tenant_benchmark", name: "Comprehensive test", sampleSize: 1, requiredReviewers: 2 });
     const comprehensive = await comprehensiveResponse.json() as any;
     expect(comprehensiveResponse.status).toBe(201);
-    expect(comprehensive.benchmark).toMatchObject({ taskCount: 2, labelTypes: ["actor", "ransomware", "victim", "incident", "cve", "malware", "ttp", "country", "sector", "indicator", "impact", "dataset", "business_mechanism"], protocol: { version: "ti.independent_extraction_benchmark.v4", datasetUsage: "locked_final_evaluation", reviewerIndependenceAttestationRequired: true }, progress: { diagnostics: { contextOnlyTaskCount: 11 } } });
+    expect(comprehensive.benchmark).toMatchObject({ taskCount: 2, labelTypes: ["actor", "ransomware", "victim", "incident", "cve", "malware", "ttp", "country", "sector", "indicator", "impact", "dataset", "business_mechanism"], protocol: { version: "ti.independent_extraction_benchmark.v4", datasetUsage: "locked_final_evaluation", reviewerIndependenceAttestationRequired: true }, progress: { diagnostics: { contextOnlyTaskCount: 0 } } });
     const manifest = store.getEvaluationBenchmark(comprehensive.benchmark.id)!.manifest!;
-    for (const labelType of comprehensive.benchmark.labelTypes) expect(manifest.find((task: any) => task.labelType === labelType)).toBeDefined();
+    expect(manifest.map((task: any) => task.labelType).sort()).toEqual(["actor", "victim"]);
     const comprehensiveTasks = await (await call(`/v1/intel/evaluation/benchmarks/${comprehensive.benchmark.id}/tasks`, "reviewer_one")).text();
     for (const forbidden of ["observedPredictions", "observedValues", "predictionConfidence", "comprehensive-parser"]) expect(comprehensiveTasks).not.toContain(forbidden);
 

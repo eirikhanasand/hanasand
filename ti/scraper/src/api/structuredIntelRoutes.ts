@@ -8,7 +8,7 @@ import type { ApiServerOptions } from "./serverTypes.ts";
 import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
 import { buildEvaluationMetrics } from "../pipeline/evaluationMetrics.ts";
 import { authenticateOperatorRequest, authenticateRequest, authorizeOperatorScope } from "./requestAuthentication.ts";
-import { handleEvaluationBenchmarkRequest } from "./evaluationBenchmarkRoutes.ts";
+import { createIndependentEvaluationReference, handleEvaluationBenchmarkRequest } from "./evaluationBenchmarkRoutes.ts";
 import { handleTimelinessRequest } from "./timelinessRoutes.ts";
 import { reconcileActorIdentityCoverage } from "../pipeline/mitreActorCatalog.ts";
 import { handleAutomaticReviewRequest } from "./automaticReviewRoutes.ts";
@@ -197,7 +197,21 @@ async function createValidationRecord(request: Request, options: ApiServerOption
   const scope = resolveTenantScope(request, new URL(request.url), body.tenantId);
   if (scope.error) return scope.error;
   if (body.validationType === "independent_evaluation_reference") {
-    return error("managed_evaluation_reference", "Independent evaluation references are created only by the governed evaluation corpus pipeline", 403);
+    try {
+      const result = createIndependentEvaluationReference(options.store, {
+        tenantId: scope.tenantId,
+        captureId: body.captureId,
+        referenceCaptureId: body.referenceCaptureId,
+        labelType: body.labelType,
+        expectedValues: body.expectedValues,
+        independenceAttested: body.independenceAttested,
+        reviewerId: authentication.identity!.id
+      });
+      return json({ validationRecord: result.record }, result.created ? 201 : 200);
+    } catch (caught) {
+      const failure = caught as { code?: string; message?: string };
+      return error(failure.code ?? "invalid_evaluation_reference", failure.message ?? "The independent evaluation reference is invalid", failure.code === "evaluation_reference_immutable" ? 409 : 400);
+    }
   }
   const capture = body.captureId ? (options.store as any).getCapture?.(body.captureId) : undefined;
   const incident = body.incidentId ? (options.store as any).getIncident?.(body.incidentId) : undefined;

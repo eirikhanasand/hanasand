@@ -138,6 +138,66 @@ type EvaluationLookup = {
   validations: Map<string, EvaluationValidationRecord | undefined>;
   annotations: Map<string, EvaluationAnnotationRecord | undefined>;
 };
+
+export function createIndependentEvaluationReference(store: CaptureMetadataStore, input: {
+  tenantId?: string;
+  captureId?: string;
+  referenceCaptureId?: string;
+  labelType?: string;
+  expectedValues?: unknown;
+  independenceAttested?: boolean;
+  reviewerId: string;
+  frozenAt?: string;
+}) {
+  if (input.independenceAttested !== true) throw evaluationFailure("reference_independence_required", "Confirm that the exhaustive reference set was curated independently from extractor development and predictions", false);
+  const labelType = cleanText(input.labelType, 80);
+  if (!labelType || !LABEL_TYPE_SET.has(labelType)) throw evaluationFailure("invalid_reference_label_type", `Use ${LABEL_TYPES.join(", ")} label types`, false);
+  const expectedValues = annotationValues(input.expectedValues);
+  if (!expectedValues) throw evaluationFailure("invalid_reference_values", "expectedValues must be a bounded exhaustive array of entity values", false);
+  const target = input.captureId ? store.getCapture(input.captureId) : undefined;
+  const reference = input.referenceCaptureId ? store.getCapture(input.referenceCaptureId) : undefined;
+  if (!target || !reference || !inTenantScope(target, input.tenantId) || !inTenantScope(reference, input.tenantId)) throw evaluationFailure("invalid_reference_capture", "Target and authoritative reference captures must exist in the same tenant scope", false);
+  if (target.id === reference.id) throw evaluationFailure("reference_not_independent", "Target and authoritative reference must be different retained captures", false);
+  const targetSource = store.getSource(target.sourceId), referenceSource = store.getSource(reference.sourceId);
+  if (!targetSource || !referenceSource || !inTenantScope(targetSource, input.tenantId) || !inTenantScope(referenceSource, input.tenantId)) throw evaluationFailure("invalid_reference_source", "Both retained captures must have source records in the same tenant scope", false);
+  if ([target, reference].some((capture) => capture.metadata?.fixture || capture.metadata?.synthetic || capture.metadata?.demo)) throw evaluationFailure("fixture_reference_forbidden", "Evaluation truth must use real retained captures", false);
+  const targetEvidence = exhaustiveEvidenceText(target), referenceEvidence = exhaustiveEvidenceText(reference);
+  if (!targetEvidence || !referenceEvidence) throw evaluationFailure("reference_evidence_incomplete", "Target and authoritative reference must retain complete safe evidence", false);
+  if (evidenceIndependence(store, [target.id, reference.id]).groupCount < 2) throw evaluationFailure("reference_not_independent", "Authoritative truth must come from an independent publisher and content lineage", false);
+  if (expectedValues.some((value) => !valueAppearsInEvidence(labelType, value, referenceEvidence))) throw evaluationFailure("reference_value_not_grounded", "Every positive expected value must appear in the authoritative reference capture", false);
+  const referenceUrl = publicReferenceUrl(reference.url);
+  if (!referenceUrl) throw evaluationFailure("invalid_reference_url", "The authoritative reference capture must retain a public HTTP(S) URL", false);
+  const frozenAt = input.frozenAt ?? nowIso();
+  const expectedValuesHash = evaluationHash(JSON.stringify([labelType, canonicalValues(expectedValues)]));
+  const id = stableId("evaluation-reference", `${input.tenantId ?? "global"}:${target.id}:${labelType}:${reference.id}`);
+  const existing = store.getValidationRecord(id);
+  if (existing) {
+    if (existing.referenceContentHash === reference.contentHash && existing.expectedValuesHash === expectedValuesHash) return { record: existing, created: false };
+    throw evaluationFailure("evaluation_reference_immutable", "A frozen reference set already exists for this target, label, and reference capture", false);
+  }
+  const record: EvaluationValidationRecord = {
+    id,
+    tenantId: input.tenantId,
+    captureId: target.id,
+    validationType: REFERENCE_VALIDATION_TYPE,
+    status: "supported",
+    referenceUrl,
+    referenceCaptureId: reference.id,
+    referenceSourceId: reference.sourceId,
+    referenceContentHash: reference.contentHash,
+    labelType: labelType as EvaluationLabelType,
+    expectedValues,
+    expectedValuesHash,
+    exhaustiveExpectedValues: true,
+    truthSchemaVersion: REFERENCE_TRUTH_SCHEMA_VERSION,
+    truthFrozenAt: frozenAt,
+    matchedAt: frozenAt,
+    reviewerId: input.reviewerId,
+    createdAt: frozenAt,
+    updatedAt: frozenAt
+  };
+  return { record: store.saveValidationRecord(record), created: true };
+}
 export function createEvaluationLookup(): EvaluationLookup {
   return { captures: new Map(), sources: new Map(), validations: new Map(), annotations: new Map() };
 }
@@ -253,7 +313,8 @@ async function createBenchmark(request: Request, options: ApiServerOptions, acto
     requiredReviewers,
     datasetSplit,
     reviewMode: body.automatic === true || body.reviewMode === "automatic_model" ? "automatic_model" : "human",
-    createdBy: actor.id
+    createdBy: actor.id,
+    independentOnly: true
   });
   if (!benchmark) return error("benchmark_corpus_empty", "No safe stored captures are available in this scope", 409);
   return json({ benchmark: benchmarkSummary(options.store, benchmark) }, 201);
@@ -442,7 +503,7 @@ export function createEvaluationBenchmark(store: CaptureMetadataStore, input: {
     createdAt,
     updatedAt: createdAt
   };
-  if (input.independentOnly && datasetSplit === "test" && !automaticHeldOutSelectionReady(benchmark)) return undefined;
+  if (input.independentOnly && datasetSplit === "test" && reviewMode === "automatic_model" && !automaticHeldOutSelectionReady(benchmark)) return undefined;
   store.saveEvaluationBenchmark(benchmark);
   return benchmark;
 }
@@ -2147,6 +2208,11 @@ function validationRelevantToLabel(validationType: unknown, labelType?: string) 
 
 function safeReferenceHost(value: unknown) {
   try { const url = new URL(String(value)); return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? url.hostname.toLowerCase() : undefined; }
+  catch { return undefined; }
+}
+
+function publicReferenceUrl(value: unknown) {
+  try { const url = new URL(String(value)); return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? url.toString() : undefined; }
   catch { return undefined; }
 }
 

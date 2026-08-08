@@ -129,8 +129,8 @@ describe("structured intelligence API boundary", () => {
         truthSchemaVersion: "ti.independent_evaluation_reference.v1"
       })
     }), options);
-    expect(forgedReference.status).toBe(403);
-    expect(await forgedReference.json()).toMatchObject({ error: { code: "managed_evaluation_reference" } });
+    expect(forgedReference.status).toBe(400);
+    expect(await forgedReference.json()).toMatchObject({ error: { code: "reference_independence_required" } });
 
     const review = await handleApiRequest(api("/v1/intel/claims/claim_tenant_b/reviews", {
       method: "POST",
@@ -140,6 +140,51 @@ describe("structured intelligence API boundary", () => {
     expect(review.status).toBe(404);
     expect(store.listValidationRecords()).toHaveLength(0);
     expect(store.listClaimReviews()).toHaveLength(0);
+  });
+
+  test("creates immutable independent truth only from retained source-separated captures", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource({ ...source({ id: "src_eval_target", url: "https://reports.example.test/feed" }), tenantId: "tenant_eval" });
+    store.saveSource({ ...source({ id: "src_eval_authority", url: "https://authority.example.test/advisories" }), tenantId: "tenant_eval" });
+    store.saveSource({ ...source({ id: "src_eval_same_publisher", url: "https://reports.example.test/independent" }), tenantId: "tenant_eval" });
+    store.saveSource({ ...source({ id: "src_eval_foreign", url: "https://foreign.example.test/advisories" }), tenantId: "tenant_foreign" });
+    const target = store.saveCapture(fixtureCapture({ id: "cap_eval_target", tenantId: "tenant_eval", sourceId: "src_eval_target", url: "https://reports.example.test/apt29", body: "APT29 targeted Northwind Health.", metadata: {} }));
+    const authority = store.saveCapture(fixtureCapture({ id: "cap_eval_authority", tenantId: "tenant_eval", sourceId: "src_eval_authority", url: "https://authority.example.test/apt29", body: "Independent attribution identifies APT29.", metadata: {} }));
+    const samePublisher = store.saveCapture(fixtureCapture({ id: "cap_eval_same_publisher", tenantId: "tenant_eval", sourceId: "src_eval_same_publisher", url: "https://reports.example.test/reference", body: "Independent attribution identifies APT29.", metadata: {} }));
+    const foreign = store.saveCapture(fixtureCapture({ id: "cap_eval_foreign", tenantId: "tenant_foreign", sourceId: "src_eval_foreign", url: "https://foreign.example.test/apt29", body: "Independent attribution identifies APT29.", metadata: {} }));
+    store.saveExtractedEntity({ id: "entity_eval_actor", tenantId: "tenant_eval", sourceId: target.sourceId, captureId: target.id, type: "actor", value: "APT29", normalizedValue: "apt29", confidence: 0.9, extractorVersion: "parser-v1" });
+    const options = {
+      store,
+      frontier: new FocusedFrontier(),
+      authApiBase: "http://auth.test/api",
+      authFetch: async () => Response.json({ id: "reference_curator", roles: [{ id: "analyst" }] })
+    } as any;
+    const headers = { "content-type": "application/json", authorization: "Bearer test", id: "reference_curator", "x-tenant-id": "tenant_eval" };
+    const submit = (body: Record<string, unknown>) => handleApiRequest(api("/v1/intel/validation-records", { method: "POST", headers, body: JSON.stringify({ validationType: "independent_evaluation_reference", captureId: target.id, labelType: "actor", expectedValues: ["APT29"], independenceAttested: true, ...body }) }), options);
+
+    const crossTenant = await submit({ referenceCaptureId: foreign.id });
+    expect(crossTenant.status).toBe(400);
+    expect(await crossTenant.json()).toMatchObject({ error: { code: "invalid_reference_capture" } });
+    const samePublisherResponse = await submit({ referenceCaptureId: samePublisher.id });
+    expect(samePublisherResponse.status).toBe(400);
+    expect(await samePublisherResponse.json()).toMatchObject({ error: { code: "reference_not_independent" } });
+    const ungrounded = await submit({ referenceCaptureId: authority.id, expectedValues: ["APT41"] });
+    expect(ungrounded.status).toBe(400);
+    expect(await ungrounded.json()).toMatchObject({ error: { code: "reference_value_not_grounded" } });
+
+    const created = await submit({ referenceCaptureId: authority.id });
+    expect(created.status).toBe(201);
+    expect(await created.json()).toMatchObject({ validationRecord: { captureId: target.id, referenceCaptureId: authority.id, referenceSourceId: authority.sourceId, labelType: "actor", expectedValues: ["APT29"], exhaustiveExpectedValues: true, reviewerId: "reference_curator" } });
+    expect(store.listValidationRecords()).toHaveLength(1);
+    expect((await submit({ referenceCaptureId: authority.id })).status).toBe(200);
+    const conflicting = await submit({ referenceCaptureId: authority.id, expectedValues: [] });
+    expect(conflicting.status).toBe(409);
+    expect(await conflicting.json()).toMatchObject({ error: { code: "evaluation_reference_immutable" } });
+    expect(store.listValidationRecords()).toHaveLength(1);
+
+    const benchmark = await handleApiRequest(api("/v1/intel/evaluation/benchmarks", { method: "POST", headers, body: JSON.stringify({ tenantId: "tenant_eval", sampleSize: 1, labelTypes: ["actor"], requiredReviewers: 2 }) }), options);
+    expect(benchmark.status).toBe(201);
+    expect(await benchmark.json()).toMatchObject({ benchmark: { taskCount: 1, captureIds: [target.id], progress: { pendingTaskCount: 1, diagnostics: { contextOnlyTaskCount: 0 } } } });
   });
 
   test("scopes search, evidence reports, and run results to the requested tenant", async () => {
