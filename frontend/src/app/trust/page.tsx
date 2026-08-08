@@ -14,9 +14,9 @@ export const metadata: Metadata = buildRouteMetadata({
 
 const assuranceCards = [
     {
-        title: 'Data coverage',
+        title: 'Intelligence feed coverage',
         status: 'Measured endpoint',
-        detail: 'Current source counts, configured freshness and cadence, regional metadata, and observed alert latency with clear measurement boundaries.',
+        detail: 'Qualifying feed counts require repeated useful retained evidence; registry inventory and observed alert latency remain separate.',
         icon: Database,
         href: '/coverage',
     },

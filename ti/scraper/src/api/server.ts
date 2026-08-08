@@ -82,7 +82,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       const runtime = runtimeResourceSnapshot(options);
       return json({ ok: storage.ok !== false, service: "ti-scraper", version: "v1", storage, collection: { public: (options.canaryLoop as any)?.getState?.(), publicDefault: (options.defaultCanaryLoop as any)?.getState?.(), restrictedMetadata: (options.restrictedMetadataLoop as any)?.getState?.() }, ...runtime, generatedAt: nowIso() }, storage.ok === false ? 503 : 200);
     }
-    if (url.pathname === "/v1/public/coverage" && request.method === "GET") return json(publicCoverage(options));
+    if (url.pathname === "/v1/public/coverage" && request.method === "GET") return json(await publicCoverage(options));
     if (url.pathname === "/v1/auth/integration-notes" && request.method === "GET") {
       return json({
         version: "v1",
