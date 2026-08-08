@@ -326,6 +326,7 @@ export interface CaptureMetadataStore {
   saveCapture(capture: RawCapture): RawCapture;
   getCapture(id: string): RawCapture | undefined;
   listCaptures(): RawCapture[];
+  listExposureQueueCaptures(): RawCapture[];
   saveSource(source: SourceRecord): SourceRecord;
   getSource(id: string): SourceRecord | undefined;
   listSources(): SourceRecord[];

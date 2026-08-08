@@ -18,13 +18,14 @@ import { nowIso, stableId } from "../utils.ts";
 import { canonicalActorIdentity, normalizeActorLabel, resolveMitreActorIdentity, type ActorIdentityRecord, type MitreActorCatalogSnapshot } from "../pipeline/mitreActorCatalog.ts";
 import type { RansomwareOperationCatalogSnapshot } from "../pipeline/ransomwareOperationCatalog.ts";
 import { publicReferenceUrl } from "../pipeline/timelinessGroundTruth.ts";
+import { mayContainExposureQueueClaim } from "../product/exposureQueueCandidate.ts";
 export interface RawEvidenceStore extends CaptureMetadataStore {} export interface ScraperStore extends CaptureMetadataStore {}
 export type ActorIdentityCatalogSnapshot = MitreActorCatalogSnapshot | RansomwareOperationCatalogSnapshot;
 export type ActorIdentityCatalogProvenance = { sourceId: string; captureId: string; importedAt?: string };
 const mapValues = <T>(map: Map<string, T>) => [...map.values()];
 const put = <T extends { id: string }>(map: Map<string, T>, item: T) => (map.set(item.id, item), item);
 export class InMemoryScraperStore implements ScraperStore {
-  private captures = new Map<string, RawCapture>(); private dedupe = new Map<string, string>(); private incidents = new Map<string, IncidentCandidate>(); private sources = new Map<string, SourceRecord>(); private plans = new Map<string, any>(); private runs = new Map<string, any>();
+  private captures = new Map<string, RawCapture>(); private exposureQueueCaptureIds = new Set<string>(); private dedupe = new Map<string, string>(); private incidents = new Map<string, IncidentCandidate>(); private sources = new Map<string, SourceRecord>(); private plans = new Map<string, any>(); private runs = new Map<string, any>();
   private extractedEntities = new Map<string, any>(); private indicators = new Map<string, any>(); private actorProfiles = new Map<string, any>(); private actorAliases = new Map<string, any>(); private actorIdentityCatalogs = new Map<string, any>(); private actorIdentities = new Map<string, any>(); private evidenceLinks = new Map<string, any>(); private validationRecords = new Map<string, EvaluationValidationRecord>(); private evaluationLabels = new Map<string, EvaluationLabelRecord>();
   private sourceHealthObservations = new Map<string, any>(); private timelinessRecords = new Map<string, any>();
   private evaluationBenchmarks = new Map<string, EvaluationBenchmarkRecord>(); private evaluationBenchmarkTaskIndexes = new Map<string, Map<string, number>>(); private evaluationAnnotations = new Map<string, EvaluationAnnotationRecord>(); private evaluationAdjudications = new Map<string, EvaluationAdjudicationRecord>();
@@ -57,10 +58,10 @@ export class InMemoryScraperStore implements ScraperStore {
     if (duplicate) return { capture: duplicate, status: "duplicate", duplicateOf: duplicate.id, dedupeKey: captureDedupeKey(prepared) };
     return { capture: this.insertCapture(prepared, true), status: "inserted", dedupeKey: captureDedupeKey(prepared) };
   }
-  private insertCapture(capture: RawCapture, delta: boolean) { this.captures.set(capture.id, capture); for (const key of dedupeIndexKeys(capture)) this.dedupe.set(key, capture.id); if (delta) (this as any).recordCaptureDelta("added", capture); return capture; }
+  private insertCapture(capture: RawCapture, delta: boolean) { this.captures.set(capture.id, capture); this.indexExposureQueueCapture(capture); for (const key of dedupeIndexKeys(capture)) this.dedupe.set(key, capture.id); if (delta) (this as any).recordCaptureDelta("added", capture); return capture; }
   getCapture(id: string) { return this.captures.get(id); }
-  updateCaptureMetadata(id: string, update: (metadata: any) => any) { const previous = this.mustCapture(id); this.assertOrganizationWritable(previous); const next = { ...previous, metadata: update(previous.metadata ?? {}) }; this.captures.set(id, next); this.invalidateSourceReviewForCapture(previous, next); return next; }
-  replaceCaptureForRetention(capture: RawCapture) { const previous = this.mustCapture(capture.id); if (previous.contentHash !== capture.contentHash || previous.sourceId !== capture.sourceId || previous.tenantId !== capture.tenantId) throw new Error(`Retention cannot change capture identity: ${capture.id}`); this.captures.set(capture.id, capture); this.invalidateSourceReviewForCapture(previous, capture); return capture; }
+  updateCaptureMetadata(id: string, update: (metadata: any) => any) { const previous = this.mustCapture(id); this.assertOrganizationWritable(previous); const next = { ...previous, metadata: update(previous.metadata ?? {}) }; this.captures.set(id, next); this.indexExposureQueueCapture(next); this.invalidateSourceReviewForCapture(previous, next); return next; }
+  replaceCaptureForRetention(capture: RawCapture) { const previous = this.mustCapture(capture.id); if (previous.contentHash !== capture.contentHash || previous.sourceId !== capture.sourceId || previous.tenantId !== capture.tenantId) throw new Error(`Retention cannot change capture identity: ${capture.id}`); this.captures.set(capture.id, capture); this.indexExposureQueueCapture(capture); this.invalidateSourceReviewForCapture(previous, capture); return capture; }
   private invalidateSourceReviewForCapture(previous: RawCapture, capture: RawCapture) {
     if (JSON.stringify(sourceReviewProjectionInput(previous)) === JSON.stringify(sourceReviewProjectionInput(capture))) return;
     const source = this.sources.get(previous.sourceId);
@@ -81,6 +82,11 @@ export class InMemoryScraperStore implements ScraperStore {
   }
   findDuplicateCapture(capture: RawCapture) { const prepared = prepareCapture(capture); for (const key of dedupeIndexKeys(prepared)) { const id = this.dedupe.get(key); if (id) return this.captures.get(id); } }
   listCaptures() { return mapValues(this.captures); }
+  listExposureQueueCaptures() { return [...this.exposureQueueCaptureIds].flatMap((id) => this.captures.get(id) ?? []); }
+  private indexExposureQueueCapture(capture: RawCapture) {
+    if (mayContainExposureQueueClaim(capture, this.sources.get(capture.sourceId))) this.exposureQueueCaptureIds.add(capture.id);
+    else this.exposureQueueCaptureIds.delete(capture.id);
+  }
   savePipelineResult(result: PipelineResult): PipelineResult {
     const firstVisibleAt = result.capture.firstVisibleAt ?? nowIso();
     const capture = this.saveCaptureWithDedupe({ ...result.capture, processedAt: result.capture.processedAt ?? firstVisibleAt, firstVisibleAt }).capture;
@@ -343,7 +349,15 @@ export class InMemoryScraperStore implements ScraperStore {
   saveTimelinessRecord(record: any) { assertTimelinessOrder(record); return this.putScoped(this.timelinessRecords, record); }
   hydrateTimelinessSnapshot(record: any) { return put(this.timelinessRecords, record); }
   getTimelinessRecord(id: string) { return this.timelinessRecords.get(id); } listTimelinessRecords() { return mapValues(this.timelinessRecords); }
-  saveSource(source: SourceRecord) { return this.putScoped(this.sources, source); } getSource(id: string) { return this.sources.get(id); } listSources() { return mapValues(this.sources); }
+  saveSource(source: SourceRecord) {
+    const previous = this.sources.get(source.id);
+    const stored = this.putScoped(this.sources, source);
+    if (!previous || sourceExposureIdentity(previous) !== sourceExposureIdentity(stored)) {
+      for (const capture of this.captures.values()) if (capture.sourceId === stored.id) this.indexExposureQueueCapture(capture);
+    }
+    return stored;
+  }
+  getSource(id: string) { return this.sources.get(id); } listSources() { return mapValues(this.sources); }
   savePlan(plan: any) { return this.putScoped(this.plans, plan); } getPlan(id: string) { return this.plans.get(id); } listPlans() { return mapValues(this.plans); }
   saveRun(run: any) { return this.putScoped(this.runs, run); } getRun(id: string) { return this.runs.get(id); } findRunByIdempotencyKey(tenantId: string | undefined, key: string) { return mapValues(this.runs).find((run) => run.tenantId === tenantId && run.idempotencyKey === key); } listRuns() { return mapValues(this.runs); }
   saveAnalystMetadataReviewTask(task: any) { if (task.unsafeMaterialAccessed !== false) throw new Error(`Analyst metadata review task must not record unsafe material access: ${task.id}`); return this.putScoped(this.analystMetadataReviewTasks, task); } getAnalystMetadataReviewTask(id: string) { return this.analystMetadataReviewTasks.get(id); } listAnalystMetadataReviewTasks() { return mapValues(this.analystMetadataReviewTasks); }
@@ -407,6 +421,10 @@ export class InMemoryScraperStore implements ScraperStore {
     const target = records[recordType];
     if (!target?.has(record.id)) return undefined;
     target.set(record.id, record);
+    if (recordType === "capture") this.indexExposureQueueCapture(record);
+    if (recordType === "source") {
+      for (const capture of this.captures.values()) if (capture.sourceId === record.id) this.indexExposureQueueCapture(capture);
+    }
     return record;
   }
   deleteWorkflowForRetention(recordType: string, id: string, audit?: { organizationId: string; runId: string; item: any }) {
@@ -507,6 +525,7 @@ installMemoryStoreReplayMethods(InMemoryScraperStore); installMemoryStoreDiscove
 export { canonicalizeUrl, captureDedupeKey, InMemoryObjectEvidenceStore };
 
 function normalized(record: any): string { return String(record.normalizedValue ?? record.value ?? "").trim().toLowerCase(); }
+function sourceExposureIdentity(source: SourceRecord) { return `${source.name ?? ""}\u001f${source.metadata?.sourceFamily ?? ""}`; }
 function activeActorProfile(profile: any): boolean { return Boolean(profile && profile.identityResolutionState !== "archived"); }
 type ActorProfileResolution = { profileId: string; tenantId?: string; canonicalName: string; normalizedName: string; aliases: string[]; actorIdentityIds: string[] };
 function actorProfileResolution(store: any, capture: any, entity: any): ActorProfileResolution | undefined {

@@ -654,6 +654,53 @@ describe("DWM exposure queue pipeline", () => {
     expect(body.freshness.collectionCheckAgeMinutes).toBeLessThan(1);
   });
 
+  test("serves stale retained claims from the exposure index without scanning every capture", async () => {
+    const store = new InMemoryScraperStore();
+    const oldAt = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+    await saveExposureClaimFromCollectedItem(store, {
+      sourceId: "src_indexed_exposure",
+      source: { name: "Indexed exposure source", url: "https://example.test/feed" },
+      title: "Akira has just published a new victim: Indexed Company",
+      rawText: "Akira victim: Indexed Company. 10 GB claimed from a public actor page.",
+      url: "https://example.test/indexed-company",
+      collectedAt: oldAt,
+      publishedAt: oldAt,
+      metadata: { adapter: "rss", sourceFamily: "public_actor_claims" }
+    } as any);
+    store.saveSource(source({ id: "src_unrelated", name: "Unrelated source" }));
+    store.saveCapture(fixtureCapture({ id: "cap_unrelated", sourceId: "src_unrelated", title: "Routine advisory" }));
+
+    expect(store.listCaptures()).toHaveLength(2);
+    expect(store.listExposureQueueCaptures().map((capture) => capture.id)).toEqual([expect.stringMatching(/^cap_/)]);
+    (store as any).listCaptures = () => { throw new Error("full capture scan"); };
+
+    const response = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=10"), { store, frontier: new FocusedFrontier(), port: 0 } as any);
+    const body = await response.json() as any;
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ status: "stale", counts: { visible: 1, total: 1 }, page: { total: 1 }, items: [{ company: "Indexed Company" }] });
+  });
+
+  test("keeps the exposure index aligned with metadata, retention, and source changes", () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_reindexed", name: "Generic source" }));
+    const capture = store.saveCapture(fixtureCapture({
+      id: "cap_reindexed",
+      sourceId: "src_reindexed",
+      title: "Akira has just published a new victim: Reindexed Company",
+      metadata: {}
+    }));
+    expect(store.listExposureQueueCaptures()).toEqual([]);
+
+    const enriched = store.updateCaptureMetadata(capture.id, (metadata) => ({ ...metadata, leakSite: { actorName: "Akira", victimName: "Reindexed Company" } }));
+    expect(store.listExposureQueueCaptures().map((item) => item.id)).toEqual([capture.id]);
+
+    store.replaceRecordForRetention("capture", { ...enriched, metadata: {} });
+    expect(store.listExposureQueueCaptures()).toEqual([]);
+
+    store.saveSource({ ...store.getSource("src_reindexed")!, name: "Ransomware.live Victim Feed" });
+    expect(store.listExposureQueueCaptures().map((item) => item.id)).toEqual([capture.id]);
+  });
+
   test("does not promote generic advisory or ATT&CK text as victim claims", async () => {
     const store = new InMemoryScraperStore();
     await saveExposureClaimFromCollectedItem(store, {

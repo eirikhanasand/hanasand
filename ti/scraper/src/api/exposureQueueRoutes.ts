@@ -12,6 +12,7 @@ import { StaticWebAdapter, canonicalizeUrl } from "../adapters/staticWeb.ts";
 import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
 import { publicSourceReferenceUrl, sourceFieldReportTimestamp, zonedSourceTimestamp } from "../pipeline/sourceFieldReportTimestamp.ts";
+import { mayContainExposureQueueClaim } from "../product/exposureQueueCandidate.ts";
 
 const PUBLIC_ADVISORY_MAX_BYTES = 2_000_000;
 
@@ -385,11 +386,12 @@ export function exposureClaimsFromStore(store: any, filters: string | ExposureQu
   const offset = Math.max(0, Math.floor(Number(options.offset ?? 0)));
   const items: any[] = [];
 
-  for (const capture of store.listCaptures?.() ?? []) {
+  const captures = store.listExposureQueueCaptures?.() ?? store.listCaptures?.() ?? [];
+  for (const capture of captures) {
     if (Object.hasOwn(options, "tenantId") && normalizedTenantId(capture.tenantId) !== normalizedTenantId(options.tenantId)) continue;
     const source = store.getSource?.(capture.sourceId);
     if (source?.tenantId && normalizedTenantId(source.tenantId) !== normalizedTenantId(capture.tenantId)) continue;
-    if (!(capture?.metadata?.exposureClaim || capture?.metadata?.leakSite || isTrustedVictimFeedCapture(capture, source))) continue;
+    if (!mayContainExposureQueueClaim(capture, source)) continue;
     if (!shouldShowExposureQueueCapture(capture, source)) continue;
     const item = exposureClaimFromCapture(capture, source);
     const time = epoch(item.claimTime ?? item.collectedAt);
