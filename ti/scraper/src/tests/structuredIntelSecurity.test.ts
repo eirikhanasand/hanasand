@@ -114,6 +114,24 @@ describe("structured intelligence API boundary", () => {
     }), options);
     expect(validation.status).toBe(400);
 
+    store.saveSource({ ...source({ id: "src_tenant_a" }), tenantId: "tenant_a" });
+    const ownCapture = store.saveCapture(fixtureCapture({ id: "cap_tenant_a", tenantId: "tenant_a", sourceId: "src_tenant_a" }));
+    const forgedReference = await handleApiRequest(api("/v1/intel/validation-records", {
+      method: "POST",
+      headers: analystHeaders,
+      body: JSON.stringify({
+        captureId: ownCapture.id,
+        validationType: "independent_evaluation_reference",
+        status: "supported",
+        referenceUrl: "https://example.test/reference",
+        expectedValues: [],
+        exhaustiveExpectedValues: true,
+        truthSchemaVersion: "ti.independent_evaluation_reference.v1"
+      })
+    }), options);
+    expect(forgedReference.status).toBe(403);
+    expect(await forgedReference.json()).toMatchObject({ error: { code: "managed_evaluation_reference" } });
+
     const review = await handleApiRequest(api("/v1/intel/claims/claim_tenant_b/reviews", {
       method: "POST",
       headers: analystHeaders,

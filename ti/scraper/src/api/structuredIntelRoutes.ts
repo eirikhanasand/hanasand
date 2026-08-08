@@ -196,6 +196,9 @@ async function createValidationRecord(request: Request, options: ApiServerOption
   const body = await readJson<any>(request);
   const scope = resolveTenantScope(request, new URL(request.url), body.tenantId);
   if (scope.error) return scope.error;
+  if (body.validationType === "independent_evaluation_reference") {
+    return error("managed_evaluation_reference", "Independent evaluation references are created only by the governed evaluation corpus pipeline", 403);
+  }
   const capture = body.captureId ? (options.store as any).getCapture?.(body.captureId) : undefined;
   const incident = body.incidentId ? (options.store as any).getIncident?.(body.incidentId) : undefined;
   const claim = body.claimId ? (options.store as any).getIntelligenceClaim?.(body.claimId) : undefined;

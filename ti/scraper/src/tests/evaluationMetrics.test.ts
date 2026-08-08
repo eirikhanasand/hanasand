@@ -127,6 +127,29 @@ describe("durable evaluation metrics", () => {
     });
   });
 
+  test("keeps historical scheduler source comparisons out of independent accuracy", () => {
+    const store = new InMemoryScraperStore();
+    const task = independentTask(store, "task_scheduler_reference", "capture_scheduler_reference", "cve", ["CVE-2026-4101"], "source-scheduler:cisa-kev:nvd-cve:v1");
+    const benchmark: EvaluationBenchmarkRecord = {
+      id: "benchmark_scheduler_reference",
+      status: "complete",
+      datasetSplit: "test",
+      taskCount: 1,
+      captureIds: [task.captureId!],
+      manifest: [task],
+      protocol: { version: "ti.independent_extraction_benchmark.v4", testSplitLocked: true, datasetUsage: "locked_final_evaluation" }
+    };
+    store.saveEvaluationBenchmark(benchmark);
+    saveMetricAdjudication(store, benchmark, task, ["CVE-2026-4101"], "2026-07-20T00:00:00.000Z");
+
+    expect(buildEvaluationMetrics(store, { datasetSplit: "test" }).quality).toMatchObject({
+      status: "diagnostic_only",
+      evaluatedUnitCount: 0,
+      diagnosticUnitCount: 1,
+      benchmarkEvidence: { completedBenchmarkCount: 0, completedTaskCount: 0, adjudicationCount: 0 }
+    });
+  });
+
   test("rejects tampered, extra, missing, cross-split, and multiply adjudicated independently flagged labels", async () => {
     for (const variant of ["tampered", "extra", "missing", "cross_split", "multiple"] as const) {
       const store = new InMemoryScraperStore();
@@ -281,7 +304,7 @@ describe("durable evaluation metrics", () => {
   });
 });
 
-function independentTask(store: InMemoryScraperStore, id: string, captureId: string, labelType: EvaluationLabelType, authoritativeExpectedValues: string[]): EvaluationTaskRecord {
+function independentTask(store: InMemoryScraperStore, id: string, captureId: string, labelType: EvaluationLabelType, authoritativeExpectedValues: string[], reviewerId = "independent-reference-curator"): EvaluationTaskRecord {
   const target = store.getCapture(captureId) ?? saveMetricTarget(store, captureId, authoritativeExpectedValues.join(". ") || `No supported ${labelType} value.`);
   const canonical = authoritativeExpectedValues.map((value) => value.trim().toLowerCase().replace(/\s+/g, " ")).sort().join("\n");
   const valueSetHash = createHash("sha256").update(JSON.stringify([labelType, canonical])).digest("hex");
@@ -294,7 +317,7 @@ function independentTask(store: InMemoryScraperStore, id: string, captureId: str
   const frozenAt = "2026-07-20T00:00:00.000Z";
   store.saveSource({ id: referenceSourceId, tenantId: target.tenantId, name: `Independent ${labelType} authority`, type: "json_api", url: referenceUrl, accessMethod: "public_http", status: "active", risk: "low", trustScore: 1, crawlFrequencySeconds: 3600, legalNotes: "Separately retained authoritative reference.", metadata: { sourceFamily: "authoritative_reference" }, createdAt: frozenAt, updatedAt: frozenAt });
   store.saveCapture({ id: referenceCaptureId, tenantId: target.tenantId, sourceId: referenceSourceId, url: referenceUrl, collectedAt: frozenAt, publishedAt: frozenAt, contentHash: referenceContentHash, mediaType: "text/plain", storageKind: "inline_text", body: referenceBody, metadata: { parserVersion: "authoritative-reference:v1" }, sensitive: false });
-  store.saveValidationRecord({ id: validationId, tenantId: target.tenantId, captureId, validationType: "independent_evaluation_reference", status: "supported", referenceUrl, referenceCaptureId, referenceSourceId, referenceContentHash, labelType, expectedValues: authoritativeExpectedValues, expectedValuesHash: valueSetHash, exhaustiveExpectedValues: true, truthSchemaVersion: "ti.independent_evaluation_reference.v1", truthFrozenAt: frozenAt, matchedAt: frozenAt, reviewerId: "independent-reference-curator" });
+  store.saveValidationRecord({ id: validationId, tenantId: target.tenantId, captureId, validationType: "independent_evaluation_reference", status: "supported", referenceUrl, referenceCaptureId, referenceSourceId, referenceContentHash, labelType, expectedValues: authoritativeExpectedValues, expectedValuesHash: valueSetHash, exhaustiveExpectedValues: true, truthSchemaVersion: "ti.independent_evaluation_reference.v1", truthFrozenAt: frozenAt, matchedAt: frozenAt, reviewerId });
   const targetBody = String(target.body);
   const targetExcerptHash = createHash("sha256").update(targetBody).digest("hex");
   const referenceExcerptHash = createHash("sha256").update(referenceBody).digest("hex");

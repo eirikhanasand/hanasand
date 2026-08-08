@@ -687,7 +687,7 @@ describe("automatic independent evaluation", () => {
     expect(store.listEvaluationBenchmarks()).toHaveLength(1);
   });
 
-  test("retains CISA-backed NVD truth and creates a restart-safe independent pilot without locking an undersized final test", async () => {
+  test("keeps CISA and NVD same-pipeline checks diagnostic across restart", async () => {
     const dir = mkdtempSync(join(tmpdir(), "automatic-evaluation-successor-"));
     const snapshotPath = join(dir, "store.json");
     const cves = ["CVE-2026-4101", "CVE-2026-4102", "CVE-2026-4103", "CVE-2026-4104", "CVE-2026-4105"];
@@ -709,7 +709,8 @@ describe("automatic independent evaluation", () => {
       const diagnostic = createEvaluationBenchmark(first, { sampleSize: 5, datasetSplit: "test", reviewMode: "automatic_model", createdAt: "2026-07-21T10:00:30.000Z" })!;
       expect(diagnostic.manifest!.every((task: any) => task.independenceContext.truthBasis === "context_only")).toBe(true);
       await collect(first, "src_canary_nvd_recent", "2026-07-21T10:01:00.000Z");
-      expect(first.listValidationRecords().filter((row: any) => row.validationType === "independent_evaluation_reference" && row.reviewerId === "source-scheduler:cisa-kev:nvd-cve:v1")).toHaveLength(4);
+      expect(first.listValidationRecords().filter((row: any) => row.validationType === "cross_source_evaluation_diagnostic" && row.reviewerId === "source-scheduler:cisa-kev:nvd-cve-diagnostic:v2")).toHaveLength(4);
+      expect(first.listValidationRecords().filter((row: any) => row.validationType === "independent_evaluation_reference")).toHaveLength(0);
 
       const targets = first.listCaptures().filter((capture: any) => capture.sourceId === "src_canary_nvd_recent");
       first.updateCaptureMetadata(targets.find((capture: any) => capture.metadata?.structuredFields?.cveID === cves[2])!.id, (metadata: any) => ({ ...metadata, review: { state: "needs_review" } }));
@@ -717,9 +718,10 @@ describe("automatic independent evaluation", () => {
       const noisy = targets.find((capture: any) => capture.metadata?.structuredFields?.cveID === cves[1])!;
       first.saveExtractedEntity({ id: "entity_nvd_wrong_cve", sourceId: noisy.sourceId, captureId: noisy.id, type: "cve", value: "CVE-2026-9999", normalizedValue: "cve-2026-9999", confidence: 0.7, extractorProvider: "hanasand-ti", extractorModel: "extraction-pipeline", extractorVersion: "ti-extractor-v3" });
       await collect(first, "src_canary_nvd_recent", "2026-07-21T11:01:00.000Z");
-      const references = first.listValidationRecords().filter((row: any) => row.validationType === "independent_evaluation_reference");
+      const references = first.listValidationRecords().filter((row: any) => row.validationType === "cross_source_evaluation_diagnostic");
       expect(references).toHaveLength(4);
-      const nvdTargets = references.filter((row: any) => row.reviewerId === "source-scheduler:cisa-kev:nvd-cve:v1");
+      expect(references.every((row: any) => row.exhaustiveExpectedValues === false && row.truthSchemaVersion === "ti.cross_source_evaluation_diagnostic.v1")).toBe(true);
+      const nvdTargets = references.filter((row: any) => row.reviewerId === "source-scheduler:cisa-kev:nvd-cve-diagnostic:v2");
       expect(nvdTargets).toHaveLength(4);
       expect(nvdTargets.some((row: any) => first.getCapture(row.captureId)?.metadata?.structuredFields?.cveID === cves[4])).toBe(false);
       const boundedTarget = first.listCaptures().find((capture: any) => capture.metadata?.structuredFields?.cveID === cves[4])!;
@@ -727,55 +729,49 @@ describe("automatic independent evaluation", () => {
       expect(JSON.stringify(boundedTarget)).not.toContain("evaluationCveSet");
 
       await collect(first, "src_canary_cisa_known_exploited_json", "2026-07-21T11:02:00.000Z");
-      const bidirectionalReferences = first.listValidationRecords().filter((row: any) => row.validationType === "independent_evaluation_reference");
+      const bidirectionalReferences = first.listValidationRecords().filter((row: any) => row.validationType === "cross_source_evaluation_diagnostic");
       expect(bidirectionalReferences).toHaveLength(5);
-      expect(bidirectionalReferences.filter((row: any) => row.reviewerId === "source-scheduler:nvd-cve:cisa-kev:v1")).toHaveLength(1);
+      expect(bidirectionalReferences.filter((row: any) => row.reviewerId === "source-scheduler:nvd-cve:cisa-kev-diagnostic:v2")).toHaveLength(1);
+
+      const historicalTarget = first.listCaptures().find((capture: any) => capture.sourceId === "src_canary_nvd_recent" && capture.metadata?.structuredFields?.cveID === cves[0])!;
+      const historicalReference = first.listCaptures().find((capture: any) => capture.sourceId === "src_canary_cisa_known_exploited_json" && capture.metadata?.structuredFields?.cveID === cves[0])!;
+      first.saveValidationRecord({
+        id: "historical_scheduler_reference",
+        captureId: historicalTarget.id,
+        validationType: "independent_evaluation_reference",
+        status: "supported",
+        referenceUrl: historicalReference.url,
+        referenceCaptureId: historicalReference.id,
+        referenceSourceId: historicalReference.sourceId,
+        referenceContentHash: historicalReference.contentHash,
+        labelType: "cve",
+        expectedValues: [cves[0]],
+        expectedValuesHash: createHash("sha256").update(JSON.stringify(["cve", cves[0].toLowerCase()])).digest("hex"),
+        exhaustiveExpectedValues: true,
+        truthSchemaVersion: "ti.independent_evaluation_reference.v1",
+        truthFrozenAt: historicalReference.collectedAt,
+        matchedAt: historicalReference.collectedAt,
+        reviewerId: "source-scheduler:cisa-kev:nvd-cve:v1"
+      });
+      const afterHistorical = createEvaluationBenchmark(first, { sampleSize: 5, labelTypes: ["cve"], datasetSplit: "validation", reviewMode: "automatic_model", createdAt: "2026-07-21T11:03:00.000Z" })!;
+      expect(afterHistorical.manifest!.every((task: any) => task.independenceContext.truthBasis === "context_only")).toBe(true);
 
       const restarted = new FileBackedScraperStore({ snapshotPath });
       await collect(restarted, "src_canary_nvd_recent", "2026-07-21T12:02:00.000Z");
-      expect(restarted.listValidationRecords().filter((row: any) => row.validationType === "independent_evaluation_reference")).toHaveLength(5);
-      const reviewed: any[] = [];
+      expect(restarted.listValidationRecords().filter((row: any) => row.validationType === "cross_source_evaluation_diagnostic")).toHaveLength(5);
+      let modelCalls = 0;
       const result = await runAutomaticEvaluationCycle({
         store: restarted,
-        sampleSize: 5,
+        autoCreate: false,
         maxTasks: 20,
         now: () => "2026-07-21T12:03:00.000Z",
-        review: async (request: any) => {
-          reviewed.push(request);
-          const reference = request.evidence.references.find((row: any) => row.kind === "independent_authoritative_reference");
-          const expectedValues = [String(reference.excerpt).match(/CVE-\d{4}-\d{4,}/i)![0].toUpperCase()];
-          const ambiguous = request.role === "reviewer_1"
-            && restarted.getCapture(request.evidence.references[0].captureId)?.metadata?.review?.state === "needs_review";
-          return {
-            expectedValues,
-            decision: ambiguous ? "ambiguous" : "present",
-            confidence: ambiguous ? 0.55 : 0.94,
-            rationale: "The separately retained CISA KEV record freezes the exhaustive CVE identity.",
-            evidenceIds: [reference.id],
-            reviewerProvider: "hanasand-ai",
-            reviewerModel: "hanasand",
-            reviewerModelVersion: "hanasand-v3",
-            promptVersion: request.promptVersion,
-            schemaVersion: request.schemaVersion,
-            modelConversationId: `conversation-${request.contextId}`,
-            modelResponseId: `response-${request.contextId}`
-          };
-        }
+        review: async () => { modelCalls++; throw new Error("diagnostic task must not reach the evaluation model"); }
       });
-
-      expect(result.createdBenchmarkIds).toHaveLength(1);
-      const successor = restarted.getEvaluationBenchmark(result.createdBenchmarkIds[0])!;
-      expect(successor).toMatchObject({ datasetSplit: "validation", protocol: { reviewPromptVersion: "ti.automatic_evaluation_review.v2", testSplitLocked: false, datasetUsage: "model_selection_only" } });
-      expect(successor.manifest).toHaveLength(5);
-      expect(successor.manifest!.every((task: any) => task.labelType === "cve" && task.independenceContext.truthReferenceCaptureId && task.independenceContext.extractionDecisionLineage?.length)).toBe(true);
-      expect(successor.manifest!.flatMap((task: any) => task.caseTags)).toEqual(expect.arrayContaining(["ambiguous", "parser_failure"]));
-      expect(restarted.getEvaluationBenchmark(diagnostic.id)).toMatchObject({ status: "retired", datasetSplit: "test", successorBenchmarkId: successor.id, lineage: { retainedDiagnosticResults: true } });
-      expect(restarted.listEvaluationBenchmarks().filter((benchmark: any) => benchmark.datasetSplit === "test" && benchmark.protocol?.version === "ti.independent_extraction_benchmark.v4" && benchmark.protocol?.testSplitLocked && benchmark.manifest?.every((task: any) => task.independenceContext?.truthBasis === "separately_retained_authoritative_reference"))).toHaveLength(0);
-      expect(restarted.listEvaluationLabels().map((label: any) => label.outcome)).toEqual(expect.arrayContaining(["true_positive", "false_positive"]));
-      expect(restarted.listEvaluationAnnotations().every((row: any) => row.reviewerProvider === "hanasand-ai" && row.reviewerModel === "hanasand" && row.reviewerModelVersion === "hanasand-v3" && row.modelConversationId && row.modelResponseId && row.promptVersion === "ti.automatic_evaluation_review.v2")).toBe(true);
-      expect(restarted.listEvaluationAdjudications()).toHaveLength(5);
-      expect(restarted.listEvaluationAdjudications().some((row: any) => row.disagreementPreserved)).toBe(true);
-      expect(reviewed.some((request) => request.role === "adjudicator")).toBe(true);
+      expect(result.createdBenchmarkIds).toEqual([]);
+      expect(modelCalls).toBe(0);
+      expect(restarted.listEvaluationLabels()).toEqual([]);
+      expect(restarted.getEvaluationBenchmark(afterHistorical.id)!.manifest!.every((task: any) => task.automation?.status === "dead_letter")).toBe(true);
+      expect(restarted.getEvaluationBenchmark(diagnostic.id)).toBeDefined();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -72,7 +72,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const latestCaptureIds: string[] = [], completeEvaluationCaptures: any[] = [], errors: any[] = [];
   const concurrency = Math.max(1, Math.min(tasks.length || 1, Number(options.maxConcurrentTasks ?? 5)));
   for (let done = 0; done < tasks.length; done += concurrency) await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length - done) }, () => runLeasedTask(options, runId, generatedAt, fetcher, mode, maxBytes, counters, latestCaptureIds, errors, completeEvaluationCaptures)));
-  retainIndependentEvaluationReferences(options.store, completeEvaluationCaptures);
+  retainCrossSourceEvaluationDiagnostics(options.store, completeEvaluationCaptures);
   const remainingQueuedTaskCount = options.frontier.snapshot().map(frontierTask).filter((task: any) => task.runId === runId).length;
   const runStatus = remainingQueuedTaskCount ? "queued" : counters.failedTaskCount && counters.completedTaskCount ? "degraded" : counters.failedTaskCount ? "failed" : "completed";
   const completedAt = options.now?.() ?? nowIso();
@@ -80,13 +80,13 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   return { generatedAt, tenantId: options.tenantId, mode: "production_canary", status: runStatus, runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, retiredSourceCount: productivity.retired.length, supersededTaskCount, activeSourceCount: scheduledSourceIds.size, deferredDueSourceCount: allDue.length - scheduledSourceIds.size, queuedTaskCount: tasks.length, queueLimit, availableQueueSlots, backpressureState, ...counters, remainingQueuedTaskCount, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
 }
 
-export function retainIndependentEvaluationReferences(store: any, completeCollectedCaptures: any[]) {
+export function retainCrossSourceEvaluationDiagnostics(store: any, completeCollectedCaptures: any[]) {
   if (!completeCollectedCaptures.length || typeof store.saveValidationRecord !== "function") return 0;
   const sources = new Map(store.listSources().map((source: any) => [source.id, source]));
   const captures = store.listCaptures().filter(referenceEligibleCapture);
   const cisa = new Map<string, any>(), nvd = new Map<string, any>();
   const pairedCaptures = new Set((store.listValidationRecords?.() ?? [])
-    .filter((record: any) => record.validationType === "independent_evaluation_reference" && record.captureId && record.referenceCaptureId)
+    .filter((record: any) => ["cross_source_evaluation_diagnostic", "independent_evaluation_reference"].includes(record.validationType) && record.captureId && record.referenceCaptureId)
     .map((record: any) => evaluationCapturePair(record.captureId, record.referenceCaptureId)));
   for (const capture of captures) {
     const cve = retainedCveId(capture);
@@ -115,10 +115,10 @@ export function retainIndependentEvaluationReferences(store: any, completeCollec
       || evidenceIndependence(store, [target.id, reference.id]).groupCount < 2) continue;
     const expectedValues = [authoritativeCve];
     store.saveValidationRecord({
-      id: stableId("evaluation-reference", `${target.id}:${reference.id}:cve:${authoritativeCve}`),
+      id: stableId("evaluation-diagnostic", `${target.id}:${reference.id}:cve:${authoritativeCve}`),
       tenantId: target.tenantId,
       captureId: target.id,
-      validationType: "independent_evaluation_reference",
+      validationType: "cross_source_evaluation_diagnostic",
       status: "supported",
       referenceUrl: reference.canonicalUrl ?? reference.url,
       referenceCaptureId: reference.id,
@@ -127,11 +127,11 @@ export function retainIndependentEvaluationReferences(store: any, completeCollec
       labelType: "cve",
       expectedValues,
       expectedValuesHash: createHash("sha256").update(JSON.stringify(["cve", authoritativeCve.toLowerCase()])).digest("hex"),
-      exhaustiveExpectedValues: true,
-      truthSchemaVersion: "ti.independent_evaluation_reference.v1",
+      exhaustiveExpectedValues: false,
+      truthSchemaVersion: "ti.cross_source_evaluation_diagnostic.v1",
       truthFrozenAt: reference.collectedAt,
       matchedAt: reference.collectedAt,
-      reviewerId: isNvdCveSource(targetSource) ? "source-scheduler:cisa-kev:nvd-cve:v1" : "source-scheduler:nvd-cve:cisa-kev:v1"
+      reviewerId: isNvdCveSource(targetSource) ? "source-scheduler:cisa-kev:nvd-cve-diagnostic:v2" : "source-scheduler:nvd-cve:cisa-kev-diagnostic:v2"
     });
     pairedCaptures.add(evaluationCapturePair(target.id, reference.id));
     retained++;

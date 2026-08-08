@@ -1986,7 +1986,7 @@ function authoritativeReferenceIndex(
   const captureById = new Map(captures.map((capture) => [capture.id, capture]));
   const candidates = new Map<string, AuthoritativeReferenceSet[]>();
   for (const validation of validations) {
-    if (validation.validationType !== REFERENCE_VALIDATION_TYPE
+    if (!independentReferenceValidation(validation)
       || validation.status !== "supported"
       || validation.truthSchemaVersion !== REFERENCE_TRUTH_SCHEMA_VERSION
       || validation.exhaustiveExpectedValues !== true
@@ -2047,6 +2047,12 @@ function valueAppearsInEvidence(labelType: string, value: string, evidence: stri
   return Boolean(needle && ` ${haystack} `.includes(` ${needle} `));
 }
 
+function independentReferenceValidation(validation: EvaluationValidationRecord) {
+  return validation.validationType === REFERENCE_VALIDATION_TYPE
+    && validation.truthSchemaVersion === REFERENCE_TRUTH_SCHEMA_VERSION
+    && !String(validation.reviewerId ?? "").startsWith("source-scheduler:");
+}
+
 function referenceTruthKey(captureId: string, labelType: string) {
   return `${captureId}\u0000${labelType}`;
 }
@@ -2080,7 +2086,7 @@ function taskReferenceEvidenceMatches(store: CaptureMetadataStore, task: Evaluat
   const referenceEvidence = exhaustiveEvidenceText(referenceCapture);
   if (!values
     || !validation
-    || validation.validationType !== REFERENCE_VALIDATION_TYPE
+    || !independentReferenceValidation(validation)
     || validation.status !== "supported"
     || validation.truthSchemaVersion !== REFERENCE_TRUTH_SCHEMA_VERSION
     || validation.exhaustiveExpectedValues !== true
