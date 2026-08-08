@@ -4,7 +4,7 @@ import type { ApiServerOptions } from "./serverTypes.ts";
 
 export async function publicCoverage(options: ApiServerOptions) {
   const generatedAt = nowIso();
-  const operations = await buildSourceOperationsSnapshot(options.store, { generatedAt, limit: 500 });
+  const operations = await buildSourceOperationsSnapshot(options.store, { generatedAt, limit: 1 });
   const summary: any = operations.summary ?? {};
   const sourceQualification: any = operations.qualification ?? {};
   const measured = summary.measurementState !== "source_counts_only" && sourceQualification.measurementState !== "not_measured";
@@ -34,7 +34,7 @@ export async function publicCoverage(options: ApiServerOptions) {
       baselineMet: measured ? sourceQualification.baselineMet === true : null,
     },
     observedAlertLatencySeconds: latency,
-    collectionCadenceSeconds: cadenceSummary(operations.sources ?? []),
+    collectionCadenceSeconds: cadenceSummary(typeof options.store?.listSources === "function" ? options.store.listSources() : []),
     definitions: {
       qualifying: "A feed qualifies only after repeated successful and useful scheduled cycles, retained evidence, current content, legal basis, review approval where required, and duplicate exclusion.",
       useful: "Useful counts come from persisted retained captures linked to successful collection cycles; registration and health checks are insufficient.",
@@ -51,7 +51,11 @@ function latencySummary(records: any[]) {
 }
 
 function cadenceSummary(sources: any[]) {
-  const values = sources.map((source) => number(source.collection?.cadenceSeconds)).filter(valid).sort((a, b) => a - b);
+  const values = sources
+    .filter((source) => !source?.tenantId)
+    .map((source) => number(source.crawlFrequencySeconds ?? (number(source.crawlFrequencyMinutes) * 60)))
+    .filter(valid)
+    .sort((a, b) => a - b);
   if (!values.length) return { status: "not_measured", sourceCount: 0, minimumSeconds: null, medianSeconds: null, maximumSeconds: null };
   return {
     status: "observed",
