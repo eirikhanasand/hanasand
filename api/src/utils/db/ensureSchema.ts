@@ -520,6 +520,15 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation_created_at ON ai_messages(conversation_id, created_at ASC)')
     await run('CREATE INDEX IF NOT EXISTS idx_ai_repositories_owner_imported_at ON ai_imported_repositories(owner_id, imported_at DESC)')
     await run(`
+        CREATE TABLE IF NOT EXISTS ti_saved_searches (
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            query TEXT NOT NULL,
+            saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (user_id, query)
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_ti_saved_searches_user_saved_at ON ti_saved_searches(user_id, saved_at DESC)')
+    await run(`
         CREATE TABLE IF NOT EXISTS agent_automations (
             id TEXT PRIMARY KEY,
             owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

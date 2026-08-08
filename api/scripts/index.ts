@@ -27,6 +27,7 @@ const coreTasks: TestTask[] = [
     scriptTask('ai-action-policy', 'AI action policy contract', 'smoke-ai-action-policy.ts'),
     scriptTask('ai-repo-credentials', 'AI repository credential encryption contract', 'smoke-ai-repo-credentials.ts'),
     scriptTask('alert-automations', 'Alert automation contract', 'smoke-alert-automations.ts'),
+    scriptTask('ti-saved-searches', 'TI saved-search persistence contract', 'smoke-ti-saved-searches.ts'),
     scriptTask('app-update', 'Desktop app update contract', 'smoke-app-update.ts'),
     scriptTask('mail-overview-timeout', 'Mail overview timeout contract', 'smoke-mail-overview-timeout.ts'),
     scriptTask('pwned-check', 'Pwned password dataset contract', 'smoke-pwned-check.ts'),

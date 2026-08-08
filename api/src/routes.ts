@@ -211,6 +211,7 @@ import { getBrowserSandboxProfiles, putBrowserSandboxProfiles } from './handlers
 import { getBrowserRunReport, getBrowserRuns, postBrowserRunReport } from './handlers/browserSandboxRuns.ts'
 import { getCommercialContactRequests, postCommercialContactRequest } from './handlers/commercialContactRequests.ts'
 import { getOrganizationPrivacy, postOrganizationPrivacy } from './handlers/organizationPrivacy.ts'
+import { deleteSavedSearch, getSavedSearches, postSavedSearch } from './handlers/ti/savedSearches.ts'
 import { getAptUpdates } from './handlers/aptUpdates.ts'
 import { getMillEvents, getMillFindings, getMillRules, getMillUsage, ingestMill, postMillEventAction, postMillFindingAction, postMillRule, postMillRuleAction, postMillRulePack, postMillSigmaPack } from './handlers/mill.ts'
 
@@ -363,6 +364,11 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/notes', postNote)
     fastify.put('/notes/:id', putNote)
     fastify.delete('/notes/:id', deleteNote)
+
+    // Threat intelligence saved searches
+    fastify.get('/ti/saved-searches', getSavedSearches)
+    fastify.post('/ti/saved-searches', postSavedSearch)
+    fastify.delete('/ti/saved-searches', deleteSavedSearch)
 
     // Organizations
     fastify.get('/organizations', getOrganizations)

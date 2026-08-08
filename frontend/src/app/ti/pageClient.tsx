@@ -13,6 +13,7 @@ import mapData from '@parent/public/world.json'
 import { Activity, BellRing, Bookmark, Building2, CheckCircle2, ClipboardList, Clock3, Copy, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Move, Search, Send, ShieldAlert, ShieldCheck, Trash2, UserPlus, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { getCookie } from '@/utils/cookies/cookies'
 import { SyntheticEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
 import { ActorBusinessModelEvidence } from './businessModelEvidence'
@@ -130,6 +131,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState('')
     const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([])
+    const [savedSearchesFromAccount, setSavedSearchesFromAccount] = useState(false)
     const activeQueryRef = useRef((initialResult?.query ?? initialQuery).trim().toLowerCase())
     const requestSeqRef = useRef(0)
     const inputRef = useRef<HTMLInputElement>(null)
@@ -142,6 +144,18 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
     }, [])
 
     useEffect(() => {
+        const token = getCookie('access_token')
+        const id = getCookie('id')
+        if (token && id) {
+            setSavedSearchesFromAccount(true)
+            fetch('/api/backend/ti/saved-searches', { headers: { Authorization: `Bearer ${token}`, id }, cache: 'no-store' })
+                .then(response => response.ok ? response.json() : null)
+                .then(payload => {
+                    if (Array.isArray(payload?.savedSearches)) setSavedSearches(payload.savedSearches.slice(0, TI_SAVED_SEARCH_LIMIT))
+                })
+                .catch(() => undefined)
+            return
+        }
         try {
             const stored = JSON.parse(window.localStorage.getItem(TI_SAVED_SEARCHES_KEY) || '[]')
             if (Array.isArray(stored)) {
@@ -239,18 +253,31 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
         await executeSearch(String(form.get('q') ?? inputRef.current?.value ?? query).trim())
     }
 
-    function saveCurrentSearch() {
+    async function saveCurrentSearch() {
         const clean = query.trim()
         if (!clean) return
         const next = [{ query: clean, savedAt: new Date().toISOString() }, ...savedSearches.filter(item => item.query.toLowerCase() !== clean.toLowerCase())].slice(0, TI_SAVED_SEARCH_LIMIT)
         setSavedSearches(next)
-        window.localStorage.setItem(TI_SAVED_SEARCHES_KEY, JSON.stringify(next))
+        const token = getCookie('access_token')
+        const id = getCookie('id')
+        if (token && id) {
+            await fetch('/api/backend/ti/saved-searches', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, id }, body: JSON.stringify({ query: clean }) }).catch(() => undefined)
+        } else {
+            window.localStorage.setItem(TI_SAVED_SEARCHES_KEY, JSON.stringify(next))
+        }
     }
 
-    function removeSavedSearch(queryToRemove: string) {
+    async function removeSavedSearch(queryToRemove: string) {
         const next = savedSearches.filter(item => item.query !== queryToRemove)
         setSavedSearches(next)
-        window.localStorage.setItem(TI_SAVED_SEARCHES_KEY, JSON.stringify(next))
+        const token = getCookie('access_token')
+        const id = getCookie('id')
+        if (token && id) {
+            const params = new URLSearchParams({ query: queryToRemove })
+            await fetch(`/api/backend/ti/saved-searches?${params}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}`, id } }).catch(() => undefined)
+        } else {
+            window.localStorage.setItem(TI_SAVED_SEARCHES_KEY, JSON.stringify(next))
+        }
     }
 
     function handleQueryChange(value: string) {
@@ -315,7 +342,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                 <div className='flex items-center justify-between gap-3'>
                     <div>
                         <h2 className='text-sm font-semibold text-ui-text'>Saved searches</h2>
-                        <p className='mt-1 text-xs text-ui-muted'>Stored only in this browser. Select one to reopen the current result.</p>
+                        <p className='mt-1 text-xs text-ui-muted'>{savedSearchesFromAccount ? 'Stored with your account. Select one to reopen the current result.' : 'Stored only in this browser until you sign in.'}</p>
                     </div>
                     <Bookmark className='h-4 w-4 text-ui-primary' />
                 </div>
