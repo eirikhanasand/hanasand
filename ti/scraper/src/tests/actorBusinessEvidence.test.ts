@@ -116,6 +116,39 @@ describe("actor business-model reviewed evidence", () => {
     });
   });
 
+  test("projects exact affiliate economics without treating claimed payouts as profit", async () => {
+    const store = actorStore(["CRPxO"]);
+    const result = groupResult("CRPxO", "CRPxO is actively recruiting affiliates, offering: 70% revenue share, XMR/BTC payouts, Claimed payouts within 24 hours, and $333 one-time affiliate access.");
+    store.savePipelineResult(result);
+
+    expect((await searchResult(store, "CRPxO")).actorIntelligence.businessModel.pendingFindings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "intermediary_communication", value: "Affiliate recruitment", captureIds: [result.capture.id] }),
+      expect.objectContaining({ type: "revenue_share_claim", value: "70% revenue share", captureIds: [result.capture.id] }),
+      expect.objectContaining({ type: "payment_claim", value: "XMR/BTC payouts", captureIds: [result.capture.id] }),
+      expect.objectContaining({ type: "payment_claim", value: "Claimed payouts within 24 hours", captureIds: [result.capture.id] }),
+      expect.objectContaining({ type: "pricing_claim", value: "$333 one-time affiliate access", captureIds: [result.capture.id] }),
+    ]));
+    for (const claim of store.listIntelligenceClaims().filter((claim: any) => claim.captureIds.includes(result.capture.id) && ["intermediary_communication", "revenue_share_claim", "payment_claim", "pricing_claim"].includes(claim.claimType))) review(store, claim, "confirm");
+
+    const reviewed = await searchResult(store, "CRPxO");
+    expect(reviewed.actorIntelligence.businessModel).toMatchObject({
+      pricingClaims: [expect.objectContaining({ value: "$333 one-time affiliate access" })],
+      paymentClaims: expect.arrayContaining([
+        expect.objectContaining({ value: "XMR/BTC payouts" }),
+        expect.objectContaining({ value: "Claimed payouts within 24 hours" }),
+      ]),
+      revenueShareClaims: [expect.objectContaining({ value: "70% revenue share" })],
+      intermediaryCommunications: [expect.objectContaining({ value: "Affiliate recruitment" })],
+      profitabilityConclusion: expect.objectContaining({ status: "unknown", claimIds: [], captureIds: [] }),
+    });
+    expect(reviewed.actorCaseStudies.cases[0]).toMatchObject({
+      actor: "CRPxO",
+      categories: ["intermediary_communication", "operating_model", "payment", "pricing"],
+      captureCount: 1,
+      evidenceCount: 5,
+    });
+  });
+
   test("keeps current reviewed evidence when the aggregate claim also retains retired source history", async () => {
     const store = actorStore(["BrainCipher"]);
     store.saveSource(retainedGroupSource);

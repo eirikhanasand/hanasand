@@ -5,7 +5,7 @@ import { resolveMitreActorIdentity, type ActorIdentityRecord } from "./mitreActo
 import { extractActorBusinessEvidence } from "./actorBusinessEvidence.ts";
 import { publicSourceReferenceUrl, zonedSourceTimestamp } from "./sourceFieldReportTimestamp.ts";
 
-export const SOURCE_SPECIFIC_EXTRACTOR_VERSION = "ti-source-specific-extractor-v5";
+export const SOURCE_SPECIFIC_EXTRACTOR_VERSION = "ti-source-specific-extractor-v6";
 
 export function extractSourceSpecificEntities(item: CollectedItem, context: ExtractionContext, actorIdentities?: ActorIdentityRecord[], fallbackEntities: ExtractedEntity[] = []): ExtractedEntity[] {
   const profile = item.metadata?.extractionProfile;
