@@ -58,7 +58,11 @@ describe("scheduled organization watchlist discovery", () => {
     expect(store.listSourceHealthObservations()).toContainEqual(expect.objectContaining({ tenantId: "tenant_ntnu", sourceId: store.listCaptures()[0].sourceId, success: true, useful: true }));
     expect(store.listSourceHealthObservations()).toContainEqual(expect.objectContaining({ tenantId: "tenant_ntnu", sourceId: "src_google_news_query", success: true }));
     expect(store.listSourceHealthObservations()).toContainEqual(expect.objectContaining({ tenantId: "tenant_tine", sourceId: "src_google_news_query", success: true }));
-    expect(store.listDwmAlerts()).toEqual([]);
+    expect(store.listDwmAlerts()).toContainEqual(expect.objectContaining({
+      tenantId: "tenant_ntnu",
+      organizationId: "org_ntnu",
+      workflowContext: expect.objectContaining({ captureIds: [store.listCaptures()[0].id] })
+    }));
     expect(store.listRuns().every((run) => (run.exposureClaimCount ?? 0) === 0)).toBe(true);
 
     store.saveOrganization({ id: "org_manual", tenantId: "tenant_manual", name: "Manual monitor", status: "active" });

@@ -9,6 +9,7 @@ import { buildDwmSourceInventory } from "../product/dwmSourceInventory.ts";
 import { nowIso } from "../utils.ts";
 import { cancelActorOrgRelevanceReviewPreparedHandoff, createActorOrgRelevanceReviewAlertGenerationRequest, createActorOrgRelevanceReviewCaseHandoffRequest, createActorOrgRelevanceReviewCustomerNotification, createActorOrgRelevanceReviewSourceCollectionRequest, createActorOrgRelevanceReviewWebhookTriggerRequest, getActorOrgRelevanceReview, listActorOrgRelevanceHandoffQueue, listActorOrgRelevanceReviews, listActorOrgRelevanceSourceCollectionQueue, materializeActorOrgRelevanceReviewWatchlist, submitActorOrgRelevanceReview, updateActorOrgRelevanceReview, updateActorOrgRelevanceReviewEvidence } from "./actorOrgRelevanceRoutes.ts";
 import { canaryActivation, canaryConsole, canaryOperator, canaryPause, canaryReadiness, canaryRun, canarySoak } from "./canaryRoutes.ts";
+import { createDwmCollectionRequest, getDwmCollectionRequest } from "./dwmCollectionRoutes.ts";
 import { createCase, createCaseFromDwmAlert, exportCaseActionReplay, exportCaseEvidence, getCaseDetail, getCaseWebhookReplayReadiness, listCaseHandoffActions, listCaseWorkflowTransitions, listCases, recordCaseCustomerNotification, recordCaseHandoffAction, updateCase } from "./caseRoutes.ts";
 import { collectionSchedulerStatus, updateCollectionSchedulerControl } from "./collectionSchedulerStatus.ts";
 import { contractIndex } from "./contractsRoute.ts";
@@ -278,6 +279,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     }
     if (url.pathname === "/v1/dwm/watchlists" && request.method === "GET") return listDwmWatchlists(url, options, request);
     if (url.pathname === "/v1/dwm/watchlists" && request.method === "POST") return createDwmWatchlist(request, options);
+    if (url.pathname === "/v1/dwm/collection-requests" && request.method === "POST") return createDwmCollectionRequest(request, options);
+    if (/^\/v1\/dwm\/collection-requests\/[^/]+$/.test(url.pathname) && request.method === "GET") return getDwmCollectionRequest(request, options, url.pathname.split("/").pop()!);
     if (/^\/v1\/dwm\/watchlists\/[^/]+\/disable$/.test(url.pathname) && request.method === "POST") return disableDwmWatchlist(request, options, url.pathname.split("/")[4]);
     if (/^\/v1\/dwm\/watchlists\/[^/]+$/.test(url.pathname) && request.method === "GET") return getDwmWatchlistDetail(url, options, url.pathname.split("/").pop(), request);
     if (/^\/v1\/dwm\/watchlists\/[^/]+$/.test(url.pathname) && request.method === "PATCH") return updateDwmWatchlist(request, options, url.pathname.split("/").pop());

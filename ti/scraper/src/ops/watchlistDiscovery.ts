@@ -24,7 +24,10 @@ export async function scheduleWatchlistDiscoveryRuns(options: any, generatedAt =
   }));
 
   const existingPlans = new Map<string, any>((store.listPlans?.() ?? []).map((plan: any) => [String(plan.id), plan]));
-  const jobs = organizationJobs(store.listDwmWatchlists(), generatedAt)
+  const requestedScope = options.watchlistDiscoveryScope;
+  const collectionRequestId = cleanRequestId(options.watchlistDiscoveryRequestId);
+  const jobs = organizationJobs(store.listDwmWatchlists(), generatedAt, collectionRequestId)
+    .filter((job) => !requestedScope || (job.tenantId === requestedScope.tenantId && job.organizationId === requestedScope.organizationId))
     .filter((job) => {
       const existing = existingPlans.get(job.id);
       if (!existing) return true;
@@ -61,8 +64,8 @@ export async function scheduleWatchlistDiscoveryRuns(options: any, generatedAt =
       budgetClass: "broad_daily_sweep",
       maxTasks: providers.length,
       createdAt: generatedAt,
-      requesterId: "scheduled-watchlist-discovery",
-      reason: "active organization watchlist scheduled public discovery"
+      requesterId: collectionRequestId ? String(options.watchlistDiscoveryRequesterId ?? "organization-watchlist-discovery") : "scheduled-watchlist-discovery",
+      reason: collectionRequestId ? "authenticated organization watchlist public discovery request" : "active organization watchlist scheduled public discovery"
     }, plannerProviders, options.frontier);
     const runId = stableId("watchlist-discovery-run", plan.id);
     const planning = {
@@ -80,7 +83,7 @@ export async function scheduleWatchlistDiscoveryRuns(options: any, generatedAt =
     }));
     store.savePlan({
       ...plan,
-      request: { ...plan.request, organizationId: job.organizationId, watchlistIds: job.watchlistIds },
+      request: { ...plan.request, organizationId: job.organizationId, watchlistIds: job.watchlistIds, collectionRequestId },
       tasks
     });
     store.saveRun({
@@ -245,7 +248,7 @@ export function activeWatchlistDiscoveryTerms(store: any, task: any) {
   return context.terms.filter((term: any) => current.has(`${term.watchlistId}:${cleanTerm(term.value)?.toLowerCase()}`));
 }
 
-function organizationJobs(watchlists: any[], generatedAt: string) {
+function organizationJobs(watchlists: any[], generatedAt: string, collectionRequestId?: string) {
   const groups = new Map<string, { tenantId: string; organizationId: string; watchlistIds: Set<string>; terms: Map<string, any>; updatedAt: string }>();
   for (const watchlist of watchlists) {
     const tenantId = String(watchlist?.tenantId ?? "").trim();
@@ -267,7 +270,7 @@ function organizationJobs(watchlists: any[], generatedAt: string) {
     }
     groups.set(key, group);
   }
-  const cadenceWindow = generatedAt.slice(0, 10);
+  const cadenceWindow = collectionRequestId ?? generatedAt.slice(0, 10);
   return [...groups.values()].flatMap((group) => chunks([...group.terms.values()]).map((terms) => {
     const query = terms.map((term) => `"${term.value.replace(/["\\]/g, " ")}"`).join(" OR ");
     return {
@@ -281,6 +284,11 @@ function organizationJobs(watchlists: any[], generatedAt: string) {
       cadenceWindow
     };
   })).sort((a, b) => `${a.tenantId}:${a.organizationId}:${a.id}`.localeCompare(`${b.tenantId}:${b.organizationId}:${b.id}`));
+}
+
+function cleanRequestId(value: unknown) {
+  const id = String(value ?? "").trim();
+  return /^[A-Za-z0-9_.:-]{1,200}$/.test(id) ? id : undefined;
 }
 
 function chunks(terms: any[]) {

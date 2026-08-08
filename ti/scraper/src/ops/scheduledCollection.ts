@@ -1,5 +1,6 @@
 import { nowIso } from "../utils.ts";
 import { runLeasedTask } from "./canaryCollection.ts";
+import { rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
 
 const activeRunIds = new Set<string>();
 
@@ -37,7 +38,7 @@ export async function executeScheduledCollectionRun(options: any, runId: string)
       sourceCount: new Set(tasks.map((task: any) => task.sourceId)).size,
       error: undefined,
     });
-    if (!tasks.length) return completeRun(options.store, running, emptyCounters(), [], [], generatedAt);
+    if (!tasks.length) return completeWatchlistRun(options.store, plan, completeRun(options.store, running, emptyCounters(), [], [], generatedAt));
 
     const counters = emptyCounters();
     const captureIds: string[] = [];
@@ -65,12 +66,26 @@ export async function executeScheduledCollectionRun(options: any, runId: string)
       .map((item: any) => item.task ?? item)
       .filter((task: any) => task.runId === runId);
     if (pending.length) return deferRun(options.store, running, counters, captureIds, errors, pending);
-    return completeRun(options.store, running, counters, captureIds, errors, nowIso());
+    return completeWatchlistRun(options.store, plan, completeRun(options.store, running, counters, captureIds, errors, nowIso()));
   } catch (error) {
     return failRun(options.store, run, error instanceof Error ? error.message : String(error));
   } finally {
     activeRunIds.delete(runId);
   }
+}
+
+function completeWatchlistRun(store: any, plan: any, run: any) {
+  const context = plan.tasks?.find((task: any) => task.planning?.watchlistDiscovery)?.planning?.watchlistDiscovery;
+  if (!context?.organizationId || !run.tenantId) return run;
+  const organization = (store.listOrganizations?.() ?? []).find((row: any) => row.id === context.organizationId && row.tenantId === run.tenantId);
+  const visibility = String(organization?.alertVisibilityPolicy ?? organization?.alert_visibility_policy ?? "members");
+  rebuildDwmRuntimeAlerts({
+    store,
+    tenantId: run.tenantId,
+    organizationId: context.organizationId,
+    visibilityPolicy: visibility === "admins" || visibility === "owners" ? visibility : "members"
+  });
+  return run;
 }
 
 export function recoverCollectionRuns(options: any, now = new Date()) {
