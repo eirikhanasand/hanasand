@@ -5,6 +5,7 @@ import { isAllowedApiOrigin, verifiedClientIp } from '#utils/http/publicBoundary
 import { credentialPeriodLimits, resolveRateLimitActor } from '#plugins/rateLimit.ts'
 import { organizationPublicApiScopes } from '#utils/auth/apiKeys.ts'
 import postTiSearch, { normalizeBatchQueries } from '../src/handlers/ti/search.ts'
+import IndexHandler from '../src/handlers/index.ts'
 import { TRUSTED_API_PROXIES } from '../src/utils/http/publicBoundary.ts'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -14,6 +15,20 @@ describe('public TI API boundary', () => {
     test('uses Fastify verified client IP instead of a caller-supplied forwarding header', () => {
         const request = { ip: '203.0.113.10', headers: { 'x-forwarded-for': '127.0.0.1' } } as unknown as FastifyRequest
         expect(verifiedClientIp(request)).toBe('203.0.113.10')
+    })
+
+    test('does not expose the internal route inventory at public API roots', async () => {
+        const target = reply()
+        const request = { server: { printRoutes: () => { throw new Error('route inventory must remain private') } } } as unknown as FastifyRequest
+        const result = await IndexHandler(request, target as unknown as FastifyReply) as any
+        expect(result.statusCode).toBe(200)
+        expect(result.headers['cache-control']).toBe('no-store, max-age=0')
+        expect(result.payload).toEqual({
+            service: 'hanasand-api',
+            documentation: 'https://hanasand.com/developers',
+            openapi: '/api/v1/openapi.json',
+        })
+        expect(JSON.stringify(result.payload)).not.toContain('admin/')
     })
 
     test('trusts forwarding only from explicitly configured proxy hops', async () => {
