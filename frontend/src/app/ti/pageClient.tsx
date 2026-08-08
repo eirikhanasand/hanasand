@@ -454,9 +454,8 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
     const selectedTriageBrief = selected ? selectedTriageBriefFor(result, selected, actionability, watchlist, alertPacket, selectedCaseDraft) : null
     const hasStableActorProfile = actorQuery && Boolean(actorIntel.attribution || actorIntel.motivation.length || victimObservations.length || actorIntel.sourceProvenance.length)
     const heroVictimContext = victimObservations
-        .filter(item => /democratic national committee|solarwinds|microsoft|government and policy/i.test(item.victim))
-        .map(item => `${item.victim} (${item.country})`)
         .slice(0, 4)
+        .map(item => `${item.victim} (${item.country})`)
     const actorProfileSummary = hasStableActorProfile
         ? displayRequirementText([
             actorIntel.attribution,
@@ -2195,7 +2194,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         return {
             id,
             kind: 'victim',
-            severity: /microsoft|solarwinds|federal|government|diplomatic|political|election/i.test(`${item.victim} ${item.sector}`) ? 'high' : 'medium',
+            severity: item.confidence >= 0.85 ? 'high' : item.confidence >= 0.65 ? 'medium' : 'low',
             status: 'profile evidence',
             title: item.victim,
             subtitle: `${item.country} · ${item.sector}`,

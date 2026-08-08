@@ -75,6 +75,12 @@ function apt29Fixture(): TiSearchResponse {
         notes: [],
         actorIntelligence: {
             attribution: 'Russian SVR activity attributed in the attached Microsoft disclosure.',
+            attributionEvidence: {
+                sourceId: 'src_microsoft_midnight_blizzard',
+                sourceName: 'Microsoft Threat Intelligence',
+                provenance: 'https://www.microsoft.com/en-us/security/blog/',
+                reportDate: '2024-01-25',
+            },
             structuredProvenance: [{
                 sourceId: 'src_microsoft_midnight_blizzard',
                 sourceName: 'Microsoft Threat Intelligence',
