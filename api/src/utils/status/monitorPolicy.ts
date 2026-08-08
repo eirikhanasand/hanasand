@@ -1,5 +1,28 @@
 export type MonitorStatus = 'up' | 'degraded' | 'down'
 
+export type MonitorCheckIdentity = { service: string, check_name: string }
+
+const requiredChecks: MonitorCheckIdentity[] = [
+    { service: 'dark-web-monitoring', check_name: 'Latest activity' },
+]
+
+export function addMissingRequiredChecks<T extends MonitorCheckIdentity>(rows: T[], now = new Date()): T[] {
+    const present = new Set(rows.map(row => `${row.service}\n${row.check_name}`))
+    return [
+        ...rows,
+        ...requiredChecks
+            .filter(check => !present.has(`${check.service}\n${check.check_name}`))
+            .map(check => ({
+                ...check,
+                status: 'down' as const,
+                latency_ms: 0,
+                message: 'No persisted monitor result is available for this required check.',
+                checked_at: now,
+                uptime_30d: '0',
+            } as unknown as T)),
+    ]
+}
+
 export function activityFreshnessMinutes(freshness: Record<string, unknown>): number | undefined {
     for (const key of ['collectionAgeMinutes', 'claimAgeMinutes', 'collectionCheckAgeMinutes']) {
         const raw = freshness[key]

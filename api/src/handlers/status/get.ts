@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
+import { addMissingRequiredChecks } from '#utils/status/monitorPolicy.ts'
 
 type MonitorRow = {
     service: string
@@ -112,7 +113,7 @@ async function loadStatusPayload() {
         ORDER BY service ASC, check_name ASC, checked_at ASC
     `)
 
-    const rawChecks = result.rows as MonitorRow[]
+    const rawChecks = addMissingRequiredChecks(result.rows as MonitorRow[])
     const checks = rawChecks.map(row => toPublicMonitorRow(row))
     const staleRows = rawChecks
         .filter(row => row.status === 'up' && Date.now() - time(row.checked_at) > MONITOR_STALE_MS)
