@@ -72,6 +72,13 @@ test('pricing keeps endpoint checks secondary to exposure monitoring', async () 
     expect(pricing.indexOf('Common buying scenarios')).toBeLessThan(pricing.indexOf('Utility tool'))
 })
 
+test('pricing states the honest mobile product boundary', async () => {
+    const pricing = await readFile(path.join(root, 'src/app/pricing/page.tsx'), 'utf8')
+
+    expect(pricing).toContain('The desktop web console is the primary analyst surface.')
+    expect(pricing).toContain('Mobile access is secondary')
+})
+
 test('global footer keeps enterprise diligence ahead of personal notebook links', async () => {
     const footer = await readFile(path.join(root, 'src/components/footer/footer.tsx'), 'utf8')
     const companyGroup = footer.slice(footer.indexOf('title: \'Company\''), footer.indexOf('title: \'Legal\''))

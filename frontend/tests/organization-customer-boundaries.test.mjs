@@ -132,33 +132,9 @@ test('organization watchlist save mirrors the same scope and failed sync is expl
     assert.match(workspace, /await loadOrganizationBundle\(selectedOrganization\.id\)/)
 })
 
-test('ordinary customer overview never requests global vulnerability images', async() => {
-    cookieValues.set('access_token', 'review-session')
-    cookieValues.set('id', 'review-user')
-    const calls = []
-    globalThis.fetch = async(input) => {
-        const url = String(input)
-        calls.push(url)
-        if (url.includes('/vulnerabilities')) {
-            return Response.json({ imageCount: 38, images: [{ totalVulnerabilities: 5300, severity: { critical: 145 } }] })
-        }
-        if (url.includes('/traffic/summary?metric=domain')) return Response.json([])
-        if (url.includes('/traffic/metrics')) return Response.json({ total_requests: 7, top_domains: [] })
-        throw new Error(`Unexpected fetch: ${url}`)
-    }
-
-    const { getMonitoringOverview } = await import('../src/utils/monitoring/data')
-    const overview = await getMonitoringOverview()
-    assert.deepEqual(overview, {
-        requestsToday: 7,
-        requestsThisWeek: 0,
-        requestsThisMonth: 0,
-        requestsTotal: 0,
-        activeDomains: 0,
-    })
-    assert.equal(calls.some(url => url.includes('/vulnerabilities')), false)
-
+test('ordinary customer overview does not present unscoped platform metrics', async() => {
     const page = await readFile(new URL('../src/app/dashboard/overview/page.tsx', import.meta.url), 'utf8')
+    assert.doesNotMatch(page, /getMonitoringOverview|Platform traffic|Domains watched|requestsToday|activeDomains/)
     assert.doesNotMatch(page, /criticalVulnerabilities|totalVulnerabilities|imagesScanned|scanRunning/)
     assert.match(page, /Vulnerability monitoring/)
     assert.match(page, /value='Not configured'/)

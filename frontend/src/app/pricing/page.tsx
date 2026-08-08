@@ -44,6 +44,10 @@ const competitiveFitRows = [
         label: 'Current evidence boundary',
         value: 'Live public TI search and DWM alert workflows show recent source metadata and safe alert fields. Enterprise certificates, SSO/SCIM, and formal analyst-service coverage should be scoped before purchase.',
     },
+    {
+        label: 'Mobile posture',
+        value: 'The desktop web console is the primary analyst surface. Mobile access is secondary and should be used for review and status checks rather than treated as full parity with the desktop workflow.',
+    },
 ]
 
 const pilotSteps = [

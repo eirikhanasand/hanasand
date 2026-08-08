@@ -112,11 +112,3 @@ export type TrafficRecords = {
 export type TrafficDomains = {
     domains: string[]
 }
-
-export type MonitoringOverview = {
-    requestsToday: number
-    requestsThisWeek: number
-    requestsThisMonth: number
-    requestsTotal: number
-    activeDomains: number
-}

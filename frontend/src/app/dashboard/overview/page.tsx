@@ -2,8 +2,7 @@ import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { Activity, AlertTriangle, Radio, Radar, ShieldAlert } from 'lucide-react'
-import { getMonitoringOverview } from '@/utils/monitoring/data'
+import { AlertTriangle, Radio, ShieldAlert } from 'lucide-react'
 import getStatus from '@/utils/status/getStatus'
 import { toPublicServiceStatus } from '@/utils/status/publicStatus'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
@@ -28,27 +27,16 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
     const deniedPath = typeof deniedPathValue === 'string' && deniedPathValue.startsWith('/') ? deniedPathValue : ''
     const accessDenied = params.notAllowed === 'true'
 
-    const [overview, status] = await Promise.all([
-        getMonitoringOverview(),
-        getStatus(),
-    ])
+    const status = await getStatus()
     const publicStatus = toPublicServiceStatus(status)
     const serviceIssues = publicStatus.checks.filter(check => check.status !== 'up')
     const slowestChecks = [...publicStatus.checks].sort((a, b) => (b.latency_ms || 0) - (a.latency_ms || 0)).slice(0, 5)
-    const actions = [
-        overview.activeDomains ? {
-            href: '/monitor',
-            title: 'Review monitored domains',
-            detail: `${formatNumber(overview.activeDomains)} domains have recent traffic or breach monitoring data.`,
-            tone: 'ok' as const,
-        } : null,
-        serviceIssues.length ? {
-            href: '/status',
-            title: 'Check service health',
-            detail: `${serviceIssues.length} public check${serviceIssues.length === 1 ? '' : 's'} degraded or down.`,
-            tone: 'watch' as const,
-        } : null,
-    ].filter(Boolean)
+    const actions = [serviceIssues.length ? {
+        href: '/status',
+        title: 'Check service health',
+        detail: `${serviceIssues.length} public check${serviceIssues.length === 1 ? '' : 's'} degraded or down.`,
+        tone: 'watch' as const,
+    } : null].filter(Boolean)
 
     return (
         <DashboardPage>
@@ -79,24 +67,7 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
 
             <DwmOverviewPanel />
 
-            <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
-                <div className='flex items-center justify-between gap-3'>
-                    <div>
-                        <h2 className='text-base font-semibold text-ui-text'>Platform traffic</h2>
-                        <p className='mt-1 text-sm text-ui-muted'>Legacy service telemetry across monitored surfaces; not an organization alert metric.</p>
-                    </div>
-                    <Activity className={`h-4 w-4 ${overview.requestsToday ? 'text-ui-success' : 'text-ui-warning'}`} />
-                </div>
-                <div className='mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
-                    <Stat title='Today' value={formatNumber(overview.requestsToday)} />
-                    <Stat title='This week' value={formatNumber(overview.requestsThisWeek)} />
-                    <Stat title='This month' value={formatNumber(overview.requestsThisMonth)} />
-                    <Stat title='Total' value={formatNumber(overview.requestsTotal)} />
-                </div>
-            </DashboardPanel>
-
             <div className='grid gap-3 md:grid-cols-2'>
-                <OverviewCard href='/monitor' title='Domains watched' value={formatNumber(overview.activeDomains)} detail='open the monitored domain list' icon={<Radar className='h-4 w-4' />} tone={overview.activeDomains ? 'ok' : 'watch'} />
                 <OverviewCard title='Vulnerability monitoring' value='Not configured' detail='no organization-scoped image scanner' icon={<ShieldAlert className='h-4 w-4' />} tone='neutral' />
             </div>
 
@@ -176,19 +147,6 @@ function OverviewCard({ href, title, value, detail, icon, tone }: { href?: strin
 
     if (href) return <Link href={href} className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm transition hover:bg-ui-raised'>{content}</Link>
     return <DashboardPanel className='border-ui-border bg-ui-panel p-4'>{content}</DashboardPanel>
-}
-
-function Stat({ title, value }: { title: string, value: string }) {
-    return (
-        <div className='rounded-lg border border-ui-border bg-ui-canvas px-3 py-3'>
-            <p className='text-xs font-semibold uppercase text-ui-muted'>{title}</p>
-            <p className='mt-2 text-xl font-semibold text-ui-text'>{value}</p>
-        </div>
-    )
-}
-
-function formatNumber(value: number) {
-    return new Intl.NumberFormat('en-US').format(value)
 }
 
 function toneText(tone: 'ok' | 'watch' | 'bad' | 'neutral') {
