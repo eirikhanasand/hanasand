@@ -1384,7 +1384,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const workflowHistoryLimit = Math.max(0, Math.min(100_000, Number(Bun.env.TI_WORKFLOW_HYDRATION_HISTORY_LIMIT ?? "5000") || 5000));
     // Keep startup bounded for append-only evidence indexes. PostgreSQL remains
     // the durable source; the in-memory store only needs a recent working set.
-    const largeHistoryLimit = Math.max(0, Math.min(100_000, Number(Bun.env.TI_LARGE_HISTORY_HYDRATION_LIMIT ?? "50000") || 50000));
+    const largeHistoryLimit = Math.max(0, Math.min(100_000, Number(Bun.env.TI_LARGE_HISTORY_HYDRATION_LIMIT ?? "10000") || 10000));
     const [sources, captures, incidents, entities, indicators, actorProfiles, actorIdentityCatalogs, actorIdentities, evidenceLinks, validations, alerts, evaluationLabels, sourceHealth, timeliness, runs, claims, claimEvidence, claimReviews, workflows, reviewTasks, workflowEvents] = await Promise.all([
       this.sql`SELECT record FROM threat_intel.sources ORDER BY created_at`,
       this.sql`SELECT record FROM threat_intel.captures ORDER BY collected_at`,
