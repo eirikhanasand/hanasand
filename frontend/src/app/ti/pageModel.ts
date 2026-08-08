@@ -3231,9 +3231,6 @@ export function selectedTriageBriefFor(
     const visibleTerm = watchlist.matchedTerms[0] || watchlist.terms[0] || result.query
     const sourceLabel = selected.source || 'listed source'
     const hasSourceReference = Boolean(selected.href || selected.provenance || selected.priority?.sourceIds.length || caseDraft?.sourceRows.length)
-    const sourceRows = caseDraft?.sourceRows.length ?? 0
-    const prioritySourceRows = selected.priority?.sourceIds.length ?? 0
-    const evidenceRowCount = sourceRows || prioritySourceRows || 1
     const hasCapture = Boolean(selected.priority?.captureIds.length || caseDraft?.sourceRows.some(row => row.captureId))
     const evidenceTone: SelectedTriageBrief['evidenceTone'] = hasCapture ? 'ready' : hasSourceReference ? 'review' : 'blocked'
     const blocker = actionability.readiness.blockers.find(item => item.ownerLane === 'source' || item.ownerLane === 'public-ti')
@@ -3259,7 +3256,7 @@ export function selectedTriageBriefFor(
         whyItMatters,
         nextAction,
         evidenceStatus: hasCapture
-            ? `Backed by ${evidenceRowCount} source result${evidenceRowCount === 1 ? '' : 's'} with capture or source references attached.`
+            ? 'Backed by captured source evidence with attached references.'
             : hasSourceReference
                 ? 'Source reference is present, but the public result does not yet include a capture reference. Verify before customer-facing escalation.'
                 : 'Verify source evidence before customer-facing escalation.',
