@@ -93,20 +93,28 @@ export function createScraperRuntimeStop(options: {
 }
 
 export async function startScraperRuntime() {
+  const startupAt = Date.now();
   const config = loadRuntimeConfig();
   const logger = createLogger(Bun.env.SCRAPER_LOG_LEVEL === "debug" ? "debug" : "info");
+  const startupPhase = (phase: string, extra: Record<string, unknown> = {}) => logger.info("ti-scraper startup phase", { event: "service.startup_phase", phase, elapsedMs: Date.now() - startupAt, ...extra });
+  startupPhase("config_loaded");
   const paths = buildRuntimeStores(config);
+  startupPhase("runtime_stores_built");
   const store = await PostgresScraperStore.create();
+  startupPhase("postgres_store_created");
   const legacyImport = await store.importLegacySnapshot(paths.evidenceMetadataPath);
+  startupPhase("legacy_snapshot_checked", { imported: legacyImport.imported });
   const objectStore = new FileObjectEvidenceStore({ rootDir: paths.evidenceObjectDir });
   const retentionAssignments = normalizeDefaultRetentionClasses(store);
   const retention = await enforceDefaultRetentionPolicies(store, objectStore);
+  startupPhase("retention_enforced", { retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0) });
   const frontier = new FocusedFrontier({
     maxQueueSize: Number(Bun.env.TI_CANARY_MAX_QUEUE_SIZE ?? "500"),
     defaultPerSourceConcurrency: 1,
     crawlBudgetPolicies: { "public-canary": { taskLimit: Number(Bun.env.TI_CANARY_BUDGET_TASKS ?? "1000"), byteLimit: Number(Bun.env.TI_CANARY_BUDGET_BYTES ?? "512000000") } }
   });
   const sourceBootstrap = await bootstrapRuntimeSources(store as any);
+  startupPhase("sources_bootstrapped", { sourceCount: sourceBootstrap.totalSourceCount, importedSourceCount: sourceBootstrap.importedSourceCount });
   const scheduledRuns = createScheduledRunBoundary({
     execute: (runId) => executeScheduledCollectionRun({
       store,
@@ -185,6 +193,7 @@ export async function startScraperRuntime() {
     onError: (error: unknown) => logger.warn("automatic evaluation cycle failed", { event: "automatic_evaluation.error", error: error instanceof Error ? error.message : String(error) })
   });
   const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, defaultCanaryLoop: defaultCanary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
+  startupPhase("api_server_started", { port: server.port });
   const automaticReview = startAutomaticReviewWorker({ store, frontier, config } as any, {
     intervalMs: Number(Bun.env.HANASAND_AI_REVIEW_INTERVAL_MS ?? "60000"),
     limit: Number(Bun.env.HANASAND_AI_REVIEW_MAX_TASKS_PER_CYCLE ?? "10"),
