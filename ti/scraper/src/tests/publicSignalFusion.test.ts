@@ -35,7 +35,7 @@ describe("compact public signal fusion", () => {
   });
 
   test("surfaces coverage and next collection tasks", () => {
-    const matrix = buildActorSourceCoverageMatrix({ query: "APT29", sources });
+    const matrix = buildActorSourceCoverageMatrix({ query: "APT29", sources, deltas: [advisory] });
     const loop = buildPublicSignalLiveCollectionLoopDto({ query: "APT29", sources });
     const value = buildPublicSignalValueImpact({ publicSignalDeltas: [advisory] });
     const correlation = buildPublicAdvisoryCorrelation({ deltas: [advisory] });
@@ -44,5 +44,14 @@ describe("compact public signal fusion", () => {
     expect(loop.nextTasks[0].action).toBe("collect_public_metadata");
     expect(value.sellableRows).toBe(1);
     expect(correlation.actors[0].actor).toBe("APT29");
+  });
+
+  test("does not count registered sources as observed coverage", () => {
+    const matrix = buildActorSourceCoverageMatrix({ query: "APT29", sources, deltas: [] });
+    const fusion = buildPublicSignalFusionWorkbench({ query: "APT29", sources });
+
+    expect(matrix.rows.every((row: any) => row.sourceCount === 0 && row.status === "coverage_gap")).toBe(true);
+    expect(fusion.familyCoverage).toMatchObject({ familiesCovered: [], diversityScore: 0, evidenceBacked: true });
+    expect(fusion.sourceCoverageGaps.every((row: any) => row.reason === "no retained evidence observed")).toBe(true);
   });
 });

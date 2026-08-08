@@ -6,11 +6,13 @@ export function buildActorSourceCoverageMatrix(input: any): any {
   const generatedAt = input.generatedAt ?? nowIso();
   const query = input.query ?? "unknown";
   const sources = input.sources ?? [];
+  const sourceById = new Map(sources.map((source: SourceRecord) => [source.id, source]));
+  const observedSourceIds = new Set((input.deltas ?? []).map((delta: any) => String(delta.sourceId ?? "")).filter((sourceId: string) => sourceById.has(sourceId)));
   const rows = FAMILIES.map((family) => {
-    const sourceCount = sources.filter((source: SourceRecord) => familyForSource(source) === family).length;
-    return { family, sourceCount, status: sourceCount > 0 ? "ready" : "coverage_gap", freshness: sourceCount > 0 ? "fresh" : "unknown" };
+    const sourceCount = [...observedSourceIds].filter((sourceId) => familyForSource(sourceById.get(sourceId)!) === family).length;
+    return { family, sourceCount, status: sourceCount > 0 ? "ready" : "coverage_gap", freshness: sourceCount > 0 ? "observed" : "not_observed" };
   });
-  return { query, generatedAt, status: rows.some((row) => row.status === "ready") ? "partial" : "coverage_gap", rows };
+  return { query, generatedAt, status: rows.some((row) => row.status === "ready") ? "partial" : "coverage_gap", rows, evidenceBacked: true };
 }
 
 export function buildEnterpriseSourceCoverageRadar(input: any): any {
