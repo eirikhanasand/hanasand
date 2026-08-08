@@ -56,22 +56,7 @@ export function exposureQueueFallback(status: 'checking' | 'unavailable', limit:
 export function normalizeExposureQueue(value: unknown): ExposureQueue {
     const record = isRecord(value) ? value : {}
     const generatedAt = typeof record.generatedAt === 'string' ? record.generatedAt : new Date().toISOString()
-    const items = Array.isArray(record.items) ? record.items.map((rawItem, index) => {
-        const item = isRecord(rawItem) ? rawItem : {}
-        return {
-            id: String(item.id || `exposure-${index}`),
-            actor: String(item.actor || 'Unknown actor'),
-            company: String(item.company || 'Unknown company'),
-            claimedData: String(item.claimedData || 'Not disclosed by TA'),
-            claimedDataSize: String(item.claimedDataSize || 'Not disclosed by TA'),
-            country: String(item.country || 'Not disclosed by TA'),
-            claimTime: typeof item.claimTime === 'string' ? item.claimTime : undefined,
-            collectedAt: typeof item.collectedAt === 'string' ? item.collectedAt : undefined,
-            status: String(item.status || 'parsed'),
-            confidence: typeof item.confidence === 'number' ? item.confidence : undefined,
-            sourceName: typeof item.sourceName === 'string' ? item.sourceName : undefined,
-        }
-    }) : []
+    const items = Array.isArray(record.items) ? record.items.map(normalizeExposureQueueItem).filter((item): item is ExposureQueueItem => Boolean(item)) : []
     const freshnessRecord = isRecord(record.freshness) ? record.freshness : {}
     const schedulerRecord = isRecord(record.scheduler) ? record.scheduler : {}
     const countsRecord = isRecord(record.counts) ? record.counts : {}
@@ -104,6 +89,27 @@ export function normalizeExposureQueue(value: unknown): ExposureQueue {
             hasMore: typeof pageRecord.hasMore === 'boolean' ? pageRecord.hasMore : undefined,
         },
         items,
+    }
+}
+
+function normalizeExposureQueueItem(rawItem: unknown): ExposureQueueItem | null {
+    const item = isRecord(rawItem) ? rawItem : null
+    const id = typeof item?.id === 'string' && item.id.trim() ? item.id : null
+    const actor = typeof item?.actor === 'string' && item.actor.trim() ? item.actor : null
+    const company = typeof item?.company === 'string' && item.company.trim() ? item.company : null
+    if (!item || !id || !actor || !company) return null
+    return {
+        id,
+        actor,
+        company,
+        claimedData: String(item.claimedData || 'Not disclosed by TA'),
+        claimedDataSize: String(item.claimedDataSize || 'Not disclosed by TA'),
+        country: String(item.country || 'Not disclosed by TA'),
+        claimTime: typeof item.claimTime === 'string' ? item.claimTime : undefined,
+        collectedAt: typeof item.collectedAt === 'string' ? item.collectedAt : undefined,
+        status: String(item.status || 'unverified'),
+        confidence: typeof item.confidence === 'number' ? item.confidence : undefined,
+        sourceName: typeof item.sourceName === 'string' ? item.sourceName : undefined,
     }
 }
 
