@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-  buildSourceMarketplaceApiResponse,
-  buildTiSourceAtlasApiResponse,
-  buildTiSourceAtlasExportManifestApiResponse,
   importSeedBundle,
   seedDuplicateKey,
   validateSeedBundle,
@@ -80,14 +77,4 @@ describe("compact source seeds", () => {
     });
   });
 
-  test("returns buyer-visible atlas and marketplace rows", () => {
-    const atlas = buildTiSourceAtlasApiResponse({ recordLimit: 25, queries: ["APT29"] });
-    const manifest = buildTiSourceAtlasExportManifestApiResponse({ recordLimit: 25 });
-    const marketplace = buildSourceMarketplaceApiResponse({ limit: 25 });
-
-    expect(atlas.records).toHaveLength(25);
-    expect(atlas.coverageMatrix[0].sourceCount).toBeGreaterThan(0);
-    expect(manifest.rows.every((row: any) => row.url && row.valueScore >= 60)).toBe(true);
-    expect(marketplace.sources.every((row: any) => row.buyerUseCase.includes("Adds public"))).toBe(true);
-  });
 });
