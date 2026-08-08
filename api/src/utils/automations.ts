@@ -5,7 +5,7 @@ import { listGptClients, requestGptCompletion } from '#utils/ws/handleGptMessage
 
 export type AutomationScheduleKind = 'once' | 'interval'
 export type AutomationStatus = 'active' | 'paused' | 'archived'
-export type AutomationActionType = 'agent_prompt' | 'echo' | 'mail_health_check' | 'system_alert'
+export type AutomationActionType = 'agent_prompt' | 'echo' | 'mail_health_check' | 'system_alert' | 'organization_report'
 
 export type AutomationRow = {
     id: string
@@ -20,6 +20,7 @@ export type AutomationRow = {
     timezone: string
     model_name: string | null
     notify_on: 'never' | 'failure' | 'always'
+    organization_id: string | null
     next_run_at: string | null
     last_run_at: string | null
     last_completed_at: string | null
@@ -73,6 +74,8 @@ export type AutomationInput = {
     model_name?: unknown
     notifyOn?: unknown
     notify_on?: unknown
+    organizationId?: unknown
+    organization_id?: unknown
 }
 
 type NormalizedAutomationInput = {
@@ -86,11 +89,12 @@ type NormalizedAutomationInput = {
     timezone: string
     modelName: string | null
     notifyOn: 'never' | 'failure' | 'always'
+    organizationId: string | null
     nextRunAt: Date | null
 }
 
 const ACTIVE_STATUSES = new Set(['active', 'paused', 'archived'])
-const ACTION_TYPES = new Set(['agent_prompt', 'echo', 'mail_health_check', 'system_alert'])
+const ACTION_TYPES = new Set(['agent_prompt', 'echo', 'mail_health_check', 'system_alert', 'organization_report'])
 const NOTIFY_OPTIONS = new Set(['never', 'failure', 'always'])
 const MAX_AUTOMATION_RUNTIME_MS = 10 * 60_000
 const STALE_RUNNING_AFTER_MS = MAX_AUTOMATION_RUNTIME_MS + 2 * 60_000
@@ -109,6 +113,7 @@ export function toAutomation(row: AutomationRow) {
         timezone: row.timezone,
         modelName: row.model_name,
         notifyOn: row.notify_on,
+        organizationId: row.organization_id,
         nextRunAt: row.next_run_at,
         lastRunAt: row.last_run_at,
         lastCompletedAt: row.last_completed_at,
@@ -154,6 +159,7 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
     const timezone = parseTimezone(input.timezone ?? existing?.timezone)
     const modelName = clean(input.modelName ?? input.model_name ?? existing?.model_name) || null
     const notifyOn = parseNotifyOn(input.notifyOn ?? input.notify_on ?? existing?.notify_on)
+    const organizationId = clean(input.organizationId ?? input.organization_id ?? existing?.organization_id) || null
     const nextRunAt = status === 'active' ? computeNextRunAt({ scheduleKind, intervalMinutes, runAt, from: new Date() }) : null
 
     if (!prompt) {
@@ -168,7 +174,14 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
         throw new Error('Mail health alerts need a delivery destination before activation.')
     }
 
-    return { name, prompt, scheduleKind, intervalMinutes, runAt, status, actionType, timezone, modelName, notifyOn, nextRunAt }
+    if (actionType === 'organization_report' && !organizationId) {
+        throw new Error('Organization reports need an organization scope.')
+    }
+    if (status === 'active' && actionType === 'organization_report' && !modelName) {
+        throw new Error('Organization reports need a delivery destination before activation.')
+    }
+
+    return { name, prompt, scheduleKind, intervalMinutes, runAt, status, actionType, timezone, modelName, notifyOn, organizationId, nextRunAt }
 }
 
 export function computeNextRunAt({
@@ -385,6 +398,16 @@ async function runAutomationAction(automation: AutomationRow) {
         }
     }
 
+    if (automation.action_type === 'organization_report') {
+        const report = await buildOrganizationReport(automation)
+        await deliverDiscordIfConfigured(automation, report)
+        return {
+            provider: 'hanasand-organization-report',
+            model: automation.model_name ? discordWebhookFileModelLabel(automation.model_name) : 'organization-report',
+            message: report,
+        }
+    }
+
     const clients = listGptClients('gpt')
     const availableClients = clients.filter((client) => client.model.status !== 'error')
     const preferredClient = automation.model_name
@@ -424,6 +447,62 @@ async function runAutomationAction(automation: AutomationRow) {
 
 async function deliverDiscordIfConfigured(automation: AutomationRow, content: string) {
     await deliverDiscordWebhookFile(automation.model_name, content)
+}
+
+async function buildOrganizationReport(automation: AutomationRow) {
+    if (!automation.organization_id) throw new Error('Organization report is missing its organization scope.')
+    const watchlists = await run(`
+        SELECT value, kind
+        FROM organization_watchlist_items
+        WHERE organization_id = $1 AND status = 'active' AND archived_at IS NULL
+        ORDER BY value ASC
+    `, [automation.organization_id])
+    const terms = (watchlists.rows as Array<{ value: string, kind: string }>).map(row => `${row.value} (${row.kind})`)
+    const snapshot = await fetchOrganizationProduct(automation.organization_id)
+    const alerts = Array.isArray(snapshot.alerts) ? snapshot.alerts : []
+    const sourceCoverage = snapshot.sourceCoverage && typeof snapshot.sourceCoverage === 'object'
+        ? Object.keys(snapshot.sourceCoverage as Record<string, unknown>).length
+        : 0
+    const readiness = snapshot.readiness && typeof snapshot.readiness === 'object'
+        ? String((snapshot.readiness as Record<string, unknown>).decision || 'not reported')
+        : 'not reported'
+    const lines = [
+        `Hanasand monitoring report · ${new Date().toISOString()}`,
+        `Organization: ${automation.organization_id}`,
+        `Active watchlist: ${terms.length ? terms.join(', ') : 'none configured'}`,
+        `Observed alerts: ${alerts.length}`,
+        `Source coverage groups: ${sourceCoverage}`,
+        `Readiness: ${readiness}`,
+    ]
+    if (alerts.length) {
+        const preview = alerts.slice(0, 5).map((alert: any) => `${alert.severity || 'unknown'} · ${alert.company || alert.matchedTerm?.value || 'match'} · ${alert.reviewState || 'review'}`)
+        lines.push(`Alert queue: ${preview.join(' | ')}`)
+        if (alerts.length > preview.length) lines.push(`Alert queue: +${alerts.length - preview.length} more; review in DWM.`)
+    } else {
+        lines.push('Alert queue: no scoped matches in this snapshot.')
+    }
+    lines.push(`Instructions: ${automation.prompt}`)
+    return lines.join('\n')
+}
+
+async function fetchOrganizationProduct(organizationId: string) {
+    const base = process.env.TI_SCRAPER_API_BASE?.replace(/\/$/, '')
+    const token = process.env.TI_SCRAPER_SERVICE_TOKEN
+    if (!base || !token) throw new Error('Threat-intelligence report runtime is not configured.')
+    const url = new URL(`${base}/v1/dwm/product`)
+    url.searchParams.set('organizationId', organizationId)
+    const response = await fetch(url, {
+        headers: {
+            accept: 'application/json',
+            'x-hanasand-service-token': token,
+            'x-organization-id': organizationId,
+            'x-tenant-id': organizationId,
+        },
+        signal: AbortSignal.timeout(30_000),
+    })
+    const payload = await response.json().catch(() => null) as Record<string, unknown> | null
+    if (!response.ok || !payload) throw new Error(`Threat-intelligence report returned ${response.status}.`)
+    return payload
 }
 
 async function withAutomationTimeout<T>(promise: Promise<T>) {

@@ -43,6 +43,19 @@ try {
     })
     assert.equal(systemAlert.actionType, 'system_alert')
 
+    const organizationReport = normalizeAutomationInput({
+        name: 'Organization monitoring report',
+        prompt: 'Summarize the scoped watchlist, alerts, and source readiness.',
+        scheduleKind: 'interval',
+        intervalMinutes: 1440,
+        status: 'paused',
+        actionType: 'organization_report',
+        organizationId: 'org_smoke',
+        timezone: 'Europe/Oslo',
+    })
+    assert.equal(organizationReport.actionType, 'organization_report')
+    assert.equal(organizationReport.organizationId, 'org_smoke')
+
     await assert.rejects(
         resolveDiscordWebhookUrl('discord-webhook-file:relative/path.txt'),
         /absolute path/,
@@ -55,8 +68,9 @@ try {
     const ensureSchema = await readFile(new URL('../src/utils/db/ensureSchema.ts', import.meta.url), 'utf8')
     assert.match(ensureSchema, /mail_health_check/)
     assert.match(ensureSchema, /system_alert/)
+    assert.match(ensureSchema, /organization_report/)
 
-    const checked = ['mail_health_check', 'system_alert', 'discord_webhook_file_redaction']
+    const checked = ['mail_health_check', 'system_alert', 'organization_report_scope', 'discord_webhook_file_redaction']
     const liveWebhookFile = process.env.ALERT_DISCORD_WEBHOOK_FILE
     if (process.env.SEND_LIVE_DISCORD === '1' && liveWebhookFile) {
         await deliverDiscordWebhookFile(

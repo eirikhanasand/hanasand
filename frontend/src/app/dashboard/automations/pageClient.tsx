@@ -397,8 +397,16 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                                     <option value='mail_health_check'>Mail health automation</option>
                                     <option value='system_alert'>System automation</option>
                                     <option value='echo'>Delivery test</option>
+                                    <option value='organization_report'>Organization report</option>
                                 </select>
                             </label>
+                            {draft.actionType === 'organization_report' && (
+                                <label className='grid gap-1.5 md:col-span-2'>
+                                    <span className='text-xs font-medium text-ui-muted'>Organization ID</span>
+                                    <input className={inputClass} value={draft.organizationId || ''} placeholder='Paste the organization ID from Organizations' onChange={event => setDraft({ ...draft, organizationId: event.target.value.trim() || null })} />
+                                    <span className='text-[11px] leading-5 text-ui-muted'>The report reads only this organization’s active watchlist and DWM monitoring data. Membership is checked when you save it.</span>
+                                </label>
+                            )}
                             <label className='grid gap-1.5'>
                                 <span className='text-xs font-medium text-ui-muted'>Destination</span>
                                 <input className={inputClass} value={draft.modelName || ''} placeholder='discord-webhook-file:/secure/path/to/webhook-url' onChange={event => setDraft({ ...draft, modelName: event.target.value.trim() || null })} />
@@ -625,8 +633,11 @@ function routeHealthFor(automation: AgentAutomation): { label: string, detail: s
 
 function routeHealthForDraft(draft: AutomationPayload): { label: string, detail: string, tone: 'ok' | 'bad' | 'neutral' } {
     if (draft.status === 'paused') return { label: 'Paused', detail: 'Route is paused; reactivate to resume checks.', tone: 'neutral' }
-    if ((draft.actionType === 'mail_health_check' || draft.actionType === 'system_alert') && !draft.modelName) {
+    if ((draft.actionType === 'mail_health_check' || draft.actionType === 'system_alert' || draft.actionType === 'organization_report') && !draft.modelName) {
         return { label: 'Needs destination', detail: 'Add a Discord webhook-file destination before activating this automation.', tone: 'bad' }
+    }
+    if (draft.actionType === 'organization_report' && !draft.organizationId) {
+        return { label: 'Needs organization', detail: 'Choose an organization scope before activating this report.', tone: 'bad' }
     }
     if (draft.scheduleKind === 'interval' && (!draft.intervalMinutes || draft.intervalMinutes < 1)) {
         return { label: 'Needs interval', detail: 'Enter how many minutes to wait between checks.', tone: 'bad' }
@@ -637,16 +648,17 @@ function routeHealthForDraft(draft: AutomationPayload): { label: string, detail:
 function activeRouteSaveBlocker(draft: AutomationPayload) {
     if (draft.scheduleKind === 'interval' && (!draft.intervalMinutes || draft.intervalMinutes < 1)) return 'Enter how many minutes to wait between checks.'
     if (draft.status !== 'active') return ''
-    if ((draft.actionType === 'mail_health_check' || draft.actionType === 'system_alert') && !draft.modelName) {
+    if ((draft.actionType === 'mail_health_check' || draft.actionType === 'system_alert' || draft.actionType === 'organization_report') && !draft.modelName) {
         return 'Add a delivery destination or keep the route paused before saving.'
     }
+    if (draft.actionType === 'organization_report' && !draft.organizationId) return 'Add an organization ID or choose another automation type.'
     return ''
 }
 
 function deliveryTargetLabel(modelName: string | null | undefined, actionType: AgentAutomation['actionType']) {
     if (modelName?.startsWith('discord-webhook-file:')) return 'Discord webhook file'
     if (modelName) return modelName
-    if (actionType === 'mail_health_check' || actionType === 'system_alert') return 'Needs destination'
+    if (actionType === 'mail_health_check' || actionType === 'system_alert' || actionType === 'organization_report') return 'Needs destination'
     return actionType === 'echo' ? 'delivery test' : 'monitoring check'
 }
 
@@ -654,6 +666,7 @@ function alertCategoryLabel(actionType: AgentAutomation['actionType']) {
     if (actionType === 'mail_health_check') return 'Mail'
     if (actionType === 'system_alert') return 'System'
     if (actionType === 'echo') return 'Test'
+    if (actionType === 'organization_report') return 'Report'
     return 'Monitoring'
 }
 
@@ -683,6 +696,7 @@ function toDraft(automation: AgentAutomation): AutomationPayload {
         runAt: automation.runAt ? new Date(automation.runAt).toISOString().slice(0, 16) : '',
         status: automation.status === 'paused' ? 'paused' : 'active',
         actionType: automation.actionType,
+        organizationId: automation.organizationId || null,
         timezone: automation.timezone || defaultTimezone(),
         modelName: automation.modelName || null,
         notifyOn: automation.notifyOn || 'failure',

@@ -68,6 +68,9 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
         }
     }
 
+    const scopeError = await organizationScopeError(input.actionType, input.organizationId, ownerId)
+    if (scopeError) return res.status(403).send({ error: scopeError })
+
     const id = crypto.randomUUID()
     const result = await run(`
         INSERT INTO agent_automations (
@@ -80,12 +83,13 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
             run_at,
             status,
             action_type,
+            organization_id,
             timezone,
             model_name,
             notify_on,
             next_run_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *
     `, [
         id,
@@ -97,6 +101,7 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
         input.runAt,
         input.status,
         input.actionType,
+        input.organizationId,
         input.timezone,
         input.modelName,
         input.notifyOn,
@@ -132,6 +137,9 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
         }
     }
 
+    const scopeError = await organizationScopeError(input.actionType, input.organizationId, ownerId, manageAll)
+    if (scopeError) return res.status(403).send({ error: scopeError })
+
     const result = await run(`
         UPDATE agent_automations
            SET name = $3,
@@ -141,16 +149,17 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
                run_at = $7,
                status = $8,
                action_type = $9,
-               timezone = $10,
-               model_name = $11,
-               notify_on = $12,
-               next_run_at = $13,
+               organization_id = $10,
+               timezone = $11,
+               model_name = $12,
+               notify_on = $13,
+               next_run_at = $14,
                consecutive_failures = CASE WHEN $8 = 'active' THEN 0 ELSE consecutive_failures END,
                paused_reason = CASE WHEN $8 = 'active' THEN NULL ELSE paused_reason END,
                last_status = CASE WHEN last_status = 'running' THEN NULL ELSE last_status END,
                updated_at = NOW()
          WHERE id = $1
-           AND ($2::BOOLEAN OR owner_id = $14)
+           AND ($2::BOOLEAN OR owner_id = $15)
          RETURNING *
     `, [
         req.params.id,
@@ -162,6 +171,7 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
         input.runAt,
         input.status,
         input.actionType,
+        input.organizationId,
         input.timezone,
         input.modelName,
         input.notifyOn,
@@ -265,4 +275,20 @@ async function activeAutomationLimitError(ownerId: string, excludeId?: string) {
     }
 
     return null
+}
+
+async function organizationScopeError(actionType: string, organizationId: string | null, userId: string, includeAll = false) {
+    if (actionType !== 'organization_report') return null
+    if (!organizationId) return 'Organization reports need an organization scope.'
+    if (includeAll) {
+        const result = await run('SELECT 1 FROM organizations WHERE id = $1 AND status = \'active\'', [organizationId])
+        return result.rows.length ? null : 'Organization was not found or is not active.'
+    }
+    const result = await run(`
+        SELECT 1
+        FROM organizations o
+        JOIN organization_members member ON member.organization_id = o.id
+        WHERE o.id = $1 AND o.status = 'active' AND member.user_id = $2 AND member.status = 'active'
+    `, [organizationId, userId])
+    return result.rows.length ? null : 'Organization reports require an active organization membership.'
 }
