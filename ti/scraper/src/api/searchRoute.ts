@@ -745,7 +745,7 @@ function actorBusinessCategory(entity: any) {
   if (entity.type === "payment_claim") return "payment";
   if (["revenue_claim", "profitability_signal"].includes(entity.type)) return "economic_outcome";
   if (["publication_strategy", "publicity_tactic", "publicity_event", "victim_pressure_tactic"].includes(entity.type)) return "publicity";
-  if (entity.type === "buyer_seller_communication") return "buyer_victim_communication";
+  if (entity.type === "buyer_seller_communication") return "buyer_seller_communication";
   if (entity.type === "intermediary_communication") return "intermediary_communication";
   if (entity.type === "communication_channel") return "communication_channel";
   if (["advertised_product", "advertised_data", "dataset"].includes(entity.type)) return "advertised_offering";

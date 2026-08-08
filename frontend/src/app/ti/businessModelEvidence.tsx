@@ -18,7 +18,7 @@ export function ActorBusinessModelEvidence({ model, sources, caseStudies, state 
         { label: 'Revenue and profitability evidence', rows: [...(model?.revenueClaims ?? []), ...(model?.profitabilitySignals ?? [])] },
         { label: 'Affiliate and revenue-share terms', rows: model?.revenueShareClaims ?? [] },
         { label: 'Communication channels', rows: model?.communicationChannels ?? [] },
-        { label: 'Buyer or victim communication', rows: model?.buyerSellerCommunications ?? [] },
+        { label: 'Buyer or seller communication', rows: model?.buyerSellerCommunications ?? [] },
         { label: 'Intermediary communication', rows: model?.intermediaryCommunications ?? [] },
         { label: 'Publicity and pressure', rows: [...(model?.publicationStrategies ?? []), ...(model?.publicityTactics ?? []), ...(model?.publicityEvents ?? []), ...(model?.pressureTactics ?? [])] },
     ].filter(group => group.rows.length)
@@ -178,7 +178,7 @@ function ActorCaseStudyIndex({ catalog }: { catalog: TiActorCaseStudyCatalog }) 
 function caseCategoryLabel(value: string) {
     return ({
         advertised_offering: 'Advertised offering',
-        buyer_victim_communication: 'Buyer/victim communication',
+        buyer_seller_communication: 'Buyer/seller communication',
         communication_channel: 'Communication channel',
         economic_outcome: 'Revenue/profitability',
         intermediary_communication: 'Intermediary',
