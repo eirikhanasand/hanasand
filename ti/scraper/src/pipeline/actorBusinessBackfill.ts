@@ -1,4 +1,7 @@
 import type { CollectedItem, ExtractedEntity, RawCapture } from "../types.ts";
+import { extractActorBusinessEvidence } from "./actorBusinessEvidence.ts";
+import { extractEntities, type ExtractionContext } from "./extractors.ts";
+import type { ActorIdentityRecord } from "./mitreActorCatalog.ts";
 import { extractSourceSpecificEntities } from "./sourceSpecificExtraction.ts";
 
 const BUSINESS_TYPES = new Set([
@@ -7,16 +10,20 @@ const BUSINESS_TYPES = new Set([
   "victim_pressure_tactic", "profitability_signal",
 ]);
 
-export function actorBusinessEntitiesFromRetainedCapture(capture: RawCapture): ExtractedEntity[] {
+export function actorBusinessEntitiesFromRetainedCapture(capture: RawCapture, actorIdentities: ActorIdentityRecord[] = []): ExtractedEntity[] {
   const group = capture.metadata?.ransomwareGroup;
-  if (capture.metadata?.extractionProfile !== "ransomware_group_metadata" || typeof group?.description !== "string" || !group.description.trim()) return [];
+  const groupProfile = capture.metadata?.extractionProfile === "ransomware_group_metadata" && typeof group?.description === "string" && group.description.trim();
+  const retainedFeedText = typeof capture.metadata?.safeExcerpt === "string" && capture.metadata.safeExcerpt.trim() || typeof capture.body === "string" && capture.body.trim();
+  const feedProfile = capture.metadata?.feedItem === true && retainedFeedText;
+  const rawText = groupProfile ? group.description : feedProfile ? retainedFeedText : undefined;
+  if (!rawText || !extractActorBusinessEvidence(rawText).length) return [];
   const item: CollectedItem = {
     tenantId: capture.tenantId,
     sourceId: capture.sourceId,
     taskId: capture.taskId,
     url: capture.url,
     title: capture.metadata?.title,
-    rawText: group.description,
+    rawText,
     collectedAt: capture.collectedAt,
     publishedAt: capture.publishedAt,
     contentHash: capture.contentHash,
@@ -24,13 +31,17 @@ export function actorBusinessEntitiesFromRetainedCapture(capture: RawCapture): E
     metadata: capture.metadata,
     sensitive: capture.sensitive,
   };
-  return extractSourceSpecificEntities(item, {
+  const context: ExtractionContext = {
     sourceId: capture.sourceId,
     captureId: capture.id,
     url: capture.url,
     collectedAt: capture.collectedAt,
     contentHash: capture.contentHash,
-  }).filter(entity => BUSINESS_TYPES.has(entity.type));
+  };
+  const fallbackEntities = extractEntities(rawText, context, actorIdentities);
+  return extractSourceSpecificEntities(item, context, actorIdentities, fallbackEntities).filter(entity =>
+    BUSINESS_TYPES.has(entity.type) || (!groupProfile && entity.type === "actor")
+  );
 }
 
 export function actorBusinessLineageCounts(

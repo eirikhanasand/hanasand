@@ -1,9 +1,12 @@
 import { describe, expect, FocusedFrontier, handleApiRequest, InMemoryScraperStore, processCollectedItem, source, test } from "./apiTestHarness.ts";
 import { hashContent } from "../utils.ts";
 import { actorBusinessEntitiesFromRetainedCapture, actorBusinessLineageCounts } from "../pipeline/actorBusinessBackfill.ts";
+import type { ActorIdentityRecord } from "../pipeline/mitreActorCatalog.ts";
+import { feedItems } from "../ops/canaryFeedItems.ts";
 
 const collectedAt = "2026-07-20T15:45:45.322Z";
 const publishedAt = "2026-07-18T09:30:00.000Z";
+const feedPublishedAt = "Sat, 18 Jul 2026 11:30:00 +0200";
 const catalogSource = source({
   id: "src_ransomwarelive_current_operations_catalog",
   name: "Ransomware.live Public Groups Dataset",
@@ -16,6 +19,14 @@ const mirrorSource = source({
   id: "src_independent_actor_report",
   name: "Independent Public Ransomware Report",
   url: "https://reports.example.test/ransomware",
+});
+const publicReportSource = source({
+  ...catalogSource,
+  id: "src_public_ransomware_report",
+  name: "Independent Security News",
+  type: "rss",
+  url: "https://news.example.test/security.xml",
+  metadata: { productionCollection: true },
 });
 const retainedGroupSource = source({
   ...catalogSource,
@@ -120,6 +131,31 @@ describe("actor business-model reviewed evidence", () => {
     expect(pricing).toMatchObject({ value: "$150,000 to $1,00,0000", reviewState: "confirmed", corroborationState: "single_source" });
     expect(pricing.captureIds).toEqual([active.capture.id]);
     expect(pricing.evidence.map((row: any) => row.captureId)).toEqual([active.capture.id]);
+  });
+
+  test("extracts an exact dated single-actor public report and rejects undated or multi-actor reports", async () => {
+    const identities = [identity("Everest", []), identity("LockBit", [])];
+    const store = actorStore(["Everest", "LockBit"]);
+    store.saveSource(publicReportSource);
+    const text = "Stadler Rail says the Everest ransomware gang demanded about $12.3 million after breaching its supplier platform.";
+    const report = publicReportResult(text, identities);
+    store.savePipelineResult(report);
+
+    expect(report.entities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "actor", value: "Everest", assertionKind: "third_party_report", extractionMethod: "source_specific" }),
+      expect.objectContaining({ type: "pricing_claim", value: "$12.3 million", assertionKind: "third_party_report", extractionMethod: "source_specific" }),
+    ]));
+    expect((await searchResult(store, "Everest")).actorIntelligence.businessModel.pendingFindings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: "$12.3 million", sourceIds: [publicReportSource.id], captureIds: [report.capture.id] }),
+    ]));
+    confirmBusinessClaims(store, report.capture.id);
+    expect((await searchResult(store, "Everest")).actorIntelligence.businessModel.pricingClaims[0]).toMatchObject({
+      value: "$12.3 million",
+      evidence: [expect.objectContaining({ captureId: report.capture.id, publishedAt })],
+    });
+
+    expect(publicReportResult(text, identities, { publishedAt: undefined }).entities.some((entity: any) => entity.type === "pricing_claim")).toBe(false);
+    expect(publicReportResult(`${text} LockBit was also discussed in the report.`, identities).entities.some((entity: any) => entity.type === "pricing_claim")).toBe(false);
   });
 
   test("treats equivalent ISO review timestamp forms identically", async () => {
@@ -257,6 +293,24 @@ describe("actor business-model reviewed evidence", () => {
     store.savePipelineResult({ capture: retainedCapture, entities: actorBusinessEntitiesFromRetainedCapture(retainedCapture), indicators: [] });
     expect(actorBusinessLineageCounts(store, new Set([retainedCapture.id]))).toEqual(counts);
   });
+
+  test("backfills one retained public report with the same exact evidence boundary", () => {
+    const identities = [identity("Everest", [])];
+    const store = actorStore(["Everest"]);
+    store.saveSource(publicReportSource);
+    const result = publicReportResult("Everest ransomware demanded approximately $8 million from the victim.", identities);
+    const retainedCapture = { ...result.capture, publishedAt: new Date(feedPublishedAt).toISOString() };
+    store.savePipelineResult({ capture: retainedCapture, entities: result.entities.filter((entity: any) => entity.extractionMethod === "deterministic_fallback"), indicators: [] });
+    expect(actorBusinessLineageCounts(store, new Set([retainedCapture.id]))).toEqual({ entities: 0, claims: 0, claimEvidence: 0 });
+
+    const entities = actorBusinessEntitiesFromRetainedCapture(retainedCapture, identities);
+    store.savePipelineResult({ capture: retainedCapture, entities, indicators: [] });
+    expect(entities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "actor", value: "Everest", extractionMethod: "source_specific" }),
+      expect.objectContaining({ type: "pricing_claim", value: "$8 million", extractionMethod: "source_specific" }),
+    ]));
+    expect(actorBusinessLineageCounts(store, new Set([retainedCapture.id]))).toEqual({ entities: 1, claims: 1, claimEvidence: 1 });
+  });
 });
 
 function groupResult(actorName: string, description: string, options: {
@@ -287,6 +341,14 @@ function groupResult(actorName: string, description: string, options: {
   } as any);
 }
 
+function publicReportResult(rawText: string, actorIdentities: any[], options: { publishedAt?: string; url?: string } = {}) {
+  const reportPublishedAt = options.publishedAt === undefined && !Object.prototype.hasOwnProperty.call(options, "publishedAt") ? feedPublishedAt : options.publishedAt;
+  const url = options.url ?? `https://news.example.test/reports/${hashContent(rawText).slice(0, 8)}`;
+  const published = reportPublishedAt ? `<pubDate>${reportPublishedAt}</pubDate>` : "";
+  const [item] = feedItems(publicReportSource, { id: "task_public_report", targetUrl: publicReportSource.url }, `<rss><channel><item><title>Independent ransomware report</title><link>${url}</link>${published}<description>${rawText}</description></item></channel></rss>`, collectedAt, {});
+  return processCollectedItem({ ...item, tenantId: "default" }, { actorIdentities });
+}
+
 function actorStore(names: string[], associatedNames: Record<string, string[]> = {}) {
   const store = new InMemoryScraperStore();
   store.saveSource(catalogSource);
@@ -294,7 +356,7 @@ function actorStore(names: string[], associatedNames: Record<string, string[]> =
   return store;
 }
 
-function identity(name: string, associatedNames: string[]) {
+function identity(name: string, associatedNames: string[]): ActorIdentityRecord {
   return {
     id: `test-actors:${name}`,
     catalogId: "test-actors",

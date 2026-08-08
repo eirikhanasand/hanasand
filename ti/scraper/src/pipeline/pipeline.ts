@@ -18,8 +18,8 @@ export function processCollectedItem(item: CollectedItem, options: { actorIdenti
     language: item.language
   };
   const indicators = extractIndicators(item.rawText, extractorContext);
-  const sourceSpecificEntities = extractSourceSpecificEntities(item, extractorContext, options.actorIdentities);
   const fallbackEntities = extractEntities(item.rawText, extractorContext, options.actorIdentities);
+  const sourceSpecificEntities = extractSourceSpecificEntities(item, extractorContext, options.actorIdentities, fallbackEntities);
   const authoritativeTypes = item.metadata?.extractionProfile === "ransomware_victim_blog"
     ? new Set(sourceSpecificEntities.filter((entity) => entity.type === "actor" || entity.type === "ransomware_family" || entity.type === "victim").flatMap((entity) => entity.type === "actor" || entity.type === "ransomware_family" ? ["actor", "ransomware_family"] : [entity.type]))
     : new Set<string>();

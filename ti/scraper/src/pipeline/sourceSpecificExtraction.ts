@@ -3,17 +3,69 @@ import { normalizeWhitespace } from "../utils.ts";
 import type { ExtractionContext } from "./extractors.ts";
 import { resolveMitreActorIdentity, type ActorIdentityRecord } from "./mitreActorCatalog.ts";
 import { extractActorBusinessEvidence } from "./actorBusinessEvidence.ts";
+import { publicSourceReferenceUrl, zonedSourceTimestamp } from "./sourceFieldReportTimestamp.ts";
 
 export const SOURCE_SPECIFIC_EXTRACTOR_VERSION = "ti-source-specific-extractor-v3";
 
-export function extractSourceSpecificEntities(item: CollectedItem, context: ExtractionContext, actorIdentities?: ActorIdentityRecord[]): ExtractedEntity[] {
+export function extractSourceSpecificEntities(item: CollectedItem, context: ExtractionContext, actorIdentities?: ActorIdentityRecord[], fallbackEntities: ExtractedEntity[] = []): ExtractedEntity[] {
   const profile = item.metadata?.extractionProfile;
   const entities = profile === "ransomware_victim_blog" ? victimBlogEntities(item, context)
     : profile === "ransomware_group_metadata" ? ransomwareGroupEntities(item, context)
       : profile === "cisa_kev" ? cisaKevEntities(item, context)
         : profile === "cert_ua_public_channel" ? certUaEntities(item, context)
-          : [];
+          : publicThreatReportEntities(item, context, actorIdentities ?? [], fallbackEntities);
   return actorIdentities?.length ? entities.map((entity) => resolveActorEntity(entity, actorIdentities)) : entities;
+}
+
+function publicThreatReportEntities(item: CollectedItem, context: ExtractionContext, identities: ActorIdentityRecord[], fallbackEntities: ExtractedEntity[]): ExtractedEntity[] {
+  if (item.metadata?.feedItem !== true || !exactPublisherTimestamp(item)) return [];
+  const actorMentions = fallbackEntities.filter((candidate: any) => candidate.type === "actor" && candidate.actorIdentityIds?.length === 1);
+  const identityIds = [...new Set(actorMentions.flatMap((candidate: any) => candidate.actorIdentityIds))];
+  if (identityIds.length !== 1) return [];
+  const identity = identities.find((candidate) => candidate.id === identityIds[0] && candidate.status === "current");
+  if (!identity) return [];
+  const labels = [...new Set(actorMentions.flatMap((candidate: any) => [candidate.rawValue, candidate.value]).map(meaningful).filter((label): label is string => Boolean(label)))];
+  const findings = extractActorBusinessEvidence(item.rawText).filter((finding) => labels.some((label) => containsLabel(finding.evidenceText, label)));
+  if (!findings.length) return [];
+  const mention: any = actorMentions.find((candidate: any) => labels.some((label) => containsLabel(findings[0].evidenceText, label))) ?? actorMentions[0];
+  const actorEvidence = meaningful(mention.rawValue) ?? meaningful(mention.value) ?? identity.canonicalName;
+  const actorOffset = Number(mention.provenance?.[0]?.startOffset ?? item.rawText.indexOf(actorEvidence));
+  const actor = entity("actor", identity.canonicalName, Math.max(0.82, Number(mention.confidence ?? 0)), "feedItem", item, context, "third_party_report", ["third-party actor attribution requires analyst review"], actorOffset, actorEvidence, actorEvidence.length);
+  (actor as any).actorIdentityIds = [identity.id];
+  (actor as any).aliases = identity.associatedNames;
+  return [actor, ...findings.map((finding) => entity(
+    finding.type,
+    finding.value,
+    finding.confidence,
+    "feedItem",
+    item,
+    context,
+    finding.assertionKind,
+    finding.reviewReasons,
+    finding.startOffset,
+    finding.evidenceText,
+    finding.matchedLength
+  ))];
+}
+
+function exactPublisherTimestamp(item: CollectedItem) {
+  const referenceUrl = publicSourceReferenceUrl(item.url);
+  const publishedAt = Date.parse(String(item.publishedAt ?? ""));
+  return Array.isArray(item.metadata?.reportTimestamps) && item.metadata.reportTimestamps.some((record: any) => {
+    const timestamp = zonedSourceTimestamp(record?.timestamp);
+    return referenceUrl
+      && Number.isFinite(publishedAt)
+      && record?.role === "publisher"
+      && record?.extractionMethod === "source_field"
+      && record?.sourceId === item.sourceId
+      && typeof record?.evidencePath === "string" && record.evidencePath.trim()
+      && timestamp && Date.parse(timestamp) === publishedAt
+      && (!record.referenceUrl || publicSourceReferenceUrl(record.referenceUrl) === referenceUrl);
+  });
+}
+
+function containsLabel(text: string, label: string) {
+  return new RegExp(`(^|[^a-z0-9])${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=$|[^a-z0-9])`, "i").test(text);
 }
 
 function resolveActorEntity(entity: ExtractedEntity, identities: ActorIdentityRecord[]): ExtractedEntity {

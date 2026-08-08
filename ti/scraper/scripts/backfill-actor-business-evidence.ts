@@ -5,8 +5,9 @@ const apply = process.argv.includes("--apply");
 const store = await PostgresScraperStore.create();
 
 try {
-  const captures = store.listCaptures().filter((capture: any) => capture.metadata?.extractionProfile === "ransomware_group_metadata");
-  const plans = captures.map((capture: any) => ({ capture, entities: actorBusinessEntitiesFromRetainedCapture(capture) })).filter(plan => plan.entities.length);
+  const actorIdentities = store.listActorIdentities();
+  const captures = store.listCaptures().filter((capture: any) => capture.metadata?.extractionProfile === "ransomware_group_metadata" || capture.metadata?.feedItem === true);
+  const plans = captures.map((capture: any) => ({ capture, entities: actorBusinessEntitiesFromRetainedCapture(capture, actorIdentities) })).filter(plan => plan.entities.length);
   const before = actorBusinessLineageCounts(store, new Set(captures.map((capture: any) => capture.id)));
 
   if (apply) {

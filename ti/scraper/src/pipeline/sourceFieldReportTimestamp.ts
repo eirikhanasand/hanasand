@@ -2,7 +2,7 @@ import { privateTarget } from "../registry/sourceRegistry.ts";
 
 export function zonedSourceTimestamp(value: unknown) {
   const timestamp = typeof value === "string" ? value.trim() : "";
-  return /(?:Z|[+-]\d{2}:\d{2})$/i.test(timestamp) && Number.isFinite(Date.parse(timestamp)) ? timestamp : undefined;
+  return /(?:Z|[+-]\d{2}:?\d{2}|GMT|UTC)$/i.test(timestamp) && Number.isFinite(Date.parse(timestamp)) ? timestamp : undefined;
 }
 
 export function publicSourceReferenceUrl(value: unknown) {

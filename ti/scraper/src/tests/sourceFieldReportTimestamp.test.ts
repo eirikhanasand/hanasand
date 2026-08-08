@@ -15,6 +15,10 @@ describe("source-field report provenance", () => {
       referenceUrl: "https://reports.example.com/item#published",
       extractionMethod: "source_field"
     });
+    expect(sourceFieldReportTimestamp({ ...input, timestamp: "Wed, 22 Jul 2026 12:59:17 -0400", referenceUrl: "https://reports.example.com/rss-item" })).toMatchObject({
+      timestamp: "Wed, 22 Jul 2026 12:59:17 -0400",
+      extractionMethod: "source_field"
+    });
     for (const [timestamp, referenceUrl] of [
       ["2026-07-23T10:00:00", "https://reports.example.com/item"],
       ["not-a-time", "https://reports.example.com/item"],
