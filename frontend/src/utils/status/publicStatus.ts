@@ -6,6 +6,7 @@ const requiredPublicChecks = [
     { service: 'threat-intelligence', check_name: 'Public search' },
     { service: 'browser-sandbox', check_name: 'Browser workspace' },
     { service: 'dark-web-monitoring', check_name: 'Monitoring workspace' },
+    { service: 'dark-web-monitoring', check_name: 'Latest activity' },
 ] as const
 
 const MAX_CHECK_AGE_MS = 5 * 60 * 1000

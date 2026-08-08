@@ -16,12 +16,13 @@ test('public status does not claim operational health without fresh public check
     }, Date.parse('2026-07-05T00:00:00.000Z'))
 
     expect(status.overall).toBe('degraded')
-    expect(status.checks).toHaveLength(5)
+    expect(status.checks).toHaveLength(6)
     expect(status.checks.map(check => check.service)).toEqual([
         'Core platform',
         'Website',
         'Threat intelligence',
         'Browser sandbox',
+        'Dark web monitoring',
         'Dark web monitoring',
     ])
     expect(status.checks[0]).toMatchObject({
@@ -70,6 +71,7 @@ test('public status is operational only when every buyer-facing monitor is fresh
             serviceCheck('threat-intelligence', 'Public search', checkedAt),
             serviceCheck('browser-sandbox', 'Browser workspace', checkedAt),
             serviceCheck('dark-web-monitoring', 'Monitoring workspace', checkedAt),
+            serviceCheck('dark-web-monitoring', 'Latest activity', checkedAt),
             serviceCheck('content', 'Articles', checkedAt),
         ],
         history: [],
@@ -77,8 +79,37 @@ test('public status is operational only when every buyer-facing monitor is fresh
     }, now)
 
     expect(status.overall).toBe('up')
-    expect(status.checks).toHaveLength(5)
+    expect(status.checks).toHaveLength(6)
     expect(status.checks.every(check => check.status === 'up')).toBe(true)
+})
+
+test('public status exposes stale latest activity as a service failure', () => {
+    const now = Date.parse('2026-08-08T23:20:00.000Z')
+    const checkedAt = new Date(now).toISOString()
+    const status = toPublicServiceStatus({
+        overall: 'up',
+        generated_at: checkedAt,
+        checks: [
+            serviceCheck('core', 'API health', checkedAt),
+            serviceCheck('website', 'Public website', checkedAt),
+            serviceCheck('threat-intelligence', 'Public search', checkedAt),
+            serviceCheck('browser-sandbox', 'Browser workspace', checkedAt),
+            serviceCheck('dark-web-monitoring', 'Monitoring workspace', checkedAt),
+            {
+                ...serviceCheck('dark-web-monitoring', 'Latest activity', checkedAt),
+                status: 'down',
+                message: 'Latest customer activity is stale (113 minutes).',
+            },
+        ],
+        history: [],
+        incidents: [],
+    }, now)
+
+    expect(status.overall).toBe('down')
+    expect(status.checks.find(check => check.check_name === 'Latest Activity')).toMatchObject({
+        status: 'down',
+        message: 'Latest customer activity is stale (113 minutes).',
+    })
 })
 
 test('public status rejects monitor results older than five minutes', () => {
@@ -131,7 +162,7 @@ test('status monitors probe buyer-facing surfaces without inserting fake traffic
     const logMonitor = await readFile(path.join(root, '../api/src/utils/status/logMonitors.ts'), 'utf8')
     const dashboardMonitor = await readFile(path.join(root, '../ops/db-dashboard-monitor/db-dashboard-monitor.mjs'), 'utf8')
 
-    for (const expected of ['API health', 'Public website', 'Public search', 'Browser workspace', 'Monitoring workspace']) {
+    for (const expected of ['API health', 'Public website', 'Public search', 'Browser workspace', 'Monitoring workspace', 'Latest activity']) {
         expect(syntheticMonitor).toContain(`'${expected}'`)
     }
     expect(syntheticMonitor).toContain('\'https://api.hanasand.com/api/v1\'')
