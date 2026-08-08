@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { automaticBenchmarkSampleSizes, automaticHeldOutSelectionReady, createEvaluationBenchmark, runAutomaticEvaluationCycle } from "../api/evaluationBenchmarkRoutes.ts";
+import { automaticBenchmarkSampleSizes, automaticHeldOutSelectionReady, createEvaluationBenchmark, createReferenceCurationBenchmark, runAutomaticEvaluationCycle } from "../api/evaluationBenchmarkRoutes.ts";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
@@ -15,6 +15,95 @@ import type { EvaluationLabelType } from "../storage/evidenceStoreTypes.ts";
 import { hashContent, stableId } from "../utils.ts";
 
 describe("automatic independent evaluation", () => {
+  test("automatically freezes prediction-hidden truth from independent retained captures without creating labels", async () => {
+    const store = referenceCurationStore();
+    const requests: any[] = [];
+    const cycle = () => runAutomaticEvaluationCycle({
+      store,
+      sampleSize: 2,
+      maxTasks: 25,
+      now: () => "2026-08-08T11:01:00.000Z",
+      review: async (request: any) => {
+        requests.push(request);
+        const expectedValues = request.labelType === "actor" ? ["APT29"] : [];
+        return {
+          expectedValues,
+          decision: expectedValues.length ? "present" : "absent",
+          confidence: 0.94,
+          rationale: "Both independently retained publisher reports support the complete label set.",
+          evidenceIds: request.evidence.references.map((reference: any) => reference.id),
+          referenceAligned: true,
+          referenceExhaustive: true,
+          reviewerProvider: "hanasand-ai",
+          reviewerModel: "hanasand-curator",
+          reviewerModelVersion: "curator-v1",
+          promptVersion: request.promptVersion,
+          schemaVersion: request.schemaVersion,
+          modelConversationId: `curation-conversation-${request.contextId}`,
+          modelResponseId: `curation-response-${request.contextId}`
+        };
+      }
+    });
+    const first = await cycle();
+    expect(first.createdBenchmarkIds).toHaveLength(1);
+    const benchmarkId = first.createdBenchmarkIds[0];
+    const second = await cycle();
+    expect({ processed: first.processedTaskCount + second.processedTaskCount, completed: first.completedTaskCount + second.completedTaskCount, deadLetters: first.deadLetterCount + second.deadLetterCount }).toEqual({ processed: 39, completed: 13, deadLetters: 0 });
+    const benchmark = store.getEvaluationBenchmark(benchmarkId)!;
+    expect(benchmark.protocol?.version).toBe("ti.independent_reference_curation.v1");
+    expect(requests).toHaveLength(39);
+    expect(new Set(requests.map((request) => request.contextId)).size).toBe(39);
+    expect(requests.every((request) => request.mode === "reference_curation" && request.evidence.references.some((reference: any) => reference.kind === "independent_reference_candidate"))).toBe(true);
+    for (const request of requests) {
+      const serialized = JSON.stringify(request);
+      expect(serialized).not.toContain("observedValues");
+      expect(serialized).not.toContain("observedPredictions");
+      expect(serialized).not.toContain("candidateClass");
+    }
+    const references = store.listValidationRecords().filter((record: any) => record.validationType === "independent_evaluation_reference");
+    expect(references).toHaveLength(13);
+    expect(references.every((record: any) => record.reviewerId.startsWith("hanasand-ai-curation:") && record.curationBenchmarkId === benchmark.id && record.curationAdjudicationId && record.curationAnnotationIds?.length === 2 && record.reviewerModelVersions?.includes("curator-v1"))).toBe(true);
+    expect(store.listEvaluationLabels()).toHaveLength(0);
+    expect(store.listEvaluationAdjudications().every((row: any) => row.reviewKind === "automatic_reference_curation_adjudication" && row.curationAccepted === true)).toBe(true);
+    expect(store.getEvaluationBenchmark(benchmark.id)).toMatchObject({ status: "complete", protocol: { version: "ti.independent_reference_curation.v1", datasetUsage: "reference_curation_only" } });
+
+    const extraction = createEvaluationBenchmark(store, { sampleSize: 2, labelTypes: ["actor", "victim"], datasetSplit: "validation", reviewMode: "automatic_model", independentOnly: true, createdAt: "2026-08-08T11:02:00.000Z" })!;
+    expect(extraction.protocol).toMatchObject({ version: "ti.independent_extraction_benchmark.v4", truthBasis: "separately_retained_authoritative_reference_sets" });
+    expect(extraction.manifest!.every((task: any) => task.authoritativeExpectedValues && task.independenceContext.authoritativeReferenceSetComplete)).toBe(true);
+  });
+
+  test("persists rejected reference curation without promoting it to truth", async () => {
+    const store = referenceCurationStore();
+    const benchmark = createReferenceCurationBenchmark(store, { sampleSize: 1, labelTypes: ["actor"], createdAt: "2026-08-08T12:00:00.000Z" })!;
+    await runAutomaticEvaluationCycle({
+      store,
+      autoCreate: false,
+      maxTasks: 3,
+      now: () => "2026-08-08T12:01:00.000Z",
+      review: async (request: any) => ({
+        expectedValues: [],
+        decision: "absent",
+        confidence: 0.8,
+        rationale: "The retained reports do not establish an exhaustive aligned actor set.",
+        evidenceIds: request.evidence.references.map((reference: any) => reference.id),
+        referenceAligned: false,
+        referenceExhaustive: false,
+        reviewerProvider: "hanasand-ai",
+        reviewerModel: "hanasand-curator",
+        reviewerModelVersion: "curator-v1",
+        promptVersion: request.promptVersion,
+        schemaVersion: request.schemaVersion,
+        modelConversationId: `rejected-conversation-${request.contextId}`,
+        modelResponseId: `rejected-response-${request.contextId}`
+      })
+    });
+    expect(store.listValidationRecords()).toHaveLength(0);
+    expect(store.listEvaluationLabels()).toHaveLength(0);
+    expect(store.listEvaluationAnnotations()).toHaveLength(2);
+    expect(store.listEvaluationAdjudications()).toEqual([expect.objectContaining({ benchmarkId: benchmark.id, curationAccepted: false, referenceAligned: false, referenceExhaustive: false })]);
+    expect(store.getEvaluationBenchmark(benchmark.id)).toMatchObject({ status: "complete", protocol: { version: "ti.independent_reference_curation.v1" } });
+  });
+
   test("keeps predictions hidden across isolated reviewers and materializes immutable TP, FP, and FN labels", async () => {
     const store = evaluationStore();
     const benchmark = createEvaluationBenchmark(store, {
@@ -910,6 +999,21 @@ describe("automatic independent evaluation", () => {
     expect(scopedStore.listEvaluationBenchmarks().filter((benchmark: any) => !benchmark.tenantId)).toHaveLength(0);
   });
 });
+
+function referenceCurationStore() {
+  const store = new InMemoryScraperStore();
+  const at = "2026-08-08T10:00:00.000Z";
+  for (const suffix of ["a", "b"]) {
+    const sourceId = `src_curation_${suffix}`;
+    const captureId = `cap_curation_${suffix}`;
+    const host = `publisher-${suffix}.test`;
+    const body = `Independent ${suffix.toUpperCase()} publisher report: APT29 conducted a cyber intrusion. No victim organization is identified.`;
+    store.saveSource({ id: sourceId, name: `Publisher ${suffix.toUpperCase()}`, type: "rss", url: `https://${host}/`, accessMethod: "public_http", status: "active", risk: "low", trustScore: 0.9, crawlFrequencySeconds: 3600, legalNotes: "Public retained report.", metadata: { sourceFamily: "news" }, createdAt: at, updatedAt: at });
+    store.saveCapture({ id: captureId, sourceId, url: `https://${host}/report`, collectedAt: at, publishedAt: at, contentHash: hashContent(body), mediaType: "text/plain", storageKind: "inline_text", body, metadata: { parserVersion: "parser-v1" }, sensitive: false });
+    store.saveExtractedEntity({ id: `entity_curation_${suffix}`, sourceId, captureId, type: suffix === "a" ? "actor" : "threat_actor", value: "APT29", normalizedValue: "apt29", confidence: 0.9, extractorProvider: "hanasand-ti", extractorModel: "extraction-pipeline", extractorVersion: "parser-v1" });
+  }
+  return store;
+}
 
 function evaluationStore() {
   const store = new InMemoryScraperStore();

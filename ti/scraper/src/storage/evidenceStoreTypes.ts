@@ -32,7 +32,7 @@ export type EvaluationLineageIdentity = {
 
 export type EvaluationReferenceEvidence = {
   id: string;
-  kind: "retained_capture" | "independent_authoritative_reference" | "independent_validation" | "validation_context";
+  kind: "retained_capture" | "independent_reference_candidate" | "independent_authoritative_reference" | "independent_validation" | "validation_context";
   captureId?: string;
   sourceId?: string;
   referenceCaptureId?: string;
@@ -181,6 +181,8 @@ export type EvaluationAnnotationRecord = EvaluationStoreRecord & {
   predictionAccessed?: boolean;
   independenceAttested?: boolean;
   independenceContext?: EvaluationIndependenceContext;
+  referenceAligned?: boolean;
+  referenceExhaustive?: boolean;
   annotatedAt?: string;
 };
 
@@ -211,6 +213,8 @@ export type EvaluationAdjudicationRecord = EvaluationStoreRecord & {
   schemaVersion?: string;
   independenceAttested?: boolean;
   independenceContext?: EvaluationIndependenceContext;
+  referenceAligned?: boolean;
+  referenceExhaustive?: boolean;
   adjudicatedAt?: string;
 };
 
@@ -274,6 +278,14 @@ export type EvaluationValidationRecord = EvaluationStoreRecord & {
   truthFrozenAt?: string;
   matchedAt: string;
   reviewerId?: string;
+  curationBenchmarkId?: string;
+  curationTaskId?: string;
+  curationAdjudicationId?: string;
+  curationAnnotationIds?: string[];
+  reviewerModelVersions?: string[];
+  promptVersion?: string;
+  schemaVersion?: string;
+  independenceContext?: EvaluationIndependenceContext;
 };
 
 export type EvaluationTimelinessRecord = EvaluationStoreRecord & {

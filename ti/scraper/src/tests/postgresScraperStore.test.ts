@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createEvaluationBenchmark, runAutomaticEvaluationCycle } from "../api/evaluationBenchmarkRoutes.ts";
+import { createEvaluationBenchmark, createReferenceCurationBenchmark, runAutomaticEvaluationCycle } from "../api/evaluationBenchmarkRoutes.ts";
 import { sourceAutomaticReviewEvidenceBindings } from "../api/automaticReviewRoutes.ts";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
@@ -615,6 +615,47 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     const third = await PostgresScraperStore.create({ databaseUrl });
     expect(third.getEvaluationBenchmark(benchmark.id)).toMatchObject({ status: "complete", manifest: [expect.objectContaining({ automation: expect.objectContaining({ status: "adjudicated" }) })] });
     expect({ annotations: third.listEvaluationAnnotations().length, adjudications: third.listEvaluationAdjudications().length, labels: third.listEvaluationLabels().length }).toEqual({ annotations: 2, adjudications: 1, labels: 1 });
+    await third.close();
+  }, 30_000);
+
+  test("persists automatic retained-reference curation across restart without evaluation labels", async () => {
+    const at = "2026-08-08T13:00:00.000Z";
+    const first = await PostgresScraperStore.create({ databaseUrl });
+    for (const suffix of ["a", "b"]) {
+      const sourceId = `src_curation_restart_${suffix}`, captureId = `cap_curation_restart_${suffix}`, host = `curation-${suffix}.test`;
+      const evidence = `Independent retained report ${suffix}: APT29 conducted an intrusion.`;
+      first.saveSource(source({ id: sourceId, name: `Curation ${suffix}`, url: `https://${host}/` }));
+      first.saveCapture({ id: captureId, sourceId, url: `https://${host}/report`, collectedAt: at, publishedAt: at, contentHash: hashContent(evidence), mediaType: "text/plain", storageKind: "inline_text", body: evidence, metadata: { parserVersion: "parser-v1" }, sensitive: false } as any);
+      first.saveExtractedEntity({ id: `entity_curation_restart_${suffix}`, sourceId, captureId, type: "actor", value: "APT29", normalizedValue: "apt29", confidence: 0.9, extractorVersion: "parser-v1" });
+    }
+    const benchmark = createReferenceCurationBenchmark(first, { sampleSize: 1, labelTypes: ["actor"], createdAt: at })!;
+    const review = async (request: any) => ({
+      expectedValues: ["APT29"], decision: "present", confidence: 0.9, rationale: "Both retained publisher reports support the exhaustive actor set.",
+      evidenceIds: request.evidence.references.map((reference: any) => reference.id), referenceAligned: true, referenceExhaustive: true,
+      reviewerProvider: "hanasand-ai", reviewerModel: "hanasand-curator", reviewerModelVersion: "curator-v1",
+      promptVersion: request.promptVersion, schemaVersion: request.schemaVersion, modelConversationId: `curation-conversation-${request.contextId}`, modelResponseId: `curation-response-${request.contextId}`
+    });
+    await runAutomaticEvaluationCycle({ store: first, autoCreate: false, maxTasks: 1, now: () => "2026-08-08T13:01:00.000Z", review });
+    await first.flush();
+    await first.close();
+
+    const second = await PostgresScraperStore.create({ databaseUrl });
+    const hydrated = second.getEvaluationBenchmark(benchmark.id)!;
+    expect(hydrated.protocol).toMatchObject({ version: "ti.independent_reference_curation.v1" });
+    expect(hydrated.manifest![0].automation).toMatchObject({ status: "queued", stage: "reviewer_2" });
+    expect(second.listEvaluationAnnotations().filter((row: any) => row.benchmarkId === benchmark.id)).toHaveLength(1);
+    const resumed = await runAutomaticEvaluationCycle({ store: second, autoCreate: false, maxTasks: 2, now: () => "2026-08-08T13:02:00.000Z", review });
+    expect(resumed).toMatchObject({ processedTaskCount: 2, completedTaskCount: 1, retryScheduledCount: 0, deadLetterCount: 0 });
+    await second.flush();
+    await second.close();
+
+    const third = await PostgresScraperStore.create({ databaseUrl });
+    const completed = third.getEvaluationBenchmark(benchmark.id)!;
+    expect(completed.status).toBe("complete");
+    expect(completed.manifest![0].automation).toMatchObject({ status: "adjudicated" });
+    expect(third.listValidationRecords().filter((row: any) => row.curationBenchmarkId === benchmark.id)).toEqual([expect.objectContaining({ validationType: "independent_evaluation_reference", reviewerId: expect.stringContaining("hanasand-ai-curation:") })]);
+    expect(third.listEvaluationAdjudications().filter((row: any) => row.benchmarkId === benchmark.id)).toEqual([expect.objectContaining({ reviewKind: "automatic_reference_curation_adjudication", curationAccepted: true })]);
+    expect(third.listEvaluationLabels().filter((row: any) => row.benchmarkId === benchmark.id)).toHaveLength(0);
     await third.close();
   }, 30_000);
 
