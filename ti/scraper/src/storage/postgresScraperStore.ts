@@ -1417,7 +1417,15 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       // Keep operational workflow records in memory, but do not make startup
       // proportional to the automatic-review history. The full history remains
       // durable in PostgreSQL for retention/export paths.
-      this.sql`SELECT record_type, record FROM threat_intel.workflow_records WHERE record_type <> 'analyst_metadata_review_task' ORDER BY created_at`,
+      this.sql`SELECT record_type, record FROM threat_intel.workflow_records
+        WHERE record_type IN (
+          'collection_run', 'replay_job', 'discovery_evidence', 'live_search_snapshot',
+          'dwm_watchlist', 'dwm_webhook_delivery', 'organization', 'organization_member',
+          'organization_invite', 'webhook_destination', 'case', 'actor_org_relevance_review',
+          'analyst_source_activation_packet', 'analyst_victim_notification_packet',
+          'analyst_claim_ledger_entry', 'analyst_loop_snapshot', 'evaluation_benchmark',
+          'evaluation_annotation', 'evaluation_adjudication'
+        ) ORDER BY created_at`,
       workflowHistoryLimit > 0
         ? this.sql`SELECT record_type, record FROM threat_intel.workflow_records WHERE record_type = 'analyst_metadata_review_task' AND record->>'recordKind' = 'automatic_intelligence_review_task' ORDER BY created_at DESC LIMIT ${workflowHistoryLimit}`
         : Promise.resolve([]),
