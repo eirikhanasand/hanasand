@@ -83,6 +83,8 @@ export function contractIndex() {
     route("GET", "/v1/contracts"),
     route("GET", "/v1/dwm/watchlists"),
     route("POST", "/v1/dwm/watchlists"),
+    route("POST", "/v1/dwm/collection-requests"),
+    route("GET", "/v1/dwm/collection-requests/:requestId"),
     route("GET", "/v1/dwm/alerts/generation-readiness"),
     route("POST", "/v1/dwm/alerts/:alertId/case-handoff"),
     route("GET", "/v1/cases"),

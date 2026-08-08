@@ -17,6 +17,8 @@ describe("api regression sentinel", () => {
       "/v1/darkweb/search",
       "/v1/ops/product-slo",
       "/v1/dwm/watchlists",
+      "/v1/dwm/collection-requests",
+      "/v1/dwm/collection-requests/:requestId",
       "/v1/dwm/alerts/generation-readiness",
       "/v1/dwm/alerts/:alertId/case-handoff",
       "/v1/cases",
