@@ -6,7 +6,7 @@ import { evidenceIndependence } from "../storage/memoryStore.ts";
 import { activatePublicCanarySources, pausePublicCanarySources, reconcilePublicSourceProductivity } from "./canaryActivation.ts";
 import { canaryQueries, PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 import { detachedState, externalize, fetchItems, health, maxItemsFor, tasksForSource } from "./canaryHelpers.ts";
-import { isNvdCveSource } from "./canaryFeedItems.ts";
+import { isCisaKevSource, isNvdCveSource } from "./canaryFeedItems.ts";
 import { isSellableIntelText, sellableReason } from "../value/sellableIntel.ts";
 import { sourceActivityWindowDays, sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
 import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
@@ -84,29 +84,34 @@ export function retainIndependentEvaluationReferences(store: any, completeCollec
   if (!completeCollectedCaptures.length || typeof store.saveValidationRecord !== "function") return 0;
   const sources = new Map(store.listSources().map((source: any) => [source.id, source]));
   const captures = store.listCaptures().filter(referenceEligibleCapture);
-  const cisa = new Map<string, any>();
+  const cisa = new Map<string, any>(), nvd = new Map<string, any>();
+  const pairedCaptures = new Set((store.listValidationRecords?.() ?? [])
+    .filter((record: any) => record.validationType === "independent_evaluation_reference" && record.captureId && record.referenceCaptureId)
+    .map((record: any) => evaluationCapturePair(record.captureId, record.referenceCaptureId)));
   for (const capture of captures) {
-    if (!isCisaKevSource(sources.get(capture.sourceId))) continue;
     const cve = retainedCveId(capture);
-    if (cve) cisa.set(cve, capture);
+    if (!cve) continue;
+    if (isCisaKevSource(sources.get(capture.sourceId))) cisa.set(cve, capture);
+    if (isNvdCveSource(sources.get(capture.sourceId))) nvd.set(cve, capture);
   }
   let retained = 0;
   for (const candidate of completeCollectedCaptures) {
     const target = candidate?.capture, targetCveSet = candidate?.evaluationCveSet;
     if (!referenceEligibleCapture(target)
-      || !isNvdCveSource(sources.get(target.sourceId))
       || store.getCapture(target.id)?.contentHash !== target.contentHash
       || targetCveSet?.complete !== true
       || targetCveSet.captureContentHash !== target.contentHash
       || !Array.isArray(targetCveSet.values)
       || targetCveSet.hash !== createHash("sha256").update(JSON.stringify(targetCveSet.values)).digest("hex")) continue;
-    const targetCve = retainedCveId(target), reference = targetCve && cisa.get(targetCve);
+    const targetSource = sources.get(target.sourceId), targetCve = retainedCveId(target);
+    const reference = targetCve && (isNvdCveSource(targetSource) ? cisa.get(targetCve) : isCisaKevSource(targetSource) ? nvd.get(targetCve) : undefined);
     const authoritativeCve = reference && retainedCveId(reference);
     if (!authoritativeCve
       || targetCveSet.values.length !== 1
       || targetCveSet.values[0] !== targetCve
       || !reference
       || target.id === reference.id
+      || pairedCaptures.has(evaluationCapturePair(target.id, reference.id))
       || evidenceIndependence(store, [target.id, reference.id]).groupCount < 2) continue;
     const expectedValues = [authoritativeCve];
     store.saveValidationRecord({
@@ -126,11 +131,16 @@ export function retainIndependentEvaluationReferences(store: any, completeCollec
       truthSchemaVersion: "ti.independent_evaluation_reference.v1",
       truthFrozenAt: reference.collectedAt,
       matchedAt: reference.collectedAt,
-      reviewerId: "source-scheduler:cisa-kev:nvd-cve:v1"
+      reviewerId: isNvdCveSource(targetSource) ? "source-scheduler:cisa-kev:nvd-cve:v1" : "source-scheduler:nvd-cve:cisa-kev:v1"
     });
+    pairedCaptures.add(evaluationCapturePair(target.id, reference.id));
     retained++;
   }
   return retained;
+}
+
+function evaluationCapturePair(left: string, right: string) {
+  return [left, right].sort().join("\0");
 }
 
 function referenceEligibleCapture(capture: any) {
@@ -146,10 +156,6 @@ function referenceEligibleCapture(capture: any) {
 function retainedCveId(capture: any) {
   const value = String(capture.metadata?.structuredFields?.cveID ?? "").trim().toUpperCase();
   return /^CVE-\d{4}-\d{4,}$/.test(value) ? value : undefined;
-}
-
-function isCisaKevSource(source: any) {
-  return /^https:\/\/www\.cisa\.gov\/sites\/default\/files\/feeds\/known_exploited_vulnerabilities\.json(?:[?#].*)?$/i.test(String(source?.url ?? ""));
 }
 
 export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { enabled?: boolean; intervalSeconds?: number; queueLimit?: number; onCycle?: (r: any) => void; onError?: (e: unknown) => void }): CanaryCollectionLoopHandle {
@@ -251,7 +257,7 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
       for (const entity of pipeline.entities ?? []) if (["actor", "ransomware_family"].includes(entity.type)) taskMetrics.actorIds.add(String(entity.normalizedValue ?? entity.value));
       if (!task.planning?.watchlistDiscovery && !actorIdentityCatalogSnapshot && !catalogEvidenceOnly && await saveExposureClaimFromCollectedItem(options.store, collected, generatedAt)) counters.exposureClaimCount++;
       latestCaptureIds.push(saved.capture.id);
-      if (isNvdCveSource(source)) completeEvaluationCaptures.push({ capture: completeEvaluationCapture, evaluationCveSet: collected.evaluationCveSet });
+      if (isNvdCveSource(source) || isCisaKevSource(source)) completeEvaluationCaptures.push({ capture: completeEvaluationCapture, evaluationCveSet: collected.evaluationCveSet });
     }
     counters.completedTaskCount++; options.frontier.complete(task);
     const checkedAt = options.now?.() ?? nowIso(), useful = taskMetrics.captureCount > 0;

@@ -1054,14 +1054,14 @@ export function startAutomaticEvaluationLoop(options: AutomaticEvaluationCycleOp
 function ensureAutomaticBenchmarks(store: CaptureMetadataStore, generatedAt: string, options: AutomaticEvaluationCycleOptions) {
   const created: string[] = [];
   const automatic = store.listEvaluationBenchmarks().map(completeBenchmark).filter((benchmark): benchmark is EvaluationBenchmark => Boolean(benchmark?.reviewMode === "automatic_model" && !benchmark.tenantId));
-  const sampleSize = Math.max(1, Math.min(200, Number(options.sampleSize ?? 51)));
+  const sampleSizes = automaticBenchmarkSampleSizes(options.sampleSize);
   let currentTest = automatic
     .filter((benchmark) => benchmark.datasetSplit === "test")
     .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))
     .find((benchmark) => referenceReadyAutomaticBenchmark(store, benchmark) && automaticHeldOutSelectionReady(benchmark));
   if (!currentTest) {
     const excludedCaptureIds = unique(automatic.filter((benchmark) => benchmark.datasetSplit === "test" && referenceReadyAutomaticBenchmark(store, benchmark)).flatMap((benchmark) => benchmark.captureIds ?? []));
-    const benchmark = createEvaluationBenchmark(store, { sampleSize, datasetSplit: "test", reviewMode: "automatic_model", createdAt: generatedAt, createdBy: "automatic-evaluation-runtime", name: `Locked automatic evaluation ${generatedAt.slice(0, 10)}`, excludedCaptureIds, independentOnly: true });
+    const benchmark = createEvaluationBenchmark(store, { sampleSize: sampleSizes.test, datasetSplit: "test", reviewMode: "automatic_model", createdAt: generatedAt, createdBy: "automatic-evaluation-runtime", name: `Locked automatic evaluation ${generatedAt.slice(0, 10)}`, excludedCaptureIds, independentOnly: true });
     if (benchmark) { currentTest = benchmark; created.push(benchmark.id); }
   }
   if (currentTest) {
@@ -1079,7 +1079,7 @@ function ensureAutomaticBenchmarks(store: CaptureMetadataStore, generatedAt: str
   const validations = automatic.filter((benchmark) => benchmark.datasetSplit === "validation").sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   const latest = validations[0], refreshMs = Math.max(86_400_000, Number(options.refreshIntervalMs ?? 7 * 86_400_000));
   if (!latest || !referenceReadyAutomaticBenchmark(store, latest) || (TERMINAL_BENCHMARK_STATUSES.has(latest.status) && Date.parse(generatedAt) - Date.parse(latest.createdAt) >= refreshMs)) {
-    const benchmark = createEvaluationBenchmark(store, { sampleSize, datasetSplit: "validation", reviewMode: "automatic_model", createdAt: generatedAt, createdBy: "automatic-evaluation-runtime", name: `Rolling automatic evaluation ${generatedAt.slice(0, 10)}`, independentOnly: true });
+    const benchmark = createEvaluationBenchmark(store, { sampleSize: sampleSizes.validation, datasetSplit: "validation", reviewMode: "automatic_model", createdAt: generatedAt, createdBy: "automatic-evaluation-runtime", name: `Rolling automatic evaluation ${generatedAt.slice(0, 10)}`, independentOnly: true });
     if (benchmark) {
       created.push(benchmark.id);
       for (const prior of automatic.filter((candidate) => candidate.datasetSplit === "test" && candidate.status !== "retired" && !automaticHeldOutSelectionReady(candidate))) {
@@ -1105,6 +1105,12 @@ function ensureAutomaticBenchmarks(store: CaptureMetadataStore, generatedAt: str
     }
   }
   return created;
+}
+
+export function automaticBenchmarkSampleSizes(value: unknown) {
+  const requested = Math.floor(Number(value ?? 51));
+  const validation = Number.isFinite(requested) ? Math.max(1, Math.min(200, requested)) : 51;
+  return { test: Math.max(51, validation), validation };
 }
 
 function referenceReadyAutomaticBenchmark(store: CaptureMetadataStore, benchmark: EvaluationBenchmark) {

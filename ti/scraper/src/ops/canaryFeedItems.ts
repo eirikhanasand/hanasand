@@ -52,12 +52,16 @@ function jsonItem(source: any, task: any, entry: any, at: string, metadata: any,
   const url = stringField(entry, ["post_url", "link", "url", "source", "reference"]) || task.targetUrl;
   const rawText = ransomwareGroup ? ransomwareGroupSummary(source.name, ransomwareGroup) : [source.name, title, jsonSummary(entry)].filter(Boolean).join("\n").slice(0, 24_000);
   const collected = row(source, task, /^https?:\/\//i.test(url) ? url : task.targetUrl, title, rawText, at, publishedAt, { ...metadata, jsonApi: true, structuredFields: structuredFields(entry), ransomwareGroup }, index, false);
-  const evaluationCveSet = isNvdCveSource(source) ? completeCveProjection(entry) : undefined;
+  const evaluationCveSet = isNvdCveSource(source) || isCisaKevSource(source) ? completeCveProjection(entry) : undefined;
   return evaluationCveSet ? { ...collected, evaluationCveSet: { ...evaluationCveSet, captureContentHash: collected.contentHash } } : collected;
 }
 
 export function isNvdCveSource(source: any) {
   return /^https:\/\/services\.nvd\.nist\.gov\/rest\/json\/cves\/2\.0(?:[?#].*)?$/i.test(String(source?.url ?? ""));
+}
+
+export function isCisaKevSource(source: any) {
+  return /^https:\/\/www\.cisa\.gov\/sites\/default\/files\/feeds\/known_exploited_vulnerabilities\.json(?:[?#].*)?$/i.test(String(source?.url ?? ""));
 }
 
 function jsonRows(value: any): any[] {

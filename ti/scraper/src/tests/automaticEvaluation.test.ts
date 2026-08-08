@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { automaticHeldOutSelectionReady, createEvaluationBenchmark, runAutomaticEvaluationCycle } from "../api/evaluationBenchmarkRoutes.ts";
+import { automaticBenchmarkSampleSizes, automaticHeldOutSelectionReady, createEvaluationBenchmark, runAutomaticEvaluationCycle } from "../api/evaluationBenchmarkRoutes.ts";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
@@ -705,11 +705,11 @@ describe("automatic independent evaluation", () => {
     try {
       const first = new FileBackedScraperStore({ snapshotPath });
       saveSources(first);
-      await collect(first, "src_canary_nvd_recent", "2026-07-21T10:00:00.000Z");
+      await collect(first, "src_canary_cisa_known_exploited_json", "2026-07-21T10:00:00.000Z");
       const diagnostic = createEvaluationBenchmark(first, { sampleSize: 5, datasetSplit: "test", reviewMode: "automatic_model", createdAt: "2026-07-21T10:00:30.000Z" })!;
       expect(diagnostic.manifest!.every((task: any) => task.independenceContext.truthBasis === "context_only")).toBe(true);
-      await collect(first, "src_canary_cisa_known_exploited_json", "2026-07-21T10:01:00.000Z");
-      expect(first.listValidationRecords().filter((row: any) => row.validationType === "independent_evaluation_reference")).toHaveLength(0);
+      await collect(first, "src_canary_nvd_recent", "2026-07-21T10:01:00.000Z");
+      expect(first.listValidationRecords().filter((row: any) => row.validationType === "independent_evaluation_reference" && row.reviewerId === "source-scheduler:cisa-kev:nvd-cve:v1")).toHaveLength(4);
 
       const targets = first.listCaptures().filter((capture: any) => capture.sourceId === "src_canary_nvd_recent");
       first.updateCaptureMetadata(targets.find((capture: any) => capture.metadata?.structuredFields?.cveID === cves[2])!.id, (metadata: any) => ({ ...metadata, review: { state: "needs_review" } }));
@@ -719,14 +719,21 @@ describe("automatic independent evaluation", () => {
       await collect(first, "src_canary_nvd_recent", "2026-07-21T11:01:00.000Z");
       const references = first.listValidationRecords().filter((row: any) => row.validationType === "independent_evaluation_reference");
       expect(references).toHaveLength(4);
-      expect(references.some((row: any) => first.getCapture(row.captureId)?.metadata?.structuredFields?.cveID === cves[4])).toBe(false);
+      const nvdTargets = references.filter((row: any) => row.reviewerId === "source-scheduler:cisa-kev:nvd-cve:v1");
+      expect(nvdTargets).toHaveLength(4);
+      expect(nvdTargets.some((row: any) => first.getCapture(row.captureId)?.metadata?.structuredFields?.cveID === cves[4])).toBe(false);
       const boundedTarget = first.listCaptures().find((capture: any) => capture.metadata?.structuredFields?.cveID === cves[4])!;
       expect(boundedTarget.body).not.toContain("CVE-2025-9999");
       expect(JSON.stringify(boundedTarget)).not.toContain("evaluationCveSet");
 
+      await collect(first, "src_canary_cisa_known_exploited_json", "2026-07-21T11:02:00.000Z");
+      const bidirectionalReferences = first.listValidationRecords().filter((row: any) => row.validationType === "independent_evaluation_reference");
+      expect(bidirectionalReferences).toHaveLength(5);
+      expect(bidirectionalReferences.filter((row: any) => row.reviewerId === "source-scheduler:nvd-cve:cisa-kev:v1")).toHaveLength(1);
+
       const restarted = new FileBackedScraperStore({ snapshotPath });
       await collect(restarted, "src_canary_nvd_recent", "2026-07-21T12:02:00.000Z");
-      expect(restarted.listValidationRecords().filter((row: any) => row.validationType === "independent_evaluation_reference")).toHaveLength(4);
+      expect(restarted.listValidationRecords().filter((row: any) => row.validationType === "independent_evaluation_reference")).toHaveLength(5);
       const reviewed: any[] = [];
       const result = await runAutomaticEvaluationCycle({
         store: restarted,
@@ -759,14 +766,14 @@ describe("automatic independent evaluation", () => {
       expect(result.createdBenchmarkIds).toHaveLength(1);
       const successor = restarted.getEvaluationBenchmark(result.createdBenchmarkIds[0])!;
       expect(successor).toMatchObject({ datasetSplit: "validation", protocol: { reviewPromptVersion: "ti.automatic_evaluation_review.v2", testSplitLocked: false, datasetUsage: "model_selection_only" } });
-      expect(successor.manifest).toHaveLength(4);
+      expect(successor.manifest).toHaveLength(5);
       expect(successor.manifest!.every((task: any) => task.labelType === "cve" && task.independenceContext.truthReferenceCaptureId && task.independenceContext.extractionDecisionLineage?.length)).toBe(true);
       expect(successor.manifest!.flatMap((task: any) => task.caseTags)).toEqual(expect.arrayContaining(["ambiguous", "parser_failure"]));
       expect(restarted.getEvaluationBenchmark(diagnostic.id)).toMatchObject({ status: "retired", datasetSplit: "test", successorBenchmarkId: successor.id, lineage: { retainedDiagnosticResults: true } });
       expect(restarted.listEvaluationBenchmarks().filter((benchmark: any) => benchmark.datasetSplit === "test" && benchmark.protocol?.version === "ti.independent_extraction_benchmark.v4" && benchmark.protocol?.testSplitLocked && benchmark.manifest?.every((task: any) => task.independenceContext?.truthBasis === "separately_retained_authoritative_reference"))).toHaveLength(0);
       expect(restarted.listEvaluationLabels().map((label: any) => label.outcome)).toEqual(expect.arrayContaining(["true_positive", "false_positive"]));
       expect(restarted.listEvaluationAnnotations().every((row: any) => row.reviewerProvider === "hanasand-ai" && row.reviewerModel === "hanasand" && row.reviewerModelVersion === "hanasand-v3" && row.modelConversationId && row.modelResponseId && row.promptVersion === "ti.automatic_evaluation_review.v2")).toBe(true);
-      expect(restarted.listEvaluationAdjudications()).toHaveLength(4);
+      expect(restarted.listEvaluationAdjudications()).toHaveLength(5);
       expect(restarted.listEvaluationAdjudications().some((row: any) => row.disagreementPreserved)).toBe(true);
       expect(reviewed.some((request) => request.role === "adjudicator")).toBe(true);
     } finally {
@@ -805,6 +812,9 @@ describe("automatic independent evaluation", () => {
     const missingHardCase = benchmark(51);
     missingHardCase.manifest = missingHardCase.manifest.map((task: any) => ({ ...task, caseTags: [] }));
     expect(automaticHeldOutSelectionReady(missingHardCase)).toBe(false);
+    expect(automaticBenchmarkSampleSizes(50)).toEqual({ test: 51, validation: 50 });
+    expect(automaticBenchmarkSampleSizes(75)).toEqual({ test: 75, validation: 75 });
+    expect(automaticBenchmarkSampleSizes("invalid")).toEqual({ test: 51, validation: 51 });
   });
 
   test("locks final-test captures out of validation and records real-case sampling strata", async () => {
