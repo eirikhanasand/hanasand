@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
+import { verifiedClientIp } from '#utils/http/publicBoundary.ts'
 
 const ignoredPathPrefixes = [
     '/api/traffic',
@@ -16,7 +17,7 @@ export default function recordTraffic(req: FastifyRequest, res: FastifyReply) {
     const domain = normalizeDomain(readHeader(req.headers['x-forwarded-host']) || readHeader(req.headers.host))
     const userAgent = readHeader(req.headers['user-agent'])
     const referer = readHeader(req.headers.referer || req.headers.referrer)
-    const ip = readHeader(req.headers['x-forwarded-for']).split(',')[0]?.trim() || req.ip || ''
+    const ip = verifiedClientIp(req)
     const countryIso = normalizeCountryIso(
         readHeader(req.headers['cf-ipcountry'])
         || readHeader(req.headers['x-vercel-ip-country'])
