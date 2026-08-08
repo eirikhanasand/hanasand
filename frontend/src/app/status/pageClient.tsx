@@ -163,6 +163,19 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                 <StatusMeta icon={<CheckCircle className='h-4 w-4' />} label='Components' value={`${checks.length} monitored checks`} />
             </section>
 
+            <section className='grid gap-4 rounded-md border border-ui-border bg-ui-panel p-4'>
+                <div>
+                    <p className='text-xs font-semibold uppercase text-ui-primary'>How to read this page</p>
+                    <h2 className='mt-1 text-xl font-semibold text-ui-text'>Operational history is evidence, not a contract.</h2>
+                </div>
+                <div className='grid gap-3 text-sm md:grid-cols-3'>
+                    <ReliabilityNote title='Freshness' detail='A public check older than five minutes is shown as unverified/degraded. A missing result is not counted as uptime.' />
+                    <ReliabilityNote title='Incident history' detail='The 90-day bars link to monitor incidents. Resolved means the observed check recovered; it does not erase the event.' />
+                    <ReliabilityNote title='Procurement boundary' detail='No standard uptime, response-time, maintenance, notification, or service-credit commitment is published. Put those terms in the signed order.' />
+                </div>
+                <Link href='/trust/sla-onboarding' className='w-fit text-sm font-semibold text-ui-primary hover:underline'>Review support and onboarding terms →</Link>
+            </section>
+
             <section>
                 <div className='flex flex-wrap items-end justify-between gap-2'>
                     <h2 className='text-xl font-medium text-ui-text'>Current Status: Hanasand.com</h2>
@@ -221,6 +234,15 @@ function StatusMeta({ icon, label, value }: { icon: ReactNode, label: string, va
                 <span className='block text-xs font-semibold uppercase'>{label}</span>
                 <span className='text-ui-text'>{value}</span>
             </span>
+        </div>
+    )
+}
+
+function ReliabilityNote({ title, detail }: { title: string, detail: string }) {
+    return (
+        <div className='rounded-md border border-ui-border bg-ui-canvas p-3'>
+            <h3 className='font-semibold text-ui-text'>{title}</h3>
+            <p className='mt-1 leading-6 text-ui-muted'>{detail}</p>
         </div>
     )
 }

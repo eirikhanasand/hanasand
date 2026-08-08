@@ -90,7 +90,7 @@ export default function PricingPage() {
                         <p className='text-sm font-semibold uppercase text-ui-primary'>Pricing</p>
                         <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Evaluate the product, then scope monitored coverage.</h1>
                         <p className='text-lg leading-8 text-ui-muted'>
-                            Console evaluation is self-serve. Monitoring and integration are sales-provisioned so watchlist size, delivery, API budgets, retention, support, and price are written into the order form.
+                            Console evaluation is self-serve. There is no public card checkout for production monitoring today; monitoring and integration are provisioned so watchlist size, delivery, API budgets, retention, support, and price are written into the order form.
                         </p>
                         <div className='flex flex-wrap justify-center gap-3 pt-2'>
                             <Link href='#competitive-fit' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
@@ -136,6 +136,18 @@ export default function PricingPage() {
                                 </article>
                             )
                         })}
+                    </div>
+
+                    <div id='checkout-boundary' className='grid gap-4 rounded-lg border border-ui-border bg-ui-raised p-4 md:grid-cols-[0.7fr_1.3fr] md:items-start'>
+                        <div>
+                            <p className='text-xs font-semibold uppercase text-ui-primary'>Checkout boundary</p>
+                            <h2 className='mt-1 text-lg font-semibold'>Choose the path that exists today.</h2>
+                        </div>
+                        <div className='grid gap-2 text-sm md:grid-cols-3'>
+                            <CheckoutNote title='Evaluation' detail='Create an account and evaluate the console/API with no card required.' />
+                            <CheckoutNote title='Production monitoring' detail='No self-serve card checkout is published. Request scope, order-form terms, and managed activation.' />
+                            <CheckoutNote title='Integration' detail='Confirm API budgets, delivery, retention, support, and security requirements before activation.' />
+                        </div>
                     </div>
                 </div>
             </section>
@@ -310,5 +322,14 @@ export default function PricingPage() {
                 </div>
             </section>
         </main>
+    )
+}
+
+function CheckoutNote({ title, detail }: { title: string, detail: string }) {
+    return (
+        <div className='rounded-lg border border-ui-border bg-ui-panel p-3'>
+            <h3 className='font-semibold text-ui-text'>{title}</h3>
+            <p className='mt-1 leading-6 text-ui-muted'>{detail}</p>
+        </div>
     )
 }
