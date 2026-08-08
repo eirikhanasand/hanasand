@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, AlarmClockCheck, BookOpen, BrainCircuit, CalendarClock, ChevronDown, ClipboardCheck, ClipboardList, Code2, Database, DatabaseBackup, DatabaseZap, FileCode2, FileWarning, FolderKanban, Gauge, Globe2, Inbox, LayoutDashboard, ListChecks, Network, NotebookText, PanelLeftClose, PanelLeftOpen, PlayCircle, Radar, ScanSearch, Server, Settings2, ShieldAlert, ShieldCheck, Sparkles, UserRound, UserRoundCheck, Zap } from 'lucide-react'
+import { Activity, AlarmClockCheck, BookOpen, BrainCircuit, Building2, CalendarClock, ChevronDown, ClipboardCheck, ClipboardList, Code2, Database, DatabaseBackup, DatabaseZap, FileCode2, FileWarning, FolderKanban, Gauge, Globe2, Inbox, LayoutDashboard, ListChecks, Network, NotebookText, PanelLeftClose, PanelLeftOpen, PlayCircle, Radar, ScanSearch, Server, Settings2, ShieldAlert, ShieldCheck, Sparkles, UserRound, UserRoundCheck, Zap } from 'lucide-react'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 
@@ -62,6 +62,7 @@ export default function DashboardSidebar({
     ]
 
     const workspaceItems: Item[] = [
+        { href: '/organizations', label: 'Organizations', icon: <Building2 className='h-4 w-4' /> },
         { href: `/profile/${id}`, label: 'Profile', icon: <UserRound className='h-4 w-4' /> },
     ]
 
