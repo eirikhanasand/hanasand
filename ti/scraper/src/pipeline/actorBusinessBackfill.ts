@@ -7,7 +7,7 @@ import { extractSourceSpecificEntities, SOURCE_SPECIFIC_EXTRACTOR_VERSION } from
 const BUSINESS_TYPES = new Set([
   "extortion_model", "advertised_product", "advertised_data", "pricing_claim", "payment_claim", "revenue_claim",
   "revenue_share_claim", "negotiation_claim", "communication_channel", "buyer_seller_communication", "intermediary_communication", "monetization_path",
-  "victim_pressure_tactic", "profitability_signal",
+  "publicity_event", "victim_pressure_tactic", "profitability_signal",
 ]);
 
 export function actorBusinessEntitiesFromRetainedCapture(capture: RawCapture, actorIdentities: ActorIdentityRecord[] = []): ExtractedEntity[] {

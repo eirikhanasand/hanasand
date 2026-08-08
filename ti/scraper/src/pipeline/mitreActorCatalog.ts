@@ -320,7 +320,7 @@ export function actorLookupPolicy(value: string): ActorLookupPolicy {
 
 const STRUCTURED_ONLY_LABELS = new Set([
   "actor", "aware", "backdoor", "blackout", "exploit", "global", "group", "loader", "malware",
-  "payload", "play", "ransomware", "silent", "trojan", "unsafe", "victim"
+  "payload", "play", "ransomware", "silence", "silent", "trojan", "unsafe", "victim"
 ]);
 
 function successorIdentity(identity: ActorIdentityRecord, identities: readonly ActorIdentityRecord[]): ActorIdentityRecord {

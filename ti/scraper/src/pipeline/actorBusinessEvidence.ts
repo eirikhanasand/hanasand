@@ -1,7 +1,7 @@
 import { normalizeWhitespace } from "../utils.ts";
 
 export type ActorBusinessEvidence = {
-  type: "extortion_model" | "advertised_product" | "advertised_data" | "pricing_claim" | "negotiation_claim" | "payment_claim" | "revenue_claim" | "revenue_share_claim" | "communication_channel" | "buyer_seller_communication" | "intermediary_communication" | "monetization_path" | "victim_pressure_tactic" | "profitability_signal";
+  type: "extortion_model" | "advertised_product" | "advertised_data" | "pricing_claim" | "negotiation_claim" | "payment_claim" | "revenue_claim" | "revenue_share_claim" | "communication_channel" | "buyer_seller_communication" | "intermediary_communication" | "monetization_path" | "publicity_event" | "victim_pressure_tactic" | "profitability_signal";
   value: string;
   confidence: number;
   assertionKind: "third_party_report";
@@ -38,6 +38,7 @@ const RULES: EvidenceRule[] = [
   rule("revenue_claim", /\bsecured\b[^.!?;<]{0,100}\bransom payment of\s+((?:US)?\$\s?[\d,.]+(?:\s+(?:million|billion))?)/i, 0.76, "reported payment is not the same as independently verified revenue or profit", (match) => `Reported ${match[1]} ransom payment`),
   rule("negotiation_claim", /\b(?:new\s+)?negotiation\s+(portal|site|infrastructure)\b/i, 0.82, "reported negotiation channel; no conversation content was collected", (match) => `Negotiation ${match[1].toLowerCase()}`),
   rule("buyer_seller_communication", /\breached out\b[^.!?]{0,80}\b(?:took|received)\s+extensions?\b[^.!?]{0,80}\b(?:ignored|stalled|stopped)\b[^.!?]{0,40}\bnegotiation\b[^.!?]{0,80}\b(?:no real offer|no offer|without an? offer)\b/i, 0.82, "reported victim negotiation behavior; no private conversation content was collected", () => "Victim outreach followed by stalled negotiation without an offer"),
+  rule("publicity_event", /\b(?:has just published|published) (?:a )?new victim\b/i, 0.88, "third-party publication report requires analyst review", () => "Public victim listing"),
   rule("intermediary_communication", /\b(?:actively\s+)?recruit(?:s|ed|ing)? affiliates\b/i, 0.82, "reported affiliate recruitment; no private communication was collected", () => "Affiliate recruitment"),
   rule("intermediary_communication", /\bpromot(?:e|ing|ed)\s+(?:their\s+)?affiliate program\b/i, 0.8, "reported affiliate recruitment; no private communication was collected", () => "Affiliate program promotion"),
   rule("revenue_share_claim", /\b(?:flexible\s+)?revenue split(?: model)?\b/i, 0.78, "reported revenue-sharing terms are not independently verified"),

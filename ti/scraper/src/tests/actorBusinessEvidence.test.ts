@@ -134,8 +134,8 @@ describe("actor business-model reviewed evidence", () => {
   });
 
   test("extracts an exact dated single-actor public report and rejects undated or multi-actor reports", async () => {
-    const identities = [identity("Everest", []), identity("Helix", []), identity("LockBit", [])];
-    const store = actorStore(["Everest", "Helix", "LockBit"]);
+    const identities = [identity("Everest", []), identity("Helix", []), identity("LockBit", []), identity("Silence", [])];
+    const store = actorStore(["Everest", "Helix", "LockBit", "Silence"]);
     store.saveSource(publicReportSource);
     const text = "Stadler Rail says the Everest ransomware gang demanded about $12.3 million after breaching its supplier platform.";
     const report = publicReportResult(text, identities);
@@ -163,17 +163,35 @@ describe("actor business-model reviewed evidence", () => {
     const savedCommunication = store.savePipelineResult(communication);
     expect(savedCommunication.capture.metadata?.reportTimestamps).toBeUndefined();
     expect(communication.entities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "actor", value: "Helix", assertionKind: "third_party_report", extractionMethod: "source_specific" }),
       expect.objectContaining({ type: "buyer_seller_communication", value: "Victim outreach followed by stalled negotiation without an offer", assertionKind: "third_party_report", extractionMethod: "source_specific" }),
+      expect.objectContaining({ type: "publicity_event", value: "Public victim listing", assertionKind: "third_party_report", extractionMethod: "source_specific" }),
     ]));
+    expect(communication.entities.some((entity: any) => entity.type === "actor" && entity.value === "Silence")).toBe(false);
     expect((await searchResult(store, "Helix")).actorIntelligence.businessModel.pendingFindings).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "buyer_seller_communication", value: "Victim outreach followed by stalled negotiation without an offer", sourceIds: [publicReportSource.id], captureIds: [communication.capture.id] }),
+      expect.objectContaining({ type: "publicity_event", value: "Public victim listing", sourceIds: [publicReportSource.id], captureIds: [communication.capture.id] }),
     ]));
     const communicationClaim = store.listIntelligenceClaims().find((claim: any) => claim.claimType === "buyer_seller_communication" && claim.captureIds.includes(communication.capture.id));
+    const publicityClaim = store.listIntelligenceClaims().find((claim: any) => claim.claimType === "publicity_event" && claim.captureIds.includes(communication.capture.id));
     review(store, communicationClaim, "confirm");
-    expect((await searchResult(store, "Helix")).actorIntelligence.businessModel.buyerSellerCommunications[0]).toMatchObject({
+    review(store, publicityClaim, "confirm");
+    const reviewed = await searchResult(store, "Helix");
+    expect(reviewed.actorIntelligence.businessModel.buyerSellerCommunications[0]).toMatchObject({
       value: "Victim outreach followed by stalled negotiation without an offer",
       reviewState: "confirmed",
       evidence: [expect.objectContaining({ captureId: communication.capture.id, sourceId: publicReportSource.id })],
+    });
+    expect(reviewed.actorIntelligence.businessModel.publicityEvents[0]).toMatchObject({
+      value: "Public victim listing",
+      reviewState: "confirmed",
+      evidence: [expect.objectContaining({ captureId: communication.capture.id, sourceId: publicReportSource.id })],
+    });
+    expect(reviewed.actorCaseStudies.cases[0]).toMatchObject({
+      actor: "Helix",
+      categories: ["buyer_victim_communication", "publicity"],
+      captureCount: 1,
+      evidenceCount: 2,
     });
     expect(publicReportResult("Helix says: If you are listed by mistake, contact us.", identities).entities.some((entity: any) => entity.type === "buyer_seller_communication")).toBe(false);
   });
