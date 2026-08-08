@@ -75,6 +75,7 @@ const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 export type PostgresScraperStoreOptions = {
   databaseUrl?: string;
   migrationPath?: string;
+  onStartupPhase?: (phase: string) => void;
 };
 
 type PendingWrite = { description: string; run: () => Promise<void> };
@@ -116,11 +117,17 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const store = new PostgresScraperStore(sql, migrations);
     try {
       await sql.connect();
+      options.onStartupPhase?.("connected");
       await store.migrate();
+      options.onStartupPhase?.("migrated");
       await store.hydrate();
+      options.onStartupPhase?.("hydrated");
       await store.backfillSourceOperationalKeys();
+      options.onStartupPhase?.("source_keys_backfilled");
       await store.syncOrganizationWatchlists();
+      options.onStartupPhase?.("organization_watchlists_synced");
       await store.databaseHealth();
+      options.onStartupPhase?.("health_checked");
       return store;
     } catch (error) {
       await sql.close({ timeout: 1 }).catch(() => undefined);

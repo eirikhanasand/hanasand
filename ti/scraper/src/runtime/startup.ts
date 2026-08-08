@@ -100,7 +100,7 @@ export async function startScraperRuntime() {
   startupPhase("config_loaded");
   const paths = buildRuntimeStores(config);
   startupPhase("runtime_stores_built");
-  const store = await PostgresScraperStore.create();
+  const store = await PostgresScraperStore.create({ onStartupPhase: (phase) => startupPhase(`postgres_${phase}`) });
   startupPhase("postgres_store_created");
   const legacyImport = await store.importLegacySnapshot(paths.evidenceMetadataPath);
   startupPhase("legacy_snapshot_checked", { imported: legacyImport.imported });
