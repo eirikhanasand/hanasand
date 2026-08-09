@@ -309,8 +309,8 @@ function reviewStorageBackpressure(store: any) {
   if (!snapshot) return undefined;
   const pendingWrites = Number(snapshot.pendingWrites ?? 0);
   const lastWriteError = typeof snapshot.lastWriteError === "string" ? snapshot.lastWriteError.trim() : "";
-  if (!lastWriteError && !(snapshot.ok === false && pendingWrites > 0)) return undefined;
-  const reason = lastWriteError || "PostgreSQL write queue is unhealthy.";
+  if (!lastWriteError && pendingWrites <= 0) return undefined;
+  const reason = lastWriteError || `PostgreSQL write queue has ${pendingWrites} pending records.`;
   return { ok: false, pendingWrites, lastWriteError: reason, message: `Review paused because PostgreSQL writes are unhealthy: ${reason}` };
 }
 

@@ -43,6 +43,18 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(modelCalls).toBe(0);
   });
 
+  test("does not index or call the model while writes remain queued", async () => {
+    const store: any = new InMemoryScraperStore();
+    store.databaseHealthSnapshot = () => ({ ok: true, pendingWrites: 1 });
+    store.queryAllStructuredRecords = async () => { throw new Error("must not enumerate while writes remain queued"); };
+    let modelCalls = 0;
+
+    const cycle = await runAutomaticReviewCycle({ store } as any, { allTenants: true, fetcher: async () => { modelCalls++; throw new Error("must not call model"); } });
+
+    expect(cycle).toMatchObject({ status: "failed", storage: { pendingWrites: 1 }, error: { code: "storage_backpressure" }, attempted: 0 });
+    expect(modelCalls).toBe(0);
+  });
+
   test("async review snapshots do not re-enumerate high-volume collections", async () => {
     const store: any = new InMemoryScraperStore();
     const querySources: Record<string, () => any[]> = {

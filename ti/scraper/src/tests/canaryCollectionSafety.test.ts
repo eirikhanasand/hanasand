@@ -40,6 +40,17 @@ describe("public collection boundary", () => {
     expect(store.listRuns()).toHaveLength(0);
   });
 
+  test("treats a non-empty write queue as backpressure even when health is otherwise ok", async () => {
+    const store = new InMemoryScraperStore();
+    (store as any).databaseHealthSnapshot = () => ({ ok: true, pendingWrites: 1 });
+    let fetchCount = 0;
+
+    const cycle = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, fetch: async () => { fetchCount++; return new Response("unexpected"); } });
+
+    expect(cycle).toMatchObject({ status: "failed", backpressureState: "storage_failed", storage: { pendingWrites: 1 } });
+    expect(fetchCount).toBe(0);
+  });
+
   test("reports the next timer-anchored cycle after a late completion", () => {
     const startedAt = "2026-08-09T13:54:00.000Z", intervalMs = 15 * 60_000;
     expect(nextAnchoredCycleAt(startedAt, intervalMs, Date.parse("2026-08-09T14:10:55.000Z"))).toBe("2026-08-09T14:24:00.000Z");
