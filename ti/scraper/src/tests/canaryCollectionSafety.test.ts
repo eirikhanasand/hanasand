@@ -113,6 +113,38 @@ describe("public collection boundary", () => {
     }));
   });
 
+  test("uses publisher content rather than source labels for usefulness", async () => {
+    const store = new InMemoryScraperStore();
+    const at = "2026-07-23T12:00:00.000Z";
+    for (const id of ["neutral", "malicious"]) store.saveSource({ ...source({
+      id: `src_vulnerability_malware_${id}`,
+      name: "Critical Vulnerability Malware Attack Research",
+      url: `https://publisher.example/${id}.xml`,
+      governance: { approvalRequired: false, approvalState: "approved" },
+      metadata: { productionCollection: true, countsAsCoverage: false, sourceFamily: "clear_web" }
+    }), countsAsCoverage: false } as any);
+
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      maxSources: 2,
+      maxTasks: 2,
+      now: () => at,
+      fetch: async (url: string) => new Response(url.includes("malicious")
+        ? "<rss><channel><item><title>Observed campaign activity</title><link>https://publisher.example/malicious/item</link><description>The publisher observed credential phishing and malware delivery against multiple organizations and documented defensive indicators.</description><pubDate>Thu, 23 Jul 2026 11:00:00 GMT</pubDate></item></channel></rss>"
+        : "<rss><channel><item><title>Weekly engineering notes</title><link>https://publisher.example/neutral/item</link><description>The publisher summarized routine product maintenance, documentation changes, compatibility notes, and upcoming community events.</description><pubDate>Thu, 23 Jul 2026 11:00:00 GMT</pubDate></item></channel></rss>",
+      { headers: { "content-type": "application/rss+xml" } })
+    });
+
+    const health = Object.fromEntries(store.listSourceHealthObservations().map((row: any) => [row.sourceId, row]));
+    const captures = Object.fromEntries(store.listCaptures().map((capture: any) => [capture.sourceId, capture]));
+    expect(cycle).toMatchObject({ insertedCaptureCount: 2, failedTaskCount: 0 });
+    expect(health.src_vulnerability_malware_neutral).toMatchObject({ useful: false, captureCount: 1 });
+    expect(captures.src_vulnerability_malware_neutral).toMatchObject({ metadata: { sourceReviewCandidate: true, sellableCandidate: false } });
+    expect(health.src_vulnerability_malware_malicious).toMatchObject({ useful: true, captureCount: 1 });
+    expect(captures.src_vulnerability_malware_malicious).toMatchObject({ metadata: { sellableCandidate: true } });
+  });
+
   test("caps ordinary publisher rows at the scheduler limit", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ metadata: { productionCollection: true, maxItemsPerFetch: 150 } }));

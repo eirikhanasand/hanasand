@@ -297,7 +297,7 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
       || isNvdCveSource(source)
       || ["cisa_kev", "ransomware_group_metadata", "mitre_actor_catalog", "ransomware_operation_catalog", "ransomware_operation_activity_evidence"].includes(collected.metadata?.extractionProfile)
       || sourceReviewApproved && currentReviewedItem(collected, source, generatedAt)
-      || isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt, maxAgeDays: sourceActivityWindowDays(source) }));
+      || isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, sourceName: source.name, adapter: collected.metadata?.adapter, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt, maxAgeDays: sourceActivityWindowDays(source) }));
     const retainedItems = task.planning?.watchlistDiscovery
       ? collectedItems
       : collectedItems.filter((collected: any) => itemUseful(collected) || sourceRequiresAutomaticReview(source));
