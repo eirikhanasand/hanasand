@@ -88,7 +88,7 @@ Do not create a fake benchmark or force an artificial class balance. Instead:
 
 ## Already closed
 
-- Closed: the former homepage exposure `0/0` display was verified fixed; the live endpoint currently returns real exposure data (3,545 retained records at the latest check) and honest unavailable states.
+- Regression under investigation: the earlier homepage `0/0` fix was real at the time, and the records are still present, but the current exposure-queue read now exceeds the bounded read timeout after the scraper recovery. Do not call this closed again until the live endpoint returns its real total from the current deployment.
 - Closed: the automatic-review worker no longer recreates tasks outside its bounded PostgreSQL body window; the deployed worker is draining the persisted backlog.
 - Closed: production monitor incidents persist durably and alert email attempts are serialized and rate-limited; the deployed API recorded a successful alert after the previous SMTP rate-limit failures.
 - Fake coverage-plan endpoint: removed and verified unreachable.
