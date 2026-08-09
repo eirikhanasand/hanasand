@@ -286,44 +286,46 @@ export default async function runSyntheticMonitor() {
         }),
         check('threat-intelligence', 'Processing backlog', async () => {
             const result = await run(`
+                WITH latest_review_tasks AS (
+                  SELECT DISTINCT ON (record->>'taskId') record, updated_at
+                  FROM threat_intel.workflow_records
+                  WHERE record_type = 'analyst_metadata_review_task'
+                    AND record->>'recordKind' = 'automatic_intelligence_review_task'
+                  ORDER BY record->>'taskId', updated_at DESC
+                )
                 SELECT
-                  count(*) FILTER (
-                    WHERE record_type = 'analyst_metadata_review_task'
-                      AND record->>'recordKind' = 'automatic_intelligence_review_task'
-                      AND record->>'state' IN ('queued', 'running', 'retrying')
+                  (SELECT count(*)::int FROM latest_review_tasks
+                    WHERE record->>'state' IN ('queued', 'running', 'retrying')
                       AND record->>'promptVersion' NOT IN (
                         'ti.automatic_intelligence_review.prompt.v1',
                         'ti.automatic_intelligence_review.prompt.v2',
                         'ti.automatic_intelligence_review.prompt.v3'
                       )
                       AND updated_at < NOW() - INTERVAL '30 minutes'
-                  )::int AS stale_reviews,
+                  ) AS stale_reviews,
                   COALESCE(
-                    EXTRACT(EPOCH FROM (NOW() - MIN(updated_at) FILTER (
-                      WHERE record_type = 'analyst_metadata_review_task'
-                        AND record->>'recordKind' = 'automatic_intelligence_review_task'
-                        AND record->>'state' IN ('queued', 'running', 'retrying')
+                    EXTRACT(EPOCH FROM (NOW() - (SELECT MIN(updated_at) FROM latest_review_tasks
+                      WHERE record->>'state' IN ('queued', 'running', 'retrying')
                         AND record->>'promptVersion' NOT IN (
                           'ti.automatic_intelligence_review.prompt.v1',
                           'ti.automatic_intelligence_review.prompt.v2',
                           'ti.automatic_intelligence_review.prompt.v3'
-                        )
-                    )) / 60)::int,
+                        ))) / 60)::int,
                     0
                   ) AS oldest_review_age_minutes,
-                  count(*) FILTER (
+                  (SELECT count(*)::int FROM threat_intel.workflow_records
                     WHERE record_type = 'collection_plan'
                       AND id LIKE 'source-feed-discovery-plan_%'
                       AND record->>'status' = 'failed'
                       AND COALESCE((record->>'consecutiveFailureCount')::int, 0) > 0
                       AND NULLIF(record->>'nextEligibleAt', '')::timestamptz < NOW()
-                  )::int AS overdue_discovery,
-                  count(*) FILTER (
+                  ) AS overdue_discovery,
+                  (SELECT count(*)::int FROM threat_intel.workflow_records
                     WHERE record_type = 'evaluation_benchmark'
                       AND record->>'status' = 'annotating'
                       AND record->'protocol'->>'version' = 'ti.independent_extraction_benchmark.v4'
                       AND updated_at < NOW() - INTERVAL '4 hours'
-                  )::int AS stalled_evaluations,
+                  ) AS stalled_evaluations,
                   (
                     SELECT count(*)::int
                     FROM threat_intel.sources source
@@ -354,7 +356,6 @@ export default async function runSyntheticMonitor() {
                           AND recovered.updated_at > failed.updated_at
                       )
                   ) AS recent_delivery_failures
-                FROM threat_intel.workflow_records
             `)
             const counts = result.rows[0] || {}
             const staleReviews = Number(counts.stale_reviews ?? 0)
