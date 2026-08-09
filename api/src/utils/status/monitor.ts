@@ -233,13 +233,11 @@ export default async function runSyntheticMonitor() {
             return 'The authenticated dark-web monitoring workspace rendered successfully.'
         }),
         check('dark-web-monitoring', 'Latest activity', async () => {
-            let { response, body } = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase)
-            for (let attempt = 0; response.status >= 500 && attempt < 2; attempt += 1) {
-                await new Promise((resolve) => setTimeout(resolve, 1_000))
-                const retry = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase)
-                response = retry.response
-                body = retry.body
-            }
+            // A failed activity check is already recorded as down. Retrying
+            // the same slow route here only stretches the public status read
+            // without changing the result; the next scheduled monitor run is
+            // the retry boundary.
+            const { response, body } = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase)
             const queue = object(body)
             const counts = object(queue?.counts)
             const freshness = object(queue?.freshness)
