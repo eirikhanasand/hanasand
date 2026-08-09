@@ -17,5 +17,5 @@ test('defaults the client to an explicit tenant and reserves global scope for sy
     assert.match(client, /setTenantId\(organization\.tenantId \|\| organization\.id\)/)
     assert.match(client, /params\.set\('organizationId', organizationId\.trim\(\)\)/)
     assert.match(route, /scope === 'global' && !session\.identity\.roles\.includes\('system_admin'\)/)
-    assert.match(route, /organizationScopeError\(organizationId \|\| tenantId!\,/)
+    assert.match(route, /organizationScopeError\(organizationId \|\| tenantId!,/)
 })
