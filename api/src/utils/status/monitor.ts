@@ -70,6 +70,10 @@ function hasToken(body: unknown): body is { token: string } {
     return Boolean(body && typeof body === 'object' && 'token' in body && typeof (body as { token?: unknown }).token === 'string')
 }
 
+function remainingMonitorTimeout(deadline: number) {
+    return Math.max(1, deadline - Date.now())
+}
+
 export default async function runSyntheticMonitor() {
     const runId = `monitor_${Date.now()}`
     const password = `Mm22!!${crypto.randomUUID().replaceAll('-', '').slice(0, 18)}Aa`
@@ -112,17 +116,19 @@ export default async function runSyntheticMonitor() {
             return 'The public website rendered successfully.'
         }),
         check('threat-intelligence', 'Public search', async () => {
+            const deadline = Date.now() + MONITOR_REQUEST_TIMEOUT_MS
             const request = () => fetchJson('/ti/search', {
                 method: 'POST',
                 body: JSON.stringify({ query: 'APT29' }),
-            }, publicApiBase)
+            }, publicApiBase, remainingMonitorTimeout(deadline))
             let result = await request()
             const valid = (value: typeof result) => {
                 const body = object(value.body)
                 return value.response.status === 200 && body?.mode === 'scraper' && Array.isArray(body.sources) && Array.isArray(body.recentActivity)
             }
-            for (let attempt = 0; !valid(result) && attempt < 2; attempt += 1) {
-                await new Promise((resolve) => setTimeout(resolve, 1_000))
+            for (let attempt = 0; !valid(result) && attempt < 2 && Date.now() < deadline; attempt += 1) {
+                await new Promise((resolve) => setTimeout(resolve, Math.min(1_000, remainingMonitorTimeout(deadline))))
+                if (Date.now() >= deadline) break
                 result = await request()
             }
             if (!valid(result)) {
@@ -233,10 +239,12 @@ export default async function runSyntheticMonitor() {
             return 'The authenticated dark-web monitoring workspace rendered successfully.'
         }),
         check('dark-web-monitoring', 'Latest activity', async () => {
-            let { response, body } = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase)
-            for (let attempt = 0; response.status >= 500 && attempt < 2; attempt += 1) {
-                await new Promise((resolve) => setTimeout(resolve, 1_000))
-                const retry = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase)
+            const deadline = Date.now() + MONITOR_REQUEST_TIMEOUT_MS
+            let { response, body } = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase, remainingMonitorTimeout(deadline))
+            for (let attempt = 0; response.status >= 500 && attempt < 2 && Date.now() < deadline; attempt += 1) {
+                await new Promise((resolve) => setTimeout(resolve, Math.min(1_000, remainingMonitorTimeout(deadline))))
+                if (Date.now() >= deadline) break
+                const retry = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase, remainingMonitorTimeout(deadline))
                 response = retry.response
                 body = retry.body
             }

@@ -28,6 +28,8 @@ describe('production monitor notification transitions', () => {
         expect(source).toContain('const MONITOR_REQUEST_TIMEOUT_MS = 5_000')
         expect(source).toContain('signal: options.signal || AbortSignal.timeout(timeoutMs)')
         expect(source).toContain('signal: AbortSignal.timeout(MONITOR_REQUEST_TIMEOUT_MS)')
+        expect(source).toContain('const deadline = Date.now() + MONITOR_REQUEST_TIMEOUT_MS')
+        expect(source).toContain('Date.now() < deadline')
     })
 
     test('unavailable dependency records down promptly without substituting success', async () => {
