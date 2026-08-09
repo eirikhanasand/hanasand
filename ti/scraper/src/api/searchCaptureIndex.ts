@@ -38,6 +38,16 @@ export function findActorSearchCaptures(store: any, identities: string[], limit:
     .slice(0, limit)
     .map((hit) => hit.doc.capture);
 }
+export function findSearchCapturesFromRows(captures: any[], sources: any[], query: string, limit: number, tenantId?: string, actorTerms?: string[]) {
+  const sourceById = new Map(sources.map((source: any) => [source.id, source]));
+  const rows = captures.filter((capture: any) => (capture.tenantId || undefined) === tenantId);
+  const overlay = {
+    listSearchCaptureChanges: () => ({ revision: rows.length, captures: rows }),
+    getSource: (sourceId: string) => sourceById.get(sourceId),
+    listIncidentsByCaptureIds: () => []
+  };
+  return actorTerms ? findActorSearchCaptures(overlay, actorTerms, limit, tenantId) : findSearchCaptures(overlay, query, limit, tenantId);
+}
 function indexForStore(store: any): SearchIndex {
   const index = cache.get(store) ?? { revision: 0, records: new Map(), postings: new Map(), tenantIds: new Map() };
   const changes = store.listSearchCaptureChanges?.(index.revision);

@@ -5,7 +5,7 @@ import { nowIso } from "../utils.ts";
 import { ACTIONS, abuse, certification, channelStatus, contract, enrichAnswer, enrichEffects, enrichPoll, enrichPromotion, enrichReliability, enrichStates, planSteps, promoteCanary, readiness, redact, rollout, strings, summarize } from "./publicChannelHelpers.ts";
 
 export type PublicChannelStatusState = "queued" | "partial" | "blocked" | "ready" | "rate_limited" | "policy_disabled" | "high_duplicate";
-export type PublicChannelApplyPlanRouteOptions = { store: ScraperStore; publicTelegramSourcePacks?: any[]; generatedAt?: string };
+export type PublicChannelApplyPlanRouteOptions = { store: ScraperStore; publicTelegramSourcePacks?: any[]; generatedAt?: string; captures?: any[] };
 
 export function buildPublicChannelApplyPlanRouteResponse(input: any, options: PublicChannelApplyPlanRouteOptions): any {
   const invalidActions = (input.actions ?? []).filter((action) => !ACTIONS.includes(action));
@@ -23,7 +23,7 @@ export function buildPublicChannelStatusRouteResponse(input: any, options: Publi
   if (!input.query.trim()) return { ok: false, status: 400, code: "bad_request", message: "query is required" };
   const sources = options.store.listSources(), packs = options.publicTelegramSourcePacks, generatedAt = options.generatedAt;
   const queuedSourceIds = options.store.listPlans().flatMap((p) => p.tasks ?? []).filter((t) => t.sourceType === "telegram_public").map((t) => t.sourceId);
-  const captures = options.store.listCaptures();
+  const captures = options.captures ?? options.store.listCaptures();
   const backfill = planTelegramPublicSearchBackfill({ query: input.query, entityType: input.entityType, sources, sourcePacks: packs, tenantId: input.tenantId, maxTasks: 8, queuedSourceIds });
   const terms = backfill.queryTerms.map((term) => term.toLowerCase());
   const evidence = captures.map((capture) => {

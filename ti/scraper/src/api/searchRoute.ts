@@ -1,7 +1,7 @@
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { error, json, numberQuery, readJson } from "./http.ts";
 import { nowIso, stableId } from "../utils.ts";
-import { findActorSearchCaptures, findSearchCaptures } from "./searchCaptureIndex.ts";
+import { findActorSearchCaptures, findSearchCaptures, findSearchCapturesFromRows } from "./searchCaptureIndex.ts";
 import { cleanSearchText, isMetadataOnlyCapture, rowFromCapture, safePublicSearchUrl } from "./searchRows.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
 import { sanitizeDwmApiPayload } from "../product/dwmCustomerDisplay.ts";
@@ -36,13 +36,16 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     queuePressureLimit: Number(options.liveSearchQueuePressureLimit ?? 50),
   });
   scheduleLiveSearch(liveSearch, options, generatedAt);
+  const persistedSearchCaptures = typeof (options.store as any).querySearchCaptures === "function"
+    ? await (options.store as any).querySearchCaptures([query], scope.tenantId, 300)
+    : undefined;
   const publicChannelResult = buildPublicChannelStatusRouteResponse(
     { query, entityType, tenantId: scope.tenantId },
-    { store: options.store, publicTelegramSourcePacks: options.publicTelegramSourcePacks as any, generatedAt },
+    { store: options.store, publicTelegramSourcePacks: options.publicTelegramSourcePacks as any, generatedAt, captures: persistedSearchCaptures },
   );
   const limit = Math.max(1, Math.min(numberQuery(url.searchParams.get("limit")) ?? 50, 100));
   const identity = actorIdentity(options.store, scope.tenantId, query);
-  const captures = searchCaptures(options.store, query, entityType, identity, limit * 3, scope.tenantId);
+  const captures = await searchCaptures(options.store, query, entityType, identity, limit * 3, scope.tenantId);
   const rows = dedupeRows(captures.map((capture: any) => rowFromCapture(capture, scopedSource(options.store.getSource?.(capture.sourceId), scope.tenantId)))).slice(0, limit);
   const captureIds = new Set(rows.map((row) => row.id));
   const sourceIds = new Set(rows.map((row) => row.sourceId));
@@ -189,7 +192,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     extractorVersion: incident.extractorVersion,
     reviewReasons: incident.reviewReasons ?? []
   }));
-  const restricted = searchDarkwebIndex({ query, sources: sourcesInScope, captures: options.store.listCaptures(), limit: 20 });
+  const restricted = searchDarkwebIndex({ query, sources: sourcesInScope, captures: persistedSearchCaptures ?? options.store.listCaptures(), limit: 20 });
   const restrictedSourceCount = sourcesInScope.filter((source: any) => String(source.type).endsWith("_metadata")).length;
   const restrictedDisabled = Number((options.config as any)?.limits?.maxConcurrentDarknetMetadataTasks) === 0;
   const response = {
@@ -976,7 +979,12 @@ function searchEntityType(query: string, requested: unknown, store: any, tenantI
   return query.includes(" ") ? "organization" : "free_text";
 }
 
-function searchCaptures(store: any, query: string, entityType: SearchEntityType, identity: ReturnType<typeof actorIdentity>, limit: number, tenantId?: string) {
+async function searchCaptures(store: any, query: string, entityType: SearchEntityType, identity: ReturnType<typeof actorIdentity>, limit: number, tenantId?: string) {
+  if (typeof store.querySearchCaptures === "function") {
+    const terms = entityType === "actor" ? identity.terms : [query];
+    const rows = await store.querySearchCaptures(terms, tenantId, Math.max(limit, 300));
+    return findSearchCapturesFromRows(rows, store.listSources?.() ?? [], query, limit, tenantId, entityType === "actor" ? identity.terms : undefined);
+  }
   if (entityType !== "actor") return findSearchCaptures(store, query, limit, tenantId);
   const candidates = findActorSearchCaptures(store, identity.terms, limit, tenantId)
     .sort((a: any, b: any) => String(b.collectedAt ?? "").localeCompare(String(a.collectedAt ?? "")));

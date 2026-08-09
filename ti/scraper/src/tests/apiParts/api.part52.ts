@@ -31,6 +31,8 @@ describe("api v1", () => {
     store.saveExtractedEntity({ id: "entity_indexed_search", tenantId: "tenant_api", captureId: "cap_indexed_search", sourceId: "src_indexed_search", type: "actor", value: "APT29", normalizedValue: "apt29", assertionKind: "observed", extractionMethod: "source_specific", confidence: 0.9 });
     store.saveIndicator({ id: "indicator_indexed_search", tenantId: "tenant_api", captureId: "cap_indexed_search", sourceId: "src_indexed_search", type: "domain", value: "example.org", confidence: 0.8 });
     store.saveIntelligenceClaim({ id: "claim_indexed_search", tenantId: "tenant_api", sourceIds: ["src_indexed_search"], captureIds: ["cap_indexed_search"], claimType: "actor_activity", value: { actor: "APT29" }, summary: "APT29 activity", confidence: 0.8, reviewState: "needs_review", corroborationState: "single_source" });
+    (store as any).querySearchCaptures = async () => [store.getCapture("cap_indexed_search")];
+    (store as any).listCaptures = () => { throw new Error("search performed a complete capture-table scan"); };
     for (const method of ["listExtractedEntities", "listIndicators", "listIntelligenceClaims", "listClaimEvidence", "listClaimReviews"]) {
       (store as any)[method] = () => { throw new Error(`${method} performed a complete-table scan`); };
     }

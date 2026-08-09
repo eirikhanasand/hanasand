@@ -346,6 +346,25 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return { sources: sources.map(readRecord), captures: captures.map(readRecord) };
   }
 
+  async querySearchCaptures(queries: Iterable<string>, tenantId: string | undefined, limit = 500) {
+    const terms = [...new Set([...queries].map((value) => String(value).trim().toLowerCase()).filter(Boolean))];
+    if (!terms.length) return [];
+    const tenantPlaceholder = `$${terms.length + 1}`;
+    const limitPlaceholder = `$${terms.length + 2}`;
+    const rows = await this.sql.unsafe(
+      `SELECT capture.record
+       FROM threat_intel.captures AS capture
+       LEFT JOIN threat_intel.sources AS source ON source.id = capture.source_id
+       WHERE capture.tenant_id IS NOT DISTINCT FROM ${tenantPlaceholder}::text
+         AND (position($1 in lower(capture.record::text || ' ' || COALESCE(source.record::text, ''))) > 0
+           ${terms.slice(1).map((_, index) => `OR position($${index + 2} in lower(capture.record::text || ' ' || COALESCE(source.record::text, ''))) > 0`).join(" ")})
+       ORDER BY capture.collected_at DESC, capture.id
+       LIMIT ${limitPlaceholder}`,
+      [...terms, tenantId ?? null, Math.max(1, Math.min(500, Math.floor(limit)))]
+    );
+    return rows.map(readRecord);
+  }
+
   async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; sourceId?: string; executableOnly?: boolean } ) {
     const limit = Math.max(1, Math.min(500, Number(input.limit ?? 100)));
     const offset = Math.max(0, Number(input.offset ?? 0));
