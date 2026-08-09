@@ -88,6 +88,31 @@ test('retries canonical search after an unavailable response', async () => {
     }
 })
 
+test('reports whether a search was served from the in-process cache', async () => {
+    const previousScraperBase = process.env.TI_SCRAPER_API_BASE
+    const originalFetch = globalThis.fetch
+    process.env.TI_SCRAPER_API_BASE = 'http://scraper.test'
+    let attempts = 0
+    globalThis.fetch = async () => {
+        attempts++
+        return Response.json({
+            query: 'cache-status-987654', generatedAt: '2026-08-09T06:00:00.000Z', mode: 'scraper', status: 'ready',
+            summary: 'Evidence is available.', confidence: 0.8, lastSeen: '2026-08-09T05:00:00.000Z', aliases: [],
+            recentActivity: [], targets: [], ttps: [], datasets: [], sources: [], notes: [],
+        })
+    }
+
+    try {
+        expect((await searchThreatIntel({ query: 'cache-status-987654' })).cacheStatus).toBe('miss')
+        expect((await searchThreatIntel({ query: 'cache-status-987654' })).cacheStatus).toBe('hit')
+        expect(attempts).toBe(1)
+    } finally {
+        globalThis.fetch = originalFetch
+        if (previousScraperBase === undefined) delete process.env.TI_SCRAPER_API_BASE
+        else process.env.TI_SCRAPER_API_BASE = previousScraperBase
+    }
+})
+
 test('refreshes a cached pending search before its advertised poll interval', async () => {
     const previousScraperBase = process.env.TI_SCRAPER_API_BASE
     const originalFetch = globalThis.fetch

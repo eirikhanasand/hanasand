@@ -1607,7 +1607,15 @@
             "enum": [
               "scraper",
               "seeded",
-              "live_search"
+              "live_search",
+              "unavailable"
+            ]
+          },
+          "cacheStatus": {
+            "type": "string",
+            "enum": [
+              "hit",
+              "miss"
             ]
           },
           "status": {

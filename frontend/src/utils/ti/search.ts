@@ -9,6 +9,7 @@ export interface TiSearchResponse {
     queryKind?: 'actor' | 'domain' | 'cve' | 'indicator' | 'organization' | 'free_text'
     generatedAt: string
     mode: 'scraper' | 'seeded' | 'live_search' | 'unavailable'
+    cacheStatus?: 'hit' | 'miss'
     status?: TiResultState
     runId?: string
     refreshAfterSeconds?: number

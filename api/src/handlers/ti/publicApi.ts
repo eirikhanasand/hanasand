@@ -178,6 +178,7 @@ function publicSearchResult(result: TiSearchResponse) {
         queryKind: result.queryKind,
         generatedAt: result.generatedAt,
         mode: result.mode,
+        cacheStatus: result.cacheStatus,
         status: result.status,
         runId: result.runId,
         refreshAfterSeconds: finiteNumber(result.refreshAfterSeconds),

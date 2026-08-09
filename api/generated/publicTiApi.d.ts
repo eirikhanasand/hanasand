@@ -358,7 +358,9 @@ export interface components {
             /** Format: date-time */
             generatedAt: string;
             /** @enum {string} */
-            mode: "scraper" | "seeded" | "live_search";
+            mode: "scraper" | "seeded" | "live_search" | "unavailable";
+            /** @enum {string} */
+            cacheStatus?: "hit" | "miss";
             /** @enum {string} */
             status?: "queued" | "searching" | "partial" | "ready" | "metadata_review" | "blocked_unsafe_target" | "needs_source_activation";
             runId?: string;
