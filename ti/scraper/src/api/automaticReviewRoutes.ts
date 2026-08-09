@@ -218,7 +218,8 @@ function syncQueueWithIndex(store: any, index: ReviewIndex, input: { tenantId?: 
   for (let position = 0; position < index.sources.length; position++) {
     const source = index.sources[position];
     if (!input.allTenants && !inTenantScope(source, input.tenantId)) continue;
-    const reconciled = reconcileApprovedPublicCandidate(store, source, at);
+    const reviewUnblocked = reconcileUncertainSourceCollection(store, source, at);
+    const reconciled = reconcileApprovedPublicCandidate(store, reviewUnblocked, at);
     index.sources[position] = reconciled;
     index.sourcesById.set(reconciled.id, reconciled);
   }
@@ -772,7 +773,7 @@ function persistSubjectDecision(store: any, index: ReviewIndex, task: AutomaticR
       ...source,
       status: approved ? source.status : state === "rejected" ? "rejected" : "candidate",
       countsAsCoverage: approved ? source.countsAsCoverage : false,
-      crawlState: approved ? source.crawlState : {
+      crawlState: approved ? source.crawlState : state === "needs_review" ? clearAutomaticReviewBackoff(source.crawlState) : {
         ...(source.crawlState ?? {}),
         nextEligibleAt: backoffUntil,
         backoffUntil,
@@ -860,6 +861,22 @@ function persistSubjectDecision(store: any, index: ReviewIndex, task: AutomaticR
   index.incidentsById.set(updated.id, updated);
 }
 
+function reconcileUncertainSourceCollection(store: any, source: any, at: string) {
+  if (source.status !== "candidate"
+    || source.metadata?.automaticSourceReview?.state !== "needs_review"
+    || !automaticReviewBackoff(source.crawlState)) return source;
+  return store.saveSource({ ...source, crawlState: clearAutomaticReviewBackoff(source.crawlState), updatedAt: at });
+}
+
+function automaticReviewBackoff(crawlState: any) {
+  return String(crawlState?.lastError ?? "").startsWith("Automatic source review:");
+}
+
+function clearAutomaticReviewBackoff(crawlState: any) {
+  if (!automaticReviewBackoff(crawlState)) return crawlState;
+  return { ...(crawlState ?? {}), nextEligibleAt: undefined, backoffUntil: undefined, lastErrorAt: undefined, lastError: undefined };
+}
+
 function reconcileApprovedPublicCandidate(store: any, source: any, at: string) {
   if (source.status !== "candidate"
     || source.metadata?.productionCollection !== false
@@ -873,7 +890,7 @@ function reconcileApprovedPublicCandidate(store: any, source: any, at: string) {
   const productiveCycles = currentProductiveSourceCycles(store, source, at);
   const sustained = productiveCycles.length >= 2;
   const lastProductiveAt = productiveCycles.at(-1)?.checkedAt;
-  const reviewBackoff = String(source.crawlState?.lastError ?? "").startsWith("Automatic source review:");
+  const reviewBackoff = automaticReviewBackoff(source.crawlState);
   if (source.countsAsCoverage === sustained
     && source.metadata?.countsAsCoverage === sustained
     && source.metadata?.sourcePortfolioQualificationState === (sustained ? "sustained_productive" : "pending_sustained_productivity")
@@ -884,13 +901,7 @@ function reconcileApprovedPublicCandidate(store: any, source: any, at: string) {
     ...source,
     status: sustained ? "active" : "candidate",
     countsAsCoverage: sustained,
-    crawlState: reviewBackoff ? {
-      ...(source.crawlState ?? {}),
-      nextEligibleAt: undefined,
-      backoffUntil: undefined,
-      lastErrorAt: undefined,
-      lastError: undefined
-    } : source.crawlState,
+    crawlState: reviewBackoff ? clearAutomaticReviewBackoff(source.crawlState) : source.crawlState,
     metadata: {
       ...(source.metadata ?? {}),
       productionCollection: sustained,

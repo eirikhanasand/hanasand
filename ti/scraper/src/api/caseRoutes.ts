@@ -834,10 +834,10 @@ function reportCaptureForEvidence(item: any, caseRecord: AnalystCase, options: A
   const sourceId = exactEvidenceReference(item.sourceId, provenance.sourceId);
   const contentHash = exactEvidenceReference(item.contentHash, provenance.contentHash);
   if (!captureId || !sourceId || !contentHash) return undefined;
-  const capture = options.store.listCaptures().find((row: any) => row.id === captureId);
+  const capture = options.store.getCapture(captureId);
   if (!capture || !reportEvidenceInScope(capture, caseRecord.tenantId)) return undefined;
   if (sourceId !== capture.sourceId || contentHash !== capture.contentHash) return undefined;
-  const source = options.store.listSources().find((row: any) => row.id === sourceId);
+  const source = options.store.getSource(sourceId);
   if (!source || !reportEvidenceInScope(source, caseRecord.tenantId)) return undefined;
   return capture;
 }

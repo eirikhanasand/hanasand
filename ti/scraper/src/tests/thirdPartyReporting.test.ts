@@ -12,6 +12,17 @@ const serviceHeaders = {
 };
 
 describe("authenticated third-party reporting", () => {
+  test("case export resolves selected provenance through keyed store getters", async () => {
+    const { store, options } = reportingFixture();
+    const captureStore = store as any;
+    captureStore.listCaptures = () => { throw new Error("case export must not enumerate captures"); };
+    captureStore.listSources = () => { throw new Error("case export must not enumerate sources"); };
+
+    const response = await report(options, "json", ["evidence_public"]);
+    expect(response.status).toBe(200);
+    expect((await response.json() as any).summary).toMatchObject({ caseId: "case_report", evidenceCount: 1 });
+  });
+
   test("exports only selected tenant-visible evidence as safe JSON and valid STIX", async () => {
     const { store, options } = reportingFixture();
     const noAuthentication = await handleApiRequest(new Request("http://local/v1/cases/case_report/export?organizationId=org_report&report=true&format=json&evidenceId=evidence_public", {

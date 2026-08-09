@@ -52,9 +52,28 @@ describe("public collection boundary", () => {
     expect(store.listIndicators()).toHaveLength(0);
     expect(store.listIntelligenceClaims()).toHaveLength(0);
     expect(store.listSourceHealthObservations()).toContainEqual(expect.objectContaining({
-      status: "degraded", success: true, useful: false, itemCount: 1,
-      captureCount: 0, parserWarningCount: 1
+      status: "healthy", success: true, useful: false, itemCount: 0,
+      captureCount: 0, parserWarningCount: 0
     }));
+  });
+
+  test("caps ordinary publisher rows at the scheduler limit", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ metadata: { productionCollection: true, maxItemsPerFetch: 150 } }));
+    const items = Array.from({ length: 5 }, (_, index) => `<item><title>CVE-2026-42${index} remote code execution</title><link>https://example.test/${index}</link><description>Critical vulnerability with a security patch.</description><pubDate>Thu, 23 Jul 2026 12:00:00 GMT</pubDate></item>`).join("");
+
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      maxSources: 1,
+      maxTasks: 1,
+      maxItemsPerTask: 2,
+      now: () => "2026-07-23T12:00:00.000Z",
+      fetch: async () => new Response(`<rss><channel>${items}</channel></rss>`, { headers: { "content-type": "application/rss+xml" } })
+    });
+
+    expect(cycle.insertedCaptureCount).toBe(2);
+    expect(store.listCaptures()).toHaveLength(2);
   });
 
   test("times out a stalled response body without wedging the recurring loop", async () => {
@@ -620,8 +639,7 @@ describe("public collection boundary", () => {
     expect(request.searchParams.get("resultsPerPage")).toBe("40");
     expect(request.searchParams.get("pubStartDate")).toBe("2026-03-31T00:00:00.000Z");
     expect(request.searchParams.get("pubEndDate")).toBe("2026-07-29T00:00:00.000Z");
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ metadata: { parserWarnings: ["JSON source contained no supported records"] } });
+    expect(items).toHaveLength(0);
 
     const store = new InMemoryScraperStore();
     store.saveSource(nvd);

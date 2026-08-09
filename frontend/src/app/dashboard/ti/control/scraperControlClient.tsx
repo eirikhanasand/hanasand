@@ -548,7 +548,7 @@ function frontierTasksFrom(snapshot: ControlSnapshot | null): FrontierTask[] {
             id: stringValue(task.id) || `frontier_${index}`,
             sourceId: stringValue(task.sourceId) || stringValue(asRecord(task.source).id),
             url: stringValue(task.url),
-            discoveredAt: stringValue(task.discoveredAt) || stringValue(task.createdAt) || snapshot?.generatedAt || new Date().toISOString(),
+            discoveredAt: stringValue(task.discoveredAt) || stringValue(task.createdAt) || '',
             anchorText: stringValue(task.anchorText) || stringValue(task.query) || 'Queued source check',
             fairnessKey: stringValue(task.fairnessKey) || 'default',
             score: numberFrom(record.score) ?? numberFrom(task.score) ?? numberFrom(task.parentRelevance) ?? 0,
@@ -562,7 +562,7 @@ function sourceWeight(source: SourceRow) {
 
 function workItemsFor(snapshot: ControlSnapshot | null, sources: SourceRow[], tasks: FrontierTask[]): WorkItem[] {
     const items: WorkItem[] = []
-    const generatedAt = snapshot?.generatedAt ? formatTime(snapshot.generatedAt) : 'Now'
+    const generatedAt = snapshot?.generatedAt ? formatTime(snapshot.generatedAt) : 'Time unavailable'
     if (snapshot?.error) {
         items.push({
             id: 'scraper-connecting',
@@ -970,7 +970,7 @@ function operationalStateLabel(value: string) {
 }
 
 function formatTime(value?: string) {
-    if (!value) return 'Now'
+    if (!value) return 'Time unavailable'
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return value
     return new Intl.DateTimeFormat('en', {

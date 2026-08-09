@@ -465,14 +465,13 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   private async queryRecordsByIds(table: string, column: string, ids: Iterable<string>, tenantId?: string, allTenants = false) {
     const values = [...new Set([...ids].map(String).filter(Boolean))];
     if (!values.length) return [];
-    const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
-    const tenantPlaceholder = `$${values.length + 1}`;
-    const tenantWhere = allTenants ? "TRUE" : `tenant_id IS NOT DISTINCT FROM ${tenantPlaceholder}::text`;
+    const arrayLiteral = `{${values.map((value) => `"${value.replace(/[\\\"]/g, "\\$&")}"`).join(",")}}`;
+    const tenantWhere = allTenants ? "TRUE" : "tenant_id IS NOT DISTINCT FROM $2::text";
     const rows = await this.sql.unsafe(
       `SELECT record FROM threat_intel.${table}
-       WHERE ${column} IN (${placeholders})
+       WHERE ${column} = ANY($1::text[])
          AND ${tenantWhere}`,
-      allTenants ? values : [...values, tenantId ?? null]
+      allTenants ? [arrayLiteral] : [arrayLiteral, tenantId ?? null]
     );
     return rows.map(readRecord);
   }
@@ -1253,18 +1252,22 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             AND sources.canonical_rank = 1
             AND source_type = 'telegram_public'
         ),
-        'measurementState', 'measured',
+        'measurementState', CASE
+          WHEN count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL) > 0
+            THEN 'measured'
+          ELSE 'source_counts_only'
+        END,
         'observedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
         'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
         'successfulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success),
-        'usefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful),
+        'usefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.capture_count > 0),
         'captureProducingSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.capture_count > 0),
         'healthySourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND COALESCE(latest_health.parser_warning_count, 0) = 0),
         'degradedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND COALESCE(latest_health.parser_warning_count, 0) > 0),
         'failedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL AND latest_health.success = FALSE),
         'checkedWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.checked_at >= now() - interval '24 hours'),
         'successfulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND latest_health.checked_at >= now() - interval '24 hours'),
-        'usefulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.checked_at >= now() - interval '24 hours'),
+        'usefulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.capture_count > 0 AND latest_health.checked_at >= now() - interval '24 hours'),
         'backoffSourceCount', count(*) FILTER (WHERE collection_executable AND NULLIF(sources.record->'crawlState'->>'backoffUntil', '')::timestamptz > now()),
         'neverObservedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NULL)
       ) AS summary

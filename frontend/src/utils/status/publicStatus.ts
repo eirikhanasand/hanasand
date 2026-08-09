@@ -24,7 +24,7 @@ export function toPublicServiceStatus(status: ServiceStatus, nowMs = Date.now())
     const publicCheckKeys = new Set(requiredPublicChecks.map(checkKey))
     const checks = requiredPublicChecks.map(required => {
         const check = currentChecks.get(checkKey(required))
-        return check ? toPublicServiceCheck(check) : missingPublicCheck(required, status.generated_at)
+        return check ? toPublicServiceCheck(check) : missingPublicCheck(required)
     })
 
     return {
@@ -59,14 +59,14 @@ function checkKey(value: { service: string, check_name: string }) {
     return `${value.service}\n${value.check_name}`
 }
 
-function missingPublicCheck(required: typeof requiredPublicChecks[number], generatedAt: string): ServiceCheck {
+function missingPublicCheck(required: typeof requiredPublicChecks[number]): ServiceCheck {
     return {
         service: publicStatusLabel(required.service),
         check_name: publicStatusLabel(required.check_name),
         status: 'degraded',
         latency_ms: 0,
         message: 'No status result has arrived in the last 5 minutes. Treat this component as unverified.',
-        checked_at: generatedAt,
+        checked_at: '',
         uptime_30d: 'unverified',
     }
 }

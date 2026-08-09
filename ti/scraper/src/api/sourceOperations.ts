@@ -100,7 +100,7 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
         lastFailureReason: safeFailureReason(lastFailure?.failureReason),
         consecutiveFailures: consecutiveFailures(sourceObservations),
         collectionSuccessRate: ratio(successes.length, sourceObservations.length),
-        usefulYieldRate: ratio(sourceObservations.filter((row: any) => Number(row.captureCount ?? 0) > 0).length, successes.length),
+        usefulYieldRate: ratio(sourceObservations.filter((row: any) => row.useful === true && Number(row.captureCount ?? 0) > 0).length, successes.length),
         freshnessLagSeconds: finiteNumber(latest?.freshnessLagSeconds),
         staleAfterSeconds
       },

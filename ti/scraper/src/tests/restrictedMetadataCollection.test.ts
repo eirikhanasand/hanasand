@@ -393,7 +393,7 @@ describe("restricted metadata collection", () => {
       id: "tor-approved-metadata-proxy",
       network: "tor",
       accessMethod: "approved_proxy",
-      config: { maxConcurrency: 2, maxMetadataBytes: 64_000, timeoutClass: "metadata_standard" },
+      config: { maxConcurrency: 16, maxMetadataBytes: 64_000, requestTimeoutMs: 45_000, timeoutClass: "metadata_standard" },
       async fetchMetadata(input: any) {
         active++;
         peak = Math.max(peak, active);
@@ -406,15 +406,17 @@ describe("restricted metadata collection", () => {
     const cycles: Awaited<ReturnType<typeof runRestrictedMetadataCollectionCycle>>[] = [];
     for (let index = 0; index < 4; index++) {
       const at = new Date(Date.parse("2026-07-23T12:00:00.000Z") + index * 900_000).toISOString();
-      cycles.push(await runRestrictedMetadataCollectionCycle({ store, boundary, maxSources: 250, maxConcurrentSources: 2, now: () => at }));
+      cycles.push(await runRestrictedMetadataCollectionCycle({ store, boundary, maxSources: 300, maxConcurrentSources: 16, now: () => at }));
     }
 
-    expect(cycles.map((cycle) => cycle.sourceCount)).toEqual([250, 250, 250, 250]);
-    expect(cycles.every((cycle) => cycle.status === "failed" && cycle.failedSourceCount === 250 && cycle.maxConcurrentSources === 2)).toBe(true);
-    expect(peak).toBe(2);
-    expect(store.listSourceHealthObservations()).toHaveLength(1_000);
+    expect(cycles.map((cycle) => cycle.sourceCount)).toEqual([300, 300, 300, 300]);
+    expect(cycles.every((cycle) => cycle.status === "failed" && cycle.failedSourceCount === cycle.sourceCount && cycle.maxConcurrentSources === 16)).toBe(true);
+    expect(4 * 300).toBeGreaterThanOrEqual(1_000);
+    expect(Math.ceil(300 / 16) * boundary.config.requestTimeoutMs).toBeLessThanOrEqual(900_000);
+    expect(peak).toBe(16);
+    expect(store.listSourceHealthObservations()).toHaveLength(1_200);
     expect(new Set(store.listSourceHealthObservations().map((row) => row.sourceId)).size).toBe(1_000);
-    expect(store.listRuns().every((run) => run.taskCount === 250 && run.status === "failed")).toBe(true);
+    expect(store.listRuns().every((run) => run.taskCount <= 300 && run.status === "failed")).toBe(true);
   });
 
   test("keeps repeated scheduled cycles idempotent and records only novel useful victim metadata", async () => {

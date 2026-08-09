@@ -12,11 +12,12 @@ test('inline alert rebuild reports only durable outcomes as success', () => {
 
 test('without inline outcome, the helper keeps the scoped rebuild POST path', async () => {
     const source = await readFile('frontend/src/app/dashboard/dwm/dwm-workflow-actions.tsx', 'utf8')
-    expect(source).toContain('return postJson(\'/api/dwm/alerts/rebuild\', scope)')
+    expect(source).toContain('return normalizeAlertRebuildOutcome(await postJson(\'/api/dwm/alerts/rebuild\', scope))')
     expect(source).toContain('const rebuildOutcome = normalizeAlertRebuildOutcome(rebuild)')
     expect(source).toContain('if (!caseId) throw new Error(\'No durable case was returned.\')')
     expect(source).toContain('ok: !failed && !dryRun')
     const caseDetail = await readFile('frontend/src/app/dashboard/dwm/cases/[id]/case-detail-client.tsx', 'utf8')
     expect(caseDetail).toContain('if (!payload.case || typeof payload.case.id !== \'string\') throw new Error(\'No durable case update was returned.\')')
     expect(caseDetail).toContain('if (!payload.receipt || typeof payload.receipt.id !== \'string\') throw new Error(\'No durable notification record was returned.\')')
+    expect(source).toContain('if (!requestId || (!sourceId && !duplicateOf)) throw new Error(\'No durable source request was returned.\')')
 })

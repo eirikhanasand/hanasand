@@ -7,6 +7,13 @@ const task = { id: "task_feed", targetUrl: source.url };
 const metadata = { canaryPortfolio: true, fetchMode: "native_live_http" };
 
 describe("canary feed item extraction", () => {
+  test("does not manufacture capture-shaped rows for unsupported payloads", () => {
+    expect(feedItems({ ...source, type: "telegram_public" }, task, "<html>No messages</html>", "2026-06-21T10:00:00.000Z", metadata)).toHaveLength(0);
+    expect(feedItems({ ...source, type: "api" }, task, "[]", "2026-06-21T10:00:00.000Z", metadata)).toHaveLength(0);
+    expect(feedItems(source, task, "<rss><channel></channel></rss>", "2026-06-21T10:00:00.000Z", metadata)).toHaveLength(0);
+    expect(feedItems(source, task, "not a feed", "2026-06-21T10:00:00.000Z", metadata)).toHaveLength(0);
+  });
+
   test("turns RSS entries into distinct collected items", () => {
     const items = feedItems(source, task, rss(), "2026-06-21T00:00:00.000Z", metadata);
     expect(items).toHaveLength(2);

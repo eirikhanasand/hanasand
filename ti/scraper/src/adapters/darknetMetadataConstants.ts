@@ -15,7 +15,7 @@ export const BLOCKED_OPERATIONS: BlockedDarknetOperation[] = [
 ];
 
 export const DARKNET_METADATA_NETWORK_CONFIGS = {
-  tor: config("tor", "tor-approved-metadata-proxy", "tor_socks", 64_000, 45_000, 2),
+  tor: config("tor", "tor-approved-metadata-proxy", "tor_socks", 64_000, 45_000, 16),
   i2p: config("i2p", "i2p-approved-metadata-proxy", "i2p_http", 64_000, 60_000, 1),
   freenet: config("freenet", "freenet-approved-metadata-proxy", "freenet_gateway", 32_000, 90_000, 1)
 } as const;

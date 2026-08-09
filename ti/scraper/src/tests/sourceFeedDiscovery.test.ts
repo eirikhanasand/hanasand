@@ -1026,7 +1026,7 @@ describe("scheduled public feed discovery", () => {
     });
   });
 
-  test("automatically re-reviews an uncertain source only after backoff and newer useful evidence", async () => {
+  test("keeps uncertain-source collection eligible while delaying re-review until newer useful evidence exists", async () => {
     const store = new InMemoryScraperStore();
     const candidate = source({
       id: "uncertain-source-review",
@@ -1075,11 +1075,33 @@ describe("scheduled public feed discovery", () => {
     expect(firstReview).toMatchObject({ queued: 1, attempted: 1 });
     expect(store.getSource(candidate.id)).toMatchObject({
       status: "candidate",
-      crawlState: { backoffUntil: "2026-07-25T12:01:00.000Z" },
+      crawlState: { nextEligibleAt: "2026-07-24T12:01:00.000Z", backoffUntil: undefined, lastError: undefined },
       metadata: { automaticSourceReview: { state: "needs_review", nextReviewAt: "2026-07-25T12:01:00.000Z" } }
     });
     expect(store.getSource(candidate.id)?.metadata?.automaticSourceReview?.selectedEvidenceIds?.[0]).toEqual(expect.any(String));
     const firstTaskId = store.getSource(candidate.id)?.metadata?.automaticSourceReview?.taskId;
+
+    store.saveSource({
+      ...store.getSource(candidate.id)!,
+      crawlState: {
+        retryCount: 0,
+        nextEligibleAt: "2026-07-25T12:01:00.000Z",
+        backoffUntil: "2026-07-25T12:01:00.000Z",
+        lastErrorAt: "2026-07-24T12:01:00.000Z",
+        lastError: "Automatic source review: needs_review"
+      }
+    });
+    expect(syncAutomaticReviewQueue({ store } as any, {
+      allTenants: true,
+      now: "2026-07-24T12:02:00.000Z",
+      modelVersion: "hanasand"
+    })).toBe(0);
+    expect(store.getSource(candidate.id)?.crawlState).toMatchObject({
+      retryCount: 0,
+      nextEligibleAt: undefined,
+      backoffUntil: undefined,
+      lastError: undefined
+    });
 
     const noNewEvidence = await runAutomaticReviewCycle({ store } as any, {
       now: "2026-07-25T12:01:00.000Z",
