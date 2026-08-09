@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T08:44:10.647Z",
+  "generatedAt": "2026-08-09T09:00:45.254Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -333,59 +333,159 @@
       "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
       "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/ulose",
       "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_orova_victim_blog",
+      "actorName": "Orova",
+      "endpointHash": "ee8e1fc5cf6b8fbb",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy page returned only a bounded script shell with no safely extractable victim-listing structure.",
+      "evidenceCheckedAt": "2026-08-09T09:00:45.254Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/orova",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_timc_victim_blog",
+      "actorName": "TiMc",
+      "endpointHash": "6f18335643617d9d",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy page returned only a bounded script shell with no safely extractable victim-listing structure.",
+      "evidenceCheckedAt": "2026-08-09T09:00:45.254Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/timc",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_netrunner_victim_blog",
+      "actorName": "netrunner",
+      "endpointHash": "4010c3f75e55dc1a",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy request failed before any lawful useful victim metadata could be parsed.",
+      "evidenceCheckedAt": "2026-08-09T09:00:45.254Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/netrunner",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_cry0_victim_blog",
+      "actorName": "cry0",
+      "endpointHash": "7eeaca44088d0274",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.",
+      "evidenceCheckedAt": "2026-08-09T09:00:45.254Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/cry0",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_datakeeper_victim_blog",
+      "actorName": "datakeeper",
+      "endpointHash": "278f7f7de60b436b",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response was redirect-only and produced no independently useful victim metadata.",
+      "evidenceCheckedAt": "2026-08-09T09:00:45.254Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/datakeeper",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_orion_victim_blog",
+      "actorName": "orion",
+      "endpointHash": "66b5c6a188bd1dab",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response was redirect-only and produced no independently useful victim metadata.",
+      "evidenceCheckedAt": "2026-08-09T09:00:45.254Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/orion",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_kazu_victim_blog",
+      "actorName": "kazu",
+      "endpointHash": "44daadd9cbf723ff",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.",
+      "evidenceCheckedAt": "2026-08-09T09:00:45.254Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/kazu",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_kyber_victim_blog",
+      "actorName": "kyber",
+      "endpointHash": "387cadf5716852af",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response was redirect-only and produced no independently useful victim metadata.",
+      "evidenceCheckedAt": "2026-08-09T09:00:45.254Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/kyber",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_radar_victim_blog",
+      "actorName": "radar",
+      "endpointHash": "eb8228a8d36bbc59",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy page returned only a bounded script or layout shell with no safely extractable victim-listing structure.",
+      "evidenceCheckedAt": "2026-08-09T09:00:45.254Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/radar",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_satanlockv2_victim_blog",
+      "actorName": "satanlockv2",
+      "endpointHash": "5ecd6ed145de931e",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy page returned only a bounded script or layout shell with no safely extractable victim-listing structure.",
+      "evidenceCheckedAt": "2026-08-09T09:00:45.254Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/satanlockv2",
+      "countsAsCoverage": false
     }
   ],
   "sources": [
     {
-        "id": "restricted_ms13089_victim_blog",
-        "name": "MS-13089 victim blog",
-        "type": "tor_metadata",
-        "url": "http://msleakjir7pxbe6onlqe5uwgvdmy6nq4mnwfy7ojswbhnleenm77vgad.onion",
-        "accessMethod": "approved_proxy",
-        "status": "candidate",
-        "risk": "restricted",
-        "trustScore": 0.82,
-        "crawlFrequencySeconds": 3600,
-        "legalNotes": "Collect public victim-post titles and publication metadata only. Never authenticate, interact, follow payload links, or retain page bodies, credentials, or leaked content.",
-        "governance": {
-            "approvalRequired": true,
-            "approvalState": "approved",
-            "metadataOnly": true,
-            "approvalScope": "metadata_only",
-            "approvedAt": "2026-07-23T10:20:56.065Z",
-            "approvedBy": "source-review:goal4-lawful-metadata",
-            "policyVersion": "collection-policy:v1"
-        },
-        "metadata": {
-            "sourceFamily": "dark_web_victim_feed",
-            "actorName": "ms13089",
-            "actors": [
-                "ms13089"
-            ],
-            "discoveryAuthorityUrl": "https://ransomwhere.org/data",
-            "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/ms13089",
-            "discoveryCheckedAt": "2026-08-09T05:41:29.000Z",
-            "discoveryAvailability": "reported_available",
-            "discoveryObservedAt": "2026-08-09T05:41:29.000Z",
-            "productionCollectionVerifiedAt": "2026-08-09T05:41:29.000Z",
-            "productionCollectionOutcome": "metadata_only_parser_verified",
-            "parserProfile": "post_title_victim_listing",
-            "reportedVictimCount": 4,
-            "lastReportedVictimAt": "2026-05-05T11:53:39.404Z",
-            "expectedPageRole": "victim_listing",
-            "collectionScope": "metadata_only",
-            "retainRawContent": false,
-            "retentionDays": 30,
-            "attribution": "Ransomwhere.org public research inventory plus approved-proxy metadata-only parser verification",
-            "sourcePortfolioVerification": {
-                "verifiedAt": "2026-08-09T05:41:29.000Z",
-                "outcome": "content_parsed",
-                "observedItemCount": 3,
-                "httpStatus": 200,
-                "adapter": "tor_metadata",
-                "legalBasisVerifiedAt": "2026-08-09T05:41:29.000Z"
-            }
+      "id": "restricted_ms13089_victim_blog",
+      "name": "MS-13089 victim blog",
+      "type": "tor_metadata",
+      "url": "http://msleakjir7pxbe6onlqe5uwgvdmy6nq4mnwfy7ojswbhnleenm77vgad.onion",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.82,
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Collect public victim-post titles and publication metadata only. Never authenticate, interact, follow payload links, or retain page bodies, credentials, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-07-23T10:20:56.065Z",
+        "approvedBy": "source-review:goal4-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "ms13089",
+        "actors": [
+          "ms13089"
+        ],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/data",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/ms13089",
+        "discoveryCheckedAt": "2026-08-09T05:41:29.000Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T05:41:29.000Z",
+        "productionCollectionVerifiedAt": "2026-08-09T05:41:29.000Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "post_title_victim_listing",
+        "reportedVictimCount": 4,
+        "lastReportedVictimAt": "2026-05-05T11:53:39.404Z",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "attribution": "Ransomwhere.org public research inventory plus approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T05:41:29.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 3,
+          "httpStatus": 200,
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T05:41:29.000Z"
         }
+      }
     },
     {
       "id": "restricted_deadlock_victim_blog",
@@ -738,6 +838,158 @@
           "contentType": "text/html",
           "adapter": "tor_metadata",
           "legalBasisVerifiedAt": "2026-08-09T08:44:10.647Z"
+        }
+      }
+    },
+    {
+      "id": "restricted_exitium_victim_blog",
+      "name": "Exitium victim blog",
+      "type": "tor_metadata",
+      "url": "http://m3ksukzn2glzfdvlusohril7n3iyk4z4fudf6mm22lwhpbpt5aiee5qd.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.84,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public victim-listing organization names and publication metadata. Never authenticate, interact with operators, follow payload or contact links, or retain descriptions, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-08-09T09:00:45.254Z",
+        "approvedBy": "source-review:goal8-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Exitium",
+        "actors": [
+          "Exitium"
+        ],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/developers",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/exitium",
+        "discoveryCheckedAt": "2026-08-09T09:00:45.254Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T09:00:45.254Z",
+        "productionCollectionVerifiedAt": "2026-08-09T09:00:45.254Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "target_card_title",
+        "parserShape": "div.target-card > div.target-content > h3.target-title",
+        "observedParsedItemCount": 4,
+        "reportedVictimCount": 4,
+        "lastReportedVictimAt": "2026-04-14T20:06:20.603210+00:00",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+        "discoveryAuthorityChain": [
+          {
+            "name": "Ransomwhere.org",
+            "role": "current public proxy inventory for the upstream ransomware.live group catalog",
+            "url": "https://ransomwhere.org/developers",
+            "recordUrl": "https://ransomwhere.org/api/groups/exitium"
+          },
+          {
+            "name": "SOCRadar",
+            "role": "independent current public ransomware-group profile",
+            "url": "https://socradar.io/free-tools/ransomware-intelligence",
+            "recordUrl": "https://socradar.io/free-tools/ransomware-intelligence/groups/exitium"
+          },
+          {
+            "name": "Red Piranha",
+            "role": "independent current threat research confirming the actor and its public victim portal",
+            "url": "https://redpiranha.net/",
+            "recordUrl": "https://redpiranha.net/news/threat-intelligence-report-april-14-april-20-2026"
+          }
+        ],
+        "attribution": "Ransomwhere.org public inventory, independent public threat research, and approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T09:00:45.254Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 4,
+          "httpStatus": 200,
+          "contentType": "text/html",
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T09:00:45.254Z"
+        }
+      }
+    },
+    {
+      "id": "restricted_insomnia_victim_blog",
+      "name": "Insomnia victim blog",
+      "type": "tor_metadata",
+      "url": "http://i62huw7ve22rpyw6lnq3kmfump2dmsg4xpveec3ere73njwatrz74gad.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.84,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public victim-listing organization names and publication metadata. Never authenticate, interact with operators, follow payload or contact links, or retain descriptions, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-08-09T09:00:45.254Z",
+        "approvedBy": "source-review:goal8-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Insomnia",
+        "actors": [
+          "Insomnia"
+        ],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/developers",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/insomnia",
+        "discoveryCheckedAt": "2026-08-09T09:00:45.254Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T09:00:45.254Z",
+        "productionCollectionVerifiedAt": "2026-08-09T09:00:45.254Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "book_card_info_title",
+        "parserShape": "div.book-card > div.card-info > h3.info-title > a",
+        "observedParsedItemCount": 24,
+        "reportedVictimCount": 42,
+        "lastReportedVictimAt": "2026-08-06T14:54:24.048058+00:00",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+        "discoveryAuthorityChain": [
+          {
+            "name": "Ransomwhere.org",
+            "role": "current public proxy inventory for the upstream ransomware.live group catalog",
+            "url": "https://ransomwhere.org/developers",
+            "recordUrl": "https://ransomwhere.org/api/groups/insomnia"
+          },
+          {
+            "name": "SOCRadar",
+            "role": "independent current public ransomware-group profile",
+            "url": "https://socradar.io/free-tools/ransomware-intelligence",
+            "recordUrl": "https://socradar.io/free-tools/ransomware-intelligence/groups/insomnia"
+          },
+          {
+            "name": "Breach House",
+            "role": "independent current public actor profile and victim-count research",
+            "url": "https://breach.house/",
+            "recordUrl": "https://breach.house/groups/insomnia"
+          }
+        ],
+        "attribution": "Ransomwhere.org public inventory, independent public threat research, and approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T09:00:45.254Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 24,
+          "httpStatus": 200,
+          "contentType": "text/html",
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T09:00:45.254Z"
         }
       }
     }
