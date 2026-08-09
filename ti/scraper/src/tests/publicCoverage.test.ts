@@ -40,6 +40,31 @@ describe("public coverage", () => {
     expect(body.qualification).toMatchObject({ measurementState: "not_measured", counts: { clearWeb: null, lawfulDarkWeb: null, publicTelegram: null, total: null }, baselineMet: null });
   });
 
+  test("uses the bounded PostgreSQL summary instead of the detailed source page", async () => {
+    let summaryQueries = 0;
+    const store: any = {
+      querySourceOperationalSummary: async () => {
+        summaryQueries += 1;
+        return { summary: {
+          measurementState: "measured",
+          sourceCount: 1699,
+          retainedSourceCount: 214,
+          inactiveSourceCount: 1485,
+          qualifyingClearWebSourceCount: 28,
+          qualifyingLawfulDarkWebSourceCount: 4,
+          qualifyingPublicTelegramSourceCount: 13
+        } };
+      },
+      querySourceOperationalPage: async () => { throw new Error("detailed source page must not run"); },
+      listSources: () => [],
+      listTimelinessRecords: () => []
+    };
+    const body = await publicCoverage({ store, frontier: {} as any });
+    expect(summaryQueries).toBe(1);
+    expect(body.registry).toEqual({ registeredSourceCount: 1699, executableSourceCount: 214, inactiveSourceCount: 1485 });
+    expect(body.qualification).toMatchObject({ counts: { clearWeb: 28, lawfulDarkWeb: 4, publicTelegram: 13, total: 45 }, gaps: { lawfulDarkWeb: 996 } });
+  });
+
   test("is exposed as an unauthenticated read-only route", async () => {
     const store: any = { listSources: () => [], listTimelinessRecords: () => [] };
     const response = await handleApiRequest(new Request("http://local/v1/public/coverage"), { store, frontier: {} as any });
