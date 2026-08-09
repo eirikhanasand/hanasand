@@ -15,7 +15,8 @@ do
   bun test --max-concurrency 1 "./$suite" || failed=1
 done
 
-find src/tests/apiParts -name 'api.part*.ts' -type f | sort | grep -Ev "/($listener_parts)$" | sed 's#^#./#' | xargs -n 20 bun test --max-concurrency 20 || failed=1
-find src/tests -name '*.test.ts' -type f | sort | grep -Ev "/($excluded_suites)$" | xargs -n 20 bun test --max-concurrency 20 || failed=1
+# ponytail: run one file per Bun process; grouped concurrent suites leak module/global test state and create false auth failures.
+find src/tests/apiParts -name 'api.part*.ts' -type f | sort | grep -Ev "/($listener_parts)$" | sed 's#^#./#' | xargs -n 1 bun test --max-concurrency 1 || failed=1
+find src/tests -name '*.test.ts' -type f | sort | grep -Ev "/($excluded_suites)$" | xargs -n 1 bun test --max-concurrency 1 || failed=1
 
 exit "$failed"
