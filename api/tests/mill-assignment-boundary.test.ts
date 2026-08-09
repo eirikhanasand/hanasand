@@ -3,7 +3,6 @@ import { expect, mock, test } from 'bun:test'
 const queries: string[] = []
 
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: 'analyst-a' }) }))
-mock.module('#utils/auth/apiKeys.ts', () => ({ matchApiKeyScope: () => true, validateApiKey: async () => null }))
 mock.module('#utils/adminAudit.ts', () => ({ recordAdminAuditEvent: async () => undefined }))
 mock.module('#db', () => ({
     default: async (sql: string) => {
