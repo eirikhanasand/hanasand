@@ -84,7 +84,7 @@ describe("public Telegram canary collection", () => {
     const families = new Set(report.accepted.flatMap((item: any) => item.metadata.sourceFamilies));
 
     expect(report).toMatchObject({ valid: true, errors: [], duplicates: [] });
-    expect(report.accepted).toHaveLength(19);
+    expect(report.accepted).toHaveLength(bundle.sourceCount);
     expect(report.accepted.every((item: any) => item.tenantId === undefined)).toBe(true);
     expect(report.accepted.map((item: any) => item.id)).toEqual(expect.arrayContaining([
       "src_group_ib_telegram",
@@ -105,7 +105,11 @@ describe("public Telegram canary collection", () => {
       "src_csirt_italia_telegram",
       "src_bizone_telegram",
       "src_ruscadasec_news_telegram",
-      "src_scadax_news_telegram"
+      "src_scadax_news_telegram",
+      "src_security_vision_telegram",
+      "src_angara_security_telegram",
+      "src_anti_malware_ru_telegram",
+      "src_netlas_telegram"
     ]));
     expect(report.accepted.map((item: any) => item.language)).toEqual(expect.arrayContaining(["en", "es", "it", "ru", "hi", "uk", "az", "uz"]));
     expect(report.accepted.find((item: any) => item.id === "src_red_hot_cyber_telegram")).toMatchObject({
@@ -143,6 +147,26 @@ describe("public Telegram canary collection", () => {
       language: "en",
       metadata: { publisherReference: "https://ruscadasec.com/", sourcePortfolioVerification: { observedItemCount: 20, observedUsefulItemCount: 18 } }
     });
+    expect(report.accepted.find((item: any) => item.id === "src_security_vision_telegram")).toMatchObject({
+      url: "https://t.me/svplatform",
+      language: "ru",
+      metadata: { publisherReference: "https://www.securityvision.ru/", sourcePortfolioVerification: { observedItemCount: 19, observedUsefulItemCount: 1 } }
+    });
+    expect(report.accepted.find((item: any) => item.id === "src_angara_security_telegram")).toMatchObject({
+      url: "https://t.me/angarasecurity",
+      language: "ru",
+      metadata: { publisherReference: "https://www.angarasecurity.ru/", sourcePortfolioVerification: { observedItemCount: 11, observedUsefulItemCount: 1 } }
+    });
+    expect(report.accepted.find((item: any) => item.id === "src_anti_malware_ru_telegram")).toMatchObject({
+      url: "https://t.me/anti_malware",
+      language: "ru",
+      metadata: { publisherReference: "https://www.anti-malware.ru/", sourcePortfolioVerification: { observedItemCount: 20, observedUsefulItemCount: 20 } }
+    });
+    expect(report.accepted.find((item: any) => item.id === "src_netlas_telegram")).toMatchObject({
+      url: "https://t.me/netlas",
+      language: "en",
+      metadata: { publisherReference: "https://netlas.io/", sourcePortfolioVerification: { observedItemCount: 20, observedUsefulItemCount: 16 } }
+    });
     expect([...families]).toEqual(expect.arrayContaining([
       "apt_research",
       "malware_research",
@@ -173,7 +197,11 @@ describe("public Telegram canary collection", () => {
       "src_csirt_italia_telegram",
       "src_bizone_telegram",
       "src_ruscadasec_news_telegram",
-      "src_scadax_news_telegram"
+      "src_scadax_news_telegram",
+      "src_security_vision_telegram",
+      "src_angara_security_telegram",
+      "src_anti_malware_ru_telegram",
+      "src_netlas_telegram"
     ]);
     expect(candidates.every((item: any) => item.countsAsCoverage !== true
       && item.metadata.productionCollection === false
@@ -196,8 +224,8 @@ describe("public Telegram canary collection", () => {
     const first = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: bundle.generatedAt });
     const restart = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: bundle.generatedAt });
 
-    expect(first).toMatchObject({ importedSourceCount: 19, updatedSourceCount: 0, activeSourceCount: 7, errors: [] });
-    expect(restart).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 19, activeSourceCount: 7, totalSourceCount: 19, errors: [] });
+    expect(first).toMatchObject({ importedSourceCount: bundle.sourceCount, updatedSourceCount: 0, activeSourceCount: 7, errors: [] });
+    expect(restart).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: bundle.sourceCount, activeSourceCount: 7, totalSourceCount: bundle.sourceCount, errors: [] });
   });
 
   test("backs off a public-preview source after a bounded upstream failure", async () => {
@@ -285,13 +313,13 @@ describe("public Telegram canary collection", () => {
     expect(store.listSourceHealthObservations().filter((row: any) => row.sourceId === sourceId)).toHaveLength(3);
 
     const restart = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: "2026-08-24T09:31:00.000Z" });
-    expect(restart).toMatchObject({ importedSourceCount: 0, activeSourceCount: 8, totalSourceCount: 19, errors: [] });
+    expect(restart).toMatchObject({ importedSourceCount: 0, activeSourceCount: 8, totalSourceCount: bundle.sourceCount, errors: [] });
     expect(bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: restart.generatedAt })).toMatchObject({
       importedSourceCount: 0,
       updatedSourceCount: 0,
-      skippedSourceCount: 19,
+      skippedSourceCount: bundle.sourceCount,
       activeSourceCount: 8,
-      totalSourceCount: 19,
+      totalSourceCount: bundle.sourceCount,
       errors: []
     });
     expect(store.listSources().filter((item: any) => item.id === sourceId)).toHaveLength(1);
