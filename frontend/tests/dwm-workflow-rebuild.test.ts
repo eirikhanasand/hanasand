@@ -14,4 +14,6 @@ test('without inline outcome, the helper keeps the scoped rebuild POST path', as
     const source = await readFile('frontend/src/app/dashboard/dwm/dwm-workflow-actions.tsx', 'utf8')
     expect(source).toContain('return postJson(\'/api/dwm/alerts/rebuild\', scope)')
     expect(source).toContain('const rebuildOutcome = normalizeAlertRebuildOutcome(rebuild)')
+    expect(source).toContain('if (!caseId) throw new Error(\'No durable case was returned.\')')
+    expect(source).toContain('ok: !failed && !dryRun')
 })

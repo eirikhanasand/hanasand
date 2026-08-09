@@ -181,6 +181,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             if (!casePayload.ok) throw new Error(casePayload.message)
 
             const caseId = readNestedString(casePayload, ['case', 'id']) || readNestedString(casePayload, ['alertCaseHandoff', 'caseId'])
+            if (!caseId) throw new Error('No durable case was returned.')
             let deliveryText = ''
             let deliveryReady = false
             let deliveryAttempts = 0
@@ -367,7 +368,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const failed = deliveryRows.some(row => row.status === 'failed' || Boolean(row.error))
             const dryRun = deliveryRows.some(row => row.status === 'dry_run' || row.dryRun === true)
             setResult({
-                ok: !failed,
+                ok: !failed && !dryRun,
                 message: failed
                     ? 'Webhook test recorded a failed delivery attempt. Review delivery history before retrying.'
                     : dryRun
