@@ -15,6 +15,20 @@ import { sourceAutomaticReviewEvidenceBindings } from "../api/automaticReviewRou
 import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
 
 describe("public collection boundary", () => {
+  test("reports effective bounded runtime limits", async () => {
+    const loop = startCanaryCollectionLoop({
+      store: new InMemoryScraperStore(),
+      frontier: new FocusedFrontier(),
+      enabled: false,
+      maxSources: 1_200,
+      maxTasks: 1_200,
+      maxConcurrentTasks: 100
+    });
+
+    expect(loop.getState()).toMatchObject({ maxSources: 60, maxTasks: 60, maxConcurrentTasks: 32 });
+    await loop.stop();
+  });
+
   test("fails honestly before planning when PostgreSQL writes are unhealthy", async () => {
     const store = new InMemoryScraperStore();
     (store as any).databaseHealthSnapshot = () => ({ ok: false, pendingWrites: 2, lastWriteError: "Failed to read data" });
