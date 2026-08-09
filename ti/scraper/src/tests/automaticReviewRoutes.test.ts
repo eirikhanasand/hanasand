@@ -558,6 +558,45 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(store.getSource(catalog.id)).toMatchObject({ status: "active", countsAsCoverage: false, metadata: { productionCollection: true } });
   });
 
+  test("queues governed legacy evidence before production activation", async () => {
+    const store = new InMemoryScraperStore();
+    const saveLegacy = (id: string, input: Record<string, any> = {}) => store.saveSource({
+      ...source({
+        id,
+        tenantId: input.tenantId,
+        status: "active",
+        type: "telegram_public",
+        url: `https://publisher.example/${id}`,
+        governance: input.governance ?? { approvalRequired: true, approvalState: "approved" },
+        metadata: { productionCollection: false, ...input.metadata }
+      }),
+      countsAsCoverage: false
+    });
+    const saveEvidence = (sourceId: string, tenantId?: string) => {
+      const runId = `run_${sourceId}`;
+      store.saveCapture(fixtureCapture({
+        id: `capture_${sourceId}`,
+        tenantId,
+        sourceId,
+        collectedAt: firstAt,
+        publishedAt: firstAt,
+        body: `${sourceId} retained security advisory`,
+        metadata: { runId, safeExcerpt: `${sourceId} retained security advisory` }
+      }));
+      store.saveSourceHealthObservation({ id: `health_${sourceId}`, tenantId, sourceId, collectionRunId: runId, checkedAt: firstAt, success: true, useful: true, captureCount: 1 });
+    };
+
+    const eligible = saveLegacy("legacy_preproduction");
+    saveLegacy("legacy_without_evidence");
+    const catalog = saveLegacy("legacy_catalog", { metadata: { extractionProfile: "mitre_actor_catalog" } });
+    const tenant = saveLegacy("legacy_tenant", { tenantId: "tenant-a" });
+    const ungoverned = saveLegacy("legacy_ungoverned", { governance: { approvalRequired: true, approvalState: "pending" } });
+    for (const candidate of [eligible, catalog, tenant, ungoverned]) saveEvidence(candidate.id, candidate.tenantId);
+
+    expect(syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(1);
+    expect(store.listAnalystMetadataReviewTasks().filter((task: any) => task.recordKind === "automatic_intelligence_review_task").map((task: any) => task.subject.sourceId)).toEqual([eligible.id]);
+  });
+
   test("supersedes a queued upgrade when a valid prior clear-web approval arrives before the model call", async () => {
     const store = new InMemoryScraperStore();
     seedSource(store, "source-queued-upgrade", "CVE-2026-1002 is a critical privilege escalation advisory.");
