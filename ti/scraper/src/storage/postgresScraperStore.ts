@@ -80,6 +80,7 @@ export type PostgresScraperStoreOptions = {
   onStartupPhase?: (phase: string) => void;
   runMaintenanceMigrations?: boolean;
   hydrate?: boolean;
+  deferHighVolumeHydration?: boolean;
 };
 
 type PendingWrite = { description: string; run: () => Promise<void> };
@@ -98,6 +99,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   private readonly sql: SQL;
   private readonly migrations: Migration[];
   private readonly latestMigrationVersion: string;
+  private readonly deferHighVolumeHydration: boolean;
   private readonly pendingWrites: PendingWrite[] = [];
   private draining?: Promise<void>;
   private lastWriteError?: Error;
@@ -106,11 +108,12 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   private databaseHealthRefresh?: Promise<void>;
   private pipelineDepth = 0;
 
-  private constructor(sql: SQL, migrations: Migration[]) {
+  private constructor(sql: SQL, migrations: Migration[], deferHighVolumeHydration = false) {
     super();
     this.sql = sql;
     this.migrations = migrations;
     this.latestMigrationVersion = migrations.at(-1)?.version ?? LATEST_MIGRATION_VERSION;
+    this.deferHighVolumeHydration = deferHighVolumeHydration;
   }
 
   static async create(options: PostgresScraperStoreOptions = {}): Promise<PostgresScraperStore> {
@@ -121,7 +124,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       ...migration,
       path: index === 0 && options.migrationPath ? options.migrationPath : migration.path
     }));
-    const store = new PostgresScraperStore(sql, migrations);
+    const store = new PostgresScraperStore(sql, migrations, options.deferHighVolumeHydration === true);
     try {
       await sql.connect();
       await sql.unsafe("SET TIME ZONE 'UTC'");
@@ -1474,6 +1477,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   private async hydrate(): Promise<void> {
+    const deferHighVolumeHydration = this.deferHighVolumeHydration;
     const workflowHistoryLimit = Math.max(0, Math.min(100_000, Number(Bun.env.TI_WORKFLOW_HYDRATION_HISTORY_LIMIT ?? "5000") || 5000));
     const collectionPlanHydrationLimit = Math.max(0, Math.min(20_000, Number(Bun.env.TI_COLLECTION_PLAN_HYDRATION_LIMIT ?? "5000") || 5000));
     {
@@ -1481,7 +1485,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         this.sql`SELECT record FROM threat_intel.sources ORDER BY created_at`,
         this.sql`SELECT record FROM threat_intel.captures ORDER BY collected_at`,
         this.sql`SELECT record FROM threat_intel.incidents ORDER BY first_seen_at`,
-        this.sql`SELECT record FROM threat_intel.entities ORDER BY created_at`,
+        deferHighVolumeHydration ? Promise.resolve([]) : this.sql`SELECT record FROM threat_intel.entities ORDER BY created_at`,
         this.sql`SELECT record FROM threat_intel.actor_profiles ORDER BY first_seen_at`,
         this.sql`SELECT record FROM threat_intel.actor_identity_catalogs ORDER BY retrieved_at`,
         this.sql`SELECT record FROM threat_intel.actor_identities ORDER BY catalog_id, external_id`,
@@ -1489,9 +1493,13 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         this.sql`SELECT record FROM threat_intel.alerts ORDER BY first_seen_at`,
         this.sql`SELECT record FROM threat_intel.evaluation_labels ORDER BY labeled_at`,
         this.sql`SELECT record FROM threat_intel.timeliness_records ORDER BY first_visible_at`,
-        this.sql`SELECT record FROM threat_intel.collection_runs ORDER BY started_at`,
+        deferHighVolumeHydration
+          ? this.sql`SELECT record FROM threat_intel.collection_runs WHERE status IN ('queued', 'running') OR started_at >= now() - interval '30 days' ORDER BY started_at`
+          : this.sql`SELECT record FROM threat_intel.collection_runs ORDER BY started_at`,
         this.sql`SELECT record FROM threat_intel.intelligence_claims ORDER BY first_seen_at`,
-        this.sql`SELECT record FROM threat_intel.source_health ORDER BY checked_at`,
+        deferHighVolumeHydration
+          ? this.sql`SELECT DISTINCT ON (source_id, tenant_id) record FROM threat_intel.source_health ORDER BY source_id, tenant_id, checked_at DESC`
+          : this.sql`SELECT record FROM threat_intel.source_health ORDER BY checked_at`,
         // Keep operational workflow records in memory, but do not make startup
         // proportional to the automatic-review history. The full history remains
         // durable in PostgreSQL for retention/export paths.
@@ -1516,6 +1524,12 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             OR id IN (SELECT id FROM recent_collection_plans)
             OR record->>'status' IN ('queued', 'running')
             OR COALESCE(NULLIF(record->>'nextEligibleAt', '')::timestamptz, '-infinity'::timestamptz) >= now()
+          )
+          AND (
+            NOT ${deferHighVolumeHydration}
+            OR record_type NOT IN ('collection_plan', 'collection_run')
+            OR record->>'status' IN ('queued', 'running')
+            OR created_at >= now() - interval '30 days'
           )
           ORDER BY created_at`,
         workflowHistoryLimit > 0
