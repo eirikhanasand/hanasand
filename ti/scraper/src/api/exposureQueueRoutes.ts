@@ -113,7 +113,7 @@ export async function listExposureQueue(request: Request, url: URL, options: Api
       collectionAgeMinutes,
       collectionCheckAgeMinutes,
       maxLiveAgeMinutes: 60,
-      nextExpectedCollection: nextCollectionAt(at)
+      nextExpectedCollection: nextCollectionAt(at, latestCollectionCheckAt)
     },
     parser: {
       service: Bun.env.HANASAND_AI_API_BASE ? "hanasand-ai" : "metadata-safe-ransomware-claim-parser:v1",
@@ -1296,8 +1296,9 @@ function meaningfulClaimedData(value: unknown) {
   return cleaned;
 }
 
-function nextCollectionAt(at: string) {
-  return new Date(Date.parse(at) + 5 * 60_000).toISOString();
+function nextCollectionAt(at: string, latestCheckAt?: string) {
+  const base = epoch(latestCheckAt) || Date.parse(at);
+  return new Date(base + 5 * 60_000).toISOString();
 }
 
 function latestTime(values: unknown[]) {

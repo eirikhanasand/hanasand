@@ -746,6 +746,41 @@ describe("DWM exposure queue pipeline", () => {
     expect(body.freshness.collectionCheckAgeMinutes).toBeLessThan(1);
   });
 
+  test("does not claim a future collection when the latest check is overdue", async () => {
+    const store = new InMemoryScraperStore();
+    const oldAt = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+    await saveExposureClaimFromCollectedItem(store, {
+      sourceId: "src_overdue_collection",
+      source: { name: "Overdue collection source", url: "https://example.test/feed" },
+      title: "Akira has just published a new victim: Overdue Company",
+      rawText: "Akira victim: Overdue Company. 10 GB claimed from a public actor page.",
+      url: "https://example.test/overdue-company",
+      collectedAt: oldAt,
+      publishedAt: oldAt,
+      metadata: { adapter: "rss", sourceFamily: "public_actor_claims" }
+    } as any);
+    const source = store.getSource("src_overdue_collection");
+    store.saveSourceHealthObservation({
+      id: "health_overdue_collection",
+      tenantId: source?.tenantId,
+      sourceId: "src_overdue_collection",
+      checkedAt: oldAt,
+      status: "healthy",
+      success: true,
+      useful: false,
+      itemCount: 0,
+      captureCount: 0,
+      duplicateCount: 0,
+      parserWarningCount: 0,
+      legalMode: "public_content"
+    });
+
+    const response = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=1"), { store, frontier: new FocusedFrontier(), port: 0 } as any);
+    const body = await response.json() as any;
+    expect(body.status).toBe("stale");
+    expect(Date.parse(body.freshness.nextExpectedCollection)).toBeLessThan(Date.now());
+  });
+
   test("serves stale retained claims from the exposure index without scanning every capture", async () => {
     const store = new InMemoryScraperStore();
     const oldAt = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
