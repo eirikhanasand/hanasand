@@ -119,7 +119,8 @@ describe("public Telegram canary collection", () => {
       "src_redseg_latam_telegram",
       "src_alexander_leonov_english_telegram",
       "src_zhassulan_maldevcc_telegram",
-      "src_hispasec_unaaldia_telegram"
+      "src_hispasec_unaaldia_telegram",
+      "src_cyber_bro_uzbekistan_telegram"
     ]));
     expect(report.accepted.map((item: any) => item.language)).toEqual(expect.arrayContaining(["en", "es", "it", "ru", "hi", "uk", "az", "uz"]));
     expect(report.accepted.find((item: any) => item.id === "src_red_hot_cyber_telegram")).toMatchObject({
@@ -235,6 +236,12 @@ describe("public Telegram canary collection", () => {
       status: "candidate",
       metadata: { productionCollection: false, publisherReference: "https://unaaldia.hispasec.com/reto-ctf-uam-diciembre-porropwnpwn/", sourcePortfolioVerification: { observedItemCount: 20, observedUsefulItemCount: 10 } }
     });
+    expect(report.accepted.find((item: any) => item.id === "src_cyber_bro_uzbekistan_telegram")).toMatchObject({
+      url: "https://t.me/cyberbrosecurity",
+      language: "uz",
+      status: "candidate",
+      metadata: { productionCollection: false, publisherReference: "https://cyber-bro.uz/", sourcePortfolioVerification: { observedItemCount: 9, observedUsefulItemCount: 1 } }
+    });
     expect([...families]).toEqual(expect.arrayContaining([
       "apt_research",
       "malware_research",
@@ -279,7 +286,8 @@ describe("public Telegram canary collection", () => {
       "src_redseg_latam_telegram",
       "src_alexander_leonov_english_telegram",
       "src_zhassulan_maldevcc_telegram",
-      "src_hispasec_unaaldia_telegram"
+      "src_hispasec_unaaldia_telegram",
+      "src_cyber_bro_uzbekistan_telegram"
     ]);
     expect(candidates.every((item: any) => item.countsAsCoverage !== true
       && item.metadata.productionCollection === false

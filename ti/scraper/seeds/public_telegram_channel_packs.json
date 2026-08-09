@@ -1,10 +1,10 @@
 {
-  "version": 15,
+  "version": 16,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-08-09T20:39:32.166Z",
+  "generatedAt": "2026-08-09T20:51:01.345Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 33,
+  "sourceCount": 34,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -3932,6 +3932,130 @@
             "malware",
             "fraude",
             "ciberataque"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_cyber_bro_uzbekistan_telegram",
+      "name": "CYBER-BRO Uzbekistan public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/cyberbrosecurity",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.83,
+      "language": "uz",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Uzbek-language threat intelligence, malware, and defensive security research from the exact channel linked by CYBER-BRO's first-party website. Collect only unauthenticated public-preview text for defensive threat intelligence with attribution; do not join, authenticate, interact, follow private invitations, or download media, files, samples, proof-of-concept code, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T20:51:01.345Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "apt_research",
+          "malware_research",
+          "cybercrime_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "cyberbrosecurity",
+        "verifiedSourceId": "src_cyber_bro_uzbekistan_telegram",
+        "publisherReference": "https://cyber-bro.uz/",
+        "ownershipVerifiedAt": "2026-08-09T20:51:01.345Z",
+        "activityVerifiedAt": "2026-08-09T20:51:01.345Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "threat intelligence",
+          "malware analysis",
+          "AI-enabled phishing",
+          "APT research",
+          "ICS security"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T20:51:01.345Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 9,
+          "observedUsefulItemCount": 1,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://cyber-bro.uz/",
+          "legalBasisVerifiedAt": "2026-08-09T20:51:01.345Z",
+          "latestPublishedAt": "2026-08-08T10:37:52+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:uz:cyber-bro:telegram",
+        "publisher": {
+          "name": "CYBER-BRO",
+          "country": "UZ",
+          "homepage": "https://cyber-bro.uz/",
+          "trustBasis": "CYBER-BRO's first-party website links the exact public Telegram channel"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.83,
+        "intelligenceValue": 0.81,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "threat intelligence",
+            "malware analysis",
+            "AI-enabled phishing",
+            "APT research",
+            "ICS security"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "government",
+            "critical infrastructure",
+            "finance"
+          ],
+          "regions": [
+            "Uzbekistan",
+            "Central Asia"
+          ],
+          "countries": [
+            "Uzbekistan"
+          ],
+          "languages": [
+            "uz"
+          ],
+          "queryPatterns": [
+            "zararli dastur",
+            "firibgarlik",
+            "tahdid",
+            "kiberxavfsizlik"
           ]
         },
         "collection": {

@@ -94,6 +94,19 @@ Explicit exclusions from this iteration:
 - `https://t.me/criptored` parsed 0 items and produced 0 useful items.
 - Ransomware.live's current first-party homepage exposed no exact public Telegram endpoint, so no handle guess was registered.
 
+The 2026-08-09T20:49Z–20:51Z iteration accepted one more non-coverage candidate:
+
+- `src_cyber_bro_uzbekistan_telegram` is the exact `https://t.me/cyberbrosecurity` channel linked by CYBER-BRO's first-party website. The shipped public-preview adapter parsed 9 current posts, classified 1 as useful, observed a latest post at 2026-08-08T10:37:52Z, and found zero sanitizer changes, sanitizer-idempotence failures, or residual email, bot-token, credential, and phone matches. The useful item is CYBER-BRO's own Uzbek-language analysis of AI-enabled phishing and malware threats, providing original Central Asian regional-language coverage rather than copied news. It remains `candidate`, `productionCollection=false`, and `countsAsCoverage=false` until governed automatic review and two distinct useful retained scheduled cycles.
+
+Explicit exclusions from this iteration:
+
+- INCIBE's exact first-party `https://t.me/ProtegeTuEmpresa` channel parsed 20 posts but produced 0 useful items and was inactive after 2024-06-25.
+- Indonesia BSSN/BSrE's exact first-party `https://t.me/bsreupdate` channel parsed 20 posts but produced 0 useful items and was inactive after 2026-02-20.
+- Armenia's Ministry of Internal Affairs homepage linked the exact `https://t.me/cyberpolice_arm` endpoint, which parsed 19 current posts through 2026-08-08 but produced 0 useful items. The shared sellable-intel classifier lacks Armenian threat terminology; no source-ID fallback or fabricated search query was added in this Telegram-owned lane.
+- Romania's first-party Security Patch site linked `https://t.me/PatchSecurity`, but its public preview parsed 0 items. The first-party elhacker.NET forum linked `https://t.me/elhackerdotnet`, whose public preview also parsed 0 items.
+- `https://t.me/EsGeeks` had exact first-party ownership and parsed 20 current posts with 6 classifier-useful items, but five were summaries of third-party publishers rather than independent reporting. Numeric sanitizer residual matches were reviewed as CVE identifiers, a GitHub username, and dates—not phone PII—but the channel was still rejected as copied aggregation rather than source-family expansion.
+- deepdarkCTI exposed only a request-access Telegram group, not an unauthenticated public channel. RansomLook and Ransomware.live exposed no exact first-party public Telegram endpoint, so no handle guesses were registered.
+
 ## One iteration
 
 1. Measure registered, executable, qualifying, current-useful, stale, failed, and backoff counts from PostgreSQL and the source-operations API.
