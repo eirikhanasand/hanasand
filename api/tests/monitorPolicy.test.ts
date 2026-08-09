@@ -8,6 +8,7 @@ describe('production monitor notification transitions', () => {
         const source = await readFile(path.join(import.meta.dir, '../src/handlers/status/get.ts'), 'utf8')
         expect(source).toContain('WINDOW status_history_window AS')
         expect(source).not.toContain('WINDOW window AS')
+        expect(source).toContain('const [result, historyResult, incidentResult] = await Promise.all([')
     })
 
     test('does not re-alert while a check is flapping', () => {
