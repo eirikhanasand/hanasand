@@ -149,6 +149,28 @@ describe("public collection boundary", () => {
     expect(store.getSource("c")?.health?.checkedAt).toBeUndefined();
   });
 
+  test("yields between bounded task waves so runtime requests are not starved", async () => {
+    const store = new InMemoryScraperStore();
+    for (const id of ["a", "b", "c"]) store.saveSource(source({ id, url: `https://example.test/${id}.xml` }));
+    let runtimeTaskRan = false;
+    const observed: boolean[] = [];
+    setTimeout(() => { runtimeTaskRan = true; }, 0);
+
+    await runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      maxSources: 3,
+      maxTasks: 3,
+      maxConcurrentTasks: 1,
+      fetch: async () => {
+        observed.push(runtimeTaskRan);
+        return new Response("<rss><channel></channel></rss>", { headers: { "content-type": "application/rss+xml" } });
+      }
+    });
+
+    expect(observed).toEqual([false, true, true]);
+  });
+
   test("does not adopt a queued watchlist run owned by the scheduled executor", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "canonical", url: "https://example.test/canonical.xml" }));
