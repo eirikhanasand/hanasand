@@ -3,6 +3,18 @@ import type { PolicyDecision } from "./collectionPolicyTypes.ts";
 import { isApproved } from "./collectionPolicyApproval.ts";
 
 export function evaluateMetadataOnlySource(source: SourceRecord): PolicyDecision {
+  if (source.metadata?.exposureQueueSource === true && source.accessMethod === "public_http") {
+    if (!/^https:\/\//i.test(String(source.url ?? ""))) {
+      return { allowed: false, metadataOnly: true, reason: "public exposure metadata source requires HTTPS" };
+    }
+    if (!source.legalNotes.trim()) {
+      return { allowed: false, metadataOnly: true, reason: "public exposure metadata source has no legal notes" };
+    }
+    if (!["active", "probation", "degraded"].includes(source.status)) {
+      return { allowed: false, metadataOnly: true, reason: `public exposure metadata source status is ${source.status}` };
+    }
+    return { allowed: true, metadataOnly: true, reason: "public exposure source is metadata-only" };
+  }
   if (source.governance && !source.governance.metadataOnly) {
     return { allowed: false, metadataOnly: true, reason: "darknet metadata source requires metadata-only governance review" };
   }

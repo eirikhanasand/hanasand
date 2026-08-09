@@ -25,6 +25,9 @@ export function sourceCollectionLane(source: SourceRecord): "public" | "restrict
   try {
     if (source.metadata?.productionCollection === false || !evaluateSourceForCollection(source).allowed) return undefined;
     if (source.type === "tor_metadata") return "restricted_metadata";
+    if (source.metadata?.exposureQueueSource === true && source.accessMethod === "public_http") {
+      return ["http:", "https:"].includes(new URL(source.url).protocol) ? "public" : undefined;
+    }
     if (source.type.endsWith("_metadata") || source.accessMethod !== "public_http" || ["high", "restricted"].includes(source.risk)) return undefined;
     return ["http:", "https:"].includes(new URL(source.url).protocol) ? "public" : undefined;
   } catch {
