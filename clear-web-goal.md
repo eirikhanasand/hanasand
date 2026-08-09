@@ -27,7 +27,7 @@ A source counts only when its canonical direct RSS, Atom, JSON, or official API 
 
 ## Current state
 
-Open. Production at `b7877ca408c50fbbdcf2b4ebb460b107d9363f4a` had 24 strictly qualifying clear-web sources at 2026-08-09T10:59Z. The clear-web fleet contained 88 sources in total and 64 remained candidates, leaving a qualifying gap of 4,976. The deployed source-review index correction covers all 53 run-linked `sourceReviewCandidate` sources without changing non-useful health or candidate/noncoverage state. Ledger 015 commit `dd6333c6f1f9087d28e368499886a33efa658edd` is a candidate-only family handoff and contributes no production credit until import, governed review, and two later retained useful scheduled cycles.
+Open. Production at `57587954d1ebd455c731acaa5aee0cb0e8af3187` had 28 strictly qualifying clear-web sources at 2026-08-09T13:07Z, leaving a qualifying gap of 4,972. Newly imported source packs remain candidate-only and contribute no production credit until governed review and two useful retained scheduled cycles.
 
 | Measured at | Deployed commit | Qualifying clear-web sources | Remaining |
 | --- | --- | ---: | ---: |
@@ -35,6 +35,7 @@ Open. Production at `b7877ca408c50fbbdcf2b4ebb460b107d9363f4a` had 24 strictly q
 | 2026-08-09T07:20Z | `98d393e81f90427f3a75c27dbbbf868bd89d288b` | 15 | 4,985 |
 | 2026-08-09T07:43Z | `d37ab621c8d17f1bd32b23ba715dee4105f287fa` | 20 | 4,980 |
 | 2026-08-09T10:59Z | `b7877ca408c50fbbdcf2b4ebb460b107d9363f4a` | 24 | 4,976 |
+| 2026-08-09T13:07Z | `57587954d1ebd455c731acaa5aee0cb0e8af3187` | 28 | 4,972 |
 
 Update this file only from deployed live evidence; raw registry or candidate counts do not satisfy the goal.
 

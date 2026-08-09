@@ -6,17 +6,18 @@ Maintain at least 100 independently useful, lawful public Telegram feeds in prod
 
 ## Live baseline
 
-Measured on 2026-08-09 after SecurityLab completed its second native scheduler cycle and survived the next production restart:
+Measured on 2026-08-09 after the approved-candidate promotion repair and a later clean production recreation:
 
-- 164 registered `telegram_public` rows: 22 active, 17 candidate, 2 rejected, and 123 retired;
-- 13 rows satisfying the full qualifying-count contract, leaving 87 to reach the Telegram objective; 9 other active legacy rows do not count as coverage;
-- `src_securitylab_ru_telegram` completed two distinct useful HTTP 200 runs (`canary-run_abfe88ccf5b9498d` and `canary-run_6bd31b86c7a0d9c1`) with zero parser warnings and promoted to `active`, `productionCollection=true`, and `countsAsCoverage=true` at 2026-08-09T09:29:19Z;
-- those runs retained 21 immutable captures; all 21 evidence objects and all 42 stored excerpt/title fields were present and produced zero residual changes under the deployed Telegram sanitizer;
-- the post-promotion restart retained one stable SecurityLab source identity, both useful health rows, and the promoted lifecycle fields;
-- the source-operations API reported `publicTelegram=13` and gap 87 at 2026-08-09T09:40:10Z; and
-- production checkout `855df45ebfb20d3b1c0aea87c6ae9fdc3d4537a1` ran scraper image `sha256:dadc046a3cf2c7d3f5c0a58ba1501dc6926b1a44bb9fbf8572bb60ab653250c5`, healthy with restart count 0 since 2026-08-09T09:37:52Z.
+- 174 registered `telegram_public` rows: 23 active, 26 candidate, 2 rejected, and 123 retired;
+- 14 rows satisfying the full qualifying-count contract, leaving 86 to reach the Telegram objective; 9 other active legacy rows do not count as coverage;
+- the production defect was not missing seed import: approved candidates with retained productive cycles were left behind an automatic-review backoff, while reconciliation waited for another review or collection event that the backoff itself prevented;
+- the repair reconciles an evidence-bound approved candidate during the ordinary automatic-review sync, clears only review-created backoff, preserves real collection/rate-limit backoff, and requires a scheduled check inside the current check window before promotion;
+- `src_portfolio_tg_k8security` is the first recovered source: one global row, `active`, executable, `productionCollection=true`, `countsAsCoverage=true`, with 34 retained captures, 605 health observations, 16 useful scheduled cycles, and zero parser warnings;
+- its persisted source timestamp, capture count, health count, and lifecycle state survived stop/start and the later image recreation without a duplicate row; bootstrap on the later recreation reported `updatedSourceCount=0` while importing 36 unrelated newly shipped candidates;
+- the source-operations API reported `qualifyingPublicTelegramSourceCount=14`, 82/82 active executable global sources, 81 checked successfully within 24 hours, and no failed source at 2026-08-09T13:07Z; and
+- production checkout `57587954d1ebd455c731acaa5aee0cb0e8af3187` ran scraper image `sha256:db64d55794b04abcc7e3ecff0ded3e573f07fa3d5a8cc55a2b671b86035413de`, healthy with restart count 0 since 2026-08-09T13:03:05Z.
 
-The deployed repair preserves compatible governed approvals across prompt revisions, retains productive-cycle history during bounded restart hydration, and prevents the global Telegram canary from adopting scheduled watchlist-discovery runs. Candidate registration still does not reduce the gap: every new endpoint remains non-production and non-coverage until the native scheduler and evidence-bound review satisfy the qualification contract.
+The next promotion queue is concrete, not a raw-source target. Nine model-approved candidates currently have one useful retained scheduled cycle: Angara Security, Anti-Malware.ru, BI.ZONE, CSIRT Italia, Netlas, UCSB, RUSCADASEC News, ScadaX News, and Security Vision. F6 and Tumar.One also have one useful retained cycle but still need an evidence-bound automatic source review. Four older candidates have multiple productive cycles but an uncertain automatic review and therefore remain correctly withheld: Alexey Lukatsky, Alexander Leonov, Solar 4RAYS, and Deiteriy Lab. Candidate registration still does not reduce the gap.
 
 Replace this section after every deployment with the current database/API measurement and deployed commit. Never substitute pack size, candidate count, test fixtures, injected fetches, or status labels.
 
