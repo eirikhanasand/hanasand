@@ -37,7 +37,7 @@ export function notificationEvent(current: MonitorStatus, previous: MonitorStatu
     // Alert once on a new incident, then wait for a sustained recovery before
     // allowing another alert. This prevents a flapping check from exhausting
     // the mail relay while every failure remains persisted in the monitor log.
-    if (current !== 'up' && previous.length > 0 && previous.every(status => status === 'up')) return 'alert' as const
+    if (current !== 'up' && previous.every(status => status === 'up')) return 'alert' as const
     if (current === 'up' && previous[0] === 'up' && previous[1] !== 'up' && previous[2] && previous[2] !== 'up') return 'recovered' as const
     return undefined
 }

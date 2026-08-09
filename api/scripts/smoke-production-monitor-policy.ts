@@ -6,7 +6,7 @@ assert.equal(latencyStatus(3_000, { degraded: 3_000, down: 10_000 }), 'degraded'
 assert.equal(latencyStatus(10_000, { degraded: 3_000, down: 10_000 }), 'down')
 
 assert.equal(notificationEvent('down', ['up', 'up']), 'alert')
-assert.equal(notificationEvent('down', []), undefined)
+assert.equal(notificationEvent('down', []), 'alert')
 assert.equal(notificationEvent('down', ['down', 'up']), undefined)
 assert.equal(notificationEvent('down', ['down', 'down']), undefined)
 assert.equal(notificationEvent('up', ['down', 'up', 'up']), undefined)
