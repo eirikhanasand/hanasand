@@ -389,6 +389,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         `,
         this.sql`
           SELECT jsonb_build_object(
+            'operationalMetricsMeasured', FALSE,
             'sourceCount', count(*),
             'retainedSourceCount', count(*) FILTER (WHERE collection_executable),
             'inactiveSourceCount', count(*) FILTER (WHERE NOT collection_executable),
