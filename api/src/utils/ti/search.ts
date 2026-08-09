@@ -102,6 +102,7 @@ export interface TiSearchResponse {
     queryKind?: 'actor' | 'domain' | 'cve' | 'indicator' | 'organization' | 'free_text'
     generatedAt: string
     mode: 'scraper' | 'seeded' | 'live_search' | 'unavailable'
+    cacheStatus?: 'hit' | 'miss'
     status?: TiResultState
     runId?: string
     refreshAfterSeconds?: number
@@ -132,7 +133,7 @@ export async function searchThreatIntel(input: TiSearchRequest): Promise<TiSearc
     const key = query.toLowerCase()
     const cached = cache.get(key)
     if (cached && cached.expiresAt > Date.now()) {
-        return { ...cached.result, queryKind: cached.result.queryKind ?? queryKind, generatedAt: new Date().toISOString() }
+        return { ...cached.result, queryKind: cached.result.queryKind ?? queryKind, generatedAt: new Date().toISOString(), cacheStatus: 'hit' }
     }
     if (cached) cache.delete(key)
 
@@ -140,7 +141,7 @@ export async function searchThreatIntel(input: TiSearchRequest): Promise<TiSearc
     if (scraperBase) {
         const scraperResult = await fetchCanonicalScraperSearch(scraperBase, query, { cachedOnly: input.preferCached && queryKind === 'actor' })
         if (scraperResult) {
-            const result = { ...scraperResult, queryKind: scraperResult.queryKind ?? queryKind, mode: 'scraper' as const }
+            const result = { ...scraperResult, queryKind: scraperResult.queryKind ?? queryKind, mode: 'scraper' as const, cacheStatus: 'miss' as const }
             if (!(input.preferCached && queryKind === 'actor')) writeCache(key, result)
             return result
         }
@@ -201,6 +202,7 @@ function unavailableResult(query: string, queryKind: NonNullable<TiSearchRespons
         datasets: [],
         sources: [],
         notes: ['Canonical TI collection is temporarily unavailable; no intelligence was inferred.'],
+        cacheStatus: 'miss',
         actionability: { schemaVersion: 'ti.query.actionability.v1', alertDisposition: 'needs_enrichment', shouldAlert: false, rationale: 'No durable evidence is available.', watchlistCandidates: domainCandidate },
     }
 }

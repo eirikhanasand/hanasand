@@ -1075,7 +1075,7 @@ export function timelineFor(result: TiSearchResponse, selected?: AnalystWorkItem
             id: 'generated',
             at: result.generatedAt,
             label: 'Profile generated',
-            detail: `${humanResultStatus(result.status)} result from ${result.mode}.`,
+            detail: `${humanResultStatus(result.status)} result from ${result.mode}${result.cacheStatus ? ` · cache ${result.cacheStatus}` : ''}.`,
         },
         ...(selected ? [{
             id: `selected-${selected.id}`,

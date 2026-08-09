@@ -125,6 +125,8 @@ apt29WithHostedCopyResidue.actionability!.enrichmentGaps = [{
 }]
 const sanitizedApt29Result = sanitizeTiResultForPublicPage(apt29WithHostedCopyResidue)
 assert(sanitizedApt29Result, 'Public /ti result sanitizer should return a result.')
+apt29WithHostedCopyResidue.cacheStatus = 'hit'
+assert(sanitizeTiResultForPublicPage(apt29WithHostedCopyResidue)?.cacheStatus === 'hit', 'Public /ti result sanitizer should preserve cache provenance.')
 assert(sanitizedApt29Result?.claims?.[0]?.corroborationState === 'corroborated', 'Public /ti result sanitizer should preserve claim review and corroboration state.')
 assert(sanitizedApt29Result?.incidents?.[0]?.assertionKind === 'inferred', 'Public /ti result sanitizer should preserve inferred incident semantics.')
 assert(sanitizedApt29Result?.evidenceAssessment?.sourceCount === 2, 'Public /ti result sanitizer should preserve independent-source assessment.')

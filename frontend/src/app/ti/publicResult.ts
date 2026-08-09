@@ -8,6 +8,7 @@ export function sanitizeTiResultForPublicPage(result: TiSearchResponse | null): 
         queryKind: result.queryKind,
         generatedAt: result.generatedAt,
         mode: result.mode,
+        cacheStatus: result.cacheStatus,
         status: result.status,
         refreshAfterSeconds: result.refreshAfterSeconds,
         summary: result.summary,
