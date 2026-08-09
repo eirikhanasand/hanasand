@@ -793,13 +793,16 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
 
       const legacy: any = restrictedSource("src_legacy_canonical", onion("c"), "2026-07-21T00:00:00.000Z");
       Object.assign(legacy, {
-        status: "active",
-        countsAsCoverage: true,
+        status: "retired",
+        countsAsCoverage: false,
         health: { status: "failing", checkedAt: "2026-07-22T09:00:00.000Z", lastFailureAt: "2026-07-22T09:00:00.000Z", lastError: "retry budget exhausted", consecutiveFailures: 15 },
         crawlState: { retryCount: 15, lastErrorAt: "2026-07-22T09:00:00.000Z", lastError: "retry budget exhausted", backoffUntil: "2026-07-23T09:00:00.000Z" },
-        metadata: { ...legacy.metadata, productionCollection: true, sourcePortfolioQualificationState: "sustained_productive" }
+        metadata: { ...legacy.metadata, productionCollection: true, retiredAt: "2026-07-22T10:00:00.000Z", retiredReason: "stale canonical source" }
       });
       restarted.saveSource(legacy);
+      const tenantDuplicate: any = restrictedSource("src_tenant_canonical", onion("c"), "2026-07-21T00:00:00.000Z");
+      Object.assign(tenantDuplicate, { tenantId: "default", status: "active", countsAsCoverage: true, metadata: { ...tenantDuplicate.metadata, productionCollection: true } });
+      restarted.saveSource(tenantDuplicate);
       const canonicalSeed = {
         ...current,
         id: "src_revalidated_canonical_seed",
@@ -815,7 +818,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       };
       writeFileSync(seedPath, JSON.stringify({ ...bundle, sources: [canonicalSeed] }));
       const canonical = bootstrapRuntimeSources(restarted, { seedPaths: [seedPath], generatedAt: "2026-07-22T15:00:00.000Z" });
-      expect(canonical).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 1, skippedSourceCount: 0, totalSourceCount: 2 });
+      expect(canonical).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 1, skippedSourceCount: 0, totalSourceCount: 3 });
       expect(restarted.getSource("src_legacy_canonical")).toMatchObject({
         status: "candidate",
         countsAsCoverage: false,
@@ -825,6 +828,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       });
       expect(restarted.getSource("src_legacy_canonical")?.crawlState?.backoffUntil).toBeUndefined();
       expect(restarted.getSource("src_legacy_canonical")?.crawlState?.lastError).toBeUndefined();
+      expect(restarted.getSource("src_tenant_canonical")).toMatchObject({ tenantId: "default", status: "active", countsAsCoverage: true });
     } finally {
       if (previous === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
       else Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = previous;

@@ -58,10 +58,10 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
 
   const generatedAt = input.generatedAt ?? nowIso();
   const seedPaths = input.seedPaths ?? configuredSeedPaths();
-  const existingByKey = new Map<string, SourceRecord>();
+  const existingByKey = new Map<string, SourceRecord[]>();
   for (const source of store.listSources().sort(existingCanonicalOwnerOrder)) {
     const key = seedDuplicateKey(source);
-    if (!existingByKey.has(key)) existingByKey.set(key, source);
+    existingByKey.set(key, [...(existingByKey.get(key) ?? []), source]);
   }
   const errors: RuntimeSourceBootstrapResult["errors"] = [];
   let importedSourceCount = 0;
@@ -104,13 +104,14 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
         continue;
       }
       const duplicateKey = seedDuplicateKey(source);
-      const existing = existingByKey.get(duplicateKey);
+      const existingCandidates = existingByKey.get(duplicateKey) ?? [];
+      const existing = existingCandidates.find((candidate) => sameTenantScope(candidate, source)) ?? existingCandidates[0];
       const prepared = prepareRuntimeSource(source, path, generatedAt, restricted);
       if (existing) {
         const reconciled = reconcileVerifiedSource(existing, prepared, generatedAt, store);
         if (reconciled) {
           const saved = store.saveSource(reconciled);
-          existingByKey.set(duplicateKey, saved);
+          existingByKey.set(duplicateKey, [...existingCandidates.filter((candidate) => candidate.id !== saved.id), saved].sort(existingCanonicalOwnerOrder));
           updatedSourceCount++;
         } else {
           skippedSourceCount++;
@@ -118,7 +119,7 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
         continue;
       }
       const saved = store.saveSource(prepared);
-      existingByKey.set(duplicateKey, saved);
+      existingByKey.set(duplicateKey, [saved]);
       importedSourceCount++;
     }
 
@@ -372,6 +373,10 @@ function existingCanonicalOwnerOrder(left: SourceRecord, right: SourceRecord) {
     || lifecyclePriority(left.status) - lifecyclePriority(right.status)
     || String(left.createdAt ?? "").localeCompare(String(right.createdAt ?? ""))
     || String(left.id).localeCompare(String(right.id));
+}
+
+function sameTenantScope(left: SourceRecord, right: SourceRecord) {
+  return String(left.tenantId ?? "") === String(right.tenantId ?? "");
 }
 
 function lifecyclePriority(status: string) {
