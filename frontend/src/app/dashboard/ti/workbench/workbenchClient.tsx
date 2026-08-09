@@ -2488,7 +2488,7 @@ function DeliveryEvidenceRows({ deliveries, selected, orgContext }: { deliveries
                             <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                                 <div className='flex min-w-0 flex-wrap items-center gap-2'>
                                     <span className='font-mono text-xs font-semibold text-ui-text'>{delivery.id}</span>
-                                    <span className={workflowStatusClass(delivery.status === 'delivered' || delivery.status === 'dry_run' ? 'ready' : delivery.status === 'failed' || delivery.status === 'skipped' ? 'blocked' : 'needs_action')}>{label(delivery.status)}</span>
+                                    <span className={workflowStatusClass(delivery.status === 'delivered' ? 'ready' : delivery.status === 'failed' || delivery.status === 'skipped' ? 'blocked' : 'needs_action')}>{label(delivery.status)}</span>
                                     {delivery.deliveryKind && <span className='rounded-full bg-ui-raised px-2 py-0.5 text-[11px] font-semibold text-ui-primary'>{delivery.deliveryKind}</span>}
                                 </div>
                                 <Link href={ledgerHref} className='inline-flex min-h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>

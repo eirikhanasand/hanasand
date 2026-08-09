@@ -182,6 +182,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const caseId = readNestedString(casePayload, ['case', 'id']) || readNestedString(casePayload, ['alertCaseHandoff', 'caseId'])
             let deliveryText = ''
             let deliveryReady = false
+            let deliveryAttempts = 0
             if (webhookConfigured) {
                 const delivery = await postJson('/api/dwm/webhooks/deliver', {
                     ...scope,
@@ -195,8 +196,11 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 if (!delivery.ok) throw new Error(delivery.message)
                 const deliveryRows = durableDeliveryRows(delivery)
                 if (!deliveryRows.length) throw new Error('No durable delivery result was returned.')
-                deliveryReady = true
-                deliveryText = ' Dry-run delivery recorded.'
+                deliveryAttempts = deliveryRows.length
+                deliveryReady = deliveryRows.some(row => row.status === 'delivered')
+                deliveryText = deliveryReady
+                    ? ' Delivery delivered.'
+                    : ' Dry-run delivery recorded; no customer notification was sent.'
             }
 
             setTerms(nextTerms)
@@ -209,12 +213,12 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 alertId: alert.id,
                 caseId: caseId || undefined,
                 caseHref: caseId ? caseDetailPath(caseId, alert.id, organizationId, 'public_advisory') : undefined,
-                deliveryAttempts: deliveryText ? (deliveryReady ? 1 : 0) : undefined,
-                deliveryState: deliveryText ? (deliveryReady ? deliveryText.trim() : 'Delivery needs setup. Configure or test a destination before sending customer notification.') : undefined,
+                deliveryAttempts: deliveryText ? deliveryAttempts : undefined,
+                deliveryState: deliveryText ? (deliveryReady ? 'delivered' : 'dry-run recorded') : undefined,
             })
             setResult({
                 ok: true,
-                message: `Collected ${accepted} public incident report${accepted === 1 ? '' : 's'}, opened ${caseId || 'a case'}.${deliveryReady ? deliveryText : deliveryText ? ' Configure or test a destination before sending customer notification.' : ''}`,
+                message: `Collected ${accepted} public incident report${accepted === 1 ? '' : 's'}, opened ${caseId || 'a case'}.${deliveryText}`,
                 actionHref: deliveryText && !deliveryReady ? deliverySetupHref(organizationId, alert.id, caseId || undefined) : undefined,
                 actionLabel: deliveryText && !deliveryReady ? 'Configure delivery' : undefined,
             })
