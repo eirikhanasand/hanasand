@@ -6,6 +6,8 @@ Keep discovering, validating, deploying, and monitoring lawful Tor metadata feed
 
 Live baseline on 2026-08-09: **0 qualifying Tor feeds**. Raw registrations, transport canaries, candidates, mirrors, and retired rows do not count.
 
+The production scheduler is deployed at `e7aae5ba71e5a1a4a74111f62d0322e54fc9949d`. At 2026-08-09T06:22Z, PostgreSQL reported 9 admitted Tor candidates, 6 with one current productive scheduled cycle, 1 with an approved source review, and 0 with the complete two-cycle qualification proof. The remaining gap is 1,000.
+
 ## A source counts only when
 
 - its endpoint identity is canonical and unique across every source type;
@@ -26,6 +28,22 @@ Live baseline on 2026-08-09: **0 qualifying Tor feeds**. Raw registrations, tran
 6. Add only parser-positive sources to the existing restricted seed/bootstrap path, run the focused checks, commit, push, deploy from `/home/hanasand/hanasand`, and probe live.
 7. Recheck candidates until they have two current productive scheduled cycles; retire sources that fail a full monitoring window.
 8. Update the dated live baseline and continue immediately while the qualifying count is below 1,000.
+
+## Corrected production path
+
+- The lawful Tor portfolio is part of the runtime bootstrap seed paths.
+- A previously admitted `restrictedMetadataCandidate` remains collectable after its immutable seed receipt ages out; expiry no longer prevents it from obtaining runtime qualification evidence.
+- The source-review prompt explicitly recognizes bounded victim-organization listings as useful metadata-only CTI.
+- Promotion remains approval-only and still requires identity-bound retained evidence plus two novel useful scheduled cycles.
+- Public and Telegram candidates in `needs_review` may gather newer bound evidence after initial verification expiry, but cannot promote until the review becomes approved.
+
+## Live progress ledger
+
+| Measured at | Deployed commit | Admitted candidates | At least one productive cycle | Approved review | Qualifying | Remaining |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 2026-08-09T06:22Z | `e7aae5ba71e5a1a4a74111f62d0322e54fc9949d` | 9 | 6 | 1 | 0 | 1,000 |
+
+Every later row must come from the live PostgreSQL/API/scheduler view. Never record onion locators or captured content in this file.
 
 ## Completion proof
 
