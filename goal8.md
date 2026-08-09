@@ -4,9 +4,15 @@
 
 Keep discovering, validating, deploying, and monitoring lawful Tor metadata feeds until the live source-operations API reports at least **1,000 qualifying lawful dark-web/Tor feeds**.
 
-Live baseline on 2026-08-09: **3 qualifying Tor feeds**. Raw registrations, transport canaries, candidates, mirrors, and retired rows do not count.
+Live sustained baseline on 2026-08-09: **3 qualifying Tor feeds**. Raw registrations, transport canaries, candidates, mirrors, and retired rows do not count.
 
 The corrected production scheduler first shipped at `e7aae5ba71e5a1a4a74111f62d0322e54fc9949d`; governed review follow-through is at `06b360c60a409214db6d2d0126785bf8adea151a`, and Tor bootstrap readiness is at `79e976b85ef0bb1ec1626c4eb9295b23b8aead15`. Restart reconciliation at `9f9e3a90f17e5973ed943cc1e8b0d6863d854474` now preserves both evidence-bound portfolio identities and legacy governed Tor sources with two current retained productive cycles. At 2026-08-09T09:50Z, PostgreSQL reported 13 admitted candidates, 14 current feeds with at least one productive scheduled cycle, 11 approved source reviews, and 3 complete persisted qualification proofs; the public coverage API independently reported 3 qualifying lawful-dark-web feeds. The remaining gap is 997.
+
+At 2026-08-09T08:31Z, production commit `b206b20338cf8fe6d93b1509ed3da9bdd333c38b` had imported two additional endpoint-unique candidates. Each completed one real useful scheduled cycle, retained one bounded metadata capture, and received an approved identity-bound automatic review. PostgreSQL then reported 9 pending admitted candidates, 11 portfolio feeds with at least one retained productive cycle, and 7 approved source reviews. The source-operations API still reported exactly 2 qualifying lawful-dark-web feeds and a gap of 998 because the new candidates have not yet completed a second novel productive scheduled cycle.
+
+At 2026-08-09T09:42:20Z, the healthy post-restart production path at source/Tor merge `5f75ad6634ff5c3362ed0353b05a6e6d52f6b564` reported exactly 3 qualifying lawful-dark-web feeds and a gap of 997. The family funnel contained 21 non-retired Tor rows: 13 candidates and 5 active/executable rows, with the remaining rows rejected. Across the two governed restricted packs, 15 intelligence feeds had some retained useful run-linked evidence and 11 exposed an approved automatic-review state; 14 remained current at the 09:50Z reconciliation, and only Blackwater, Qilin, and Genesis satisfied the complete qualification contract. An earlier immediate post-restart snapshot briefly reported 4; the later API result is the sustained ledger value until the fourth row's lifecycle demotion is reconciled.
+
+The production loss was a shared bootstrap identity defect, not missing source evidence. Restricted seed import assigned a new `createdAt` before qualification, changing the automatic-review identity hash and demoting already-qualified rows on every restart. Commit `14e1a7c2f1dbcd8ce942b16a8346894c856223fe` preserves the persisted identity during qualification, and `9f9e3a90f17e5973ed943cc1e8b0d6863d854474` preserves qualified legacy restricted sources that rely on real runtime evidence. The next verified shared blocker is review visibility: PostgreSQL currently omits run-linked `sourceReviewCandidate` captures when their health row is deliberately non-useful pending AI review. Those captures must become reviewable without receiving usefulness or qualification credit.
 
 ## A source counts only when
 
@@ -37,6 +43,8 @@ The corrected production scheduler first shipped at `e7aae5ba71e5a1a4a74111f62d0
 - The scraper cannot start its restricted scheduler until the Tor control port reports bootstrap progress at 100%; open proxy ports alone no longer count as healthy.
 - Promotion remains approval-only and still requires identity-bound retained evidence plus two novel useful scheduled cycles.
 - Public and Telegram candidates in `needs_review` may gather newer bound evidence after initial verification expiry, but cannot promote until the review becomes approved.
+- Restricted re-import preserves the persisted source identity before qualification, so approved review evidence remains bound across restart.
+- Legacy restricted seeds without a shipped portfolio-verification receipt may evaluate their current governed runtime evidence; this does not bypass review, two-cycle, freshness, or retention requirements.
 
 ## Live progress ledger
 
@@ -47,6 +55,8 @@ The corrected production scheduler first shipped at `e7aae5ba71e5a1a4a74111f62d0
 | 2026-08-09T06:49Z | `b64cdf05428dc2f6b5f60f258a6c348026a55060` | 9 | 6 | 3 | 0 | 1,000 |
 | 2026-08-09T07:11Z | `79e976b85ef0bb1ec1626c4eb9295b23b8aead15` | 9 | 6 | 4 | 0 | 1,000 |
 | 2026-08-09T07:20Z | `32ad0e8cbd1f62b9f443b641e7933cadbb1c2eee` | 7 | 7 | 4 | 2 | 998 |
+| 2026-08-09T08:31Z | `b206b20338cf8fe6d93b1509ed3da9bdd333c38b` | 9 | 11 | 7 | 2 | 998 |
+| 2026-08-09T09:42:20Z | `5f75ad6634ff5c3362ed0353b05a6e6d52f6b564` | 13 | 15 | 11 | 3 | 997 |
 | 2026-08-09T09:50Z | `bcac2d85028a434d232d335b1ddd9d3fc68a2053` | 13 | 14 | 11 | 3 | 997 |
 
 Every later row must come from the live PostgreSQL/API/scheduler view. Never record onion locators or captured content in this file.
