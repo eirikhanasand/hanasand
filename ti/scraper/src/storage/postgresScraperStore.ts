@@ -470,7 +470,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       `SELECT record FROM threat_intel.${table}
        WHERE ${column} = ANY($1::text[])
          AND ${tenantWhere}`,
-      allTenants ? [values] : [values, tenantId ?? null]
+      allTenants ? [this.sql.array(values)] : [this.sql.array(values), tenantId ?? null]
     );
     return rows.map(readRecord);
   }
