@@ -197,7 +197,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 const deliveryRows = durableDeliveryRows(delivery)
                 if (!deliveryRows.length) throw new Error('No durable delivery result was returned.')
                 deliveryAttempts = deliveryRows.length
-                deliveryReady = deliveryRows.some(row => row.status === 'delivered')
+                deliveryReady = deliveryRows.some(row => row.status === 'delivered' && row.dryRun !== true)
                 deliveryText = deliveryReady
                     ? ' Delivery delivered.'
                     : ' Dry-run delivery recorded; no customer notification was sent.'
@@ -217,7 +217,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 deliveryState: deliveryText ? (deliveryReady ? 'delivered' : 'dry-run recorded') : undefined,
             })
             setResult({
-                ok: true,
+                ok: !webhookConfigured || deliveryReady,
                 message: `Collected ${accepted} public incident report${accepted === 1 ? '' : 's'}, opened ${caseId || 'a case'}.${deliveryText}`,
                 actionHref: deliveryText && !deliveryReady ? deliverySetupHref(organizationId, alert.id, caseId || undefined) : undefined,
                 actionLabel: deliveryText && !deliveryReady ? 'Configure delivery' : undefined,
