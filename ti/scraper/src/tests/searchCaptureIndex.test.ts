@@ -28,7 +28,7 @@ describe("search capture index", () => {
     expect(await response.json()).toEqual({ error: { code: "search_unavailable", message: "Search index is still starting" } });
   });
 
-  test("uses the bounded PostgreSQL search query while its optional index is warming", async () => {
+  test("does not run a PostgreSQL evidence scan while its optional index is warming", async () => {
     let queryCalls = 0;
     const response = await searchResponse(
       new Request("http://local/v1/intel/search?q=APT29"),
@@ -48,8 +48,8 @@ describe("search capture index", () => {
       } as any,
       new URL("http://local/v1/intel/search?q=APT29")
     );
-    expect(response.status).toBe(200);
-    expect(queryCalls).toBe(1);
+    expect(response.status).toBe(503);
+    expect(queryCalls).toBe(0);
   });
 
   test("reports search startup separately from process health", async () => {
