@@ -1,7 +1,7 @@
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { error, json, numberQuery, readJson } from "./http.ts";
 import { nowIso, stableId } from "../utils.ts";
-import { findActorSearchCaptures, findSearchCaptures, findSearchCapturesFromRows } from "./searchCaptureIndex.ts";
+import { findActorSearchCaptures, findSearchCaptures, findSearchCapturesFromRows, isSearchCaptureIndexReady } from "./searchCaptureIndex.ts";
 import { cleanSearchText, isMetadataOnlyCapture, rowFromCapture, safePublicSearchUrl } from "./searchRows.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
 import { sanitizeDwmApiPayload } from "../product/dwmCustomerDisplay.ts";
@@ -21,6 +21,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   if (scope.error) return scope.error;
   const query = String(body.q ?? body.query ?? url.searchParams.get("q") ?? "").trim();
   if (!query || query.length > 300) return error("invalid_search_query", "Search query must contain 1-300 characters", 400);
+  if (!isSearchCaptureIndexReady(options.store)) return error("search_unavailable", "Search index is still starting", 503);
 
   const generatedAt = nowIso();
   const entityType = searchEntityType(query, body.entityType ?? url.searchParams.get("entityType"), options.store, scope.tenantId);

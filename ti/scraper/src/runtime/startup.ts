@@ -13,7 +13,7 @@ import { buildRuntimeStores } from "./startupStores.ts";
 import { executeScheduledCollectionRun, recoverCollectionRuns } from "../ops/scheduledCollection.ts";
 import { startAutomaticReviewWorker } from "../api/automaticReviewRoutes.ts";
 import { startAutomaticEvaluationLoop } from "../api/evaluationBenchmarkRoutes.ts";
-import { warmSearchCaptureIndex } from "../api/searchCaptureIndex.ts";
+import { warmSearchCaptureIndexAsync } from "../api/searchCaptureIndex.ts";
 
 export function createScheduledRunBoundary(options: {
   execute: (runId: string) => Promise<any>;
@@ -125,7 +125,6 @@ export async function startScraperRuntime() {
   });
   const sourceBootstrap = await bootstrapRuntimeSources(store as any);
   startupPhase("sources_bootstrapped", { sourceCount: sourceBootstrap.totalSourceCount, importedSourceCount: sourceBootstrap.importedSourceCount });
-  startupPhase("search_index_built", warmSearchCaptureIndex(store));
   const scheduledRuns = createScheduledRunBoundary({
     execute: (runId) => executeScheduledCollectionRun({
       store,
@@ -204,6 +203,10 @@ export async function startScraperRuntime() {
     onError: (error: unknown) => logger.warn("automatic evaluation cycle failed", { event: "automatic_evaluation.error", error: error instanceof Error ? error.message : String(error) })
   });
   const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, defaultCanaryLoop: defaultCanary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
+  startupPhase("search_index_warm_queued");
+  setTimeout(() => void warmSearchCaptureIndexAsync(store)
+    .then((result) => startupPhase("search_index_built", result))
+    .catch((error) => logger.error("search index warm failed", { event: "search_index.warm_failed", error: error instanceof Error ? error.message : String(error) })), 0);
   startupPhase("api_server_started", { port: server.port });
   const automaticReview = startAutomaticReviewWorker({ store, frontier, config } as any, {
     intervalMs: Number(Bun.env.HANASAND_AI_REVIEW_INTERVAL_MS ?? "60000"),

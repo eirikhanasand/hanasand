@@ -8,14 +8,44 @@ type SearchDoc = { capture: any; text: string; title: string; collectedAt: strin
 type CachedDoc = { doc?: SearchDoc; postingKeys: string[]; tenantKey: string };
 type SearchIndex = { revision: number; records: Map<string, CachedDoc>; postings: Map<string, Set<string>>; tenantIds: Map<string, Set<string>> };
 const cache = new WeakMap<object, SearchIndex>();
+const ready = new WeakMap<object, boolean>();
 const norm = (value: unknown) => String(value ?? "").toLowerCase();
 const words = (query: string) => norm(query).split(/[^a-z0-9.-]+/).filter((w) => w.length > 1);
 const unique = (items: string[]) => [...new Set(items.filter(Boolean))];
 export function warmSearchCaptureIndex(store: any) {
-  if (store.usesPostgresSearchIndex === false) return { captureCount: 0, indexedCaptureCount: 0 };
+  if (store.usesPostgresSearchIndex === false) {
+    ready.set(store, true);
+    return { captureCount: 0, indexedCaptureCount: 0 };
+  }
+  ready.set(store, false);
   const index = indexForStore(store);
-  return { captureCount: index.records.size, indexedCaptureCount: [...index.tenantIds.values()].reduce((count, ids) => count + ids.size, 0) };
+  const result = { captureCount: index.records.size, indexedCaptureCount: [...index.tenantIds.values()].reduce((count, ids) => count + ids.size, 0) };
+  ready.set(store, true);
+  return result;
 }
+export async function warmSearchCaptureIndexAsync(store: any) {
+  if (store.usesPostgresSearchIndex === false) {
+    ready.set(store, true);
+    return { captureCount: 0, indexedCaptureCount: 0 };
+  }
+  ready.set(store, false);
+  const index = ensureIndex(store);
+  const changes = store.listSearchCaptureChanges?.(index.revision);
+  if (!changes) throw new Error("Search capture change index is unavailable");
+  if (changes.revision !== index.revision) {
+    const captureIds = changes.captures.map((capture: any) => capture.id);
+    const incidentTitles = new Map<string, unknown>((store.listIncidentsByCaptureIds?.(captureIds) ?? []).map((incident: any) => [incident.captureId, incident.title]));
+    for (let offset = 0; offset < changes.captures.length; offset += 100) {
+      for (const capture of changes.captures.slice(offset, offset + 100)) applyChange(index, store, capture, incidentTitles);
+      await Bun.sleep(0);
+    }
+    index.revision = changes.revision;
+  }
+  const result = { captureCount: index.records.size, indexedCaptureCount: [...index.tenantIds.values()].reduce((count, ids) => count + ids.size, 0) };
+  ready.set(store, true);
+  return result;
+}
+export function isSearchCaptureIndexReady(store: any) { return store.usesPostgresSearchIndex !== true || ready.get(store) === true; }
 export function findSearchCaptures(store: any, query: string, limit: number, tenantId?: string) {
   const index = indexForStore(store);
   const terms = words(query);
@@ -53,28 +83,34 @@ export function findSearchCapturesFromRows(captures: any[], sources: any[], quer
   return actorTerms ? findActorSearchCaptures(overlay, actorTerms, limit, tenantId) : findSearchCaptures(overlay, query, limit, tenantId);
 }
 function indexForStore(store: any): SearchIndex {
-  const index = cache.get(store) ?? { revision: 0, records: new Map(), postings: new Map(), tenantIds: new Map() };
+  const index = ensureIndex(store);
   const changes = store.listSearchCaptureChanges?.(index.revision);
   if (!changes) throw new Error("Search capture change index is unavailable");
   if (changes.revision === index.revision) return index;
   const captureIds = changes.captures.map((capture: any) => capture.id);
-  const incidentTitles = new Map((store.listIncidentsByCaptureIds?.(captureIds) ?? []).map((incident: any) => [incident.captureId, incident.title]));
-  for (const capture of changes.captures) {
-    removeCachedDoc(index, capture.id);
-    const source = store.getSource?.(capture.sourceId);
-    const candidate = withLegacyIncidentTitle(capture, incidentTitles.get(capture.id));
-    const doc = sellableCapture(candidate, source, store) ? docFor(candidate, source) : undefined;
-    const tenant = tenantKey(capture.tenantId || undefined);
-    const postingKeys = doc ? indexedTerms(doc).map((term) => postingKey(tenant, term)) : [];
-    index.records.set(capture.id, { doc, postingKeys, tenantKey: tenant });
-    if (doc) {
-      addTo(index.tenantIds, tenant, capture.id);
-      for (const key of postingKeys) addTo(index.postings, key, capture.id);
-    }
-  }
+  const incidentTitles = new Map<string, unknown>((store.listIncidentsByCaptureIds?.(captureIds) ?? []).map((incident: any) => [incident.captureId, incident.title]));
+  for (const capture of changes.captures) applyChange(index, store, capture, incidentTitles);
   index.revision = changes.revision;
   cache.set(store, index);
   return index;
+}
+function ensureIndex(store: any): SearchIndex {
+  const index = cache.get(store) ?? { revision: 0, records: new Map(), postings: new Map(), tenantIds: new Map() };
+  cache.set(store, index);
+  return index;
+}
+function applyChange(index: SearchIndex, store: any, capture: any, incidentTitles: Map<string, unknown>) {
+  removeCachedDoc(index, capture.id);
+  const source = store.getSource?.(capture.sourceId);
+  const candidate = withLegacyIncidentTitle(capture, incidentTitles.get(capture.id));
+  const doc = sellableCapture(candidate, source, store) ? docFor(candidate, source) : undefined;
+  const tenant = tenantKey(capture.tenantId || undefined);
+  const postingKeys = doc ? indexedTerms(doc).map((term) => postingKey(tenant, term)) : [];
+  index.records.set(capture.id, { doc, postingKeys, tenantKey: tenant });
+  if (doc) {
+    addTo(index.tenantIds, tenant, capture.id);
+    for (const key of postingKeys) addTo(index.postings, key, capture.id);
+  }
 }
 
 function addTo(index: Map<string, Set<string>>, key: string, id: string) { index.set(key, new Set([...(index.get(key) ?? []), id])); }

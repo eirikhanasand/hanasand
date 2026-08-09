@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { findSearchCaptures, findSearchCapturesFromRows, warmSearchCaptureIndex } from "../api/searchCaptureIndex.ts";
+import { findSearchCaptures, findSearchCapturesFromRows, isSearchCaptureIndexReady, warmSearchCaptureIndex, warmSearchCaptureIndexAsync } from "../api/searchCaptureIndex.ts";
+import { searchResponse } from "../api/searchRoute.ts";
 import { automaticSourceReviewEvidenceBindingsMatch, sourceAutomaticReviewEvidenceBindings } from "../api/automaticReviewRoutes.ts";
 import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion, automaticSourceReviewIdentity, hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
@@ -8,10 +9,32 @@ import { source } from "./helpers/plannerFixtures.ts";
 
 describe("search capture index", () => {
   test("does not build an in-memory index for PostgreSQL-backed search", () => {
-    expect(warmSearchCaptureIndex({
+    const store = {
       usesPostgresSearchIndex: false,
       listSearchCaptureChanges: () => { throw new Error("PostgreSQL startup scanned hydrated captures"); }
-    })).toEqual({ captureCount: 0, indexedCaptureCount: 0 });
+    };
+    expect(isSearchCaptureIndexReady(store)).toBe(true);
+    expect(warmSearchCaptureIndex(store)).toEqual({ captureCount: 0, indexedCaptureCount: 0 });
+  });
+
+  test("returns an explicit unavailable response while PostgreSQL search is warming", async () => {
+    const response = await searchResponse(
+      new Request("http://local/v1/intel/search?q=APT29"),
+      { store: { usesPostgresSearchIndex: true } } as any,
+      new URL("http://local/v1/intel/search?q=APT29")
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: { code: "search_unavailable", message: "Search index is still starting" } });
+  });
+
+  test("warms PostgreSQL search in yielding batches before marking it ready", async () => {
+    const store = new InMemoryScraperStore() as any;
+    store.usesPostgresSearchIndex = true;
+    store.listSearchCaptureChanges = () => ({ revision: 1, captures: [fixtureCapture({ id: "cap_async_warm", sourceId: "src_async_warm", metadata: { safeExcerpt: "APT29 retained evidence" } })] });
+    store.getSource = () => source({ id: "src_async_warm" });
+    expect(isSearchCaptureIndexReady(store)).toBe(false);
+    await expect(warmSearchCaptureIndexAsync(store)).resolves.toMatchObject({ captureCount: 1 });
+    expect(isSearchCaptureIndexReady(store)).toBe(true);
   });
 
   test("uses retained review evidence when filtering bounded PostgreSQL rows", () => {
