@@ -19,6 +19,7 @@ import {
   syncAutomaticReviewQueue
 } from "../api/automaticReviewRoutes.ts";
 import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity, hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
+import { findSearchCaptures } from "../api/searchCaptureIndex.ts";
 
 const generatedAt = "2026-07-23T12:00:00.000Z";
 const nextYear = "2027-07-23T12:00:00.000Z";
@@ -499,6 +500,55 @@ describe("scheduled public feed discovery", () => {
         sourcePortfolioProductiveCheckCount: 2
       }
     });
+  });
+
+  test("retains unfamiliar publisher language for review and uses approved source evidence without changing the source", async () => {
+    const store = new InMemoryScraperStore();
+    const feedUrl = "https://adaptive-source.example/feed.xml";
+    usefulCapture(store, "adaptive-parent", undefined, "run-adaptive-parent", [feedUrl]);
+    let version = 0;
+    const unfamiliarFeed = (publishedAt: string) => {
+      version++;
+      return `<rss><channel><item><title>Unauthorised database access through crafted route ${version}</title><link>https://adaptive-source.example/reports/${version}</link><description>Remote users could read private records through a crafted route before the maintainer corrected the affected component and published operational remediation details.</description><pubDate>${publishedAt}</pubDate></item></channel></rss>`;
+    };
+    expect(await runSourceFeedDiscoveryCycle({
+      store,
+      sourceFeedDiscoveryFetch: async () => response(unfamiliarFeed(generatedAt), feedUrl, "application/rss+xml")
+    }, generatedAt)).toMatchObject({ importedSourceCount: 1 });
+    const candidate = store.listSources().find((row: any) => row.metadata?.sourceFeedDiscovery)!;
+    const collect = (at: string, publishedAt = at) => runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      sourceIds: [candidate.id],
+      scheduleSourceFeedDiscovery: false,
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => at,
+      fetch: async () => response(unfamiliarFeed(publishedAt), feedUrl, "application/rss+xml")
+    });
+
+    expect(await collect("2026-07-24T12:00:00.000Z")).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 1 });
+    const firstCapture = store.listCaptures().find((capture: any) => capture.sourceId === candidate.id)!;
+    expect(firstCapture.metadata).toMatchObject({ sourceReviewCandidate: true, sellableCandidate: false, sellableReason: "missing_threat_intel_terms" });
+    expect(store.listExtractedEntities().filter((entity: any) => entity.captureId === firstCapture.id)).toEqual([]);
+    expect(store.listSourceHealthObservations().filter((row: any) => row.sourceId === candidate.id).at(-1)).toMatchObject({ useful: false, captureCount: 1 });
+    expect(findSearchCaptures(store, "unauthorised database", 10)).toEqual([]);
+
+    approveSourceReview(store, candidate.id);
+    expect(findSearchCaptures(store, "unauthorised database", 10).map((capture: any) => capture.id)).toContain(firstCapture.id);
+    expect(await collect("2026-07-25T12:00:00.000Z")).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 0 });
+    expect(await collect("2026-07-26T12:00:00.000Z")).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 0 });
+    expect(store.getSource(candidate.id)).toMatchObject({
+      status: "active",
+      countsAsCoverage: true,
+      metadata: {
+        productionCollection: true,
+        sourcePortfolioQualificationState: "sustained_productive",
+        sourcePortfolioProductiveCheckCount: 2
+      }
+    });
+    expect(await collect("2026-07-27T12:00:00.000Z", "2025-01-01T12:00:00.000Z")).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 1 });
+    expect(store.listSourceHealthObservations().filter((row: any) => row.sourceId === candidate.id).at(-1)).toMatchObject({ useful: false, captureCount: 1 });
   });
 
   test("bounds stuck auxiliary work before the canonical run and remains restart-idempotent", async () => {
