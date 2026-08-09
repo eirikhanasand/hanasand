@@ -2085,7 +2085,7 @@ function DeliveryPanel({ alert, deliveries, busyAction, onTest, onSend }: { aler
     const caseHref = alert && caseId ? caseDetailHref(caseId, alert.id, orgId, 'delivery_history') : undefined
     const latestDelivery = visible[0]
     const lastFailedDelivery = visible.find(delivery => delivery.status === 'failed')
-    const lastSuccessfulDelivery = visible.find(delivery => delivery.status === 'delivered')
+    const lastSuccessfulDelivery = visible.find(delivery => delivery.status === 'delivered' && delivery.dryRun !== true)
     const orgHref = organizationDeliveryWorkspaceHref({ organizationId: orgId, alertId: alert?.id, caseId, delivery: latestDelivery })
     const testBusy = alert ? busyAction === `test:${alert.id}` : false
     const sendBusy = alert ? busyAction === `send:${alert.id}` : false
@@ -2682,8 +2682,9 @@ function caseLinkLabel(value?: string | null) {
 
 function deliverySummaryLabel(rows: DeliveryItem[]) {
     if (!rows.length) return 'Not tested'
-    if (rows.some(row => row.status === 'delivered')) {
-        return `${rows.filter(row => row.status === 'delivered').length} delivered`
+    const delivered = rows.filter(row => row.status === 'delivered' && row.dryRun !== true)
+    if (delivered.length) {
+        return `${delivered.length} delivered`
     }
     if (rows.some(row => row.status === 'dry_run')) {
         return `${rows.filter(row => row.status === 'dry_run').length} tested`
@@ -2696,7 +2697,7 @@ function deliverySummaryLabel(rows: DeliveryItem[]) {
 
 function webhookReady(label: string) {
     const normalized = label.toLowerCase()
-    return normalized.includes('delivered') || normalized.includes('tested') || normalized.includes('attempted')
+    return normalized.includes('delivered') || normalized.includes('tested')
 }
 
 function retryStateLabel(delivery: DeliveryItem) {

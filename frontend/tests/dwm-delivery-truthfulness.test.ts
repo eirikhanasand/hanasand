@@ -13,9 +13,11 @@ test('DWM marks only durable webhook delivery as success', async () => {
     ])
 
     assert.match(portal, /state: latestDelivery\?\.status === 'delivered' \? 'ready'/)
-    assert.match(portal, /const lastSuccessfulDelivery = visible\.find\(delivery => delivery\.status === 'delivered'\)/)
     assert.doesNotMatch(portal, /latestDelivery\?\.status === 'delivered' \|\| latestDelivery\?\.status === 'dry_run'/)
     assert.doesNotMatch(portal, /lastSuccessfulDelivery = visible\.find\(delivery => delivery\.status === 'delivered' \|\| delivery\.status === 'dry_run'/)
+    assert.match(portal, /lastSuccessfulDelivery = visible\.find\(delivery => delivery\.status === 'delivered' && delivery\.dryRun !== true\)/)
+    assert.match(portal, /const delivered = rows\.filter\(row => row\.status === 'delivered' && row\.dryRun !== true\)/)
+    assert.doesNotMatch(portal, /normalized\.includes\('attempted'\)/)
     assert.match(actions, /deliveryReady = deliveryRows\.some\(row => row\.status === 'delivered' && row\.dryRun !== true\)/)
     assert.match(actions, /const deliveredCount = deliveryRows\.filter\(row => row\.status === 'delivered' && row\.dryRun !== true\)\.length/)
     assert.match(actions, /setResult\(\{ ok: !failed && deliveredCount > 0, message \}\)/)
