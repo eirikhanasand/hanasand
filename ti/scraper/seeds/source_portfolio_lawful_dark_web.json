@@ -330,7 +330,7 @@
         "discoveryObservedAt": "2026-08-09T08:00:41.650Z",
         "productionCollectionVerifiedAt": "2026-08-09T08:00:41.650Z",
         "productionCollectionOutcome": "metadata_only_parser_verified",
-        "parserProfile": "news_item_headline_victim_listing",
+        "parserProfile": "news_item_headline",
         "observedParsedItemCount": 10,
         "reportedVictimCount": 95,
         "lastReportedVictimAt": "2026-07-28T23:50:22.347267+00:00",
