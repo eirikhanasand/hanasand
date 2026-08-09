@@ -36,6 +36,15 @@ describe("DWM exposure queue pipeline", () => {
     expect(store.listCaptures()).toHaveLength(0);
   });
 
+  test("reports the actual parser service when hosted AI is unavailable", async () => {
+    const response = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue"), testOptions(new InMemoryScraperStore()));
+    expect(response.status).toBe(200);
+    expect((await response.json()).parser).toMatchObject({
+      service: "metadata-safe-ransomware-claim-parser:v1",
+      aiEndpointConfigured: false,
+    });
+  });
+
   test("rejects arbitrary HTTPS intake without the bounded public-advisory source family", async () => {
     const store = new InMemoryScraperStore();
     const response = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
@@ -96,6 +105,7 @@ describe("DWM exposure queue pipeline", () => {
     }), options);
     const ingestBody = await ingest.json() as any;
     expect(ingestBody.accepted).toBe(1);
+    expect(ingestBody.parser.fallbackUsed).toBe(false);
     expect(store.listSources()[0]).toMatchObject({ id: publicAdvisorySourceIdentity(reportUrl).id, tenantId: undefined, type: "static_web", url: "https://news.example.test/", status: "candidate", accessMethod: "public_http", metadata: { sourceFamily: "public_advisory", productionCollection: false } });
     expect(store.listSources()[0].metadata?.canaryPortfolio).toBeUndefined();
     expect(store.listCaptures()[0]).toMatchObject({ tenantId: "org_ntnu_research", url: reportUrl, title: "NTNU hit by cyberattack", publishedAt, sensitive: false, metadata: { adapter: "static_web", sourceFamily: "public_advisory", organizationId: "org_ntnu_research" } });

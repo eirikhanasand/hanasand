@@ -122,7 +122,7 @@ function victimNamesFromHtml(html: string, actorName?: string) {
 
 function metadataFromJson(json: string, actorName?: string) {
   const actor = actorName?.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (!actor || !["lamashtu", "incransom"].includes(actor)) throw new Error("Tor metadata JSON parser is not approved for this actor");
+  if (!actor || !["lamashtu", "incransom", "ransomhouse"].includes(actor)) throw new Error("Tor metadata JSON parser is not approved for this actor");
   let document: any;
   try { document = JSON.parse(json); }
   catch { throw new Error("Tor metadata JSON parser rejected invalid payload"); }
@@ -134,6 +134,13 @@ function metadataFromJson(json: string, actorName?: string) {
     const sourceTimestamp = candidates.filter((item: any) => victimNames.includes(safeMetadataText(item.name))).map((item: any) => item.timestamp).filter(Boolean).sort((left: string, right: string) => Date.parse(right) - Date.parse(left))[0];
     const title = `${safeMetadataText(actorName ?? "")} victim metadata`.trim().slice(0, 300);
     return { title, description: victimNames.join(" | ").slice(0, 1_000) || undefined, actorName, parserProfile: "json_announcements_company_name", victimName: victimNames[0], victimNames, sourceTimestamp, links: [] };
+  }
+  if (actor === "ransomhouse") {
+    const rows = document?.data;
+    if (!Array.isArray(rows)) throw new Error("Tor metadata JSON parser found no approved victim listing");
+    const victimNames = safeVictimNames(rows.filter((row: any) => typeof row?.action === "string").map((row: any) => row?.header).filter((name: any) => typeof name === "string"));
+    const title = `${safeMetadataText(actorName ?? "")} victim metadata`.trim().slice(0, 300);
+    return { title, description: victimNames.join(" | ").slice(0, 1_000) || undefined, actorName, parserProfile: "json_data_header", victimName: victimNames[0], victimNames, links: [] };
   }
   const rows = document?.posts;
   if (!Array.isArray(rows)) throw new Error("Tor metadata JSON parser found no approved victim listing");

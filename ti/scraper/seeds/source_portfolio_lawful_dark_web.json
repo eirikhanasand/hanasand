@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T10:42:11.044Z",
+  "generatedAt": "2026-08-09T11:00:47.000Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -53,15 +53,6 @@
       "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
       "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
       "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/auditteam",
-      "countsAsCoverage": false
-    },
-    {
-      "id": "restricted_ransomhouse_victim_blog",
-      "actorName": "RansomHouse",
-      "disposition": "rejected",
-      "reason": "The endpoint returned an unsupported JSON response instead of bounded victim-listing metadata.",
-      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
-      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/ransomhouse",
       "countsAsCoverage": false
     },
     {
@@ -1164,6 +1155,82 @@
           "contentType": "application/json",
           "adapter": "tor_metadata",
           "legalBasisVerifiedAt": "2026-08-09T10:42:11.044Z"
+        }
+      }
+    },
+    {
+      "id": "restricted_ransomhouse_victim_blog",
+      "name": "RansomHouse victim API",
+      "type": "tor_metadata",
+      "url": "http://zohlm7ahjwegcedoz7lrdrti7bvpofymcayotp744qhx6gjmxbuo2yid.onion/a",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.86,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public victim-listing organization names from the credential-free JSON endpoint. Never authenticate, interact with operators, follow payload or contact links, or retain descriptions, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-08-09T11:00:47.000Z",
+        "approvedBy": "source-review:goal8-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "RansomHouse",
+        "actors": [
+          "RansomHouse"
+        ],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/developers",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/ransomhouse",
+        "discoveryCheckedAt": "2026-08-09T11:00:47.000Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T11:00:47.000Z",
+        "productionCollectionVerifiedAt": "2026-08-09T11:00:47.000Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "json_data_header",
+        "parserShape": "data[].header where action is present",
+        "observedParsedItemCount": 22,
+        "reportedVictimCount": 205,
+        "lastReportedVictimAt": "2026-08-07T13:33:22.504123+00:00",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+        "discoveryAuthorityChain": [
+          {
+            "name": "Ransomwhere.org",
+            "role": "current public proxy inventory for the upstream ransomware.live group catalog",
+            "url": "https://ransomwhere.org/developers",
+            "recordUrl": "https://ransomwhere.org/api/groups/ransomhouse"
+          },
+          {
+            "name": "Palo Alto Networks Unit 42",
+            "role": "independent recent technical analysis of RansomHouse operations",
+            "url": "https://unit42.paloaltonetworks.com/",
+            "recordUrl": "https://unit42.paloaltonetworks.com/ransomhouse-encryption-upgrade/"
+          },
+          {
+            "name": "Check Point Research",
+            "role": "independent current reporting of a July 2026 RansomHouse victim claim",
+            "url": "https://research.checkpoint.com/",
+            "recordUrl": "https://research.checkpoint.com/2026/27th-july-threat-intelligence-report/"
+          }
+        ],
+        "attribution": "Ransomwhere.org public inventory, current independent Unit 42 and Check Point Research, and approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T11:00:47.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 22,
+          "httpStatus": 200,
+          "contentType": "application/json",
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T11:00:47.000Z"
         }
       }
     }

@@ -111,7 +111,7 @@ export async function listExposureQueue(request: Request, url: URL, options: Api
       nextExpectedCollection: nextCollectionAt(at)
     },
     parser: {
-      service: "hanasand-ai",
+      service: Bun.env.HANASAND_AI_API_BASE ? "hanasand-ai" : "metadata-safe-ransomware-claim-parser:v1",
       aiEndpointConfigured: Boolean(Bun.env.HANASAND_AI_API_BASE),
       fallbackParser: "metadata-safe-ransomware-claim-parser:v1"
     },
@@ -167,9 +167,9 @@ export async function ingestExposureClaims(request: Request, options: ApiServerO
     accepted: accepted.length,
     rejected: submitted.length - accepted.length,
     parser: {
-      service: "hanasand-ai",
+      service: Bun.env.HANASAND_AI_API_BASE ? "hanasand-ai" : "metadata-safe-ransomware-claim-parser:v1",
       aiEndpointConfigured: Boolean(Bun.env.HANASAND_AI_API_BASE),
-      fallbackUsed: parsed.some((claim) => claim?.parserMode !== "hanasand-ai")
+      fallbackUsed: parsed.some((claim) => claim?.parserMode === "local_fallback")
     },
     captures: accepted.map((capture) => ({ id: capture.id, sourceId: capture.sourceId, collectedAt: capture.collectedAt })),
     queue: exposureClaimsFromStore(options.store, {}, { limit: 25, tenantId: scope.tenantId })
