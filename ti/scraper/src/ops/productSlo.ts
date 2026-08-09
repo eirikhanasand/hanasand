@@ -39,12 +39,12 @@ export interface LiveProductOperationalMetrics {
     futureCollectedAt: number;
   };
   incidents: { total: number };
-  runs: { queued: number; running: number; completed: number; failed: number; cancelled: number; other: number };
+  runs: { queued: number; running: number; completed: number; failed: number; failedLast24Hours: number; cancelled: number; other: number };
   queue: { queued: number; leased: number };
 }
 
 export interface LiveProductSloObjective {
-  id: "collecting_source_hosts" | "collection_freshness" | "capture_timestamp_quality";
+  id: "collecting_source_hosts" | "collection_freshness" | "capture_timestamp_quality" | "recent_collection_failures";
   state: LiveProductSloState;
   value: number | null;
   target: number;
@@ -100,7 +100,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const validCaptureTimes = captureTimes.filter((value): value is number => value !== null);
   const latestCaptureMs = validCaptureTimes.length > 0 ? Math.max(...validCaptureTimes) : null;
   const latestCaptureAgeSeconds = latestCaptureMs === null ? null : Math.max(0, Math.floor((generatedAtMs - latestCaptureMs) / 1000));
-  const runStatuses = countRunStatuses(input.runs);
+  const runStatuses = countRunStatuses(input.runs, generatedAtMs);
   const activeSourceIds = new Set(input.sources.filter((source) => source.status === "active").map((source) => String(source.id ?? "")).filter(Boolean));
   const sourcesById = new Map(input.sources.map((source) => [String(source.id ?? ""), source]));
   const observedSourceIds = new Set(input.captures.map((capture) => String(capture.sourceId ?? "")).filter(Boolean));
@@ -155,6 +155,13 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
       id: "capture_timestamp_quality",
       state: metrics.captures.missingCollectedAt + futureCollectedAt === 0 ? "pass" : "warn",
       value: metrics.captures.missingCollectedAt + futureCollectedAt,
+      target: 0,
+      unit: "count"
+    },
+    {
+      id: "recent_collection_failures",
+      state: runStatuses.failedLast24Hours === 0 ? "pass" : runStatuses.failedLast24Hours >= 5 ? "alert" : "warn",
+      value: runStatuses.failedLast24Hours,
       target: 0,
       unit: "count"
     }
@@ -217,12 +224,15 @@ export async function readLiveProductDailySnapshots(path: string): Promise<LiveP
   }
 }
 
-function countRunStatuses(runs: CollectionRun[]): LiveProductOperationalMetrics["runs"] {
-  const counts = { queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0, other: 0 };
+function countRunStatuses(runs: CollectionRun[], generatedAtMs = Date.now()): LiveProductOperationalMetrics["runs"] {
+  const counts = { queued: 0, running: 0, completed: 0, failed: 0, failedLast24Hours: 0, cancelled: 0, other: 0 };
+  const cutoff = generatedAtMs - FRESHNESS_TARGET_SECONDS * 1_000;
   for (const run of runs) {
     const status = String(run.status ?? "other");
     if (status in counts && status !== "other") counts[status as keyof Omit<typeof counts, "other">] += 1;
     else counts.other += 1;
+    const finishedAt = validTime(run.updatedAt ?? run.completedAt ?? run.createdAt);
+    if (status === "failed" && finishedAt !== null && finishedAt >= cutoff && finishedAt <= generatedAtMs) counts.failedLast24Hours += 1;
   }
   return counts;
 }

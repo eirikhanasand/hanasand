@@ -94,4 +94,18 @@ describe("ops utilities", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("alerts on repeated recent collection failures", () => {
+    const dashboard = buildLiveProductSloDashboard({
+      generatedAt: "2026-06-21T00:00:00.000Z",
+      runs: Array.from({ length: 5 }, (_, index) => ({ status: "failed", updatedAt: `2026-06-20T23:0${index}:00.000Z` })),
+      sources: [{ id: "source_1", status: "active", type: "rss", url: "https://feed.example.test/rss" }],
+      captures: [{ sourceId: "source_1", collectedAt: "2026-06-20T23:30:00.000Z" }],
+      incidents: [],
+      frontier: { queued: 0, leased: 0 }
+    });
+    expect(dashboard.metrics.runs.failedLast24Hours).toBe(5);
+    expect(dashboard.slos.find((slo) => slo.id === "recent_collection_failures")).toMatchObject({ state: "alert", value: 5 });
+    expect(dashboard.dashboard.state).toBe("alert");
+  });
 });
