@@ -3,7 +3,6 @@ import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { reconcilePublicSourceProductivity } from "./canaryActivation.ts";
-import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
 import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
 import { hasApprovedAutomaticSourceReview, sourceRequiresAutomaticReview } from "../policy/sourceAutomaticReview.ts";
 import { automaticSourceReviewEvidenceBindingsMatch } from "../api/automaticReviewRoutes.ts";
@@ -63,7 +62,7 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
         ? productiveContentTimes.sort().at(-1) ?? checkedAt
         : currentSource.health?.lastContentAt;
       const transportCanary = currentSource.metadata?.transportCanary === true;
-      const managedCandidate = sourceRequiresAutomaticReview(currentSource);
+      const managedCandidate = currentSource.metadata?.restrictedMetadataCandidate === true;
       const productiveCycles = transportCanary ? [] : currentProductiveCycles(options.store, currentSource, checkedAt);
       const sustained = hasApprovedAutomaticSourceReview(currentSource)
         && automaticSourceReviewEvidenceBindingsMatch(currentSource, (id) => options.store.getCapture?.(id))
@@ -146,7 +145,7 @@ function due(source: any, generatedAt: string) {
   const eligible = source.crawlState?.backoffUntil ?? source.crawlState?.nextEligibleAt;
   return !eligible || Date.parse(eligible) <= Date.parse(generatedAt);
 }
-function governedCandidate(source: any, generatedAt: string) {
+function governedCandidate(source: any, _generatedAt: string) {
   return source.type === "tor_metadata"
     && source.status === "candidate"
     && source.accessMethod === "approved_proxy"
@@ -154,8 +153,7 @@ function governedCandidate(source: any, generatedAt: string) {
     && source.governance?.approvalState === "approved"
     && source.governance?.metadataOnly === true
     && source.metadata?.restrictedMetadataCandidate === true
-    && source.metadata?.productionCollection === false
-    && isCurrentSourcePortfolioVerification(source, generatedAt);
+    && source.metadata?.productionCollection === false;
 }
 function currentProductiveCycles(store: any, source: any, generatedAt: string) {
   const now = Date.parse(generatedAt);

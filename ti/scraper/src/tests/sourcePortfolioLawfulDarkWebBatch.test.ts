@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { describe, expect, test } from "bun:test";
 import { importRestrictedMetadataSeedBundle } from "../registry/restrictedSourceSeeds.ts";
 
 describe("lawful dark-web source portfolio batch", () => {

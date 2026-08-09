@@ -237,7 +237,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       "public_telegram_channel_packs.json",
       "restricted_metadata_source_packs.json"
     ];
-    const portfolioNames = ["source_portfolio_clear_web.json", "source_portfolio_public_telegram.json"];
+    const portfolioNames = ["source_portfolio_clear_web.json", "source_portfolio_lawful_dark_web.json", "source_portfolio_public_telegram.json"];
     const configured = configuredNames.map((name) => join(seedDirectory, name));
     const generatedAt = new Date(Math.max(...[...configuredNames, ...portfolioNames].map((name) => Date.parse(seed(name).generatedAt)).filter(Number.isFinite))).toISOString();
     const sourceCount = (name: string) => seed(name).sources.length;
@@ -253,10 +253,13 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       expect(first.seedPaths.slice(0, configured.length)).toEqual(configured);
       expect(first.seedPaths).toHaveLength(new Set(first.seedPaths).size);
       expect(first.seedPaths.filter((path) => path.endsWith("source_portfolio_clear_web.json"))).toHaveLength(1);
+      expect(first.seedPaths.filter((path) => path.endsWith("source_portfolio_lawful_dark_web.json"))).toHaveLength(1);
       expect(first.seedPaths.filter((path) => path.endsWith("source_portfolio_public_telegram.json"))).toHaveLength(1);
       expect(first.errors.filter((error) => error.path.includes("source_portfolio_"))).toEqual([]);
       expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "clear_web" && source.metadata?.sourcePortfolioVerification))
         .toHaveLength(sourceCount("source_portfolio_clear_web.json"));
+      expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "dark_web_victim_feed" && source.metadata?.sourcePortfolioVerification))
+        .toHaveLength(sourceCount("source_portfolio_lawful_dark_web.json") + verifiedSourceCount("restricted_metadata_source_packs.json"));
       expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "telegram_public" && source.metadata?.sourcePortfolioVerification))
         .toHaveLength(verifiedSourceCount("source_portfolio_public_telegram.json") + verifiedSourceCount("public_telegram_channel_packs.json"));
       const importedPortfolio = store.listSources().filter((source: any) => source.metadata?.sourcePortfolioVerification);

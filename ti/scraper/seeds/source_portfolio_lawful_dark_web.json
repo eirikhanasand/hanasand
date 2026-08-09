@@ -2,6 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
+  "generatedAt": "2026-08-09T05:41:29.000Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -273,10 +274,10 @@
             ],
             "discoveryAuthorityUrl": "https://ransomwhere.org/data",
             "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/ms13089",
-            "discoveryCheckedAt": "2026-07-23T10:20:56.065Z",
+            "discoveryCheckedAt": "2026-08-09T05:41:29.000Z",
             "discoveryAvailability": "reported_available",
-            "discoveryObservedAt": "2026-07-23T10:20:56.065Z",
-            "productionCollectionVerifiedAt": "2026-07-23T10:20:56.065Z",
+            "discoveryObservedAt": "2026-08-09T05:41:29.000Z",
+            "productionCollectionVerifiedAt": "2026-08-09T05:41:29.000Z",
             "productionCollectionOutcome": "metadata_only_parser_verified",
             "parserProfile": "post_title_victim_listing",
             "reportedVictimCount": 4,
@@ -287,12 +288,12 @@
             "retentionDays": 30,
             "attribution": "Ransomwhere.org public research inventory plus approved-proxy metadata-only parser verification",
             "sourcePortfolioVerification": {
-                "verifiedAt": "2026-07-23T10:20:56.065Z",
+                "verifiedAt": "2026-08-09T05:41:29.000Z",
                 "outcome": "content_parsed",
                 "observedItemCount": 3,
                 "httpStatus": 200,
                 "adapter": "tor_metadata",
-                "legalBasisVerifiedAt": "2026-07-23T10:20:56.065Z"
+                "legalBasisVerifiedAt": "2026-08-09T05:41:29.000Z"
             }
         }
     }
