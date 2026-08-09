@@ -155,6 +155,27 @@ describe("structured threat-intelligence storage contract", () => {
     expect(page.captures[0]).toMatchObject({ id: "cap_query", tenantId: null, sourceId: "src_query", collectedAt: "2026-08-09T10:01:00.000Z", publishedAt: "2026-08-09T10:00:00.000Z", storageKind: "metadata_only" });
   });
 
+  test("keeps exposure queue candidate reads on the indexed capture predicate", async () => {
+    const migration = await Bun.file(new URL("../../migrations/038_exposure_queue_candidate_index.sql", import.meta.url)).text();
+    expect(migration).toContain("threat_intel_captures_exposure_queue_candidate_idx");
+    expect(migration).toContain("COALESCE(published_at, collected_at) DESC, id DESC");
+    expect(migration).toContain("record->'metadata'->'leakSite'->>'actorName'");
+    expect(migration).toContain("record->>'title' ~*");
+
+    const store = Object.create(PostgresScraperStore.prototype) as any;
+    let query = "";
+    store.sql = {
+      unsafe: async (sql: string) => {
+        query = sql;
+        return [{ record: { title: "Akira has just published a new victim: Query Company" }, capture_id: "cap_query", tenant_id: null, source_id: "src_query", url: "https://example.test/query", collected_at: "2026-08-09T10:01:00.000Z", published_at: "2026-08-09T10:00:00.000Z", media_type: "text/html", storage_kind: "metadata_only", total: 1, needs_review: 0, metadata_only: 1, latest_claim_at: "2026-08-09T10:00:00.000Z", latest_collected_at: "2026-08-09T10:01:00.000Z" }];
+      }
+    };
+    await store.queryExposureQueuePage({ tenantId: "default", limit: 1, offset: 0 });
+    expect(query).toContain("candidate_captures AS MATERIALIZED");
+    expect(query).toContain("record->>'title' ~*");
+    expect(query).toContain("ORDER BY COALESCE(capture.published_at, capture.collected_at) DESC");
+  });
+
   test("preserves exposure totals when an out-of-range page has no rows", async () => {
     const store = Object.create(PostgresScraperStore.prototype) as any;
     let calls = 0;

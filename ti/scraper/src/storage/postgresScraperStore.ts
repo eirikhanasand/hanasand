@@ -71,7 +71,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "034_reconcile_incomplete_collection_runs", path: fileURLToPath(new URL("../../migrations/034_reconcile_incomplete_collection_runs.sql", import.meta.url)) },
   { version: "035_preserve_unknown_delivery_completion", path: fileURLToPath(new URL("../../migrations/035_preserve_unknown_delivery_completion.sql", import.meta.url)) },
   { version: "036_source_operations_runtime_indexes", path: fileURLToPath(new URL("../../migrations/036_source_operations_runtime_indexes.sql", import.meta.url)) },
-  { version: "037_remove_parser_fallback_artifacts", path: fileURLToPath(new URL("../../migrations/037_remove_parser_fallback_artifacts.sql", import.meta.url)) }
+  { version: "037_remove_parser_fallback_artifacts", path: fileURLToPath(new URL("../../migrations/037_remove_parser_fallback_artifacts.sql", import.meta.url)) },
+  { version: "038_exposure_queue_candidate_index", path: fileURLToPath(new URL("../../migrations/038_exposure_queue_candidate_index.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 const MAINTENANCE_MIGRATION_VERSIONS = new Set(["037_remove_parser_fallback_artifacts"]);
