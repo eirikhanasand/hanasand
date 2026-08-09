@@ -52,8 +52,7 @@ export async function runResults(request: Request, options: ApiServerOptions, ru
   if (scope.error) return scope.error;
   const run = options.store.getRun?.(runId);
   if (!run || !inTenantScope(run, scope.tenantId)) return error("not_found", "Run not found", 404);
-  const runCaptureIds = new Set(run.captureIds ?? []);
-  const captures = options.store.listCaptures().filter((capture: any) => (!capture.tenantId || capture.tenantId === scope.tenantId) && (runCaptureIds.has(capture.id) || captureRunId(capture) === runId));
+  const captures = capturesForRun(options.store, run, scope.tenantId);
   const captureIds = new Set(captures.map((capture: any) => capture.id));
   const belongsToRun = (record: any) => captureIds.has(record.captureId) && (!record.tenantId || record.tenantId === scope.tenantId);
   const incidents = (options.store.listIncidents?.() ?? []).filter(belongsToRun);
@@ -77,8 +76,7 @@ export async function exportRunStix(request: Request, options: ApiServerOptions)
   if (scope.error) return scope.error;
   const run = options.store.getRun?.(input.runId);
   if (!run || !inTenantScope(run, scope.tenantId)) return error("not_found", "Run not found", 404);
-  const runCaptureIds = new Set(run.captureIds ?? []);
-  const captures = options.store.listCaptures().filter((capture: any) => (!capture.tenantId || capture.tenantId === scope.tenantId) && (runCaptureIds.has(capture.id) || captureRunId(capture) === run.id));
+  const captures = capturesForRun(options.store, run, scope.tenantId);
   const bundle = exportEvidenceBackedStixBundle({ captures, options: { producerName: input.producerName ?? "ti-scraper", generatedAt: input.generatedAt ?? nowIso(), bundleKey: run.id, includeDerivedIntelligence: false } });
   const standardsValidation = validateStixBundle(bundle);
   if (!standardsValidation.valid) return error("invalid_stix_report", "Generated bundle did not pass STIX 2.1 validation", 500);
@@ -101,4 +99,12 @@ function runFromPlan(plan: CollectionPlan, requestId: string): CollectionRun {
 
 function captureRunId(capture: any): string | undefined {
   return capture.runId ?? capture.metadata?.runId ?? capture.provenance?.runId;
+}
+
+function capturesForRun(store: ApiServerOptions["store"], run: CollectionRun, tenantId?: string) {
+  const captureIds = (run.captureIds ?? []).map((id: unknown) => String(id));
+  return [...new Set<string>(captureIds)].flatMap((captureId: string) => {
+    const capture = store.getCapture(captureId);
+    return capture && (!capture.tenantId || capture.tenantId === tenantId) ? [capture] : [];
+  });
 }
