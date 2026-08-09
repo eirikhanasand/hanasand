@@ -2120,17 +2120,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                 ) ranked_latest
                 WHERE latest_rank = 1
               ), productive_runs AS (
-                SELECT health.record, health.checked_at, health.id, health.source_id, health.tenant_id, health.collection_run_id,
-                  row_number() OVER (PARTITION BY health.source_id, health.tenant_id, health.collection_run_id ORDER BY health.checked_at DESC, health.id DESC) AS run_rank
+                SELECT record, checked_at, id, source_id, tenant_id, collection_run_id,
+                  row_number() OVER (PARTITION BY source_id, tenant_id, collection_run_id ORDER BY checked_at DESC, id DESC) AS run_rank
                 FROM threat_intel.source_health health
-                JOIN threat_intel.sources source
-                  ON source.id = health.source_id AND source.tenant_id IS NOT DISTINCT FROM health.tenant_id
-                WHERE health.success AND health.useful AND health.capture_count > 0 AND health.collection_run_id IS NOT NULL
-                  AND health.checked_at >= now() - make_interval(secs => GREATEST(
-                    86400,
-                    COALESCE((source.record->>'crawlFrequencySeconds')::int, 86400) * 3,
-                    COALESCE((source.record->'metadata'->>'activityWindowSeconds')::int, 2592000)
-                  ))
+                WHERE success AND useful AND capture_count > 0 AND collection_run_id IS NOT NULL
                   AND EXISTS (
                     SELECT 1 FROM threat_intel.captures retained
                     WHERE retained.source_id = health.source_id
