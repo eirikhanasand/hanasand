@@ -14,6 +14,10 @@ const requiredPublicChecks = [
 const MAX_CHECK_AGE_MS = 5 * 60 * 1000
 
 export function toPublicServiceStatus(status: ServiceStatus, nowMs = Date.now()): ServiceStatus {
+    if (!status.generated_at && status.checks.length === 0) {
+        return status
+    }
+
     const currentChecks = new Map(status.checks
         .filter(check => isCurrentPublicCheck(check, nowMs))
         .map(check => [checkKey(check), check]))
@@ -53,18 +57,6 @@ export function toPublicServiceStatus(status: ServiceStatus, nowMs = Date.now())
 
 function checkKey(value: { service: string, check_name: string }) {
     return `${value.service}\n${value.check_name}`
-}
-
-export function publicStatusCoverageCheck(generatedAt = new Date().toISOString()): ServiceCheck {
-    return {
-        service: 'Status coverage',
-        check_name: 'Public monitor freshness',
-        status: 'degraded',
-        latency_ms: 0,
-        message: 'No current public monitor checks are available. Treat status as unverified until fresh checks are present.',
-        checked_at: generatedAt,
-        uptime_30d: 'unverified',
-    }
 }
 
 function missingPublicCheck(required: typeof requiredPublicChecks[number], generatedAt: string): ServiceCheck {
