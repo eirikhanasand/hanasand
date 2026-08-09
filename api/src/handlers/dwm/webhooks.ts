@@ -527,7 +527,7 @@ export async function postDwmWebhookDestinationTest(req: FastifyRequest<{ Params
     const destination = destinations.find(item => item.id === req.params.id)
     const deliveries = await listDwmWebhookDeliveries(userId, existing.orgId)
     const auditEvents = await listDwmWebhookAuditEvents(userId, existing.orgId)
-    return res.status(202).send({
+    const response = {
         delivery,
         preview: buildDwmWebhookDeliveryPreview(delivery),
         destinationCrud: destination
@@ -576,7 +576,16 @@ export async function postDwmWebhookDestinationTest(req: FastifyRequest<{ Params
             deliveries,
             destinations: destination ? [destination] : destinations,
         }),
-    })
+    }
+    const outcome = destinationTestResponseOutcome(delivery)
+    return res.status(outcome.status).send(outcome.failed ? { ...response, error: outcome.error, code: outcome.code } : response)
+}
+
+export function destinationTestResponseOutcome(delivery: { status?: string | null, error?: unknown }) {
+    const failed = delivery.status === 'failed' || Boolean(delivery.error)
+    return failed
+        ? { status: 502, failed: true, code: 'webhook_destination_test_failed', error: 'Webhook destination test failed.' }
+        : { status: 202, failed: false }
 }
 
 export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring: OrgQuery }>, res: FastifyReply) {
