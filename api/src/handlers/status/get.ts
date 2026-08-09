@@ -112,14 +112,14 @@ async function loadStatusPayload() {
                 status,
                 message,
                 checked_at,
-                LAG(status) OVER window AS previous_status,
-                LAG(checked_at) OVER window AS previous_checked_at,
-                LEAD(status) OVER window AS next_status,
-                LEAD(checked_at) OVER window AS next_checked_at
+                LAG(status) OVER status_history_window AS previous_status,
+                LAG(checked_at) OVER status_history_window AS previous_checked_at,
+                LEAD(status) OVER status_history_window AS next_status,
+                LEAD(checked_at) OVER status_history_window AS next_checked_at
             FROM service_monitor_results
             WHERE checked_at >= NOW() - INTERVAL '90 days'
               AND NOT (service = 'core' AND check_name = 'API index')
-            WINDOW window AS (PARTITION BY service, check_name ORDER BY checked_at)
+            WINDOW status_history_window AS (PARTITION BY service, check_name ORDER BY checked_at)
         )
         SELECT service, check_name, status, message, checked_at
         FROM sequenced
