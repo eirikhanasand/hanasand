@@ -38,8 +38,9 @@
 - Use provenance hashes so every claim can be traced without redistributing raw evidence.
 
 ## Deployment
-- Build: `docker compose build ti-scraper`.
-- Deploy: `docker compose up -d ti-scraper api frontend`.
+- Build the scraper in a separately serialized deployment window: `docker compose build ti-scraper`.
+- Deploy only that image after the build completes: `docker compose up -d --no-deps ti-scraper`.
+- Deploy API and frontend separately; their lifecycle must not rebuild or replace the scraper.
 - Internal scraper URL: `http://ti-scraper:8097`.
 - Public UI path: `https://hanasand.com/ti`.
 - Verify container health before routing traffic.

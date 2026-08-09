@@ -128,8 +128,6 @@ services:
         condition: service_healthy
       stalwart:
         condition: service_started
-      ti-scraper:
-        condition: service_healthy
       onion-tor:
         condition: service_started
 

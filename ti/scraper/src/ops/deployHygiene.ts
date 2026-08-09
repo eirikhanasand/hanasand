@@ -21,6 +21,7 @@ export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygien
   const scraperDockerfileDockerignore = readIfExists(scraperDockerfileDockerignorePath);
   const backupWrapper = readIfExists(backupWrapperPath);
   const backupScript = readIfExists(backupScriptPath);
+  const apiService = compose.split(/\n  api:\s*\n/, 2)[1]?.split(/\n  [\w-]+:\s*\n/, 1)[0] ?? "";
   const allowedApiBuildIncludes = new Set([
     "!api/",
     "!api/src/",
@@ -42,7 +43,7 @@ export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygien
     check("dockerfile.runs_tests", /RUN\s+bun\s+(?:run\s+)?test/.test(scraperDockerfile) && /RUN\s+bun\s+run\s+check/.test(scraperDockerfile), "scraper Docker build runs tests and type-check"),
     check("compose.scraper_service", /ti-scraper:\s*\n/.test(compose), "compose declares ti-scraper service"),
     check("compose.scraper_health", /ti-scraper:[\s\S]*healthcheck:[\s\S]*\/v1\/health/.test(compose), "ti-scraper healthcheck probes /v1/health"),
-    check("compose.api_depends_on_scraper", /api:[\s\S]*depends_on:[\s\S]*ti-scraper:[\s\S]*condition:\s*service_healthy/.test(compose), "api waits for scraper service_healthy"),
+    check("compose.api_isolated_from_scraper", Boolean(apiService) && !/(?:^|\n) {6}ti-scraper:\s*(?:\n|$)/.test(apiService), "api deployments do not reconcile the independently deployed scraper"),
     check("compose.internal_scraper_url", /TI_SCRAPER_API_BASE:\s*\$\{TI_SCRAPER_API_BASE:-http:\/\/ti-scraper:8097\}/.test(compose), "api uses internal scraper URL by default"),
     check("compose.scraper_memory_target", /SCRAPER_MEMORY_TARGET_MB:\s*8192/.test(compose), "scraper target memory is 8 GB"),
     check("compose.scraper_memory_ceiling", /SCRAPER_MEMORY_CEILING_MB:\s*20480/.test(compose), "scraper normal ceiling is 20 GB"),

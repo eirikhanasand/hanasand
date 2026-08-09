@@ -10,7 +10,7 @@ describe("deploy hygiene", () => {
 
     expect(report.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "dockerfile.test_enforced")?.ok).toBe(true);
-    expect(report.checks.find((item) => item.name === "compose.api_depends_on_scraper")?.ok).toBe(true);
+    expect(report.checks.find((item) => item.name === "compose.api_isolated_from_scraper")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "compose.scraper_memory_target")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "compose.scraper_stop_grace")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "compose.scraper_review_concurrency")?.ok).toBe(true);
@@ -163,7 +163,7 @@ describe("deploy hygiene", () => {
     }
   });
 
-  test("catches missing scraper health dependency and unused test stage", () => {
+  test("catches accidental scraper deployment coupling and unused test stage", () => {
     const root = mkdtempSync(join(tmpdir(), "ti-deploy-hygiene-"));
     mkdirSync(join(root, "ti", "scraper"), { recursive: true });
     writeFileSync(join(root, ".dockerignore"), "node_modules\n");
@@ -180,6 +180,9 @@ describe("deploy hygiene", () => {
       "  api:",
       "    environment:",
       "      TI_SCRAPER_API_BASE: ${TI_SCRAPER_API_BASE:-http://ti-scraper:8097}",
+      "    depends_on:",
+      "      ti-scraper:",
+      "        condition: service_healthy",
       "  ti-scraper:",
       "    mem_limit: 24g",
       "    environment:",
@@ -192,7 +195,7 @@ describe("deploy hygiene", () => {
 
     expect(report.ok).toBe(false);
     expect(report.checks.find((item) => item.name === "dockerfile.test_enforced")?.ok).toBe(false);
-    expect(report.checks.find((item) => item.name === "compose.api_depends_on_scraper")?.ok).toBe(false);
+    expect(report.checks.find((item) => item.name === "compose.api_isolated_from_scraper")?.ok).toBe(false);
     expect(report.checks.find((item) => item.name === "compose.scraper_evidence_volume")?.ok).toBe(false);
     expect(report.checks.find((item) => item.name === "compose.scraper_canary_no_auto_activate")?.ok).toBe(false);
     expect(report.checks.find((item) => item.name === "compose.automatic_evaluation_opt_in")?.ok).toBe(false);
