@@ -410,6 +410,84 @@ describe("automatic Hanasand AI intelligence review", () => {
     }));
   });
 
+  test("reviews productive legacy feeds without counting catalogs or disabling uncertain collection", async () => {
+    const store = new InMemoryScraperStore();
+    const saveLegacy = (id: string, metadata: Record<string, unknown> = {}) => store.saveSource({
+      ...source({
+        id,
+        tenantId: undefined,
+        status: "active",
+        type: "rss",
+        url: `https://publisher.example/${id}.xml`,
+        governance: { approvalRequired: true, approvalState: "approved" },
+        metadata: { productionCollection: true, sourceFamily: "government", ...metadata }
+      }),
+      countsAsCoverage: false
+    });
+    const saveCycle = (sourceId: string, index: number) => {
+      const runId = `run_${sourceId}_${index}`;
+      const at = `2026-07-22T10:0${index}:00.000Z`;
+      store.saveCapture(fixtureCapture({
+        id: `capture_${sourceId}_${index}`,
+        tenantId: undefined,
+        sourceId,
+        collectedAt: at,
+        publishedAt: at,
+        body: `${sourceId} retained security advisory ${index}`,
+        metadata: { runId, safeExcerpt: `${sourceId} retained security advisory ${index}` }
+      }));
+      store.saveSourceHealthObservation({ id: `health_${sourceId}_${index}`, tenantId: undefined, sourceId, collectionRunId: runId, checkedAt: at, success: true, useful: true, captureCount: 1 });
+    };
+
+    const legacy = saveLegacy("legacy_productive_feed");
+    saveCycle(legacy.id, 1);
+    saveCycle(legacy.id, 2);
+    const uncertain = saveLegacy("legacy_uncertain_feed");
+    saveCycle(uncertain.id, 1);
+    const catalog = saveLegacy("legacy_registration_catalog", { extractionProfile: "mitre_actor_catalog" });
+    saveCycle(catalog.id, 1);
+    saveCycle(catalog.id, 2);
+
+    expect(await syncAutomaticReviewQueue(options(store), { allTenants: true, now: "2026-07-22T10:03:00.000Z", modelVersion: "hanasand" })).toBe(2);
+    expect(store.listAnalystMetadataReviewTasks().some((task: any) => task.subject?.sourceId === catalog.id)).toBe(false);
+
+    await runAutomaticReviewCycle(options(store), {
+      allTenants: true,
+      now: "2026-07-22T10:03:00.000Z",
+      clock: () => "2026-07-22T10:03:00.000Z",
+      modelVersion: "hanasand",
+      limit: 2,
+      concurrency: 1,
+      fetcher: async (_input, init) => {
+        const request = promptRequest(JSON.parse(String(init?.body)).prompt);
+        return completedTools(request, request.subject.id === uncertain.id
+          ? supportedDecision(request, {
+              promptVersion: request.promptVersion,
+              action: "mark_needs_review",
+              claimValidity: "uncertain",
+              actorAttribution: { canonicalName: null, aliases: [] },
+              supportingEvidenceIds: [],
+              uncertainty: ["The retained publisher text needs another current sample."],
+              falsePositiveReasons: ["The bounded output is too terse for a terminal decision."],
+              confidence: 0.4
+            })
+          : supportedDecision(request, { promptVersion: request.promptVersion, actorAttribution: { canonicalName: null, aliases: [] } }));
+      }
+    });
+
+    expect(store.getSource(legacy.id)).toMatchObject({
+      status: "active",
+      countsAsCoverage: true,
+      metadata: { productionCollection: true, countsAsCoverage: true, sourcePortfolioQualificationState: "sustained_productive", sourcePortfolioProductiveCheckCount: 2, automaticSourceReview: { state: "approved" } }
+    });
+    expect(store.getSource(uncertain.id)).toMatchObject({
+      status: "active",
+      countsAsCoverage: false,
+      metadata: { productionCollection: true, countsAsCoverage: false, sourcePortfolioQualificationState: "pending_sustained_productivity", automaticSourceReview: { state: "needs_review" } }
+    });
+    expect(store.getSource(catalog.id)).toMatchObject({ status: "active", countsAsCoverage: false, metadata: { productionCollection: true } });
+  });
+
   test("supersedes a queued upgrade when a valid prior clear-web approval arrives before the model call", async () => {
     const store = new InMemoryScraperStore();
     seedSource(store, "source-queued-upgrade", "CVE-2026-1002 is a critical privilege escalation advisory.");

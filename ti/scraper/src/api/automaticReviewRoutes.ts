@@ -16,6 +16,7 @@ import {
   automaticSourceReviewIdentity,
   automaticReviewModelVersion,
   hasApprovedAutomaticSourceReview,
+  isLegacySourceReviewCandidate,
   sourceAutomaticReviewEvidenceBound,
   sourceAutomaticReviewIdentityMatches,
   sourceAutomaticReviewPromptVersionMatches,
@@ -766,14 +767,16 @@ function persistSubjectDecision(store: any, index: ReviewIndex, task: AutomaticR
   if (task.subject.sourceId) {
     const source = store.getSource?.(task.subject.sourceId) ?? index.sourcesById.get(task.subject.sourceId);
     if (!source) return;
+    const legacySource = isLegacySourceReviewCandidate(source);
     const approved = decision.action === "confirm" && decision.claimValidity === "supported";
     const state = approved ? "approved" : decision.action === "mark_needs_review" ? "needs_review" : "rejected";
     const backoffUntil = approved ? undefined : new Date(Date.parse(at) + 86_400_000).toISOString();
+    const keepCollecting = legacySource && state === "needs_review";
     let updated = store.saveSource({
       ...source,
-      status: approved ? source.status : state === "rejected" ? "rejected" : "candidate",
+      status: approved || keepCollecting ? source.status : state === "rejected" ? "rejected" : "candidate",
       countsAsCoverage: approved ? source.countsAsCoverage : false,
-      crawlState: approved ? source.crawlState : state === "needs_review" ? clearAutomaticReviewBackoff(source.crawlState) : {
+      crawlState: approved || keepCollecting ? source.crawlState : state === "needs_review" ? clearAutomaticReviewBackoff(source.crawlState) : {
         ...(source.crawlState ?? {}),
         nextEligibleAt: backoffUntil,
         backoffUntil,
@@ -783,7 +786,7 @@ function persistSubjectDecision(store: any, index: ReviewIndex, task: AutomaticR
       metadata: {
         ...(source.metadata ?? {}),
         ...(!approved ? {
-          productionCollection: false,
+          productionCollection: keepCollecting,
           countsAsCoverage: false,
           sourcePortfolioQualificationState: "pending_sustained_productivity"
         } : {}),
@@ -878,9 +881,11 @@ function clearAutomaticReviewBackoff(crawlState: any) {
 }
 
 function reconcileApprovedPublicCandidate(store: any, source: any, at: string) {
-  if (source.status !== "candidate"
-    || source.metadata?.productionCollection !== false
-    || source.metadata?.sourcePortfolioVerification?.outcome !== "content_parsed"
+  const portfolioCandidate = source.status === "candidate"
+    && source.metadata?.productionCollection === false
+    && source.metadata?.sourcePortfolioVerification?.outcome === "content_parsed";
+  const legacySource = isLegacySourceReviewCandidate(source);
+  if ((!portfolioCandidate && !legacySource)
     || source.accessMethod !== "public_http"
     || source.risk !== "low"
     || source.governance?.approvalState !== "approved"
@@ -899,12 +904,12 @@ function reconcileApprovedPublicCandidate(store: any, source: any, at: string) {
     && !reviewBackoff) return source;
   return store.saveSource({
     ...source,
-    status: sustained ? "active" : "candidate",
+    status: sustained ? "active" : legacySource ? source.status : "candidate",
     countsAsCoverage: sustained,
     crawlState: reviewBackoff ? clearAutomaticReviewBackoff(source.crawlState) : source.crawlState,
     metadata: {
       ...(source.metadata ?? {}),
-      productionCollection: sustained,
+      productionCollection: legacySource ? true : sustained,
       countsAsCoverage: sustained,
       sourcePortfolioQualificationState: sustained ? "sustained_productive" : "pending_sustained_productivity",
       sourcePortfolioProductiveCheckCount: productiveCycles.length,
