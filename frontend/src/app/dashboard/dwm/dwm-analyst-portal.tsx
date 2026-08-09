@@ -1,8 +1,8 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { Fragment, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, RotateCcw, Send, ShieldCheck, SlidersHorizontal, UserRound, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmAlertAnalystAction, DwmProductSnapshot } from '@/utils/dwm/product'
 import { safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
@@ -198,42 +198,24 @@ export function DwmAnalystPortal({
     view = 'cases',
 }: PortalProps) {
     const router = useRouter()
-    const searchParams = useSearchParams()
     const [snapshot, setSnapshot] = useState(initialSnapshot)
     const [operations, setOperations] = useState(initialOperations)
     const [alerts, setAlerts] = useState(initialAlerts)
-    const [dataHealth, setDataHealth] = useState(initialDataHealth)
+    const [, setDataHealth] = useState(initialDataHealth)
     const [casesState, setCasesState] = useState<CasesState>(() => ({ status: view === 'cases' ? 'loading' : 'ready', rows: [] }))
-    const [selectedId, setSelectedId] = useState(initialAlertId && alerts.some(alert => alert.id === initialAlertId) ? initialAlertId : alerts[0]?.id ?? '')
     const [busyAction, setBusyAction] = useState<string | null>(null)
-    const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
     const [localDeliveries, setLocalDeliveries] = useState<DeliveryItem[]>(initialDeliveries)
     const [refreshVersion, setRefreshVersion] = useState(0)
-    const pendingInitialAlertId = useRef(initialAlertId)
-    const [queueFilter, setQueueFilter] = useState<QueueFilter>(() => normalizeQueueFilter(searchParams.get('filter')))
-    const [queueQuery, setQueueQuery] = useState(() => searchParams.get('q')?.slice(0, 120) ?? '')
-    const queue = useMemo(() => filterAlerts(orderAlerts(alerts), queueFilter, queueQuery), [alerts, queueFilter, queueQuery])
-    const selectedAlert = queue.find(alert => alert.id === selectedId) ?? queue[0]
+    const selectedAlert = alerts.find(alert => alert.id === initialAlertId) ?? alerts[0]
     const selectedOrganizationId = selectedAlert ? alertOrganizationId(selectedAlert, organizationId) : organizationId
-    const visibleQueue = useMemo(() => visibleQueueAlerts(queue, selectedAlert?.id), [queue, selectedAlert?.id])
-    const selectedDeliveries = selectedAlert ? localDeliveries.filter(delivery => delivery.alertId === selectedAlert.id) : []
-    const criticalCount = alerts.filter(alert => alert.severity === 'critical').length
-    const readyCount = alerts.filter(alert => alert.deliveryState === 'ready_to_send').length
-    const activeCount = alerts.filter(alert => alert.deliveryState !== 'muted' && alert.reviewState !== 'resolved').length
-    const freshCount = alerts.filter(isFreshAlert).length
-    const highConfidenceCount = alerts.filter(alert => alert.confidence >= 80).length
     const latestCaptures = operations?.latestCaptures ?? []
     const activeSourceCount = operations?.counts.activeSourceCount ?? 0
     const sourceCount = operations?.counts.sourceCount ?? 0
     const sharedCaptureCount = operations?.counts.captureCount ?? latestCaptures.length
     const tenantRunCaptureCount = operations?.latestRun?.captureCount ?? 0
     const watchlistMatchCount = operations?.counts.watchlistMatchCount || latestCaptureWatchlistMatchCount(latestCaptures) || alertWatchlistMatchCount(alerts)
-    const caseCount = alerts.filter(hasAlertCaseLink).length
-    const latestRunLabel = captureRunLabel(operations?.latestRun?.captureCount)
     const watchTermCount = snapshot.watchlist.length
     const webhookState = deliverySummaryLabel(localDeliveries)
-    const apiProblemCount = [dataHealth.snapshot, dataHealth.operations, dataHealth.alerts, dataHealth.deliveries]
-        .filter(item => item.state !== 'live').length
     const workflowTelemetry = {
         activeSourceCount,
         sourceCount,
@@ -256,19 +238,6 @@ export function DwmAnalystPortal({
     )
 
     useEffect(() => {
-        const requestedAlertId = pendingInitialAlertId.current
-        if (requestedAlertId && alerts.some(alert => alert.id === requestedAlertId)) {
-            if (!queue.some(alert => alert.id === requestedAlertId)) setQueueFilter('all')
-            setSelectedId(requestedAlertId)
-            pendingInitialAlertId.current = undefined
-            return
-        }
-        if (queue.length && !queue.some(alert => alert.id === selectedId)) {
-            setSelectedId(queue[0].id)
-        }
-    }, [alerts, queue, selectedId])
-
-    useEffect(() => {
         const controller = new AbortController()
         const params = dwmScopeSearchParams(tenantId, organizationId)
         if (view === 'cases') {
@@ -284,57 +253,6 @@ export function DwmAnalystPortal({
             controller.abort()
         }
     }, [tenantId, organizationId, refreshVersion, view])
-
-    async function updateAlert(alertId: string, reviewState: string, deliveryState: string, note: string, assignedOwner?: string) {
-        await runAction(`update:${alertId}`, async () => {
-            const alert = alerts.find(item => item.id === alertId)
-            const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(alertId)}`, {
-                method: 'PATCH',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify(scopeBody({ reviewState, deliveryState, note, assignedOwner, actor: 'dashboard' }, tenantId, alert ? alertOrganizationId(alert, organizationId) : organizationId)),
-            })
-            const payload = await readPayload(response)
-            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-            return 'Case updated.'
-        })
-    }
-
-    async function replayAlert(alertId: string) {
-        await runAction(`replay:${alertId}`, async () => {
-            const alert = alerts.find(item => item.id === alertId)
-            const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(alertId)}/replay`, {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify(scopeBody({ actor: 'dashboard' }, tenantId, alert ? alertOrganizationId(alert, organizationId) : organizationId)),
-            })
-            const payload = await readPayload(response)
-            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-            return 'Evidence replay recorded.'
-        })
-    }
-
-    async function openCase(alert: PortalAlert, assignedOwner?: string, note?: string) {
-        await runAction(`case:${alert.id}`, async () => {
-            const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`, {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify(scopeBody({
-                    actor: 'dashboard',
-                    assignedOwner,
-                    note: note?.trim() || 'Case opened from DWM alert.',
-                    idempotencyKey: `dashboard-case-handoff:${alert.id}`,
-                }, tenantId, alertOrganizationId(alert, organizationId))),
-            })
-            const payload = await readPayload(response)
-            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-            const caseId = payload.case?.id || payload.alertCaseHandoff?.caseId
-            if (caseId) {
-                router.push(caseDetailHref(caseId, alert.id, alertOrganizationId(alert, organizationId), 'alert_queue'))
-                return `Opening case ${caseId}.`
-            }
-            return 'Case route is available.'
-        })
-    }
 
     async function sendAlert(alertId: string) {
         await runAction(`send:${alertId}`, async () => {
@@ -374,66 +292,15 @@ export function DwmAnalystPortal({
 
     async function runAction(key: string, action: () => Promise<string>) {
         setBusyAction(key)
-        setMessage(null)
         try {
-            const text = await action()
-            setMessage({ ok: true, text })
+            await action()
             setRefreshVersion(version => version + 1)
             router.refresh()
         } catch (error) {
-            setMessage({ ok: false, text: safeActionMessage(error) })
+            console.error(error)
         } finally {
             setBusyAction(null)
         }
-    }
-
-    function selectAlert(alert: PortalAlert) {
-        setSelectedId(alert.id)
-        router.replace(dwmQueueHref({
-            params: searchParams,
-            tenantId,
-            organizationId: alertOrganizationId(alert, organizationId),
-            alertId: alert.id,
-            filter: queueFilter,
-            query: queueQuery,
-        }), { scroll: false })
-    }
-
-    function updateQueueFilter(filter: QueueFilter) {
-        setQueueFilter(filter)
-        router.replace(dwmQueueHref({
-            params: searchParams,
-            tenantId,
-            organizationId: selectedOrganizationId,
-            alertId: selectedAlert?.id,
-            filter,
-            query: queueQuery,
-        }), { scroll: false })
-    }
-
-    function updateQueueQuery(query: string) {
-        setQueueQuery(query)
-        router.replace(dwmQueueHref({
-            params: searchParams,
-            tenantId,
-            organizationId: selectedOrganizationId,
-            alertId: selectedAlert?.id,
-            filter: queueFilter,
-            query,
-        }), { scroll: false })
-    }
-
-    function clearQueueView() {
-        setQueueFilter('active')
-        setQueueQuery('')
-        router.replace(dwmQueueHref({
-            params: searchParams,
-            tenantId,
-            organizationId: selectedOrganizationId,
-            alertId: selectedAlert?.id,
-            filter: 'active',
-            query: '',
-        }), { scroll: false })
     }
 
     if (view === 'watchlists') {
@@ -529,7 +396,7 @@ function CaseOverview({ tenantId, organizationId, state, alerts }: { tenantId: s
                                     const severity = alert?.severity || row.severity || row.priority || '—'
                                     const status = row.status || '—'
                                     const reviewState = alert?.reviewState || row.reviewState
-                                    const organization = row.organizationId || organizationId || 'Unavailable'
+                                    const organization = row.organizationId || organizationId || tenantId
                                     const victim = alert?.company || row.victimName || row.company
                                     return (
                                         <tr key={caseId} className='align-top text-ui-text' data-dwm-case-row='true'>
@@ -589,37 +456,6 @@ function DwmPanelPage({ title, meta, children }: { title: string, meta: string, 
 
 function alertOrganizationId(alert: PortalAlert, fallback?: string) {
     return alert.organizationId || alert.workflowContext?.organizationId || fallback
-}
-
-function normalizeQueueFilter(value: string | null): QueueFilter {
-    return queueFilters.some(filter => filter.id === value) ? value as QueueFilter : 'active'
-}
-
-function dwmQueueHref(input: { params: URLSearchParams, tenantId: string, organizationId?: string, alertId?: string, filter: QueueFilter, query: string }) {
-    const nextParams = new URLSearchParams(input.params.toString())
-    nextParams.set('tenantId', input.tenantId)
-    if (input.organizationId) {
-        nextParams.set('organizationId', input.organizationId)
-    } else {
-        nextParams.delete('organizationId')
-    }
-    if (input.alertId) {
-        nextParams.set('alert', input.alertId)
-    } else {
-        nextParams.delete('alert')
-    }
-    if (input.filter !== 'active') {
-        nextParams.set('filter', input.filter)
-    } else {
-        nextParams.delete('filter')
-    }
-    const query = input.query.trim()
-    if (query) {
-        nextParams.set('q', query.slice(0, 120))
-    } else {
-        nextParams.delete('q')
-    }
-    return `/dashboard/dwm?${nextParams.toString()}`
 }
 
 function dwmScopeSearchParams(tenantId: string, organizationId?: string) {
@@ -750,7 +586,7 @@ function scopeBody<T extends Record<string, unknown>>(body: T, tenantId: string,
     return organizationId ? { ...body, tenantId, organizationId } : { ...body, tenantId }
 }
 
-function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, captureCount, watchlistMatchCount, alertCount, caseCount, deliveryCount, latestRunLabel, webhookState }: {
+export function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, captureCount, watchlistMatchCount, alertCount, caseCount, deliveryCount, latestRunLabel, webhookState }: {
     watchTermCount: number
     activeSourceCount: number
     sourceCount: number
@@ -814,9 +650,9 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
     )
 }
 
-function PublicTiDwmIntake({ handoff, params, tenantId, organizationId, activeSourceCount, sourceCount, caseCount }: {
+export function PublicTiDwmIntake({ handoff, params, tenantId, organizationId, activeSourceCount, sourceCount, caseCount }: {
     handoff: PublicTiHandoffDecodeResult
-    params: ReturnType<typeof useSearchParams>
+    params: Pick<URLSearchParams, 'toString'>
     tenantId: string
     organizationId?: string
     activeSourceCount: number
@@ -956,11 +792,7 @@ function alertWatchlistMatchCount(alerts: PortalAlert[]) {
     return uniqueStrings(alerts.map(alert => alert.matchedTerm.value)).length
 }
 
-function captureRunLabel(runCaptureCount?: number) {
-    return runCaptureCount === undefined ? 'not run' : `${runCaptureCount} captures`
-}
-
-function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAction, actionMessage, onUpdate, onOpenCase, onReplay, onTest, onSend }: {
+export function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAction, actionMessage, onUpdate, onOpenCase, onReplay, onTest, onSend }: {
     alert: PortalAlert
     deliveries: DeliveryItem[]
     sourceCoverage: DwmProductSnapshot['sourceCoverage']
@@ -2063,7 +1895,7 @@ function CaseBrief({ label, value }: { label: string, value: string }) {
     )
 }
 
-function NoCaseWorkspace({ latestCaptures, workflowActions, watchTermCount, dataHealth }: {
+export function NoCaseWorkspace({ latestCaptures, workflowActions, watchTermCount, dataHealth }: {
     latestCaptures: OperationsSnapshot['latestCaptures']
     workflowActions: ReactNode
     watchTermCount: number
