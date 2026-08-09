@@ -138,9 +138,15 @@ function metadataFromJson(json: string, actorName?: string) {
   if (actor === "ransomhouse") {
     const rows = document?.data;
     if (!Array.isArray(rows)) throw new Error("Tor metadata JSON parser found no approved victim listing");
-    const victimNames = safeVictimNames(rows.filter((row: any) => typeof row?.action === "string").map((row: any) => row?.header).filter((name: any) => typeof name === "string"));
+    const candidates = rows.map((row: any) => ({
+      name: row?.header,
+      timestamp: validDmyTimestamp(row?.actionDate),
+      valid: typeof row?.action === "string" && /^[a-f0-9]{40}$/i.test(String(row?.id ?? "")) && String(row?.private) === "false"
+    })).filter((item: any) => item.valid && typeof item.name === "string" && item.timestamp);
+    const victimNames = safeVictimNames(candidates.map((item: any) => item.name));
+    const sourceTimestamp = candidates.filter((item: any) => victimNames.includes(safeMetadataText(item.name))).map((item: any) => item.timestamp).sort((left: string, right: string) => Date.parse(right) - Date.parse(left))[0];
     const title = `${safeMetadataText(actorName ?? "")} victim metadata`.trim().slice(0, 300);
-    return { title, description: victimNames.join(" | ").slice(0, 1_000) || undefined, actorName, parserProfile: "json_data_header", victimName: victimNames[0], victimNames, links: [] };
+    return { title, description: victimNames.join(" | ").slice(0, 1_000) || undefined, actorName, parserProfile: "json_data_header", victimName: victimNames[0], victimNames, sourceTimestamp, links: [] };
   }
   const rows = document?.posts;
   if (!Array.isArray(rows)) throw new Error("Tor metadata JSON parser found no approved victim listing");
@@ -168,6 +174,12 @@ function meta(html: string, name: string): string { const element = [...html.mat
 function time(html: string): string | undefined { const value = html.match(/<time\b[^>]*datetime=["']([^"']+)["']/i)?.[1]?.trim(); return value && /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) && Number.isFinite(Date.parse(value)) ? value : undefined; }
 function validTimestamp(value: unknown): string | undefined { return typeof value === "string" && /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) && Number.isFinite(Date.parse(value)) ? value : undefined; }
 function validEpochTimestamp(value: unknown): string | undefined { const date = typeof value === "number" && Number.isFinite(value) ? new Date(value) : undefined; return date && Number.isFinite(date.getTime()) ? date.toISOString() : undefined; }
+function validDmyTimestamp(value: unknown): string | undefined {
+  const match = typeof value === "string" ? value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/) : undefined;
+  if (!match) return undefined;
+  const date = new Date(Date.UTC(Number(match[3]), Number(match[2]) - 1, Number(match[1])));
+  return date.getUTCFullYear() === Number(match[3]) && date.getUTCMonth() === Number(match[2]) - 1 && date.getUTCDate() === Number(match[1]) ? date.toISOString() : undefined;
+}
 function labeled(text: string | undefined, labels: string[]): string | undefined { if (!text) return undefined; const match = text.match(new RegExp(`(?:${labels.join("|")})\\s*[:\\-]\\s*([^|;\\n]{2,120})`, "i")); return match?.[1]?.trim(); }
 function clean(value: string): string { return value.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'").replace(/\s+/g, " ").trim(); }
 function safeVictimNames(values: string[]): string[] {
