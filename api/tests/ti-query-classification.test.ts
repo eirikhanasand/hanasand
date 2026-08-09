@@ -140,6 +140,28 @@ test('preflights the scraper before a public search and keeps full query timing 
     }
 })
 
+test('returns unavailable after a failed health preflight without issuing the long search request', async () => {
+    const previousScraperBase = process.env.TI_SCRAPER_API_BASE
+    const originalFetch = globalThis.fetch
+    process.env.TI_SCRAPER_API_BASE = 'http://scraper.test'
+    const requestedPaths: string[] = []
+    globalThis.fetch = async input => {
+        const url = new URL(String(input))
+        requestedPaths.push(url.pathname)
+        return new Response(null, { status: 503 })
+    }
+
+    try {
+        const result = await searchThreatIntel({ query: 'APT7654334', preflightHealth: true })
+        expect(result).toMatchObject({ mode: 'unavailable', status: 'unavailable', summary: 'Search unavailable', recentActivity: [] })
+        expect(requestedPaths).toEqual(['/v1/health'])
+    } finally {
+        globalThis.fetch = originalFetch
+        if (previousScraperBase === undefined) delete process.env.TI_SCRAPER_API_BASE
+        else process.env.TI_SCRAPER_API_BASE = previousScraperBase
+    }
+})
+
 test('refreshes a cached pending search before its advertised poll interval', async () => {
     const previousScraperBase = process.env.TI_SCRAPER_API_BASE
     const originalFetch = globalThis.fetch
