@@ -138,6 +138,17 @@ Explicit exclusions from this reassessment:
 - `https://t.me/dsszzi_official` is exact, current, and first-party, but it already exists globally as active production source `src_ssscip_cert_ua_telegram` in `verified_long_lived_sources.json`; no duplicate identity was added.
 - DragonJAR remained parser-positive and current, but this pass found only third-party directory results and the channel's self-description, not an exact link from the first-party publisher site. It remains unregistered until that ownership edge is independently verifiable.
 
+The 2026-08-09T21:41:09Z government/regional iteration accepted two more non-coverage candidates:
+
+- `src_uzbekistan_mia_cyberpolice_telegram` is the exact `https://t.me/cyberpolice_iiv` endpoint listed by Uzbekistan's Ministry of Internal Affairs Cybercrime Department among its official public pages. The shipped adapter parsed 8 current Uzbek posts through 2026-08-09T12:08:46Z. The bounded classifier returned 0 useful items; sanitizer change, sanitizer-idempotence failure, residual email, bot-token, and credential counts were all zero. It remains candidate-only and receives no qualification credit.
+- `src_armenia_hti_telegram` is the exact `https://t.me/HTI_Armenia` endpoint linked by Armenia's Ministry of High-Tech Industry on its National Center for Information Security and Cryptography page. The shipped adapter parsed 8 current Armenian posts through 2026-08-08T18:16:00Z. The bounded classifier returned 0 useful items; every sanitizer and residual count above was zero. The channel includes mixed government technology content, so governed scheduled evidence must establish useful security yield before it can qualify.
+
+Explicit exclusion from this iteration:
+
+- `https://t.me/kzcert` has exact first-party KZ-CERT references but its unauthenticated public preview produced 0 parsed items. It remains excluded; the existing TSARKA `certkznews` candidate is a distinct endpoint and publisher identity.
+
+The candidate-to-production trace was re-audited without changing shared runtime code: file-backed bootstrap imports these rows as global candidate/nonproduction sources; the native canary scheduler admits current verified governed portfolio candidates; parser-retained items can supply immutable automatic-review evidence even when the bounded classifier returns zero; approved review evidence makes later current reviewed items useful; and two distinct retained useful run-linked cycles trigger the existing qualification state transition. Registration is therefore only the first step. Integration/deployment while verification is current, natural scheduled cycles, review approval, and restart/API/DB/UI reconciliation remain required before any row counts.
+
 ## One iteration
 
 1. Measure registered, executable, qualifying, current-useful, stale, failed, and backoff counts from PostgreSQL and the source-operations API.

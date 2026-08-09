@@ -1,10 +1,10 @@
 {
-  "version": 18,
+  "version": 19,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-08-09T21:34:45.911Z",
+  "generatedAt": "2026-08-09T21:41:09.855Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 47,
+  "sourceCount": 49,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -4610,6 +4610,86 @@
         "publisher": { "name": "S2W", "country": "KR", "homepage": "https://www.s2w.inc/", "trustBasis": "S2W's first-party launch notice links the exact public Telegram channel and describes its expert-curated CTI scope" },
         "tier": "tier_2", "approvalScope": "official_public_web_preview", "license": "Public publisher communications; source attribution retained.", "legalBasis": "Unauthenticated public publisher channel used for defensive security research.", "reliability": 0.88, "intelligenceValue": 0.78, "retentionClass": "standard", "analystOwner": "source-ops",
         "coverage": { "topics": ["dark web", "ransomware", "cybercrime", "victim reporting"], "actors": [], "aliases": [], "industries": ["technology", "finance", "government", "critical infrastructure"], "regions": ["South Korea", "East Asia", "Global"], "countries": ["South Korea"], "languages": ["en"], "queryPatterns": ["ransomware", "dark web", "victim", "threat actor"] },
+        "collection": { "freshnessTargetSeconds": 3600, "collectionSlaSeconds": 1800, "budgetClass": "normal", "crawlCadenceSeconds": 1800 }, "adapterCompatibility": ["telegram_public"], "rollback": {}
+      }
+    },
+    {
+      "id": "src_uzbekistan_mia_cyberpolice_telegram",
+      "name": "Uzbekistan MIA Cyber Police public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/cyberpolice_iiv",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.95,
+      "language": "uz",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Uzbek-language cybercrime warnings and defensive guidance from the exact channel published by Uzbekistan's Ministry of Internal Affairs Cybercrime Department. Collect only unauthenticated public-preview text with attribution; do not join, authenticate, interact, or download media, files, samples, credentials, or victim data.",
+      "governance": { "approvalRequired": true, "approvalState": "approved", "approvalScope": "official_public_web_preview", "metadataOnly": false, "approvedAt": "2026-08-09T21:41:09.855Z", "approvedBy": "source-review:publisher-owned-reference", "policyVersion": "collection-policy:v1" },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": ["cert_government", "cybercrime_reporting", "phishing_reporting", "regional_language"],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "cyberpolice_iiv",
+        "verifiedSourceId": "src_uzbekistan_mia_cyberpolice_telegram",
+        "publisherReference": "https://gov.uz/oz/iiv/news/view/198883",
+        "ownershipVerifiedAt": "2026-08-09T21:41:09.855Z",
+        "activityVerifiedAt": "2026-08-09T21:41:09.855Z",
+        "activityWindowSeconds": 2592000,
+        "topics": ["cybercrime", "phishing", "online fraud", "account security", "defensive guidance"],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": { "verifiedAt": "2026-08-09T21:41:09.855Z", "outcome": "content_parsed", "observedItemCount": 8, "observedUsefulItemCount": 0, "httpStatus": 200, "contentType": "text/html; charset=utf-8", "adapter": "telegram_public", "parserVersion": "telegram-public-preview:v1", "publisherReference": "https://gov.uz/oz/iiv/news/view/198883", "legalBasisVerifiedAt": "2026-08-09T21:41:09.855Z", "latestPublishedAt": "2026-08-09T12:08:46+00:00" }
+      },
+      "catalog": {
+        "canonicalId": "government:uz:mia-cybercrime:telegram",
+        "publisher": { "name": "Ministry of Internal Affairs of the Republic of Uzbekistan", "country": "UZ", "homepage": "https://gov.uz/oz/iiv", "trustBasis": "the ministry's Cybercrime Department notice lists the exact channel among its official public pages" },
+        "tier": "tier_1", "approvalScope": "official_public_web_preview", "license": "Public government communications; source attribution retained.", "legalBasis": "Unauthenticated public government channel used for defensive security research.", "reliability": 0.95, "intelligenceValue": 0.78, "retentionClass": "standard", "analystOwner": "source-ops",
+        "coverage": { "topics": ["cybercrime", "phishing", "online fraud", "account security"], "actors": [], "aliases": [], "industries": ["government", "finance", "consumer"], "regions": ["Uzbekistan", "Central Asia"], "countries": ["Uzbekistan"], "languages": ["uz"], "queryPatterns": ["kiber", "firibgarlik", "fishing", "xavfsizlik"] },
+        "collection": { "freshnessTargetSeconds": 3600, "collectionSlaSeconds": 1800, "budgetClass": "normal", "crawlCadenceSeconds": 1800 }, "adapterCompatibility": ["telegram_public"], "rollback": {}
+      }
+    },
+    {
+      "id": "src_armenia_hti_telegram",
+      "name": "Armenia High-Tech Industry public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/HTI_Armenia",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.9,
+      "language": "hy",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Armenian-language information-security, cryptography, and technology guidance from the exact channel linked by Armenia's Ministry of High-Tech Industry. Collect only unauthenticated public-preview text with attribution; do not join, authenticate, interact, or download media, files, samples, credentials, or personal data.",
+      "governance": { "approvalRequired": true, "approvalState": "approved", "approvalScope": "official_public_web_preview", "metadataOnly": false, "approvedAt": "2026-08-09T21:41:09.855Z", "approvedBy": "source-review:publisher-owned-reference", "policyVersion": "collection-policy:v1" },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": ["cert_government", "information_security", "cryptography", "regional_language"],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "HTI_Armenia",
+        "verifiedSourceId": "src_armenia_hti_telegram",
+        "publisherReference": "https://old.hightech.gov.am/en/national-center-for-information-security-and-cryptography",
+        "ownershipVerifiedAt": "2026-08-09T21:41:09.855Z",
+        "activityVerifiedAt": "2026-08-09T21:41:09.855Z",
+        "activityWindowSeconds": 2592000,
+        "topics": ["information security", "cryptography", "cybersecurity guidance", "digital resilience"],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": { "verifiedAt": "2026-08-09T21:41:09.855Z", "outcome": "content_parsed", "observedItemCount": 8, "observedUsefulItemCount": 0, "httpStatus": 200, "contentType": "text/html; charset=utf-8", "adapter": "telegram_public", "parserVersion": "telegram-public-preview:v1", "publisherReference": "https://old.hightech.gov.am/en/national-center-for-information-security-and-cryptography", "legalBasisVerifiedAt": "2026-08-09T21:41:09.855Z", "latestPublishedAt": "2026-08-08T18:16:00+00:00" }
+      },
+      "catalog": {
+        "canonicalId": "government:am:hti-information-security:telegram",
+        "publisher": { "name": "Ministry of High-Tech Industry of the Republic of Armenia", "country": "AM", "homepage": "https://hightech.gov.am/", "trustBasis": "the ministry's National Center for Information Security and Cryptography page links the exact public Telegram channel" },
+        "tier": "tier_1", "approvalScope": "official_public_web_preview", "license": "Public government communications; source attribution retained.", "legalBasis": "Unauthenticated public government channel used for defensive security research.", "reliability": 0.9, "intelligenceValue": 0.7, "retentionClass": "standard", "analystOwner": "source-ops",
+        "coverage": { "topics": ["information security", "cryptography", "cybersecurity guidance", "digital resilience"], "actors": [], "aliases": [], "industries": ["government", "technology", "critical infrastructure"], "regions": ["Armenia", "South Caucasus"], "countries": ["Armenia"], "languages": ["hy"], "queryPatterns": ["կիբեռ", "տեղեկատվական անվտանգություն", "գաղտնագրություն", "անվտանգ"] },
         "collection": { "freshnessTargetSeconds": 3600, "collectionSlaSeconds": 1800, "budgetClass": "normal", "crawlCadenceSeconds": 1800 }, "adapterCompatibility": ["telegram_public"], "rollback": {}
       }
     }
