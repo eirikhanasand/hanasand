@@ -1111,8 +1111,8 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
     try {
         deliveries = await triggerDwmAlertWebhookNotification(userId, { ...input.alert, ...input, orgId, orgName }, input)
     } catch (error) {
-        const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code || '') : ''
-        if (code !== 'missing_timestamp') throw error
+        if (!(typeof error === 'object' && error && 'blockers' in error)) throw error
+        const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code || 'delivery_contract_invalid') : 'delivery_contract_invalid'
         return res.status(400).send({
             error: error instanceof Error ? error.message : 'Webhook delivery contract is invalid.',
             code,

@@ -7329,12 +7329,15 @@ export async function deliverDwmAlertNotification(
         destinations: candidateDestinations,
     })
     const normalizedPlanAlert = normalizeAlert(plan.alert)
-    if (!normalizedPlanAlert.eventTimestamp) {
-        const error = new Error('Webhook delivery requires an evidence-backed alert timestamp.')
-        Object.assign(error, {
-            code: 'missing_timestamp',
-            blockers: [{ code: 'missing_timestamp', path: 'alert.eventTimestamp', message: error.message, blocking: true }],
-        })
+    const deliveryBlockers = deliveryAttemptContractBlockers({
+        input,
+        plan,
+        alert: normalizedPlanAlert,
+        watchlist: normalizeWatchlist(plan.alert.watchlist),
+    })
+    if (deliveryBlockers.length) {
+        const error = new Error(deliveryBlockers[0].message)
+        Object.assign(error, { code: deliveryBlockers[0].code, blockers: deliveryBlockers })
         throw error
     }
 

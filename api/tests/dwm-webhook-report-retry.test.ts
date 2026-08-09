@@ -750,7 +750,13 @@ function deliveryInput(dedupeKey: string, dryRun: boolean) {
             tenantId: 'org_1',
             dedupeKey,
             title: 'Evidence-backed report delivery',
+            severity: 'medium',
+            sourceFamily: 'clear_web',
+            evidenceCount: 1,
+            provenance: { captureIds: ['capture_1'], sourceIds: ['source_1'] },
             firstSeenAt: '2026-07-23T10:00:00.000Z',
+            casePath: '/dashboard/dwm?alert=alert_1',
+            watchlist: { id: 'watch_1', terms: ['example.com'] },
         },
     }
 }

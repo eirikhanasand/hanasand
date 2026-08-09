@@ -406,7 +406,13 @@ function deliveryInput(lineage: string, dryRun: boolean) {
             tenantId: orgId,
             dedupeKey: report.exportChecksum,
             title: 'Evidence-backed report delivery',
+            severity: 'medium',
+            sourceFamily: 'clear_web',
+            evidenceCount: 1,
+            provenance: { captureIds: [`capture_${lineage}`], sourceIds: [`source_${lineage}`] },
             firstSeenAt: '2026-07-23T10:00:00.000Z',
+            casePath: `/dashboard/dwm/cases/case_${lineage}`,
+            watchlist: { id: `watchlist_${lineage}`, terms: ['example.com'] },
             report,
         },
     }
