@@ -65,14 +65,14 @@ export default async function getStatus(): Promise<ServiceStatus> {
 function normalizeStatus(payload: Partial<ServiceStatus>): ServiceStatus {
     const checks = Array.isArray(payload.checks)
         ? payload.checks.map((check) => ({
-            service: check.service || 'system',
-            check_name: check.check_name || 'Status',
+            service: check.service || '',
+            check_name: check.check_name || '',
             status: check.status === 'up' || check.status === 'degraded' || check.status === 'down'
                 ? check.status
                 : 'degraded',
             latency_ms: Number(check.latency_ms) || 0,
             message: check.message || null,
-            checked_at: check.checked_at || new Date().toISOString(),
+            checked_at: check.checked_at || '',
             uptime_30d: check.uptime_30d || 'metering',
         }))
         : []
@@ -81,7 +81,7 @@ function normalizeStatus(payload: Partial<ServiceStatus>): ServiceStatus {
         overall: payload.overall === 'up' || payload.overall === 'degraded' || payload.overall === 'down'
             ? payload.overall
             : checks.some((check) => check.status === 'down') ? 'down' : checks.some((check) => check.status === 'degraded') ? 'degraded' : 'up',
-        generated_at: payload.generated_at || new Date().toISOString(),
+        generated_at: payload.generated_at || '',
         checks,
         history: normalizeHistory((payload as ServiceStatus).history),
         incidents: normalizeIncidents((payload as ServiceStatus).incidents),
@@ -95,9 +95,9 @@ function normalizeHistory(value: unknown): ServiceHistoryDay[] {
         if (!row || typeof row !== 'object') return []
         const item = row as Partial<ServiceHistoryDay>
         return [{
-            service: item.service || 'system',
-            check_name: item.check_name || 'Status',
-            date: item.date || new Date().toISOString().slice(0, 10),
+            service: item.service || '',
+            check_name: item.check_name || '',
+            date: item.date || '',
             status: item.status === 'up' || item.status === 'degraded' || item.status === 'down' ? item.status : 'up',
             incident_ids: Array.isArray(item.incident_ids) ? item.incident_ids.map(String) : [],
         }]
@@ -112,17 +112,17 @@ function normalizeIncidents(value: unknown): ServiceIncident[] {
         const item = row as Partial<ServiceIncident>
         return [{
             id: item.id || '',
-            service: item.service || 'system',
-            check_name: item.check_name || 'Status',
+            service: item.service || '',
+            check_name: item.check_name || '',
             title: item.title || 'Service incident',
             impact: item.impact === 'Outage' ? 'Outage' : 'Instability',
             status: item.status === 'investigating' ? 'investigating' : 'resolved',
-            started_at: item.started_at || new Date().toISOString(),
+            started_at: item.started_at || '',
             resolved_at: item.resolved_at || null,
             summary: item.summary || 'Automated monitors detected a service issue.',
             cause: item.cause || item.summary || 'Automated monitor evidence is attached to this incident.',
             updates: Array.isArray(item.updates) ? item.updates.map(update => ({
-                at: String(update.at || item.started_at || new Date().toISOString()),
+                at: String(update.at || item.started_at || ''),
                 status: String(update.status || 'update'),
                 message: String(update.message || item.summary || 'Monitor update.'),
             })) : [],

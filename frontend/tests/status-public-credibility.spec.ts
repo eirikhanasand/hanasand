@@ -193,6 +193,27 @@ test('status fetch failures preserve the unavailable contract for transport and 
     }
 })
 
+test('status normalization preserves missing timestamps and labels as unknown', async () => {
+    const originalFetch = globalThis.fetch
+    try {
+        globalThis.fetch = (async () => new Response(JSON.stringify({
+            overall: 'up',
+            checks: [{ status: 'up', latency_ms: 1 }],
+            history: [{ status: 'up' }],
+            incidents: [{ id: 'incident-1', title: 'Observed incident' }],
+        }), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch
+
+        await expect(getStatus()).resolves.toMatchObject({
+            generated_at: '',
+            checks: [{ service: '', check_name: '', checked_at: '' }],
+            history: [{ service: '', check_name: '', date: '' }],
+            incidents: [{ started_at: '', updates: [] }],
+        })
+    } finally {
+        globalThis.fetch = originalFetch
+    }
+})
+
 test('public status page renders unverified coverage without fake uptime', async () => {
     const source = await readFile(path.join(root, 'src/app/status/pageClient.tsx'), 'utf8')
 
