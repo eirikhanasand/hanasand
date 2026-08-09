@@ -596,7 +596,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             'duplicateCount', COALESCE(sum(source_health.duplicate_count), 0),
             'lastSuccessAt', max(source_health.checked_at) FILTER (WHERE source_health.success),
             'lastUsefulAt', max(source_health.checked_at) FILTER (WHERE source_health.success AND source_health.useful AND source_health.capture_count > 0),
-            'latest', (array_agg(source_health.record ORDER BY source_health.checked_at DESC, source_health.id DESC))[1]
+            'latest', (
+              SELECT latest_health.record
+              FROM threat_intel.source_health AS latest_health
+              WHERE latest_health.source_id = page.id
+                AND latest_health.tenant_id IS NOT DISTINCT FROM page.tenant_id
+              ORDER BY latest_health.checked_at DESC, latest_health.id DESC
+              LIMIT 1
+            )
           ) AS stats
           FROM threat_intel.source_health
           WHERE source_health.source_id = page.id
