@@ -346,28 +346,32 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return this.queryRecordsByIds("evidence_links", "subject_id", subjectIds, tenantId, allTenants);
   }
 
-  async queryUsefulSourceHealth(input: { tenantId?: string; allTenants?: boolean } = {}) {
-    const rows = input.allTenants
-      ? await this.sql`
-          SELECT record
-          FROM threat_intel.source_health
-          WHERE useful = TRUE AND capture_count > 0
-          ORDER BY checked_at DESC
-        `
+  async queryAutomaticReviewSourceHealth(input: { tenantId?: string; allTenants?: boolean } = {}) {
+    const tenantWhere = input.allTenants
+      ? "TRUE"
       : input.tenantId === undefined
-        ? await this.sql`
-            SELECT record
-            FROM threat_intel.source_health
-            WHERE tenant_id IS NULL AND useful = TRUE AND capture_count > 0
-            ORDER BY checked_at DESC
-          `
-        : await this.sql`
-            SELECT record
-            FROM threat_intel.source_health
-            WHERE tenant_id IS NOT DISTINCT FROM ${input.tenantId}
-              AND useful = TRUE AND capture_count > 0
-            ORDER BY checked_at DESC
-          `;
+        ? "health.tenant_id IS NULL"
+        : "health.tenant_id IS NOT DISTINCT FROM $1::text";
+    const rows = await this.sql.unsafe(`
+      SELECT health.record
+      FROM threat_intel.source_health AS health
+      WHERE ${tenantWhere}
+        AND health.success = TRUE
+        AND health.capture_count > 0
+        AND health.collection_run_id IS NOT NULL
+        AND (
+          health.useful = TRUE
+          OR EXISTS (
+            SELECT 1
+            FROM threat_intel.captures AS capture
+            WHERE capture.tenant_id IS NOT DISTINCT FROM health.tenant_id
+              AND capture.source_id = health.source_id
+              AND capture.record->'metadata'->>'runId' = health.collection_run_id
+              AND capture.record->'metadata'->>'sourceReviewCandidate' = 'true'
+          )
+        )
+      ORDER BY health.checked_at DESC
+    `, input.allTenants || input.tenantId === undefined ? [] : [input.tenantId]);
     return rows.map(readRecord);
   }
 
@@ -1018,6 +1022,28 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         'retainedSourceCount', count(*) FILTER (WHERE collection_executable),
         'inactiveSourceCount', count(*) FILTER (WHERE NOT collection_executable),
         'activeSourceCount', count(*) FILTER (WHERE collection_executable),
+        'qualifyingClearWebSourceCount', count(*) FILTER (
+          WHERE collection_executable
+            AND COALESCE((sources.record->>'countsAsCoverage')::boolean, FALSE)
+            AND COALESCE((sources.record->'metadata'->>'productionCollection')::boolean, FALSE)
+            AND sources.record->'metadata'->>'sourcePortfolioQualificationState' = 'sustained_productive'
+            AND source_type IN ('rss', 'api', 'json_api', 'blog')
+        ),
+        'qualifyingLawfulDarkWebSourceCount', count(*) FILTER (
+          WHERE collection_executable
+            AND COALESCE((sources.record->>'countsAsCoverage')::boolean, FALSE)
+            AND COALESCE((sources.record->'metadata'->>'productionCollection')::boolean, FALSE)
+            AND sources.record->'metadata'->>'sourcePortfolioQualificationState' = 'sustained_productive'
+            AND source_type IN ('tor_metadata', 'darkweb_metadata')
+            AND COALESCE((sources.record->'governance'->>'metadataOnly')::boolean, (sources.record->'metadata'->>'captureMode') = 'metadata_only')
+        ),
+        'qualifyingPublicTelegramSourceCount', count(*) FILTER (
+          WHERE collection_executable
+            AND COALESCE((sources.record->>'countsAsCoverage')::boolean, FALSE)
+            AND COALESCE((sources.record->'metadata'->>'productionCollection')::boolean, FALSE)
+            AND sources.record->'metadata'->>'sourcePortfolioQualificationState' = 'sustained_productive'
+            AND source_type = 'telegram_public'
+        ),
         'measurementState', 'measured',
         'observedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
         'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),

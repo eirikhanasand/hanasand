@@ -1379,8 +1379,8 @@ async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants =
     if (task.subject?.incidentId) incidentIds.add(task.subject.incidentId);
   }
   const [health, claimEvidence, evidenceLinks] = await Promise.all([
-    typeof store.queryUsefulSourceHealth === "function"
-      ? store.queryUsefulSourceHealth({ tenantId, allTenants })
+    typeof store.queryAutomaticReviewSourceHealth === "function"
+      ? store.queryAutomaticReviewSourceHealth({ tenantId, allTenants })
       : load("sourceHealth", "listSourceHealthObservations"),
     typeof store.queryClaimEvidenceBySubjectIds === "function"
       ? store.queryClaimEvidenceBySubjectIds(claimIds, tenantId, allTenants)
