@@ -10209,6 +10209,8 @@ function destinationLifecycleState({
         && health.lastFailure.errorClass !== 'live_delivery_disabled'
     )
     const verified = health.lastTest.status === 'dry_run' || health.lastTest.status === 'delivered'
+    const liveVerified = health.lastTest.status === 'delivered'
+    const liveDeliveryUnverified = health.enabled && endpointPresent && !liveVerified
     const testRequired = health.enabled && endpointPresent && (!verified || secretRotated)
     const states = [
         health.enabled ? null : 'disabled',
@@ -10216,7 +10218,8 @@ function destinationLifecycleState({
         revokedOwner ? 'revoked_owner' : null,
         secretRotated ? 'secret_rotated' : null,
         testRequired ? 'test_required' : null,
-        health.enabled && endpointPresent && verified && !failed && !revokedOwner && !secretRotated ? 'active' : null,
+        liveDeliveryUnverified ? 'live_delivery_unverified' : null,
+        health.enabled && endpointPresent && liveVerified && !failed && !revokedOwner && !secretRotated ? 'active' : null,
     ].filter(Boolean) as string[]
     const primary = states[0] || (health.enabled ? 'test_required' : 'disabled')
     const blockers = [
@@ -10225,6 +10228,7 @@ function destinationLifecycleState({
         revokedOwner ? lifecycleStateBlocker('revoked_owner', 'Destination was created by a user who no longer owns this destination record.', health.destinationId, true) : null,
         secretRotated ? lifecycleStateBlocker('secret_rotated', 'Webhook URL or secret reference changed after the last verified dry-run test.', health.destinationId, false) : null,
         testRequired ? lifecycleStateBlocker('test_required', 'Run a no-network dry-run test before relying on this destination.', health.destinationId, false) : null,
+        liveDeliveryUnverified ? lifecycleStateBlocker('live_delivery_unverified', 'A successful live delivery has not been recorded for this destination.', health.destinationId, false) : null,
     ].filter(Boolean) as ReturnType<typeof lifecycleStateBlocker>[]
 
     return {
@@ -10237,6 +10241,8 @@ function destinationLifecycleState({
         revokedOwner: states.includes('revoked_owner'),
         secretRotated: states.includes('secret_rotated'),
         testRequired: states.includes('test_required'),
+        liveDeliveryUnverified: states.includes('live_delivery_unverified'),
+        liveVerified,
         verified,
         secretState: endpointPresent ? 'redacted' : 'missing',
         ownerState: revokedOwner ? 'revoked_owner' : 'current',
@@ -10264,7 +10270,7 @@ function destinationLifecycleState({
 }
 
 function lifecycleStateBlocker(
-    code: 'disabled' | 'failed' | 'revoked_owner' | 'secret_rotated' | 'test_required',
+    code: 'disabled' | 'failed' | 'revoked_owner' | 'secret_rotated' | 'test_required' | 'live_delivery_unverified',
     message: string,
     destinationId: string | null,
     blocking = false
@@ -10332,9 +10338,11 @@ function destinationLifecycleReadinessReceipt({
                 ? 'review_destination'
                 : health.retry.retryable
                     ? 'retry_delivery'
-                    : health.ready
-                        ? 'ready'
-                        : 'inspect_destination'
+                    : lifecycleState.liveDeliveryUnverified
+                        ? 'deliver_live_alert'
+                        : health.ready
+                            ? 'ready'
+                            : 'inspect_destination'
     const nextDeliveryState = !health.enabled
         ? 'disabled'
         : terminalFailure
@@ -10343,9 +10351,11 @@ function destinationLifecycleReadinessReceipt({
                 ? 'retry_scheduled'
                 : lifecycleState.testRequired
                     ? 'test_required'
-                    : health.ready
-                        ? 'ready'
-                        : 'blocked'
+                    : lifecycleState.liveDeliveryUnverified
+                        ? 'live_delivery_unverified'
+                        : health.ready
+                            ? 'ready'
+                            : 'blocked'
 
     return {
         schemaVersion: 'dwm.webhook.destination_lifecycle_readiness_receipt.v1',
@@ -10356,7 +10366,7 @@ function destinationLifecycleReadinessReceipt({
             health: health.health,
             nextDeliveryState,
             readyForDryRun: health.enabled && lifecycleState.secretState === 'redacted',
-            readyForLive: health.ready && health.liveDeliveryEnabled && blockingCodes.length === 0,
+            readyForLive: lifecycleState.liveVerified && health.liveDeliveryEnabled && blockingCodes.length === 0,
             liveDeliveryEnabled: health.liveDeliveryEnabled,
         },
         nextAction,
