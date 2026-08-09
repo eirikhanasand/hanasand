@@ -401,7 +401,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         ORDER BY created_at ASC, id ASC`, allTenants ? [] : [tenantId]),
       taskIdsQuery
     ]);
-    const tasksAndEvents = [...taskRows, ...eventRows].map(readRecord);
+    const tasksAndEvents = [...taskRows, ...eventRows].map(readRecord).filter(isRecord);
     const tasks = tasksAndEvents.filter((record: any) => record.recordKind === 'automatic_intelligence_review_task');
     const claimIds = tasks.map((task: any) => task.subject?.claimId).filter(Boolean);
     const incidentIds = tasks.map((task: any) => task.subject?.incidentId).filter(Boolean);
@@ -3011,6 +3011,10 @@ const structuredTables = {
 function readRecord(row: any): any {
   if (typeof row.record === "string") return JSON.parse(row.record);
   return row.record;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function readCaptureRecord(row: any): any {

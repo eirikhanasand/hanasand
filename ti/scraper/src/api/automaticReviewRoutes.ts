@@ -1419,6 +1419,7 @@ function containsLabel(text: string, label: string) {
 
 function buildReviewIndex(store: any): ReviewIndex {
   const workflow = store.listAnalystMetadataReviewTasks?.() ?? [];
+  const workflowRecords = workflow.filter(isReviewRecord);
   const claims = store.listIntelligenceClaims?.() ?? [];
   const incidents = store.listIncidents?.() ?? [];
   const captures = store.listCaptures?.() ?? [];
@@ -1428,9 +1429,9 @@ function buildReviewIndex(store: any): ReviewIndex {
   const evidenceLinks = store.listEvidenceLinks?.() ?? [];
   const reviews = store.listClaimReviews?.() ?? [];
   return {
-    tasks: workflow.filter((item: any) => item.recordKind === TASK_KIND),
-    existingTaskIds: new Set(workflow.filter((item: any) => item.recordKind === TASK_KIND).map((item: any) => item.id)),
-    events: workflow.filter((item: any) => item.recordKind === EVENT_KIND),
+    tasks: workflowRecords.filter((item: any) => item.recordKind === TASK_KIND),
+    existingTaskIds: new Set(workflowRecords.filter((item: any) => item.recordKind === TASK_KIND).map((item: any) => item.id)),
+    events: workflowRecords.filter((item: any) => item.recordKind === EVENT_KIND),
     claims,
     incidents,
     sources,
@@ -1505,10 +1506,11 @@ async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants =
 
 function buildReviewIndexFromCollections(collections: ReviewIndexCollections): ReviewIndex {
   const { tasksAndEvents, claims, incidents, captures, sources, health, claimEvidence, evidenceLinks, reviews, actorIdentities } = collections;
+  const workflowRecords = tasksAndEvents.filter(isReviewRecord);
   return {
-    tasks: tasksAndEvents.filter((item: any) => item.recordKind === TASK_KIND),
-    existingTaskIds: new Set((collections.taskIds ?? tasksAndEvents.filter((item: any) => item.recordKind === TASK_KIND).map((item: any) => item.id)).map(String)),
-    events: tasksAndEvents.filter((item: any) => item.recordKind === EVENT_KIND),
+    tasks: workflowRecords.filter((item: any) => item.recordKind === TASK_KIND),
+    existingTaskIds: new Set((collections.taskIds ?? workflowRecords.filter((item: any) => item.recordKind === TASK_KIND).map((item: any) => item.id)).map(String)),
+    events: workflowRecords.filter((item: any) => item.recordKind === EVENT_KIND),
     claims,
     incidents,
     sources,
@@ -1523,6 +1525,10 @@ function buildReviewIndexFromCollections(collections: ReviewIndexCollections): R
     reviewsByClaim: grouped(reviews, "claimId"),
     actorIdentities
   };
+}
+
+function isReviewRecord(item: unknown): item is any {
+  return Boolean(item && typeof item === "object" && !Array.isArray(item));
 }
 
 function linkedEvidence(index: ReviewIndex, subject: AutomaticReviewTask["subject"], selectedEvidenceProvenance?: AutomaticReviewTask["selectedEvidenceProvenance"], tenantId = subjectTenant(index, subject)) {
