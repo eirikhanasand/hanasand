@@ -76,7 +76,7 @@ test('organization API-key proxy lists, creates, revokes, and preserves authoriz
 
 test('organization watchlist save mirrors the same scope and failed sync is explicit and retryable', async() => {
     const scraperCalls = []
-    let mirrorFails = true
+    let mirrorState = 'failed'
     globalThis.fetch = async(input, init) => {
         const url = String(input)
         if (url === 'http://auth.test/api/organizations/org-review/watchlists' || url === 'http://auth.test/api/organizations/org-review/watchlists/term-1') {
@@ -84,7 +84,8 @@ test('organization watchlist save mirrors the same scope and failed sync is expl
         }
         if (url === 'http://scraper.test/v1/dwm/watchlists') {
             scraperCalls.push({ headers: new Headers(init?.headers), body: JSON.parse(String(init?.body)) })
-            if (mirrorFails) throw new Error('scraper unavailable')
+            if (mirrorState === 'failed') throw new Error('scraper unavailable')
+            if (mirrorState === 'empty') return Response.json({ watchlist: { id: 'org_term-1' }, alertRebuild: { savedAlertCount: 0, alertIds: [] } }, { status: 201 })
             return Response.json({ watchlist: { id: 'org_term-1' }, alertRebuild: { savedAlertCount: 1, alertIds: ['alert_org_review'] } }, { status: 201 })
         }
         throw new Error(`Unexpected fetch: ${url}`)
@@ -105,7 +106,15 @@ test('organization watchlist save mirrors the same scope and failed sync is expl
     assert.equal(failedPayload.retryable, true)
     assert.equal(failedPayload.watchlistItem.id, 'term-1')
 
-    mirrorFails = false
+    mirrorState = 'empty'
+    const empty = await POST(request(), context)
+    const emptyPayload = await empty.json()
+    assert.equal(empty.status, 201)
+    assert.equal(emptyPayload.error.code, 'dwm_alert_rebuild_empty')
+    assert.equal(emptyPayload.retryable, false)
+    assert.equal(emptyPayload.dwmAlertBridge.ok, false)
+
+    mirrorState = 'success'
     const itemRoute = await import('../src/app/api/organizations/[id]/watchlists/[itemId]/route')
     const retried = await itemRoute.PUT(new NextRequest('http://frontend.test/api/organizations/org-review/watchlists/term-1', {
         method: 'PUT',
@@ -116,7 +125,7 @@ test('organization watchlist save mirrors the same scope and failed sync is expl
     assert.equal(retried.status, 201)
     assert.equal(retriedPayload.dwmAlertBridge.ok, true)
     assert.equal(retriedPayload.dwmAlertBridge.watchlistId, 'org_term-1')
-    assert.equal(scraperCalls.length, 2)
+    assert.equal(scraperCalls.length, 3)
     for (const call of scraperCalls) {
         assert.equal(call.headers.get('x-tenant-id'), 'org-review')
         assert.equal(call.headers.get('x-organization-id'), 'org-review')

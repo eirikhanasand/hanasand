@@ -114,15 +114,24 @@ export async function proxyOrganizationWatchlistMutation(request: NextRequest, p
 
     const dwmAlertBridge = await mirrorOrganizationWatchlistToDwm(request, input.organizationId, organizationResult.payload)
     if (!dwmAlertBridge.ok) {
+        const rebuildStatus = 'rebuildStatus' in dwmAlertBridge && typeof dwmAlertBridge.rebuildStatus === 'string'
+            ? dwmAlertBridge.rebuildStatus
+            : 'failed'
+        const completedEmpty = rebuildStatus === 'completed'
+        const pending = ['queued', 'running', 'pending'].includes(rebuildStatus)
         return NextResponse.json({
             ...organizationResult.payload,
             error: {
-                code: 'dwm_watchlist_sync_failed',
-                message: 'The watchlist term was saved, but DWM sync failed. Sync the saved term again to reconcile it.',
+                code: completedEmpty ? 'dwm_alert_rebuild_empty' : pending ? 'dwm_alert_rebuild_pending' : 'dwm_watchlist_sync_failed',
+                message: completedEmpty
+                    ? 'The watchlist term was saved, but no persisted alert matched the retained evidence.'
+                    : pending
+                        ? 'The watchlist term was saved; DWM alert rebuilding is still in progress.'
+                        : 'The watchlist term was saved, but DWM sync failed. Sync the saved term again to reconcile it.',
             },
-            retryable: true,
+            retryable: !completedEmpty,
             dwmAlertBridge,
-        }, { status: 502, headers: { 'cache-control': 'no-store' } })
+        }, { status: completedEmpty ? organizationResult.status : pending ? 202 : 502, headers: { 'cache-control': 'no-store' } })
     }
     return NextResponse.json({ ...organizationResult.payload, dwmAlertBridge }, { status: organizationResult.status, headers: { 'cache-control': 'no-store' } })
 }
@@ -296,6 +305,7 @@ export async function mirrorOrganizationWatchlistToDwmResult(input: {
     return {
         ok: mirrors.every(item => item.ok),
         status: mirrors.every(item => item.ok) ? first.status : 502,
+        rebuildStatus: mirrors.find(item => item.rebuildStatus !== 'completed')?.rebuildStatus ?? 'completed',
         watchlistId: first.watchlistId,
         watchlistStatus: first.watchlistStatus,
         savedAlertCount: mirrors.reduce((total, item) => total + item.savedAlertCount, 0),
