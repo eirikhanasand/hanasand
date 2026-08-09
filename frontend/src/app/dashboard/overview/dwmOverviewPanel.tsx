@@ -7,12 +7,13 @@ import type { DwmProductSnapshot } from '@/utils/dwm/product'
 
 type LoadState = { status: 'loading' } | { status: 'ready', snapshot: DwmProductSnapshot } | { status: 'error', message: string }
 
-export default function DwmOverviewPanel() {
+export default function DwmOverviewPanel({ organizationId }: { organizationId?: string }) {
     const [state, setState] = useState<LoadState>({ status: 'loading' })
 
     useEffect(() => {
         const controller = new AbortController()
-        fetch('/api/dwm/product', { cache: 'no-store', signal: controller.signal })
+        const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''
+        fetch(`/api/dwm/product${query}`, { cache: 'no-store', signal: controller.signal })
             .then(async response => {
                 const body = await response.json().catch(() => null) as DwmProductSnapshot | { error?: { message?: string } } | null
                 const errorMessage = body && 'error' in body ? body.error?.message : undefined
@@ -24,10 +25,11 @@ export default function DwmOverviewPanel() {
                 setState({ status: 'error', message: error instanceof Error ? error.message : 'Tenant monitoring is unavailable.' })
             })
         return () => controller.abort()
-    }, [])
+    }, [organizationId])
 
-    if (state.status === 'loading') return <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm' aria-label='Organization monitoring'><div className='flex items-center gap-2 text-sm text-ui-muted'><Loader2 className='h-4 w-4 animate-spin text-ui-primary' />Loading organization monitoring…</div></section>
-    if (state.status === 'error') return <section className='rounded-lg border border-ui-warning/40 bg-ui-panel p-4 shadow-sm' aria-label='Organization monitoring'><div className='flex items-center gap-2 text-sm font-semibold text-ui-text'><AlertTriangle className='h-4 w-4 text-ui-warning' />Organization monitoring needs review</div><p className='mt-2 text-sm text-ui-muted'>{state.message}</p><Link href='/dashboard/dwm' className='mt-3 inline-flex text-sm font-semibold text-ui-primary hover:underline'>Open DWM</Link></section>
+    const scopeLabel = organizationId ? 'Organization monitoring' : 'Personal monitoring'
+    if (state.status === 'loading') return <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm' aria-label={scopeLabel}><div className='flex items-center gap-2 text-sm text-ui-muted'><Loader2 className='h-4 w-4 animate-spin text-ui-primary' />Loading {scopeLabel.toLowerCase()}…</div></section>
+    if (state.status === 'error') return <section className='rounded-lg border border-ui-warning/40 bg-ui-panel p-4 shadow-sm' aria-label={scopeLabel}><div className='flex items-center gap-2 text-sm font-semibold text-ui-text'><AlertTriangle className='h-4 w-4 text-ui-warning' />{scopeLabel} needs review</div><p className='mt-2 text-sm text-ui-muted'>{state.message}</p><Link href={organizationId ? `/dashboard/dwm?organizationId=${encodeURIComponent(organizationId)}` : '/dashboard/dwm'} className='mt-3 inline-flex text-sm font-semibold text-ui-primary hover:underline'>Open DWM</Link></section>
 
     const { snapshot } = state
     const healthySources = snapshot.sourceCoverage.filter(source => source.health === 'healthy').length
@@ -36,10 +38,10 @@ export default function DwmOverviewPanel() {
     const readiness = snapshot.readiness.decision === 'production_ready_with_live_sources' ? 'Monitoring ready' : hasWatchlist ? 'Monitoring setup needs review' : 'Add a watchlist to start'
     const readinessTone = snapshot.readiness.decision === 'production_ready_with_live_sources' ? 'text-ui-success' : 'text-ui-warning'
 
-    return <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm' aria-label='Organization monitoring'>
+    return <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm' aria-label={scopeLabel}>
         <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
             <div>
-                <p className='text-xs font-semibold uppercase tracking-[0.08em] text-ui-primary'>Organization monitoring</p>
+                <p className='text-xs font-semibold uppercase tracking-[0.08em] text-ui-primary'>{scopeLabel}</p>
                 <h2 className='mt-1 text-base font-semibold text-ui-text'>Your watchlist and alert state</h2>
                 <p className='mt-1 text-sm text-ui-muted'>Tenant-scoped DWM state from the monitoring service, separate from platform traffic telemetry.</p>
             </div>

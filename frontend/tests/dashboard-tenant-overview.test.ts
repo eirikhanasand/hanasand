@@ -10,7 +10,10 @@ test('customer overview keeps tenant monitoring separate from unscoped platform 
 
     assert.match(page, /DwmOverviewPanel/)
     assert.doesNotMatch(page, /Platform traffic|Domains watched|getMonitoringOverview/)
-    assert.match(panel, /fetch\('\/api\/dwm\/product'/)
+    assert.match(panel, /fetch\(`\/api\/dwm\/product\$\{query\}`/)
+    assert.match(panel, /const query = organizationId \? `\?organizationId=/)
+    assert.match(panel, /Personal monitoring/)
+    assert.match(panel, /Organization monitoring/)
     assert.match(panel, /Tenant-scoped DWM state/)
     assert.match(panel, /snapshot\.watchlist\.length/)
     assert.match(panel, /snapshot\.alerts\.length/)
