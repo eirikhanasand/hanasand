@@ -490,7 +490,7 @@ export class InMemoryScraperStore implements ScraperStore {
     const incomingFirstSeenAt = validIso(alert.firstSeenAt);
     const firstSeenAt = [existingFirstSeenAt, incomingFirstSeenAt].filter(Boolean).sort()[0];
     const stored = this.putScoped(this.dwmAlerts, firstSeenAt ? { ...alert, firstSeenAt } : alert);
-    const alertCreated = [["alertCreatedAt", alert.alertCreatedAt], ["alertCreatedEvent.at", alert.alertCreatedEvent?.at], ["deliveryReadinessContext.alertCreatedAt", alert.deliveryReadinessContext?.alertCreatedAt], ["createdAt", alert.createdAt], ["savedAt", alert.savedAt]]
+    const alertCreated = [["alertCreatedAt", alert.alertCreatedAt], ["alertCreatedEvent.at", alert.alertCreatedEvent?.at], ["deliveryReadinessContext.alertCreatedAt", alert.deliveryReadinessContext?.alertCreatedAt]]
       .map(([field, value]) => ({ field, timestamp: validIso(value) }))
       .find((candidate) => candidate.timestamp);
     if (alertCreated?.timestamp) {

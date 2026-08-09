@@ -137,6 +137,22 @@ test("aggregate alert and delivery events update every linked evidence incident 
   expect(store.getTimelinessRecord(`incident_${windowOnly.id}`)).toMatchObject({ alertCreatedAt: "2026-05-24T10:00:04.000Z", deliveryAttemptedAt: "2026-05-24T10:01:00.000Z", deliveredAt: "2026-05-24T10:01:02.000Z", latencies: { visibilityToAlertSeconds: 1, reportToDeliveredSeconds: 63 } });
 });
 
+test("generic alert bookkeeping timestamps do not become lifecycle alert time", () => {
+  const store = new InMemoryScraperStore();
+  const capture = fixtureCapture({ id: "cap_alert_bookkeeping", contentHash: "hash_alert_bookkeeping", firstVisibleAt: "2026-05-24T10:00:03.000Z" });
+  store.savePipelineResult({
+    capture,
+    incident: { id: "incident_alert_bookkeeping", sourceId: capture.sourceId, captureId: capture.id, title: "Incident", summary: "Summary", firstSeenAt: capture.collectedAt, confidence: 0.5, extractorVersion: "test", reviewState: "unreviewed" },
+    entities: [],
+    indicators: []
+  });
+
+  expect(() => store.saveDwmAlert({ id: "alert_bookkeeping", incidentId: "incident_alert_bookkeeping", createdAt: "2026-05-24T10:00:02.000Z", savedAt: "2026-05-24T10:00:02.000Z", provenance: { captureIds: [capture.id] } })).not.toThrow();
+  expect(store.getTimelinessRecord("incident_alert_bookkeeping")).not.toMatchObject({ alertCreatedAt: expect.any(String) });
+  expect(() => store.saveDwmAlert({ id: "alert_bookkeeping", incidentId: "incident_alert_bookkeeping", alertCreatedAt: "2026-05-24T10:00:04.000Z", provenance: { captureIds: [capture.id] } })).not.toThrow();
+  expect(store.getTimelinessRecord("incident_alert_bookkeeping")).toMatchObject({ alertCreatedAt: "2026-05-24T10:00:04.000Z" });
+});
+
 test("unknown report times stay unknown and impossible event order is rejected", () => {
   const store = new InMemoryScraperStore();
   const capture = fixtureCapture({
