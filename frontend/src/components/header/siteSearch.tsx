@@ -187,7 +187,7 @@ async function loadActors(query: string, signal: AbortSignal): Promise<SearchIte
     const response = await fetch(`/api/ti/search?${params.toString()}`, { cache: 'no-store', signal })
     if (!response.ok) return []
     const payload = await response.json()
-    return actorItems(payload, query).slice(0, 8)
+    return actorItems(payload).slice(0, 8)
 }
 
 export function caseItem(value: unknown): SearchItem | null {
@@ -201,7 +201,7 @@ export function caseItem(value: unknown): SearchItem | null {
     return { id: `case:${id}`, title, detail, href }
 }
 
-export function actorItems(payload: unknown, query: string): SearchItem[] {
+export function actorItems(payload: unknown): SearchItem[] {
     const rows = arrayFrom(payload, ['actors', 'actorOverviews', 'results', 'rows'])
     const fromRows = rows.map(actorItem).filter(isSearchItem)
     if (fromRows.length) return uniqueByHref(fromRows)
