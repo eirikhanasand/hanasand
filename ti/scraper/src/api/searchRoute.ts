@@ -43,9 +43,11 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   scheduleLiveSearch(liveSearch, options, generatedAt);
   const limit = Math.max(1, Math.min(numberQuery(url.searchParams.get("limit")) ?? 50, 100));
   const captures = await searchCaptures(options.store, query, entityType, identity, Math.max(300, limit * 3), scope.tenantId);
+  const persistedSearchCaptures = (options.store as any).usesPostgresSearchIndex === true
+    || typeof (options.store as any).querySearchCaptures === "function" ? captures : undefined;
   const publicChannelResult = buildPublicChannelStatusRouteResponse(
     { query, entityType, tenantId: scope.tenantId },
-    { store: options.store, publicTelegramSourcePacks: options.publicTelegramSourcePacks as any, generatedAt, captures },
+    { store: options.store, publicTelegramSourcePacks: options.publicTelegramSourcePacks as any, generatedAt, captures: persistedSearchCaptures },
   );
   const rows = dedupeRows(captures.map((capture: any) => rowFromCapture(capture, scopedSource(options.store.getSource?.(capture.sourceId), scope.tenantId)))).slice(0, limit);
   const captureIds = new Set(rows.map((row) => row.id));
@@ -195,7 +197,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     extractorVersion: incident.extractorVersion,
     reviewReasons: incident.reviewReasons ?? []
   }));
-  const restricted = searchDarkwebIndex({ query, sources: sourcesInScope, captures, limit: 20 });
+  const restricted = searchDarkwebIndex({ query, sources: sourcesInScope, captures: persistedSearchCaptures ?? options.store.listCaptures(), limit: 20 });
   const restrictedSourceCount = sourcesInScope.filter((source: any) => String(source.type).endsWith("_metadata")).length;
   const restrictedDisabled = Number((options.config as any)?.limits?.maxConcurrentDarknetMetadataTasks) === 0;
   const response = {
