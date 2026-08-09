@@ -1,10 +1,10 @@
 {
-  "version": 16,
+  "version": 17,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-08-09T20:51:01.345Z",
+  "generatedAt": "2026-08-09T22:15:00.000Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 34,
+  "sourceCount": 45,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -4068,6 +4068,469 @@
           "telegram_public"
         ],
         "rollback": {}
+      }
+    },
+    {
+      "id": "src_codeby_security_telegram",
+      "name": "Codeby security research public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/codeby_sec",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.82,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian-language vulnerability analysis and defensive security reporting from the exact channel linked by Codeby's first-party website. Collect only unauthenticated public-preview text for defensive threat intelligence with attribution; do not join, authenticate, interact, follow private invitations, or download media, files, samples, proof-of-concept code, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T21:40:00.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "vulnerability_reporting",
+          "malware_research",
+          "cybercrime_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "codeby_sec",
+        "verifiedSourceId": "src_codeby_security_telegram",
+        "publisherReference": "https://codeby.net/",
+        "ownershipVerifiedAt": "2026-08-09T21:40:00.000Z",
+        "activityVerifiedAt": "2026-08-09T21:40:00.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "vulnerabilities",
+          "malware",
+          "application security",
+          "incident response",
+          "defensive research"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T21:40:00.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 2,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://codeby.net/",
+          "legalBasisVerifiedAt": "2026-08-09T21:40:00.000Z",
+          "latestPublishedAt": "2026-08-08T09:01:19+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:ru:codeby:telegram",
+        "publisher": {
+          "name": "Codeby",
+          "country": "RU",
+          "homepage": "https://codeby.net/",
+          "trustBasis": "Codeby's first-party website links the exact public Telegram channel"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.82,
+        "intelligenceValue": 0.82,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "vulnerabilities",
+            "malware",
+            "application security",
+            "incident response",
+            "defensive research"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [
+            "Russia"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "уязвимость",
+            "вредоносное ПО",
+            "кибератака",
+            "реагирование на инциденты"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_eset_ukraine_telegram",
+      "name": "ESET Ukraine public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/eset_ua_news",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.89,
+      "language": "uk",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Ukrainian-language malware telemetry, phishing analysis, and defensive guidance from the exact channel linked by ESET Ukraine's first-party website. Collect only unauthenticated public-preview text for defensive threat intelligence with attribution; do not join, authenticate, interact, follow private invitations, or download media, files, samples, proof-of-concept code, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T22:10:00.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "apt_research",
+          "malware_research",
+          "phishing_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "eset_ua_news",
+        "verifiedSourceId": "src_eset_ukraine_telegram",
+        "publisherReference": "https://www.eset.com/ua/",
+        "ownershipVerifiedAt": "2026-08-09T22:10:00.000Z",
+        "activityVerifiedAt": "2026-08-09T22:10:00.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "malware telemetry",
+          "phishing",
+          "cybercrime",
+          "APT activity",
+          "defensive guidance"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T22:10:00.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 2,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.eset.com/ua/",
+          "legalBasisVerifiedAt": "2026-08-09T22:10:00.000Z",
+          "latestPublishedAt": "2026-07-17T08:25:12+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "vendor:eset:ukraine:telegram",
+        "publisher": {
+          "name": "ESET Ukraine",
+          "country": "UA",
+          "homepage": "https://www.eset.com/ua/",
+          "trustBasis": "ESET Ukraine's first-party website links the exact public Telegram channel"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.89,
+        "intelligenceValue": 0.86,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "malware telemetry",
+            "phishing",
+            "cybercrime",
+            "APT activity",
+            "defensive guidance"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "finance",
+            "government",
+            "consumer"
+          ],
+          "regions": [
+            "Ukraine",
+            "Eastern Europe"
+          ],
+          "countries": [
+            "Ukraine"
+          ],
+          "languages": [
+            "uk"
+          ],
+          "queryPatterns": [
+            "шкідливе програмне забезпечення",
+            "фішинг",
+            "кібератака",
+            "кіберзагроза"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_stormwall_ddos_telegram",
+      "name": "StormWall DDoS security public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/stormwallpro",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.84,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian-language DDoS research and defensive guidance from the exact channel linked by StormWall's first-party website. Collect only unauthenticated public-preview text with attribution; do not join, authenticate, interact, or download media, files, samples, credentials, or victim data.",
+      "governance": { "approvalRequired": true, "approvalState": "approved", "approvalScope": "official_public_web_preview", "metadataOnly": false, "approvedAt": "2026-08-09T21:40:00.000Z", "approvedBy": "source-review:publisher-owned-reference", "policyVersion": "collection-policy:v1" },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": ["ddos_research", "cybercrime_reporting", "regional_language"],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "stormwallpro",
+        "verifiedSourceId": "src_stormwall_ddos_telegram",
+        "publisherReference": "https://stormwall.pro/",
+        "ownershipVerifiedAt": "2026-08-09T21:40:00.000Z",
+        "activityVerifiedAt": "2026-08-09T21:40:00.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": ["DDoS attacks", "botnets", "availability", "defensive guidance"],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": { "verifiedAt": "2026-08-09T21:40:00.000Z", "outcome": "content_parsed", "observedItemCount": 10, "observedUsefulItemCount": 0, "httpStatus": 200, "contentType": "text/html; charset=utf-8", "adapter": "telegram_public", "parserVersion": "telegram-public-preview:v1", "publisherReference": "https://stormwall.pro/", "legalBasisVerifiedAt": "2026-08-09T21:40:00.000Z", "latestPublishedAt": "2026-08-05T10:51:00+00:00" }
+      },
+      "catalog": {
+        "canonicalId": "vendor:ru:stormwall:telegram",
+        "publisher": { "name": "StormWall", "country": "RU", "homepage": "https://stormwall.pro/", "trustBasis": "publisher website links the exact public Telegram channel" },
+        "tier": "tier_2", "approvalScope": "official_public_web_preview", "license": "Public publisher communications; source attribution retained.", "legalBasis": "Unauthenticated public publisher channel used for defensive security research.", "reliability": 0.84, "intelligenceValue": 0.75, "retentionClass": "standard", "analystOwner": "source-ops",
+        "coverage": { "topics": ["DDoS attacks", "botnets", "availability"], "actors": [], "aliases": [], "industries": ["technology", "critical infrastructure"], "regions": ["Eastern Europe", "Global"], "countries": ["Russia"], "languages": ["ru"], "queryPatterns": ["DDoS", "ботнет", "атака" ] },
+        "collection": { "freshnessTargetSeconds": 3600, "collectionSlaSeconds": 1800, "budgetClass": "normal", "crawlCadenceSeconds": 1800 }, "adapterCompatibility": ["telegram_public"], "rollback": {}
+      }
+    },
+    {
+      "id": "src_rvision_security_telegram",
+      "name": "R-Vision security public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/rvision_pro",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.84,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian-language vulnerability and security-operations guidance from the exact channel linked by R-Vision's first-party website. Collect only unauthenticated public-preview text with attribution; do not join, authenticate, interact, or download media, files, samples, credentials, or victim data.",
+      "governance": { "approvalRequired": true, "approvalState": "approved", "approvalScope": "official_public_web_preview", "metadataOnly": false, "approvedAt": "2026-08-09T21:40:00.000Z", "approvedBy": "source-review:publisher-owned-reference", "policyVersion": "collection-policy:v1" },
+      "metadata": {
+        "sourceFamily": "telegram_public", "sourceFamilies": ["vulnerability_reporting", "security_operations", "regional_language"], "collectionMode": "public_web_preview", "mediaPolicy": "metadata_only_no_download", "productionCollection": false, "countsAsCoverage": false, "sourcePortfolioQualificationState": "pending_sustained_productivity", "channelHandle": "rvision_pro", "verifiedSourceId": "src_rvision_security_telegram", "publisherReference": "https://rvision.ru/", "ownershipVerifiedAt": "2026-08-09T21:40:00.000Z", "activityVerifiedAt": "2026-08-09T21:40:00.000Z", "activityWindowSeconds": 2592000, "topics": ["vulnerabilities", "security operations", "incident response", "defensive guidance"], "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": { "verifiedAt": "2026-08-09T21:40:00.000Z", "outcome": "content_parsed", "observedItemCount": 10, "observedUsefulItemCount": 0, "httpStatus": 200, "contentType": "text/html; charset=utf-8", "adapter": "telegram_public", "parserVersion": "telegram-public-preview:v1", "publisherReference": "https://rvision.ru/", "legalBasisVerifiedAt": "2026-08-09T21:40:00.000Z", "latestPublishedAt": "2026-08-06T08:17:01+00:00" }
+      },
+      "catalog": {
+        "canonicalId": "vendor:ru:r-vision:telegram", "publisher": { "name": "R-Vision", "country": "RU", "homepage": "https://rvision.ru/", "trustBasis": "publisher website links the exact public Telegram channel" }, "tier": "tier_2", "approvalScope": "official_public_web_preview", "license": "Public publisher communications; source attribution retained.", "legalBasis": "Unauthenticated public publisher channel used for defensive security research.", "reliability": 0.84, "intelligenceValue": 0.74, "retentionClass": "standard", "analystOwner": "source-ops", "coverage": { "topics": ["vulnerabilities", "security operations", "incident response"], "actors": [], "aliases": [], "industries": ["technology", "finance", "government"], "regions": ["Eastern Europe"], "countries": ["Russia"], "languages": ["ru"], "queryPatterns": ["уязвимость", "инцидент", "кибератака"] }, "collection": { "freshnessTargetSeconds": 3600, "collectionSlaSeconds": 1800, "budgetClass": "normal", "crawlCadenceSeconds": 1800 }, "adapterCompatibility": ["telegram_public"], "rollback": {}
+      }
+    },
+    {
+      "id": "src_jet_infosystems_telegram",
+      "name": "Jet Infosystems security public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/jetinfosystems",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.8,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian-language security and technology guidance from the exact channel linked by Jet Infosystems' first-party website. Collect only unauthenticated public-preview text with attribution; do not join, authenticate, interact, or download media, files, samples, credentials, or victim data.",
+      "governance": { "approvalRequired": true, "approvalState": "approved", "approvalScope": "official_public_web_preview", "metadataOnly": false, "approvedAt": "2026-08-09T21:40:00.000Z", "approvedBy": "source-review:publisher-owned-reference", "policyVersion": "collection-policy:v1" },
+      "metadata": {
+        "sourceFamily": "telegram_public", "sourceFamilies": ["vendor_security", "security_operations", "regional_language"], "collectionMode": "public_web_preview", "mediaPolicy": "metadata_only_no_download", "productionCollection": false, "countsAsCoverage": false, "sourcePortfolioQualificationState": "pending_sustained_productivity", "channelHandle": "jetinfosystems", "verifiedSourceId": "src_jet_infosystems_telegram", "publisherReference": "https://jet.su/", "ownershipVerifiedAt": "2026-08-09T21:40:00.000Z", "activityVerifiedAt": "2026-08-09T21:40:00.000Z", "activityWindowSeconds": 2592000, "topics": ["cybersecurity", "security operations", "critical infrastructure", "defensive guidance"], "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": { "verifiedAt": "2026-08-09T21:40:00.000Z", "outcome": "content_parsed", "observedItemCount": 20, "observedUsefulItemCount": 0, "httpStatus": 200, "contentType": "text/html; charset=utf-8", "adapter": "telegram_public", "parserVersion": "telegram-public-preview:v1", "publisherReference": "https://jet.su/", "legalBasisVerifiedAt": "2026-08-09T21:40:00.000Z", "latestPublishedAt": "2026-08-07T14:50:31+00:00" }
+      },
+      "catalog": {
+        "canonicalId": "vendor:ru:jet-infosystems:telegram", "publisher": { "name": "Jet Infosystems", "country": "RU", "homepage": "https://jet.su/", "trustBasis": "publisher website links the exact public Telegram channel" }, "tier": "tier_3", "approvalScope": "official_public_web_preview", "license": "Public publisher communications; source attribution retained.", "legalBasis": "Unauthenticated public publisher channel used for defensive security research.", "reliability": 0.8, "intelligenceValue": 0.68, "retentionClass": "standard", "analystOwner": "source-ops", "coverage": { "topics": ["cybersecurity", "security operations", "critical infrastructure"], "actors": [], "aliases": [], "industries": ["technology", "critical infrastructure"], "regions": ["Eastern Europe"], "countries": ["Russia"], "languages": ["ru"], "queryPatterns": ["кибератака", "безопасность", "инцидент"] }, "collection": { "freshnessTargetSeconds": 3600, "collectionSlaSeconds": 1800, "budgetClass": "normal", "crawlCadenceSeconds": 1800 }, "adapterCompatibility": ["telegram_public"], "rollback": {}
+      }
+    },
+    {
+      "id": "src_k2_tech_security_telegram",
+      "name": "K2 Tech security public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/k2_tech",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.8,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian-language cybersecurity and infrastructure guidance from the exact channel linked by K2 Tech's first-party website. Collect only unauthenticated public-preview text with attribution; do not join, authenticate, interact, or download media, files, samples, credentials, or victim data.",
+      "governance": { "approvalRequired": true, "approvalState": "approved", "approvalScope": "official_public_web_preview", "metadataOnly": false, "approvedAt": "2026-08-09T21:40:00.000Z", "approvedBy": "source-review:publisher-owned-reference", "policyVersion": "collection-policy:v1" },
+      "metadata": {
+        "sourceFamily": "telegram_public", "sourceFamilies": ["vendor_security", "critical_infrastructure", "regional_language"], "collectionMode": "public_web_preview", "mediaPolicy": "metadata_only_no_download", "productionCollection": false, "countsAsCoverage": false, "sourcePortfolioQualificationState": "pending_sustained_productivity", "channelHandle": "k2_tech", "verifiedSourceId": "src_k2_tech_security_telegram", "publisherReference": "https://k2.tech/", "ownershipVerifiedAt": "2026-08-09T21:40:00.000Z", "activityVerifiedAt": "2026-08-09T21:40:00.000Z", "activityWindowSeconds": 2592000, "topics": ["cybersecurity", "critical infrastructure", "security architecture", "defensive guidance"], "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": { "verifiedAt": "2026-08-09T21:40:00.000Z", "outcome": "content_parsed", "observedItemCount": 4, "observedUsefulItemCount": 0, "httpStatus": 200, "contentType": "text/html; charset=utf-8", "adapter": "telegram_public", "parserVersion": "telegram-public-preview:v1", "publisherReference": "https://k2.tech/", "legalBasisVerifiedAt": "2026-08-09T21:40:00.000Z", "latestPublishedAt": "2026-08-07T06:44:50+00:00" }
+      },
+      "catalog": {
+        "canonicalId": "vendor:ru:k2-tech:telegram", "publisher": { "name": "K2 Tech", "country": "RU", "homepage": "https://k2.tech/", "trustBasis": "publisher website links the exact public Telegram channel" }, "tier": "tier_3", "approvalScope": "official_public_web_preview", "license": "Public publisher communications; source attribution retained.", "legalBasis": "Unauthenticated public publisher channel used for defensive security research.", "reliability": 0.8, "intelligenceValue": 0.68, "retentionClass": "standard", "analystOwner": "source-ops", "coverage": { "topics": ["cybersecurity", "critical infrastructure", "security architecture"], "actors": [], "aliases": [], "industries": ["technology", "critical infrastructure"], "regions": ["Eastern Europe"], "countries": ["Russia"], "languages": ["ru"], "queryPatterns": ["кибератака", "безопасность", "инфраструктура"] }, "collection": { "freshnessTargetSeconds": 3600, "collectionSlaSeconds": 1800, "budgetClass": "normal", "crawlCadenceSeconds": 1800 }, "adapterCompatibility": ["telegram_public"], "rollback": {}
+      }
+    },
+    {
+      "id": "src_security_code_telegram",
+      "name": "Security Code public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/Kodnaprovode",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.82,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian-language vulnerability, defensive training, and product-security guidance from the exact channel published by Security Code. Collect only unauthenticated public-preview text with attribution; do not join, authenticate, interact, or download media, files, samples, credentials, or victim data.",
+      "governance": { "approvalRequired": true, "approvalState": "approved", "approvalScope": "official_public_web_preview", "metadataOnly": false, "approvedAt": "2026-08-09T21:40:00.000Z", "approvedBy": "source-review:publisher-owned-reference", "policyVersion": "collection-policy:v1" },
+      "metadata": {
+        "sourceFamily": "telegram_public", "sourceFamilies": ["vulnerability_reporting", "defensive_training", "regional_language"], "collectionMode": "public_web_preview", "mediaPolicy": "metadata_only_no_download", "productionCollection": false, "countsAsCoverage": false, "sourcePortfolioQualificationState": "pending_sustained_productivity", "channelHandle": "Kodnaprovode", "verifiedSourceId": "src_security_code_telegram", "publisherReference": "https://www.securitycode.ru/", "ownershipVerifiedAt": "2026-08-09T21:40:00.000Z", "activityVerifiedAt": "2026-08-09T21:40:00.000Z", "activityWindowSeconds": 2592000, "topics": ["vulnerabilities", "network security", "defensive training", "product security"], "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": { "verifiedAt": "2026-08-09T21:40:00.000Z", "outcome": "content_parsed", "observedItemCount": 20, "observedUsefulItemCount": 0, "httpStatus": 200, "contentType": "text/html; charset=utf-8", "adapter": "telegram_public", "parserVersion": "telegram-public-preview:v1", "publisherReference": "https://www.securitycode.ru/", "legalBasisVerifiedAt": "2026-08-09T21:40:00.000Z", "latestPublishedAt": "2026-08-06T12:01:12+00:00" }
+      },
+      "catalog": {
+        "canonicalId": "vendor:ru:security-code:telegram", "publisher": { "name": "Security Code", "country": "RU", "homepage": "https://www.securitycode.ru/", "trustBasis": "publisher website publishes the exact public Telegram channel" }, "tier": "tier_2", "approvalScope": "official_public_web_preview", "license": "Public publisher communications; source attribution retained.", "legalBasis": "Unauthenticated public publisher channel used for defensive security research.", "reliability": 0.82, "intelligenceValue": 0.7, "retentionClass": "standard", "analystOwner": "source-ops", "coverage": { "topics": ["vulnerabilities", "network security", "defensive training"], "actors": [], "aliases": [], "industries": ["technology", "government"], "regions": ["Eastern Europe"], "countries": ["Russia"], "languages": ["ru"], "queryPatterns": ["уязвимость", "защита", "безопасность"] }, "collection": { "freshnessTargetSeconds": 3600, "collectionSlaSeconds": 1800, "budgetClass": "normal", "crawlCadenceSeconds": 1800 }, "adapterCompatibility": ["telegram_public"], "rollback": {}
+      }
+    },
+    {
+      "id": "src_aktiv_security_telegram",
+      "name": "Aktiv security public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/aktivcompany",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.8,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian-language authentication and product-security guidance from the exact channel linked by Aktiv's first-party website. Collect only unauthenticated public-preview text with attribution; do not join, authenticate, interact, or download media, files, samples, credentials, or victim data.",
+      "governance": { "approvalRequired": true, "approvalState": "approved", "approvalScope": "official_public_web_preview", "metadataOnly": false, "approvedAt": "2026-08-09T21:40:00.000Z", "approvedBy": "source-review:publisher-owned-reference", "policyVersion": "collection-policy:v1" },
+      "metadata": {
+        "sourceFamily": "telegram_public", "sourceFamilies": ["identity_security", "product_security", "regional_language"], "collectionMode": "public_web_preview", "mediaPolicy": "metadata_only_no_download", "productionCollection": false, "countsAsCoverage": false, "sourcePortfolioQualificationState": "pending_sustained_productivity", "channelHandle": "aktivcompany", "verifiedSourceId": "src_aktiv_security_telegram", "publisherReference": "https://www.aktiv-company.ru/", "ownershipVerifiedAt": "2026-08-09T21:40:00.000Z", "activityVerifiedAt": "2026-08-09T21:40:00.000Z", "activityWindowSeconds": 2592000, "topics": ["authentication", "identity security", "product security", "defensive guidance"], "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": { "verifiedAt": "2026-08-09T21:40:00.000Z", "outcome": "content_parsed", "observedItemCount": 13, "observedUsefulItemCount": 0, "httpStatus": 200, "contentType": "text/html; charset=utf-8", "adapter": "telegram_public", "parserVersion": "telegram-public-preview:v1", "publisherReference": "https://www.aktiv-company.ru/", "legalBasisVerifiedAt": "2026-08-09T21:40:00.000Z", "latestPublishedAt": "2026-08-06T10:40:17+00:00" }
+      },
+      "catalog": {
+        "canonicalId": "vendor:ru:aktiv:telegram", "publisher": { "name": "Aktiv", "country": "RU", "homepage": "https://www.aktiv-company.ru/", "trustBasis": "publisher website links the exact public Telegram channel" }, "tier": "tier_3", "approvalScope": "official_public_web_preview", "license": "Public publisher communications; source attribution retained.", "legalBasis": "Unauthenticated public publisher channel used for defensive security research.", "reliability": 0.8, "intelligenceValue": 0.68, "retentionClass": "standard", "analystOwner": "source-ops", "coverage": { "topics": ["authentication", "identity security", "product security"], "actors": [], "aliases": [], "industries": ["technology", "finance", "government"], "regions": ["Eastern Europe"], "countries": ["Russia"], "languages": ["ru"], "queryPatterns": ["аутентификация", "уязвимость", "защита"] }, "collection": { "freshnessTargetSeconds": 3600, "collectionSlaSeconds": 1800, "budgetClass": "normal", "crawlCadenceSeconds": 1800 }, "adapterCompatibility": ["telegram_public"], "rollback": {}
+      }
+    },
+    {
+      "id": "src_phishman_security_telegram",
+      "name": "Cyber Phishman public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/cyberphishman",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.82,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian-language phishing-defense and security-awareness guidance from the exact channel linked by Phishman's first-party website. Collect only unauthenticated public-preview text with attribution; do not join, authenticate, interact, or download media, files, samples, credentials, or victim data.",
+      "governance": { "approvalRequired": true, "approvalState": "approved", "approvalScope": "official_public_web_preview", "metadataOnly": false, "approvedAt": "2026-08-09T21:40:00.000Z", "approvedBy": "source-review:publisher-owned-reference", "policyVersion": "collection-policy:v1" },
+      "metadata": {
+        "sourceFamily": "telegram_public", "sourceFamilies": ["phishing_reporting", "defensive_training", "regional_language"], "collectionMode": "public_web_preview", "mediaPolicy": "metadata_only_no_download", "productionCollection": false, "countsAsCoverage": false, "sourcePortfolioQualificationState": "pending_sustained_productivity", "channelHandle": "cyberphishman", "verifiedSourceId": "src_phishman_security_telegram", "publisherReference": "https://phishman.ru/", "ownershipVerifiedAt": "2026-08-09T21:40:00.000Z", "activityVerifiedAt": "2026-08-09T21:40:00.000Z", "activityWindowSeconds": 2592000, "topics": ["phishing", "social engineering", "security awareness", "defensive training"], "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": { "verifiedAt": "2026-08-09T21:40:00.000Z", "outcome": "content_parsed", "observedItemCount": 7, "observedUsefulItemCount": 0, "httpStatus": 200, "contentType": "text/html; charset=utf-8", "adapter": "telegram_public", "parserVersion": "telegram-public-preview:v1", "publisherReference": "https://phishman.ru/", "legalBasisVerifiedAt": "2026-08-09T21:40:00.000Z", "latestPublishedAt": "2026-08-06T09:31:36+00:00" }
+      },
+      "catalog": {
+        "canonicalId": "vendor:ru:phishman:telegram", "publisher": { "name": "Phishman", "country": "RU", "homepage": "https://phishman.ru/", "trustBasis": "publisher website links the exact public Telegram channel" }, "tier": "tier_3", "approvalScope": "official_public_web_preview", "license": "Public publisher communications; source attribution retained.", "legalBasis": "Unauthenticated public publisher channel used for defensive security research.", "reliability": 0.82, "intelligenceValue": 0.68, "retentionClass": "standard", "analystOwner": "source-ops", "coverage": { "topics": ["phishing", "social engineering", "security awareness"], "actors": [], "aliases": [], "industries": ["technology", "finance", "consumer"], "regions": ["Eastern Europe"], "countries": ["Russia"], "languages": ["ru"], "queryPatterns": ["фишинг", "социальная инженерия", "обучение"] }, "collection": { "freshnessTargetSeconds": 3600, "collectionSlaSeconds": 1800, "budgetClass": "normal", "crawlCadenceSeconds": 1800 }, "adapterCompatibility": ["telegram_public"], "rollback": {}
+      }
+    },
+    {
+      "id": "src_cryptopro_security_telegram",
+      "name": "CryptoPro security public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/cryptopro_news",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.82,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian-language cryptography, authentication, and product-security guidance from the exact channel linked by CryptoPro's first-party website. Collect only unauthenticated public-preview text with attribution; do not join, authenticate, interact, or download media, files, samples, credentials, or victim data.",
+      "governance": { "approvalRequired": true, "approvalState": "approved", "approvalScope": "official_public_web_preview", "metadataOnly": false, "approvedAt": "2026-08-09T22:15:00.000Z", "approvedBy": "source-review:publisher-owned-reference", "policyVersion": "collection-policy:v1" },
+      "metadata": {
+        "sourceFamily": "telegram_public", "sourceFamilies": ["cryptography", "identity_security", "regional_language"], "collectionMode": "public_web_preview", "mediaPolicy": "metadata_only_no_download", "productionCollection": false, "countsAsCoverage": false, "sourcePortfolioQualificationState": "pending_sustained_productivity", "channelHandle": "cryptopro_news", "verifiedSourceId": "src_cryptopro_security_telegram", "publisherReference": "https://www.cryptopro.ru/", "ownershipVerifiedAt": "2026-08-09T22:15:00.000Z", "activityVerifiedAt": "2026-08-09T22:15:00.000Z", "activityWindowSeconds": 2592000, "topics": ["cryptography", "authentication", "identity security", "product security"], "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": { "verifiedAt": "2026-08-09T22:15:00.000Z", "outcome": "content_parsed", "observedItemCount": 18, "observedUsefulItemCount": 0, "httpStatus": 200, "contentType": "text/html; charset=utf-8", "adapter": "telegram_public", "parserVersion": "telegram-public-preview:v1", "publisherReference": "https://www.cryptopro.ru/", "legalBasisVerifiedAt": "2026-08-09T22:15:00.000Z", "latestPublishedAt": "2026-07-26T11:39:02+00:00" }
+      },
+      "catalog": {
+        "canonicalId": "vendor:ru:cryptopro:telegram", "publisher": { "name": "CryptoPro", "country": "RU", "homepage": "https://www.cryptopro.ru/", "trustBasis": "publisher website links the exact public Telegram channel" }, "tier": "tier_3", "approvalScope": "official_public_web_preview", "license": "Public publisher communications; source attribution retained.", "legalBasis": "Unauthenticated public publisher channel used for defensive security research.", "reliability": 0.82, "intelligenceValue": 0.67, "retentionClass": "standard", "analystOwner": "source-ops", "coverage": { "topics": ["cryptography", "authentication", "identity security"], "actors": [], "aliases": [], "industries": ["technology", "finance", "government"], "regions": ["Eastern Europe"], "countries": ["Russia"], "languages": ["ru"], "queryPatterns": ["криптография", "сертификат", "аутентификация"] }, "collection": { "freshnessTargetSeconds": 3600, "collectionSlaSeconds": 1800, "budgetClass": "normal", "crawlCadenceSeconds": 1800 }, "adapterCompatibility": ["telegram_public"], "rollback": {}
+      }
+    },
+    {
+      "id": "src_tsarka_certkznews_telegram",
+      "name": "TSARKA CERT.KZ News public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/certkznews",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.85,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Kazakhstan-focused incident-response and defensive security reporting from the exact channel linked by TSARKA's first-party website. Collect only unauthenticated public-preview text with attribution; do not join, authenticate, interact, or download media, files, samples, credentials, or victim data.",
+      "governance": { "approvalRequired": true, "approvalState": "approved", "approvalScope": "official_public_web_preview", "metadataOnly": false, "approvedAt": "2026-08-09T22:15:00.000Z", "approvedBy": "source-review:publisher-owned-reference", "policyVersion": "collection-policy:v1" },
+      "metadata": {
+        "sourceFamily": "telegram_public", "sourceFamilies": ["incident_response", "cybercrime_reporting", "regional_language"], "collectionMode": "public_web_preview", "mediaPolicy": "metadata_only_no_download", "productionCollection": false, "countsAsCoverage": false, "sourcePortfolioQualificationState": "pending_sustained_productivity", "channelHandle": "certkznews", "verifiedSourceId": "src_tsarka_certkznews_telegram", "publisherReference": "https://cybersec.kz/", "ownershipVerifiedAt": "2026-08-09T22:15:00.000Z", "activityVerifiedAt": "2026-08-09T22:15:00.000Z", "activityWindowSeconds": 2592000, "topics": ["incident response", "cybercrime", "security advisories", "defensive guidance"], "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": { "verifiedAt": "2026-08-09T22:15:00.000Z", "outcome": "content_parsed", "observedItemCount": 12, "observedUsefulItemCount": 0, "httpStatus": 200, "contentType": "text/html; charset=utf-8", "adapter": "telegram_public", "parserVersion": "telegram-public-preview:v1", "publisherReference": "https://cybersec.kz/", "legalBasisVerifiedAt": "2026-08-09T22:15:00.000Z", "latestPublishedAt": "2026-08-06T09:38:31+00:00" }
+      },
+      "catalog": {
+        "canonicalId": "vendor:kz:tsarka-certkznews:telegram", "publisher": { "name": "TSARKA", "country": "KZ", "homepage": "https://cybersec.kz/", "trustBasis": "publisher website links the exact public Telegram channel" }, "tier": "tier_2", "approvalScope": "official_public_web_preview", "license": "Public publisher communications; source attribution retained.", "legalBasis": "Unauthenticated public publisher channel used for defensive security research.", "reliability": 0.85, "intelligenceValue": 0.73, "retentionClass": "standard", "analystOwner": "source-ops", "coverage": { "topics": ["incident response", "cybercrime", "security advisories"], "actors": [], "aliases": [], "industries": ["technology", "finance", "government"], "regions": ["Central Asia", "Kazakhstan"], "countries": ["Kazakhstan"], "languages": ["ru"], "queryPatterns": ["инцидент", "атака", "уязвимость"] }, "collection": { "freshnessTargetSeconds": 3600, "collectionSlaSeconds": 1800, "budgetClass": "normal", "crawlCadenceSeconds": 1800 }, "adapterCompatibility": ["telegram_public"], "rollback": {}
       }
     }
   ]

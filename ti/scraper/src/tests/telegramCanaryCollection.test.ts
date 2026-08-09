@@ -120,7 +120,9 @@ describe("public Telegram canary collection", () => {
       "src_alexander_leonov_english_telegram",
       "src_zhassulan_maldevcc_telegram",
       "src_hispasec_unaaldia_telegram",
-      "src_cyber_bro_uzbekistan_telegram"
+      "src_cyber_bro_uzbekistan_telegram",
+      "src_codeby_security_telegram",
+      "src_eset_ukraine_telegram"
     ]));
     expect(report.accepted.map((item: any) => item.language)).toEqual(expect.arrayContaining(["en", "es", "it", "ru", "hi", "uk", "az", "uz"]));
     expect(report.accepted.find((item: any) => item.id === "src_red_hot_cyber_telegram")).toMatchObject({
@@ -242,6 +244,35 @@ describe("public Telegram canary collection", () => {
       status: "candidate",
       metadata: { productionCollection: false, publisherReference: "https://cyber-bro.uz/", sourcePortfolioVerification: { observedItemCount: 9, observedUsefulItemCount: 1 } }
     });
+    expect(report.accepted.find((item: any) => item.id === "src_codeby_security_telegram")).toMatchObject({
+      url: "https://t.me/codeby_sec",
+      language: "ru",
+      status: "candidate",
+      metadata: { productionCollection: false, publisherReference: "https://codeby.net/", sourcePortfolioVerification: { observedItemCount: 20, observedUsefulItemCount: 2 } }
+    });
+    expect(report.accepted.find((item: any) => item.id === "src_eset_ukraine_telegram")).toMatchObject({
+      url: "https://t.me/eset_ua_news",
+      language: "uk",
+      status: "candidate",
+      metadata: { productionCollection: false, publisherReference: "https://www.eset.com/ua/", sourcePortfolioVerification: { observedItemCount: 20, observedUsefulItemCount: 2 } }
+    });
+    for (const expected of [
+      ["src_stormwall_ddos_telegram", "https://t.me/stormwallpro", "https://stormwall.pro/", 10],
+      ["src_rvision_security_telegram", "https://t.me/rvision_pro", "https://rvision.ru/", 10],
+      ["src_jet_infosystems_telegram", "https://t.me/jetinfosystems", "https://jet.su/", 20],
+      ["src_k2_tech_security_telegram", "https://t.me/k2_tech", "https://k2.tech/", 4],
+      ["src_security_code_telegram", "https://t.me/Kodnaprovode", "https://www.securitycode.ru/", 20],
+      ["src_aktiv_security_telegram", "https://t.me/aktivcompany", "https://www.aktiv-company.ru/", 13],
+      ["src_phishman_security_telegram", "https://t.me/cyberphishman", "https://phishman.ru/", 7],
+      ["src_cryptopro_security_telegram", "https://t.me/cryptopro_news", "https://www.cryptopro.ru/", 18],
+      ["src_tsarka_certkznews_telegram", "https://t.me/certkznews", "https://cybersec.kz/", 12]
+    ] as const) {
+      expect(report.accepted.find((item: any) => item.id === expected[0])).toMatchObject({
+        url: expected[1],
+        status: "candidate",
+        metadata: { productionCollection: false, publisherReference: expected[2], sourcePortfolioVerification: { observedItemCount: expected[3], observedUsefulItemCount: 0 } }
+      });
+    }
     expect([...families]).toEqual(expect.arrayContaining([
       "apt_research",
       "malware_research",
@@ -287,23 +318,35 @@ describe("public Telegram canary collection", () => {
       "src_alexander_leonov_english_telegram",
       "src_zhassulan_maldevcc_telegram",
       "src_hispasec_unaaldia_telegram",
-      "src_cyber_bro_uzbekistan_telegram"
+      "src_cyber_bro_uzbekistan_telegram",
+      "src_codeby_security_telegram",
+      "src_eset_ukraine_telegram",
+      "src_stormwall_ddos_telegram",
+      "src_rvision_security_telegram",
+      "src_jet_infosystems_telegram",
+      "src_k2_tech_security_telegram",
+      "src_security_code_telegram",
+      "src_aktiv_security_telegram",
+      "src_phishman_security_telegram",
+      "src_cryptopro_security_telegram",
+      "src_tsarka_certkznews_telegram"
     ]);
     expect(candidates.every((item: any) => item.countsAsCoverage !== true
       && item.metadata.productionCollection === false
       && item.metadata.countsAsCoverage === false
       && item.metadata.sourcePortfolioQualificationState === "pending_sustained_productivity"
       && item.metadata.sourcePortfolioVerification.outcome === "content_parsed"
-      && item.metadata.sourcePortfolioVerification.observedUsefulItemCount > 0
+      && item.metadata.sourcePortfolioVerification.observedItemCount > 0
+      && item.metadata.sourcePortfolioVerification.observedUsefulItemCount >= 0
       && !evaluateSourceForCollection(item).allowed
       && !isExecutableSource(item))).toBe(true);
+    expect(candidates.filter((item: any) => item.metadata.sourcePortfolioVerification.observedUsefulItemCount === 0)).toHaveLength(9);
     expect(report.accepted.map((item: any) => item.url)).not.toEqual(expect.arrayContaining([
       "https://t.me/FalconFeedsio",
       "https://t.me/noname05716",
       "https://t.me/dailydarkweb",
       "https://t.me/darkwebinformer_news",
-      "https://t.me/kzcert",
-      "https://t.me/certkznews"
+      "https://t.me/kzcert"
     ]));
 
     const store = new InMemoryScraperStore();
