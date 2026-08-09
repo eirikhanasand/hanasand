@@ -21,6 +21,8 @@ describe("api v1", () => {
     expect(response).not.toHaveProperty("collectionStrategy");
     expect(response.planner).not.toHaveProperty("decisions");
     expect(response.publicChannel).not.toHaveProperty("operatorStates");
+    expect(executed).toEqual([]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(executed).toEqual([response.planner.activeRunId]);
     expect(store.getRun(response.planner.activeRunId)).toMatchObject({ status: "queued", requestHash: response.planner.reuseKey });
 
@@ -57,6 +59,7 @@ describe("api v1", () => {
       planner: { terminalRunId: runId, terminalRunStatus: "failed" },
       publicTiAnswer: { noResult: true, displayState: "partial", waitReasons: [{ code: "collection_terminal" }], nextPoll: { pollable: false, cursorRequired: false } },
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(executed).toEqual([runId]);
     expect(store.listRuns()).toHaveLength(1);
   });

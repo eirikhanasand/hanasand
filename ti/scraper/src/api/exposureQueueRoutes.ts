@@ -149,9 +149,12 @@ export async function ingestExposureClaims(request: Request, options: ApiServerO
   if (!submitted.length) return error("missing_exposure_claims", "Submit at least one metadata-only exposure claim", 400);
   if (submitted.length > 100) return error("exposure_batch_too_large", "At most 100 exposure claims may be submitted at once", 413);
   const items = submitted.map(exposureClaimInput).filter((item): item is ExposureClaimItem => Boolean(item));
+  // Operator intake must use the bounded publisher fetch. Collector-backed
+  // dark-web/Telegram items enter through saveExposureClaimFromCollectedItem,
+  // where the retained capture is already the evidence boundary.
   const parsed = await Promise.all(items.map((item) => item.sourceFamily === "public_advisory"
     ? collectPublicAdvisory(item, options, scope, at).catch(() => undefined)
-    : parseExposureClaim(item, at)));
+    : Promise.resolve(undefined)));
   const accepted = parsed
     .filter((claim): claim is ParsedExposureClaim => Boolean(claim))
     .filter((claim) => claim.company && (claim.parserMode === "public_advisory_fetch" || claim.actor))

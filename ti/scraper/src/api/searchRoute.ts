@@ -372,7 +372,7 @@ function scheduleLiveSearch(liveSearch: any, options: ApiServerOptions, generate
   options.store.saveRun?.({ id: runId, tenantId: plan.tenantId, planId: plan.id, requestId: plan.request.id, requestHash: liveSearch.dto.reuseKey, status: "queued", createdAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, reviewTaskCount: plan.reviewRequired.length, rejectedSourceCount: plan.rejected.length, captureCount: 0, incidentCount: 0 });
   liveSearch.dto.activeRunId = runId;
   liveSearch.dto.queuedTaskCount = tasks.length;
-  options.runExecutor(runId);
+  void new Promise<void>((resolve) => setTimeout(resolve, 0)).then(() => options.runExecutor?.(runId)).catch(() => undefined);
 }
 
 function compactPublicChannel(status: any, packs: any[] = [], query: string) {
