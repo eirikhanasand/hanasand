@@ -186,8 +186,7 @@ function publicSearchResult(result: TiSearchResponse) {
         confidence: confidence(result.confidence),
         lastSeen: result.lastSeen,
         aliases: strings(result.aliases),
-        recentActivity: array(result.recentActivity).map(item => {
-            const row = record(item)
+        recentActivity: records(result.recentActivity).map(row => {
             return compact({
                 date: text(row.date), title: text(row.title), detail: text(row.detail), confidence: confidence(row.confidence), sourceIds: strings(row.sourceIds),
                 url: httpUrl(row.url), claimType: text(row.claimType), victimName: text(row.victimName), affectedSectors: strings(row.affectedSectors), countries: strings(row.countries),
@@ -195,10 +194,10 @@ function publicSearchResult(result: TiSearchResponse) {
                 corroboratingSourceIds: strings(row.corroboratingSourceIds), contradictingSourceIds: strings(row.contradictingSourceIds), assertionKind: text(row.assertionKind), reviewState: text(row.reviewState), corroborationState: text(row.corroborationState), observationSummary: text(row.observationSummary),
             })
         }),
-        targets: array(result.targets).map(item => { const row = record(item); return compact({ sector: text(row.sector), regions: strings(row.regions), rationale: text(row.rationale), confidence: confidence(row.confidence) }) }),
-        ttps: array(result.ttps).map(item => { const row = record(item); return compact({ name: text(row.name), attackId: text(row.attackId), tactic: text(row.tactic), detail: text(row.detail), confidence: confidence(row.confidence), extractionMethod: text(row.extractionMethod)?.slice(0, 120), extractorVersion: text(row.extractorVersion)?.slice(0, 120) }) }),
-        datasets: array(result.datasets).map(item => { const row = record(item); return compact({ name: text(row.name), type: text(row.type), coverage: text(row.coverage), status: text(row.status), url: httpUrl(row.url) }) }),
-        sources: array(result.sources).map(item => { const row = record(item); return compact({ id: text(row.id), name: text(row.name), type: text(row.type), provenance: text(row.provenance), url: httpUrl(row.url), captureId: text(row.captureId), sourceRequestId: text(row.sourceRequestId), sourceFamily: text(row.sourceFamily), parserStatus: text(row.parserStatus), reportDate: iso(row.reportDate), lastCollectedAt: iso(row.lastCollectedAt) }) }),
+        targets: records(result.targets).map(row => compact({ sector: text(row.sector), regions: strings(row.regions), rationale: text(row.rationale), confidence: confidence(row.confidence) })),
+        ttps: records(result.ttps).map(row => compact({ name: text(row.name), attackId: text(row.attackId), tactic: text(row.tactic), detail: text(row.detail), confidence: confidence(row.confidence), extractionMethod: text(row.extractionMethod)?.slice(0, 120), extractorVersion: text(row.extractorVersion)?.slice(0, 120) })),
+        datasets: records(result.datasets).map(row => compact({ name: text(row.name), type: text(row.type), coverage: text(row.coverage), status: text(row.status), url: httpUrl(row.url) })),
+        sources: records(result.sources).map(row => compact({ id: text(row.id), name: text(row.name), type: text(row.type), provenance: text(row.provenance), url: httpUrl(row.url), captureId: text(row.captureId), sourceRequestId: text(row.sourceRequestId), sourceFamily: text(row.sourceFamily), parserStatus: text(row.parserStatus), reportDate: iso(row.reportDate), lastCollectedAt: iso(row.lastCollectedAt) })),
         notes: strings(result.notes),
         actorIntelligence: actorIntelligence ? compact({
             actorClass: text(actorIntelligence.actorClass), attribution: text(actorIntelligence.attribution), firstSeen: iso(actorIntelligence.firstSeen), lastSeen: iso(actorIntelligence.lastSeen),
@@ -207,7 +206,7 @@ function publicSearchResult(result: TiSearchResponse) {
         }) : undefined,
         actionability: actionability ? compact({
             schemaVersion: actionability.schemaVersion, alertDisposition: actionability.alertDisposition, shouldAlert: boolean(actionability.shouldAlert), rationale: text(actionability.rationale),
-            watchlistCandidates: array(actionability.watchlistCandidates).map(candidate => { const row = record(candidate); return compact({ kind: text(row.kind), value: text(row.value), reason: text(row.reason), confidence: confidence(row.confidence) }) }),
+            watchlistCandidates: records(actionability.watchlistCandidates).map(row => compact({ kind: text(row.kind), value: text(row.value), reason: text(row.reason), confidence: confidence(row.confidence) })),
         }) : undefined,
     })) as ReturnType<typeof compact>
 }
@@ -308,6 +307,7 @@ function statusCode(status: number) { return status === 400 ? 'invalid_request' 
 function statusMessage(status: number) { return status === 400 ? 'The request is invalid.' : status === 401 ? 'Authentication is required.' : status === 403 ? 'The credential does not permit this operation.' : status === 404 ? 'The requested resource was not found.' : status === 429 ? 'The request rate limit was exceeded.' : 'The request could not be completed.' }
 function compact<T extends Record<string, unknown>>(value: T) { return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) }
 function record(value: unknown): Record<string, any> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {} }
+function records(value: unknown): Record<string, any>[] { return Array.isArray(value) ? value.filter((item): item is Record<string, any> => Boolean(item && typeof item === 'object' && !Array.isArray(item))) : [] }
 function array<T>(value: T[] | undefined): T[] { return Array.isArray(value) ? value : [] }
 function arrayLength(value: unknown) { return Array.isArray(value) ? value.length : undefined }
 function text(value: unknown) { return typeof value === 'string' && value.length ? value : undefined }

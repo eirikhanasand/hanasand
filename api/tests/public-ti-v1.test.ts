@@ -68,18 +68,18 @@ describe('public TI v1', () => {
             ttps: ['unexpected'],
             datasets: [null],
             sources: [null],
-            actionability: { ...searchResult.actionability, watchlistCandidates: [null, 'unexpected'] },
+            actionability: { ...searchResult.actionability, watchlistCandidates: [null, 'unexpected', { kind: 'domain', value: 'example.com', reason: 'direct', confidence: 0.8 }] },
         } as any))
 
         const response = await app.inject({ method: 'POST', url: '/api/v1/ti/search', payload: { query: 'APT29' } })
         expect(response.statusCode).toBe(200)
-        expect(response.json().recentActivity).toHaveLength(3)
-        expect(response.json().recentActivity[2]).toMatchObject({ title: 'Source mention' })
-        expect(response.json().targets).toHaveLength(1)
-        expect(response.json().ttps).toHaveLength(1)
-        expect(response.json().datasets).toHaveLength(1)
-        expect(response.json().sources).toHaveLength(1)
-        expect(response.json().actionability.watchlistCandidates).toHaveLength(2)
+        expect(response.json().recentActivity).toHaveLength(1)
+        expect(response.json().recentActivity[0]).toMatchObject({ title: 'Source mention' })
+        expect(response.json().targets).toHaveLength(0)
+        expect(response.json().ttps).toHaveLength(0)
+        expect(response.json().datasets).toHaveLength(0)
+        expect(response.json().sources).toHaveLength(0)
+        expect(response.json().actionability.watchlistCandidates).toEqual([expect.objectContaining({ value: 'example.com' })])
     })
 
     test('removes restricted host locators from every public search URL surface', async () => {
