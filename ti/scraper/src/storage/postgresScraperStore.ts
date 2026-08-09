@@ -1205,9 +1205,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return { rows, totals, total, nextCursor: offset + rows.length < total ? String(offset + rows.length) : undefined };
   }
 
-  async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string; executableOnly?: boolean }) {
+  async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string; executableOnly?: boolean }, executor: any = this.sql) {
     const tenantPredicate = input.tenantId === undefined ? "IS NULL AND $1::text IS NULL" : "= $1::text";
-    const [row] = await this.sql.unsafe(`
+    const [row] = await executor.unsafe(`
       WITH source_scope AS MATERIALIZED (
         SELECT sources.*
         FROM threat_intel.sources sources
@@ -1324,6 +1324,13 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   async queryPublicCoverageSummary(input: { generatedAt: string }) {
+    const timeoutMs = Math.max(250, Math.min(15_000, Number(Bun.env.TI_PUBLIC_COVERAGE_TIMEOUT_MS || 5_000)));
+    const operationsPromise = typeof this.sql.begin === "function"
+      ? this.sql.begin(async (transaction: any) => {
+        await transaction.unsafe(`SET LOCAL statement_timeout = '${timeoutMs}ms'`);
+        return this.querySourceOperationalSummary({ generatedAt: input.generatedAt, executableOnly: true }, transaction);
+      })
+      : this.querySourceOperationalSummary({ generatedAt: input.generatedAt, executableOnly: true });
     const [registryRows, operations] = await Promise.all([
       this.sql`
         SELECT count(*)::int AS source_count,
@@ -1332,7 +1339,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         FROM threat_intel.sources
         WHERE tenant_id IS NULL
       `,
-      this.querySourceOperationalSummary({ generatedAt: input.generatedAt, executableOnly: true })
+      operationsPromise
     ]);
     const registry = registryRows[0] ?? {};
     const summary = operations.summary ?? {};

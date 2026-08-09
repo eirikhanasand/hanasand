@@ -108,6 +108,20 @@ describe("structured threat-intelligence storage contract", () => {
     expect(result.summary).toMatchObject({ sourceCount: 12, retainedSourceCount: 4, inactiveSourceCount: 8, qualifyingClearWebSourceCount: 2 });
   });
 
+  test("sets a bounded PostgreSQL timeout for public coverage qualification", async () => {
+    const store = Object.create(PostgresScraperStore.prototype) as any;
+    let timeoutQuery = "";
+    let summaryExecutor: unknown;
+    store.sql = Object.assign((strings: TemplateStringsArray) => Promise.resolve([{ source_count: 1, executable_source_count: 1, inactive_source_count: 0 }]), {
+      begin: async (callback: (transaction: any) => Promise<unknown>) => callback({ unsafe: async (query: string) => { timeoutQuery = query; } })
+    });
+    store.querySourceOperationalSummary = async (_input: any, executor: unknown) => { summaryExecutor = executor; return { summary: {} }; };
+
+    await store.queryPublicCoverageSummary({ generatedAt: collectedAt });
+    expect(timeoutQuery).toContain("SET LOCAL statement_timeout = '5000ms'");
+    expect(summaryExecutor).toBeDefined();
+  });
+
   test("retries a transient write failure without dropping the queued record", async () => {
     const store = Object.create(PostgresScraperStore.prototype) as any;
     let attempts = 0;
