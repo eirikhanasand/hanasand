@@ -46,7 +46,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const rows = dedupeRows(captures.map((capture: any) => rowFromCapture(capture, scopedSource(options.store.getSource?.(capture.sourceId), scope.tenantId)))).slice(0, limit);
   const captureIds = new Set(rows.map((row) => row.id));
   const sourceIds = new Set(rows.map((row) => row.sourceId));
-  const records = searchRecords(options.store, scope.tenantId, captureIds, sourceIds);
+  const records = await searchRecords(options.store, scope.tenantId, captureIds, sourceIds);
   const assessment = assess(rows, records, generatedAt);
   const eventRows = rows.filter(isIncidentRow);
   const activityRows = entityType === "actor" ? eventRows : rows;
@@ -125,7 +125,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     }))
   ], (candidate) => `${candidate.kind}:${candidate.value.toLowerCase()}`);
   const missing = missingFields({ query, entityType, actor, victims, sectors, countries, ttps, records, generatedAt });
-  const actorBusinessEvidence = actorQuery ? actorBusinessEvidenceCatalog(options.store, scope.tenantId, query, generatedAt) : undefined;
+  const actorBusinessEvidence = actorQuery ? await actorBusinessEvidenceCatalog(options.store, scope.tenantId, query, generatedAt) : undefined;
   const businessModel = actorQuery ? businessModelAssessment(options.store, actorBusinessEvidence?.reviewedFindings ?? [], actorBusinessEvidence?.pendingFindings ?? []) : undefined;
   const actorCaseStudies = actorBusinessEvidence?.catalog;
   const attributionEvidence = actor ? actorAttribution(rows, unique([actor, ...aliases, ...identity.terms])) : undefined;
@@ -312,22 +312,26 @@ function compactPublicChannel(status: any, packs: any[] = [], query: string) {
   };
 }
 
-function searchRecords(store: any, tenantId: string | undefined, captureIds: Set<string>, sourceIds: Set<string>) {
+async function searchRecords(store: any, tenantId: string | undefined, captureIds: Set<string>, sourceIds: Set<string>) {
   const scoped = (method: string) => (typeof store[method] === "function" ? store[method]() : []).filter((record: any) => (record.tenantId || undefined) === tenantId);
-  const indexed = (method: string, fallback: string, ids: Set<string>) => typeof store[method] === "function" ? store[method](ids, tenantId) : scoped(fallback);
+  const indexed = async (databaseMethod: string, memoryMethod: string, ids: Set<string>) => {
+    if (typeof store[databaseMethod] === "function") return await store[databaseMethod](ids, tenantId);
+    return typeof store[memoryMethod] === "function" ? store[memoryMethod](ids, tenantId) : scoped(memoryMethod);
+  };
+  const indexedSync = (method: string, fallback: string, ids: Set<string>) => typeof store[method] === "function" ? store[method](ids, tenantId) : scoped(fallback);
   const restrictedCaptureIds = new Set([...captureIds].filter((id) => isMetadataOnlyCapture(store.getCapture?.(id))));
   const safeCapture = (id: string) => captureIds.has(id) && !restrictedCaptureIds.has(id);
   const safeAggregate = (ids: string[] = []) => ids.some(safeCapture) && !ids.some((id) => restrictedCaptureIds.has(id));
-  const allEntities = indexed("listExtractedEntitiesByCaptureIds", "listExtractedEntities", captureIds);
+  const allEntities = indexedSync("listExtractedEntitiesByCaptureIds", "listExtractedEntities", captureIds);
   const entities = allEntities.filter((record: any) => safeCapture(record.captureId));
   const businessEntityCandidates = allEntities.filter((record: any) => captureIds.has(record.captureId) && isSafeBusinessMechanism(record));
   const businessEntityIds = new Set(businessEntityCandidates.map((record: any) => record.id));
-  const indicators = indexed("listIndicatorsByCaptureIds", "listIndicators", captureIds).filter((record: any) => safeCapture(record.captureId));
+  const indicators = (await indexed("queryIndicatorsByCaptureIds", "listIndicatorsByCaptureIds", captureIds)).filter((record: any) => safeCapture(record.captureId));
   const incidents = scoped("listIncidents").filter((record: any) => safeCapture(record.captureId));
-  const businessClaimEvidence = indexed("listClaimEvidenceByCaptureIds", "listClaimEvidence", captureIds).filter((record: any) => record.subjectType === "entity" && businessEntityIds.has(record.subjectId));
+  const businessClaimEvidence = (await indexed("queryClaimEvidenceByCaptureIds", "listClaimEvidenceByCaptureIds", captureIds)).filter((record: any) => record.subjectType === "entity" && businessEntityIds.has(record.subjectId));
   const businessClaimIds = new Set(businessClaimEvidence.map((record: any) => record.claimId));
   const allClaims = uniqueBy([
-    ...indexed("listIntelligenceClaimsByCaptureIds", "listIntelligenceClaims", captureIds),
+    ...indexedSync("listIntelligenceClaimsByCaptureIds", "listIntelligenceClaims", captureIds),
     ...[...businessClaimIds].flatMap((id) => store.getIntelligenceClaim?.(id) ?? []),
   ], (record: any) => record.id);
   const businessEntitiesById = new Map<string, any>(businessEntityCandidates.map((record: any) => [record.id, record]));
@@ -512,7 +516,7 @@ function businessObservations(store: any, findings: any[], reviewed: boolean) {
   });
 }
 
-function actorBusinessEvidenceCatalog(store: any, tenantId: string | undefined, query: string, generatedAt: string) {
+async function actorBusinessEvidenceCatalog(store: any, tenantId: string | undefined, query: string, generatedAt: string) {
   const inScope = (record: any) => Boolean(record) && (!record.tenantId || (record.tenantId || undefined) === tenantId);
   const indexedInScope = (method: string, keys: Iterable<string>) => {
     const values = [...keys];
@@ -540,15 +544,25 @@ function actorBusinessEvidenceCatalog(store: any, tenantId: string | undefined, 
     actorEntitiesByCapture.set(entity.captureId, [...(actorEntitiesByCapture.get(entity.captureId) ?? []), entity]);
   }
   const entityIds = new Set(entityById.keys());
-  const claimEvidence = typeof store.listClaimEvidenceBySubjectIds === "function"
-    ? indexedInScope("listClaimEvidenceBySubjectIds", entityIds)
-    : (store.listClaimEvidence?.() ?? []).filter(inScope).filter((evidence: any) => entityById.has(evidence.subjectId));
+  const claimEvidence = typeof store.queryClaimEvidenceBySubjectIds === "function"
+    ? uniqueBy([
+      ...(await store.queryClaimEvidenceBySubjectIds(entityIds)),
+      ...(tenantId ? await store.queryClaimEvidenceBySubjectIds(entityIds, tenantId) : [])
+    ], (record: any) => record.id)
+    : typeof store.listClaimEvidenceBySubjectIds === "function"
+      ? indexedInScope("listClaimEvidenceBySubjectIds", entityIds)
+      : (store.listClaimEvidence?.() ?? []).filter(inScope).filter((evidence: any) => entityById.has(evidence.subjectId));
   const claimIds = new Set<string>(claimEvidence.map((evidence: any) => String(evidence.claimId)));
   const claimsById = new Map([...claimIds].flatMap((id) => { const claim = store.getIntelligenceClaim?.(id); return claim && inScope(claim) ? [[id, claim] as const] : []; }));
   const reviewsByClaim = new Map<string, any[]>();
-  const claimReviews = typeof store.listClaimReviewsByClaimIds === "function"
-    ? indexedInScope("listClaimReviewsByClaimIds", claimIds)
-    : (store.listClaimReviews?.() ?? []).filter(inScope).filter((review: any) => claimIds.has(review.claimId));
+  const claimReviews = typeof store.queryClaimReviewsByClaimIds === "function"
+    ? uniqueBy([
+      ...(await store.queryClaimReviewsByClaimIds(claimIds)),
+      ...(tenantId ? await store.queryClaimReviewsByClaimIds(claimIds, tenantId) : [])
+    ], (record: any) => record.id)
+    : typeof store.listClaimReviewsByClaimIds === "function"
+      ? indexedInScope("listClaimReviewsByClaimIds", claimIds)
+      : (store.listClaimReviews?.() ?? []).filter(inScope).filter((review: any) => claimIds.has(review.claimId));
   for (const review of claimReviews) {
     reviewsByClaim.set(review.claimId, [...(reviewsByClaim.get(review.claimId) ?? []), review]);
   }
@@ -813,7 +827,7 @@ function validIso(value: unknown): string | undefined {
   return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
 }
 
-function assess(rows: any[], records: ReturnType<typeof searchRecords>, generatedAt: string) {
+function assess(rows: any[], records: Awaited<ReturnType<typeof searchRecords>>, generatedAt: string) {
   const contradicted = records.claims.filter((claim: any) => claim.reviewState === "contradicted" || claim.corroborationState === "contradicted").length;
   const rejected = records.claims.filter((claim: any) => claim.reviewState === "rejected").length;
   const stale = records.claims.filter((claim: any) => staleAt(claim, generatedAt)).length;
@@ -841,7 +855,7 @@ function assess(rows: any[], records: ReturnType<typeof searchRecords>, generate
   return { ready, confidence: Number(score.toFixed(3)), sourceCount: records.sourceCount, captureCount: rows.length, confirmedClaimCount: confirmed, corroboratedClaimCount: corroborated, validationCount: validated, contradictedClaimCount: contradicted, rejectedClaimCount: rejected, staleClaimCount: stale, metadataOnly: rows.length > 0 && rows.every((row) => row.metadataOnly), reasons };
 }
 
-function activity(row: any, records: ReturnType<typeof searchRecords>, fallbackConfidence: number, generatedAt: string) {
+function activity(row: any, records: Awaited<ReturnType<typeof searchRecords>>, fallbackConfidence: number, generatedAt: string) {
   const rowClaims = records.claims.filter((claim: any) => claim.captureIds?.includes(row.id));
   const activityClaims = rowClaims.filter(supportsActivityCorroboration);
   const eligibleActivityClaims = activityClaims.filter((claim: any) => eligibleSupportClaim(claim, generatedAt));
@@ -896,7 +910,7 @@ function eligibleSupportClaim(claim: any, generatedAt: string) {
     && !staleAt(claim, generatedAt);
 }
 
-function qualityPayload(query: string, rows: any[], records: ReturnType<typeof searchRecords>, assessment: ReturnType<typeof assess>) {
+function qualityPayload(query: string, rows: any[], records: Awaited<ReturnType<typeof searchRecords>>, assessment: ReturnType<typeof assess>) {
   return {
     query,
     status: rows.length ? assessment.ready ? "ready" : "partial" : "unmeasured",
@@ -916,11 +930,11 @@ function qualityPayload(query: string, rows: any[], records: ReturnType<typeof s
   };
 }
 
-function assertionsFor(captureId: string, records: ReturnType<typeof searchRecords>) {
+function assertionsFor(captureId: string, records: Awaited<ReturnType<typeof searchRecords>>) {
   return records.entities.filter((entity: any) => entity.captureId === captureId).map((entity: any) => ({ id: entity.id, type: entity.type, value: safeText(entity.value, 240), confidence: confidence(entity.confidence), assertionKind: entity.assertionKind ?? "extracted", extractionMethod: entity.extractionMethod, extractorVersion: entity.extractorVersion, reviewReasons: entity.reviewReasons ?? [] }));
 }
 
-function reviewStateFor(captureId: string, records: ReturnType<typeof searchRecords>, generatedAt: string) {
+function reviewStateFor(captureId: string, records: Awaited<ReturnType<typeof searchRecords>>, generatedAt: string) {
   const claims = records.claims.filter((claim: any) => claim.captureIds?.includes(captureId));
   if (claims.some((claim: any) => claim.reviewState === "contradicted")) return "contradicted";
   if (claims.some((claim: any) => claim.reviewState === "rejected")) return "rejected";
@@ -930,7 +944,7 @@ function reviewStateFor(captureId: string, records: ReturnType<typeof searchReco
   return "unreviewed";
 }
 
-function rowConfidence(captureId: string, records: ReturnType<typeof searchRecords>, fallback: number, generatedAt: string) {
+function rowConfidence(captureId: string, records: Awaited<ReturnType<typeof searchRecords>>, fallback: number, generatedAt: string) {
   const values = [...records.entities, ...records.indicators, ...records.claims]
     .filter((record: any) => record.captureId === captureId || record.captureIds?.includes(captureId))
     .filter((record: any) => !record.reviewState || eligibleSupportClaim(record, generatedAt))
@@ -938,7 +952,7 @@ function rowConfidence(captureId: string, records: ReturnType<typeof searchRecor
   return values.length ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(3)) : Math.min(fallback, 0.4);
 }
 
-function actorAliases(records: ReturnType<typeof searchRecords>, rows: any[], profile: any, identity: ReturnType<typeof actorIdentity>) {
+function actorAliases(records: Awaited<ReturnType<typeof searchRecords>>, rows: any[], profile: any, identity: ReturnType<typeof actorIdentity>) {
   const profileAliases = profile
     ? records.aliases.filter((alias: any) => alias.actorProfileId === profile.id).map((alias: any) => alias.alias)
     : [];
@@ -1036,7 +1050,7 @@ function actorCaptureMatches(capture: any, entities: any[], normalizedTerms: Set
   return [...normalizedTerms].some((term) => termRegex(term).test(title));
 }
 
-function actorProfileForQuery(records: ReturnType<typeof searchRecords>, identity: ReturnType<typeof actorIdentity>) {
+function actorProfileForQuery(records: Awaited<ReturnType<typeof searchRecords>>, identity: ReturnType<typeof actorIdentity>) {
   const aliasProfileIds = new Set(records.aliases.filter((alias: any) => identity.normalizedTerms.has(normalizeActorName(alias.alias))).map((alias: any) => alias.actorProfileId));
   return records.profiles.find((profile: any) => identity.normalizedTerms.has(normalizeActorName(profile.canonicalName)) || aliasProfileIds.has(profile.id));
 }
@@ -1062,7 +1076,7 @@ function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function missingFields(input: { query: string; entityType: SearchEntityType; actor?: string; victims: string[]; sectors: string[]; countries: string[]; ttps: any[]; records: ReturnType<typeof searchRecords>; generatedAt: string }) {
+function missingFields(input: { query: string; entityType: SearchEntityType; actor?: string; victims: string[]; sectors: string[]; countries: string[]; ttps: any[]; records: Awaited<ReturnType<typeof searchRecords>>; generatedAt: string }) {
   const normalizedQuery = normalizeActorName(input.query);
   const common = [
     input.records.sourceCount >= 2 ? "" : "independent corroborating source",
@@ -1120,7 +1134,7 @@ function claimCounts(claims: any[], generatedAt: string) {
   return { total: claims.length, confirmed: claims.filter((claim) => claim.reviewState === "confirmed" && eligibleSupportClaim(claim, generatedAt)).length, needsReview: claims.filter((claim) => ["unreviewed", "needs_review"].includes(claim.reviewState)).length, rejected: claims.filter((claim) => claim.reviewState === "rejected").length, stale: claims.filter((claim) => staleAt(claim, generatedAt)).length, contradicted: claims.filter((claim) => claim.reviewState === "contradicted" || claim.corroborationState === "contradicted").length, corroborated: claims.filter((claim) => claim.corroborationState === "corroborated" && eligibleSupportClaim(claim, generatedAt)).length };
 }
 
-function characterizationEntities(records: ReturnType<typeof searchRecords>, type: string, generatedAt: string) {
+function characterizationEntities(records: Awaited<ReturnType<typeof searchRecords>>, type: string, generatedAt: string) {
   const confirmedEntityIds = new Set(records.claims.filter((claim: any) => claim.subjectType === "entity" && claim.reviewState === "confirmed" && eligibleSupportClaim(claim, generatedAt)).map((claim: any) => claim.subjectId));
   return records.entities.filter((entity: any) => entity.type === type && (entity.extractionMethod !== "deterministic_fallback" || confirmedEntityIds.has(entity.id)));
 }
@@ -1143,7 +1157,7 @@ function safeIndicators(indicators: any[]) {
     .filter(Boolean));
 }
 
-function hasParsedRecord(captureId: string, records: ReturnType<typeof searchRecords>) {
+function hasParsedRecord(captureId: string, records: Awaited<ReturnType<typeof searchRecords>>) {
   return records.entities.some((record: any) => record.captureId === captureId)
     || records.businessEntities.some((record: any) => record.captureId === captureId)
     || records.indicators.some((record: any) => record.captureId === captureId)

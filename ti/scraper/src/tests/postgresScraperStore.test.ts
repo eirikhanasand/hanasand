@@ -511,8 +511,10 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     `, [tenantId, sourceId, historicalCaptureId, recentCaptureId]);
 
     const second = await PostgresScraperStore.create({ databaseUrl });
-    expect(second.listIndicators()).toHaveLength(10_001);
-    expect(second.getIndicator("indicator_complete_history_old")).toMatchObject({ captureId: historicalCaptureId, value: "historical-sentinel.example" });
+    expect(second.listIndicators()).toHaveLength(0);
+    expect(await second.queryIndicatorsByCaptureIds([historicalCaptureId], tenantId)).toEqual([
+      expect.objectContaining({ id: "indicator_complete_history_old", captureId: historicalCaptureId, value: "historical-sentinel.example" })
+    ]);
 
     const structured = await handleApiRequest(api(`/v1/intel/indicators?tenantId=${tenantId}&q=historical-sentinel.example`), { store: second, frontier: new FocusedFrontier() });
     expect(await structured.json()).toMatchObject({ total: 1, indicators: [{ id: "indicator_complete_history_old" }] });
@@ -1449,7 +1451,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(await admin`SELECT to_jsonb(link) AS row FROM threat_intel.evidence_links AS link WHERE capture_id IN ('cap_dirty_null_a', 'cap_dirty_null_b', 'cap_dirty_null_url_a', 'cap_dirty_null_url_b') ORDER BY id`).toEqual(dirtyBefore.links);
     await admin`UPDATE threat_intel.captures SET normalized_text_hash = normalized_text_hash WHERE id = 'cap_dirty_null_a'`;
     expect(migrated.listCaptures().filter((row) => row.tenantId === "tenant_alpha")).toHaveLength(4);
-    expect(migrated.listEvidenceLinks().filter((row: any) => row.tenantId === "tenant_alpha")).toHaveLength(4);
+    expect(await migrated.queryEvidenceLinksByCaptureIds(["cap_dirty_null_a", "cap_dirty_null_b", "cap_dirty_null_url_a", "cap_dirty_null_url_b"], "tenant_alpha")).toHaveLength(4);
     const replay = capture("cap_dirty_null_replay", "tenant_alpha", "https://publisher.example/replay", "dirty-content-replay");
     const foundReplay = migrated.findDuplicateCapture(replay);
     expect(migrated.saveCaptureWithDedupe(replay)).toMatchObject({ status: "duplicate" });
@@ -1607,7 +1609,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     }));
     expect(third.listCaptures()).toContainEqual(expect.objectContaining({ id: betaObservation.capture.id, sourceId: "src_actor_observation" }));
     expect(third.listCaptures()).toContainEqual(expect.objectContaining({ id: afterRetirement.capture.id, sourceId: "src_actor_observation" }));
-    expect(third.listEvidenceLinks()).toContainEqual(expect.objectContaining({ captureId: betaObservation.capture.id, subjectType: "actor_profile", subjectId: betaProfile.id }));
+    expect(await third.queryEvidenceLinksByCaptureIds([betaObservation.capture.id])).toContainEqual(expect.objectContaining({ captureId: betaObservation.capture.id, subjectType: "actor_profile", subjectId: betaProfile.id }));
     expect(third.listEvidenceLinks().some((link: any) => link.captureId === afterRetirement.capture.id && link.subjectType === "actor_profile")).toBe(false);
     const rerun = third.replaceActorIdentityCatalog(actorCatalog([actorIdentity("G0001", "Alpha Group", ["Alpha Current Alias"])], "catalog-v2"), {
       sourceId: "src_actor_catalog",
@@ -2685,13 +2687,13 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(second.listCaptures().find((record: any) => record.id === result.capture.id)).toMatchObject({ retentionClass: "public_report", metadata: { retentionPolicy: { class: "public_report" } } });
     expect(second.listIncidents()).toHaveLength(1);
     expect(second.listExtractedEntities().length).toBeGreaterThan(1);
-    expect(second.listIndicators()).toHaveLength(1);
+    expect(await second.queryIndicatorsByCaptureIds([result.capture.id], "tenant_postgres")).toHaveLength(1);
     expect(second.listActorProfiles().some((profile: any) => profile.canonicalName === "APT29")).toBe(true);
     expect(second.listActorAliases().some((alias: any) => alias.normalizedAlias === "apt29")).toBe(true);
-    expect(second.listEvidenceLinks().length).toBeGreaterThan(3);
+    expect((await second.queryEvidenceLinksByCaptureIds([result.capture.id], "tenant_postgres")).length).toBeGreaterThan(3);
     expect(second.listIntelligenceClaims().some((claim: any) => claim.id === actorClaim.id && claim.reviewState === "confirmed")).toBe(true);
-    expect(second.listClaimEvidence().length).toBeGreaterThan(3);
-    expect(second.listClaimReviews()).toEqual([expect.objectContaining({ id: "claim_review_postgres", nextState: "confirmed" })]);
+    expect((await second.queryClaimEvidenceByCaptureIds([result.capture.id], "tenant_postgres")).length).toBeGreaterThan(3);
+    expect(await second.queryClaimReviewsByClaimIds([actorClaim.id], "tenant_postgres")).toEqual([expect.objectContaining({ id: "claim_review_postgres", nextState: "confirmed" })]);
     expect(second.listValidationRecords()).toHaveLength(1);
     expect(second.listEvaluationLabels()).toHaveLength(1);
     expect(second.listEvaluationBenchmarks()).toEqual([expect.objectContaining({ id: "benchmark_postgres" })]);

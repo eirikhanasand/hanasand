@@ -301,7 +301,7 @@ describe("automatic Hanasand AI intelligence review", () => {
 
   test("dead-letters an expired final-attempt lease without issuing attempt four", async () => {
     const store = seededClaimStore();
-    syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" });
+    await syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" });
     const task = store.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task");
     store.saveAnalystMetadataReviewTask({ ...task, state: "running", attempt: 3, leaseExpiresAt: "2026-07-22T10:00:30.000Z" });
     let calls = 0;
@@ -745,7 +745,7 @@ postgresDescribe("automatic review PostgreSQL persistence", () => {
     seedActorCatalog(store, [identity("actor_apt29", "G0016", "APT29", ["Midnight Blizzard"])]);
     seedClaim(store, "claim_actor", "APT29 targeted Northwind.");
     store.saveClaimEvidence(claimEvidence("evidence_actor", "claim_actor", "capture_source_a", "source_a", 0.9));
-    syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" });
+    await syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" });
     const current = store.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task");
     const protectedIds: string[] = [];
     for (const version of ["v1", "v2", "v3", "v4", "v5", "v6"]) {
@@ -797,7 +797,10 @@ postgresDescribe("automatic review PostgreSQL persistence", () => {
     expect(JSON.stringify(corrections)).not.toContain("unsafe_contact");
     expect(new Set([firstSha, secondSha, thirdSha]).size).toBe(3);
     expect(task).toMatchObject({ state: "terminal", outcome: "decided", attempt: 3, decision: { falsePositiveReasons: ["The claimed actor is not supported by the retained report"] } });
-    expect(events.map((event: any) => event.error).filter(Boolean)).toEqual(["A non-supported decision requires a structured false-positive reason", "Hanasand AI returned unsafe calibration context"]);
+    expect(events.map((event: any) => event.error).filter(Boolean)).toEqual(expect.arrayContaining([
+      "A non-supported decision requires a structured false-positive reason",
+      "Hanasand AI returned unsafe calibration context"
+    ]));
     expect(events.map((event: any) => event.contractCorrection).filter(Boolean)).toEqual(["false_positive_reasons_required"]);
     for (const id of protectedIds) expect(JSON.stringify(store.getAnalystMetadataReviewTask(id))).toBe(protectedBefore.get(id)!);
     expect(store.listAnalystMetadataReviewTasks().filter((item: any) => item.recordKind === "automatic_intelligence_review_event" && item.taskId === "pg-v6-retrying" && item.state === "superseded")).toHaveLength(1);

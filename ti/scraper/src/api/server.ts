@@ -165,7 +165,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (/^\/v1\/ti\/actor-org-relevance\/[^/]+$/.test(url.pathname) && request.method === "PATCH") return updateActorOrgRelevanceReview(request, options, url.pathname.split("/").pop());
     if (url.pathname === "/v1/intel/runs" && request.method === "POST") return createRun(request, options);
     if (/^\/v1\/intel\/runs\/[^/]+$/.test(url.pathname) && request.method === "GET") return runStatus(request, options, url.pathname.split("/").pop() ?? "");
-    if (/^\/v1\/intel\/runs\/[^/]+\/results$/.test(url.pathname) && request.method === "GET") return runResults(request, options, url.pathname.split("/")[4]);
+    if (/^\/v1\/intel\/runs\/[^/]+\/results$/.test(url.pathname) && request.method === "GET") return await runResults(request, options, url.pathname.split("/")[4]);
     if (url.pathname === "/v1/exports/stix" && request.method === "POST") return exportRunStix(request, options);
     if (url.pathname === "/v1/darkweb/status") return json({ status: buildDarkwebIndexStatus({ sources: options.store.listSources(), captures: options.store.listCaptures() } as any) });
     if (url.pathname === "/v1/darkweb/search") return json(searchDarkwebIndex({

@@ -46,7 +46,7 @@ export function runStatus(request: Request, options: ApiServerOptions, runId: st
   return run && inTenantScope(run, scope.tenantId) ? json({ run, frontier: { summary: options.frontier.groupedSnapshot() } }) : error("not_found", "Run not found", 404);
 }
 
-export function runResults(request: Request, options: ApiServerOptions, runId: string): Response {
+export async function runResults(request: Request, options: ApiServerOptions, runId: string): Promise<Response> {
   const url = new URL(request.url);
   const scope = resolveTenantScope(request);
   if (scope.error) return scope.error;
@@ -57,9 +57,13 @@ export function runResults(request: Request, options: ApiServerOptions, runId: s
   const captureIds = new Set(captures.map((capture: any) => capture.id));
   const belongsToRun = (record: any) => captureIds.has(record.captureId) && (!record.tenantId || record.tenantId === scope.tenantId);
   const incidents = (options.store.listIncidents?.() ?? []).filter(belongsToRun);
-  const indicators = ((options.store as any).listIndicators?.() ?? []).filter(belongsToRun);
+  const indicators = typeof (options.store as any).queryIndicatorsByCaptureIds === "function"
+    ? (await (options.store as any).queryIndicatorsByCaptureIds(captureIds, scope.tenantId)).filter(belongsToRun)
+    : ((options.store as any).listIndicators?.() ?? []).filter(belongsToRun);
   const entities = ((options.store as any).listExtractedEntities?.() ?? []).filter(belongsToRun);
-  const relationships = ((options.store as any).listEvidenceLinks?.() ?? []).filter(belongsToRun);
+  const relationships = typeof (options.store as any).queryEvidenceLinksByCaptureIds === "function"
+    ? (await (options.store as any).queryEvidenceLinksByCaptureIds(captureIds, scope.tenantId)).filter(belongsToRun)
+    : ((options.store as any).listEvidenceLinks?.() ?? []).filter(belongsToRun);
   const requested = new Set((url.searchParams.get("include") ?? "captures,incidents,indicators,entities,relationships").split(",").map((item) => item.trim()).filter(Boolean));
   const collections: Record<string, any[]> = { captures: captures.map((capture: any) => toSafeCaptureDto(capture, { tenantId: scope.tenantId })), incidents, indicators, entities, relationships };
   const results = Object.fromEntries(Object.entries(collections).filter(([name]) => requested.has(name)).map(([name, items]) => [name, { items, total: items.length }]));

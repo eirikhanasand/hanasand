@@ -72,11 +72,13 @@ const DEFAULT_MIGRATIONS = [
   { version: "037_remove_parser_fallback_artifacts", path: fileURLToPath(new URL("../../migrations/037_remove_parser_fallback_artifacts.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
+const MAINTENANCE_MIGRATION_VERSIONS = new Set(["037_remove_parser_fallback_artifacts"]);
 
 export type PostgresScraperStoreOptions = {
   databaseUrl?: string;
   migrationPath?: string;
   onStartupPhase?: (phase: string) => void;
+  runMaintenanceMigrations?: boolean;
 };
 
 type PendingWrite = { description: string; run: () => Promise<void> };
@@ -94,6 +96,7 @@ type DatabaseHealth = {
 export class PostgresScraperStore extends InMemoryScraperStore {
   private readonly sql: SQL;
   private readonly migrations: Migration[];
+  private readonly latestMigrationVersion: string;
   private readonly pendingWrites: PendingWrite[] = [];
   private draining?: Promise<void>;
   private lastWriteError?: Error;
@@ -106,12 +109,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     super();
     this.sql = sql;
     this.migrations = migrations;
+    this.latestMigrationVersion = migrations.at(-1)?.version ?? LATEST_MIGRATION_VERSION;
   }
 
   static async create(options: PostgresScraperStoreOptions = {}): Promise<PostgresScraperStore> {
     const databaseUrl = options.databaseUrl ?? Bun.env.TI_DATABASE_URL;
     const sql = databaseUrl ? new SQL(databaseUrl) : new SQL();
-    const migrations = DEFAULT_MIGRATIONS.map((migration, index) => ({
+    const runMaintenanceMigrations = options.runMaintenanceMigrations !== false;
+    const migrations = DEFAULT_MIGRATIONS.filter((migration) => runMaintenanceMigrations || !MAINTENANCE_MIGRATION_VERSIONS.has(migration.version)).map((migration, index) => ({
       ...migration,
       path: index === 0 && options.migrationPath ? options.migrationPath : migration.path
     }));
@@ -169,7 +174,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           EXISTS (
             SELECT 1
             FROM threat_intel.schema_migrations
-            WHERE version = ${LATEST_MIGRATION_VERSION}
+            WHERE version = ${this.latestMigrationVersion}
           ) AS migration_ready,
           NOT EXISTS (
             SELECT 1
@@ -220,7 +225,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         ok: Boolean(row?.schema_ready && row?.migration_ready && row?.actor_profile_scope_ready),
         backend: "postgresql",
         schema: "threat_intel",
-        migrationVersion: LATEST_MIGRATION_VERSION,
+        migrationVersion: this.latestMigrationVersion,
         actorProfileScopeReady: Boolean(row?.actor_profile_scope_ready),
         pendingWrites: this.pendingWrites.length,
         lastWriteError: this.lastWriteError?.message
@@ -230,7 +235,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         ok: false,
         backend: "postgresql",
         schema: "threat_intel",
-        migrationVersion: LATEST_MIGRATION_VERSION,
+        migrationVersion: this.latestMigrationVersion,
         pendingWrites: this.pendingWrites.length,
         lastWriteError: error instanceof Error ? error.message : String(error)
       };
@@ -250,7 +255,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       ok: !this.lastWriteError,
       backend: "postgresql" as const,
       schema: "threat_intel" as const,
-      migrationVersion: LATEST_MIGRATION_VERSION,
+      migrationVersion: this.latestMigrationVersion,
       pendingWrites: this.pendingWrites.length
     };
     return {
@@ -280,6 +285,54 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const total = Number(countRows[0]?.total ?? 0);
     const records = rows.map(readRecord);
     return { records, total, nextCursor: offset + records.length < total ? String(offset + records.length) : undefined };
+  }
+
+  async queryAllStructuredRecords(collection: keyof typeof structuredTables, input: { tenantId?: string } = {}) {
+    const table = structuredTables[collection];
+    if (!table) throw new Error(`Unsupported threat-intelligence collection: ${collection}`);
+    const tenantWhere = input.tenantId === undefined
+      ? "TRUE"
+      : "(tenant_id IS NULL OR tenant_id IS NOT DISTINCT FROM $1::text)";
+    const collectionWhere = "where" in table ? table.where : "TRUE";
+    const rows = input.tenantId === undefined
+      ? await this.sql.unsafe(`SELECT record FROM threat_intel.${table.name} WHERE (${collectionWhere}) ORDER BY ${table.orderBy} DESC`)
+      : await this.sql.unsafe(`SELECT record FROM threat_intel.${table.name} WHERE ${tenantWhere} AND (${collectionWhere}) ORDER BY ${table.orderBy} DESC`, [input.tenantId]);
+    return rows.map(readRecord);
+  }
+
+  // Query bounded evidence edges from PostgreSQL; high-volume history must not be hydrated into memory at startup.
+  private async queryRecordsByIds(table: string, column: string, ids: Iterable<string>, tenantId?: string) {
+    const values = [...new Set([...ids].map(String).filter(Boolean))];
+    if (!values.length) return [];
+    const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
+    const tenantPlaceholder = `$${values.length + 1}`;
+    const rows = await this.sql.unsafe(
+      `SELECT record FROM threat_intel.${table}
+       WHERE ${column} IN (${placeholders})
+         AND tenant_id IS NOT DISTINCT FROM ${tenantPlaceholder}::text`,
+      [...values, tenantId ?? null]
+    );
+    return rows.map(readRecord);
+  }
+
+  async queryIndicatorsByCaptureIds(captureIds: Iterable<string>, tenantId?: string) {
+    return this.queryRecordsByIds("indicators", "capture_id", captureIds, tenantId);
+  }
+
+  async queryEvidenceLinksByCaptureIds(captureIds: Iterable<string>, tenantId?: string) {
+    return this.queryRecordsByIds("evidence_links", "capture_id", captureIds, tenantId);
+  }
+
+  async queryClaimEvidenceByCaptureIds(captureIds: Iterable<string>, tenantId?: string) {
+    return this.queryRecordsByIds("claim_evidence", "capture_id", captureIds, tenantId);
+  }
+
+  async queryClaimEvidenceBySubjectIds(subjectIds: Iterable<string>, tenantId?: string) {
+    return this.queryRecordsByIds("claim_evidence", "subject_id", subjectIds, tenantId);
+  }
+
+  async queryClaimReviewsByClaimIds(claimIds: Iterable<string>, tenantId?: string) {
+    return this.queryRecordsByIds("claim_reviews", "claim_id", claimIds, tenantId);
   }
 
   async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; sourceId?: string; executableOnly?: boolean } ) {
@@ -1393,7 +1446,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   private async hydrate(): Promise<void> {
     const workflowHistoryLimit = Math.max(0, Math.min(100_000, Number(Bun.env.TI_WORKFLOW_HYDRATION_HISTORY_LIMIT ?? "5000") || 5000));
     {
-      const [sources, captures, incidents, entities, actorProfiles, actorIdentityCatalogs, actorIdentities, validations, alerts, evaluationLabels, timeliness, runs, claims, workflows, reviewTasks, workflowEvents] = await Promise.all([
+      const [sources, captures, incidents, entities, actorProfiles, actorIdentityCatalogs, actorIdentities, validations, alerts, evaluationLabels, timeliness, runs, claims, sourceHealth, workflows, reviewTasks, workflowEvents] = await Promise.all([
         this.sql`SELECT record FROM threat_intel.sources ORDER BY created_at`,
         this.sql`SELECT record FROM threat_intel.captures ORDER BY collected_at`,
         this.sql`SELECT record FROM threat_intel.incidents ORDER BY first_seen_at`,
@@ -1407,6 +1460,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         this.sql`SELECT record FROM threat_intel.timeliness_records ORDER BY first_visible_at`,
         this.sql`SELECT record FROM threat_intel.collection_runs ORDER BY started_at`,
         this.sql`SELECT record FROM threat_intel.intelligence_claims ORDER BY first_seen_at`,
+        this.sql`SELECT record FROM threat_intel.source_health ORDER BY checked_at`,
         // Keep operational workflow records in memory, but do not make startup
         // proportional to the automatic-review history. The full history remains
         // durable in PostgreSQL for retention/export paths.
@@ -1440,10 +1494,12 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         for (const row of timeliness) this.hydrateTimelinessSnapshot(readRecord(row));
         for (const row of runs) super.saveRun(readRecord(row));
         for (const row of claims) super.saveIntelligenceClaim(readRecord(row));
+        for (const row of sourceHealth) super.saveSourceHealthObservation(readRecord(row));
         for (const row of [...workflows, ...reviewTasks, ...workflowEvents]) this.hydrateWorkflow(String(row.record_type), readRecord(row));
       });
     }
-    await this.hydrateCompleteEvidenceHistory();
+    // High-volume evidence remains queryable in PostgreSQL. Hydrating it here makes
+    // readiness proportional to historical volume and consumes most of the process heap.
     this.pipelineDepth++;
     const reconciledAt = new Date().toISOString();
     let reconciliation = { archivedActorProfileIds: [] as string[], reboundActorProfileIds: [] as string[] };
@@ -1459,36 +1515,6 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         if (archivedIds.has(id)) await this.persistActorProfileArchiveHistory(id, reconciledAt, transaction);
         await this.persistActorProfile(this.getActorProfile(id), transaction);
       }
-    });
-  }
-
-  private async hydrateCompleteEvidenceHistory(): Promise<void> {
-    let rows = await this.sql`SELECT record FROM threat_intel.indicators ORDER BY created_at`;
-    this.hydrateWithoutOrganizationWriteGuard(() => {
-      for (const row of rows) super.saveIndicator(readRecord(row));
-    });
-
-    rows = await this.sql`SELECT record FROM threat_intel.evidence_links ORDER BY created_at`;
-    this.hydrateWithoutOrganizationWriteGuard(() => {
-      for (const row of rows) {
-        const record = readRecord(row);
-        if (record.subjectType !== "incident" || this.getIncident(record.subjectId)) super.saveEvidenceLink(record);
-      }
-    });
-
-    rows = await this.sql`SELECT record FROM threat_intel.source_health ORDER BY checked_at`;
-    this.hydrateWithoutOrganizationWriteGuard(() => {
-      for (const row of rows) super.saveSourceHealthObservation(readRecord(row));
-    });
-
-    rows = await this.sql`SELECT record FROM threat_intel.claim_evidence ORDER BY created_at`;
-    this.hydrateWithoutOrganizationWriteGuard(() => {
-      for (const row of rows) super.saveClaimEvidence(readRecord(row));
-    });
-
-    rows = await this.sql`SELECT record FROM threat_intel.claim_reviews ORDER BY reviewed_at`;
-    this.hydrateWithoutOrganizationWriteGuard(() => {
-      for (const row of rows) super.saveClaimReview(readRecord(row));
     });
   }
 

@@ -161,21 +161,21 @@ export async function handleAutomaticReviewRequest(request: Request, options: Ap
   if (scope.error) return scope.error;
 
   if (url.pathname === "/v1/intel/automatic-reviews" && request.method === "GET") {
-    return json(automaticReviewSnapshot(options.store, scope.tenantId, numberQuery(url.searchParams.get("limit"))));
+    return json(await automaticReviewSnapshot(options.store, scope.tenantId, numberQuery(url.searchParams.get("limit"))));
   }
   if (url.pathname === "/v1/intel/automatic-reviews/sync" && request.method === "POST") {
-    const queued = syncAutomaticReviewQueue(options, { tenantId: scope.tenantId });
+    const queued = await syncAutomaticReviewQueue(options, { tenantId: scope.tenantId });
     await (options.store as any).flush?.();
-    return json({ queued, ...automaticReviewSnapshot(options.store, scope.tenantId) }, 201);
+    return json({ queued, ...(await automaticReviewSnapshot(options.store, scope.tenantId)) }, 201);
   }
   if (url.pathname === "/v1/intel/automatic-reviews/run" && request.method === "POST") {
     const limit = boundedInteger(body.limit, 10, 1, 50);
     const cycle = await runAutomaticReviewCycle(options, { limit, tenantId: scope.tenantId });
-    return json({ cycle, ...automaticReviewSnapshot(options.store, scope.tenantId) }, 201);
+    return json({ cycle, ...(await automaticReviewSnapshot(options.store, scope.tenantId)) }, 201);
   }
   if (request.method === "POST") {
     const taskId = url.pathname.split("/")[4];
-    const replayed = replayAutomaticReview(options, taskId, scope.tenantId);
+    const replayed = await replayAutomaticReview(options, taskId, scope.tenantId);
     if (replayed instanceof Response) return replayed;
     await (options.store as any).flush?.();
     return json({ task: replayed }, 201);
@@ -187,8 +187,10 @@ export function syncAutomaticReviewQueue(options: ApiServerOptions, input: { ten
   const store = options.store as any;
   const at = validIso(input.now) ?? nowIso();
   const modelVersion = input.modelVersion ?? configuredModelVersion(options);
-  const index = buildReviewIndex(store);
-  return syncQueueWithIndex(store, index, input, at, modelVersion);
+  if (typeof store.queryAllStructuredRecords === "function") {
+    return buildReviewIndexAsync(store, input.tenantId, input.allTenants === true).then((index) => syncQueueWithIndex(store, index, input, at, modelVersion));
+  }
+  return syncQueueWithIndex(store, buildReviewIndex(store), input, at, modelVersion);
 }
 
 function syncQueueWithIndex(store: any, index: ReviewIndex, input: { tenantId?: string; allTenants?: boolean }, at: string, modelVersion: string) {
@@ -234,7 +236,7 @@ export async function runAutomaticReviewCycle(options: ApiServerOptions, input: 
   const store = options.store as any;
   const at = validIso(input.now) ?? nowIso();
   const modelVersion = input.modelVersion ?? configuredModelVersion(options);
-  const index = buildReviewIndex(store);
+  const index = await buildReviewIndexAsync(store, input.tenantId, input.allTenants === true);
   const superseded = supersedeStaleTasks(store, index.tasks, input, at, modelVersion, MAX_STALE_TASKS_SUPERSEDED_PER_CYCLE);
   const queued = syncQueueWithIndex(store, index, input, at, modelVersion);
   const recovered = recoverExpiredLeases(store, index.tasks, at, input);
@@ -309,9 +311,15 @@ export function startAutomaticReviewWorker(options: ApiServerOptions, input: { i
   return { tick, stop: async () => { stopped = true; clearInterval(timer); await active; } };
 }
 
-export function automaticReviewSnapshot(store: any, tenantId?: string, requestedLimit = 100) {
+export function automaticReviewSnapshot(store: any, tenantId?: string, requestedLimit = 100): any {
   const limit = Math.max(1, Math.min(250, Math.floor(requestedLimit || 100)));
-  const index = buildReviewIndex(store);
+  if (typeof store.queryAllStructuredRecords === "function") {
+    return buildReviewIndexAsync(store, tenantId, false).then((index) => reviewSnapshotFromIndex(index, tenantId, limit));
+  }
+  return reviewSnapshotFromIndex(buildReviewIndex(store), tenantId, limit);
+}
+
+function reviewSnapshotFromIndex(index: ReviewIndex, tenantId: string | undefined, limit: number) {
   const allTasks = index.tasks.filter((task) => inTenantScope(task, tenantId)).sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
   const allEvents = index.events.filter((event) => inTenantScope(event, tenantId));
   const visible = allTasks.slice(0, limit).map((task) => publicTask(task, index, allEvents));
@@ -1030,13 +1038,13 @@ function sourceCaptureStateSha256(capture: any) {
   return createHash("sha256").update(fields.map((value) => `${Buffer.byteLength(value)}:${value}`).join("|")).digest("hex");
 }
 
-function replayAutomaticReview(options: ApiServerOptions, taskId: string, tenantId?: string): AutomaticReviewTask | Response {
+async function replayAutomaticReview(options: ApiServerOptions, taskId: string, tenantId?: string): Promise<AutomaticReviewTask | Response> {
   const store = options.store as any;
   const current = store.getAnalystMetadataReviewTask?.(taskId) as AutomaticReviewTask | undefined;
   if (!current || current.recordKind !== TASK_KIND || !inTenantScope(current, tenantId)) return error("automatic_review_not_found", "Automatic review task not found", 404);
   if (!["dead_letter", "quarantined"].includes(current.state)) return error("automatic_review_not_replayable", "Only dead-lettered or quarantined tasks may be replayed", 409);
   const at = nowIso();
-  const index = buildReviewIndex(store);
+  const index = await buildReviewIndexAsync(store, tenantId, false);
   const evidence = governedEvidence(index, current.subject);
   const records = eligibleLinkedEvidence(index, current.subject);
   const counts = linkedEvidenceCounts(index, records);
@@ -1283,6 +1291,38 @@ function buildReviewIndex(store: any): ReviewIndex {
     healthBySource: grouped(health, "sourceId"),
     reviewsByClaim: grouped(reviews, "claimId"),
     actorIdentities: store.listActorIdentities?.() ?? []
+  };
+}
+
+async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants = false): Promise<ReviewIndex> {
+  if (typeof store.queryAllStructuredRecords !== "function") return buildReviewIndex(store);
+  await store.flush?.();
+  const scope = allTenants ? {} : { tenantId };
+  const load = (collection: string, method: string) => store.queryAllStructuredRecords(collection, scope);
+  const [claims, incidents, captures, sources, health, claimEvidence, evidenceLinks, reviews] = await Promise.all([
+    load("claims", "listIntelligenceClaims"),
+    load("incidents", "listIncidents"),
+    load("captures", "listCaptures"),
+    load("sources", "listSources"),
+    load("sourceHealth", "listSourceHealthObservations"),
+    load("claimEvidence", "listClaimEvidence"),
+    load("evidenceLinks", "listEvidenceLinks"),
+    load("claimReviews", "listClaimReviews")
+  ]);
+  return {
+    ...buildReviewIndex(store),
+    claims,
+    incidents,
+    sources,
+    claimsById: keyed(claims),
+    incidentsById: keyed(incidents),
+    capturesById: keyed(captures),
+    capturesBySource: grouped(captures, "sourceId"),
+    sourcesById: keyed(sources),
+    claimEvidenceByClaim: grouped(claimEvidence, "claimId"),
+    incidentEvidenceByIncident: grouped(evidenceLinks.filter((item: any) => item.subjectType === "incident"), "subjectId"),
+    healthBySource: grouped(health, "sourceId"),
+    reviewsByClaim: grouped(reviews, "claimId")
   };
 }
 
