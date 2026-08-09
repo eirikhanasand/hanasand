@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { importRestrictedMetadataSeedBundle } from "../registry/restrictedSourceSeeds.ts";
+import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 
 describe("lawful dark-web source portfolio batch", () => {
   test("admits only parser-verified feeds and keeps failed probes out of coverage", () => {
@@ -16,7 +17,13 @@ describe("lawful dark-web source portfolio batch", () => {
     const rejected = batch.reviewedRejectedCandidates as Array<Record<string, unknown>>;
     const source = batch.sources.find((row: any) => row.id === "restricted_ms13089_victim_blog");
     const revalidated = batch.sources.find((row: any) => row.id === "restricted_deadlock_victim_blog");
-    const hosts = [...existing.sources, ...batch.sources].map((row) => new URL(row.url).hostname);
+    const feedKeys = [...existing.sources, ...batch.sources].map((row) => canonicalFeedKey(row.url));
+    const expectedProfiles = new Map([
+      ["restricted_ms13089_victim_blog", ["post_title_victim_listing", 3]],
+      ["restricted_deadlock_victim_blog", ["news_item_headline", 10]],
+      ["restricted_cmdorganization_victim_blog", ["item_header_link", 3]],
+      ["restricted_exfilsquad_victim_blog", ["company_header_name", 13]]
+    ]);
 
     expect(batch).toMatchObject({
       schemaVersion: "ti.source_portfolio_batch.v1",
@@ -27,7 +34,7 @@ describe("lawful dark-web source portfolio batch", () => {
       retentionClass: "restricted_metadata"
     });
     expect(report).toMatchObject({ valid: true, errors: [] });
-    expect(report.accepted).toHaveLength(2);
+    expect(report.accepted).toHaveLength(4);
     expect(report.accepted.find((row) => row.id === "restricted_ms13089_victim_blog")).toMatchObject({
       id: "restricted_ms13089_victim_blog",
       status: "candidate",
@@ -50,8 +57,29 @@ describe("lawful dark-web source portfolio batch", () => {
         sourcePortfolioVerification: { outcome: "content_parsed", observedItemCount: 10, httpStatus: 200 }
       }
     });
-    expect(new Set(hosts).size).toBe(hosts.length);
-    expect(rejected).toHaveLength(25);
+    for (const accepted of report.accepted) {
+      const expected = expectedProfiles.get(accepted.id);
+      expect(expected).toBeDefined();
+      expect(accepted).toMatchObject({
+        status: "candidate",
+        type: "tor_metadata",
+        accessMethod: "approved_proxy",
+        metadata: {
+          parserProfile: expected![0],
+          productionCollectionOutcome: "metadata_only_parser_verified",
+          sourcePortfolioVerification: {
+            outcome: "content_parsed",
+            observedItemCount: expected![1],
+            httpStatus: 200,
+            adapter: "tor_metadata"
+          }
+        }
+      });
+      expect(accepted.metadata.reportedVictimCount).toBeGreaterThan(0);
+      expect(Number.isFinite(Date.parse(accepted.metadata.lastReportedVictimAt))).toBe(true);
+    }
+    expect(new Set(feedKeys).size).toBe(feedKeys.length);
+    expect(rejected).toHaveLength(37);
     expect(new Set(rejected.map((row) => row.id)).size).toBe(rejected.length);
     expect(rejected.every((row) => row.disposition === "rejected" && row.countsAsCoverage === false)).toBe(true);
     expect(JSON.stringify(rejected)).not.toMatch(/\.onion\b|https?:\/\/[a-z2-7]{56}\b/i);

@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T08:00:41.650Z",
+  "generatedAt": "2026-08-09T08:19:12.405Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -243,6 +243,114 @@
       "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
       "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/redact",
       "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_barracuda_victim_blog",
+      "actorName": "Barracuda",
+      "disposition": "rejected",
+      "reason": "Parser structure matched bounded victim metadata, but a second current independent public identity reference was not established.",
+      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/barracuda",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_black_x_victim_blog",
+      "actorName": "Black X",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.",
+      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/blackx",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_dark_project_victim_blog",
+      "actorName": "Dark Project",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.",
+      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/darkproject",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_gammax_victim_blog",
+      "actorName": "Gammax",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.",
+      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/gammax",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_global_secret_group_victim_blog",
+      "actorName": "Global Secret Group",
+      "disposition": "rejected",
+      "reason": "The approved-proxy parser produced bounded victim metadata, but the authority detail route did not supply an exact truthful last-victim timestamp required for executable admission.",
+      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/globalsecretgroup",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_helix_victim_blog",
+      "actorName": "Helix",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.",
+      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/helix",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_l_group_victim_blog",
+      "actorName": "L Group",
+      "disposition": "rejected",
+      "reason": "Parser structure matched bounded victim metadata, but a second current independent public identity reference was not established.",
+      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/lgroup",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_panzer_victim_blog",
+      "actorName": "Panzer",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.",
+      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/panzer",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_shiba_victim_blog",
+      "actorName": "Shiba",
+      "disposition": "rejected",
+      "reason": "The current public authority reported no victims and the approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.",
+      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/shiba",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_storm_victim_blog",
+      "actorName": "Storm",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.",
+      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/storm",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_triple_x_victim_blog",
+      "actorName": "Triple X",
+      "disposition": "rejected",
+      "reason": "The approved-proxy parser produced bounded victim metadata, but the authority detail route did not supply an exact truthful last-victim timestamp required for executable admission.",
+      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/triplex",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_ulose_victim_blog",
+      "actorName": "ULose",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.",
+      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/ulose",
+      "countsAsCoverage": false
     }
   ],
   "sources": [
@@ -368,6 +476,146 @@
           "contentType": "text/html",
           "adapter": "tor_metadata",
           "legalBasisVerifiedAt": "2026-08-09T08:00:41.650Z"
+        }
+      }
+    },
+    {
+      "id": "restricted_cmdorganization_victim_blog",
+      "name": "CMDOrganization victim blog",
+      "type": "tor_metadata",
+      "url": "http://cmdnkiqjije2tllr3biee2sjgj3i4robg2cbtilbnytdhh2wy3syrlyd.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.84,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public victim-listing organization names and publication metadata. Never authenticate, interact with operators, follow payload or contact links, or retain descriptions, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-08-09T08:19:12.405Z",
+        "approvedBy": "source-review:goal8-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "CMDOrganization",
+        "actors": [
+          "CMDOrganization"
+        ],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/developers",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/cmdorganization",
+        "discoveryCheckedAt": "2026-08-09T08:19:12.405Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T08:19:12.405Z",
+        "productionCollectionVerifiedAt": "2026-08-09T08:19:12.405Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "item_header_link",
+        "parserShape": "div.item-card > div.item-header > h2 > a",
+        "observedParsedItemCount": 3,
+        "reportedVictimCount": 43,
+        "lastReportedVictimAt": "2026-07-31T10:20:16.077969+00:00",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+        "discoveryAuthorityChain": [
+          {
+            "name": "Ransomwhere.org",
+            "role": "current public proxy inventory for the upstream ransomware.live group catalog",
+            "url": "https://ransomwhere.org/developers",
+            "recordUrl": "https://ransomwhere.org/api/groups/cmdorganization"
+          },
+          {
+            "name": "SOCRadar",
+            "role": "independent current public ransomware-group profile",
+            "url": "https://socradar.io/free-tools/ransomware-intelligence",
+            "recordUrl": "https://socradar.io/free-tools/ransomware-intelligence/groups/cmdorganization"
+          }
+        ],
+        "attribution": "Ransomwhere.org public inventory, SOCRadar independent public research, and approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T08:19:12.405Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 3,
+          "httpStatus": 200,
+          "contentType": "text/html",
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T08:19:12.405Z"
+        }
+      }
+    },
+    {
+      "id": "restricted_exfilsquad_victim_blog",
+      "name": "ExfilSquad victim blog",
+      "type": "tor_metadata",
+      "url": "http://exfil5gqmbxrg6yky5aeitkdj7kfwxxjh3wxzrtlewjqi2x67o634iyd.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.84,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public victim-listing organization names and publication metadata. Never authenticate, interact with operators, follow payload or contact links, or retain descriptions, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-08-09T08:19:12.405Z",
+        "approvedBy": "source-review:goal8-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "ExfilSquad",
+        "actors": [
+          "ExfilSquad"
+        ],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/developers",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/exfilsquad",
+        "discoveryCheckedAt": "2026-08-09T08:19:12.405Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T08:19:12.405Z",
+        "productionCollectionVerifiedAt": "2026-08-09T08:19:12.405Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "company_header_name",
+        "parserShape": "div.company-header > div.company-name",
+        "observedParsedItemCount": 13,
+        "reportedVictimCount": 15,
+        "lastReportedVictimAt": "2026-07-26T23:50:39.165392+00:00",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+        "discoveryAuthorityChain": [
+          {
+            "name": "Ransomwhere.org",
+            "role": "current public proxy inventory for the upstream ransomware.live group catalog",
+            "url": "https://ransomwhere.org/developers",
+            "recordUrl": "https://ransomwhere.org/api/groups/exfilsquad"
+          },
+          {
+            "name": "SOCRadar",
+            "role": "independent current public ransomware-group profile",
+            "url": "https://socradar.io/free-tools/ransomware-intelligence",
+            "recordUrl": "https://socradar.io/free-tools/ransomware-intelligence/groups/exfilsquad"
+          }
+        ],
+        "attribution": "Ransomwhere.org public inventory, SOCRadar independent public research, and approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T08:19:12.405Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 13,
+          "httpStatus": 200,
+          "contentType": "text/html",
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T08:19:12.405Z"
         }
       }
     }
