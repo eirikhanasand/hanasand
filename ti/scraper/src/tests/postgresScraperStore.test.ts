@@ -305,6 +305,59 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await store.close();
   });
 
+  test("separates historically useful sources from their latest health", async () => {
+    const tenantId = "tenant_historical_usefulness";
+    const sourceId = "src_historical_usefulness";
+    const historicalRunId = "run_historical_usefulness";
+    const historicalAt = "2026-08-09T10:00:00.000Z";
+    const latestAt = "2026-08-09T11:00:00.000Z";
+    const store = await PostgresScraperStore.create({ databaseUrl });
+
+    store.saveSource(source({ id: sourceId, tenantId, status: "active", url: "https://historical-usefulness.example/feed" }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_historical_usefulness",
+      tenantId,
+      sourceId,
+      collectedAt: historicalAt,
+      publishedAt: historicalAt,
+      metadata: { runId: historicalRunId }
+    }));
+    store.saveSourceHealthObservation({
+      id: "health_historical_usefulness",
+      tenantId,
+      sourceId,
+      collectionRunId: historicalRunId,
+      checkedAt: historicalAt,
+      status: "healthy",
+      success: true,
+      useful: true,
+      captureCount: 1,
+      legalMode: "public_content"
+    });
+    store.saveSourceHealthObservation({
+      id: "health_latest_failure",
+      tenantId,
+      sourceId,
+      checkedAt: latestAt,
+      status: "failed",
+      success: false,
+      useful: false,
+      captureCount: 0,
+      legalMode: "public_content"
+    });
+    await store.flush();
+
+    const result = await store.querySourceOperationalSummary({ tenantId, generatedAt: latestAt, executableOnly: true });
+
+    expect(result.summary).toMatchObject({
+      everUsefulSourceCount: 1,
+      usefulSourceCount: 0,
+      latestUsefulSourceCount: 0,
+      failedSourceCount: 1
+    });
+    await store.close();
+  });
+
   test("excludes retired-only failures from current operations but keeps historical health queryable", async () => {
     const tenantId = "tenant_source_lifecycle";
     const retiredId = "src_retired_history";
