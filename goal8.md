@@ -4,9 +4,9 @@
 
 Keep discovering, validating, deploying, and monitoring lawful Tor metadata feeds until the live source-operations API reports at least **1,000 qualifying lawful dark-web/Tor feeds**.
 
-Live baseline on 2026-08-09: **0 qualifying Tor feeds**. Raw registrations, transport canaries, candidates, mirrors, and retired rows do not count.
+Live baseline on 2026-08-09: **2 qualifying Tor feeds**. Raw registrations, transport canaries, candidates, mirrors, and retired rows do not count.
 
-The corrected production scheduler first shipped at `e7aae5ba71e5a1a4a74111f62d0322e54fc9949d`; governed review follow-through is at `06b360c60a409214db6d2d0126785bf8adea151a`, and Tor bootstrap readiness is at `79e976b85ef0bb1ec1626c4eb9295b23b8aead15`. At 2026-08-09T07:11Z, PostgreSQL reported 9 governed Tor portfolio candidates, 6 with one current productive scheduled cycle, 4 with an approved source review, and 0 with the complete two-cycle qualification proof. Three additional active Tor rows are a transport canary or legacy rows and do not qualify. The remaining gap is 1,000.
+The corrected production scheduler first shipped at `e7aae5ba71e5a1a4a74111f62d0322e54fc9949d`; governed review follow-through is at `06b360c60a409214db6d2d0126785bf8adea151a`, and Tor bootstrap readiness is at `79e976b85ef0bb1ec1626c4eb9295b23b8aead15`. At 2026-08-09T07:20Z, PostgreSQL reported 7 governed Tor portfolio candidates, 7 feeds with at least one current productive scheduled cycle, 2 with two retained productive cycles, 4 with an approved source review, and 2 with the complete persisted qualification proof. Three additional active Tor rows are a transport canary or legacy rows and do not qualify. The remaining gap is 998.
 
 ## A source counts only when
 
@@ -46,6 +46,7 @@ The corrected production scheduler first shipped at `e7aae5ba71e5a1a4a74111f62d0
 | 2026-08-09T06:47Z | `b64cdf05428dc2f6b5f60f258a6c348026a55060` | 9 | 6 | 2 | 0 | 1,000 |
 | 2026-08-09T06:49Z | `b64cdf05428dc2f6b5f60f258a6c348026a55060` | 9 | 6 | 3 | 0 | 1,000 |
 | 2026-08-09T07:11Z | `79e976b85ef0bb1ec1626c4eb9295b23b8aead15` | 9 | 6 | 4 | 0 | 1,000 |
+| 2026-08-09T07:20Z | `32ad0e8cbd1f62b9f443b641e7933cadbb1c2eee` | 7 | 7 | 4 | 2 | 998 |
 
 Every later row must come from the live PostgreSQL/API/scheduler view. Never record onion locators or captured content in this file.
 
