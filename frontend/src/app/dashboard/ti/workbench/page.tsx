@@ -291,13 +291,13 @@ function dwmCaseToWorkbenchCase(row: WorkbenchDwmCaseListItem): WorkbenchCase {
     const route = String(row.recommendedRoute || 'case_review').replaceAll('_', ' ')
     const webhookStatuses = row.webhookStatuses || []
     const webhookDeliveryIds = row.webhookDeliveryIds || []
-    const updatedAt = row.updatedAt || row.latestEvent?.at || row.createdAt || new Date().toISOString()
+    const updatedAt = row.updatedAt || row.latestEvent?.at || row.createdAt || ''
     const watchlistItemIds = row.watchlistItemIds || []
     const deliveryEvidence = webhookDeliveryIds.map((deliveryId, index) => ({
         id: deliveryId,
         alertId: alertId || rowId,
         status: webhookStatuses[index] || webhookStatuses[0] || 'recorded',
-        attemptedAt: updatedAt,
+        attemptedAt: row.latestEvent?.at || '',
         webhookDestinationId: undefined,
         endpointHash: 'endpoint_hash_not_returned',
         payloadHash: 'payload_hash_not_returned',
