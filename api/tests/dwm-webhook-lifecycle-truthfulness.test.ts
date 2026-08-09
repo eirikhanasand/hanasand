@@ -125,6 +125,25 @@ test('dry-run history never makes a webhook destination live-ready', () => {
     })
     expect(deliveredDryRunContract.status).toBe('pending')
 
+    const legacyDelivered = buildDwmWebhookDestinationLifecycle({
+        destinations: [{ ...baseDestination, lastTestStatus: 'delivered' } as any],
+        liveDeliveryEnabled: true,
+        viewerRole: 'owner',
+        canManage: true,
+    })[0]
+    expect(legacyDelivered.lifecycleState).toMatchObject({
+        liveDeliveryUnverified: true,
+        liveVerified: false,
+        verified: false,
+    })
+    const legacyDeliveredContract = buildDwmWebhookDestinationTestContract({
+        destination: { ...baseDestination, lastTestStatus: 'delivered' } as any,
+        liveDeliveryEnabled: true,
+        viewerRole: 'owner',
+        canManage: true,
+    })
+    expect(legacyDeliveredContract.status).toBe('pending')
+
     const noTest = buildDwmWebhookDestinationTestContract({
         destination: { ...baseDestination, lastTestedAt: null, lastTestStatus: null } as any,
         liveDeliveryEnabled: true,
