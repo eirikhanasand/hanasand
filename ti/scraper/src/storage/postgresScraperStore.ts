@@ -36,6 +36,7 @@ import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfoli
 import { privateTarget } from "../registry/sourceRegistry.ts";
 import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion } from "../policy/sourceAutomaticReview.ts";
 import { orgWatchlistContractToRuntimeDwmWatchlists } from "./dwmOrgWatchlistBridge.ts";
+import { mayContainExposureQueueClaim } from "../product/exposureQueueCandidate.ts";
 
 const DEFAULT_MIGRATIONS = [
   { version: "006_threat_intelligence_store", path: fileURLToPath(new URL("../../migrations/006_threat_intelligence_store.sql", import.meta.url)) },
@@ -102,6 +103,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   private readonly latestMigrationVersion: string;
   private readonly deferHighVolumeHydration: boolean;
   private readonly pendingWrites: PendingWrite[] = [];
+  private readonly postgresExposureQueueCaptureIds = new Set<string>();
   private draining?: Promise<void>;
   private lastWriteError?: Error;
   private lastDatabaseHealth?: DatabaseHealth;
@@ -989,20 +991,39 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   override saveCaptureWithDedupe(capture: RawCapture): CaptureWriteResult {
     const result = super.saveCaptureWithDedupe(capture);
+    if (result.status === "inserted") this.indexPostgresExposureQueueCapture(result.capture);
     if (result.status === "inserted" && !this.pipelineDepth) this.enqueue(`capture:${result.capture.id}`, () => this.persistCapture(result.capture));
     return result;
   }
 
   override updateCaptureMetadata(id: string, update: (metadata: any) => any): RawCapture {
     const capture = super.updateCaptureMetadata(id, update);
+    this.indexPostgresExposureQueueCapture(capture);
     this.enqueue(`capture-metadata:${id}`, () => this.persistCaptureMetadata(capture));
     return capture;
   }
 
   override replaceCaptureForRetention(capture: RawCapture): RawCapture {
     const stored = super.replaceCaptureForRetention(capture);
+    this.indexPostgresExposureQueueCapture(stored);
     this.enqueue(`capture-retention:${capture.id}`, () => this.persistCaptureRetention(stored));
     return stored;
+  }
+
+  override listExposureQueueCaptures(): RawCapture[] {
+    return [...this.postgresExposureQueueCaptureIds].flatMap((id) => this.getCapture(id) ?? []);
+  }
+
+  protected override hydrateCaptureSnapshot(capture: RawCapture): RawCapture {
+    const stored = super.hydrateCaptureSnapshot(capture);
+    this.indexPostgresExposureQueueCapture(stored);
+    return stored;
+  }
+
+  private indexPostgresExposureQueueCapture(capture: RawCapture) {
+    const source = this.getSource(capture.sourceId);
+    if (mayContainExposureQueueClaim(capture, source)) this.postgresExposureQueueCaptureIds.add(capture.id);
+    else this.postgresExposureQueueCaptureIds.delete(capture.id);
   }
 
   override savePipelineResult(result: PipelineResult): PipelineResult {
@@ -1174,6 +1195,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   override saveSource(source: SourceRecord): SourceRecord {
     const stored = super.saveSource(source);
+    for (const capture of super.listCaptures()) {
+      if (capture.sourceId === stored.id) this.indexPostgresExposureQueueCapture(capture);
+    }
     this.enqueue(`source:${stored.id}`, () => this.persistSource(stored));
     return stored;
   }
