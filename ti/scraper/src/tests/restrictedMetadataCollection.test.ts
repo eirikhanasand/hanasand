@@ -279,6 +279,19 @@ describe("restricted metadata collection", () => {
     await expect(boundary.fetchMetadata({ url: `http://${"a".repeat(56)}.onion/static/data.js`, actorName: "Unapproved" })).rejects.toThrow("unsupported media type");
   });
 
+  test("extracts only allowlisted AtomSilo JavaScript company names", async () => {
+    const body = `const companies = {
+      northwind: { name: "Northwind Health", domain: "northwind.example", size: "private", description: ["do-not-store"], data: ["secret"] },
+      contoso: { name: "Contoso Manufacturing", logo: "private.png", description: ["do-not-store"] }
+    };`;
+    const boundary = new TorMetadataHttpBoundary({ proxyUrl: "http://onion-tor:8118", fetcher: async () => new Response(body, { headers: { "content-type": "application/javascript" } }) });
+    const parsed = await boundary.fetchMetadata({ url: `http://${"a".repeat(56)}.onion/javascript/data.js`, actorName: "AtomSilo" });
+
+    expect(parsed).toMatchObject({ victimNames: ["Northwind Health", "Contoso Manufacturing"], parserProfile: "js_companies_name", links: [] });
+    expect(JSON.stringify(parsed)).not.toMatch(/private|secret|do-not-store|domain|logo/i);
+    await expect(boundary.fetchMetadata({ url: `http://${"a".repeat(56)}.onion/javascript/data.js`, actorName: "Unapproved" })).rejects.toThrow("unsupported media type");
+  });
+
   test("persists allowlisted Genesis section-card names without retaining card details", async () => {
     const store = new InMemoryScraperStore();
     const restrictedHost = `${"z".repeat(56)}.onion`;
