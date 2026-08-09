@@ -143,6 +143,7 @@ test('public status page renders unverified coverage without fake uptime', async
     expect(source).toContain('historyDaysFor(currentStatus, check)')
     expect(source).toContain('No incidents on')
     expect(source).toContain('/status/incidents/${day.incident.id}')
+    expect(source).toContain('Live refresh unavailable · showing last received status')
     expect(source).not.toContain('{check.uptime_30d}%')
     expect(source).not.toContain('Array.from({ length: 45 }')
     expect(source).not.toContain('index > 38')

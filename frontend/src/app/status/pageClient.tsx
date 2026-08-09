@@ -19,6 +19,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
     const [now, setNow] = useState<number | null>(null)
     const [currentStatus, setCurrentStatus] = useState(serviceStatus)
     const [isRefreshing, setIsRefreshing] = useState(false)
+    const [refreshError, setRefreshError] = useState(false)
     const [lastRefreshAt, setLastRefreshAt] = useState(serviceStatus.generated_at)
 
     useEffect(() => {
@@ -30,9 +31,12 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                 if (response.ok) {
                     setCurrentStatus(await response.json() as ServiceStatus)
                     setLastRefreshAt(new Date().toISOString())
+                    setRefreshError(false)
+                } else {
+                    setRefreshError(true)
                 }
             } catch {
-                // Keep the latest visible status when a poll misses.
+                setRefreshError(true)
             } finally {
                 setIsRefreshing(false)
             }
@@ -152,7 +156,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                         <Link href='/status/incidents' className='inline-flex h-9 items-center rounded-md bg-white/15 px-3 text-sm font-semibold text-white transition hover:bg-white/25'>
                             Incident history
                         </Link>
-                        <span className='text-sm font-medium'>Data refreshed {relativeTime(lastRefreshAt, now)}</span>
+                        <span className='text-sm font-medium'>{refreshError ? 'Live refresh unavailable · showing last received status' : `Data refreshed ${relativeTime(lastRefreshAt, now)}`}</span>
                     </div>
                 </div>
             </section>
