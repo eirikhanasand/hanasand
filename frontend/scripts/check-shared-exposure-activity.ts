@@ -52,6 +52,7 @@ const delayed = await fetchSharedExposureQueue(new URLSearchParams({ limit: '1' 
             items: [{ id: 'capture-stale', actor: 'Observed actor', company: 'Observed company' }],
         })
     }) as typeof fetch,
+    timeoutMs: 4_000,
 })
 const delayedPayload = await delayed.json() as { status?: string, counts?: { total?: number }, items?: unknown[] }
 assert.equal(delayed.status, 200)

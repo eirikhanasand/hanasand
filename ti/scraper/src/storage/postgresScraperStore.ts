@@ -98,7 +98,7 @@ type DatabaseHealth = {
 };
 
 export class PostgresScraperStore extends InMemoryScraperStore {
-  readonly usesPostgresSearchIndex = true;
+  readonly usesPostgresSearchIndex = false;
   private readonly sql: SQL;
   private readonly migrations: Migration[];
   private readonly latestMigrationVersion: string;
@@ -588,11 +588,11 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const where = [
       "capture.tenant_id IS NOT DISTINCT FROM $1::text",
       "(source.tenant_id IS NULL OR source.tenant_id IS NOT DISTINCT FROM capture.tenant_id)",
-      "NOT (concat_ws(' ', capture.source_id, source.record->>'name', source.record->'metadata'->>'sourceFamily') ~* '(cisa known exploited|known exploited vulnerabilities|mitre att&ck|attack enterprise|groups dataset|public groups dataset|nvd recent cve|github advisory database)')",
-      "((capture.record->'metadata'->'leakSite'->>'actorName' <> '' AND capture.record->'metadata'->'leakSite'->>'victimName' <> '') OR (concat_ws(' ', capture.source_id, source.record->>'name', source.record->'metadata'->>'sourceFamily') ~* '(victim feed|ransomware\\.live victim|ransomlook|leak site|extortion|darkweb|darknet|actor claim|tor_metadata|i2p_metadata|freenet_metadata)' AND capture.record->>'title' ~* '(has just published a new victim|claims victim|claimed victim|claims victim|victim\\s*:|added victim|listed victim|published victim)'))"
+      "NOT (concat_ws(' ', capture.source_id, source.name, source.source_family) ~* '(cisa known exploited|known exploited vulnerabilities|mitre att&ck|attack enterprise|groups dataset|public groups dataset|nvd recent cve|github advisory database)')",
+      "((capture.record->'metadata'->'leakSite'->>'actorName' <> '' AND capture.record->'metadata'->'leakSite'->>'victimName' <> '') OR (concat_ws(' ', capture.source_id, source.name, source.source_family) ~* '(victim feed|ransomware\\.live victim|ransomlook|leak site|extortion|darkweb|darknet|actor claim|tor_metadata|i2p_metadata|freenet_metadata)' AND capture.record->>'title' ~* '(has just published a new victim|claims victim|claimed victim|claims victim|victim\\s*:|added victim|listed victim|published victim)'))"
     ];
     const add = (sql: string, value: unknown) => { values.push(value); where.push(sql.replace("?", `$${values.length}`)); };
-    const text = () => "lower(capture.record::text || ' ' || COALESCE(source.record::text, '')) LIKE '%' || lower(?) || '%'";
+    const text = () => "lower(capture.record::text || ' ' || COALESCE(source.record_text, '')) LIKE '%' || lower(?) || '%'";
     if (filters.q) add(text(), filters.q);
     if (filters.company) add("lower(capture.record::text) LIKE '%' || lower(?) || '%'", filters.company);
     if (filters.actor) add("lower(capture.record::text) LIKE '%' || lower(?) || '%'", filters.actor);
@@ -601,26 +601,51 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     if (filters.country) add("lower(capture.record::text) LIKE '%' || lower(?) || '%'", filters.country);
     if (filters.from) add("COALESCE(capture.published_at, capture.collected_at) >= ?::timestamptz", `${filters.from}T00:00:00.000Z`);
     if (filters.to) add("COALESCE(capture.published_at, capture.collected_at) <= ?::timestamptz", `${filters.to}T23:59:59.999Z`);
+    // Materialize the small source projection once per query. The old
+    // primary-key lookup loaded a source JSON document for every capture.
+    const sourceTerms = `WITH candidate_captures AS MATERIALIZED (
+      SELECT *
+      FROM threat_intel.captures
+      WHERE tenant_id IS NOT DISTINCT FROM $1::text
+        AND (
+          (record->'metadata'->'leakSite'->>'actorName' <> '' AND record->'metadata'->'leakSite'->>'victimName' <> '')
+          OR record->>'title' ~* '(has just published a new victim|claims victim|claimed victim|claims victim|victim\\s*:|added victim|listed victim|published victim)'
+        )
+    ), source_terms AS MATERIALIZED (
+      SELECT id, tenant_id,
+        record->>'name' AS name,
+        record->'metadata'->>'sourceFamily' AS source_family,
+        record::text AS record_text
+      FROM threat_intel.sources
+    )`;
     const filtered = `
-      FROM threat_intel.captures capture
-      LEFT JOIN threat_intel.sources source ON source.id = capture.source_id
+      FROM candidate_captures capture
+      LEFT JOIN source_terms source ON source.id = capture.source_id
       WHERE ${where.join(" AND ")}`;
-    const [summaryRows, rows] = await Promise.all([
-      this.sql.unsafe(`SELECT count(*) AS total,
-        count(*) FILTER (WHERE capture.record->'metadata'->'review'->>'state' = 'needs_review' OR capture.published_at IS NULL) AS needs_review,
-        count(*) FILTER (WHERE capture.storage_kind = 'metadata_only') AS metadata_only,
-        max(capture.published_at) AS latest_claim_at,
-        max(capture.collected_at) AS latest_collected_at${filtered}`, values),
-      this.sql.unsafe(`SELECT capture.record,
+    const pageRows = await this.sql.unsafe(`${sourceTerms}
+      SELECT capture.record,
         capture.id AS capture_id, capture.tenant_id, capture.source_id, capture.url,
-        capture.collected_at, capture.published_at, capture.media_type, capture.storage_kind${filtered}
-        ORDER BY COALESCE(capture.published_at, capture.collected_at) DESC, capture.id DESC
-        LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
-        [...values, Math.max(1, Math.min(250, Math.floor(input.limit))), Math.max(0, Math.floor(input.offset))])
-    ]);
-    const first = summaryRows[0] as Record<string, unknown> | undefined;
+        capture.collected_at, capture.published_at, capture.media_type, capture.storage_kind,
+        count(*) OVER () AS total,
+        count(*) FILTER (WHERE capture.record->'metadata'->'review'->>'state' = 'needs_review' OR capture.published_at IS NULL) OVER () AS needs_review,
+        count(*) FILTER (WHERE capture.storage_kind = 'metadata_only') OVER () AS metadata_only,
+        max(capture.published_at) OVER () AS latest_claim_at,
+        max(capture.collected_at) OVER () AS latest_collected_at${filtered}
+      ORDER BY COALESCE(capture.published_at, capture.collected_at) DESC, capture.id DESC
+      LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      [...values, Math.max(1, Math.min(250, Math.floor(input.limit))), Math.max(0, Math.floor(input.offset))]);
+    let first = pageRows[0] as Record<string, unknown> | undefined;
+    if (!first && input.offset > 0) {
+      const summaryRows = await this.sql.unsafe(`${sourceTerms}
+        SELECT count(*) AS total,
+          count(*) FILTER (WHERE capture.record->'metadata'->'review'->>'state' = 'needs_review' OR capture.published_at IS NULL) AS needs_review,
+          count(*) FILTER (WHERE capture.storage_kind = 'metadata_only') AS metadata_only,
+          max(capture.published_at) AS latest_claim_at,
+          max(capture.collected_at) AS latest_collected_at${filtered}`, values);
+      first = summaryRows[0] as Record<string, unknown> | undefined;
+    }
     return {
-      captures: rows.map(readCaptureRecord),
+      captures: pageRows.map(readCaptureRecord),
       total: Number(first?.total ?? 0),
       needsReview: Number(first?.needs_review ?? 0),
       metadataOnly: Number(first?.metadata_only ?? 0),

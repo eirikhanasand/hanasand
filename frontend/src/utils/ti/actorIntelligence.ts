@@ -139,13 +139,13 @@ type TiActorIntelligenceFallback = Omit<TiActorIntelligenceProfile, 'provenanceR
 
 function fallbackActorIntelligence(result: TiSearchResponse, victimObservations: VictimObservation[]): TiActorIntelligenceFallback {
     return {
-        actorClass: '',
+        actorClass: 'Named threat actor or activity cluster',
         attribution: result.notes.find(note => /attribut/i.test(note)) || 'No attribution evidence',
         firstSeen: result.recentActivity.map(item => item.firstReportedAt || item.date).filter(Boolean).sort()[0] || 'No dated activity yet',
         lastSeen: result.lastSeen || 'Observation date unavailable',
         motivation: [],
         malwareTools: [],
-        campaigns: result.recentActivity.filter(item => item.claimType === 'campaign').map(item => item.title).slice(0, 6),
+        campaigns: result.recentActivity.filter(item => item.claimType === 'campaign' || item.claimType === 'general_activity').map(item => item.title).slice(0, 6),
         infrastructure: result.recentActivity.filter(item => item.claimType === 'infrastructure_activity').map(item => item.title).slice(0, 6),
         indicators: [],
         targetSectors: result.targets.map(target => target.sector).slice(0, 8),

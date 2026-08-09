@@ -3,7 +3,7 @@ import { authApiUrl } from '@/utils/auth/authApiUrl'
 import { proxyApiTiRequest } from '../../dwm/_tiProxy'
 
 export const dynamic = 'force-dynamic'
-export const PUBLIC_TI_SEARCH_TIMEOUT_MS = 3_500
+const PUBLIC_TI_SEARCH_TIMEOUT_MS = 3_500
 
 export async function GET(request: NextRequest) {
     const query = request.nextUrl.searchParams.get('q')?.trim() || ''

@@ -42,6 +42,24 @@ function statusPayload() {
         return Promise.resolve(statusCache.payload)
     }
 
+    if (statusCache) {
+        if (!statusInflight) {
+            statusInflight = loadStatusPayload()
+                .then((payload) => {
+                    statusCache = { expiresAt: Date.now() + STATUS_CACHE_MS, payload }
+                    return payload
+                })
+                .catch(error => {
+                    console.error(`[production-monitor] status refresh failed: ${error instanceof Error ? error.message : String(error)}`)
+                    return statusCache!.payload
+                })
+                .finally(() => {
+                    statusInflight = null
+                })
+        }
+        return Promise.resolve(statusCache.payload)
+    }
+
     statusInflight ||= loadStatusPayload()
         .then((payload) => {
             statusCache = { expiresAt: Date.now() + STATUS_CACHE_MS, payload }
