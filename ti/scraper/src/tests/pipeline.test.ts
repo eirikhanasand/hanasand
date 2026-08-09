@@ -32,7 +32,7 @@ describe("compact pipeline value path", () => {
       contentHash: hashContent("darknet"),
       links: [],
       sensitive: true,
-      metadata: { extractionProfile: "ransomware_victim_blog", leakSite: { actorName: "Blackout", victimName: "Example Energy AS", claimedSector: "energy", claimedCountry: "Norway", claimedDataType: "customer records", summary: "PENDING Publishes after: 2d remaining. Download: metadata-only release reference. If you are listed by mistake, contact us." } }
+      metadata: { extractionProfile: "ransomware_victim_blog", leakSite: { actorName: "Blackout", victimName: "Example Energy AS", claimedSector: "energy", claimedCountry: "Norway", claimedDataType: "customer records", extortionType: "double extortion", monetizationPath: "ransom demand", buyerSellerCommunication: "auction contact channel", intermediaryCommunication: "broker listing", profitabilitySignal: "claimed paid victims", summary: "PENDING Publishes after: 2d remaining. Download: metadata-only release reference. If you are listed by mistake, contact us." } }
     });
     const cisa = processCollectedItem({
       sourceId: "src_cisa_kev",
