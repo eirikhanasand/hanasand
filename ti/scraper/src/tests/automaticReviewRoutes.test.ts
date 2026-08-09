@@ -17,6 +17,63 @@ import { hashContent } from "../utils.ts";
 const firstAt = "2026-07-22T10:00:00.000Z";
 
 describe("automatic Hanasand AI intelligence review", () => {
+  test("treats governed metadata-only victim lists as operational source evidence", async () => {
+    const store = new InMemoryScraperStore();
+    seedSource(store, "victim-list", "Acme Manufacturing\nNorthwind Logistics\nContoso Energy");
+    store.updateCaptureMetadata("capture_victim-list", (metadata) => ({ ...metadata, runId: "run-victim-list" }));
+    store.saveSourceHealthObservation({
+      id: "health-victim-list",
+      tenantId: "default",
+      sourceId: "victim-list",
+      collectionRunId: "run-victim-list",
+      checkedAt: firstAt,
+      success: true,
+      useful: true,
+      captureCount: 1
+    });
+    const source = store.getSource("victim-list")!;
+    store.saveSource({
+      ...source,
+      status: "candidate",
+      metadata: {
+        sourceFamily: "dark_web_victim_feed",
+        actorName: "Example Actor",
+        expectedPageRole: "victim_listing",
+        collectionScope: "metadata_only",
+        productionCollection: false,
+        sourcePortfolioVerification: { verifiedAt: firstAt, legalBasisVerifiedAt: firstAt, outcome: "content_parsed", observedItemCount: 3 }
+      }
+    } as any);
+    let prompt = "";
+    let request: any;
+
+    await runAutomaticReviewCycle(options(store), {
+      now: firstAt,
+      allTenants: true,
+      limit: 1,
+      concurrency: 1,
+      modelVersion: "hanasand",
+      fetcher: async (_input, init) => {
+        const outgoing = JSON.parse(String(init?.body));
+        prompt = outgoing.prompt;
+        request = promptRequest(prompt);
+        return completedTools(request, {
+          ...supportedDecision(request),
+          promptVersion: request.promptVersion,
+          actorAttribution: { canonicalName: null, aliases: [] }
+        } as any);
+      }
+    });
+
+    expect(request.assertionUnderReview).toMatchObject({
+      sourceFamily: "dark_web_victim_feed",
+      actorName: "Example Actor",
+      expectedPageRole: "victim_listing",
+      collectionScope: "metadata_only"
+    });
+    expect(prompt).toContain("a coherent retained list of plausible victim organization names is operational threat intelligence and must be confirmed");
+  });
+
   test("queues claims and incidents independently in one linear read and sends a bounded safe cross-source projection", async () => {
     const store = new InMemoryScraperStore();
     seedSource(store, "source_a", unsafeExcerpt());
