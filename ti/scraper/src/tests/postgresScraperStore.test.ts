@@ -40,6 +40,23 @@ describe("structured threat-intelligence storage contract", () => {
     expect(query).not.toContain("LEFT JOIN LATERAL");
   });
 
+  test("keeps historical usefulness separate from latest health usefulness", async () => {
+    const store = Object.create(PostgresScraperStore.prototype) as any;
+    let summaryQuery = "";
+    store.sql = {
+      unsafe: async (query: string) => {
+        summaryQuery = query;
+        return [{ summary: { everUsefulSourceCount: 1, usefulSourceCount: 0, latestUsefulSourceCount: 0 } }];
+      }
+    };
+
+    const result = await store.querySourceOperationalSummary({ tenantId: "tenant_summary", generatedAt: collectedAt });
+    expect(summaryQuery).toContain("historical_usefulness");
+    expect(summaryQuery).toContain("historical_usefulness.last_useful_at IS NOT NULL");
+    expect(summaryQuery).toContain("latest_health.useful AND latest_health.capture_count > 0");
+    expect(result.summary).toMatchObject({ everUsefulSourceCount: 1, usefulSourceCount: 0, latestUsefulSourceCount: 0 });
+  });
+
   test("does not require the optional parser cleanup table during normal startup", async () => {
     const store = Object.create(PostgresScraperStore.prototype) as any;
     store.sql = ((strings: TemplateStringsArray) => strings[0].includes("to_regclass") ? [{ table_name: null }] : []) as any;
