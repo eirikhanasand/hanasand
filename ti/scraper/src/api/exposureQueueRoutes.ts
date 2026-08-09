@@ -245,6 +245,8 @@ export async function exposureParserHealth() {
 
 export async function saveExposureClaimFromCollectedItem(store: any, item: any, at = nowIso()) {
   if (!shouldPromoteExposureClaim(item)) return undefined;
+  const sourceFamily = collectedExposureSourceFamily(item);
+  if (requiresPublisherEvidence(sourceFamily) && !hasPublisherEvidence(item)) return undefined;
   const claim = await parseExposureClaim({
     sourceId: item.sourceId,
     sourceName: item.source?.name || item.metadata?.sourceName,
@@ -255,10 +257,40 @@ export async function saveExposureClaimFromCollectedItem(store: any, item: any, 
     capturedAt: item.collectedAt || at,
     publishedAt: item.publishedAt,
     reportTimestamps: item.metadata?.reportTimestamps,
-    sourceFamily: item.metadata?.adapter === "public_advisory" ? "public_advisory" : item.metadata?.adapter === "telegram_public" ? "telegram_public" : undefined
+    sourceFamily
   }, at);
   if (!claim.actor || !claim.company) return undefined;
   return saveExposureClaim(store, claim, at, { tenantId: item.tenantId ?? "default", organizationId: item.organizationId, submittedBy: "collector" });
+}
+
+function collectedExposureSourceFamily(item: any) {
+  const explicit = String(item.metadata?.sourceFamily ?? "").trim();
+  if (explicit) return explicit;
+  if (item.metadata?.adapter === "public_advisory") return "public_advisory";
+  if (item.metadata?.adapter === "darknet_metadata") return "darkweb_metadata";
+  if (item.metadata?.adapter === "telegram_public") return "telegram_public";
+  return undefined;
+}
+
+function requiresPublisherEvidence(sourceFamily: unknown) {
+  return sourceFamily === "darkweb_metadata" || sourceFamily === "telegram_public";
+}
+
+function hasPublisherEvidence(item: any) {
+  const publishedAt = zonedSourceTimestamp(item.publishedAt);
+  const referenceUrl = publicSourceReferenceUrl(item.url);
+  if (!publishedAt || !referenceUrl || !Array.isArray(item.metadata?.reportTimestamps)) return false;
+  return item.metadata.reportTimestamps.some((record: any) => {
+    const timestamp = zonedSourceTimestamp(record?.timestamp);
+    const recordUrl = publicSourceReferenceUrl(record?.referenceUrl);
+    return record?.role === "publisher"
+      && record?.sourceId === item.sourceId
+      && record?.extractionMethod === "source_field"
+      && typeof record?.evidencePath === "string"
+      && record.evidencePath.trim().length > 0
+      && timestamp === publishedAt
+      && recordUrl === referenceUrl;
+  });
 }
 
 type ExposureQueueFilters = { q?: string; company?: string; actor?: string; category?: string; size?: string; country?: string; from?: string; to?: string };
