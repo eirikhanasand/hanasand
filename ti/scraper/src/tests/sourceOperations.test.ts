@@ -34,6 +34,7 @@ describe("source operations", () => {
     store.saveEvaluationLabel({ id: "label_fp", tenantId: "tenant_a", captureId: "cap_ops_a", outcome: "false_positive" });
     store.saveSourceHealthObservation({ id: "health_ok", tenantId: "tenant_a", sourceId: "src_ops_a", collectionRunId: "run_ops_useful", checkedAt: now, status: "degraded", success: true, useful: true, itemCount: 2, captureCount: 1, duplicateCount: 1, parserWarningCount: 1, legalMode: "public_content" });
     store.saveSourceHealthObservation({ id: "health_failed", tenantId: "tenant_a", sourceId: "src_ops_a", collectionRunId: "run_ops_failed", checkedAt: new Date(Date.parse(now) + 1_000).toISOString(), status: "failed", success: false, useful: false, itemCount: 0, captureCount: 0, duplicateCount: 0, parserWarningCount: 0, adapterFailureCategory: "network_failure", failureReason: "fetch https://secretexample.onion/post?token=unsafe failed", legalMode: "public_content" });
+    store.saveSourceHealthObservation({ id: "health_duplicate", tenantId: "tenant_a", sourceId: "src_ops_a", collectionRunId: "run_ops_duplicate", checkedAt: new Date(Date.parse(now) + 500).toISOString(), status: "healthy", success: true, useful: false, itemCount: 1, captureCount: 1, duplicateCount: 1, parserWarningCount: 0, legalMode: "public_content" });
     store.saveSourceHealthObservation({ id: "health_other_tenant", tenantId: "tenant_b", sourceId: "src_ops_b", checkedAt: now, status: "healthy", success: true, useful: true, itemCount: 1, captureCount: 1, duplicateCount: 0, parserWarningCount: 0, legalMode: "public_content" });
 
     const options = { store, frontier: new FocusedFrontier(), serviceToken: "source-ops-test" };
@@ -45,8 +46,8 @@ describe("source operations", () => {
     expect(payload.sources[0]).toMatchObject({
       id: "src_ops_a",
       family: "vendor_blog",
-      health: { state: "failed", collectionSuccessRate: 0.5, usefulYieldRate: 1, consecutiveFailures: 1, lastFailureCategory: "network_failure" },
-      parser: { version: "vendor:v2", attemptCount: 1, successRate: 0, warningCount: 1 },
+      health: { state: "failed", collectionSuccessRate: 0.6667, usefulYieldRate: 0.5, consecutiveFailures: 1, lastFailureCategory: "network_failure" },
+      parser: { version: "vendor:v2", attemptCount: 2, successRate: 0.5, warningCount: 1 },
       quality: { falsePositiveRate: 0.5, falsePositiveSampleSize: 2, falsePositiveBasis: "evaluation_labels", duplicateRate: 0.5 },
       coverage: { observedActorCount: 1, observedActors: ["apt29"], captureCount: 1 },
       verification: { countsAsCoverage: true, automaticReview: { state: "approved", reviewedAt: now, confidence: 0.92, claimValidity: "supported", modelVersion: "hanasand-review-v6" } }
