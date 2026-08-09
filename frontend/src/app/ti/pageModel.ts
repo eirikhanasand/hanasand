@@ -3272,7 +3272,7 @@ export function selectedTriageBriefFor(
 }
 
 export function actorOperationsRowsFor(result: TiSearchResponse, actor: TiActorIntelligenceProfile, victimObservations: ReturnType<typeof victimObservationsFor>): ActorOperationsRow[] {
-    const latestDate = actor.sourceCoverage.latestReportDate || actor.lastSeen || result.lastSeen || result.generatedAt
+    const latestDate = actor.sourceCoverage.latestReportDate || actor.lastSeen || result.lastSeen || ''
     const defaultSource = actor.provenanceRows[0]?.sourceName || result.sources[0]?.name || 'Public source'
     const defaultFamily = actor.sourceCoverage.sourceFamilies[0]?.family ? formatLabel(actor.sourceCoverage.sourceFamilies[0].family) : 'Source coverage'
     const techniqueRows: ActorOperationsRow[] = actor.techniqueCoverage.map(item => ({

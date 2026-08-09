@@ -4954,7 +4954,7 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
     ].filter(Boolean).slice(0, 4)
     const aliases = result.aliases.slice(0, 5)
     const techniques = actor.techniqueCoverage.slice(0, 3)
-    const latestDate = actor.sourceCoverage.latestReportDate || result.lastSeen || result.generatedAt
+    const latestDate = actor.sourceCoverage.latestReportDate || result.lastSeen || ''
     const openGap = actionability.enrichmentGapQueue[0]
     const sourceCount = actor.provenanceRows.length || actor.sourceCoverage.totalRows || result.sources.length
     const methodNames = techniques.map(item => item.attackId || item.name).filter(Boolean)

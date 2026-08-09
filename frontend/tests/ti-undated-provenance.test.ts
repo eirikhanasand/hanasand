@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { buildTiActionability } from '../src/utils/ti/actionability'
 import { buildActorIntelligence } from '../src/utils/ti/actorIntelligence'
 import { victimObservationsFor } from '../src/utils/ti/actorProfile'
+import { actorOperationsRowsFor } from '../src/app/ti/pageModel'
 import type { TiSearchResponse } from '../src/utils/ti/search'
 
 const result: TiSearchResponse = {
@@ -64,6 +65,12 @@ const undatedTimelineActor = buildActorIntelligence({
 }, [])
 assert.equal(undatedTimelineActor.campaignTimeline[0]?.firstReportedAt, '')
 assert.ok(undatedTimelineActor.campaignTimeline[0]?.missing.includes('firstReportedAt'))
+
+const undatedTechniqueActor = buildActorIntelligence({
+    ...result,
+    ttps: [{ name: 'Undated technique', tactic: 'execution', detail: 'No source date.', confidence: 0.4 }],
+}, [])
+assert.equal(actorOperationsRowsFor(result, undatedTechniqueActor, [])[0]?.timestamp, 'Observation date unavailable')
 
 const noEvidenceActor = buildActorIntelligence({ ...result, aliases: [], notes: [], sources: [], actorIntelligence: undefined }, [])
 assert.equal(noEvidenceActor.attribution, 'No attribution evidence')
