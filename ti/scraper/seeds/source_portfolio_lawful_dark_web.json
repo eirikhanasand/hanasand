@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T13:53:55.000Z",
+  "generatedAt": "2026-08-09T14:11:18.000Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -1435,6 +1435,83 @@
           "contentType": "application/javascript",
           "adapter": "tor_metadata",
           "legalBasisVerifiedAt": "2026-08-09T13:43:33.000Z"
+        }
+      }
+    },
+    {
+      "id": "restricted_crpx0_victim_blog",
+      "name": "CRPX0 victim blog",
+      "type": "tor_metadata",
+      "url": "http://tlxoddx4odmc2qvsmtsbgwwsv5j45osb5sox7mz6izxliuju5mkulzad.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.86,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public victim-listing organization headings from credential-free victim cards. Never authenticate, interact with operators, follow payload or contact links, or retain descriptions, sectors, locations, countdowns, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-08-09T14:11:18.000Z",
+        "approvedBy": "source-review:goal8-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "CRPX0",
+        "actors": [
+          "CRPX0",
+          "CrpX0"
+        ],
+        "discoveryAuthorityUrl": "https://www.ransomlook.io/doc/",
+        "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/crpx0",
+        "discoveryCheckedAt": "2026-08-09T14:11:18.000Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T14:11:18.000Z",
+        "productionCollectionVerifiedAt": "2026-08-09T14:11:18.000Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "victim_card_h3",
+        "parserShape": ".victim-card h3",
+        "observedParsedItemCount": 10,
+        "reportedVictimCount": 6,
+        "lastReportedVictimAt": "2026-07-08T18:41:42.995101Z",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+        "discoveryAuthorityChain": [
+          {
+            "name": "RansomLook",
+            "role": "current public ransomware-group registry matching the exact endpoint, victim-listing role, and availability",
+            "url": "https://www.ransomlook.io/doc/",
+            "recordUrl": "https://www.ransomlook.io/api/group/crpx0"
+          },
+          {
+            "name": "Aryaka Threat Research Lab",
+            "role": "independent current technical research identifying CRPX0 ransomware and double-extortion activity",
+            "url": "https://www.aryaka.com/reports-and-guides/",
+            "recordUrl": "https://www.aryaka.com/reports-and-guides/crpx0-ransomware-operations-report/"
+          },
+          {
+            "name": "Red Piranha",
+            "role": "independent current 2026 threat-intelligence reporting on CRPX0 activity",
+            "url": "https://redpiranha.net/news",
+            "recordUrl": "https://redpiranha.net/news/threat-intelligence-report-march-31-april-6-2026"
+          }
+        ],
+        "attribution": "Current RansomLook endpoint verification, independent Aryaka Threat Research Lab and Red Piranha reporting, and approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T14:11:18.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 10,
+          "httpStatus": 200,
+          "contentType": "text/html",
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T14:11:18.000Z"
         }
       }
     }
