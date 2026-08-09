@@ -24,10 +24,6 @@ async function loadExposureQueue(): Promise<ExposureQueue> {
         if (!response.ok) return exposureQueueFallback('unavailable', 50)
         return normalizeExposureQueue(await response.json())
     } catch (error) {
-        return exposureQueueFallback(isTimeoutError(error) ? 'checking' : 'unavailable', 50)
+        return exposureQueueFallback('unavailable', 50)
     }
-}
-
-function isTimeoutError(error: unknown) {
-    return error instanceof Error && error.name === 'TimeoutError'
 }

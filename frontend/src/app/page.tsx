@@ -407,12 +407,8 @@ async function loadExposureQueue(): Promise<ExposureQueue> {
         if (!response.ok) return exposureQueueFallback('unavailable', 10)
         return normalizeExposureQueue(await response.json())
     } catch (error) {
-        return exposureQueueFallback(isTimeoutError(error) ? 'checking' : 'unavailable', 10)
+        return exposureQueueFallback('unavailable', 10)
     }
-}
-
-function isTimeoutError(error: unknown) {
-    return error instanceof Error && error.name === 'TimeoutError'
 }
 
 function firstParam(value: string | string[] | undefined) {
