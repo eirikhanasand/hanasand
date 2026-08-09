@@ -15,12 +15,14 @@ type FetchResult = {
 
 export async function GET(request: NextRequest) {
     const generatedAt = new Date().toISOString()
-    const query = request.nextUrl.searchParams.get('q')?.trim() || 'acworth-ga.gov'
+    const query = request.nextUrl.searchParams.get('q')?.trim() || ''
     const routes = productProgressRoutes(query)
     const [sourceProxy, dwmProduct, publicTi, alerts, alertGeneration, cases, deliveries, organizations, watchlists, supportRecovery, auditEvents, deployStatus] = await Promise.all([
         fetchInternalJson(request, routes.sourceProxy || '/api/ti/scraper/control'),
         fetchInternalJson(request, routes.dwmProduct || '/api/dwm/product'),
-        fetchInternalJson(request, routes.publicTiProvenance || '/api/ti/search'),
+        query
+            ? fetchInternalJson(request, routes.publicTiProvenance || '/api/ti/search')
+            : Promise.resolve({ ok: false, status: 400, error: 'No public intelligence query was supplied.' }),
         fetchInternalJson(request, routes.dashboardAlerts || '/api/dwm/alerts'),
         fetchInternalJson(request, routes.alertGenerationReadiness || '/api/dwm/alerts/generation-readiness'),
         fetchInternalJson(request, routes.cases || '/api/cases'),
@@ -153,7 +155,7 @@ function productProgressRoutes(query: string) {
     const encoded = encodeURIComponent(query)
     return {
         productProgress: '/api/product-progress',
-        publicTiProvenance: `/api/ti/search?q=${encoded}&limit=10`,
+        publicTiProvenance: query ? `/api/ti/search?q=${encoded}&limit=10` : undefined,
         helpdeskAudit: '/api/backend/admin/support/access-recovery',
         deployProbe: '/api/status',
         sourceProxy: `/api/ti/scraper/control?q=${encoded}`,
