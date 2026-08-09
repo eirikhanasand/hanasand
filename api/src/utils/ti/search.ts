@@ -166,8 +166,10 @@ export function classifyTiQuery(query: string): NonNullable<TiSearchResponse['qu
 
 async function fetchCanonicalScraperSearch(scraperBase: string, query: string, options: { cachedOnly?: boolean, preflightHealth?: boolean } = {}): Promise<TiSearchResponse | null> {
     try {
+        const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
+        const headers = serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined
         if (options.preflightHealth) {
-            const health = await fetch(new URL('/v1/health', `${scraperBase}/`), { signal: AbortSignal.timeout(350) })
+            const health = await fetch(new URL('/v1/health', `${scraperBase}/`), { headers, signal: AbortSignal.timeout(350) })
             if (!health.ok) return null
         }
         const target = new URL('/v1/intel/search', `${scraperBase}/`)
@@ -176,7 +178,7 @@ async function fetchCanonicalScraperSearch(scraperBase: string, query: string, o
         if (entityType) target.searchParams.set('entityType', entityType)
         target.searchParams.set('limit', '50')
         if (options.cachedOnly) target.searchParams.set('cached', 'true')
-        const response = await fetch(target, { signal: AbortSignal.timeout(options.cachedOnly ? 350 : 12_000) })
+        const response = await fetch(target, { headers, signal: AbortSignal.timeout(options.cachedOnly ? 350 : 12_000) })
         if (!response.ok) return null
         const result = await response.json() as TiSearchResponse
         if (result.query.trim().toLowerCase() !== query.toLowerCase() || !Array.isArray(result.sources) || !Array.isArray(result.recentActivity)) return null
