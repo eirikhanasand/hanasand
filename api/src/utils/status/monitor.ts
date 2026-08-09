@@ -298,6 +298,19 @@ export default async function runSyntheticMonitor() {
                       )
                       AND updated_at < NOW() - INTERVAL '30 minutes'
                   )::int AS stale_reviews,
+                  COALESCE(
+                    EXTRACT(EPOCH FROM (NOW() - MIN(updated_at) FILTER (
+                      WHERE record_type = 'analyst_metadata_review_task'
+                        AND record->>'recordKind' = 'automatic_intelligence_review_task'
+                        AND record->>'state' IN ('queued', 'running', 'retrying')
+                        AND record->>'promptVersion' NOT IN (
+                          'ti.automatic_intelligence_review.prompt.v1',
+                          'ti.automatic_intelligence_review.prompt.v2',
+                          'ti.automatic_intelligence_review.prompt.v3'
+                        )
+                    )) / 60)::int,
+                    0
+                  ) AS oldest_review_age_minutes,
                   count(*) FILTER (
                     WHERE record_type = 'collection_plan'
                       AND id LIKE 'source-feed-discovery-plan_%'
@@ -345,15 +358,16 @@ export default async function runSyntheticMonitor() {
             `)
             const counts = result.rows[0] || {}
             const staleReviews = Number(counts.stale_reviews ?? 0)
+            const oldestReviewAgeMinutes = Number(counts.oldest_review_age_minutes ?? 0)
             const overdueDiscovery = Number(counts.overdue_discovery ?? 0)
             const stalledEvaluations = Number(counts.stalled_evaluations ?? 0)
             const unreviewedSources = Number(counts.unreviewed_sources ?? 0)
             const recentDeliveryFailures = Number(counts.recent_delivery_failures ?? 0)
-            const message = `${staleReviews} stale reviews, ${overdueDiscovery} overdue discovery jobs, ${stalledEvaluations} stalled evaluations, ${unreviewedSources} captured sources without automatic review, ${recentDeliveryFailures} recent delivery failures.`
-            if (staleReviews >= 1_000 || overdueDiscovery >= 10 || stalledEvaluations >= 2 || unreviewedSources >= 1_000 || recentDeliveryFailures >= 10) {
+            const message = `${staleReviews} stale reviews (oldest ${oldestReviewAgeMinutes} minutes), ${overdueDiscovery} overdue discovery jobs, ${stalledEvaluations} stalled evaluations, ${unreviewedSources} captured sources without automatic review, ${recentDeliveryFailures} recent delivery failures.`
+            if (oldestReviewAgeMinutes >= 240 || staleReviews >= 1_000 || overdueDiscovery >= 10 || stalledEvaluations >= 2 || unreviewedSources >= 1_000 || recentDeliveryFailures >= 10) {
                 return { status: 'down', message }
             }
-            if (staleReviews || overdueDiscovery || stalledEvaluations || unreviewedSources || recentDeliveryFailures >= 3) {
+            if (oldestReviewAgeMinutes >= 60 || staleReviews || overdueDiscovery || stalledEvaluations || unreviewedSources || recentDeliveryFailures >= 3) {
                 return { status: 'degraded', message }
             }
             return message
