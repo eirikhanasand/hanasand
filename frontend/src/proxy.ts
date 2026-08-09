@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import pathIsAllowedWhileUnauthorized from './utils/proxy/pathIsAllowedWhileUnauthorized'
-import tokenIsValid from './utils/proxy/tokenIsValid'
+import tokenIsValid, { recentlyValidatedSession, tokenValidationOutcome } from './utils/proxy/tokenIsValid'
 import pathToRoleArray from './utils/proxy/pathToRoleArray'
 
 export async function proxy(req: NextRequest) {
@@ -48,14 +48,21 @@ export async function proxy(req: NextRequest) {
         const token = tokenCookie.value
         const id = idCookie.value
         let roles: Role[] = []
-        if (isLocalDashboardRenderProof(req, token, id) || recentlyValidatedSession(sessionExpiresAt, authCheckedAt)) {
+        if (isLocalDashboardRenderProof(req, token, id)) {
             const rolesCookie = req.cookies.get('roles')?.value
             roles = normalizeRoles(rolesCookie ? JSON.parse(rolesCookie) : [])
         } else if (!validToken || !id) {
             const auth = await tokenIsValid(token, id)
             validToken = auth.valid
 
-            if (!validToken) {
+            const outcome = tokenValidationOutcome(auth.state, recentlyValidatedSession(sessionExpiresAt, authCheckedAt))
+            if (outcome === 'degraded') {
+                requestHeaders.set('x-auth-state', 'degraded')
+                const rolesCookie = req.cookies.get('roles')?.value
+                roles = normalizeRoles(rolesCookie ? JSON.parse(rolesCookie) : [])
+            } else if (outcome === 'unavailable') {
+                return authServiceUnavailable()
+            } else if (outcome === 'invalid') {
                 return loginRedirect(req, pathWithSearch, { expired: Boolean(token), clearAuth: true })
             }
 
@@ -119,6 +126,9 @@ export async function proxy(req: NextRequest) {
 
     response.headers.set('x-theme', theme)
     response.headers.set('x-current-path', path)
+    if (requestHeaders.get('x-auth-state')) {
+        response.headers.set('x-auth-state', requestHeaders.get('x-auth-state')!)
+    }
     return response
 }
 
@@ -165,18 +175,6 @@ function applyRefreshedAuthCookies(
     if (auth.checked_at) {
         setAuthCookie(response, 'auth_checked_at', auth.checked_at, cookieOptions, options.sharedDomain)
     }
-}
-
-const AUTH_CHECK_CACHE_MS = 5 * 60 * 1000
-const SESSION_EXPIRY_SKEW_MS = 60 * 1000
-
-function recentlyValidatedSession(sessionExpiresAt: string, authCheckedAt: string) {
-    const expires = Date.parse(sessionExpiresAt)
-    const checked = Date.parse(authCheckedAt)
-    return Number.isFinite(expires)
-        && Number.isFinite(checked)
-        && expires - Date.now() > SESSION_EXPIRY_SKEW_MS
-        && Date.now() - checked < AUTH_CHECK_CACHE_MS
 }
 
 function setAuthCookie(
@@ -290,4 +288,14 @@ function loginRedirect(
     }
 
     return response
+}
+
+function authServiceUnavailable() {
+    return NextResponse.json({
+        ok: false,
+        error: {
+            code: 'authentication_service_unavailable',
+            message: 'Authentication service is temporarily unavailable.',
+        },
+    }, { status: 503, headers: { 'cache-control': 'no-store' } })
 }

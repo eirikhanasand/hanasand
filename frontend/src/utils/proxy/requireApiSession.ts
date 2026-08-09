@@ -13,7 +13,15 @@ export default async function requireApiSession(request: NextRequest, allowedRol
     if (!token || !id) return { response: authError(401, 'authentication_required', 'A valid Hanasand session is required.') }
 
     const validation = await tokenIsValid(token, id)
-    if (!validation.valid) return { response: authError(401, 'invalid_session', 'The Hanasand session is invalid or expired.') }
+    if (!validation.valid) {
+        return {
+            response: authError(
+                validation.state === 'unavailable' ? 503 : 401,
+                validation.state === 'unavailable' ? 'authentication_service_unavailable' : 'invalid_session',
+                validation.state === 'unavailable' ? 'Authentication service is temporarily unavailable.' : 'The Hanasand session is invalid or expired.',
+            ),
+        }
+    }
 
     const roles = (validation.roles ?? [])
         .flatMap(role => [role.id, (role as Role & { role_id?: string }).role_id])

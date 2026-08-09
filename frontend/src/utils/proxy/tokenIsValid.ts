@@ -3,12 +3,15 @@ import { authApiUrl } from '@/utils/auth/authApiUrl'
 
 export type TokenValidationResult = {
     valid: boolean
+    state: 'valid' | 'invalid' | 'unavailable'
     token?: string
     roles?: Role[]
     name?: string
     avatar?: string
     expires_at?: string
 }
+
+export type TokenValidationOutcome = 'valid' | 'degraded' | 'invalid' | 'unavailable'
 
 export default async function tokenIsValid(token: string, id: string): Promise<TokenValidationResult> {
     try {
@@ -19,12 +22,13 @@ export default async function tokenIsValid(token: string, id: string): Promise<T
         })
 
         if (!response.ok) {
-            throw new Error(`Failed to connect to API: ${await response.text()}`)
+            return { valid: false, state: tokenValidationState(response.status) }
         }
 
         const data = await response.json()
         return {
             valid: true,
+            state: 'valid',
             token: data.token,
             roles: data.roles,
             name: data.name,
@@ -37,6 +41,27 @@ export default async function tokenIsValid(token: string, id: string): Promise<T
             stack: (error as Error).stack,
         })
 
-        return { valid: false }
+        return { valid: false, state: 'unavailable' }
     }
+}
+
+export function tokenValidationState(status: number): TokenValidationResult['state'] {
+    if (status === 401 || status === 403) return 'invalid'
+    if (status >= 500) return 'unavailable'
+    return 'unavailable'
+}
+
+export function recentlyValidatedSession(sessionExpiresAt: string, authCheckedAt: string, now = Date.now()) {
+    const expires = Date.parse(sessionExpiresAt)
+    const checked = Date.parse(authCheckedAt)
+    return Number.isFinite(expires)
+        && Number.isFinite(checked)
+        && expires - now > 60 * 1000
+        && now - checked < 5 * 60 * 1000
+}
+
+export function tokenValidationOutcome(state: TokenValidationResult['state'], withinGraceWindow: boolean): TokenValidationOutcome {
+    if (state === 'valid') return 'valid'
+    if (state === 'invalid') return 'invalid'
+    return withinGraceWindow ? 'degraded' : 'unavailable'
 }
