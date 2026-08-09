@@ -4396,6 +4396,7 @@ export function buildDwmWebhookDestinationContracts({
         const testAudit = lastTestDelivery ? destinationAudits.find(audit => audit.deliveryId === lastTestDelivery.id) : null
         const deliveryAudit = lastDelivery ? destinationAudits.find(audit => audit.deliveryId === lastDelivery.id) : null
         const failureReason = redactNullableDeliveryText(destination.lastTestError || lastDelivery?.error || lastTestDelivery?.error || null)
+        const lastTestStatus = lastTestDelivery?.status || (destination.lastTestStatus === 'delivered' ? 'unknown' : destination.lastTestStatus || null)
 
         return {
             id: destination.id,
@@ -4423,9 +4424,9 @@ export function buildDwmWebhookDestinationContracts({
             actorId: destination.createdBy,
             lastTest: {
                 at: destination.lastTestedAt || lastTestDelivery?.attemptedAt || null,
-                status: destination.lastTestStatus || lastTestDelivery?.status || null,
+                status: lastTestStatus,
                 dryRun: lastTestDelivery?.dryRun ?? null,
-                live: lastTestDelivery ? !lastTestDelivery.dryRun : false,
+                live: lastTestDelivery?.status === 'delivered' && lastTestDelivery.dryRun === false,
                 httpStatus: destination.lastTestHttpStatus || lastTestDelivery?.responseStatus || null,
                 failureReason: redactNullableDeliveryText(destination.lastTestError || lastTestDelivery?.error || null),
                 requestId: lastTestDelivery?.id || null,
@@ -7091,8 +7092,8 @@ export function buildDwmWebhookDestinationTestContract({
         ? {
             requestId: null,
             deliveryId: null,
-            status: destination.lastTestStatus,
-            dryRun: destination.lastTestStatus === 'dry_run' ? true : null,
+            status: destination.lastTestStatus === 'delivered' ? 'unknown' : destination.lastTestStatus,
+            dryRun: null,
             live: false,
             responseStatus: destination.lastTestHttpStatus,
             error: destination.lastTestError ? redactDeliveryEvidenceText(destination.lastTestError) : null,
@@ -7136,7 +7137,7 @@ export function buildDwmWebhookDestinationTestContract({
     if (destination && destination.status !== 'active') blockers.push(testContractBlocker('destination_disabled', 'Destination is disabled and cannot be tested.', destination.id))
     if (destination && !destination.endpointHash && !destination.endpointHint) blockers.push(testContractBlocker('missing_webhook_url', 'Destination has no configured webhook URL reference.', destination.id))
     if (!latestTest && !persistedLastTest) blockers.push(testContractBlocker('no_verified_dry_run', 'Destination has not recorded a dry-run test delivery yet.', destinationId, false))
-    if (latestTest?.status === 'failed' || persistedLastTest?.status === 'failed' || health?.lastTest.status === 'failed') blockers.push(testContractBlocker('test_failed', 'Latest destination test failed.', destinationId))
+    if (latestTest?.status === 'failed' || destination?.lastTestStatus === 'failed' || persistedLastTest?.status === 'failed' || health?.lastTest.status === 'failed') blockers.push(testContractBlocker('test_failed', 'Latest destination test failed.', destinationId))
     if (!latestAudit) blockers.push(testContractBlocker('audit_missing', 'Destination test has no linked audit event yet.', destinationId, false))
     if (!liveDeliveryEnabled) blockers.push(testContractBlocker('live_delivery_disabled', 'Live webhook delivery is disabled for this environment; tests default to dry-run.', destinationId, false))
     const uniqueBlockers = uniqueTestContractBlockers(blockers)
@@ -7161,7 +7162,7 @@ export function buildDwmWebhookDestinationTestContract({
         destinationId,
         type: destination?.kind || null,
         label: destination?.name || null,
-        status: verified ? 'verified' : latestTestStatus === 'failed' || health?.lastTest.status === 'failed' ? 'test_failed' : destination?.status === 'archived' || destination?.status === 'paused' ? 'disabled' : 'pending',
+        status: verified ? 'verified' : latestTestStatus === 'failed' || destination?.lastTestStatus === 'failed' || health?.lastTest.status === 'failed' ? 'test_failed' : destination?.status === 'archived' || destination?.status === 'paused' ? 'disabled' : 'pending',
         noNetwork: true,
         liveDeliveryEnabled,
         externalSendEnabled: false,
