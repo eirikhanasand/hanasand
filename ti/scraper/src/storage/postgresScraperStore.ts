@@ -118,6 +118,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const store = new PostgresScraperStore(sql, migrations);
     try {
       await sql.connect();
+      await sql.unsafe("SET TIME ZONE 'UTC'");
       options.onStartupPhase?.("connected");
       await store.migrate();
       options.onStartupPhase?.("migrated");
@@ -366,8 +367,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             'reportedCaptureCount', COALESCE(sum(h.capture_count), 0),
             'observedFalsePositiveRate', avg(h.false_positive_rate),
             'latest', (array_agg(h.record ORDER BY h.checked_at DESC))[1],
-            'lastSuccessAt', max(h.checked_at) FILTER (WHERE h.success),
-            'lastUsefulAt', max(h.checked_at) FILTER (
+            'lastSuccessAt', CASE WHEN max(h.checked_at) FILTER (WHERE h.success) IS NULL THEN NULL ELSE rtrim(rtrim(to_char((max(h.checked_at) FILTER (WHERE h.success)) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS'), '0'), '.') || '+00:00' END,
+            'lastUsefulAt', CASE WHEN max(h.checked_at) FILTER (
               WHERE h.success AND h.useful AND h.capture_count > 0
                 AND EXISTS (
                   SELECT 1 FROM threat_intel.captures retained
@@ -375,7 +376,15 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                     AND retained.tenant_id IS NOT DISTINCT FROM page.tenant_id
                     AND retained.record->'metadata'->>'runId' = h.collection_run_id
                 )
-            ),
+            ) IS NULL THEN NULL ELSE rtrim(rtrim(to_char((max(h.checked_at) FILTER (
+              WHERE h.success AND h.useful AND h.capture_count > 0
+                AND EXISTS (
+                  SELECT 1 FROM threat_intel.captures retained
+                  WHERE retained.source_id = page.id
+                    AND retained.tenant_id IS NOT DISTINCT FROM page.tenant_id
+                    AND retained.record->'metadata'->>'runId' = h.collection_run_id
+                )
+            )) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS'), '0'), '.') || '+00:00' END,
             'latestUseful', COALESCE((
               SELECT bool_or(latest_observation.success AND latest_observation.useful AND latest_observation.capture_count > 0)
               FROM threat_intel.source_health latest_observation
