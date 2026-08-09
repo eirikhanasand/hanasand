@@ -252,6 +252,9 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             })
             if (!source.ok) throw new Error(source.message)
             const duplicateOf = typeof source.duplicateOf === 'string' ? source.duplicateOf : ''
+            const requestId = readNestedString(source, ['request', 'id'])
+            const sourceId = readNestedString(source, ['source', 'id'])
+            if (!requestId || (!sourceId && !duplicateOf)) throw new Error('No durable source request was returned.')
             setResult({ ok: true, message: duplicateOf ? `Already registered as ${duplicateOf}.` : 'Telegram source submitted for review.' })
             setLastRoute({
                 label: 'Source request',

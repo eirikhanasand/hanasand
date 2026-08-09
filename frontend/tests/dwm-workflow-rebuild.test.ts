@@ -19,4 +19,5 @@ test('without inline outcome, the helper keeps the scoped rebuild POST path', as
     const caseDetail = await readFile('frontend/src/app/dashboard/dwm/cases/[id]/case-detail-client.tsx', 'utf8')
     expect(caseDetail).toContain('if (!payload.case || typeof payload.case.id !== \'string\') throw new Error(\'No durable case update was returned.\')')
     expect(caseDetail).toContain('if (!payload.receipt || typeof payload.receipt.id !== \'string\') throw new Error(\'No durable notification record was returned.\')')
+    expect(source).toContain('if (!requestId || (!sourceId && !duplicateOf)) throw new Error(\'No durable source request was returned.\')')
 })
