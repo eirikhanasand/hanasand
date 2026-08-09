@@ -65,6 +65,25 @@ describe("structured threat-intelligence storage contract", () => {
     expect(result.summary).toMatchObject({ everUsefulSourceCount: 1, usefulSourceCount: 0, latestUsefulSourceCount: 0 });
   });
 
+  test("aggregates public coverage latency in PostgreSQL", async () => {
+    const store = Object.create(PostgresScraperStore.prototype) as any;
+    let query = "";
+    store.sql = {
+      unsafe: async () => [],
+      then: undefined,
+    };
+    store.sql = (strings: TemplateStringsArray) => {
+      query = strings.join("?");
+      return Promise.resolve([{ sample_count: 2, median_seconds: 4, p95_seconds: 8 }]);
+    };
+
+    await expect(store.queryPublicCoverageLatency()).resolves.toEqual({ status: "observed", sampleCount: 2, medianSeconds: 4, p95Seconds: 8 });
+    expect(query).toContain("percentile_cont");
+    expect(query).toContain("tenant_id IS NULL");
+    expect(query).toContain("alerted_at >= first_reported_at");
+    expect(query).not.toContain("SELECT record FROM threat_intel.timeliness_records");
+  });
+
   test("retries a transient write failure without dropping the queued record", async () => {
     const store = Object.create(PostgresScraperStore.prototype) as any;
     let attempts = 0;
