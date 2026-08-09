@@ -58,6 +58,7 @@ export function normalizeIntervalMinutes(value: unknown, fallback = 60) {
 }
 
 export async function withWebScanLock<T>(work: () => Promise<T>): Promise<T> {
+    let reclaimedPath: string | undefined
     while (true) {
         try {
             await mkdir(LOCK_PATH)
@@ -72,8 +73,22 @@ export async function withWebScanLock<T>(work: () => Promise<T>): Promise<T> {
                 throw statError
             }
             if (lockAge > LOCK_STALE_MS) {
-                await rm(LOCK_PATH, { recursive: true, force: true })
-                continue
+                const candidate = `${LOCK_PATH}.reclaim-${randomUUID()}`
+                try {
+                    await rename(LOCK_PATH, candidate)
+                } catch (renameError) {
+                    if ((renameError as NodeJS.ErrnoException).code === 'ENOENT') continue
+                    throw renameError
+                }
+                try {
+                    await mkdir(LOCK_PATH)
+                    reclaimedPath = candidate
+                    break
+                } catch (mkdirError) {
+                    await rm(candidate, { recursive: true, force: true })
+                    if ((mkdirError as NodeJS.ErrnoException).code === 'EEXIST') continue
+                    throw mkdirError
+                }
             }
             throw Object.assign(new Error('Hanasand web scan is already running.'), { cause: error })
         }
@@ -82,6 +97,7 @@ export async function withWebScanLock<T>(work: () => Promise<T>): Promise<T> {
         return await work()
     } finally {
         await rm(LOCK_PATH, { recursive: true, force: true })
+        if (reclaimedPath) await rm(reclaimedPath, { recursive: true, force: true })
     }
 }
 
