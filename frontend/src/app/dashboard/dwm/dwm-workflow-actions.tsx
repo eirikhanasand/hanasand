@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { SyntheticEvent, useRef, useState } from 'react'
 import { Activity, BellRing, Loader2, Plus, RefreshCw, Send, ShieldCheck } from 'lucide-react'
 import { formatClaimSummary } from '@/utils/dwm/display'
+import { normalizeAlertRebuildOutcome } from '@/utils/dwm/alertRebuildOutcome'
 import type { DwmSourceFamily } from '@/utils/dwm/product'
 
 type WorkflowResult = {
@@ -851,11 +852,7 @@ async function postJson(path: string, body: Record<string, unknown>): Promise<Re
 async function alertRebuildFromWatchlistOrRequest(payload: Record<string, unknown>, scope: { tenantId: string, organizationId?: string }) {
     const inlineRebuild = isRecord(payload.alertRebuild) ? payload.alertRebuild : null
     if (inlineRebuild) {
-        return {
-            ...inlineRebuild,
-            ok: true,
-            message: 'Watchlist matched against collected evidence.',
-        }
+        return normalizeAlertRebuildOutcome(inlineRebuild)
     }
     return postJson('/api/dwm/alerts/rebuild', scope)
 }
