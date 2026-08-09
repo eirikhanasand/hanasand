@@ -105,22 +105,29 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
       }
       const duplicateKey = seedDuplicateKey(source);
       const existingCandidates = existingByKey.get(duplicateKey) ?? [];
-      const existing = existingCandidates.find((candidate) => sameTenantScope(candidate, source)) ?? existingCandidates[0];
       const prepared = prepareRuntimeSource(source, path, generatedAt, restricted);
+      const globalPortfolioOwner = governedGlobalTorPortfolioSource(prepared, generatedAt);
+      const existing = existingCandidates.find((candidate) => sameTenantScope(candidate, source)) ?? (globalPortfolioOwner ? undefined : existingCandidates[0]);
       if (existing) {
         const reconciled = reconcileVerifiedSource(existing, prepared, generatedAt, store);
         if (reconciled) {
           const saved = store.saveSource(reconciled);
-          existingByKey.set(duplicateKey, [...existingCandidates.filter((candidate) => candidate.id !== saved.id), saved].sort(existingCanonicalOwnerOrder));
-          updatedSourceCount++;
+          const retired = retireTenantCanonicalDuplicates(store, existingCandidates, saved, globalPortfolioOwner, generatedAt);
+          existingByKey.set(duplicateKey, [...retired.candidates.filter((candidate) => candidate.id !== saved.id), saved].sort(existingCanonicalOwnerOrder));
+          updatedSourceCount += 1 + retired.retiredCount;
         } else {
-          skippedSourceCount++;
+          const retired = retireTenantCanonicalDuplicates(store, existingCandidates, existing, globalPortfolioOwner, generatedAt);
+          existingByKey.set(duplicateKey, retired.candidates.sort(existingCanonicalOwnerOrder));
+          if (retired.retiredCount) updatedSourceCount += retired.retiredCount;
+          else skippedSourceCount++;
         }
         continue;
       }
       const saved = store.saveSource(prepared);
-      existingByKey.set(duplicateKey, [saved]);
+      const retired = retireTenantCanonicalDuplicates(store, existingCandidates, saved, globalPortfolioOwner, generatedAt);
+      existingByKey.set(duplicateKey, [...retired.candidates, saved].sort(existingCanonicalOwnerOrder));
       importedSourceCount++;
+      updatedSourceCount += retired.retiredCount;
     }
 
     for (const error of report.errors ?? []) {
@@ -378,6 +385,38 @@ function existingCanonicalOwnerOrder(left: SourceRecord, right: SourceRecord) {
 
 function sameTenantScope(left: SourceRecord, right: SourceRecord) {
   return String(left.tenantId ?? "") === String(right.tenantId ?? "");
+}
+
+function governedGlobalTorPortfolioSource(source: SourceRecord, generatedAt: string) {
+  return source.type === "tor_metadata"
+    && !String(source.tenantId ?? "").trim()
+    && source.metadata?.sourcePortfolioVerification?.outcome === "content_parsed"
+    && isCurrentSourcePortfolioVerification(source, generatedAt);
+}
+
+function retireTenantCanonicalDuplicates(store: SourceStore, candidates: SourceRecord[], owner: SourceRecord, enabled: boolean, generatedAt: string) {
+  let retiredCount = 0;
+  const records = candidates.map((candidate) => {
+    if (!enabled || candidate.id === owner.id || !String(candidate.tenantId ?? "").trim() || ["retired", "rejected", "disabled"].includes(candidate.status)) return candidate;
+    retiredCount++;
+    return store.saveSource({
+      ...candidate,
+      status: "retired",
+      countsAsCoverage: false,
+      updatedAt: generatedAt,
+      metadata: {
+        ...(candidate.metadata ?? {}),
+        productionCollection: false,
+        countsAsCoverage: false,
+        sourcePortfolioStatus: "retired_canonical_duplicate",
+        sourcePortfolioRetiredAt: generatedAt,
+        sourcePortfolioCanonicalOwnerId: owner.id,
+        sourcePortfolioRetirementReason: "endpoint identity is owned by the governed global Tor portfolio source"
+      },
+      crawlState: { ...(candidate.crawlState ?? {}), nextEligibleAt: undefined, backoffUntil: undefined }
+    });
+  });
+  return { candidates: records, retiredCount };
 }
 
 function lifecyclePriority(status: string) {
