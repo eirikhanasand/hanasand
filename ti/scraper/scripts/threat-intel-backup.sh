@@ -49,6 +49,25 @@ resolve_source_container() {
   exit 1
 }
 container_image() { docker container inspect "$1" --format '{{.Image}}'; }
+capture_source_evidence() {
+  attempts=0
+  while [ "$attempts" -lt 5 ]; do
+    evidence_tmp="$objects.tmp.$$"
+    rm -f -- "$evidence_tmp"
+    if docker exec "$source_scraper_container" tar -C /var/lib/ti-scraper/evidence -czf - . > "$evidence_tmp" \
+      && source_scraper_image=$(container_image "$source_scraper_container"); then
+      mv -- "$evidence_tmp" "$objects"
+      return 0
+    fi
+    rm -f -- "$evidence_tmp"
+    attempts=$((attempts + 1))
+    [ "$attempts" -lt 5 ] || break
+    source_scraper_container=$(resolve_source_container ti-scraper)
+    sleep 1
+  done
+  echo "could not capture a stable evidence-volume snapshot from ti-scraper" >&2
+  exit 1
+}
 
 inspect_evidence_archive() (
   set -eu
@@ -320,7 +339,7 @@ case "$action" in
     tar -C "$archive" -xf "$database_bundle"
     rm -f -- "$database_bundle"
 
-    docker exec "$source_scraper_container" tar -C /var/lib/ti-scraper/evidence -czf - . > "$objects"
+    capture_source_evidence
     inspect_evidence_archive "$objects" "$evidence_inventory" "$object_ledger"
     verify_object_continuity
 

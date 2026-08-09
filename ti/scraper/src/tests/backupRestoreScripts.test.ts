@@ -159,11 +159,20 @@ case " $* " in
   *" container inspect fake-source-postgres-container --format {{.State.Running}} "*) printf '%s\\n' true ;;
   *" container inspect fake-source-scraper-container --format {{.Image}} "*) printf '%s\\n' 'sha256:source-scraper-image' ;;
   *" container inspect fake-source-postgres-container --format {{.Image}} "*) printf '%s\\n' 'sha256:source-postgres-image' ;;
+  *" container inspect replacement-source-scraper-container --format {{.State.Running}} "*) printf '%s\\n' true ;;
+  *" container inspect replacement-source-scraper-container --format {{.Image}} "*) printf '%s\\n' 'sha256:replacement-scraper-image' ;;
+  *" exec replacement-source-scraper-container tar -C /var/lib/ti-scraper/evidence -czf - . "*) cat "$FAKE_EVIDENCE_ARCHIVE" ;;
   *" exec -i fake-source-postgres-container sh -s -- backup "*) cat "$FAKE_DATABASE_BUNDLE" ;;
   *" pg_restore --list "*) printf '%s\\n' '1; 0 0 TABLE threat_intel schema_migrations owner' ;;
   *"verify-restored-database.ts ledger "*) cat "$FAKE_OBJECT_LEDGER" ;;
   *" sh -s -- inventory "*) cat "$FAKE_DATABASE_INVENTORY" ;;
-  *" tar -C /var/lib/ti-scraper/evidence -czf - . "*) cat "$FAKE_EVIDENCE_ARCHIVE" ;;
+  *" exec fake-source-scraper-container tar -C /var/lib/ti-scraper/evidence -czf - . "*)
+    if [ -n "\${FAKE_EVIDENCE_EXEC_FAIL:-}" ] && [ ! -e "$FAKE_EVIDENCE_EXEC_FAIL" ]; then
+      : > "$FAKE_EVIDENCE_EXEC_FAIL"
+      exit 125
+    fi
+    cat "$FAKE_EVIDENCE_ARCHIVE"
+    ;;
   *"verify-restored-database.ts "*)
     [ ! -e "$FAKE_FAIL_MARKER" ] || exit 41
     printf '%s\\n' '{"schemaVersion":"hanasand.ti_restore_application_read.v2"}'
@@ -351,6 +360,42 @@ describe("backup and restore scripts", () => {
       expect(dockerRuns.some((line) => line.startsWith("exec fake-source-scraper-container "))).toBe(true);
       expect(dockerRuns.some((line) => line.startsWith("exec -i fake-source-postgres-container "))).toBe(true);
       expect(dockerRuns.some((line) => line.includes("replacement-source-"))).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("re-resolves the scraper when the evidence transfer races container replacement", () => {
+    const root = mkdtempSync(join(tmpdir(), "ti-backup-source-replacement-"));
+    try {
+      const archive = join(root, "archive");
+      const { databaseBundle, evidenceArchive } = makeBackupInputs(root);
+      const { bin, failMarker, log } = makeFakeDocker(root, archive);
+      const evidenceFailure = join(root, "evidence-exec-failed");
+      unlinkSync(failMarker);
+      const env = {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH}`,
+        FAKE_DATABASE_BUNDLE: databaseBundle,
+        FAKE_DATABASE_INVENTORY: join(root, "backup-source", "DATABASE-INVENTORY.tsv"),
+        FAKE_OBJECT_LEDGER: join(root, "empty-object-ledger.tsv"),
+        FAKE_EVIDENCE_ARCHIVE: evidenceArchive,
+        FAKE_FAIL_MARKER: failMarker,
+        FAKE_DOCKER_LOG: log,
+        FAKE_EVIDENCE_EXEC_FAIL: evidenceFailure,
+        FAKE_SOURCE_SCRAPER_REPLACED: join(root, "source-scraper-replaced"),
+      };
+      writeFileSync(env.FAKE_OBJECT_LEDGER, `${objectLedgerHeader}\n`);
+
+      const backup = Bun.spawnSync({ cmd: ["sh", backupScript, "backup", archive], env });
+      if (backup.exitCode !== 0) throw new Error(backup.stderr.toString());
+      const manifest = readFileSync(join(archive, "BACKUP-MANIFEST"), "utf8");
+      expect(manifest).toContain("source_scraper_container_id=replacement-source-scraper-container\n");
+      expect(manifest).toContain("source_scraper_image_id=sha256:replacement-scraper-image\n");
+      const dockerRuns = readFileSync(log, "utf8").trim().split("\n");
+      expect(dockerRuns.some((line) => line.includes("exec fake-source-scraper-container tar"))).toBe(true);
+      expect(dockerRuns.some((line) => line.includes("exec replacement-source-scraper-container tar"))).toBe(true);
+      expect(readFileSync(join(archive, "evidence.tar.gz")).byteLength).toBeGreaterThan(0);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
