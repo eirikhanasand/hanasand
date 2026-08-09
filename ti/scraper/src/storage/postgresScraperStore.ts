@@ -1579,6 +1579,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   async purgeParserDiagnosticArchiveObjects(objectStore: { deleteObject: (reference: any, reason: string) => boolean | Promise<boolean> }) {
+    const [table] = await this.sql<{ table_name: string | null }[]>`
+      SELECT to_regclass('threat_intel.parser_diagnostic_cleanup_history')::text AS table_name
+    `;
+    if (!table?.table_name) return { pendingCount: 0, deletedCount: 0, failedIds: [] as string[] };
     const rows = await this.sql<any[]>`
       SELECT id, original_record->'object_ref' AS object_ref
       FROM threat_intel.parser_diagnostic_cleanup_history
