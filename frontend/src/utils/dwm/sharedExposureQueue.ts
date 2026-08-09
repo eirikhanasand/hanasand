@@ -1,6 +1,7 @@
 import { tiScraperApiBase } from './scraperApiBase'
 
 const allowedParams = new Set(['limit', 'offset', 'q', 'company', 'actor', 'category', 'size', 'country', 'from', 'to'])
+export const EXPOSURE_QUEUE_TIMEOUT_MS = 3500
 
 export async function fetchSharedExposureQueue(
     searchParams: Pick<URLSearchParams, 'entries'>,
@@ -25,6 +26,6 @@ export async function fetchSharedExposureQueue(
     return (options.fetcher ?? fetch)(target, {
         cache: 'no-store',
         headers: { 'x-hanasand-service-token': serviceToken },
-        signal: AbortSignal.timeout(options.timeoutMs ?? 12_000),
+        signal: AbortSignal.timeout(options.timeoutMs ?? EXPOSURE_QUEUE_TIMEOUT_MS),
     })
 }
