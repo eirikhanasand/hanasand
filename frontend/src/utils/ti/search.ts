@@ -601,7 +601,7 @@ export interface TiVictimNotificationPacket {
     recommendedAction: string
 }
 
-export default async function searchThreatIntel(query: string): Promise<TiSearchResponse | null> {
+export default async function searchThreatIntel(query: string, options: { preferCached?: boolean } = {}): Promise<TiSearchResponse | null> {
     const clean = query.trim()
     if (!clean) return null
 
@@ -614,7 +614,7 @@ export default async function searchThreatIntel(query: string): Promise<TiSearch
         response = await fetch(`${config.url.api}/ti/search`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: clean })
+            body: JSON.stringify({ query: clean, ...(options.preferCached ? { preferCached: true } : {}) })
         })
     } catch {
         return null

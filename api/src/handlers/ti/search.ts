@@ -3,6 +3,7 @@ import { searchThreatIntel } from '#utils/ti/search.ts'
 
 interface SearchBody {
     query?: string
+    preferCached?: boolean
 }
 
 export const TI_QUERY_MAX_LENGTH = 200
@@ -10,8 +11,8 @@ export const TI_BATCH_MAX_QUERIES = 25
 
 export default async function postTiSearch(req: FastifyRequest<{ Body: SearchBody }>, res: FastifyReply) {
     setNoStore(res)
-    if (hasUnexpectedFields(req.body, ['query'])) {
-        return res.status(400).send({ error: 'invalid_request', message: 'search accepts only the query field' })
+    if (hasUnexpectedFields(req.body, ['query', 'preferCached'])) {
+        return res.status(400).send({ error: 'invalid_request', message: 'search accepts only the query and preferCached fields' })
     }
     const query = normalizeQuery(req.body?.query)
 
@@ -19,7 +20,7 @@ export default async function postTiSearch(req: FastifyRequest<{ Body: SearchBod
         return res.status(400).send({ error: 'invalid_query', message: `query must contain 2-${TI_QUERY_MAX_LENGTH} characters` })
     }
 
-    const result = await searchThreatIntel({ query })
+    const result = await searchThreatIntel({ query, preferCached: req.body?.preferCached === true })
     return res.send(sanitizeBrowserSearchResult(result))
 }
 

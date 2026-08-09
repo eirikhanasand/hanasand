@@ -30,7 +30,7 @@ export default async function TiQueryPage({ params }: TiQueryPageProps) {
     if (query && canonicalQuery !== query) {
         redirect(`/ti/${encodeURIComponent(canonicalQuery)}`)
     }
-    const initialResult = query ? sanitizeTiResultForPublicPage(await searchThreatIntel(query)) : null
+    const initialResult = query ? sanitizeTiResultForPublicPage(await searchThreatIntel(query, { preferCached: true })) : null
 
     return (
         <ConsoleRouteShell>

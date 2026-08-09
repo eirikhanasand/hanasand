@@ -1,5 +1,6 @@
 export interface TiSearchRequest {
     query: string
+    preferCached?: boolean
 }
 
 export type TiResultState = 'queued' | 'searching' | 'partial' | 'ready' | 'metadata_review' | 'blocked_unsafe_target' | 'needs_source_activation'
@@ -137,10 +138,10 @@ export async function searchThreatIntel(input: TiSearchRequest): Promise<TiSearc
 
     const scraperBase = process.env.TI_SCRAPER_API_BASE?.replace(/\/$/, '')
     if (scraperBase) {
-        const scraperResult = await fetchCanonicalScraperSearch(scraperBase, query)
+        const scraperResult = await fetchCanonicalScraperSearch(scraperBase, query, { cachedOnly: input.preferCached && queryKind === 'actor' })
         if (scraperResult) {
             const result = { ...scraperResult, queryKind: scraperResult.queryKind ?? queryKind, mode: 'scraper' as const }
-            writeCache(key, result)
+            if (!(input.preferCached && queryKind === 'actor')) writeCache(key, result)
             return result
         }
     }
@@ -158,14 +159,15 @@ export function classifyTiQuery(query: string): NonNullable<TiSearchResponse['qu
     return 'free_text'
 }
 
-async function fetchCanonicalScraperSearch(scraperBase: string, query: string): Promise<TiSearchResponse | null> {
+async function fetchCanonicalScraperSearch(scraperBase: string, query: string, options: { cachedOnly?: boolean } = {}): Promise<TiSearchResponse | null> {
     try {
         const target = new URL('/v1/intel/search', `${scraperBase}/`)
         target.searchParams.set('q', query)
         const entityType = scraperEntityType(query)
         if (entityType) target.searchParams.set('entityType', entityType)
         target.searchParams.set('limit', '50')
-        const response = await fetch(target, { signal: AbortSignal.timeout(12_000) })
+        if (options.cachedOnly) target.searchParams.set('cached', 'true')
+        const response = await fetch(target, { signal: AbortSignal.timeout(options.cachedOnly ? 350 : 12_000) })
         if (!response.ok) return null
         const result = await response.json() as TiSearchResponse
         if (result.query.trim().toLowerCase() !== query.toLowerCase() || !Array.isArray(result.sources) || !Array.isArray(result.recentActivity)) return null

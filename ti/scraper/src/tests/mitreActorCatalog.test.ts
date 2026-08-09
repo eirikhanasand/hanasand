@@ -197,6 +197,32 @@ describe("MITRE actor identity catalog", () => {
     expect(collision.actorProfile.actor).toBeUndefined();
   });
 
+  test("serves cached catalog identity before retained search work", async () => {
+    const catalog = parseMitreActorCatalog(officialV191Excerpt, { retrievedAt: "2026-07-21T00:00:00.000Z", minimumCurrentIdentities: 6 });
+    const store = new InMemoryScraperStore();
+    store.replaceActorIdentityCatalog(catalog, { sourceId: "src_mitre_enterprise_stix", captureId: "cap_mitre_enterprise_v19_1" });
+    (store as any).querySearchCaptures = async () => {
+      await Bun.sleep(1_000);
+      throw new Error("retained search should not run in cached mode");
+    };
+
+    const startedAt = performance.now();
+    const response = await handleApiRequest(new Request("http://localhost/v1/intel/search?q=charming%20kitten&cached=true"), { store, frontier: new FocusedFrontier() } as any);
+    const elapsedMs = performance.now() - startedAt;
+    const result = await response.json() as any;
+
+    expect(response.status).toBe(200);
+    expect(elapsedMs).toBeLessThan(500);
+    expect(result).toMatchObject({
+      mode: "seeded",
+      status: "searching",
+      actorIdentity: { catalogMatched: true, activityEvidenceAvailable: false, candidates: [{ canonicalName: "Magic Hound" }] },
+      aliases: expect.arrayContaining(["Charming Kitten", "Magic Hound"]),
+      sources: [{ name: "MITRE Enterprise ATT&CK", parserStatus: "public_reference" }]
+    });
+    expect(result.summary).toContain("Live evidence search is continuing");
+  });
+
   test("binds global catalog activity to its retained evidence captures in tenant coverage", async () => {
     const mitre = parseMitreActorCatalog(officialV191Excerpt, { retrievedAt: "2026-07-21T00:00:00.000Z", minimumCurrentIdentities: 6 });
     const capture = (id: string, contentHash: string, tenantId?: string) => ({

@@ -36,6 +36,10 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     queuePressureLimit: Number(options.liveSearchQueuePressureLimit ?? 50),
   });
   scheduleLiveSearch(liveSearch, options, generatedAt);
+  const identity = actorIdentity(options.store, scope.tenantId, query);
+  if (actorQuery && url.searchParams.get("cached") === "true") {
+    return json(sanitizeDwmApiPayload(cachedSearchResponse(query, entityType, identity, liveSearch.dto, generatedAt)));
+  }
   const localSearchIndexAvailable = (options.store as any).usesPostgresSearchIndex === true;
   const persistedSearchCaptures = localSearchIndexAvailable
     ? findSearchCaptures(options.store, query, 300, scope.tenantId)
@@ -47,7 +51,6 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     { store: options.store, publicTelegramSourcePacks: options.publicTelegramSourcePacks as any, generatedAt, captures: persistedSearchCaptures },
   );
   const limit = Math.max(1, Math.min(numberQuery(url.searchParams.get("limit")) ?? 50, 100));
-  const identity = actorIdentity(options.store, scope.tenantId, query);
   const captures = await searchCaptures(options.store, query, entityType, identity, limit * 3, scope.tenantId);
   const rows = dedupeRows(captures.map((capture: any) => rowFromCapture(capture, scopedSource(options.store.getSource?.(capture.sourceId), scope.tenantId)))).slice(0, limit);
   const captureIds = new Set(rows.map((row) => row.id));
@@ -278,6 +281,64 @@ export async function searchResponse(request: Request, options: ApiServerOptions
       : { status: restricted.count ? "partial_metadata" : "searching", queuedTasks: 0 },
   };
   return json(sanitizeDwmApiPayload(response));
+}
+
+function cachedSearchResponse(query: string, entityType: SearchEntityType, identity: ReturnType<typeof actorIdentity>, planner: any, generatedAt: string) {
+  const candidates = identity.catalogCandidates;
+  const sources = uniqueBy(candidates.map((candidate) => ({
+    id: `catalog:${candidate.catalogId}:${candidate.externalId}`,
+    name: candidate.catalogId === "mitre-attack-enterprise" ? "MITRE Enterprise ATT&CK" : candidate.catalogId,
+    type: "public_reference",
+    provenance: candidate.sourceUrl,
+    url: candidate.sourceUrl,
+    sourceFamily: "public_ti",
+    parserStatus: "public_reference"
+  })), (source) => source.id);
+  const canonical = candidates.length === 1 ? candidates[0].canonicalName : undefined;
+  const summary = candidates.length
+    ? `${canonical ?? query} is matched to the retained actor catalog. Live evidence search is continuing; no activity is inferred from the catalog record.`
+    : `No cached actor identity is available for ${query}. Live evidence search is continuing.`;
+  return {
+    query,
+    queryKind: entityType,
+    generatedAt,
+    mode: "seeded",
+    status: "searching",
+    runId: planner.activeRunId ?? planner.terminalRunId,
+    refreshAfterSeconds: planner.nextPollSeconds ?? 3,
+    summary,
+    confidence: candidates.length === 1 ? 1 : 0,
+    aliases: unique(candidates.flatMap((candidate) => [candidate.canonicalName, ...candidate.associatedNames])),
+    recentActivity: [],
+    targets: [],
+    ttps: [],
+    datasets: [],
+    sources,
+    notes: candidates.length
+      ? ["Catalog identity and aliases are authoritative reference data; retained activity, TTPs, and current claims are loaded separately."]
+      : ["No catalog identity was found in the current cache. No activity or attribution was inferred; live collection will refresh this result."],
+    actorIdentity: entityType === "actor" ? {
+      catalogMatched: candidates.length > 0,
+      ambiguous: identity.catalogAmbiguous,
+      candidates,
+      activityEvidenceAvailable: false
+    } : undefined,
+    actorIntelligence: entityType === "actor" && candidates.length ? {
+      actorClass: "cataloged_threat_group",
+      attribution: "Catalog identity match only; activity attribution requires retained evidence.",
+      confidence: 1,
+      confidenceReasoning: ["The query matched an authoritative actor catalog identity.", "No retained activity evidence has been loaded yet."],
+      sourceProvenance: sources.map((source) => source.provenance)
+    } : undefined,
+    actionability: {
+      schemaVersion: "ti.query.actionability.v1",
+      alertDisposition: "needs_enrichment",
+      shouldAlert: false,
+      rationale: candidates.length ? "Review retained evidence when it arrives; catalog identity alone is not an alert condition." : "No supported actor identity is available in cache; wait for live collection or refresh.",
+      watchlistCandidates: [],
+      enrichmentGaps: ["retained activity evidence", "grounded TTP evidence"].map((field) => ({ id: `missing:${field.replace(/\s+/g, "-")}`, title: `Missing ${field}`, severity: "medium", detail: `Attach retained evidence for ${field} before promoting the profile.`, dependency: field }))
+    }
+  };
 }
 
 function scheduleLiveSearch(liveSearch: any, options: ApiServerOptions, generatedAt: string) {

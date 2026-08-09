@@ -196,7 +196,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
         setBusy(true)
         setQuery(clean)
         setResult(searchingResult(clean))
-        searchThreatIntel(clean)
+        searchThreatIntel(clean, { preferCached: true })
             .then((next) => {
                 if (requestSeqRef.current !== requestSeq || activeQueryRef.current !== cleanKey) return
                 if (next) setResult(next)
@@ -237,7 +237,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
         router.push(`/ti/${encodeURIComponent(clean)}`)
         setResult(searchingResult(clean))
         try {
-            const next = await searchThreatIntel(clean)
+            const next = await searchThreatIntel(clean, { preferCached: true })
             if (requestSeqRef.current !== requestSeq || activeQueryRef.current !== cleanKey) return
             if (!next) {
                 setError('Threat intelligence search is temporarily unavailable.')
@@ -5364,7 +5364,7 @@ function searchingResult(query: string): TiSearchResponse {
         mode: 'unavailable',
         status: 'searching',
         refreshAfterSeconds: 3,
-        summary: 'Checking sources',
+        summary: 'No cached result is available yet; live evidence search is running.',
         confidence: 0.2,
         aliases: [],
         recentActivity: [],
@@ -5372,7 +5372,7 @@ function searchingResult(query: string): TiSearchResponse {
         ttps: [],
         datasets: [],
         sources: [],
-        notes: []
+        notes: ['No activity or attribution is inferred until retained evidence returns. Live search will refresh this result.']
     }
 }
 
