@@ -20,8 +20,8 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(38);
-    expect(batch.exclusions).toHaveLength(73);
+    expect(batch.sources).toHaveLength(43);
+    expect(batch.exclusions).toHaveLength(83);
 
     const ids = new Set<string>();
     const endpoints = new Set<string>();
@@ -136,6 +136,35 @@ describe("clear-web source portfolio batch", () => {
       const [observedItemCount, latestPublishedAt] = expected.get(source.name)!;
       expect(source.id).toBe(`src_portfolio_cw_${hash(source.url).slice(0, 20)}`);
       expect(source.metadata.sourcePortfolioVerification).toMatchObject({ observedItemCount, latestPublishedAt });
+      expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
+      expect(source.metadata).not.toHaveProperty("countsAsCoverage");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
+    }
+  });
+
+  test("keeps ledger 012 parser-useful and candidate-only until productive scheduled cycles exist", () => {
+    const expected = new Map([
+      ["National Cyber Security Centre Finland English Updates", [250, 250, 5, 2, "2026-07-23T08:15:10.000Z"]],
+      ["CERT Polska Polish Security Publications", [100, 100, 100, 95, "2026-08-08T17:00:00.000Z"]],
+      ["JPCERT Coordination Center Japanese Threat Research", [15, 15, 12, 1, "2026-08-07T06:28:06.000Z"]],
+      ["Norway NSM Vulnerability Alerts", [10, 10, 10, 6, "2026-07-14T21:11:10.000Z"]],
+      ["Qubes OS Security News", [10, 10, 10, 4, "2026-07-28T00:00:00.000Z"]],
+    ] as const);
+    const sources = batch.sources.filter((source: any) => expected.has(source.name));
+    expect(sources).toHaveLength(expected.size);
+    for (const source of sources) {
+      const [observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt] = expected.get(source.name)!;
+      expect(source.id).toBe(`src_portfolio_cw_${hash(canonicalUrl(source.url)).slice(0, 20)}`);
+      expect(source.metadata.sourcePortfolioVerification).toMatchObject({
+        observedItemCount,
+        datedItemCount,
+        currentItemCount,
+        keywordUsefulItemCount,
+        latestPublishedAt,
+      });
+      expect(currentItemCount).toBeGreaterThan(0);
+      expect(keywordUsefulItemCount).toBeGreaterThan(0);
       expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
       expect(source.metadata).not.toHaveProperty("countsAsCoverage");
       expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
