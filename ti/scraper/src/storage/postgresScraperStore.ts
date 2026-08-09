@@ -924,21 +924,36 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string }) {
     const [row] = await this.sql.unsafe(`
+      WITH latest_health AS (
+        SELECT DISTINCT ON (source_id)
+          source_id, checked_at, success, useful, capture_count, parser_warning_count
+        FROM threat_intel.source_health
+        WHERE tenant_id IS NOT DISTINCT FROM $1::text
+        ORDER BY source_id, checked_at DESC
+      )
       SELECT jsonb_build_object(
         'sourceCount', count(*),
         'retainedSourceCount', count(*) FILTER (WHERE collection_executable),
         'inactiveSourceCount', count(*) FILTER (WHERE NOT collection_executable),
         'activeSourceCount', count(*) FILTER (WHERE collection_executable),
-        'measurementState', 'source_counts_only',
-        'observedSourceCount', NULL,
-        'checkedSourceCount', NULL,
-        'successfulSourceCount', NULL,
-        'healthySourceCount', NULL,
-        'degradedSourceCount', NULL,
-        'failedSourceCount', NULL
+        'measurementState', 'measured',
+        'observedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
+        'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
+        'successfulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success),
+        'usefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful),
+        'captureProducingSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.capture_count > 0),
+        'healthySourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND COALESCE(latest_health.parser_warning_count, 0) = 0),
+        'degradedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND COALESCE(latest_health.parser_warning_count, 0) > 0),
+        'failedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL AND latest_health.success = FALSE),
+        'checkedWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.checked_at >= now() - interval '24 hours'),
+        'successfulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND latest_health.checked_at >= now() - interval '24 hours'),
+        'usefulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.checked_at >= now() - interval '24 hours'),
+        'backoffSourceCount', count(*) FILTER (WHERE collection_executable AND NULLIF(sources.record->'crawlState'->>'backoffUntil', '')::timestamptz > now()),
+        'neverObservedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NULL)
       ) AS summary
-      FROM threat_intel.sources source
-      WHERE source.tenant_id IS NOT DISTINCT FROM $1::text
+      FROM threat_intel.sources sources
+      LEFT JOIN latest_health ON latest_health.source_id = sources.id
+      WHERE sources.tenant_id IS NOT DISTINCT FROM $1::text
     `, [input.tenantId ?? null]);
     return { schemaVersion: "ti.source_operations_summary.v1", generatedAt: input.generatedAt, tenantId: input.tenantId ?? "global", summary: row?.summary ?? {} };
   }

@@ -201,6 +201,9 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
 
 export async function buildSourceOperationsSummary(store: any, input: { tenantId?: string; generatedAt?: string } = {}) {
   const generatedAt = input.generatedAt ?? nowIso();
+  if (typeof store?.querySourceOperationalSummary === "function") {
+    return await store.querySourceOperationalSummary({ tenantId: input.tenantId, generatedAt });
+  }
   const result = typeof store?.querySourceOperationalPage === "function"
     ? await store.querySourceOperationalPage({ tenantId: input.tenantId, generatedAt, limit: 1 })
     : undefined;
