@@ -20,8 +20,8 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(60);
-    expect(batch.exclusions).toHaveLength(108);
+    expect(batch.sources).toHaveLength(77);
+    expect(batch.exclusions).toHaveLength(131);
 
     const ids = new Set<string>();
     const endpoints = new Set<string>();
@@ -218,6 +218,59 @@ describe("clear-web source portfolio batch", () => {
       expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
       expect(source.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
     }
+  });
+
+  test("keeps ledger 014 production-parser-positive and candidate-only until productive scheduled cycles exist", () => {
+    const expected = new Map([
+      ["Joomla Security Announcements", [25, 25, 25, 25, "2026-07-07T14:00:01.000Z"]],
+      ["Spring Security Advisories", [50, 50, 50, 5, "2026-07-29T00:00:00.000Z"]],
+      ["Splunk Product Security Advisories", [30, 30, 30, 26, "2026-07-15T00:00:00.000Z"]],
+      ["Microsoft Security Response Center Update Guide", [150, 150, 150, 73, "2026-08-09T08:43:45.000Z"]],
+      ["Google Threat Intelligence Research", [20, 20, 20, 14, "2026-08-06T14:00:00.000Z"]],
+      ["Trend Micro Security Research", [50, 50, 50, 35, "2026-07-30T00:00:00.000Z"]],
+      ["Quarkslab Security Research", [15, 15, 15, 4, "2026-07-05T22:00:00.000Z"]],
+      ["Ruby Language Security and Release News", [10, 10, 10, 2, "2026-07-16T05:08:11.000Z"]],
+      ["Rust Project Release and Security News", [10, 10, 10, 3, "2026-08-04T00:00:00.000Z"]],
+      ["JetBrains Security Research", [12, 12, 1, 0, "2026-06-17T16:11:49.000Z"]],
+      ["OpenJS Foundation CNA Security Advisories", [72, 72, 68, 1, "2026-08-03T00:00:00.000Z"]],
+      ["Wireshark Release and Security Announcements", [20, 20, 7, 0, "2026-07-08T22:11:39.000Z"]],
+      ["Ruby on Rails Security Announcements", [25, 25, 14, 10, "2026-07-31T00:51:48.000Z"]],
+      ["Django Project Release and Security News", [10, 10, 10, 2, "2026-08-06T14:45:00.000Z"]],
+      ["Drupal Public Security Announcements", [20, 20, 2, 0, "2026-07-22T17:59:58.000Z"]],
+      ["Tenable Security Research Advisories", [10, 10, 10, 6, "2026-07-29T06:40:54.000Z"]],
+      ["Tenable Product Security Advisories", [10, 10, 10, 10, "2026-08-03T14:57:09.000Z"]],
+    ] as const);
+    const sourceTolerant = new Set([
+      "JetBrains Security Research",
+      "Wireshark Release and Security Announcements",
+      "Drupal Public Security Announcements",
+    ]);
+    const sources = batch.sources.filter((source: any) => expected.has(source.name));
+    expect(sources).toHaveLength(expected.size);
+    const totals = { parsed: 0, dated: 0, current: 0, useful: 0 };
+    for (const source of sources) {
+      const [observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt] = expected.get(source.name)!;
+      expect(source.id).toBe(`src_portfolio_cw_${hash(canonicalUrl(source.url)).slice(0, 20)}`);
+      expect(source.metadata.sourcePortfolioVerification).toMatchObject({
+        observedItemCount,
+        datedItemCount,
+        currentItemCount,
+        keywordUsefulItemCount,
+        latestPublishedAt,
+      });
+      expect(currentItemCount).toBeGreaterThan(0);
+      if (sourceTolerant.has(source.name)) expect(keywordUsefulItemCount).toBe(0);
+      else expect(keywordUsefulItemCount).toBeGreaterThan(0);
+      expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
+      expect(source.metadata).not.toHaveProperty("countsAsCoverage");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
+      totals.parsed += observedItemCount;
+      totals.dated += datedItemCount;
+      totals.current += currentItemCount;
+      totals.useful += keywordUsefulItemCount;
+    }
+    expect(totals).toEqual({ parsed: 539, dated: 539, current: 482, useful: 216 });
   });
 
   test("deduplicates by normalized endpoint across adapters and every reserved source pack", () => {
