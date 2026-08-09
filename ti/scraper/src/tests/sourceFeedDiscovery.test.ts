@@ -1140,6 +1140,26 @@ describe("scheduled public feed discovery", () => {
     });
     const approved = store.getSource(candidate.id)!;
     expect(hasApprovedAutomaticSourceReview(approved, "hanasand")).toBe(true);
+    expect(hasApprovedAutomaticSourceReview({
+      ...approved,
+      metadata: {
+        ...approved.metadata,
+        automaticSourceReview: {
+          ...approved.metadata.automaticSourceReview,
+          promptVersion: "ti.automatic_intelligence_review.prompt.v6"
+        }
+      }
+    }, "hanasand")).toBe(true);
+    expect(hasApprovedAutomaticSourceReview({
+      ...approved,
+      metadata: {
+        ...approved.metadata,
+        automaticSourceReview: {
+          ...approved.metadata.automaticSourceReview,
+          promptVersion: "ti.automatic_intelligence_review.prompt.v5"
+        }
+      }
+    }, "hanasand")).toBe(false);
     expect(hasApprovedAutomaticSourceReview({ ...approved, url: "https://replacement.example/feed.xml" }, "hanasand")).toBe(false);
     expect(hasApprovedAutomaticSourceReview({ ...approved, tenantId: "replacement-tenant" }, "hanasand")).toBe(false);
     expect(hasApprovedAutomaticSourceReview({

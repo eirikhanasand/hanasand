@@ -3732,7 +3732,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         automaticSourceReview: {
           schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
           state: "approved",
-          promptVersion: SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION,
+          promptVersion: "ti.automatic_intelligence_review.prompt.v6",
           configuredModelVersion: "hanasand",
           sourceIdentity: automaticSourceReviewIdentity({ id: sourceId, tenantId: "tenant_bound", url: "https://bounded.example/6100.xml", createdAt: "1970-01-01T00:00:00.000Z" }),
           requestSha256: "a".repeat(64),

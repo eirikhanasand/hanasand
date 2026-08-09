@@ -3,8 +3,16 @@ import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 
 export const AUTOMATIC_REVIEW_PROMPT_VERSION = "ti.automatic_intelligence_review.prompt.v7";
 export const SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION = "ti.automatic_intelligence_review.prompt.v9";
+export const SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS = [
+  "ti.automatic_intelligence_review.prompt.v6",
+  "ti.automatic_intelligence_review.prompt.v7",
+  "ti.automatic_intelligence_review.prompt.v8",
+  SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION
+] as const;
 export const AUTOMATIC_REVIEW_RESPONSE_SCHEMA = "ti.automatic_intelligence_review.response.v1";
 export const SOURCE_AUTOMATIC_REVIEW_SCHEMA = "ti.automatic_source_review.v1";
+
+const compatibleSourceReviewPromptVersions = new Set<string>(SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS);
 
 export function automaticReviewModelVersion(explicit?: unknown) {
   return cleanModelVersion(explicit) ?? cleanModelVersion(Bun.env.HANASAND_AI_MODEL) ?? "hanasand";
@@ -64,7 +72,8 @@ export function hasGovernedAutomaticSourceReviewLineage(source: any, modelVersio
   if (!sourceRequiresAutomaticReview(source)) return false;
   const review = source?.metadata?.automaticSourceReview;
   return review?.schemaVersion === SOURCE_AUTOMATIC_REVIEW_SCHEMA
-    && review?.promptVersion === SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION
+    // ponytail: a prompt upgrade queues a new review, but does not revoke an immutable approved decision by itself.
+    && compatibleSourceReviewPromptVersions.has(review?.promptVersion)
     && review?.configuredModelVersion === modelVersion
     && review?.decision?.subject?.type === "source"
     && review?.decision?.subject?.id === source.id

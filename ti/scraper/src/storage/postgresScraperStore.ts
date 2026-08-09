@@ -35,7 +35,7 @@ import { operationalQueryRow } from "../api/sourceOperations.ts";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
-import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion } from "../policy/sourceAutomaticReview.ts";
+import { SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion } from "../policy/sourceAutomaticReview.ts";
 import { orgWatchlistContractToRuntimeDwmWatchlists } from "./dwmOrgWatchlistBridge.ts";
 import { mayContainExposureQueueClaim } from "../product/exposureQueueCandidate.ts";
 
@@ -802,7 +802,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                 OR (
                   record->'metadata'->'automaticSourceReview'->>'schemaVersion' = '${SOURCE_AUTOMATIC_REVIEW_SCHEMA}'
                   AND record->'metadata'->'automaticSourceReview'->>'state' = 'approved'
-                  AND record->'metadata'->'automaticSourceReview'->>'promptVersion' = '${SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION}'
+                  AND record->'metadata'->'automaticSourceReview'->>'promptVersion' IN (${SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS.map((version) => `'${version}'`).join(", ")})
                   AND record->'metadata'->'automaticSourceReview'->>'configuredModelVersion' = $5::text
                   AND record->'metadata'->'automaticSourceReview'->'sourceIdentity'->>'sourceId' = id
                   AND record->'metadata'->'automaticSourceReview'->'sourceIdentity'->>'tenantKey' = COALESCE(tenant_id, 'global')
