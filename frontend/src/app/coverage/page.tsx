@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
+import { headers } from 'next/headers'
 import Link from 'next/link'
 import { ArrowRight, Database, Rss, Timer } from 'lucide-react'
 import { buildRouteMetadata } from '../seo'
-import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = buildRouteMetadata({ title: 'Intelligence Feed Coverage', description: 'Measured useful and qualifying intelligence-feed coverage, baseline gaps, source inventory, and observed alert latency.', path: '/coverage', keywords: ['Hanasand intelligence feed coverage', 'alert latency'] })
@@ -64,4 +64,13 @@ function formatMeasured(value: number | null) { return value === null ? 'Not mea
 function formatSeconds(value: number) { return value < 60 ? `${Math.round(value)}s` : `${(value / 60).toFixed(value >= 3600 ? 1 : 0)}${value >= 3600 ? 'h' : 'm'}` }
 function formatCadence(value: number | null) { return value === null ? 'Not measured' : formatSeconds(value) }
 function Unavailable() { return <section className='rounded-lg border border-ui-border bg-ui-panel p-6'><h2 className='font-semibold'>Coverage data is unavailable</h2><p className='mt-2 text-sm leading-6 text-ui-muted'>The measurement service did not respond. No fallback counts are shown.</p></section> }
-async function loadCoverage(): Promise<Coverage | null> { try { const response = await fetch(new URL('/v1/public/coverage', tiScraperApiBase()), { cache: 'no-store', signal: AbortSignal.timeout(10_000) }); return response.ok ? await response.json() as Coverage : null } catch { return null } }
+async function loadCoverage(): Promise<Coverage | null> {
+    try {
+        const incoming = await headers()
+        const host = incoming.get('x-forwarded-host')?.split(',')[0]?.trim() || incoming.get('host')
+        if (!host) return null
+        const protocol = incoming.get('x-forwarded-proto')?.split(',')[0]?.trim() || 'http'
+        const response = await fetch(new URL('/api/coverage', `${protocol}://${host}`), { cache: 'no-store', signal: AbortSignal.timeout(10_000) })
+        return response.ok ? await response.json() as Coverage : null
+    } catch { return null }
+}
