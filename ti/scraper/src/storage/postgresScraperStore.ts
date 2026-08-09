@@ -617,6 +617,47 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     if (filters.country) add("lower(capture.record::text) LIKE '%' || lower(?) || '%'", filters.country);
     if (filters.from) add("COALESCE(capture.published_at, capture.collected_at) >= ?::timestamptz", `${filters.from}T00:00:00.000Z`);
     if (filters.to) add("COALESCE(capture.published_at, capture.collected_at) <= ?::timestamptz", `${filters.to}T23:59:59.999Z`);
+    const offset = Math.max(0, Math.floor(input.offset));
+    const fastFirstPage = offset === 0 && !Object.values(filters).some(Boolean);
+    if (fastFirstPage) {
+      // Keep the common latest-activity read off the full materialized capture
+      // and source projections. The aggregate remains exact, while the page
+      // query can use the candidate ordering index to fetch the first row.
+      const candidateWhere = `
+        capture.tenant_id IS NOT DISTINCT FROM $1::text
+        AND (source.tenant_id IS NULL OR source.tenant_id IS NOT DISTINCT FROM capture.tenant_id)
+        AND NOT (concat_ws(' ', capture.source_id, source.record->>'name', source.record->'metadata'->>'sourceFamily') ~* '(cisa known exploited|known exploited vulnerabilities|mitre att&ck|attack enterprise|groups dataset|public groups dataset|nvd recent cve|github advisory database)')
+        AND ((capture.record->'metadata'->'leakSite'->>'actorName' <> '' AND capture.record->'metadata'->'leakSite'->>'victimName' <> '') OR capture.record->>'title' ~* '(has just published a new victim|claims victim|claimed victim|claims victim|victim\\s*:|added victim|listed victim|published victim)')`;
+      const [pageRows, summaryRows] = await Promise.all([
+        this.sql.unsafe(`
+          SELECT capture.record,
+            capture.id AS capture_id, capture.tenant_id, capture.source_id, capture.url,
+            capture.collected_at, capture.published_at, capture.media_type, capture.storage_kind
+          FROM threat_intel.captures capture
+          LEFT JOIN threat_intel.sources source ON source.id = capture.source_id
+          WHERE ${candidateWhere}
+          ORDER BY COALESCE(capture.published_at, capture.collected_at) DESC, capture.id DESC
+          LIMIT $2 OFFSET $3`, [values[0], Math.max(1, Math.min(250, Math.floor(input.limit))), Math.max(0, Math.floor(input.offset))]),
+        this.sql.unsafe(`
+          SELECT count(*) AS total,
+            count(*) FILTER (WHERE capture.record->'metadata'->'review'->>'state' = 'needs_review' OR capture.published_at IS NULL) AS needs_review,
+            count(*) FILTER (WHERE capture.storage_kind = 'metadata_only') AS metadata_only,
+            max(capture.published_at) AS latest_claim_at,
+            max(capture.collected_at) AS latest_collected_at
+          FROM threat_intel.captures capture
+          LEFT JOIN threat_intel.sources source ON source.id = capture.source_id
+          WHERE ${candidateWhere}`, [values[0]]),
+      ]);
+      const first = summaryRows[0] as Record<string, unknown> | undefined;
+      return {
+        captures: pageRows.map(readCaptureRecord),
+        total: Number(first?.total ?? 0),
+        needsReview: Number(first?.needs_review ?? 0),
+        metadataOnly: Number(first?.metadata_only ?? 0),
+        latestClaimAt: first?.latest_claim_at,
+        latestCollectedAt: first?.latest_collected_at
+      };
+    }
     // Materialize the small source projection once per query. The old
     // primary-key lookup loaded a source JSON document for every capture.
     const sourceTerms = `WITH candidate_captures AS MATERIALIZED (

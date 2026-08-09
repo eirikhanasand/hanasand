@@ -170,10 +170,31 @@ describe("structured threat-intelligence storage contract", () => {
         return [{ record: { title: "Akira has just published a new victim: Query Company" }, capture_id: "cap_query", tenant_id: null, source_id: "src_query", url: "https://example.test/query", collected_at: "2026-08-09T10:01:00.000Z", published_at: "2026-08-09T10:00:00.000Z", media_type: "text/html", storage_kind: "metadata_only", total: 1, needs_review: 0, metadata_only: 1, latest_claim_at: "2026-08-09T10:00:00.000Z", latest_collected_at: "2026-08-09T10:01:00.000Z" }];
       }
     };
-    await store.queryExposureQueuePage({ tenantId: "default", limit: 1, offset: 0 });
+    await store.queryExposureQueuePage({ tenantId: "default", filters: { q: "Akira" }, limit: 1, offset: 0 });
     expect(query).toContain("candidate_captures AS MATERIALIZED");
     expect(query).toContain("record->>'title' ~*");
     expect(query).toContain("ORDER BY COALESCE(capture.published_at, capture.collected_at) DESC");
+  });
+
+  test("keeps the unfiltered latest-activity page off full capture/source materialization", async () => {
+    const store = Object.create(PostgresScraperStore.prototype) as any;
+    const queries: string[] = [];
+    store.sql = {
+      unsafe: async (sql: string) => {
+        queries.push(sql);
+        return sql.includes("SELECT count(*)")
+          ? [{ total: 44, needs_review: 2, metadata_only: 44, latest_claim_at: "2026-08-09T10:00:00.000Z", latest_collected_at: "2026-08-09T10:01:00.000Z" }]
+          : [{ record: { title: "Akira has just published a new victim: Query Company" }, capture_id: "cap_latest", tenant_id: null, source_id: "src_latest", url: "https://example.test/query", collected_at: "2026-08-09T10:01:00.000Z", published_at: "2026-08-09T10:00:00.000Z", media_type: "text/html", storage_kind: "metadata_only" }];
+      }
+    };
+
+    const page = await store.queryExposureQueuePage({ tenantId: "default", limit: 1, offset: 0 });
+    expect(page).toMatchObject({ total: 44, latestCollectedAt: "2026-08-09T10:01:00.000Z" });
+    expect(page.captures).toHaveLength(1);
+    expect(queries).toHaveLength(2);
+    expect(queries.every(sql => !sql.includes("candidate_captures AS MATERIALIZED"))).toBe(true);
+    expect(queries.every(sql => !sql.includes("count(*) OVER"))).toBe(true);
+    expect(queries.some(sql => sql.includes("ORDER BY COALESCE(capture.published_at, capture.collected_at)"))).toBe(true);
   });
 
   test("preserves exposure totals when an out-of-range page has no rows", async () => {
