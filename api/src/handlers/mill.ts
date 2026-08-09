@@ -283,6 +283,14 @@ export async function postMillFindingAction(req: FastifyRequest<{ Params: { id: 
     const note = typeof body.note === 'string' ? body.note.trim().slice(0, 4000) : null
     const assigneeId = typeof body.assigneeId === 'string' ? body.assigneeId.trim() || null : null
     if (!status && note === null && body.assigneeId === undefined) return res.status(400).send({ error: 'Provide a valid status, note, or assigneeId.' })
+    if (assigneeId) {
+        const member = await run(`
+            SELECT 1
+            FROM organization_members
+            WHERE organization_id = $1 AND user_id = $2 AND status = 'active'
+        `, [access.organizationId, assigneeId])
+        if (!member.rows[0]) return res.status(422).send({ error: 'Assignee must be an active member of this organization.' })
+    }
     const result = await run(`
         UPDATE mill_findings
         SET status = COALESCE($3, status), analyst_note = COALESCE($4, analyst_note), assignee_id = COALESCE($5, assignee_id), updated_at = NOW()
