@@ -14,7 +14,9 @@ At 2026-08-09T09:42:20Z, the healthy post-restart production path at source/Tor 
 
 At 2026-08-09T10:17Z, a fresh cross-authority census had found 673 endpoint keys not present in the governed pack or its hashed exclusions, but most were historical endpoints or path variants. The initial 19 independently matched identities were only the first sample slice; broader sampling produced a continuing queue. Three bounded approved-proxy batches probed 36 endpoint-unique identities. One parser-positive endpoint was already the productive exact-`default` DWM source and was rejected as an endpoint-only duplicate; four responses were parser-empty, 24 returned upstream HTTP failures, and seven failed before useful metadata could be parsed. No endpoint was admitted, excluded, or counted. Discovery must continue from the remaining independently referenced frontier without treating inventory volume, historical locators, or one source represented in multiple tenants as source coverage.
 
-The production loss was a shared bootstrap identity defect, not missing source evidence. Restricted seed import assigned a new `createdAt` before qualification, changing the automatic-review identity hash and demoting already-qualified rows on every restart. Commit `14e1a7c2f1dbcd8ce942b16a8346894c856223fe` preserves the persisted identity during qualification, and `9f9e3a90f17e5973ed943cc1e8b0d6863d854474` preserves qualified legacy restricted sources that rely on real runtime evidence. The next verified shared blocker is review visibility: PostgreSQL currently omits run-linked `sourceReviewCandidate` captures when their health row is deliberately non-useful pending AI review. Those captures must become reviewable without receiving usefulness or qualification credit.
+At 2026-08-09T10:36Z, production commit `d38ec5f2d4f7aa5529cc763ca7e7a6bcce2bce2c` reported 24 qualifying clear-web feeds, 13 public Telegram feeds, and the correct 3 global lawful-Tor feeds. PostgreSQL reported 20 non-retired global Tor rows, 14 candidates, 18 feeds with retained useful health evidence, 12 approved source reviews, and 3 persisted sustained-productivity proofs. DragonForce had one successful useful scheduled cycle, one retained metadata capture, and an approved review; it remains candidate/noncoverage pending a distinct second productive cycle.
+
+The production loss was a shared bootstrap identity defect, not missing source evidence. Restricted seed import assigned a new `createdAt` before qualification, changing the automatic-review identity hash and demoting already-qualified rows on every restart. Commit `14e1a7c2f1dbcd8ce942b16a8346894c856223fe` preserves the persisted identity during qualification, and `9f9e3a90f17e5973ed943cc1e8b0d6863d854474` preserves qualified legacy restricted sources that rely on real runtime evidence. Commit `7e357e448567e3149ecef0fe31b85c68fcd74526` fixes the second loss point: PostgreSQL now exposes successful run-linked `sourceReviewCandidate` captures to governed review even when their health row remains deliberately non-useful. After rollout, all 53 sources with that retained candidate evidence had source-review tasks and zero remained invisible; no health row received usefulness or qualification credit from the repair.
 
 ## A source counts only when
 
@@ -47,6 +49,7 @@ The production loss was a shared bootstrap identity defect, not missing source e
 - Public and Telegram candidates in `needs_review` may gather newer bound evidence after initial verification expiry, but cannot promote until the review becomes approved.
 - Restricted re-import preserves the persisted source identity before qualification, so approved review evidence remains bound across restart.
 - Legacy restricted seeds without a shipped portfolio-verification receipt may evaluate their current governed runtime evidence; this does not bypass review, two-cycle, freshness, or retention requirements.
+- The PostgreSQL review index includes explicitly marked retained candidate evidence without changing its non-useful health state; ordinary non-useful captures remain excluded.
 
 ## Live progress ledger
 
@@ -60,6 +63,7 @@ The production loss was a shared bootstrap identity defect, not missing source e
 | 2026-08-09T08:31Z | `b206b20338cf8fe6d93b1509ed3da9bdd333c38b` | 9 | 11 | 7 | 2 | 998 |
 | 2026-08-09T09:42:20Z | `5f75ad6634ff5c3362ed0353b05a6e6d52f6b564` | 13 | 15 | 11 | 3 | 997 |
 | 2026-08-09T09:50Z | `bcac2d85028a434d232d335b1ddd9d3fc68a2053` | 13 | 14 | 11 | 3 | 997 |
+| 2026-08-09T10:36Z | `d38ec5f2d4f7aa5529cc763ca7e7a6bcce2bce2c` | 14 | 18 | 12 | 3 | 997 |
 
 Every later row must come from the live PostgreSQL/API/scheduler view. Never record onion locators or captured content in this file.
 
