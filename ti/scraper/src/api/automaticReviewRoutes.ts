@@ -203,7 +203,7 @@ export function syncAutomaticReviewQueue(options: ApiServerOptions, input: { ten
   const at = validIso(input.now) ?? nowIso();
   const modelVersion = input.modelVersion ?? configuredModelVersion(options);
   if (typeof store.queryAllStructuredRecords === "function") {
-    return buildReviewIndexAsync(store, input.tenantId, input.allTenants === true).then((index) => syncQueueWithIndex(store, index, input, at, modelVersion));
+    return buildReviewIndexAsync(store, input.tenantId, input.allTenants === true, { taskLimit: 100, modelVersion }).then((index) => syncQueueWithIndex(store, index, input, at, modelVersion));
   }
   return syncQueueWithIndex(store, buildReviewIndex(store), input, at, modelVersion);
 }
@@ -251,7 +251,10 @@ export async function runAutomaticReviewCycle(options: ApiServerOptions, input: 
   const store = options.store as any;
   const at = validIso(input.now) ?? nowIso();
   const modelVersion = input.modelVersion ?? configuredModelVersion(options);
-  const index = await buildReviewIndexAsync(store, input.tenantId, input.allTenants === true);
+  const index = await buildReviewIndexAsync(store, input.tenantId, input.allTenants === true, {
+    taskLimit: Math.max(100, boundedInteger(input.limit, 50, 1, 50) * 4),
+    modelVersion
+  });
   const queued = syncQueueWithIndex(store, index, input, at, modelVersion);
   const superseded = supersedeStaleTasks(store, index.tasks, input, at, modelVersion, MAX_STALE_TASKS_SUPERSEDED_PER_CYCLE);
   const recovered = recoverExpiredLeases(store, index.tasks, at, input);
@@ -1372,12 +1375,12 @@ function buildReviewIndex(store: any): ReviewIndex {
   };
 }
 
-async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants = false): Promise<ReviewIndex> {
-  if (typeof store.queryAllStructuredRecords !== "function") return buildReviewIndex(store);
+async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants = false, query?: { taskLimit?: number; modelVersion?: string }): Promise<ReviewIndex> {
   if (typeof store.queryAutomaticReviewRecords === "function") {
-    const collections = await store.queryAutomaticReviewRecords({ tenantId, allTenants });
+    const collections = await store.queryAutomaticReviewRecords({ tenantId, allTenants, ...query });
     return buildReviewIndexFromCollections(collections);
   }
+  if (typeof store.queryAllStructuredRecords !== "function") return buildReviewIndex(store);
   await store.flush?.();
   const scope = allTenants ? {} : { tenantId };
   const load = (collection: string, method: string) => store.queryAllStructuredRecords(collection, scope);

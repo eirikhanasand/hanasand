@@ -192,7 +192,10 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(await syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(1);
     const task = store.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task");
     store.analystMetadataReviewTasks.delete(task.id);
-    store.queryAutomaticReviewRecords = async () => ({
+    let queryInput: any;
+    store.queryAutomaticReviewRecords = async (input: any) => {
+      queryInput = input;
+      return ({
       tasksAndEvents: [task],
       claims: store.listIntelligenceClaims(),
       incidents: store.listIncidents(),
@@ -203,7 +206,8 @@ describe("automatic Hanasand AI intelligence review", () => {
       evidenceLinks: store.listEvidenceLinks(),
       reviews: store.listClaimReviews(),
       actorIdentities: store.listActorIdentities()
-    });
+      });
+    };
 
     const cycle = await runAutomaticReviewCycle(options(store), {
       allTenants: true,
@@ -218,6 +222,7 @@ describe("automatic Hanasand AI intelligence review", () => {
     });
 
     expect(cycle).toMatchObject({ attempted: 1, results: [{ state: "terminal", action: "confirm" }] });
+    expect(queryInput).toMatchObject({ allTenants: true, taskLimit: 100, modelVersion: "hanasand" });
     expect(store.getAnalystMetadataReviewTask(task.id)).toMatchObject({ state: "terminal", outcome: "decided" });
   });
 
