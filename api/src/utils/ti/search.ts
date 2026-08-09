@@ -100,7 +100,7 @@ export interface TiSearchResponse {
     query: string
     queryKind?: 'actor' | 'domain' | 'cve' | 'indicator' | 'organization' | 'free_text'
     generatedAt: string
-    mode: 'scraper' | 'seeded' | 'live_search'
+    mode: 'scraper' | 'seeded' | 'live_search' | 'unavailable'
     status?: TiResultState
     runId?: string
     refreshAfterSeconds?: number
@@ -186,7 +186,7 @@ function unavailableResult(query: string, queryKind: NonNullable<TiSearchRespons
         query,
         queryKind,
         generatedAt: new Date().toISOString(),
-        mode: 'live_search',
+        mode: 'unavailable',
         status: 'searching',
         refreshAfterSeconds: 5,
         summary: 'Searching',

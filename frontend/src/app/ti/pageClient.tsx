@@ -5361,7 +5361,7 @@ function searchingResult(query: string): TiSearchResponse {
     return {
         query,
         generatedAt: now,
-        mode: 'live_search',
+        mode: 'unavailable',
         status: 'searching',
         refreshAfterSeconds: 3,
         summary: 'Checking sources',

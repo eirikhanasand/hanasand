@@ -14,6 +14,7 @@ test('keeps unavailable capabilities out of no-evidence results', async () => {
     try {
         const result = await searchThreatIntel({ query: 'no-evidence-987654.example' })
         expect(result.datasets).toEqual([])
+        expect(result.mode).toBe('unavailable')
         expect(result).not.toHaveProperty('collectionStrategy')
         expect(result.actionability?.watchlistCandidates).toEqual([{
             kind: 'domain',
@@ -77,7 +78,7 @@ test('retries canonical search after an unavailable response', async () => {
     }
 
     try {
-        expect((await searchThreatIntel({ query: 'APT7654320' })).mode).toBe('live_search')
+        expect((await searchThreatIntel({ query: 'APT7654320' })).mode).toBe('unavailable')
         expect((await searchThreatIntel({ query: 'APT7654320' })).mode).toBe('scraper')
         expect(attempts).toBe(2)
     } finally {
