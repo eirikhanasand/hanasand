@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { buildDwmWebhookDeliveryReadinessConsumerProof, buildDwmWebhookDestinationLifecycle, buildDwmWebhookDestinationTestContract } from '../src/utils/dwm/webhooks.ts'
+import { buildDwmWebhookDeliveryReadiness, buildDwmWebhookDeliveryReadinessConsumerProof, buildDwmWebhookDestinationLifecycle, buildDwmWebhookDestinationTestContract } from '../src/utils/dwm/webhooks.ts'
 
 const baseDestination = {
     id: 'destination_1',
@@ -124,6 +124,16 @@ test('dry-run history never makes a webhook destination live-ready', () => {
     })
     expect(dryRunContract.status).toBe('pending')
 
+    const dryRunReadiness = buildDwmWebhookDeliveryReadiness({
+        destinations: [baseDestination as any],
+        deliveries: [testDelivery('dry_run') as any],
+        liveDeliveryEnabled: true,
+    })
+    expect(dryRunReadiness.destinations[0]).toMatchObject({
+        ready: false,
+        blockers: expect.arrayContaining(['test_delivery_unverified']),
+    })
+
     const deliveredContract = buildDwmWebhookDestinationTestContract({
         destination: { ...baseDestination, lastTestStatus: 'delivered' } as any,
         deliveries: [testDelivery('delivered') as any],
@@ -133,27 +143,34 @@ test('dry-run history never makes a webhook destination live-ready', () => {
     })
     expect(deliveredContract.status).toBe('verified')
 
-    const dryRunReadiness = buildDwmWebhookDeliveryReadinessConsumerProof({
+    const deliveredReadiness = buildDwmWebhookDeliveryReadiness({
+        destinations: [{ ...baseDestination, lastTestStatus: 'delivered' } as any],
+        deliveries: [testDelivery('delivered') as any],
+        liveDeliveryEnabled: true,
+    })
+    expect(deliveredReadiness.destinations[0]).toMatchObject({ ready: true })
+
+    const dryRunConsumerReadiness = buildDwmWebhookDeliveryReadinessConsumerProof({
         destinations: [baseDestination as any],
         deliveries: [testDelivery('dry_run') as any],
         liveDeliveryEnabled: true,
         viewerRole: 'owner',
         canManage: true,
     })
-    expect(dryRunReadiness.rows[0]).toMatchObject({
+    expect(dryRunConsumerReadiness.rows[0]).toMatchObject({
         state: 'blocked',
         dryRun: true,
         readiness: { success: false },
     })
 
-    const deliveredReadiness = buildDwmWebhookDeliveryReadinessConsumerProof({
+    const deliveredConsumerReadiness = buildDwmWebhookDeliveryReadinessConsumerProof({
         destinations: [{ ...baseDestination, lastTestStatus: 'delivered' } as any],
         deliveries: [testDelivery('delivered') as any],
         liveDeliveryEnabled: true,
         viewerRole: 'owner',
         canManage: true,
     })
-    expect(deliveredReadiness.rows[0]).toMatchObject({
+    expect(deliveredConsumerReadiness.rows[0]).toMatchObject({
         state: 'idempotent_replay',
         readiness: { success: true },
     })

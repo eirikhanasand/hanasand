@@ -10098,6 +10098,7 @@ function destinationReadinessBlockers({
     const blockers = []
     if (!destination.enabled) blockers.push('destination_disabled')
     if (!destination.lastTest.requestId) blockers.push('test_delivery_missing')
+    if (destination.lastTest.status !== 'delivered') blockers.push('test_delivery_unverified')
     if (destination.lastTest.status === 'failed') blockers.push('test_delivery_failed')
     if (!liveDeliveryEnabled) blockers.push('live_delivery_disabled')
     if (latestAttempt?.retryable) blockers.push('retry_scheduled')
