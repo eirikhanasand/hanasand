@@ -65,6 +65,15 @@ describe("organization watchlist collection requests", () => {
 
     expect(store.listPlans().map((plan: any) => ({ tenantId: plan.tenantId ?? plan.request?.tenantId, organizationId: plan.request?.organizationId, requestId: plan.request?.collectionRequestId })))
       .toContainEqual({ tenantId: "tenant_a", organizationId: "org_a", requestId });
+    const visibleWatchlists = await handleApiRequest(request("/v1/dwm/watchlists?tenantId=tenant_a&organizationId=org_a", "owner_a"), options);
+    expect(visibleWatchlists.status).toBe(200);
+    expect((await visibleWatchlists.json() as any).watchlists).toEqual(expect.arrayContaining([
+      expect.objectContaining({ organizationId: "org_a", terms: expect.arrayContaining([expect.objectContaining({ value: "Alpha Corp" })]) })
+    ]));
+    const foreignWatchlists = await handleApiRequest(request("/v1/dwm/watchlists?tenantId=tenant_b&organizationId=org_b", "owner_b"), options);
+    expect((await foreignWatchlists.json() as any).watchlists).toEqual(expect.arrayContaining([
+      expect.objectContaining({ organizationId: "org_b", terms: expect.arrayContaining([expect.objectContaining({ value: "Beta Corp" })]) })
+    ]));
     await Promise.resolve();
     const running = await handleApiRequest(request(`/v1/dwm/collection-requests/${requestId}?tenantId=tenant_a&organizationId=org_a`, "owner_a"), options);
     expect(await running.json()).toMatchObject({ collectionRequest: { requestId, status: "running", captureCount: 0, alertCount: 0 } });
@@ -86,6 +95,7 @@ describe("organization watchlist collection requests", () => {
     expect(repeated.status).toBe(200);
     expect((await repeated.json() as any).collectionRequest.requestId).toBe(requestId);
     expect(executionCount).toBe(1);
+    expect(store.listPlans().filter((plan: any) => plan.request?.collectionRequestId === requestId)).toHaveLength(1);
 
     failNext = true;
     const failed = await handleApiRequest(request("/v1/dwm/collection-requests", "owner_a", "POST", {

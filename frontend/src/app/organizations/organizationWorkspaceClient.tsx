@@ -667,6 +667,7 @@ export default function OrganizationWorkspaceClient() {
     const bundleLoadRef = useRef(0)
     const organizationSwitchFocusRef = useRef('')
     const workspaceFocusRef = useRef('')
+    const collectionRequestKeyRef = useRef<{ organizationId: string, key: string } | null>(null)
 
     const selectedOrganization = useMemo(
         () => organizations.find(organization => organization.id === selectedId) || organizations[0],
@@ -1300,14 +1301,21 @@ export default function OrganizationWorkspaceClient() {
 
     const requestFreshCollection = () => selectedOrganization && runAction('fresh-collection', async () => {
         requireManage()
+        const organizationId = selectedOrganization.id
+        const existingKey = collectionRequestKeyRef.current
+        const idempotencyKey = existingKey?.organizationId === organizationId
+            ? existingKey.key
+            : `org-ui-${organizationId}-${crypto.randomUUID()}`
+        collectionRequestKeyRef.current = { organizationId, key: idempotencyKey }
         const payload = await requestJson<{ collectionRequest?: CollectionRequest }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/collection-requests`, {
             method: 'POST',
-            headers: { 'idempotency-key': `org-ui-${selectedOrganization.id}-${Date.now()}` },
+            headers: { 'idempotency-key': idempotencyKey },
             body: JSON.stringify({ organizationId: selectedOrganization.id, tenantId: selectedOrganization.tenantId || selectedOrganization.id }),
         })
         const next = payload.collectionRequest || null
         setCollectionRequest(next)
         await loadOrganizationBundle(selectedOrganization.id)
+        collectionRequestKeyRef.current = null
         return next ? `Fresh collection ${next.status}; ${next.captureCount || 0} captures and ${next.alertCount || 0} alerts reported.` : 'Collection request accepted.'
     }, 'fresh-collection')
 
