@@ -7,6 +7,7 @@ import { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "../ops/canaryPortfolio.ts";
 import { importSeedBundle, seedDuplicateKey } from "../registry/sourceSeedsBundle.ts";
 import { expandSourcePortfolioBatch, validateSourcePortfolioBatch } from "../registry/sourcePortfolioBatch.ts";
 import { canonicalUrl } from "../registry/sourceSeedUtils.ts";
+import { hasThreatTerm } from "../value/sellableIntel.ts";
 
 const batchPath = new URL("../../seeds/source_portfolio_clear_web.json", import.meta.url);
 const seedDirectory = dirname(fileURLToPath(batchPath));
@@ -20,8 +21,8 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(282);
-    expect(batch.exclusions).toHaveLength(337);
+    expect(batch.sources).toHaveLength(302);
+    expect(batch.exclusions).toHaveLength(317);
 
     const generatedAt = Date.parse(rawBatch.generatedAt);
     const evidenceTimes = [
@@ -459,7 +460,6 @@ describe("clear-web source portfolio batch", () => {
     expect(exclusions.get(hash(canonicalUrl("https://developer.apple.com/news/releases/rss/releases.rss")).slice(0, 24))).toBe("product_release_feed_not_security_intelligence");
     expect(exclusions.get(hash(canonicalUrl("https://www.cisa.gov/uscert/ncas/all.xml")).slice(0, 24))).toBe("duplicate_publisher_feed_content");
     expect(exclusions.get(hash(canonicalUrl("https://security.archlinux.org/issues/all.json")).slice(0, 24))).toBe("parser_missing_published_timestamp");
-    expect(exclusions.get(hash(canonicalUrl("https://www.docker.com/blog/tag/security/feed/")).slice(0, 24))).toBe("marketing_or_product_guidance_only_current_items");
 
     const auscert = sources.find((source: any) => source.name === "AusCERT Security Bulletins");
     expect(auscert.legalNotes).toContain("public unauthenticated RSS response");
@@ -655,7 +655,6 @@ describe("clear-web source portfolio batch", () => {
 
     const exclusions = new Map(batch.exclusions.map((entry: any) => [entry.idOrUrlHash, entry.reason]));
     expect(exclusions.get(hash(canonicalUrl("https://www.intel471.com/blog/feed")).slice(0, 24))).toBe("duplicate_publisher_feed_content");
-    expect(exclusions.get(hash(canonicalUrl("https://www.intigriti.com/blog/feed")).slice(0, 24))).toBe("broader_mixed_feed_superseded_by_narrow_research_feed");
     expect(exclusions.get(hash(canonicalUrl("https://projectdiscovery.io/blog/category/vulnerability-research/rss.xml")).slice(0, 24))).toBe("response_exceeds_max_bytes");
     expect(exclusions.get(hash(canonicalUrl("https://community.hpe.com/hpeb/rss/board?board.id=HPE_Threat_Labs")).slice(0, 24))).toBe("http_403");
     expect(exclusions.get(hash(canonicalUrl("https://www.forescout.com/blog/feed/")).slice(0, 24))).toBe("parser_zero_items");
@@ -741,11 +740,8 @@ describe("clear-web source portfolio batch", () => {
 
     const exclusions = new Map(batch.exclusions.map((entry: any) => [entry.idOrUrlHash, entry.reason]));
     expect(exclusions.get(hash(canonicalUrl("https://pcsupport.lenovo.com/us/en/api/v4/search/psrss?language=en&country=us&brand=TPG,EBG")).slice(0, 24))).toBe("http_403");
-    expect(exclusions.get(hash(canonicalUrl("https://www.withsecure.com/en/feed/")).slice(0, 24))).toBe("zero_useful_production_items");
     expect(exclusions.get(hash(canonicalUrl("https://www.bsp.gov.ph/_layouts/15/listfeed.aspx?List=9b0a2117-49d8-4e96-80ba-8651a0e3e17a&View=be72ff0e-7b72-4309-8c5f-e502d9d324a9")).slice(0, 24))).toBe("mixed_non_operational_current_items");
     expect(exclusions.get(hash(canonicalUrl("https://gna.moksha.dk/feed.xml")).slice(0, 24))).toBe("bulk_restamped_current_items");
-    expect(exclusions.get(hash(canonicalUrl("https://brandefense.io/feed/")).slice(0, 24))).toBe("broader_mixed_feed_superseded_by_narrow_research_feed");
-    expect(exclusions.get(hash(canonicalUrl("https://blog.virustotal.com/feeds/posts/default?alt=rss")).slice(0, 24))).toBe("marketing_or_product_guidance_only_current_items");
     expect(exclusions.get(hash(canonicalUrl("https://rss.app/feeds/_22lRQJMKndkBEjVr.xml")).slice(0, 24))).toBe("generated_third_party_feed");
     expect(exclusions.get(hash(canonicalUrl("https://www.welivesecurity.com/en/rss/feed/")).slice(0, 24))).toBe("duplicate_publisher_feed_content");
     expect(exclusions.get(hash(canonicalUrl("https://sec.cloudapps.cisco.com/security/center/eventResponses_20.xml")).slice(0, 24))).toBe("legal_terms_commercial_use_restricted");
@@ -816,6 +812,62 @@ describe("clear-web source portfolio batch", () => {
     expect(exclusions.get(hash(canonicalUrl("https://www.freebsd.org/security/feed.xml")).slice(0, 24))).toBe("parser_invalid_published_timestamp");
     expect(exclusions.get(hash(canonicalUrl("https://www.mitiga.io/blog/rss.xml")).slice(0, 24))).toBe("bulk_restamped_current_items");
     expect(exclusions.get(hash(canonicalUrl("https://www.domaintools.com/blog/rss.xml")).slice(0, 24))).toBe("bulk_restamped_current_items");
+  });
+
+  test("recovers ledger 024 soft exclusions as neutral-named candidates until productive scheduled cycles exist", () => {
+    const expected = new Map([
+      ["Fedora Package Announcement Feed", [30, 30, 30, 0, "Sun, 09 Aug 2026 01:18:12 +0000"]],
+      ["CERT.br Cyber Publications", [12, 12, 3, 0, "Mon, 29 Jun 2026 17:15:00 +0000"]],
+      ["Docker Engineering Blog", [10, 10, 10, 2, "Tue, 04 Aug 2026 15:10:16 +0000"]],
+      ["NGINX Engineering Blog", [10, 10, 10, 0, "Mon, 22 Jun 2026 15:48:29 +0000"]],
+      ["Nextcloud Product Update Feed", [10, 10, 9, 0, "Fri, 24 Jul 2026 08:46:03 +0000"]],
+      ["Android Developer Update Feed", [25, 25, 2, 2, "2026-05-08T10:41:30.095-07:00"]],
+      ["Guardsquare Mobile Engineering Blog", [10, 10, 10, 0, "Tue, 04 Aug 2026 13:02:55 GMT"]],
+      ["CERT-FR Current Affairs Bulletins", [40, 40, 27, 26, "Mon, 03 Aug 2026 00:00:00 +0000"]],
+      ["CERT Polska Public Advisories", [10, 10, 10, 4, "Fri, 07 Aug 2026 14:22:41 +0000"]],
+      ["WatchGuard Technical Blog", [250, 250, 75, 12, "Fri, 07 Aug 2026 07:00:00 -0700"]],
+      ["ReliaQuest Research Blog", [10, 10, 10, 2, "Thu, 06 Aug 2026 09:00:00 GMT"]],
+      ["WithSecure Corporate Publications", [10, 10, 10, 0, "Wed, 01 Jul 2026 06:35:03 +0000"]],
+      ["VirusTotal Research Blog", [25, 25, 2, 2, "Mon, 08 Jun 2026 21:46:34 +0000"]],
+      ["Doctor Web Public Updates", [20, 20, 13, 6, "Thu, 23 Jul 2026 09:54:20 GMT"]],
+      ["Center for Internet Security Blog", [50, 50, 35, 6, "Thu, 06 Aug 2026 16:33:00 -0400"]],
+      ["Intigriti Research Blog", [20, 20, 20, 7, "Thu, 06 Aug 2026 00:00:00 GMT"]],
+      ["NowSecure Mobile Research Blog", [10, 10, 10, 3, "Wed, 05 Aug 2026 12:00:00 +0000"]],
+      ["Infoblox Network Research Blog", [12, 12, 12, 3, "Thu, 06 Aug 2026 16:00:34 +0000"]],
+      ["Morphisec Endpoint Research Blog", [20, 20, 20, 11, "Wed, 05 Aug 2026 13:00:00 +0000"]],
+      ["Brandefense Research Blog", [10, 10, 10, 10, "Fri, 07 Aug 2026 16:35:17 +0000"]],
+    ] as const);
+    const sourceTolerant = new Set([
+      "Fedora Package Announcement Feed",
+      "CERT.br Cyber Publications",
+      "NGINX Engineering Blog",
+      "Nextcloud Product Update Feed",
+      "Guardsquare Mobile Engineering Blog",
+      "WithSecure Corporate Publications",
+    ]);
+    const sources = batch.sources.filter((source: any) => expected.has(source.name));
+    expect(sources).toHaveLength(expected.size);
+    const totals = { parsed: 0, dated: 0, current: 0, useful: 0 };
+    const exclusions = new Set(batch.exclusions.map((entry: any) => entry.idOrUrlHash));
+    for (const source of sources) {
+      const [observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt] = expected.get(source.name)!;
+      expect(source.id).toBe(`src_portfolio_cw_${hash(canonicalUrl(source.url)).slice(0, 20)}`);
+      expect(source.metadata.sourcePortfolioVerification).toMatchObject({ observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt });
+      expect(currentItemCount).toBeGreaterThan(0);
+      if (sourceTolerant.has(source.name)) expect(keywordUsefulItemCount).toBe(0);
+      else expect(keywordUsefulItemCount).toBeGreaterThan(0);
+      expect(hasThreatTerm(source.name)).toBe(false);
+      expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
+      expect(source.metadata).not.toHaveProperty("countsAsCoverage");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
+      expect(exclusions.has(hash(canonicalUrl(source.url)).slice(0, 24))).toBe(false);
+      totals.parsed += observedItemCount;
+      totals.dated += datedItemCount;
+      totals.current += currentItemCount;
+      totals.useful += keywordUsefulItemCount;
+    }
+    expect(totals).toEqual({ parsed: 594, dated: 594, current: 328, useful: 96 });
   });
 
   test("deduplicates by normalized endpoint across adapters and every reserved source pack", () => {
