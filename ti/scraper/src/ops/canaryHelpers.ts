@@ -31,7 +31,7 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
   if (!res.ok) throw httpError(res.status);
   const contentType = res.headers.get("content-type") ?? undefined;
   if (contentType && !/^(?:text\/|application\/(?:rss\+xml|x-rss\+xml|atom\+xml|rdf\+xml|xml|json|xhtml\+xml))/i.test(contentType)) throw new Error(`unsupported media type: ${contentType}`);
-  const body = await boundedText(res, maxBytes);
+  const body = await boundedText(res, maxBytes, timeoutMs);
   const fetched = body.text;
   const metadata = { canaryPortfolio: true, fetchMode: mode, finalUrlHash: hashContent(finalUrl), responseBytes: body.bytesReceived, fetchProvenance: { mode, adapterVersion: "public_canary_fetcher:v2", requestedUrlHash: hashContent(requestedUrl), sourceUrlHash: hashContent(task.targetUrl), finalUrlHash: hashContent(finalUrl), httpStatus: res.status, ok: res.ok, contentType, fetchedAt: at, durationMs: Date.now() - started, bytesReceived: body.bytesReceived, maxBytes, truncated: body.truncated, bounded: true, redirectCount, userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" } };
   if (extractionProfile === "mitre_actor_catalog") {
@@ -60,7 +60,7 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
     if (!activityFetch.response.ok) throw httpError(activityFetch.response.status);
     const activityType = activityFetch.response.headers.get("content-type") ?? undefined;
     if (activityType && !/^application\/json/i.test(activityType)) throw new Error(`unsupported media type: ${activityType}`);
-    const activityBody = await boundedText(activityFetch.response, 32 * 1024 * 1024);
+    const activityBody = await boundedText(activityFetch.response, 32 * 1024 * 1024, timeoutMs);
     if (activityBody.truncated) throw new Error("Ransomware operation activity evidence exceeded the bounded response size.");
     const ransomwareOperationCatalogSnapshot = parseCurrentRansomwareOperations(fetched, activityBody.text, { retrievedAt: at, sourceUrl: task.targetUrl });
     const [groupContentHash, activityContentHash] = ransomwareOperationCatalogSnapshot.evidenceContentHashes;
@@ -212,23 +212,34 @@ async function fetchPublicResponse(fetcher: CanaryFetch, initialUrl: string, tim
   throw new Error("public fetch redirect limit exceeded");
 }
 
-async function boundedText(response: Response, maxBytes: number) {
+async function boundedText(response: Response, maxBytes: number, timeoutMs: number) {
   const reader = response.body?.getReader();
   if (!reader) return { text: "", bytesReceived: 0, truncated: false };
   const decoder = new TextDecoder();
   let text = "", bytesReceived = 0, truncated = false;
-  while (true) {
-    const chunk = await reader.read();
-    if (chunk.done) break;
-    const remaining = maxBytes - bytesReceived;
-    if (remaining <= 0) { truncated = true; await reader.cancel(); break; }
-    const bytes = chunk.value.byteLength > remaining ? chunk.value.subarray(0, remaining) : chunk.value;
-    bytesReceived += bytes.byteLength;
-    text += decoder.decode(bytes, { stream: true });
-    if (bytes.byteLength < chunk.value.byteLength) { truncated = true; await reader.cancel(); break; }
+  let timeout: Timer | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error(`response body timeout after ${timeoutMs}ms`)), timeoutMs);
+  });
+  try {
+    while (true) {
+      const chunk = await Promise.race([reader.read(), deadline]);
+      if (chunk.done) break;
+      const remaining = maxBytes - bytesReceived;
+      if (remaining <= 0) { truncated = true; await reader.cancel(); break; }
+      const bytes = chunk.value.byteLength > remaining ? chunk.value.subarray(0, remaining) : chunk.value;
+      bytesReceived += bytes.byteLength;
+      text += decoder.decode(bytes, { stream: true });
+      if (bytes.byteLength < chunk.value.byteLength) { truncated = true; await reader.cancel(); break; }
+    }
+    text += decoder.decode();
+    return { text, bytesReceived, truncated };
+  } catch (error) {
+    void reader.cancel().catch(() => undefined);
+    throw error;
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
-  text += decoder.decode();
-  return { text, bytesReceived, truncated };
 }
 
 function httpError(status: number) {

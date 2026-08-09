@@ -51,6 +51,58 @@ describe("public collection boundary", () => {
     }));
   });
 
+  test("times out a stalled response body without wedging the recurring loop", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "stalled", url: "https://example.test/stalled.xml" }));
+    let cancelled = 0;
+    const loop = startCanaryCollectionLoop({
+      store,
+      frontier: new FocusedFrontier(),
+      enabled: false,
+      scheduleSourceFeedDiscovery: false,
+      scheduleWatchlistDiscovery: false,
+      maxSources: 1,
+      maxTasks: 1,
+      maxConcurrentTasks: 1,
+      timeoutMs: 20,
+      fetch: async () => new Response(new ReadableStream({
+        pull() {},
+        cancel() { cancelled++; }
+      }), { headers: { "content-type": "application/rss+xml" } })
+    });
+
+    loop.setEnabled(true, { approvedBy: "body-timeout-test" });
+    await loop.runOnce();
+    const state = loop.getState();
+    await loop.stop();
+
+    expect(state).toMatchObject({
+      running: false,
+      cycleCount: 1,
+      successCount: 0,
+      errorCount: 0,
+      deferredCount: 1,
+      latestResult: {
+        status: "queued",
+        leasedTaskCount: 1,
+        failedTaskCount: 1,
+        completedTaskCount: 0,
+        remainingQueuedTaskCount: 1
+      }
+    });
+    expect(Date.parse(state.nextCycleAt ?? "")).toBeGreaterThan(Date.now());
+    expect(cancelled).toBe(1);
+    expect(store.listRuns()).toContainEqual(expect.objectContaining({
+      requestId: "req_public_canary",
+      status: "queued",
+      completedAt: undefined,
+      error: "response body timeout after 20ms"
+    }));
+    expect(store.listSourceHealthObservations()).toEqual([
+      expect.objectContaining({ sourceId: "stalled", success: false, useful: false, adapterFailureCategory: "timeout" })
+    ]);
+  });
+
   test("runs only explicitly selected due sources", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "first", tenantId: "default", url: "https://example.test/first.xml", status: "active" }));
