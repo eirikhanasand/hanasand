@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T10:12:13.149Z",
+  "generatedAt": "2026-08-09T10:42:11.044Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -1094,6 +1094,76 @@
           "contentType": "text/html",
           "adapter": "tor_metadata",
           "legalBasisVerifiedAt": "2026-08-09T10:12:13.149Z"
+        }
+      }
+    },
+    {
+      "id": "restricted_incransom_victim_api",
+      "name": "Inc Ransom victim API",
+      "type": "tor_metadata",
+      "url": "http://incbacg6bfwtrlzwdbqc55gsfl763s3twdtwhp27dzuik6s6rwdcityd.onion/api/v1/blog/get/announcements?page=1&perPage=15",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.84,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public victim-listing organization names and publication metadata from the credential-free JSON endpoint. Never authenticate, interact with operators, follow proof, payload, or contact links, or retain descriptions, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-08-09T10:42:11.044Z",
+        "approvedBy": "source-review:goal8-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Inc Ransom",
+        "actors": [
+          "Inc Ransom"
+        ],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/developers",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/incransom",
+        "discoveryCheckedAt": "2026-08-09T10:42:11.044Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T10:42:11.044Z",
+        "productionCollectionVerifiedAt": "2026-08-09T10:42:11.044Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "json_announcements_company_name",
+        "parserShape": "payload.announcements[].company.company_name",
+        "observedParsedItemCount": 15,
+        "reportedVictimCount": 885,
+        "lastReportedVictimAt": "2026-08-04T02:24:44.578709+00:00",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+        "discoveryAuthorityChain": [
+          {
+            "name": "Ransomwhere.org",
+            "role": "current public proxy inventory for the upstream ransomware.live group catalog",
+            "url": "https://ransomwhere.org/developers",
+            "recordUrl": "https://ransomwhere.org/api/groups/incransom"
+          },
+          {
+            "name": "Trend Micro Research",
+            "role": "independent current ransomware activity and victim-volume research",
+            "url": "https://www.trendmicro.com/vinfo/us/security/research-and-analysis/threat-reports",
+            "recordUrl": "https://documents.trendmicro.com/assets/pdf/Cyber-Risk-Report.pdf"
+          }
+        ],
+        "attribution": "Ransomwhere.org public inventory, current independent Trend Micro research, and approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T10:42:11.044Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 15,
+          "httpStatus": 200,
+          "contentType": "application/json",
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T10:42:11.044Z"
         }
       }
     }
