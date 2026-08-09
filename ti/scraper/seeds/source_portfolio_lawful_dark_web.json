@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T08:19:12.405Z",
+  "generatedAt": "2026-08-09T08:44:10.647Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -281,15 +281,6 @@
       "countsAsCoverage": false
     },
     {
-      "id": "restricted_global_secret_group_victim_blog",
-      "actorName": "Global Secret Group",
-      "disposition": "rejected",
-      "reason": "The approved-proxy parser produced bounded victim metadata, but the authority detail route did not supply an exact truthful last-victim timestamp required for executable admission.",
-      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
-      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/globalsecretgroup",
-      "countsAsCoverage": false
-    },
-    {
       "id": "restricted_helix_victim_blog",
       "actorName": "Helix",
       "disposition": "rejected",
@@ -332,15 +323,6 @@
       "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.",
       "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
       "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/storm",
-      "countsAsCoverage": false
-    },
-    {
-      "id": "restricted_triple_x_victim_blog",
-      "actorName": "Triple X",
-      "disposition": "rejected",
-      "reason": "The approved-proxy parser produced bounded victim metadata, but the authority detail route did not supply an exact truthful last-victim timestamp required for executable admission.",
-      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
-      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/triplex",
       "countsAsCoverage": false
     },
     {
@@ -616,6 +598,146 @@
           "contentType": "text/html",
           "adapter": "tor_metadata",
           "legalBasisVerifiedAt": "2026-08-09T08:19:12.405Z"
+        }
+      }
+    },
+    {
+      "id": "restricted_global_secret_group_victim_blog",
+      "name": "Global Secret Group victim blog",
+      "type": "tor_metadata",
+      "url": "http://o5lsqyar7ox25z734k6zaxt2vf7bsyi4q5rturi5iyxzqo3ica7bjsad.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.84,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public victim-listing organization names and publication metadata. Never authenticate, interact with operators, follow payload or contact links, or retain descriptions, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-08-09T08:44:06.953Z",
+        "approvedBy": "source-review:goal8-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Global Secret Group",
+        "actors": [
+          "Global Secret Group"
+        ],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/developers",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/Global%20Secret%20Group",
+        "discoveryCheckedAt": "2026-08-09T08:44:06.953Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T08:44:06.953Z",
+        "productionCollectionVerifiedAt": "2026-08-09T08:44:06.953Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "card_body_title",
+        "parserShape": "div.card-body > h3.card-title",
+        "observedParsedItemCount": 24,
+        "reportedVictimCount": 33,
+        "lastReportedVictimAt": "2026-08-05T18:21:39.317809+00:00",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+        "discoveryAuthorityChain": [
+          {
+            "name": "Ransomwhere.org",
+            "role": "current public proxy inventory for the upstream ransomware.live group catalog",
+            "url": "https://ransomwhere.org/developers",
+            "recordUrl": "https://ransomwhere.org/api/groups/Global%20Secret%20Group"
+          },
+          {
+            "name": "SOCRadar",
+            "role": "independent current public ransomware-group profile",
+            "url": "https://socradar.io/free-tools/ransomware-intelligence",
+            "recordUrl": "https://socradar.io/free-tools/ransomware-intelligence/groups/global-secret-group"
+          }
+        ],
+        "attribution": "Ransomwhere.org public inventory, SOCRadar independent public research, and approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T08:44:06.953Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 24,
+          "httpStatus": 200,
+          "contentType": "text/html",
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T08:44:06.953Z"
+        }
+      }
+    },
+    {
+      "id": "restricted_triple_x_victim_blog",
+      "name": "Triple X victim blog",
+      "type": "tor_metadata",
+      "url": "http://ojcmpbdncjo5dhaxxll44bq6to3kwqtoeraevgsjquhdtt4uv5l4igid.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.84,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public victim-listing organization names and publication metadata. Never authenticate, interact with operators, follow payload or contact links, or retain descriptions, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-08-09T08:44:10.647Z",
+        "approvedBy": "source-review:goal8-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Triple X",
+        "actors": [
+          "Triple X"
+        ],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/developers",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/Triple%20X",
+        "discoveryCheckedAt": "2026-08-09T08:44:10.647Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T08:44:10.647Z",
+        "productionCollectionVerifiedAt": "2026-08-09T08:44:10.647Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "post_container_title",
+        "parserShape": "div.post > h2.post-title",
+        "observedParsedItemCount": 4,
+        "reportedVictimCount": 4,
+        "lastReportedVictimAt": "2026-08-05T14:50:38.139223+00:00",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+        "discoveryAuthorityChain": [
+          {
+            "name": "Ransomwhere.org",
+            "role": "current public proxy inventory for the upstream ransomware.live group catalog",
+            "url": "https://ransomwhere.org/developers",
+            "recordUrl": "https://ransomwhere.org/api/groups/Triple%20X"
+          },
+          {
+            "name": "SOCRadar",
+            "role": "independent current public ransomware-group profile",
+            "url": "https://socradar.io/free-tools/ransomware-intelligence",
+            "recordUrl": "https://socradar.io/free-tools/ransomware-intelligence/groups/triple-x"
+          }
+        ],
+        "attribution": "Ransomwhere.org public inventory, SOCRadar independent public research, and approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T08:44:10.647Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 4,
+          "httpStatus": 200,
+          "contentType": "text/html",
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T08:44:10.647Z"
         }
       }
     }
