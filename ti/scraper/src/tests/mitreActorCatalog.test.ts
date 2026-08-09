@@ -201,9 +201,6 @@ describe("MITRE actor identity catalog", () => {
     const catalog = parseMitreActorCatalog(officialV191Excerpt, { retrievedAt: "2026-07-21T00:00:00.000Z", minimumCurrentIdentities: 6 });
     const store = new InMemoryScraperStore();
     store.replaceActorIdentityCatalog(catalog, { sourceId: "src_mitre_enterprise_stix", captureId: "cap_mitre_enterprise_v19_1" });
-    (store as any).listSources = () => {
-      throw new Error("live planning should not run in cached mode");
-    };
     (store as any).querySearchCaptures = async () => {
       await Bun.sleep(1_000);
       throw new Error("retained search should not run in cached mode");
@@ -223,7 +220,6 @@ describe("MITRE actor identity catalog", () => {
       aliases: expect.arrayContaining(["Charming Kitten", "Magic Hound"]),
       sources: [{ name: "MITRE Enterprise ATT&CK", parserStatus: "public_reference" }]
     });
-    expect(result.runId).toBeUndefined();
     expect(result.summary).toContain("Live evidence search is continuing");
   });
 

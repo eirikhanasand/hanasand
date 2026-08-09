@@ -25,10 +25,6 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const generatedAt = nowIso();
   const entityType = searchEntityType(query, body.entityType ?? url.searchParams.get("entityType"), options.store, scope.tenantId);
   const actorQuery = entityType === "actor";
-  const identity = actorIdentity(options.store, scope.tenantId, query);
-  if (actorQuery && url.searchParams.get("cached") === "true") {
-    return json(sanitizeDwmApiPayload(cachedSearchResponse(query, entityType, scope.tenantId, identity, generatedAt)));
-  }
   const sourcesInScope = options.store.listSources().filter((source: any) => !source.tenantId || source.tenantId === scope.tenantId);
   const liveSearch = createLiveSearchPlan({
     request: { query, entityType, tenantId: scope.tenantId, createdAt: generatedAt },
@@ -40,6 +36,10 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     queuePressureLimit: Number(options.liveSearchQueuePressureLimit ?? 50),
   });
   scheduleLiveSearch(liveSearch, options, generatedAt);
+  const identity = actorIdentity(options.store, scope.tenantId, query);
+  if (actorQuery && url.searchParams.get("cached") === "true") {
+    return json(sanitizeDwmApiPayload(cachedSearchResponse(query, entityType, identity, liveSearch.dto, generatedAt)));
+  }
   const localSearchIndexAvailable = (options.store as any).usesPostgresSearchIndex === true;
   const persistedSearchCaptures = localSearchIndexAvailable
     ? findSearchCaptures(options.store, query, 300, scope.tenantId)
@@ -283,7 +283,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   return json(sanitizeDwmApiPayload(response));
 }
 
-function cachedSearchResponse(query: string, entityType: SearchEntityType, tenantId: string | undefined, identity: ReturnType<typeof actorIdentity>, generatedAt: string) {
+function cachedSearchResponse(query: string, entityType: SearchEntityType, identity: ReturnType<typeof actorIdentity>, planner: any, generatedAt: string) {
   const candidates = identity.catalogCandidates;
   const sources = uniqueBy(candidates.map((candidate) => ({
     id: `catalog:${candidate.catalogId}:${candidate.externalId}`,
@@ -301,11 +301,11 @@ function cachedSearchResponse(query: string, entityType: SearchEntityType, tenan
   return {
     query,
     queryKind: entityType,
-    tenantId,
     generatedAt,
     mode: "seeded",
     status: "searching",
-    refreshAfterSeconds: 3,
+    runId: planner.activeRunId ?? planner.terminalRunId,
+    refreshAfterSeconds: planner.nextPollSeconds ?? 3,
     summary,
     confidence: candidates.length === 1 ? 1 : 0,
     aliases: unique(candidates.flatMap((candidate) => [candidate.canonicalName, ...candidate.associatedNames])),
