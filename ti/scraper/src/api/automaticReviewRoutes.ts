@@ -33,6 +33,7 @@ const EVIDENCE_PROJECTION_SCHEMA = "ti.automatic_intelligence_review.evidence_pr
 const TASK_KIND = "automatic_intelligence_review_task";
 const EVENT_KIND = "automatic_intelligence_review_event";
 const DEFAULT_MAX_ATTEMPTS = 3;
+const MAX_HEALTHY_PENDING_WRITES = 1_000;
 const FALSE_POSITIVE_REASON_ERROR = "A non-supported decision requires a structured false-positive reason";
 const FALSE_POSITIVE_REASON_CORRECTION = "false_positive_reasons_required";
 const FALSE_POSITIVE_REASON_RETRY = "The prior response omitted mandatory falsePositiveReasons. For a non-supported decision, the model must return at least one non-empty, evidence-grounded falsePositiveReasons entry; do not copy this instruction as the reason.";
@@ -309,7 +310,7 @@ function reviewStorageBackpressure(store: any) {
   if (!snapshot) return undefined;
   const pendingWrites = Number(snapshot.pendingWrites ?? 0);
   const lastWriteError = typeof snapshot.lastWriteError === "string" ? snapshot.lastWriteError.trim() : "";
-  if (!lastWriteError && pendingWrites <= 0) return undefined;
+  if (!lastWriteError && pendingWrites <= MAX_HEALTHY_PENDING_WRITES) return undefined;
   const reason = lastWriteError || `PostgreSQL write queue has ${pendingWrites} pending records.`;
   return { ok: false, pendingWrites, lastWriteError: reason, message: `Review paused because PostgreSQL writes are unhealthy: ${reason}` };
 }

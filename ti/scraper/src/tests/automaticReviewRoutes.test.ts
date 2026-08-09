@@ -43,16 +43,21 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(modelCalls).toBe(0);
   });
 
-  test("does not index or call the model while writes remain queued", async () => {
+  test("continues while a bounded write queue drains", async () => {
     const store: any = new InMemoryScraperStore();
     store.databaseHealthSnapshot = () => ({ ok: true, pendingWrites: 1 });
-    store.queryAllStructuredRecords = async () => { throw new Error("must not enumerate while writes remain queued"); };
-    let modelCalls = 0;
+    store.queryAllStructuredRecords = async () => [];
+    const cycle = await runAutomaticReviewCycle({ store } as any, { allTenants: true, fetcher: async () => { throw new Error("must not call model"); } });
+    expect(cycle).not.toMatchObject({ error: { code: "storage_backpressure" } });
+    expect(cycle.attempted).toBe(0);
+  });
 
-    const cycle = await runAutomaticReviewCycle({ store } as any, { allTenants: true, fetcher: async () => { modelCalls++; throw new Error("must not call model"); } });
-
-    expect(cycle).toMatchObject({ status: "failed", storage: { pendingWrites: 1 }, error: { code: "storage_backpressure" }, attempted: 0 });
-    expect(modelCalls).toBe(0);
+  test("pauses when the write queue exceeds the health budget", async () => {
+    const store: any = new InMemoryScraperStore();
+    store.databaseHealthSnapshot = () => ({ ok: true, pendingWrites: 1_001 });
+    store.queryAllStructuredRecords = async () => { throw new Error("must not enumerate while storage is backlogged"); };
+    const cycle = await runAutomaticReviewCycle({ store } as any, { allTenants: true, fetcher: async () => { throw new Error("must not call model"); } });
+    expect(cycle).toMatchObject({ status: "failed", storage: { pendingWrites: 1_001 }, error: { code: "storage_backpressure" }, attempted: 0 });
   });
 
   test("async review snapshots do not re-enumerate high-volume collections", async () => {

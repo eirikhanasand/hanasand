@@ -21,6 +21,7 @@ export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanary
 export type * from "./canaryCollectionTypes.ts";
 import type { CanaryCollectionCycleResult, CanaryCollectionLoopHandle, CanaryCollectionOptions } from "./canaryCollectionTypes.ts";
 const MAX_CANARY_TASKS_PER_CYCLE = 60;
+const MAX_HEALTHY_PENDING_WRITES = 1_000;
 function effectiveCanaryLimits(options: any) {
   const maxConcurrentTasks = Math.max(1, Math.min(Number(options.maxConcurrentTasks ?? 5), 32));
   const maxTasks = Math.min(Math.max(1, options.maxTasks ?? 5), MAX_CANARY_TASKS_PER_CYCLE);
@@ -123,7 +124,7 @@ function storageBackpressure(store: any) {
   if (!snapshot) return undefined;
   const pendingWrites = Number(snapshot.pendingWrites ?? 0);
   const lastWriteError = typeof snapshot.lastWriteError === "string" ? snapshot.lastWriteError.trim() : "";
-  if (!lastWriteError && pendingWrites <= 0) return undefined;
+  if (!lastWriteError && pendingWrites <= MAX_HEALTHY_PENDING_WRITES) return undefined;
   const reason = lastWriteError || `PostgreSQL write queue has ${pendingWrites} pending records.`;
   return { ok: false, pendingWrites, lastWriteError: reason, message: `Collection paused because PostgreSQL writes are unhealthy: ${reason}` };
 }

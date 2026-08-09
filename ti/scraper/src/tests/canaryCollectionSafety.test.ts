@@ -54,15 +54,18 @@ describe("public collection boundary", () => {
     expect(store.listRuns()).toHaveLength(0);
   });
 
-  test("treats a non-empty write queue as backpressure even when health is otherwise ok", async () => {
+  test("continues with a bounded write queue while it drains", async () => {
     const store = new InMemoryScraperStore();
     (store as any).databaseHealthSnapshot = () => ({ ok: true, pendingWrites: 1 });
-    let fetchCount = 0;
+    const cycle = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, fetch: async () => new Response("unexpected") });
+    expect(cycle.status).not.toBe("failed");
+  });
 
-    const cycle = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, fetch: async () => { fetchCount++; return new Response("unexpected"); } });
-
-    expect(cycle).toMatchObject({ status: "failed", backpressureState: "storage_failed", storage: { pendingWrites: 1 } });
-    expect(fetchCount).toBe(0);
+  test("treats a queue above the health budget as backpressure", async () => {
+    const store = new InMemoryScraperStore();
+    (store as any).databaseHealthSnapshot = () => ({ ok: true, pendingWrites: 1_001 });
+    const cycle = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, fetch: async () => new Response("unexpected") });
+    expect(cycle).toMatchObject({ status: "failed", backpressureState: "storage_failed", storage: { pendingWrites: 1_001 } });
   });
 
   test("reports the next timer-anchored cycle after a late completion", () => {
