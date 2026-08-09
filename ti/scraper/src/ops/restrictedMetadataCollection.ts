@@ -98,6 +98,7 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
       options.store.saveSource({ ...currentSource, health: { ...(currentSource.health ?? {}), status: retryCount >= 5 ? "failing" : "degraded", checkedAt, lastFailureAt: checkedAt, consecutiveFailures: retryCount, lastError: message }, crawlState: { ...(currentSource.crawlState ?? {}), retryCount, lastError: message, lastErrorAt: checkedAt, backoffUntil: new Date(Date.parse(checkedAt) + Math.min(86_400, retryCount * retryCount * 900) * 1_000).toISOString() }, updatedAt: checkedAt });
     }
     }));
+    if (offset + maxConcurrentSources < sources.length) await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
 
   const completedAt = options.now?.() ?? nowIso();
