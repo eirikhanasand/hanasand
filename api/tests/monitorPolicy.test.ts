@@ -89,6 +89,20 @@ describe('production monitor notification transitions', () => {
         expect(recorded).toEqual([{ status: 'down', message: 'backend unavailable' }])
     })
 
+    test('latency-derived failure does not retain a success message', async () => {
+        const recorded: Array<{ status: string, message: string }> = []
+        await check(
+            'threat-intelligence',
+            'Public search',
+            async () => 'A canonical threat-intelligence search completed successfully.',
+            { degraded: 0, down: 0 },
+            async (_service, _checkName, status, _latency, message) => { recorded.push({ status, message }) },
+        )
+        expect(recorded[0]?.status).toBe('down')
+        expect(recorded[0]?.message).toMatch(/^Response took \d+ ms\.$/)
+        expect(recorded[0]?.message).not.toContain('completed successfully')
+    })
+
     test('does not re-alert while a check is flapping', () => {
         expect(notificationEvent('degraded', [])).toBe('alert')
         expect(notificationEvent('degraded', ['up'])).toBe('alert')
