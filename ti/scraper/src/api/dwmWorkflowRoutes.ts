@@ -28,6 +28,12 @@ type DwmWatchlist = {
   orgMembershipContext?: RuntimeDwmWatchlist["orgMembershipContext"];
 };
 
+async function queryDwmEvidence(options: ApiServerOptions, tenantId: string): Promise<{ sources: SourceRecord[]; captures: RawCapture[] }> {
+  const query = (options.store as any).queryDwmEvidence;
+  if (typeof query === "function") return query.call(options.store, tenantId);
+  return { sources: options.store.listSources(), captures: options.store.listCaptures() };
+}
+
 function stableWatchlistTerms(watchlistId: string, terms: DwmWatchTerm[]): Array<DwmWatchTerm & { id: string }> {
   return terms.map((term: any) => ({
     ...term,
@@ -101,7 +107,7 @@ export async function createDwmWatchlist(request: Request, options: ApiServerOpt
   const entitlement = enforceDwmWatchlistEntitlement({ options, request, body, scope, access, watchlist, action: "create_dwm_watchlist" });
   if (entitlement.error) return entitlement.error;
   (options.store as any).saveDwmWatchlist(watchlist);
-  const alertRebuild = rebuildDwmAlertsAfterWatchlistMutation(options, scope);
+  const alertRebuild = await rebuildDwmAlertsAfterWatchlistMutation(options, scope);
   return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, entitlement: entitlement.adapter, watchlist: buildDwmWatchlistDetail(watchlist, options, access), alertRebuild }, 201);
 }
 
@@ -153,16 +159,19 @@ export async function updateDwmWatchlist(request: Request, options: ApiServerOpt
   const entitlement = enforceDwmWatchlistEntitlement({ options, request, body, scope, access, watchlist, action: "update_dwm_watchlist" });
   if (entitlement.error) return entitlement.error;
   (options.store as any).saveDwmWatchlist(watchlist);
-  const alertRebuild = rebuildDwmAlertsAfterWatchlistMutation(options, scope);
+  const alertRebuild = await rebuildDwmAlertsAfterWatchlistMutation(options, scope);
   return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, entitlement: entitlement.adapter, watchlist: buildDwmWatchlistDetail(watchlist, options, access), alertRebuild });
 }
 
-function rebuildDwmAlertsAfterWatchlistMutation(options: ApiServerOptions, scope: { tenantId: string; organizationId?: string; organization?: unknown }) {
+async function rebuildDwmAlertsAfterWatchlistMutation(options: ApiServerOptions, scope: { tenantId: string; organizationId?: string; organization?: unknown }) {
+  const evidence = await queryDwmEvidence(options, scope.tenantId);
   const rebuilt = rebuildDwmRuntimeAlerts({
     store: options.store as any,
     tenantId: scope.tenantId,
     organizationId: scope.organizationId,
-    visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization)
+    visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization),
+    sources: evidence.sources,
+    captures: evidence.captures
   });
   return {
     savedAlertCount: rebuilt.savedAlertCount,
@@ -530,18 +539,19 @@ function webhookDeliveryResponseSummary(delivery: any, errorClass?: string): str
   return "Delivery attempt recorded.";
 }
 
-export function getDwmAlertGenerationReadiness(url: URL, options: ApiServerOptions, request?: Request): Response {
+export async function getDwmAlertGenerationReadiness(url: URL, options: ApiServerOptions, request?: Request): Promise<Response> {
   const scope = resolveOrganizationScope({ url, request }, options);
   if (scope.error) return scope.error;
   const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
   if (access.error) return access.error;
+  const evidence = await queryDwmEvidence(options, scope.tenantId);
   const readiness = buildDwmAlertGenerationReadiness({
     watchlists: (options.store as any).listDwmWatchlists?.() ?? [],
     tenantId: scope.tenantId,
     organizationId: scope.organizationId,
     visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization),
-    sources: options.store.listSources(),
-    captures: options.store.listCaptures()
+    sources: evidence.sources,
+    captures: evidence.captures
   });
   return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, readiness });
 }
@@ -565,7 +575,9 @@ export async function rebuildDwmAlerts(request: Request, options: ApiServerOptio
 
   const entitlement = enforceDwmAlertRebuildEntitlement({ options, request, body, scope, access, action: "rebuild_dwm_alerts" });
   if (entitlement.error) return entitlement.error;
-  const rebuilt = rebuildDwmRuntimeAlerts({ store: options.store as any, tenantId, organizationId: scope.organizationId, visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization) });
+  const evidence = await queryDwmEvidence(options, tenantId);
+  const rebuilt = rebuildDwmRuntimeAlerts({ store: options.store as any, tenantId, organizationId: scope.organizationId, visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization), sources: evidence.sources, captures: evidence.captures });
+
   const usageEvent = recordDwmEntitlementUsageEvent(options, { organizationId: scope.organizationId, tenantId, action: "alert_rebuild", actor: entitlement.actor, requestId: entitlement.requestId, metadata: { route: "rebuild_dwm_alerts", savedAlertCount: rebuilt.savedAlertCount }, at: nowIso() });
   return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, entitlement: entitlement.adapter, entitlementUsageEvent: usageEvent, ...rebuilt });
 }

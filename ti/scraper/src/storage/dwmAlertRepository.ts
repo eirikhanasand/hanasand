@@ -1376,6 +1376,8 @@ export type RebuildDwmRuntimeAlertsInput = {
   tenantId: string;
   organizationId?: string;
   visibilityPolicy?: DwmAlertVisibilityPolicy;
+  sources?: SourceRecord[];
+  captures?: RawCapture[];
 };
 
 export type RebuildDwmRuntimeAlertsResult = {
@@ -1390,7 +1392,7 @@ export type RebuildDwmRuntimeAlertsResult = {
 };
 
 export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): RebuildDwmRuntimeAlertsResult {
-  const { sources, captures } = scopeDwmEvidence(input.store.listSources(), input.store.listCaptures(), input.tenantId, input.organizationId);
+  const { sources, captures } = scopeDwmEvidence(input.sources ?? input.store.listSources(), input.captures ?? input.store.listCaptures(), input.tenantId, input.organizationId);
   const watchlists = input.store.listDwmWatchlists();
   const generationPlan = buildDwmAlertGenerationPlan({
     watchlists,

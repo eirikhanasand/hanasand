@@ -27,7 +27,8 @@
     "check:scraper-native-search": "bun run scripts/check-scraper-native-search-readiness.ts",
     "check:public-ti-org-relevance": "bun run scripts/validatePublicTiOrgRelevance.ts",
     "snapshot:product-slo": "bun run scripts/collect-product-slo-snapshot.ts",
-    "bootstrap:evaluation-corpus": "bun run scripts/bootstrap-authoritative-evaluation.ts"
+    "bootstrap:evaluation-corpus": "bun run scripts/bootstrap-authoritative-evaluation.ts",
+    "migrate:maintenance": "bun run scripts/run-maintenance-migrations.ts"
   },
   "dependencies": {},
   "devDependencies": {

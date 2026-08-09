@@ -3688,6 +3688,8 @@ describe("dwm alert repository", () => {
     store.saveCapture(telegramCapture);
     store.saveCapture(telegramDuplicateCapture);
     (store as any).captures.set(telegramDuplicateCapture.id, telegramDuplicateCapture);
+    let queryCalled = 0;
+    (store as any).queryDwmEvidence = async () => { queryCalled += 1; return { sources: store.listSources(), captures: store.listCaptures() }; };
     const options = { store, frontier: new FocusedFrontier() };
 
     const watchlistResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
@@ -3745,6 +3747,7 @@ describe("dwm alert repository", () => {
     const rebuild = await rebuildResponse.json() as any;
 
     expect(rebuildResponse.status).toBe(200);
+    expect(queryCalled).toBeGreaterThan(0);
     expect(rebuild.savedAlertCount).toBe(1);
     expect(rebuild.alerts[0]).toMatchObject({
       tenantId: "tenant_api_acme",

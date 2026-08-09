@@ -285,7 +285,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (/^\/v1\/dwm\/watchlists\/[^/]+$/.test(url.pathname) && request.method === "GET") return getDwmWatchlistDetail(url, options, url.pathname.split("/").pop(), request);
     if (/^\/v1\/dwm\/watchlists\/[^/]+$/.test(url.pathname) && request.method === "PATCH") return updateDwmWatchlist(request, options, url.pathname.split("/").pop());
     if (url.pathname === "/v1/dwm/alerts" && request.method === "GET") return listDwmAlerts(url, options, request);
-    if (url.pathname === "/v1/dwm/alerts/generation-readiness" && request.method === "GET") return getDwmAlertGenerationReadiness(url, options, request);
+    if (url.pathname === "/v1/dwm/alerts/generation-readiness" && request.method === "GET") return await getDwmAlertGenerationReadiness(url, options, request);
     if (/^\/v1\/dwm\/alerts\/[^/]+\/case-handoff$/.test(url.pathname) && request.method === "POST") return createCaseFromDwmAlert(request, options, url.pathname.split("/")[4]);
     if (/^\/v1\/dwm\/alerts\/[^/]+\/replay$/.test(url.pathname) && request.method === "POST") return replayDwmAlert(request, options, url.pathname.split("/")[4]);
     if (/^\/v1\/dwm\/alerts\/[^/]+$/.test(url.pathname) && request.method === "GET") return getDwmAlertDetail(url, options, url.pathname.split("/").pop(), request);

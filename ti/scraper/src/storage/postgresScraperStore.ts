@@ -79,6 +79,7 @@ export type PostgresScraperStoreOptions = {
   migrationPath?: string;
   onStartupPhase?: (phase: string) => void;
   runMaintenanceMigrations?: boolean;
+  hydrate?: boolean;
 };
 
 type PendingWrite = { description: string; run: () => Promise<void> };
@@ -127,12 +128,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       options.onStartupPhase?.("connected");
       await store.migrate();
       options.onStartupPhase?.("migrated");
-      await store.hydrate();
-      options.onStartupPhase?.("hydrated");
-      await store.backfillSourceOperationalKeys();
-      options.onStartupPhase?.("source_keys_backfilled");
-      await store.syncOrganizationWatchlists();
-      options.onStartupPhase?.("organization_watchlists_synced");
+      if (options.hydrate !== false) {
+        await store.hydrate();
+        options.onStartupPhase?.("hydrated");
+        await store.backfillSourceOperationalKeys();
+        options.onStartupPhase?.("source_keys_backfilled");
+        await store.syncOrganizationWatchlists();
+        options.onStartupPhase?.("organization_watchlists_synced");
+      }
       await store.databaseHealth();
       options.onStartupPhase?.("health_checked");
       return store;
@@ -333,6 +336,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   async queryClaimReviewsByClaimIds(claimIds: Iterable<string>, tenantId?: string) {
     return this.queryRecordsByIds("claim_reviews", "claim_id", claimIds, tenantId);
+  }
+
+  async queryDwmEvidence(tenantId: string) {
+    const [sources, captures] = await Promise.all([
+      this.sql`SELECT record FROM threat_intel.sources WHERE tenant_id IS NULL OR tenant_id IS NOT DISTINCT FROM ${tenantId}`,
+      this.sql`SELECT record FROM threat_intel.captures WHERE tenant_id IS NULL OR tenant_id IS NOT DISTINCT FROM ${tenantId}`
+    ]);
+    return { sources: sources.map(readRecord), captures: captures.map(readRecord) };
   }
 
   async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; sourceId?: string; executableOnly?: boolean } ) {
