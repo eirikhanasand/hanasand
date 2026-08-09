@@ -31,6 +31,7 @@ test('public status does not claim operational health without fresh public check
     expect(status.checks[0]).toMatchObject({
         check_name: 'API Health',
         status: 'degraded',
+        checked_at: '',
         uptime_30d: 'unverified',
     })
     expect(status.checks[0].message).toContain('last 5 minutes')
