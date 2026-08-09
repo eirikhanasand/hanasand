@@ -13,7 +13,7 @@ test('renders a real cases overview without workflow sections', async () => {
 
     assert.match(portal, /function CaseOverview\(/)
     assert.match(portal, /data-dwm-cases-empty='true'/)
-    assert.match(portal, />No cases\.<\/div>/)
+    assert.match(portal, />No cases\.<\/p>/)
     assert.match(portal, /data-dwm-cases-table='true'/)
     assert.match(portal, /Title \/ actor/)
     assert.match(portal, /Organization \/ victim/)

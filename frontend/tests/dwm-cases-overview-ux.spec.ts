@@ -24,7 +24,8 @@ test('Cases keeps the empty state modest and workflow-free', async ({ context, p
 
     const overview = page.locator('[data-dwm-cases-overview="true"]')
     await expect(overview.getByRole('heading', { name: 'Cases' })).toBeVisible()
-    await expect(overview.locator('[data-dwm-cases-empty="true"]')).toHaveText('No cases.')
+    await expect(overview.locator('[data-dwm-cases-empty="true"]').getByText('No cases.', { exact: true })).toBeVisible()
+    await expect(overview.getByText('No alert is waiting for review. Cases appear after a scoped alert is retained and opened for investigation.')).toBeVisible()
     await expect(overview.getByText('Recent attacks', { exact: true })).toHaveCount(0)
     await expect(overview.getByText('Watchlists', { exact: true })).toHaveCount(0)
     await expect(overview.getByText('Sources', { exact: true })).toHaveCount(0)

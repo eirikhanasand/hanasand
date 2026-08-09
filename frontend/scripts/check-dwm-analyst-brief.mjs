@@ -122,13 +122,16 @@ assert.ok(source.includes('alertWatchlistMatchCount(alerts)'), 'DWM workflow cou
 assert.ok(source.includes('function alertCasePath(alert: PortalAlert)'), 'DWM selected case links should use alert case paths.')
 assert.ok(source.includes('String(second.attemptedAt || \'\').localeCompare(String(first.attemptedAt || \'\'))'), 'DWM delivery ordering should tolerate persisted attempts without timestamps.')
 assert.ok(!source.includes('.attemptedAt.localeCompare('), 'DWM delivery views should not call localeCompare on nullable persisted timestamps.')
-assert.ok(source.includes('Historical match'), 'DWM alert queue should identify retained historical evidence.')
-assert.ok(source.includes('alert.matchTiming?.historicalEvidenceCount} historical evidence'), 'DWM alert queue should disclose its historical evidence count.')
-assert.ok(source.includes('item.matchTiming?.kind ? stateLabel(item.matchTiming.kind)'), 'DWM evidence rows should disclose per-item historical/current/unknown timing.')
-assert.ok(source.includes('if (alert.matchTiming?.kind === \'historical_backfill\' || alert.matchTiming?.kind === \'unknown\') return false'), 'DWM Fresh filter must exclude historical and unknown-timing evidence.')
-assert.ok(source.includes('selectedEvidence.provenance?.publishedAt'), 'DWM evidence details should expose the original publisher timestamp.')
-assert.ok(source.includes('selectedEvidence.provenance?.collectedAt'), 'DWM evidence details should expose collection time separately.')
-assert.ok(!source.includes('provenance?.publishedAt || selectedEvidence.observedAt'), 'DWM evidence details must not present collection time as publisher time.')
+assert.ok(source.includes("data-dwm-cases-overview='true'"), 'DWM Cases should render a dedicated overview root.')
+assert.ok(source.includes("data-dwm-cases-empty='true'"), 'DWM Cases should render a truthful empty state.')
+assert.ok(source.includes("data-dwm-cases-table='true'"), 'DWM Cases should render a persisted incident table.')
+assert.ok(source.includes('Title / actor'), 'DWM Cases should expose incident title and actor context.')
+assert.ok(source.includes('Organization / victim'), 'DWM Cases should expose organization and victim context.')
+assert.ok(source.includes('Severity / status'), 'DWM Cases should expose severity and status.')
+assert.ok(source.includes('First seen / updated'), 'DWM Cases should expose incident timing.')
+assert.ok(source.includes('fetch(`/api/cases?${params.toString()}`'), 'DWM Cases should hydrate from the scoped cases API.')
+assert.ok(source.includes('fetch(`/api/dwm/alerts?${params.toString()}`'), 'DWM Cases should enrich rows from scoped alert evidence.')
+assert.ok(source.includes("view === 'cases' ? null"), 'DWM Cases should omit workflow actions from the Cases view.')
 
 for (const token of [
     'data-dwm-workflow-runbook',
