@@ -3,6 +3,7 @@ import { authApiUrl } from '@/utils/auth/authApiUrl'
 import { proxyApiTiRequest } from '../../dwm/_tiProxy'
 
 export const dynamic = 'force-dynamic'
+export const PUBLIC_TI_SEARCH_TIMEOUT_MS = 3_500
 
 export async function GET(request: NextRequest) {
     const query = request.nextUrl.searchParams.get('q')?.trim() || ''
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
             cache: 'no-store',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ query }),
-            signal: AbortSignal.timeout(15_000),
+            signal: AbortSignal.timeout(PUBLIC_TI_SEARCH_TIMEOUT_MS),
         })
         return new NextResponse(await response.text(), {
             status: response.status,

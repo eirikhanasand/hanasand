@@ -2,8 +2,31 @@ import { strict as assert } from 'node:assert'
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, test } from 'node:test'
 import { dwmOrganizationMutationDenial, dwmStorageScope, resolveDwmRequestScope, withDwmRequestScope } from '../src/app/api/dwm/_tiProxy'
+import { exposureQueueFallback, normalizeExposureQueue } from '../src/app/exposureQueue'
 
 describe('DWM tenant scope', () => {
+    test('keeps unavailable exposure data distinct from an empty successful feed', () => {
+        assert.deepEqual(exposureQueueFallback('unavailable', 10), {
+            generatedAt: '',
+            status: 'unavailable',
+            page: { limit: 10, offset: 0 },
+            items: [],
+        })
+        assert.equal(normalizeExposureQueue({}).status, 'unavailable')
+        assert.equal(normalizeExposureQueue({ items: [] }).status, 'unavailable')
+    })
+
+    test('bounds shared exposure reads without changing unavailable semantics', () => {
+        const sharedQueue = readFileSync(new URL('../src/utils/dwm/sharedExposureQueue.ts', import.meta.url), 'utf8')
+        const homepage = readFileSync(new URL('../src/app/page.tsx', import.meta.url), 'utf8')
+        const activity = readFileSync(new URL('../src/app/activity/page.tsx', import.meta.url), 'utf8')
+
+        assert.match(sharedQueue, /EXPOSURE_QUEUE_TIMEOUT_MS = 3500/)
+        assert.match(sharedQueue, /AbortSignal\.timeout\(options\.timeoutMs \?\? EXPOSURE_QUEUE_TIMEOUT_MS\)/)
+        assert.match(homepage, /timeoutMs: 3500/)
+        assert.match(activity, /timeoutMs: 3500/)
+    })
+
     test('derives a personal tenant from the authenticated identity', () => {
         const scope = resolveDwmRequestScope({
             identityId: 'user-123',
