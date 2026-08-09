@@ -225,9 +225,8 @@ function mapQueuedActor(actor: ApiQueuedActor): TiEnrichedActor {
 }
 
 function unavailableOverview(reason: string): TiEnrichmentOverview {
-    const now = new Date().toISOString()
     return {
-        generatedAt: now,
+        generatedAt: '',
         worker: {
             state: 'unavailable',
             mode: 'API actor refresh worker unavailable',
@@ -240,25 +239,8 @@ function unavailableOverview(reason: string): TiEnrichmentOverview {
         },
         updatedActors: [],
         queuedActors: [],
-        activity: [{
-            id: 'ti-worker-unavailable',
-            actorId: 'system',
-            actorName: 'Actor refresh worker',
-            happenedAt: now,
-            title: 'Actor profile stream reconnecting',
-            detail: `The dashboard is reconnecting to the live worker stream: ${reason}.`,
-            source: 'frontend actor profiles dashboard',
-            tone: 'bad',
-        }],
-        auditLog: [{
-            id: 'ti-worker-unavailable',
-            happenedAt: now,
-            actor: 'admin-console',
-            action: 'worker.state.read',
-            target: 'api:/ti/enrichment',
-            result: 'unavailable',
-            detail: reason,
-        }],
+        activity: [],
+        auditLog: [],
         stats: {
             updatedLastHour: 0,
             queued: 0,
