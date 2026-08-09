@@ -1,10 +1,10 @@
 {
-  "version": 11,
+  "version": 13,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-08-09T13:34:35.000Z",
+  "generatedAt": "2026-08-09T16:04:20.000Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 28,
+  "sourceCount": 30,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -3309,6 +3309,256 @@
             "APT",
             "вредонос",
             "кибератак"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_dciber_brazil_telegram",
+      "name": "Instituto de Defesa Cibernetica public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/dciber",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.84,
+      "language": "pt",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Portuguese-language cyber-threat and victim reporting from the exact channel published by Instituto de Defesa Cibernetica. Collect only unauthenticated public-preview text for defensive threat intelligence with attribution; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, leaked data, or victim submissions.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T15:47:40.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "cybercrime_reporting",
+          "victim_publication_reporting",
+          "threat_intelligence",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "dciber",
+        "verifiedSourceId": "src_dciber_brazil_telegram",
+        "publisherReference": "https://www.linkedin.com/company/dciber-org/",
+        "ownershipVerifiedAt": "2026-08-09T15:47:40.000Z",
+        "activityVerifiedAt": "2026-08-09T15:47:40.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "cyber threat intelligence",
+          "data breaches",
+          "ransomware",
+          "victim reporting",
+          "cybercrime"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T15:47:40.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 3,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.linkedin.com/company/dciber-org/",
+          "legalBasisVerifiedAt": "2026-08-09T15:47:40.000Z",
+          "latestPublishedAt": "2026-08-03T19:45:54+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "nonprofit:br:instituto-defesa-cibernetica:telegram",
+        "publisher": {
+          "name": "Instituto de Defesa Cibernetica",
+          "country": "BR",
+          "homepage": "https://dciber.org/",
+          "trustBasis": "the publisher's first-party LinkedIn organization page links the exact Telegram channel"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.84,
+        "intelligenceValue": 0.82,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "cyber threat intelligence",
+            "data breaches",
+            "ransomware",
+            "victim reporting",
+            "cybercrime"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "critical infrastructure",
+            "technology",
+            "enterprise"
+          ],
+          "regions": [
+            "Brazil",
+            "Latin America"
+          ],
+          "countries": [
+            "Brazil"
+          ],
+          "languages": [
+            "pt"
+          ],
+          "queryPatterns": [
+            "ameaca cibernetica",
+            "vazamento de dados",
+            "ransomware",
+            "ataque cibernetico",
+            "grupo de ameaca"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_redseg_latam_telegram",
+      "name": "REDSEG LATAM public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/redseg",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.82,
+      "language": "es",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Spanish-language cybercrime, malware, vulnerability, and incident reporting from REDSEG LATINOAMERICA and its CIBERSEG incident-response unit. Collect only unauthenticated public-preview text for defensive threat intelligence with attribution; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, leaked data, or victim submissions.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T16:04:20.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "cybercrime_reporting",
+          "malware_research",
+          "vulnerability_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "redseg",
+        "verifiedSourceId": "src_redseg_latam_telegram",
+        "publisherReference": "https://www.linkedin.com/company/ciberseg-redseg",
+        "ownershipVerifiedAt": "2026-08-09T16:04:20.000Z",
+        "activityVerifiedAt": "2026-08-09T16:04:20.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "cybercrime",
+          "malware",
+          "ransomware",
+          "vulnerabilities",
+          "incident response"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T16:04:20.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 5,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.linkedin.com/company/ciberseg-redseg",
+          "legalBasisVerifiedAt": "2026-08-09T16:04:20.000Z",
+          "latestPublishedAt": "2026-08-09T15:33:24+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "association:ve:redseg-latam:telegram",
+        "publisher": {
+          "name": "REDSEG LATINOAMERICA / CIBERSEG",
+          "country": "VE",
+          "homepage": "https://www.redseg.org/",
+          "trustBasis": "the association's CIBERSEG organization page links the exact REDSEG Telegram channel"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public association communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public association channel used for defensive security research.",
+        "reliability": 0.82,
+        "intelligenceValue": 0.81,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "cybercrime",
+            "malware",
+            "ransomware",
+            "vulnerabilities",
+            "incident response"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "critical infrastructure",
+            "telecommunications",
+            "enterprise"
+          ],
+          "regions": [
+            "Latin America",
+            "Caribbean"
+          ],
+          "countries": [
+            "Venezuela"
+          ],
+          "languages": [
+            "es"
+          ],
+          "queryPatterns": [
+            "cibercrimen",
+            "ransomware",
+            "malware",
+            "vulnerabilidad",
+            "incidente cibernetico"
           ]
         },
         "collection": {

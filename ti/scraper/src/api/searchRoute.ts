@@ -106,7 +106,9 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     ?? rows.find((row) => row.actor && identity.normalizedTerms.has(normalizeActorName(row.actor)))?.actor
     ?? (identity.catalogCandidates.length === 1 && identity.catalogCandidates[0].matchKinds.includes("canonical") ? identity.catalogCandidates[0].canonicalName : undefined);
   const eventCaptureIds = new Set(eventRows.map((row) => row.id));
-  const publicIncidents = records.incidents.filter((incident) => eventCaptureIds.has(incident.captureId));
+  const publicIncidents = records.incidents.filter((incident) => eventCaptureIds.has(incident.captureId)
+    && !["rejected", "contradicted"].includes(String(incident.reviewState ?? ""))
+    && incident.corroborationState !== "contradicted");
   const campaigns = unique(publicIncidents.map((incident) => safeText(incident.title ?? incident.summary, 180)));
   const malwareTools = entityValues(characterizationEntities(records, "malware", generatedAt), "malware");
   const indicators = safeIndicators(records.indicators);

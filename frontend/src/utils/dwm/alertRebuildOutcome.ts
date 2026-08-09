@@ -9,9 +9,12 @@ export function normalizeAlertRebuildOutcome(value: Record<string, unknown>): Al
     const status = typeof value.status === 'string' ? value.status.toLowerCase() : ''
     const failed = value.ok === false || ['failed', 'error', 'unavailable'].includes(status)
     const queued = ['queued', 'running', 'pending'].includes(status)
-    const alertIds = Array.isArray(value.alertIds) ? value.alertIds.filter((id): id is string => typeof id === 'string' && id.length > 0) : []
+    const explicitAlertIds = Array.isArray(value.alertIds) ? value.alertIds : []
+    const persistedAlerts = Array.isArray(value.alerts) ? value.alerts : []
+    const alertIds = [...explicitAlertIds, ...persistedAlerts.map((alert) => isRecord(alert) ? alert.id : undefined)]
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
     const savedAlertCount = typeof value.savedAlertCount === 'number' ? value.savedAlertCount : 0
-    const ok = !failed && !queued && (savedAlertCount > 0 || alertIds.length > 0)
+    const ok = !failed && !queued && savedAlertCount > 0 && alertIds.length > 0
     const error = isRecord(value.error) && typeof value.error.message === 'string' ? value.error.message : undefined
 
     return {
