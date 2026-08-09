@@ -115,7 +115,8 @@ describe("public Telegram canary collection", () => {
       "src_lukas_stefanko_android_malware_telegram",
       "src_ransomfeed_ransomware_telegram",
       "src_threat_hunting_father_telegram",
-      "src_dciber_brazil_telegram"
+      "src_dciber_brazil_telegram",
+      "src_redseg_latam_telegram"
     ]));
     expect(report.accepted.map((item: any) => item.language)).toEqual(expect.arrayContaining(["en", "es", "it", "ru", "hi", "uk", "az", "uz"]));
     expect(report.accepted.find((item: any) => item.id === "src_red_hot_cyber_telegram")).toMatchObject({
@@ -207,6 +208,12 @@ describe("public Telegram canary collection", () => {
       status: "candidate",
       metadata: { productionCollection: false, publisherReference: "https://www.linkedin.com/company/dciber-org/", sourcePortfolioVerification: { observedItemCount: 20, observedUsefulItemCount: 3 } }
     });
+    expect(report.accepted.find((item: any) => item.id === "src_redseg_latam_telegram")).toMatchObject({
+      url: "https://t.me/redseg",
+      language: "es",
+      status: "candidate",
+      metadata: { productionCollection: false, publisherReference: "https://www.linkedin.com/company/ciberseg-redseg", sourcePortfolioVerification: { observedItemCount: 20, observedUsefulItemCount: 5 } }
+    });
     expect([...families]).toEqual(expect.arrayContaining([
       "apt_research",
       "malware_research",
@@ -247,7 +254,8 @@ describe("public Telegram canary collection", () => {
       "src_lukas_stefanko_android_malware_telegram",
       "src_ransomfeed_ransomware_telegram",
       "src_threat_hunting_father_telegram",
-      "src_dciber_brazil_telegram"
+      "src_dciber_brazil_telegram",
+      "src_redseg_latam_telegram"
     ]);
     expect(candidates.every((item: any) => item.countsAsCoverage !== true
       && item.metadata.productionCollection === false
