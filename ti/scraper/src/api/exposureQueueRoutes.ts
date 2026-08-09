@@ -457,6 +457,19 @@ export function exposureClaimsFromStore(store: any, filters: string | ExposureQu
   return boundedLimit ? windowed.slice(0, boundedLimit) : windowed;
 }
 
+export async function exposureClaimsFromStoreAsync(store: any, filters: string | ExposureQueueFilters = "", options: { limit?: number; offset?: number; tenantId?: string } = {}) {
+  if (typeof store.queryExposureQueuePage !== "function") return exposureClaimsFromStore(store, filters, options);
+  const page = await store.queryExposureQueuePage({
+    tenantId: options.tenantId,
+    filters: typeof filters === "string" ? { q: filters } : filters,
+    limit: options.limit ?? 250,
+    offset: options.offset ?? 0
+  });
+  return page.captures
+    .map((capture: any) => exposureClaimFromCapture(capture, store.getSource?.(capture.sourceId)))
+    .filter(Boolean);
+}
+
 function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId: string; organizationId?: string; submittedBy?: string }) {
   if (claim.parserMode === "public_advisory_fetch") return savePublicAdvisory(store, claim, at, scope);
   const requestedSourceId = /^[A-Za-z0-9_.:-]{1,200}$/.test(String(claim.sourceId ?? "")) ? String(claim.sourceId) : undefined;

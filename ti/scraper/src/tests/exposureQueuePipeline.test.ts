@@ -1,5 +1,5 @@
 import { describe, expect, fixtureCapture, FocusedFrontier, handleApiRequest, InMemoryScraperStore, source, test } from "./apiTestHarness.ts";
-import { exposureClaimsFromStore, pinnedPublicAdvisoryLookup, publicAdvisorySourceIdentity, resolvePublicAdvisoryTarget, saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.ts";
+import { exposureClaimsFromStore, exposureClaimsFromStoreAsync, pinnedPublicAdvisoryLookup, publicAdvisorySourceIdentity, resolvePublicAdvisoryTarget, saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.ts";
 import { responseFixture } from "./helpers/adapterFixtureHelpers.ts";
 
 Bun.env.HANASAND_AI_API_BASE = "";
@@ -798,6 +798,16 @@ describe("DWM exposure queue pipeline", () => {
     const body = await response.json() as any;
     expect(response.status).toBe(200);
     expect(body).toMatchObject({ counts: { total: 1 }, page: { total: 1 }, items: [{ company: "Query Company" }] });
+  });
+
+  test("rebuild reads the bounded exposure page for PostgreSQL stores", async () => {
+    const store = new InMemoryScraperStore();
+    const capture = fixtureCapture({ id: "cap_bounded_exposure", sourceId: "src_bounded_exposure", title: "Akira has just published a new victim: Bounded Company", metadata: { leakSite: { actorName: "Akira", victimName: "Bounded Company" } } });
+    store.saveSource(source({ id: capture.sourceId, name: "Ransomware.live Victim Feed" }));
+    store.saveCapture(capture);
+    (store as any).queryExposureQueuePage = async () => ({ captures: [capture], total: 1, needsReview: 1, metadataOnly: 1 });
+    (store as any).listCaptures = () => { throw new Error("full capture scan"); };
+    await expect(exposureClaimsFromStoreAsync(store, "", { limit: 25, tenantId: "default" })).resolves.toHaveLength(1);
   });
 
   test("keeps the exposure index aligned with metadata, retention, and source changes", () => {

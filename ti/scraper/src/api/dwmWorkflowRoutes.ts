@@ -6,7 +6,7 @@ import { buildOrgAlertWorkflowBridgeReport } from "../product/orgAlertWorkflowBr
 import { buildOrgSharedWatchlistAlertGenerationExport } from "../storage/dwmOrgWatchlistBridge.ts";
 import { nowIso, stableId, uniqueStrings } from "../utils.ts";
 import { buildDwmEntitlementBlocker, buildDwmEntitlementReadAdapter, evaluateProposedDwmAlertRebuildEntitlement, evaluateProposedDwmWatchlistEntitlement, recordDwmEntitlementUsageEvent } from "./dwmEntitlementRoutes.ts";
-import { exposureClaimsFromStore } from "./exposureQueueRoutes.ts";
+import { exposureClaimsFromStoreAsync } from "./exposureQueueRoutes.ts";
 import { json, readJson } from "./http.ts";
 import { assertPublicWebhookTarget, buildWebhookRequestBody, findWebhookDestination, inferWebhookKind, normalizeWebhookUrl, organizationWebhookDestinations, resolveOrganizationScope, webhookHeaders, type WebhookDestination } from "./organizationRoutes.ts";
 import type { OrganizationMember } from "./organizationRoutes.ts";
@@ -1372,8 +1372,8 @@ async function ensureExposureQueueDwmAlerts(options: ApiServerOptions, scope: { 
   const generatedAt = nowIso();
   const existingAlerts = (options.store as any).listDwmAlerts?.() ?? [];
   let savedAlertCount = 0;
-  const saveMissingAlerts = () => {
-    for (const claim of exposureClaimsFromStore(options.store, "", { limit: 25, tenantId: scope.tenantId })) {
+  const saveMissingAlerts = async () => {
+    for (const claim of await exposureClaimsFromStoreAsync(options.store, "", { limit: 25, tenantId: scope.tenantId })) {
       const claimTenantId = String((claim as any).tenantId ?? scope.tenantId ?? "default");
       if (claimTenantId !== scope.tenantId) continue;
       const generatedBasis: DwmMatchTimingBasis = { kind: "alert_created_at", at: generatedAt };
@@ -1409,7 +1409,7 @@ async function ensureExposureQueueDwmAlerts(options: ApiServerOptions, scope: { 
   };
 
   if (typeof (options.store as any).batch === "function") await (options.store as any).batch(saveMissingAlerts);
-  else saveMissingAlerts();
+  else await saveMissingAlerts();
 
   return { savedAlertCount };
 }
