@@ -60,6 +60,28 @@ describe('public TI v1', () => {
         expect(invalid.json()).toEqual({ error: { code: 'invalid_query', message: 'query must contain 2-200 characters.', requestId: invalid.headers['x-request-id'] } })
     })
 
+    test('serializes scraper results with null or scalar nested entries without failing the request', async () => {
+        const app = await testApp(undefined, async () => ({
+            ...searchResult,
+            recentActivity: [null, 'unexpected', searchResult.recentActivity[0]],
+            targets: [null],
+            ttps: ['unexpected'],
+            datasets: [null],
+            sources: [null],
+            actionability: { ...searchResult.actionability, watchlistCandidates: [null, 'unexpected'] },
+        } as any))
+
+        const response = await app.inject({ method: 'POST', url: '/api/v1/ti/search', payload: { query: 'APT29' } })
+        expect(response.statusCode).toBe(200)
+        expect(response.json().recentActivity).toHaveLength(3)
+        expect(response.json().recentActivity[2]).toMatchObject({ title: 'Source mention' })
+        expect(response.json().targets).toHaveLength(1)
+        expect(response.json().ttps).toHaveLength(1)
+        expect(response.json().datasets).toHaveLength(1)
+        expect(response.json().sources).toHaveLength(1)
+        expect(response.json().actionability.watchlistCandidates).toHaveLength(2)
+    })
+
     test('removes restricted host locators from every public search URL surface', async () => {
         const app = await testApp(undefined, async () => ({
             ...searchResult,

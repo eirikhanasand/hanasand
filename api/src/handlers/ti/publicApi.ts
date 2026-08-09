@@ -186,16 +186,19 @@ function publicSearchResult(result: TiSearchResponse) {
         confidence: confidence(result.confidence),
         lastSeen: result.lastSeen,
         aliases: strings(result.aliases),
-        recentActivity: array(result.recentActivity).map(item => compact({
-            date: text(item.date), title: text(item.title), detail: text(item.detail), confidence: confidence(item.confidence), sourceIds: strings(item.sourceIds),
-            url: httpUrl(item.url), claimType: text(item.claimType), victimName: text(item.victimName), affectedSectors: strings(item.affectedSectors), countries: strings(item.countries),
-            impact: text(item.impact), firstReportedAt: iso(item.firstReportedAt), lastReportedAt: iso(item.lastReportedAt), publisherCount: nonNegativeInteger(item.publisherCount),
-            corroboratingSourceIds: strings(item.corroboratingSourceIds), contradictingSourceIds: strings(item.contradictingSourceIds), assertionKind: text(item.assertionKind), reviewState: text(item.reviewState), corroborationState: text(item.corroborationState), observationSummary: text(item.observationSummary),
-        })),
-        targets: array(result.targets).map(item => compact({ sector: text(item.sector), regions: strings(item.regions), rationale: text(item.rationale), confidence: confidence(item.confidence) })),
-        ttps: array(result.ttps).map(item => compact({ name: text(item.name), attackId: text(item.attackId), tactic: text(item.tactic), detail: text(item.detail), confidence: confidence(item.confidence), extractionMethod: text(item.extractionMethod)?.slice(0, 120), extractorVersion: text(item.extractorVersion)?.slice(0, 120) })),
-        datasets: array(result.datasets).map(item => compact({ name: text(item.name), type: text(item.type), coverage: text(item.coverage), status: text(item.status), url: httpUrl(item.url) })),
-        sources: array(result.sources).map(item => compact({ id: text(item.id), name: text(item.name), type: text(item.type), provenance: text(item.provenance), url: httpUrl(item.url), captureId: text(item.captureId), sourceRequestId: text(item.sourceRequestId), sourceFamily: text(item.sourceFamily), parserStatus: text(item.parserStatus), reportDate: iso(item.reportDate), lastCollectedAt: iso(item.lastCollectedAt) })),
+        recentActivity: array(result.recentActivity).map(item => {
+            const row = record(item)
+            return compact({
+            date: text(row.date), title: text(row.title), detail: text(row.detail), confidence: confidence(row.confidence), sourceIds: strings(row.sourceIds),
+            url: httpUrl(row.url), claimType: text(row.claimType), victimName: text(row.victimName), affectedSectors: strings(row.affectedSectors), countries: strings(row.countries),
+            impact: text(row.impact), firstReportedAt: iso(row.firstReportedAt), lastReportedAt: iso(row.lastReportedAt), publisherCount: nonNegativeInteger(row.publisherCount),
+            corroboratingSourceIds: strings(row.corroboratingSourceIds), contradictingSourceIds: strings(row.contradictingSourceIds), assertionKind: text(row.assertionKind), reviewState: text(row.reviewState), corroborationState: text(row.corroborationState), observationSummary: text(row.observationSummary),
+            })
+        }),
+        targets: array(result.targets).map(item => { const row = record(item); return compact({ sector: text(row.sector), regions: strings(row.regions), rationale: text(row.rationale), confidence: confidence(row.confidence) }) }),
+        ttps: array(result.ttps).map(item => { const row = record(item); return compact({ name: text(row.name), attackId: text(row.attackId), tactic: text(row.tactic), detail: text(row.detail), confidence: confidence(row.confidence), extractionMethod: text(row.extractionMethod)?.slice(0, 120), extractorVersion: text(row.extractorVersion)?.slice(0, 120) }) }),
+        datasets: array(result.datasets).map(item => { const row = record(item); return compact({ name: text(row.name), type: text(row.type), coverage: text(row.coverage), status: text(row.status), url: httpUrl(row.url) }) }),
+        sources: array(result.sources).map(item => { const row = record(item); return compact({ id: text(row.id), name: text(row.name), type: text(row.type), provenance: text(row.provenance), url: httpUrl(row.url), captureId: text(row.captureId), sourceRequestId: text(row.sourceRequestId), sourceFamily: text(row.sourceFamily), parserStatus: text(row.parserStatus), reportDate: iso(row.reportDate), lastCollectedAt: iso(row.lastCollectedAt) }) }),
         notes: strings(result.notes),
         actorIntelligence: actorIntelligence ? compact({
             actorClass: text(actorIntelligence.actorClass), attribution: text(actorIntelligence.attribution), firstSeen: iso(actorIntelligence.firstSeen), lastSeen: iso(actorIntelligence.lastSeen),
@@ -204,7 +207,7 @@ function publicSearchResult(result: TiSearchResponse) {
         }) : undefined,
         actionability: actionability ? compact({
             schemaVersion: actionability.schemaVersion, alertDisposition: actionability.alertDisposition, shouldAlert: boolean(actionability.shouldAlert), rationale: text(actionability.rationale),
-            watchlistCandidates: array(actionability.watchlistCandidates).map(candidate => compact({ kind: text(candidate.kind), value: text(candidate.value), reason: text(candidate.reason), confidence: confidence(candidate.confidence) })),
+            watchlistCandidates: array(actionability.watchlistCandidates).map(candidate => { const row = record(candidate); return compact({ kind: text(row.kind), value: text(row.value), reason: text(row.reason), confidence: confidence(row.confidence) }) }),
         }) : undefined,
     })) as ReturnType<typeof compact>
 }
