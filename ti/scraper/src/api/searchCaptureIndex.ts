@@ -12,6 +12,7 @@ const norm = (value: unknown) => String(value ?? "").toLowerCase();
 const words = (query: string) => norm(query).split(/[^a-z0-9.-]+/).filter((w) => w.length > 1);
 const unique = (items: string[]) => [...new Set(items.filter(Boolean))];
 export function warmSearchCaptureIndex(store: any) {
+  if (store.usesPostgresSearchIndex === false) return { captureCount: 0, indexedCaptureCount: 0 };
   const index = indexForStore(store);
   return { captureCount: index.records.size, indexedCaptureCount: [...index.tenantIds.values()].reduce((count, ids) => count + ids.size, 0) };
 }
@@ -40,13 +41,13 @@ export function findActorSearchCaptures(store: any, identities: string[], limit:
     .slice(0, limit)
     .map((hit) => hit.doc.capture);
 }
-export function findSearchCapturesFromRows(captures: any[], sources: any[], query: string, limit: number, tenantId?: string, actorTerms?: string[]) {
+export function findSearchCapturesFromRows(captures: any[], sources: any[], query: string, limit: number, tenantId?: string, actorTerms?: string[], getCapture?: (id: string) => any) {
   const sourceById = new Map(sources.map((source: any) => [source.id, source]));
   const rows = captures.filter((capture: any) => (capture.tenantId || undefined) === tenantId);
   const overlay = {
     listSearchCaptureChanges: () => ({ revision: rows.length, captures: rows }),
     getSource: (sourceId: string) => sourceById.get(sourceId),
-    getCapture: (captureId: string) => rows.find((capture: any) => capture.id === captureId),
+    getCapture: (captureId: string) => rows.find((capture: any) => capture.id === captureId) ?? getCapture?.(captureId),
     listIncidentsByCaptureIds: () => []
   };
   return actorTerms ? findActorSearchCaptures(overlay, actorTerms, limit, tenantId) : findSearchCaptures(overlay, query, limit, tenantId);

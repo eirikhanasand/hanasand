@@ -98,7 +98,7 @@ type DatabaseHealth = {
 };
 
 export class PostgresScraperStore extends InMemoryScraperStore {
-  readonly usesPostgresSearchIndex = true;
+  readonly usesPostgresSearchIndex = false;
   private readonly sql: SQL;
   private readonly migrations: Migration[];
   private readonly latestMigrationVersion: string;
@@ -612,7 +612,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     ]);
     const first = summaryRows[0] as Record<string, unknown> | undefined;
     return {
-      captures: rows.map((row: Record<string, unknown>) => readRecord(row.record)),
+      captures: rows.map((row: Record<string, unknown>) => readRecord(row)),
       total: Number(first?.total ?? 0),
       needsReview: Number(first?.needs_review ?? 0),
       metadataOnly: Number(first?.metadata_only ?? 0),

@@ -1,10 +1,52 @@
 import { describe, expect, test } from "bun:test";
-import { findSearchCaptures, warmSearchCaptureIndex } from "../api/searchCaptureIndex.ts";
+import { findSearchCaptures, findSearchCapturesFromRows, warmSearchCaptureIndex } from "../api/searchCaptureIndex.ts";
+import { automaticSourceReviewEvidenceBindingsMatch, sourceAutomaticReviewEvidenceBindings } from "../api/automaticReviewRoutes.ts";
+import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion, automaticSourceReviewIdentity, hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { fixtureCapture } from "./helpers/apiFixtures.ts";
 import { source } from "./helpers/plannerFixtures.ts";
 
 describe("search capture index", () => {
+  test("does not build an in-memory index for PostgreSQL-backed search", () => {
+    expect(warmSearchCaptureIndex({
+      usesPostgresSearchIndex: false,
+      listSearchCaptureChanges: () => { throw new Error("PostgreSQL startup scanned hydrated captures"); }
+    })).toEqual({ captureCount: 0, indexedCaptureCount: 0 });
+  });
+
+  test("uses retained review evidence when filtering bounded PostgreSQL rows", () => {
+    const store = new InMemoryScraperStore();
+    const sourceId = "src_reviewed_postgres_search";
+    store.saveSource({ ...source({ id: sourceId, metadata: { queryClass: "threat-intel", sourcePortfolioVerification: { outcome: "content_parsed" } } }), tenantId: "tenant_api" });
+    const evidence = store.saveCapture(fixtureCapture({ id: "cap_review_evidence", tenantId: "tenant_api", sourceId, url: "https://example.test/review-evidence", body: "Publisher evidence selected by governed review.", contentHash: "review-evidence", metadata: { sourceReviewCandidate: true, safeExcerpt: "Publisher evidence selected by governed review." } }));
+    const match = store.saveCapture(fixtureCapture({ id: "cap_review_match", tenantId: "tenant_api", sourceId, url: "https://example.test/review-match", collectedAt: "2026-05-24T01:00:00.000Z", body: "Unfamiliar harmful activity against diplomatic organizations.", contentHash: "review-match", metadata: { sourceReviewCandidate: true, safeExcerpt: "Unfamiliar harmful activity against diplomatic organizations." } }));
+    const current = store.getSource(sourceId)!;
+    const selectedEvidenceProvenance = sourceAutomaticReviewEvidenceBindings(current, [evidence]);
+    expect(selectedEvidenceProvenance).toHaveLength(1);
+    const reviewed = store.saveSource({
+      ...current,
+      metadata: {
+        ...current.metadata,
+        automaticSourceReview: {
+          schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
+          state: "approved",
+          promptVersion: SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION,
+          configuredModelVersion: automaticReviewModelVersion(),
+          sourceIdentity: automaticSourceReviewIdentity(current),
+          requestSha256: "a".repeat(64),
+          selectedEvidenceIds: selectedEvidenceProvenance.map((item) => item.evidenceId),
+          selectedEvidenceProvenance,
+          runtimeIdentity: { status: "completed", conversationId: "bounded-postgres-search" },
+          decision: { subject: { type: "source", id: sourceId }, action: "confirm", claimValidity: "supported" }
+        }
+      }
+    } as any);
+
+    expect(hasApprovedAutomaticSourceReview(reviewed)).toBe(true);
+    expect(automaticSourceReviewEvidenceBindingsMatch(reviewed, (id) => store.getCapture(id))).toBe(true);
+    expect(findSearchCapturesFromRows([match], [reviewed], "harmful activity", 10, "tenant_api", undefined, (id) => store.getCapture(id)).map((capture) => capture.id)).toEqual([match.id]);
+  });
+
   test("indexes retained historical actor evidence", () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "src_apt29_history", metadata: { queryClass: "threat-intel" } }));
