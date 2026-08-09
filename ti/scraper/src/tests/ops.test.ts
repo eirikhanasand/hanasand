@@ -73,7 +73,7 @@ describe("ops utilities", () => {
       resource: { memoryTargetMb: 8192, memoryCeilingMb: 14336 }
     });
     expect(dashboard.schemaVersion).toBe("ti.product_operational_slo.v1");
-    expect(dashboard.dashboard.state).toBe("pass");
+    expect(dashboard.dashboard.state).toBe("warn");
     expect(dashboard.metrics).toMatchObject({
       sources: { total: 1, active: 1, observed: 1, collectingLast24Hours: 1, collectingHostsLast24Hours: 1, collectingTypesLast24Hours: 1 },
       captures: { total: 1, collectedLast24Hours: 1 },
@@ -107,5 +107,18 @@ describe("ops utilities", () => {
     expect(dashboard.metrics.runs.failedLast24Hours).toBe(5);
     expect(dashboard.slos.find((slo) => slo.id === "recent_collection_failures")).toMatchObject({ state: "alert", value: 5 });
     expect(dashboard.dashboard.state).toBe("alert");
+  });
+
+  test("warns on a non-empty queue and alerts on a saturated queue", () => {
+    const build = (queued: number) => buildLiveProductSloDashboard({
+      generatedAt: "2026-06-21T00:00:00.000Z",
+      runs: [],
+      sources: [{ id: "source_1", status: "active", type: "rss", url: "https://feed.example.test/rss" }],
+      captures: [{ sourceId: "source_1", collectedAt: "2026-06-20T23:30:00.000Z" }],
+      incidents: [],
+      frontier: { queued, leased: 0 }
+    });
+    expect(build(1).slos.find((slo) => slo.id === "queue_depth")).toMatchObject({ state: "warn", value: 1 });
+    expect(build(100).slos.find((slo) => slo.id === "queue_depth")).toMatchObject({ state: "alert", value: 100 });
   });
 });

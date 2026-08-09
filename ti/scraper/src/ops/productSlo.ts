@@ -44,7 +44,7 @@ export interface LiveProductOperationalMetrics {
 }
 
 export interface LiveProductSloObjective {
-  id: "collecting_source_hosts" | "collection_freshness" | "capture_timestamp_quality" | "recent_collection_failures";
+  id: "collecting_source_hosts" | "collection_freshness" | "capture_timestamp_quality" | "recent_collection_failures" | "queue_depth";
   state: LiveProductSloState;
   value: number | null;
   target: number;
@@ -162,6 +162,13 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
       id: "recent_collection_failures",
       state: runStatuses.failedLast24Hours === 0 ? "pass" : runStatuses.failedLast24Hours >= 5 ? "alert" : "warn",
       value: runStatuses.failedLast24Hours,
+      target: 0,
+      unit: "count"
+    },
+    {
+      id: "queue_depth",
+      state: metrics.queue.queued + metrics.queue.leased === 0 ? "pass" : metrics.queue.queued + metrics.queue.leased >= 100 ? "alert" : "warn",
+      value: metrics.queue.queued + metrics.queue.leased,
       target: 0,
       unit: "count"
     }
