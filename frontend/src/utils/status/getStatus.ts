@@ -63,6 +63,14 @@ export default async function getStatus(): Promise<ServiceStatus> {
 }
 
 function normalizeStatus(payload: Partial<ServiceStatus>): ServiceStatus {
+    const hasEvidence = Boolean(payload.generated_at)
+        || (Array.isArray(payload.checks) && payload.checks.length > 0)
+        || (Array.isArray(payload.history) && payload.history.length > 0)
+        || (Array.isArray(payload.incidents) && payload.incidents.length > 0)
+    if (!hasEvidence) {
+        return unavailableServiceStatus()
+    }
+
     const checks = Array.isArray(payload.checks)
         ? payload.checks.map((check) => ({
             service: check.service || '',

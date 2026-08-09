@@ -193,6 +193,16 @@ test('status fetch failures preserve the unavailable contract for transport and 
     }
 })
 
+test('an empty successful status payload cannot become operational', async () => {
+    const originalFetch = globalThis.fetch
+    try {
+        globalThis.fetch = (async () => new Response('{}', { status: 200 })) as typeof fetch
+        await expect(getStatus()).resolves.toEqual(unavailableServiceStatus())
+    } finally {
+        globalThis.fetch = originalFetch
+    }
+})
+
 test('status normalization preserves missing timestamps and labels as unknown', async () => {
     const originalFetch = globalThis.fetch
     try {
