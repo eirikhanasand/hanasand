@@ -53,6 +53,81 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(snapshot).toMatchObject({ total: 0, displayedTaskCount: 0, tasks: [] });
   });
 
+  test("keeps one live source-review task when equal-time evidence query order changes", async () => {
+    const store: any = new InMemoryScraperStore();
+    const sourceId = "source_equal_time_review";
+    const runId = "run_equal_time_review";
+    store.saveSource(source({
+      id: sourceId,
+      tenantId: undefined,
+      status: "candidate",
+      url: "https://example.test/equal-time.xml",
+      metadata: { sourcePortfolioVerification: { outcome: "content_parsed" } }
+    }));
+    for (const suffix of ["a", "b"]) {
+      store.saveCapture(fixtureCapture({
+        id: `capture_equal_time_${suffix}`,
+        tenantId: undefined,
+        sourceId,
+        collectedAt: firstAt,
+        publishedAt: firstAt,
+        body: `Retained publisher evidence ${suffix}`,
+        metadata: { runId, sourceReviewCandidate: true, safeExcerpt: `Retained publisher evidence ${suffix}` }
+      }));
+    }
+    store.saveSourceHealthObservation({
+      id: "health_equal_time_review",
+      tenantId: undefined,
+      sourceId,
+      collectionRunId: runId,
+      checkedAt: firstAt,
+      success: true,
+      useful: false,
+      captureCount: 2
+    });
+    let reverseCaptures = false;
+    const querySources: Record<string, () => any[]> = {
+      claims: store.listIntelligenceClaims.bind(store),
+      incidents: store.listIncidents.bind(store),
+      captures: store.listCaptures.bind(store),
+      sources: store.listSources.bind(store),
+      claimReviews: store.listClaimReviews.bind(store),
+      claimEvidence: store.listClaimEvidence.bind(store),
+      evidenceLinks: store.listEvidenceLinks.bind(store)
+    };
+    store.queryAllStructuredRecords = async (collection: string) => {
+      const records = querySources[collection]();
+      return collection === "captures" && reverseCaptures ? records.reverse() : records;
+    };
+    store.queryAutomaticReviewSourceHealth = async () => store.listSourceHealthObservations();
+
+    expect(await syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(1);
+    reverseCaptures = true;
+    expect(await syncAutomaticReviewQueue(options(store), { allTenants: true, now: "2026-07-22T10:01:00.000Z", modelVersion: "hanasand" })).toBe(0);
+    const original = store.listAnalystMetadataReviewTasks().find((task: any) => task.recordKind === "automatic_intelligence_review_task" && task.subject?.sourceId === sourceId);
+    expect(original).toBeDefined();
+    store.saveAnalystMetadataReviewTask({ ...original, id: "automatic-review_equal_time_duplicate", queuedAt: "2026-07-22T10:01:00.000Z", updatedAt: "2026-07-22T10:01:00.000Z" });
+    let modelCalls = 0;
+    const cycle = await runAutomaticReviewCycle(options(store), {
+      allTenants: true,
+      now: "2026-07-22T10:02:00.000Z",
+      modelVersion: "hanasand",
+      limit: 2,
+      concurrency: 2,
+      fetcher: async (_input, init) => {
+        modelCalls++;
+        const request = promptRequest(JSON.parse(String(init?.body)).prompt);
+        return completedTools(request, supportedDecision(request));
+      }
+    });
+    const tasks = store.listAnalystMetadataReviewTasks().filter((task: any) => task.recordKind === "automatic_intelligence_review_task" && task.subject?.sourceId === sourceId);
+    expect(cycle).toMatchObject({ queued: 0, superseded: 1, attempted: 1 });
+    expect(modelCalls).toBe(1);
+    expect(tasks).toHaveLength(2);
+    expect(tasks.filter((task: any) => task.outcome === "superseded")).toHaveLength(1);
+    expect(tasks.filter((task: any) => task.outcome !== "superseded")).toHaveLength(1);
+  });
+
   test("treats governed metadata-only victim lists as operational source evidence", async () => {
     const store = new InMemoryScraperStore();
     seedSource(store, "victim-list", "Acme Manufacturing\nNorthwind Logistics\nContoso Energy");
