@@ -24,7 +24,9 @@ describe("lawful dark-web source portfolio batch", () => {
       ["restricted_cmdorganization_victim_blog", ["item_header_link", 3]],
       ["restricted_exfilsquad_victim_blog", ["company_header_name", 13]],
       ["restricted_global_secret_group_victim_blog", ["card_body_title", 24]],
-      ["restricted_triple_x_victim_blog", ["post_container_title", 4]]
+      ["restricted_triple_x_victim_blog", ["post_container_title", 4]],
+      ["restricted_exitium_victim_blog", ["target_card_title", 4]],
+      ["restricted_insomnia_victim_blog", ["book_card_info_title", 24]]
     ]);
 
     expect(batch).toMatchObject({
@@ -36,7 +38,7 @@ describe("lawful dark-web source portfolio batch", () => {
       retentionClass: "restricted_metadata"
     });
     expect(report).toMatchObject({ valid: true, errors: [] });
-    expect(report.accepted).toHaveLength(6);
+    expect(report.accepted).toHaveLength(8);
     expect(report.accepted.find((row) => row.id === "restricted_ms13089_victim_blog")).toMatchObject({
       id: "restricted_ms13089_victim_blog",
       status: "candidate",
