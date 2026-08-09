@@ -39,6 +39,12 @@ describe('production monitor notification transitions', () => {
         expect(latestActivity).not.toContain('setTimeout(resolve, 1_000)')
     })
 
+    test('incident hook cannot delay alert delivery when the scraper is slow', async () => {
+        const source = await readFile(path.join(import.meta.dir, '../src/utils/status/record.ts'), 'utf8')
+        expect(source).toContain('void notifyServiceMonitorIncident(transition.incident).catch')
+        expect(source).not.toContain('await notifyServiceMonitorIncident(transition.incident)')
+    })
+
     test('unavailable dependency records down promptly without substituting success', async () => {
         const originalFetch = globalThis.fetch
         const recorded: Array<{ status: string, message: string }> = []
