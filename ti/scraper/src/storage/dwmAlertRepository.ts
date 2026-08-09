@@ -1875,8 +1875,8 @@ export function buildDwmOrgAlertPipelineProof(input: {
     const matches = handoffs.filter(({ alert, handoff }) => alertMatchesGenerationCandidate(alert, handoff, candidate));
     const matchedAlertIds = uniqueStrings(matches.map(({ alert }) => String(alert.id)).filter(Boolean));
     const caseReady = matches.some(({ handoff }) => handoff.caseReadiness.ready);
-    const deliveryReady = matches.some(({ handoff }) => handoff.deliveryReadiness.ready || handoff.deliveryReadiness.deliveryHistoryRefs.length > 0);
-    const delivered = matches.some(({ handoff }) => handoff.deliveryReadiness.lastDeliveryStatus === "delivered" || handoff.deliveryReadiness.deliveryHistoryRefs.length > 0);
+    const deliveryReady = matches.some(({ handoff }) => handoff.deliveryReadiness.ready || handoff.deliveryReadiness.lastDeliveryStatus === "delivered");
+    const delivered = matches.some(({ handoff }) => handoff.deliveryReadiness.lastDeliveryStatus === "delivered");
     const blockerCodes = uniqueStrings([
       ...matches.flatMap(({ handoff }) => handoff.blockerCodes),
       !matchedAlertIds.length ? "alert_not_generated" : undefined,
@@ -1935,7 +1935,7 @@ export function buildDwmOrgAlertPipelineProof(input: {
       casePath: handoff.caseReadiness.casePath,
       caseHandoffIdempotencyKey: handoff.caseReadiness.idempotencyKey,
       deliveryReady: handoff.deliveryReadiness.ready,
-      delivered: handoff.deliveryReadiness.lastDeliveryStatus === "delivered" || handoff.deliveryReadiness.deliveryHistoryRefs.length > 0,
+      delivered: handoff.deliveryReadiness.lastDeliveryStatus === "delivered",
       downstreamBlockerCodes: handoff.blockerCodes,
       deliveryHistoryRefs: handoff.deliveryReadiness.deliveryHistoryRefs,
       sourceHandoffReadiness,
@@ -2135,8 +2135,7 @@ function buildDwmAlertSourceHandoffReadiness(input: {
     ...provenanceGapCodes,
     ...evidenceFreshness.blockerCodes
   ]);
-  const delivered = input.handoff.deliveryReadiness.lastDeliveryStatus === "delivered"
-    || input.handoff.deliveryReadiness.deliveryHistoryRefs.length > 0;
+  const delivered = input.handoff.deliveryReadiness.lastDeliveryStatus === "delivered";
   const webhookReady = input.handoff.deliveryReadiness.ready || delivered;
   const sourceReady = input.handoff.evidence.evidenceCount > 0
     && input.handoff.evidence.selectedCaptureIds.length > 0

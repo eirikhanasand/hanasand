@@ -70,9 +70,10 @@ function watchlists() {
   return runtime.map((watchlist) => ({ ...watchlist, webhookDestinationId: "webhook_pipeline_discord" }));
 }
 
-function deliveredPipelineProof() {
+function deliveredPipelineProof(deliveryStatus: "dry_run" | "failed" | "delivered" = "delivered") {
   const [watchlist] = watchlists();
   const alertGeneratorKey = watchlist.orgWatchlistTerms?.[0]?.alertGeneratorKey;
+  const delivered = deliveryStatus === "delivered";
   const alert = {
     id: "alert_pipeline_acme",
     tenantId: "tenant_pipeline",
@@ -100,8 +101,8 @@ function deliveredPipelineProof() {
     },
     workflowStatus: "open",
     reviewState: "route_to_customer",
-    deliveryState: "delivered",
-    deliveredAt: "2026-06-28T16:06:00.000Z",
+    deliveryState: delivered ? "delivered" : "pending_review",
+    ...(delivered ? { deliveredAt: "2026-06-28T16:06:00.000Z" } : {}),
     caseIdCandidate: "case_pipeline_acme",
     casePath: "/v1/cases/case_pipeline_acme?alertId=alert_pipeline_acme",
     watchlistIds: [watchlist.id],
@@ -124,8 +125,8 @@ function deliveredPipelineProof() {
       alertId: "alert_pipeline_acme",
       tenantId: "tenant_pipeline",
       organizationId: "org_pipeline",
-      ready: true,
-      state: "delivered",
+      ready: delivered,
+      state: deliveryStatus,
       sourceFamily: "telegram_public",
       selectedCaptureIds: [capture.id],
       webhookDestinationIds: ["webhook_pipeline_discord"],
@@ -137,7 +138,7 @@ function deliveredPipelineProof() {
       casePath: "/v1/cases/case_pipeline_acme?alertId=alert_pipeline_acme",
       deliveryDedupeKey: "dedupe_pipeline_acme",
       deliveryHistoryRefs: ["delivery_pipeline_acme"],
-      lastDeliveryStatus: "delivered"
+      lastDeliveryStatus: deliveryStatus
     },
     updatedAt: "2026-06-28T16:06:00.000Z",
     workflowEvents: []
@@ -150,7 +151,7 @@ function deliveredPipelineProof() {
       id: "delivery_pipeline_acme",
       alertId: "alert_pipeline_acme",
       webhookDestinationId: "webhook_pipeline_discord",
-      status: "delivered",
+      status: deliveryStatus,
       attemptedAt: "2026-06-28T16:06:00.000Z"
     }],
     tenantId: "tenant_pipeline",
@@ -162,6 +163,19 @@ function deliveredPipelineProof() {
 }
 
 describe("dwm org alert pipeline proof", () => {
+  test("does not treat dry-run or failed delivery history as delivered", () => {
+    for (const status of ["dry_run", "failed"] as const) {
+      const proof = deliveredPipelineProof(status);
+      expect(proof.candidates[0]).toMatchObject({ deliveryReady: true, delivered: false });
+      expect(proof.alerts[0]).toMatchObject({ delivered: false, deliveryReady: true });
+      expect(proof.alerts[0].sourceHandoffReadiness.webhookConsumer).toMatchObject({ delivered: false, deliveryReady: true });
+    }
+
+    const delivered = deliveredPipelineProof();
+    expect(delivered.candidates[0]).toMatchObject({ deliveryReady: true, delivered: true });
+    expect(delivered.alerts[0]).toMatchObject({ delivered: true });
+  });
+
   test("maps org watchlist readiness to persisted alert case and webhook workflow proof", () => {
     const [watchlist] = watchlists();
     const alertGeneratorKey = watchlist.orgWatchlistTerms?.[0]?.alertGeneratorKey;
