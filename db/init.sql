@@ -541,6 +541,7 @@ CREATE TABLE IF NOT EXISTS traffic_events (
 
 CREATE INDEX IF NOT EXISTS idx_service_monitor_results_checked_at ON service_monitor_results(checked_at);
 CREATE INDEX IF NOT EXISTS idx_service_monitor_results_service_check ON service_monitor_results(service, check_name, checked_at DESC);
+CREATE INDEX IF NOT EXISTS idx_service_monitor_results_non_up ON service_monitor_results(service, check_name, checked_at) WHERE status <> 'up';
 CREATE INDEX IF NOT EXISTS idx_service_logs_created_at ON service_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_service_logs_service_level ON service_logs(service, level, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_traffic_events_created_at ON traffic_events(created_at DESC);

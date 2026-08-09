@@ -6,9 +6,12 @@ import { addMissingRequiredChecks, notificationEvent } from '../src/utils/status
 describe('production monitor notification transitions', () => {
     test('status history SQL avoids reserved PostgreSQL window identifier', async () => {
         const source = await readFile(path.join(import.meta.dir, '../src/handlers/status/get.ts'), 'utf8')
+        const schema = await readFile(path.join(import.meta.dir, '../src/utils/db/ensureSchema.ts'), 'utf8')
         expect(source).toContain('WINDOW status_history_window AS')
         expect(source).not.toContain('WINDOW window AS')
         expect(source).toContain('const [result, historyResult, incidentResult] = await Promise.all([')
+        expect(source).toContain("WHERE status <> 'up'")
+        expect(schema).toContain('idx_service_monitor_results_non_up')
     })
 
     test('does not re-alert while a check is flapping', () => {
