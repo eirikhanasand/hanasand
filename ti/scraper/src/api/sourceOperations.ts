@@ -201,8 +201,11 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
 
 export async function buildSourceOperationsSummary(store: any, input: { tenantId?: string; generatedAt?: string } = {}) {
   const generatedAt = input.generatedAt ?? nowIso();
-  if (typeof store?.querySourceOperationalSummary === "function") {
-    return store.querySourceOperationalSummary({ tenantId: input.tenantId, generatedAt });
+  const result = typeof store?.querySourceOperationalPage === "function"
+    ? await store.querySourceOperationalPage({ tenantId: input.tenantId, generatedAt, limit: 1 })
+    : undefined;
+  if (result) {
+    return { schemaVersion: "ti.source_operations_summary.v1", generatedAt, tenantId: input.tenantId ?? "global", summary: result.totals ?? {} };
   }
   const snapshot = await buildSourceOperationsSnapshot(store, { tenantId: input.tenantId, generatedAt, limit: 1 });
   return { schemaVersion: "ti.source_operations_summary.v1", generatedAt, tenantId: input.tenantId ?? "global", summary: snapshot.summary };
