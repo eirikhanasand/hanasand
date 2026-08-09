@@ -6,6 +6,7 @@ import { notificationEvent, type MonitorStatus } from './monitorPolicy.ts'
 import { notifyServiceMonitorIncident, type ServiceMonitorIncidentInput } from './serviceIncident.ts'
 
 const SUSTAINED_DOWN_FAILURES = 3
+const ALERT_EMAIL_COOLDOWN_MS = 60_000
 
 export async function recordMonitorResult(
     service: string,
@@ -68,6 +69,13 @@ export async function recordMonitorResult(
     if (transition.incident) await notifyServiceMonitorIncident(transition.incident).catch(error => console.error(`[production-monitor] incident state sync failed: ${error instanceof Error ? error.message : String(error)}`))
     const event = transition.event
     if (!event) return
+    let claimed = true
+    try {
+        claimed = await claimAlertEmailAttempt()
+    } catch (error) {
+        console.error(`[production-monitor] alert cooldown unavailable: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    if (!claimed) return
     const recipient = process.env.MONITOR_ALERT_EMAIL || addressForUser(mailConfig.systemMailboxOwner)
     await sendSystemMail({
         to: recipient,
@@ -78,6 +86,15 @@ export async function recordMonitorResult(
             message,
             `Observed at ${new Date().toISOString()}.`,
         ].filter(Boolean).join('\n'),
+    }).then(async () => {
+        try {
+            await withTransaction(query => query(`
+                INSERT INTO service_monitor_results (service, check_name, status, latency_ms, message)
+                VALUES ('production-monitor', 'Alert delivery', 'up', 0, $1)
+            `, ['Monitor alert email delivered.']))
+        } catch (recordingError) {
+            console.error(`[production-monitor] failed to record alert-delivery recovery: ${recordingError instanceof Error ? recordingError.message : String(recordingError)}`)
+        }
     }).catch(async error => {
         const message = `Monitor alert delivery failed: ${error instanceof Error ? error.message : String(error)}`
         console.error(`[production-monitor] notification failed: ${message}`)
@@ -89,5 +106,25 @@ export async function recordMonitorResult(
         } catch (recordingError) {
             console.error(`[production-monitor] failed to record alert-delivery failure: ${recordingError instanceof Error ? recordingError.message : String(recordingError)}`)
         }
+    })
+}
+
+async function claimAlertEmailAttempt() {
+    return withTransaction(async query => {
+        await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', ['production-monitor:alert-email'])
+        const recent = await query(`
+            SELECT checked_at
+            FROM service_monitor_results
+            WHERE service = 'production-monitor' AND check_name = 'Alert delivery'
+            ORDER BY checked_at DESC
+            LIMIT 1
+        `)
+        const checkedAt = recent.rows[0]?.checked_at ? Date.parse(String(recent.rows[0].checked_at)) : NaN
+        if (Number.isFinite(checkedAt) && Date.now() - checkedAt < ALERT_EMAIL_COOLDOWN_MS) return false
+        await query(`
+            INSERT INTO service_monitor_results (service, check_name, status, latency_ms, message)
+            VALUES ('production-monitor', 'Alert delivery', 'degraded', 0, $1)
+        `, ['Monitor alert email attempt started.'])
+        return true
     })
 }
