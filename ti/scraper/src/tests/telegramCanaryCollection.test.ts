@@ -297,6 +297,20 @@ describe("public Telegram canary collection", () => {
       status: "candidate",
       metadata: { productionCollection: false, publisherReference: "https://old.hightech.gov.am/en/national-center-for-information-security-and-cryptography", sourcePortfolioVerification: { observedItemCount: 8, observedUsefulItemCount: 0 } }
     });
+    for (const expected of [
+      ["src_infotecs_official_telegram", "https://t.me/infotecs_official", "ru", "https://infotecs.ru/press-center/social/", 18],
+      ["src_usergate_news_telegram", "https://t.me/usergatenews", "ru", "https://docs.usergate.com/hardware/usergate-ngfw-f8010-datasheet-ru.pdf", 14],
+      ["src_ideco_ngfw_telegram", "https://t.me/ideco", "ru", "https://ideco.ru/links", 20],
+      ["src_ideco_security_news_telegram", "https://t.me/ideco_news", "ru", "https://ideco.ru/links", 13],
+      ["src_infowatch_security_telegram", "https://t.me/infowatchout", "ru", "https://www.infowatch.ru/company/about", 16]
+    ] as const) {
+      expect(report.accepted.find((item: any) => item.id === expected[0])).toMatchObject({
+        url: expected[1],
+        language: expected[2],
+        status: "candidate",
+        metadata: { productionCollection: false, publisherReference: expected[3], sourcePortfolioVerification: { observedItemCount: expected[4], observedUsefulItemCount: 0 } }
+      });
+    }
     expect([...families]).toEqual(expect.arrayContaining([
       "apt_research",
       "malware_research",
@@ -357,7 +371,12 @@ describe("public Telegram canary collection", () => {
       "src_armenia_cyberpolice_telegram",
       "src_s2w_dailybrief_telegram",
       "src_uzbekistan_mia_cyberpolice_telegram",
-      "src_armenia_hti_telegram"
+      "src_armenia_hti_telegram",
+      "src_infotecs_official_telegram",
+      "src_usergate_news_telegram",
+      "src_ideco_ngfw_telegram",
+      "src_ideco_security_news_telegram",
+      "src_infowatch_security_telegram"
     ]);
     expect(candidates.every((item: any) => item.countsAsCoverage !== true
       && item.metadata.productionCollection === false
@@ -368,7 +387,7 @@ describe("public Telegram canary collection", () => {
       && item.metadata.sourcePortfolioVerification.observedUsefulItemCount >= 0
       && !evaluateSourceForCollection(item).allowed
       && !isExecutableSource(item))).toBe(true);
-    expect(candidates.filter((item: any) => item.metadata.sourcePortfolioVerification.observedUsefulItemCount === 0)).toHaveLength(13);
+    expect(candidates.filter((item: any) => item.metadata.sourcePortfolioVerification.observedUsefulItemCount === 0)).toHaveLength(18);
     expect(report.accepted.map((item: any) => item.url)).not.toEqual(expect.arrayContaining([
       "https://t.me/FalconFeedsio",
       "https://t.me/noname05716",

@@ -149,6 +149,15 @@ Explicit exclusion from this iteration:
 
 The candidate-to-production trace was re-audited without changing shared runtime code: file-backed bootstrap imports these rows as global candidate/nonproduction sources; the native canary scheduler admits current verified governed portfolio candidates; parser-retained items can supply immutable automatic-review evidence even when the bounded classifier returns zero; approved review evidence makes later current reviewed items useful; and two distinct retained useful run-linked cycles trigger the existing qualification state transition. Registration is therefore only the first step. Integration/deployment while verification is current, natural scheduled cycles, review approval, and restart/API/DB/UI reconciliation remain required before any row counts.
 
+The 2026-08-09T23:05:20Z vendor-security iteration accepted five parser-positive, non-coverage candidates after exact first-party ownership checks:
+
+- `src_infotecs_official_telegram` — `https://t.me/infotecs_official`, linked and identified as the official account on InfoTeCS's social page; 18 parsed posts, latest 2026-08-07T14:01:38Z.
+- `src_usergate_news_telegram` — `https://t.me/usergatenews`, published in UserGate's official product documentation; 14 parsed posts, latest 2026-08-04T12:33:23Z.
+- `src_ideco_ngfw_telegram` — `https://t.me/ideco`, and `src_ideco_security_news_telegram` — `https://t.me/ideco_news`, both individually linked and labeled on Ideco's official channels page; 20 and 13 parsed posts, latest 2026-08-07T12:34:54Z and 2026-08-09T05:36:32Z.
+- `src_infowatch_security_telegram` — `https://t.me/infowatchout`, identified by InfoWatch's official publication materials; 16 parsed posts, latest 2026-08-04T09:20:11Z.
+
+All five bounded samples classified zero items as useful under the fixed classifier, so the binding candidate-admission rule retains them for governed review without granting coverage. Each probe used the shipped `telegram-public-preview:v1` parser, had zero sanitizer-idempotence failures, and had zero residual email, bot-token, or credential matches. `https://t.me/idecoutm` was explicitly rejected because the same official Ideco portfolio produced zero parsed preview items.
+
 ## One iteration
 
 1. Measure registered, executable, qualifying, current-useful, stale, failed, and backoff counts from PostgreSQL and the source-operations API.
