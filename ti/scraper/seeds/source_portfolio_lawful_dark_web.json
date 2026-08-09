@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T15:33:48.000Z",
+  "generatedAt": "2026-08-09T15:52:16.000Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -59,9 +59,10 @@
     {
       "id": "restricted_gunra_victim_blog",
       "actorName": "Gunra",
+      "endpointHash": "a3195a1c540e0eab",
       "disposition": "rejected",
-      "reason": "The authority-listed endpoint is not a credential-free v3 onion target accepted by the production boundary.",
-      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "reason": "The current public root redirected outside the approved v3 Onion metadata boundary before any useful victim metadata could be parsed.",
+      "evidenceCheckedAt": "2026-08-09T15:52:16.000Z",
       "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/gunra",
       "countsAsCoverage": false
     },
@@ -95,18 +96,20 @@
     {
       "id": "restricted_shinyhunters_victim_blog",
       "actorName": "ShinyHunters",
+      "endpointHash": "2fc5943481605dca",
       "disposition": "rejected",
-      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
-      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "reason": "The current authority-marked endpoint failed the approved metadata boundary because its TLS certificate was not valid, before any useful metadata could be parsed.",
+      "evidenceCheckedAt": "2026-08-09T15:52:16.000Z",
       "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/shinyhunters",
       "countsAsCoverage": false
     },
     {
       "id": "restricted_nightspire_victim_blog",
       "actorName": "NightSpire",
+      "endpointHash": "003f7976cf2e1cdb",
       "disposition": "rejected",
       "reason": "The endpoint exceeded the production metadata redirect limit before returning a victim listing.",
-      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "evidenceCheckedAt": "2026-08-09T15:52:16.000Z",
       "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/nightspire",
       "countsAsCoverage": false
     },
@@ -122,9 +125,10 @@
     {
       "id": "restricted_blacknevas_victim_blog",
       "actorName": "BlackNevas",
+      "endpointHash": "8f5ecb2abb6d1110",
       "disposition": "rejected",
-      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
-      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "reason": "The current public root returned only a bounded 790-byte page and zero production-parser victim metadata.",
+      "evidenceCheckedAt": "2026-08-09T15:52:16.000Z",
       "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/blacknevas",
       "countsAsCoverage": false
     },
@@ -423,7 +427,7 @@
       "countsAsCoverage": false
     },
     { "id": "restricted_alphalocker_victim_blog", "actorName": "AlphaLocker", "endpointHash": "14cd8fc0552fb010", "disposition": "rejected", "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.", "evidenceCheckedAt": "2026-08-09T09:22:53.201Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/alphalocker", "countsAsCoverage": false },
-    { "id": "restricted_anubis_victim_blog", "actorName": "Anubis", "endpointHash": "a0e774393936c63c", "disposition": "rejected", "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.", "evidenceCheckedAt": "2026-08-09T09:22:50.075Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/anubis", "countsAsCoverage": false },
+    { "id": "restricted_anubis_victim_blog", "actorName": "Anubis", "endpointHash": "a0e774393936c63c", "disposition": "rejected", "reason": "The current root redirected to a small submission form with zero victim-title matches against 102 current authority records.", "evidenceCheckedAt": "2026-08-09T15:52:16.000Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/anubis", "countsAsCoverage": false },
     { "id": "restricted_arcusmedia_victim_blog", "actorName": "ArcusMedia", "endpointHash": "7719344883b35161", "disposition": "rejected", "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.", "evidenceCheckedAt": "2026-08-09T09:22:56.155Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/arcusmedia", "countsAsCoverage": false },
     { "id": "restricted_crypto24_victim_blog", "actorName": "Crypto24", "endpointHash": "e6290a4c61e1094b", "disposition": "rejected", "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.", "evidenceCheckedAt": "2026-08-09T09:22:55.286Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/crypto24", "countsAsCoverage": false },
     { "id": "restricted_karma_victim_blog", "actorName": "Karma", "endpointHash": "3c60e472792cc305", "disposition": "rejected", "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.", "evidenceCheckedAt": "2026-08-09T09:23:02.594Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/karma", "countsAsCoverage": false },
@@ -526,7 +530,10 @@
     { "id": "restricted_mydata_victim_blog", "actorName": "MyData", "endpointHash": "9cdaea1bc73ef973", "disposition": "rejected", "reason": "The current credential-free public page was reachable, but the production parser returned zero victim-listing items.", "evidenceCheckedAt": "2026-08-09T15:33:48.000Z", "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/mydata", "countsAsCoverage": false },
     { "id": "restricted_metaencryptor_victim_blog", "actorName": "MetaEncryptor", "endpointHash": "9e1fe21b3ef252e2", "disposition": "rejected", "reason": "The current authority-marked endpoint failed the approved metadata boundary because its TLS certificate was not valid, before any useful metadata could be parsed.", "evidenceCheckedAt": "2026-08-09T15:33:48.000Z", "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/metaencryptor", "countsAsCoverage": false },
     { "id": "restricted_threatmarket_victim_blog", "actorName": "ThreatMarket", "endpointHash": "42b16a6c8674b032", "disposition": "rejected", "reason": "The current public market page was reachable, but it exposed no production-parser victim listing and is outside independently useful ransomware-feed coverage.", "evidenceCheckedAt": "2026-08-09T15:33:48.000Z", "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/threatmarket", "countsAsCoverage": false },
-    { "id": "restricted_ciphbit_victim_blog", "actorName": "CiphBit", "endpointHash": "17154b54e0f7dabd", "disposition": "rejected", "reason": "The current authority-marked endpoint returned HTTP 403 through the approved proxy before any useful victim metadata could be parsed.", "evidenceCheckedAt": "2026-08-09T15:33:48.000Z", "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/ciphbit", "countsAsCoverage": false }
+    { "id": "restricted_ciphbit_victim_blog", "actorName": "CiphBit", "endpointHash": "17154b54e0f7dabd", "disposition": "rejected", "reason": "The current authority-marked endpoint returned HTTP 403 through the approved proxy before any useful victim metadata could be parsed.", "evidenceCheckedAt": "2026-08-09T15:33:48.000Z", "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/ciphbit", "countsAsCoverage": false },
+    { "id": "restricted_anubis_victim_blog_2", "actorName": "Anubis", "endpointHash": "b465a9eb8fc833ce", "disposition": "rejected", "reason": "The second current root redirected to the same small submission form with zero victim-title matches against 102 current authority records, so it contributes no independent feed evidence.", "evidenceCheckedAt": "2026-08-09T15:52:16.000Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/anubis", "countsAsCoverage": false },
+    { "id": "restricted_nightspire_victim_blog_2", "actorName": "NightSpire", "endpointHash": "eaed3ca953287c5d", "disposition": "rejected", "reason": "The second current root was reachable, but its 21.5 KiB public page produced zero victim-title matches against 365 current authority records and no production-parser victim metadata.", "evidenceCheckedAt": "2026-08-09T15:52:16.000Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/nightspire", "countsAsCoverage": false },
+    { "id": "restricted_payload_victim_blog_2", "actorName": "Payload", "endpointHash": "756a71a512bb37fe", "disposition": "rejected", "reason": "The current endpoint exceeded the production metadata redirect limit before returning a credential-free public victim listing.", "evidenceCheckedAt": "2026-08-09T15:52:16.000Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/payload", "countsAsCoverage": false }
   ],
   "sources": [
     {
