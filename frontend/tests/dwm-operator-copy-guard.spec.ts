@@ -46,6 +46,9 @@ test('dashboard DWM operator copy avoids backend-shaped returned wording', async
     expect(dwmPortal).toContain('no durable delivery result was returned')
     expect(workflowActions).toContain('No durable delivery result was returned.')
     expect(workflowActions).not.toContain('Webhook delivery attempted for ${attemptedCount} alert(s).')
+    expect(workflowActions).toContain('Webhook test recorded a dry-run delivery.')
+    expect(workflowActions).toContain('Webhook test recorded a failed delivery attempt.')
+    expect(workflowActions).toContain('dryRun\n                        ? \'Webhook test recorded a dry-run delivery.')
     expect(dwmPortal).toContain('Trace ${row.auditEventId || row.requestId}.')
 
     expect(dwmPage).not.toContain('returning live')

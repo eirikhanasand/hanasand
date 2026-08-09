@@ -340,12 +340,21 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             if (!test.ok) throw new Error(test.message)
             const deliveryRows = durableDeliveryRows(test)
             if (!deliveryRows.length) throw new Error('No durable delivery result was returned.')
-            setResult({ ok: true, message: 'Webhook test delivered. Future alerts can use this destination.' })
+            const failed = deliveryRows.some(row => row.status === 'failed' || Boolean(row.error))
+            const dryRun = deliveryRows.some(row => row.status === 'dry_run' || row.dryRun === true)
+            setResult({
+                ok: !failed,
+                message: failed
+                    ? 'Webhook test recorded a failed delivery attempt. Review delivery history before retrying.'
+                    : dryRun
+                        ? 'Webhook test recorded a dry-run delivery. Future alerts can use this destination.'
+                        : 'Webhook test delivered. Future alerts can use this destination.',
+            })
             setLastRoute({
                 label: 'Webhook test',
                 watchTerms: effectiveTermCount,
                 deliveryAttempts: deliveryRows.length,
-                deliveryState: 'test delivered',
+                deliveryState: failed ? 'test failed' : dryRun ? 'test recorded' : 'test delivered',
             })
             refreshWorkspace()
         } catch (error) {
