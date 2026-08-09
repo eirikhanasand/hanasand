@@ -47,6 +47,19 @@ export function latencyStatus(latency: number, thresholds?: { degraded: number, 
     return latency >= thresholds.down ? 'down' : latency >= thresholds.degraded ? 'degraded' : 'up'
 }
 
+export function watchlistProcessingStatus(configured: number, runtime: number, scraperAvailable: boolean) {
+    if (!scraperAvailable) {
+        return { status: 'down' as const, message: 'Customer watchlists are synchronized, but the scraper is unavailable for collection.' }
+    }
+    if (configured > 0 && runtime === 0) {
+        return { status: 'down' as const, message: `Customer watchlists exist for ${configured} organizations but none are in the scraper runtime.` }
+    }
+    if (configured > 0 && runtime < configured) {
+        return { status: 'degraded' as const, message: `Customer watchlist synchronization is incomplete (${runtime} runtime organizations for ${configured} configured organizations).` }
+    }
+    return { status: 'up' as const, message: `Customer watchlists are represented in the scraper runtime (${runtime} runtime organizations for ${configured} configured organizations).` }
+}
+
 export function activityCountDrop(
     total: number,
     previous?: { status: MonitorStatus, message?: string | null }
