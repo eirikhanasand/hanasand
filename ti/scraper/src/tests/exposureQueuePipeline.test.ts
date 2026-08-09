@@ -96,6 +96,7 @@ describe("DWM exposure queue pipeline", () => {
     }), options);
     const ingestBody = await ingest.json() as any;
     expect(ingestBody.accepted).toBe(1);
+    expect(ingestBody.parser.fallbackUsed).toBe(false);
     expect(store.listSources()[0]).toMatchObject({ id: publicAdvisorySourceIdentity(reportUrl).id, tenantId: undefined, type: "static_web", url: "https://news.example.test/", status: "candidate", accessMethod: "public_http", metadata: { sourceFamily: "public_advisory", productionCollection: false } });
     expect(store.listSources()[0].metadata?.canaryPortfolio).toBeUndefined();
     expect(store.listCaptures()[0]).toMatchObject({ tenantId: "org_ntnu_research", url: reportUrl, title: "NTNU hit by cyberattack", publishedAt, sensitive: false, metadata: { adapter: "static_web", sourceFamily: "public_advisory", organizationId: "org_ntnu_research" } });

@@ -169,7 +169,7 @@ export async function ingestExposureClaims(request: Request, options: ApiServerO
     parser: {
       service: "hanasand-ai",
       aiEndpointConfigured: Boolean(Bun.env.HANASAND_AI_API_BASE),
-      fallbackUsed: parsed.some((claim) => claim?.parserMode !== "hanasand-ai")
+      fallbackUsed: parsed.some((claim) => claim?.parserMode === "local_fallback")
     },
     captures: accepted.map((capture) => ({ id: capture.id, sourceId: capture.sourceId, collectedAt: capture.collectedAt })),
     queue: exposureClaimsFromStore(options.store, {}, { limit: 25, tenantId: scope.tenantId })
