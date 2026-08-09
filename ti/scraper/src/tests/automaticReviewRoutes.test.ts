@@ -5,6 +5,7 @@ import {
   AUTOMATIC_REVIEW_RESPONSE_SCHEMA,
   automaticReviewSnapshot,
   runAutomaticReviewCycle,
+  sourceAutomaticReviewEvidenceBindings,
   startAutomaticReviewWorker,
   syncAutomaticReviewQueue
 } from "../api/automaticReviewRoutes.ts";
@@ -12,9 +13,12 @@ import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { PostgresScraperStore } from "../storage/postgresScraperStore.ts";
+import { SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS, SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
 import { hashContent } from "../utils.ts";
 
 const firstAt = "2026-07-22T10:00:00.000Z";
+const sourceReviewV7 = SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS[1];
+const sourceReviewV8 = SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS[2];
 
 describe("automatic Hanasand AI intelligence review", () => {
   test("treats governed metadata-only victim lists as operational source evidence", async () => {
@@ -81,6 +85,7 @@ describe("automatic Hanasand AI intelligence review", () => {
       verifiedObservedItemCount: 3
     });
     expect(prompt).toContain("a coherent retained list of plausible victim organization names is operational threat intelligence and must be confirmed");
+    expect(request.promptVersion).toBe(SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION);
     expect(store.getSource("victim-list")?.metadata?.automaticSourceReview).toMatchObject({
       state: "approved",
       decision: {
@@ -127,6 +132,104 @@ describe("automatic Hanasand AI intelligence review", () => {
       state: "needs_review",
       decision: { action: "mark_needs_review", claimValidity: "uncertain" }
     });
+  });
+
+  test("preserves prior clear-web source approvals while upgrading victim-list reviews", () => {
+    const store = new InMemoryScraperStore();
+    seedSource(store, "source-versioned", "CVE-2026-1001 is a critical remote code execution advisory.");
+    store.updateCaptureMetadata("capture_source-versioned", (metadata) => ({ ...metadata, runId: "run-source-versioned" }));
+    store.saveSourceHealthObservation({
+      id: "health-source-versioned",
+      tenantId: "default",
+      sourceId: "source-versioned",
+      collectionRunId: "run-source-versioned",
+      checkedAt: firstAt,
+      success: true,
+      useful: true,
+      captureCount: 1
+    });
+    const source = {
+      ...store.getSource("source-versioned")!,
+      status: "candidate",
+      metadata: {
+        sourceFamily: "clear_web",
+        sourcePortfolioVerification: { outcome: "content_parsed" }
+      }
+    } as any;
+    store.saveSource({
+      ...source,
+      metadata: {
+        ...source.metadata,
+        automaticSourceReview: approvedSourceReview(source, store.listCaptures(), sourceReviewV7)
+      }
+    });
+
+    expect(syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(0);
+    store.saveSource({
+      ...source,
+      metadata: {
+        ...source.metadata,
+        automaticSourceReview: approvedSourceReview(source, store.listCaptures(), sourceReviewV8)
+      }
+    });
+    expect(syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(0);
+
+    const reviewed = store.getSource(source.id)!;
+    store.saveSource({ ...reviewed, metadata: { ...reviewed.metadata, sourceFamily: "dark_web_victim_feed" } });
+    expect(syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(1);
+    expect(store.listAnalystMetadataReviewTasks()).toContainEqual(expect.objectContaining({
+      subject: { type: "source", id: source.id, sourceId: source.id },
+      promptVersion: SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION,
+      state: "queued"
+    }));
+  });
+
+  test("supersedes a queued upgrade when a valid prior clear-web approval arrives before the model call", async () => {
+    const store = new InMemoryScraperStore();
+    seedSource(store, "source-queued-upgrade", "CVE-2026-1002 is a critical privilege escalation advisory.");
+    store.updateCaptureMetadata("capture_source-queued-upgrade", (metadata) => ({ ...metadata, runId: "run-source-queued-upgrade" }));
+    store.saveSourceHealthObservation({
+      id: "health-source-queued-upgrade",
+      tenantId: "default",
+      sourceId: "source-queued-upgrade",
+      collectionRunId: "run-source-queued-upgrade",
+      checkedAt: firstAt,
+      success: true,
+      useful: true,
+      captureCount: 1
+    });
+    const source = {
+      ...store.getSource("source-queued-upgrade")!,
+      status: "candidate",
+      metadata: { sourceFamily: "clear_web", sourcePortfolioVerification: { outcome: "content_parsed" } }
+    } as any;
+    store.saveSource(source);
+    expect(syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(1);
+    store.saveSource({
+      ...source,
+      metadata: {
+        ...source.metadata,
+        automaticSourceReview: approvedSourceReview(source, store.listCaptures(), sourceReviewV7)
+      }
+    });
+    let modelCalls = 0;
+
+    await runAutomaticReviewCycle(options(store), {
+      now: firstAt,
+      allTenants: true,
+      limit: 1,
+      concurrency: 1,
+      modelVersion: "hanasand",
+      fetcher: async () => { modelCalls++; throw new Error("must not call model"); }
+    });
+
+    expect(modelCalls).toBe(0);
+    expect(store.listAnalystMetadataReviewTasks()).toContainEqual(expect.objectContaining({
+      recordKind: "automatic_intelligence_review_task",
+      subject: { type: "source", id: source.id, sourceId: source.id },
+      state: "terminal",
+      outcome: "superseded"
+    }));
   });
 
   test("queues claims and incidents independently in one linear read and sends a bounded safe cross-source projection", async () => {
@@ -937,6 +1040,22 @@ function seedSource(store: InMemoryScraperStore, sourceId: string, excerpt: stri
   const tenantId = tenant ?? undefined;
   store.saveSource({ id: sourceId, tenantId, name: `Public ${sourceId}`, type: "news", url: `https://example.test/${sourceId}`, status: "active", accessMethod: "public_http", risk: "low", trustScore: 0.9, crawlFrequencySeconds: 3600, legalNotes: "Public source.", createdAt: firstAt, updatedAt: firstAt });
   store.saveCapture({ id: `capture_${sourceId}`, tenantId, sourceId, url: `https://example.test/${sourceId}`, title: "Source report", collectedAt: firstAt, publishedAt: firstAt, processedAt: firstAt, firstVisibleAt: firstAt, contentHash: hashContent(`${sourceId}-body`), mediaType: "text/plain", storageKind: "inline_text", body: "restricted raw body", metadata: { safeExcerpt: excerpt, publisherReportedAtProvenance: { kind: "publisher" } }, provenance: { extractorVersion: "retained-parser-v7", parserVersion: "source-parser-v3" }, sensitive: false });
+}
+
+function approvedSourceReview(source: any, captures: any[], promptVersion: string) {
+  const selectedEvidenceProvenance = sourceAutomaticReviewEvidenceBindings(source, captures);
+  return {
+    schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
+    state: "approved",
+    promptVersion,
+    configuredModelVersion: "hanasand",
+    sourceIdentity: automaticSourceReviewIdentity(source),
+    requestSha256: "a".repeat(64),
+    selectedEvidenceIds: selectedEvidenceProvenance.map((item) => item.evidenceId),
+    selectedEvidenceProvenance,
+    runtimeIdentity: { status: "completed", conversationId: "prior-clear-web-review" },
+    decision: { subject: { type: "source", id: source.id }, action: "confirm", claimValidity: "supported" }
+  };
 }
 
 function incident(id: string, summary = "APT29 targeted Northwind.") {
