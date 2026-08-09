@@ -2132,7 +2132,7 @@ function buildPublicTiSourceHealthQueue(input: {
             ...(!source.sourceRequestId && !source.captureId ? ['sourceProvenance[].sourceRequestId'] : []),
             ...(!matchingProvenance?.reportDate && !source.lastCollectedAt ? ['actorIntelligence.structuredProvenance[].reportDate'] : []),
         ])
-        const timestamp = source.lastCollectedAt || matchingProvenance?.reportDate || input.actor.sourceCoverage.latestReportDate || input.result.lastSeen || input.result.generatedAt
+        const timestamp = source.lastCollectedAt || matchingProvenance?.reportDate || input.actor.sourceCoverage.latestReportDate || input.result.lastSeen || ''
         const stale = input.actor.freshness.stale || input.actor.sourceCoverage.stale
         const parserStatus = source.parserStatus || (source.status === 'capture_ready'
             ? stale ? 'capture linked; freshness review' : 'capture linked'
@@ -2176,7 +2176,7 @@ function buildPublicTiSourceHealthQueue(input: {
             sourceName: gap.title,
             sourceFamily: sourceHealthFamilyForGap(gap.sourceFamily),
             provenance: gap.dependency,
-            timestamp: input.actor.sourceCoverage.latestReportDate || input.result.lastSeen || input.result.generatedAt,
+            timestamp: input.actor.sourceCoverage.latestReportDate || input.result.lastSeen || '',
             parserStatus: 'enrichment queued',
             state: gap.severity === 'high' ? 'blocked' : 'review',
             route: gap.route,

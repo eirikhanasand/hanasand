@@ -50,6 +50,7 @@ const operatorEvidence = actionability.geographyHandoffs.find(row => row.role ==
 
 assert.equal(actor.sourceCoverage.latestReportDate, undefined)
 assert.equal(operatorEvidence?.reportDate, undefined)
+assert.ok(actionability.sourceHealthQueue.rows.some(row => row.timestamp === ''))
 
 const undatedTimelineActor = buildActorIntelligence({
     ...result,
