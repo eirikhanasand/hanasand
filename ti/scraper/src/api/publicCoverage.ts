@@ -1,4 +1,5 @@
 import { nowIso } from "../utils.ts";
+import { isExecutableSource } from "../policy/collectionPolicy.ts";
 import { buildSourceOperationsSnapshot } from "./sourceOperations.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 
@@ -52,7 +53,7 @@ function latencySummary(records: any[]) {
 
 function cadenceSummary(sources: any[]) {
   const values = sources
-    .filter((source) => !source?.tenantId)
+    .filter((source) => !source?.tenantId && isExecutableSource(source))
     .map((source) => number(source.crawlFrequencySeconds ?? (number(source.crawlFrequencyMinutes) * 60)))
     .filter(valid)
     .sort((a, b) => a - b);
