@@ -31,6 +31,7 @@ import type {
 import { InMemoryScraperStore, linkedAlertCaptureIds } from "./memoryStore.ts";
 import { persistActorIdentityCatalog } from "./postgresActorIdentityCatalog.ts";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
+import { operationalQueryRow } from "../api/sourceOperations.ts";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
@@ -377,6 +378,56 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const tenantId = input.tenantId ?? null;
     const sourceId = input.sourceId?.trim() || null;
     const executableOnly = input.executableOnly === true;
+    if (!sourceId && !executableOnly && limit === 1) {
+      const [pageRows, totalRows] = await Promise.all([
+        this.sql`
+          SELECT record, collection_executable
+          FROM threat_intel.sources
+          WHERE tenant_id IS NOT DISTINCT FROM ${tenantId}
+          ORDER BY lower(name), id
+          LIMIT 1 OFFSET ${offset}
+        `,
+        this.sql`
+          SELECT jsonb_build_object(
+            'sourceCount', count(*),
+            'retainedSourceCount', count(*) FILTER (WHERE collection_executable),
+            'inactiveSourceCount', count(*) FILTER (WHERE NOT collection_executable),
+            'activeSourceCount', count(*) FILTER (WHERE collection_executable),
+            'qualifyingClearWebSourceCount', count(*) FILTER (
+              WHERE collection_executable
+                AND COALESCE((record->>'countsAsCoverage')::boolean, FALSE)
+                AND COALESCE((record->'metadata'->>'productionCollection')::boolean, FALSE)
+                AND source_type IN ('rss', 'api', 'json_api', 'blog')
+            ),
+            'qualifyingLawfulDarkWebSourceCount', count(*) FILTER (
+              WHERE collection_executable
+                AND COALESCE((record->>'countsAsCoverage')::boolean, FALSE)
+                AND COALESCE((record->'metadata'->>'productionCollection')::boolean, FALSE)
+                AND source_type IN ('tor_metadata', 'darkweb_metadata')
+            ),
+            'qualifyingPublicTelegramSourceCount', count(*) FILTER (
+              WHERE collection_executable
+                AND COALESCE((record->>'countsAsCoverage')::boolean, FALSE)
+                AND COALESCE((record->'metadata'->>'productionCollection')::boolean, FALSE)
+                AND source_type = 'telegram_public'
+            )
+          ) AS totals
+          FROM threat_intel.sources
+          WHERE tenant_id IS NOT DISTINCT FROM ${tenantId}
+        `
+      ]);
+      const totals = totalRows[0]?.totals ?? {};
+      const rows = pageRows.map((row: any) => operationalQueryRow({
+        record: readRecord(row),
+        collection_executable: row.collection_executable,
+        health_stats: {},
+        capture_stats: {},
+        actor_stats: {},
+        label_stats: {}
+      }, input.generatedAt));
+      const total = Number(totals.sourceCount ?? 0);
+      return { rows, totals, total, nextCursor: offset + rows.length < total ? String(offset + rows.length) : undefined };
+    }
     const [rows, totalRows] = await Promise.all([
       this.sql.unsafe(`
         WITH page AS (

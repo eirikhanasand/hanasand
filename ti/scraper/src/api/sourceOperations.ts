@@ -287,7 +287,7 @@ function operationalQuerySnapshot(result: any, input: any, generatedAt: string) 
   };
 }
 
-function operationalQueryRow(row: any, generatedAt: string) {
+export function operationalQueryRow(row: any, generatedAt: string) {
   const source = row.record ?? {};
   const health = row.health_stats ?? {};
   const capture = row.capture_stats ?? {};
