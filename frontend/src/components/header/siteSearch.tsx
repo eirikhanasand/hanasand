@@ -206,7 +206,8 @@ export function actorItems(payload: unknown, query: string): SearchItem[] {
     const fromRows = rows.map(actorItem).filter(isSearchItem)
     if (fromRows.length) return uniqueByHref(fromRows)
     if (!payload || typeof payload !== 'object' || stringValue((payload as Record<string, unknown>).status).toLowerCase() !== 'ready') return []
-    const fallbackTitle = stringValue((payload as Record<string, unknown> | null)?.actor) || stringValue((payload as Record<string, unknown> | null)?.query) || query
+    const fallbackTitle = stringValue((payload as Record<string, unknown> | null)?.actor)
+    if (!fallbackTitle) return []
     return [{ id: `actor:${fallbackTitle}`, title: fallbackTitle, detail: 'Open threat intelligence result', href: `/ti/${encodeURIComponent(fallbackTitle)}` }]
 }
 
