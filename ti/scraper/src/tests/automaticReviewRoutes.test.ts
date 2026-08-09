@@ -187,6 +187,38 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(allTasks.tasks).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: foreignTask.id })]));
   });
 
+  test("processes a bounded task when it is not hydrated into the task map", async () => {
+    const store: any = new InMemoryScraperStore();
+    const claim = { id: "claim_projection_only", tenantId: "default", claimType: "actor", reviewState: "unreviewed", summary: "Projection-only claim", value: { actor: "APT29" } };
+    store.saveIntelligenceClaim(claim);
+    store.getAnalystMetadataReviewTask = () => undefined;
+    store.queryAutomaticReviewRecords = async () => ({
+      tasksAndEvents: [],
+      claims: [claim],
+      incidents: [],
+      captures: [],
+      sources: [],
+      health: [],
+      claimEvidence: [],
+      evidenceLinks: [],
+      reviews: [],
+      actorIdentities: []
+    });
+
+    const cycle = await runAutomaticReviewCycle(options(store), {
+      allTenants: true,
+      now: firstAt,
+      modelVersion: "test-model",
+      limit: 1,
+      concurrency: 1
+    });
+
+    expect(cycle).toMatchObject({ queued: 1, attempted: 1, results: [{ state: "quarantined" }] });
+    const persistedTasks = store.listAnalystMetadataReviewTasks().filter((item: any) => item.recordKind === "automatic_intelligence_review_task");
+    expect(persistedTasks).toHaveLength(1);
+    expect(persistedTasks[0]).toMatchObject({ state: "quarantined", lastError: "No governed evidence is linked to this subject" });
+  });
+
   test("treats governed metadata-only victim lists as operational source evidence", async () => {
     const store = new InMemoryScraperStore();
     seedSource(store, "victim-list", "Acme Manufacturing\nNorthwind Logistics\nContoso Energy");
