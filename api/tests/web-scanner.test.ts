@@ -6,7 +6,7 @@ const stateDir = await mkdtemp(path.join('/tmp', 'hanasand-web-scan-'))
 process.env.WEB_SCAN_STATE_PATH = path.join(stateDir, 'web-scan.json')
 process.env.WEB_SCAN_INTERVAL_MINUTES = 'not-a-number'
 
-const { countSeverities, headerChecks, normalizeIntervalMinutes, setWebScanSchedule, withWebScanLock } = await import('../src/utils/vulnerabilities/webScanner.ts')
+const { countSeverities, headerChecks, normalizeIntervalMinutes, parseApprovedTargets, resolveApprovedTarget, setWebScanSchedule, withWebScanLock } = await import('../src/utils/vulnerabilities/webScanner.ts')
 
 afterAll(async() => {
     await rm(stateDir, { recursive: true, force: true })
@@ -28,6 +28,15 @@ describe('Hanasand safe web scanner', () => {
         expect(report.schedule.intervalMinutes).toBe(5)
         expect(report.schedule.target).toBe('https://hanasand.com')
         expect(report.schedule.scope).toBe('global')
+    })
+
+    test('accepts only exact HTTPS targets from the approved allowlist', () => {
+        const approved = parseApprovedTargets('https://hanasand.com')
+        expect(resolveApprovedTarget('https://hanasand.com', approved)).toBe('https://hanasand.com')
+        expect(() => resolveApprovedTarget('http://hanasand.com', approved)).toThrow('approved HTTPS target allowlist')
+        expect(() => resolveApprovedTarget('https://evil.example', approved)).toThrow('approved HTTPS target allowlist')
+        expect(() => resolveApprovedTarget('https://hanasand.com/path', approved)).toThrow('approved HTTPS target allowlist')
+        expect(parseApprovedTargets('not-a-url').has('https://hanasand.com')).toBe(true)
     })
 
     test('aggregates actionable severities', () => {

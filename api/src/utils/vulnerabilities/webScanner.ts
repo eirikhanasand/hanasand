@@ -6,7 +6,9 @@ import { randomUUID } from 'node:crypto'
 const STATE_PATH = process.env.WEB_SCAN_STATE_PATH || '/var/lib/hanasand/web-scan.json'
 const LOCK_PATH = `${STATE_PATH}.lock`
 const RECOVERY_LOCK_PATH = `${LOCK_PATH}.recovery`
-const TARGET = 'https://hanasand.com'
+const DEFAULT_APPROVED_TARGET = 'https://hanasand.com'
+const APPROVED_TARGETS = parseApprovedTargets(process.env.WEB_SCAN_APPROVED_TARGETS)
+const TARGET = resolveApprovedTarget(process.env.WEB_SCAN_TARGET || DEFAULT_APPROVED_TARGET, APPROVED_TARGETS)
 const PORTS = [80, 443, 8080, 8443]
 const DEFAULT_INTERVAL_MINUTES = normalizeIntervalMinutes(process.env.WEB_SCAN_INTERVAL_MINUTES, 60)
 const MAX_HISTORY = 100
@@ -56,6 +58,28 @@ export function normalizeIntervalMinutes(value: unknown, fallback = 60) {
     const parsed = Number(value)
     const safeFallback = Number.isFinite(fallback) ? Math.floor(fallback) : 60
     return Math.min(Math.max(Number.isFinite(parsed) ? Math.floor(parsed) : safeFallback, 5), 1440)
+}
+
+export function parseApprovedTargets(value: string | undefined) {
+    const targets = (value || DEFAULT_APPROVED_TARGET).split(',').map(item => item.trim()).filter(Boolean)
+    const valid = targets.filter(target => isApprovedTargetFormat(target))
+    return new Set(valid.length ? valid : [DEFAULT_APPROVED_TARGET])
+}
+
+export function resolveApprovedTarget(target: string, approvedTargets = APPROVED_TARGETS) {
+    if (!isApprovedTargetFormat(target) || !approvedTargets.has(target)) {
+        throw new Error('Web scanner target is not on the approved HTTPS target allowlist.')
+    }
+    return target
+}
+
+function isApprovedTargetFormat(target: string) {
+    try {
+        const url = new URL(target)
+        return url.protocol === 'https:' && url.username === '' && url.password === '' && url.pathname === '/' && url.search === '' && url.hash === '' && url.hostname === url.hostname.toLowerCase()
+    } catch {
+        return false
+    }
 }
 
 export async function withWebScanLock<T>(work: () => Promise<T>): Promise<T> {
@@ -186,7 +210,7 @@ function checkPort(host: string, port: number): Promise<{ port: number, open: bo
 async function readState(): Promise<WebScanReport> {
     try {
         const parsed = JSON.parse(await readFile(STATE_PATH, 'utf8')) as Partial<WebScanReport> & { scanId?: string, startedAt?: string, finishedAt?: string, running?: boolean, targets?: WebScanTargetResult[], error?: string | null }
-        if (parsed.current || parsed.history || parsed.schedule) return { ...emptyReport(), ...parsed, schedule: { ...emptyReport().schedule, ...(parsed.schedule || {}) } }
+        if (parsed.current || parsed.history || parsed.schedule) return { ...emptyReport(), ...parsed, schedule: { ...emptyReport().schedule, ...(parsed.schedule || {}), target: TARGET, scope: 'global' } }
         if (parsed.scanId) return { ...emptyReport(), history: [{ scanId: parsed.scanId, status: parsed.running ? 'running' : 'completed', startedAt: parsed.startedAt || new Date().toISOString(), finishedAt: parsed.finishedAt || null, durationMs: null, target: TARGET, targets: parsed.targets || [], severityCounts: countSeverities(parsed.targets || []), error: parsed.error || null }] }
         return emptyReport()
     } catch { return emptyReport() }
