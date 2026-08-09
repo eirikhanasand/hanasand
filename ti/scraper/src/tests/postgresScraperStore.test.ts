@@ -41,7 +41,11 @@ describe("structured threat-intelligence storage contract", () => {
     await store.querySourceOperationalSummary({ tenantId: "tenant_summary", generatedAt: collectedAt });
 
     expect(query).toContain("SELECT DISTINCT ON (health.source_id, health.tenant_id)");
+    expect(query).toContain("WHERE sources.tenant_id = $1::text");
     expect(query).not.toContain("LEFT JOIN LATERAL");
+
+    await store.querySourceOperationalSummary({ generatedAt: collectedAt });
+    expect(query).toContain("WHERE sources.tenant_id IS NULL AND $1::text IS NULL");
   });
 
   test("joins retained run evidence once for historical usefulness", async () => {
@@ -59,6 +63,7 @@ describe("structured threat-intelligence storage contract", () => {
     expect(summaryQuery).toContain("JOIN source_scope scoped");
     expect(summaryQuery).toContain("historical_usefulness");
     expect(summaryQuery).toContain("JOIN threat_intel.captures retained");
+    expect(summaryQuery).toContain("retained.tenant_id = $1::text");
     expect(summaryQuery).toContain("retained.record->'metadata'->>'runId' = health.collection_run_id");
     expect(summaryQuery).not.toContain("AND EXISTS (");
     expect(summaryQuery).toContain("latest_health.useful AND latest_health.capture_count > 0");

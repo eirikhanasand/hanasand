@@ -1206,11 +1206,12 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string; executableOnly?: boolean }) {
+    const tenantPredicate = input.tenantId === undefined ? "IS NULL AND $1::text IS NULL" : "= $1::text";
     const [row] = await this.sql.unsafe(`
       WITH source_scope AS MATERIALIZED (
         SELECT sources.*
         FROM threat_intel.sources sources
-        WHERE sources.tenant_id IS NOT DISTINCT FROM $1::text
+        WHERE sources.tenant_id ${tenantPredicate}
           AND (NOT $2::boolean OR sources.collection_executable)
       ), capture_counts AS (
         SELECT captures.source_id, captures.tenant_id, count(*) AS capture_count
@@ -1218,7 +1219,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         JOIN source_scope scoped
           ON scoped.id = captures.source_id
           AND scoped.tenant_id IS NOT DISTINCT FROM captures.tenant_id
-        WHERE captures.tenant_id IS NOT DISTINCT FROM $1::text
+        WHERE captures.tenant_id ${tenantPredicate}
         GROUP BY captures.source_id, captures.tenant_id
       ), latest_health AS (
         SELECT DISTINCT ON (health.source_id, health.tenant_id)
@@ -1227,7 +1228,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         JOIN source_scope scoped
           ON scoped.id = health.source_id
           AND scoped.tenant_id IS NOT DISTINCT FROM health.tenant_id
-        WHERE health.tenant_id IS NOT DISTINCT FROM $1::text
+        WHERE health.tenant_id ${tenantPredicate}
         ORDER BY health.source_id, health.tenant_id, health.checked_at DESC, health.id DESC
       ), historical_usefulness AS (
         SELECT health.source_id, health.tenant_id, max(health.checked_at) AS last_useful_at
@@ -1237,9 +1238,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           AND scoped.tenant_id IS NOT DISTINCT FROM health.tenant_id
         JOIN threat_intel.captures retained
           ON retained.source_id = health.source_id
-          AND retained.tenant_id IS NOT DISTINCT FROM health.tenant_id
+          AND retained.tenant_id ${tenantPredicate}
           AND retained.record->'metadata'->>'runId' = health.collection_run_id
-        WHERE health.tenant_id IS NOT DISTINCT FROM $1::text
+        WHERE health.tenant_id ${tenantPredicate}
           AND health.success
           AND health.useful
           AND health.capture_count > 0
@@ -1257,7 +1258,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         LEFT JOIN capture_counts
           ON capture_counts.source_id = sources.id
           AND capture_counts.tenant_id IS NOT DISTINCT FROM sources.tenant_id
-        WHERE sources.tenant_id IS NOT DISTINCT FROM $1::text
+        WHERE sources.tenant_id ${tenantPredicate}
       )
       SELECT jsonb_build_object(
         'sourceCount', count(*),
