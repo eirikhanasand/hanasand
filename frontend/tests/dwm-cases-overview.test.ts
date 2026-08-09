@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-// @ts-expect-error Bun provides this module when running focused tests.
 import { test } from 'bun:test'
 
 test('renders a real cases overview without workflow sections', async () => {
