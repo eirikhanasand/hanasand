@@ -77,13 +77,63 @@ Explicit exclusions from this iteration:
 
 Keep this ledger append-only per bounded discovery iteration so rejected endpoints are not repeatedly guessed and accepted candidates are never mistaken for coverage.
 
+The 2026-08-09T20:39Z iteration accepted one more non-coverage candidate:
+
+- `src_hispasec_unaaldia_telegram` is the exact `https://t.me/unaaldia` channel linked by Hispasec's first-party Una al Dia publication. The shipped public-preview adapter parsed 20 current posts, classified 10 as useful, observed a latest post at 2026-08-07T14:57:03Z, and found zero sanitizer-idempotence or residual email, bot-token, and credential matches. It remains `candidate`, `productionCollection=false`, and `countsAsCoverage=false` until governed approval and two distinct useful retained scheduled cycles.
+
+Explicit exclusions from this iteration:
+
+- `https://t.me/siberbulten` had an exact first-party Siber Bulten reference but its public preview parsed 0 items and produced 0 useful items.
+- `https://t.me/cyberthint` had an exact current first-party reference in Cyberthint's 2026 threat-intelligence report but its public preview parsed 0 items and produced 0 useful items.
+- `https://t.me/hackplayers` had a first-party Hackplayers reference but its public preview parsed 0 items and produced 0 useful items.
+- `https://t.me/dragonjar` parsed 20 current posts but produced 0 useful items through the shipped classifier.
+- `https://t.me/elcomsoft` parsed 20 posts but produced only 1 useful item and lacked a current exact first-party endpoint reference in this pass.
+- `https://t.me/criptored` parsed 0 items and produced 0 useful items.
+- Ransomware.live's current first-party homepage exposed no exact public Telegram endpoint, so no handle guess was registered.
+
+The 2026-08-09T20:49Z–20:51Z iteration accepted one more non-coverage candidate:
+
+- `src_cyber_bro_uzbekistan_telegram` is the exact `https://t.me/cyberbrosecurity` channel linked by CYBER-BRO's first-party website. The shipped public-preview adapter parsed 9 current posts, classified 1 as useful, observed a latest post at 2026-08-08T10:37:52Z, and found zero sanitizer changes, sanitizer-idempotence failures, or residual email, bot-token, credential, and phone matches. The useful item is CYBER-BRO's own Uzbek-language analysis of AI-enabled phishing and malware threats, providing original Central Asian regional-language coverage rather than copied news. It remains `candidate`, `productionCollection=false`, and `countsAsCoverage=false` until governed automatic review and two distinct useful retained scheduled cycles.
+
+Explicit exclusions from this iteration:
+
+- INCIBE's exact first-party `https://t.me/ProtegeTuEmpresa` channel parsed 20 posts but produced 0 useful items and was inactive after 2024-06-25.
+- Indonesia BSSN/BSrE's exact first-party `https://t.me/bsreupdate` channel parsed 20 posts but produced 0 useful items and was inactive after 2026-02-20.
+- Armenia's Ministry of Internal Affairs homepage linked the exact `https://t.me/cyberpolice_arm` endpoint, which parsed 19 current posts through 2026-08-08 but produced 0 useful items. The shared sellable-intel classifier lacks Armenian threat terminology; no source-ID fallback or fabricated search query was added in this Telegram-owned lane.
+- Romania's first-party Security Patch site linked `https://t.me/PatchSecurity`, but its public preview parsed 0 items. The first-party elhacker.NET forum linked `https://t.me/elhackerdotnet`, whose public preview also parsed 0 items.
+- `https://t.me/EsGeeks` had exact first-party ownership and parsed 20 current posts with 6 classifier-useful items, but five were summaries of third-party publishers rather than independent reporting. Numeric sanitizer residual matches were reviewed as CVE identifiers, a GitHub username, and dates—not phone PII—but the channel was still rejected as copied aggregation rather than source-family expansion.
+- deepdarkCTI exposed only a request-access Telegram group, not an unauthenticated public channel. RansomLook and Ransomware.live exposed no exact first-party public Telegram endpoint, so no handle guesses were registered.
+
+The 2026-08-09T21:30Z–22:15Z iteration accepted eleven more non-coverage candidates:
+
+- `src_codeby_security_telegram` is the exact `https://t.me/codeby_sec` endpoint linked by Codeby's first-party website. The shipped adapter parsed 20 current posts, classified 2 as useful, observed a latest post at 2026-08-08T09:01:19Z, and found zero sanitizer changes, sanitizer-idempotence failures, or residual email, bot-token, and credential matches. Both useful posts link back to Codeby's own current vulnerability analyses rather than copied publisher articles. It remains `candidate`, `productionCollection=false`, and `countsAsCoverage=false` until governed review and two distinct useful retained scheduled cycles.
+- `src_eset_ukraine_telegram` is the exact `https://t.me/eset_ua_news` endpoint linked by ESET Ukraine's first-party website. The shipped adapter parsed 20 posts, classified 2 current Ukrainian items as useful, observed a latest post at 2026-07-17T08:25:12Z, and found zero sanitizer changes or idempotence failures. The retained candidates include ESET's own malware telemetry and phishing analysis. It remains candidate-only under the same production qualification contract.
+- The binding source-selection correction was applied before publication: a fixed bounded classifier result is evidence, not a candidate-admission gate. Nine additional exact first-party security/vendor endpoints were therefore retained as candidates after the shipped adapter parsed current public-preview text with zero sanitizer changes, zero sanitizer-idempotence failures, and zero residual email, bot-token, or credential matches. Their bounded samples classified zero items as useful, so they receive zero coverage credit and must prove useful retained yield through governed scheduled collection:
+  - `src_stormwall_ddos_telegram` — `https://t.me/stormwallpro`, linked by `https://stormwall.pro/`; 10 parsed, latest 2026-08-05T10:51:00Z.
+  - `src_rvision_security_telegram` — `https://t.me/rvision_pro`, linked by `https://rvision.ru/`; 10 parsed, latest 2026-08-06T08:17:01Z.
+  - `src_jet_infosystems_telegram` — `https://t.me/jetinfosystems`, linked by `https://jet.su/`; 20 parsed, latest 2026-08-07T14:50:31Z.
+  - `src_k2_tech_security_telegram` — `https://t.me/k2_tech`, linked by `https://k2.tech/`; 4 parsed, latest 2026-08-07T06:44:50Z.
+  - `src_security_code_telegram` — `https://t.me/Kodnaprovode`, published by `https://www.securitycode.ru/`; 20 parsed, latest 2026-08-06T12:01:12Z.
+  - `src_aktiv_security_telegram` — `https://t.me/aktivcompany`, linked by `https://www.aktiv-company.ru/`; 13 parsed, latest 2026-08-06T10:40:17Z.
+  - `src_phishman_security_telegram` — `https://t.me/cyberphishman`, linked by `https://phishman.ru/`; 7 parsed, latest 2026-08-06T09:31:36Z.
+  - `src_cryptopro_security_telegram` — `https://t.me/cryptopro_news`, linked by `https://www.cryptopro.ru/`; 18 parsed, latest 2026-07-26T11:39:02Z.
+  - `src_tsarka_certkznews_telegram` — `https://t.me/certkznews`, linked by `https://cybersec.kz/`; 12 parsed, latest 2026-08-06T09:38:31Z. This supersedes the historical endpoint exclusion with current exact first-party ownership and parser evidence; it does not grant production or coverage status.
+
+Explicit exclusions from this iteration:
+
+- `https://t.me/it_law_security` produced 1 useful item across 20 posts, but it was secondary reporting about Qilin rather than independently produced threat intelligence.
+- `https://t.me/HackYourMom` produced 1 useful item across 18 current posts and `https://t.me/cybercalm` produced 5 across 20, but both primarily summarized third-party reporting. They were rejected as secondary-news padding rather than independent source-family expansion.
+- `https://t.me/cyberseckz` parsed 0 public-preview items. `https://t.me/jetinfo`, CyberSec_TR, Cyber Cache, Dr.Web, Kaspersky ICS, ThreatMon, Enigma Security, and INCIBE's ProtegeTuEmpresa were stale or empty. SecureByte, ZeroDayResearch, and Malpedia lacked a current exact first-party endpoint reference. ImMALWARE's bounded payload retained a credential-pattern residual and was excluded as unsafe. Guessed vendor handles with no first-party endpoint evidence were not registered.
+- Generic Global CIO and TAdviser channels were excluded as irrelevant general-IT media, not because of classifier yield. CryptoPro was reassessed as a first-party security vendor and imported candidate-only above.
+- The examined national CERT/government portfolios in Brazil, Chile, Colombia, Moldova, Georgia, Kyrgyzstan, Poland, Saudi Arabia, Qatar, Oman, Bahrain, Kuwait, Pakistan, Malaysia, Thailand, and Singapore exposed no exact current public Telegram feed that also produced useful adapter yield.
+
 ## One iteration
 
 1. Measure registered, executable, qualifying, current-useful, stale, failed, and backoff counts from PostgreSQL and the source-operations API.
 2. Reconcile approved candidates that already have two distinct useful retained scheduled cycles; fix shared lifecycle defects before adding more registrations.
 3. Discover a bounded batch from exact publisher, CERT/government, or independently authoritative references.
 4. Require an unauthenticated public `/s` preview, current relevant parser yield, endpoint deduplication, lawful public-text collection, and sanitizer residual checks.
-5. Reject private, invite-only, authenticated, CAPTCHA-gated, copied, hijacked, sample-distribution, stale, irrelevant, or zero-yield channels.
+5. Reject private, invite-only, authenticated, CAPTCHA-gated, copied, hijacked, sample-distribution, stale, irrelevant, unsafe, or parser-empty channels. A first-party current security/vendor channel with parsed text may enter candidate review even when the bounded classifier returns zero; that result grants no qualification credit.
 6. Keep accepted discoveries as non-coverage candidates until the native scheduler persists two distinct useful cycles and the evidence-bound automatic review approves them.
 7. Deploy from the canonical production checkout, then verify scheduler health, captures, parser outcomes, backoff, qualification, and restart idempotence.
 8. Update this baseline and repeat while the qualifying count is below 100.
