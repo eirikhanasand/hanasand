@@ -9,6 +9,7 @@ const webBase = (process.env.MONITOR_WEB_BASE || 'https://hanasand.com').replace
 const scraperBase = (process.env.TI_SCRAPER_API_BASE || 'http://ti-scraper:8097').replace(/\/$/, '')
 const modelClientBase = (process.env.HANASAND_MODEL_CLIENT_HEALTH_BASE || 'http://hanasand_ai_model_client:18182').replace(/\/$/, '')
 const MONITOR_REQUEST_TIMEOUT_MS = 5_000
+const SCRAPER_PENDING_WRITES_DEGRADED_THRESHOLD = 1_000
 type CheckResult = string | void | { status: MonitorStatus, message: string }
 type MonitorRecorder = typeof recordMonitorResult
 
@@ -140,6 +141,12 @@ export default async function runSyntheticMonitor() {
             const pendingWrites = Number(storage.pendingWrites ?? 0)
             if (storage.lastWriteError) {
                 throw new Error('Threat-intelligence storage has a write error.')
+            }
+            if (pendingWrites >= SCRAPER_PENDING_WRITES_DEGRADED_THRESHOLD) {
+                return {
+                    status: 'degraded',
+                    message: `Threat-intelligence storage has ${pendingWrites} pending writes.`,
+                }
             }
             const collection = object(health.collection)
             const loops = ['public', 'publicDefault', 'restrictedMetadata']
