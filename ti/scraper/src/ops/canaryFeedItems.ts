@@ -21,13 +21,11 @@ export function isParserEmptyFallback(item: any): boolean {
 export function feedItems(source: any, task: any, fetched: string, at: string, metadata: any, maxItems = 40) {
   if (source.type === "telegram_public") {
     const telegram = telegramItems(source, task, fetched, at, metadata, maxItems);
-    if (telegram.length) return telegram;
-    return [fallback(source, task, fetched, at, { ...metadata, parserWarnings: ["public Telegram preview contained no messages"] })];
+    return telegram;
   }
   if (["api", "json_api"].includes(source.type)) {
     const json = jsonItems(source, task, fetched, at, metadata, maxItems);
-    if (json.length) return json;
-    return [fallback(source, task, fetched, at, { ...metadata, parserWarnings: ["JSON source contained no supported records"] })];
+    return json;
   }
   if (source.type === "rss") {
     const rss = parseRssItems(fetched, task.targetUrl).slice(0, maxItems).map((entry, index) => row(
@@ -42,12 +40,12 @@ export function feedItems(source: any, task: any, fetched: string, at: string, m
       index,
       true
     )).filter((item) => item.rawText.length > 24);
-    return rss.length ? rss : [fallback(source, task, fetched, at, { ...metadata, adapter: "rss", parserVersion: "rss-adapter-v2", parserWarnings: ["feed contained no RSS or Atom entries"] })];
+    return rss;
   }
   const blocks = [...fetched.matchAll(ITEM_RE)].map((m) => m[0]);
   if (!blocks.length) blocks.push(...[...fetched.matchAll(ENTRY_RE)].map((m) => m[0]));
   const items = blocks.slice(0, maxItems).map((block, index) => item(source, task, block, at, metadata, index)).filter((row) => row.rawText.length > 24);
-  return items.length ? items : [fallback(source, task, fetched, at, metadata)];
+  return items;
 }
 
 function jsonItems(source: any, task: any, fetched: string, at: string, metadata: any, maxItems: number) {
@@ -170,11 +168,6 @@ function item(source: any, task: any, block: string, at: string, metadata: any, 
   const publishedAt = text(tag(block, "pubDate") || tag(block, "published") || tag(block, "updated") || tag(block, "dc:date")) || undefined;
   const rawText = [source.name, title, summary].filter(Boolean).join("\n").slice(0, 24_000);
   return row(source, task, url, title, rawText, at, publishedAt, metadata, index, true);
-}
-
-function fallback(source: any, task: any, fetched: string, at: string, metadata: any) {
-  const rawText = `${source.name}\n${text(fetched)}`.slice(0, 48_000);
-  return row(source, task, task.targetUrl, source.name, rawText, at, undefined, metadata, 0, false);
 }
 
 function row(source: any, task: any, url: string, title: string, rawText: string, at: string, publishedAt: string | undefined, metadata: any, index: number, feedItem: boolean) {

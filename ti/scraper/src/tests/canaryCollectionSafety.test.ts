@@ -52,8 +52,8 @@ describe("public collection boundary", () => {
     expect(store.listIndicators()).toHaveLength(0);
     expect(store.listIntelligenceClaims()).toHaveLength(0);
     expect(store.listSourceHealthObservations()).toContainEqual(expect.objectContaining({
-      status: "degraded", success: true, useful: false, itemCount: 1,
-      captureCount: 0, parserWarningCount: 1
+      status: "healthy", success: true, useful: false, itemCount: 0,
+      captureCount: 0, parserWarningCount: 0
     }));
   });
 
@@ -620,8 +620,7 @@ describe("public collection boundary", () => {
     expect(request.searchParams.get("resultsPerPage")).toBe("40");
     expect(request.searchParams.get("pubStartDate")).toBe("2026-03-31T00:00:00.000Z");
     expect(request.searchParams.get("pubEndDate")).toBe("2026-07-29T00:00:00.000Z");
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ metadata: { parserWarnings: ["JSON source contained no supported records"] } });
+    expect(items).toHaveLength(0);
 
     const store = new InMemoryScraperStore();
     store.saveSource(nvd);
