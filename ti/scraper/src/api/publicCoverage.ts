@@ -5,8 +5,10 @@ import type { ApiServerOptions } from "./serverTypes.ts";
 
 export async function publicCoverage(options: ApiServerOptions) {
   const generatedAt = nowIso();
-  const operations = typeof (options.store as any)?.querySourceOperationalSummary === "function"
-    ? await buildSourceOperationsSummary(options.store, { generatedAt })
+  const operations = typeof (options.store as any)?.queryPublicCoverageSummary === "function"
+    ? await (options.store as any).queryPublicCoverageSummary({ generatedAt })
+    : typeof (options.store as any)?.querySourceOperationalSummary === "function"
+      ? await buildSourceOperationsSummary(options.store, { generatedAt })
     : await buildSourceOperationsSnapshot(options.store, { generatedAt, limit: 1 });
   const summary: any = operations.summary ?? {};
   const sourceQualification: any = operations.qualification ?? qualificationFromSummary(summary);

@@ -21,6 +21,7 @@ import { publicReferenceUrl } from "../pipeline/timelinessGroundTruth.ts";
 import { mayContainExposureQueueClaim } from "../product/exposureQueueCandidate.ts";
 import { isLegacySourceReviewCandidate } from "../policy/sourceAutomaticReview.ts";
 export interface RawEvidenceStore extends CaptureMetadataStore {} export interface ScraperStore extends CaptureMetadataStore {
+  queryPublicCoverageSummary?: (input: { generatedAt: string }) => Promise<{ summary?: Record<string, unknown> }>;
   queryPublicCoverageLatency?: () => Promise<{ status: string; sampleCount: number; medianSeconds: number | null; p95Seconds: number | null }>;
   queryPublicCoverageCadence?: () => Promise<{ status: string; sourceCount: number; minimumSeconds: number | null; medianSeconds: number | null; maximumSeconds: number | null }>;
 }

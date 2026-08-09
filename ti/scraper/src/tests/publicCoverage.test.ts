@@ -65,6 +65,21 @@ describe("public coverage", () => {
     expect(body.qualification).toMatchObject({ counts: { clearWeb: 28, lawfulDarkWeb: 4, publicTelegram: 13, total: 45 }, gaps: { lawfulDarkWeb: 996 } });
   });
 
+  test("prefers the public coverage storage summary when available", async () => {
+    let genericSummaryCalled = false;
+    const store: any = {
+      queryPublicCoverageSummary: async () => ({ summary: { measurementState: "measured", sourceCount: 3, retainedSourceCount: 2, inactiveSourceCount: 1 } }),
+      querySourceOperationalSummary: async () => { genericSummaryCalled = true; return { summary: {} }; },
+      listSources: () => { throw new Error("public coverage must not enumerate sources"); },
+      listTimelinessRecords: () => [],
+      queryPublicCoverageLatency: async () => ({ status: "not_enough_observations", sampleCount: 0, medianSeconds: null, p95Seconds: null }),
+      queryPublicCoverageCadence: async () => ({ status: "not_measured", sourceCount: 0, minimumSeconds: null, medianSeconds: null, maximumSeconds: null })
+    };
+    const body = await publicCoverage({ store, frontier: {} as any });
+    expect(genericSummaryCalled).toBe(false);
+    expect(body.registry).toEqual({ registeredSourceCount: 3, executableSourceCount: 2, inactiveSourceCount: 1 });
+  });
+
   test("keeps historical usefulness separate from latest source health", async () => {
     const store: any = {
       querySourceOperationalSummary: async () => ({ summary: {

@@ -1322,6 +1322,31 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return { schemaVersion: "ti.source_operations_summary.v1", generatedAt: input.generatedAt, tenantId: input.tenantId ?? "global", summary: row?.summary ?? {} };
   }
 
+  async queryPublicCoverageSummary(input: { generatedAt: string }) {
+    const [registryRows, operations] = await Promise.all([
+      this.sql`
+        SELECT count(*)::int AS source_count,
+          count(*) FILTER (WHERE collection_executable)::int AS executable_source_count,
+          count(*) FILTER (WHERE NOT collection_executable)::int AS inactive_source_count
+        FROM threat_intel.sources
+        WHERE tenant_id IS NULL
+      `,
+      this.querySourceOperationalSummary({ generatedAt: input.generatedAt, executableOnly: true })
+    ]);
+    const registry = registryRows[0] ?? {};
+    const summary = operations.summary ?? {};
+    return {
+      ...operations,
+      summary: {
+        ...summary,
+        sourceCount: Number(registry?.source_count ?? 0),
+        retainedSourceCount: Number(registry?.executable_source_count ?? 0),
+        activeSourceCount: Number(registry?.executable_source_count ?? 0),
+        inactiveSourceCount: Number(registry?.inactive_source_count ?? 0)
+      }
+    };
+  }
+
   async queryPublicCoverageLatency() {
     const [row] = await this.sql`
       SELECT count(*)::int AS sample_count,
