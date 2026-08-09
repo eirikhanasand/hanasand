@@ -1,10 +1,10 @@
 {
-  "version": 5,
+  "version": 6,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-07-24T09:04:39.000Z",
+  "generatedAt": "2026-08-09T08:38:54.000Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 14,
+  "sourceCount": 15,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -773,7 +773,7 @@
         "verifiedSourceId": "src_cert_agid_telegram",
         "publisherReference": "https://cert-agid.gov.it/",
         "ownershipVerifiedAt": "2026-07-23T16:23:47.000Z",
-        "activityVerifiedAt": "2026-07-23T16:23:47.000Z",
+        "activityVerifiedAt": "2026-08-09T08:38:54.000Z",
         "activityWindowSeconds": 2592000,
         "topics": [
           "malware campaigns",
@@ -783,17 +783,17 @@
         ],
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T16:23:47.000Z",
+          "verifiedAt": "2026-08-09T08:38:54.000Z",
           "outcome": "content_parsed",
-          "observedItemCount": 12,
-          "observedUsefulItemCount": 9,
+          "observedItemCount": 17,
+          "observedUsefulItemCount": 12,
           "httpStatus": 200,
           "contentType": "text/html; charset=utf-8",
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://cert-agid.gov.it/",
-          "legalBasisVerifiedAt": "2026-07-23T16:23:47.000Z",
-          "latestPublishedAt": "2026-07-21T08:08:00+00:00"
+          "legalBasisVerifiedAt": "2026-08-09T08:38:54.000Z",
+          "latestPublishedAt": "2026-08-08T09:56:40+00:00"
         }
       },
       "catalog": {
@@ -895,7 +895,7 @@
         "verifiedSourceId": "src_solar_4rays_telegram",
         "publisherReference": "https://rt-solar.ru/solar-4rays/blog/6142/",
         "ownershipVerifiedAt": "2026-07-23T16:23:47.000Z",
-        "activityVerifiedAt": "2026-07-23T16:23:47.000Z",
+        "activityVerifiedAt": "2026-08-09T08:38:54.000Z",
         "activityWindowSeconds": 2592000,
         "topics": [
           "malware",
@@ -906,17 +906,17 @@
         ],
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T16:23:47.000Z",
+          "verifiedAt": "2026-08-09T08:38:54.000Z",
           "outcome": "content_parsed",
-          "observedItemCount": 14,
-          "observedUsefulItemCount": 1,
+          "observedItemCount": 15,
+          "observedUsefulItemCount": 2,
           "httpStatus": 200,
           "contentType": "text/html; charset=utf-8",
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://rt-solar.ru/solar-4rays/blog/6142/",
-          "legalBasisVerifiedAt": "2026-07-23T16:23:47.000Z",
-          "latestPublishedAt": "2026-07-22T08:34:50+00:00"
+          "legalBasisVerifiedAt": "2026-08-09T08:38:54.000Z",
+          "latestPublishedAt": "2026-08-06T10:59:08+00:00"
         }
       },
       "catalog": {
@@ -1019,7 +1019,7 @@
         "verifiedSourceId": "src_d3lab_telegram",
         "publisherReference": "https://www.d3lab.net/",
         "ownershipVerifiedAt": "2026-07-23T16:23:47.000Z",
-        "activityVerifiedAt": "2026-07-23T16:23:47.000Z",
+        "activityVerifiedAt": "2026-08-09T08:38:54.000Z",
         "activityWindowSeconds": 2592000,
         "topics": [
           "phishing campaigns",
@@ -1029,7 +1029,7 @@
         ],
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T16:23:47.000Z",
+          "verifiedAt": "2026-08-09T08:38:54.000Z",
           "outcome": "content_parsed",
           "observedItemCount": 17,
           "observedUsefulItemCount": 5,
@@ -1038,8 +1038,8 @@
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://www.d3lab.net/",
-          "legalBasisVerifiedAt": "2026-07-23T16:23:47.000Z",
-          "latestPublishedAt": "2026-07-15T13:06:51+00:00"
+          "legalBasisVerifiedAt": "2026-08-09T08:38:54.000Z",
+          "latestPublishedAt": "2026-08-07T07:54:33+00:00"
         }
       },
       "catalog": {
@@ -1141,7 +1141,7 @@
         "verifiedSourceId": "src_cert_gov_az_telegram",
         "publisherReference": "https://www.cert.gov.az/en",
         "ownershipVerifiedAt": "2026-07-23T19:34:33.000Z",
-        "activityVerifiedAt": "2026-07-23T19:34:33.000Z",
+        "activityVerifiedAt": "2026-08-09T08:38:54.000Z",
         "activityWindowSeconds": 2592000,
         "topics": [
           "malware campaigns",
@@ -1151,17 +1151,17 @@
         ],
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T19:34:33.000Z",
+          "verifiedAt": "2026-08-09T08:38:54.000Z",
           "outcome": "content_parsed",
           "observedItemCount": 20,
-          "observedUsefulItemCount": 5,
+          "observedUsefulItemCount": 4,
           "httpStatus": 200,
           "contentType": "text/html; charset=utf-8",
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://www.cert.gov.az/en",
-          "legalBasisVerifiedAt": "2026-07-23T19:34:33.000Z",
-          "latestPublishedAt": "2026-07-22T10:02:41+00:00"
+          "legalBasisVerifiedAt": "2026-08-09T08:38:54.000Z",
+          "latestPublishedAt": "2026-08-07T10:16:01+00:00"
         }
       },
       "catalog": {
@@ -1263,7 +1263,7 @@
         "verifiedSourceId": "src_uzcert_live_telegram",
         "publisherReference": "https://uzcert.uz/",
         "ownershipVerifiedAt": "2026-07-23T19:34:33.000Z",
-        "activityVerifiedAt": "2026-07-23T19:34:33.000Z",
+        "activityVerifiedAt": "2026-08-09T08:38:54.000Z",
         "activityWindowSeconds": 2592000,
         "topics": [
           "malware campaigns",
@@ -1273,17 +1273,17 @@
         ],
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T19:34:33.000Z",
+          "verifiedAt": "2026-08-09T08:38:54.000Z",
           "outcome": "content_parsed",
           "observedItemCount": 20,
-          "observedUsefulItemCount": 4,
+          "observedUsefulItemCount": 5,
           "httpStatus": 200,
           "contentType": "text/html; charset=utf-8",
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://uzcert.uz/",
-          "legalBasisVerifiedAt": "2026-07-23T19:34:33.000Z",
-          "latestPublishedAt": "2026-07-23T14:30:52+00:00"
+          "legalBasisVerifiedAt": "2026-08-09T08:38:54.000Z",
+          "latestPublishedAt": "2026-08-07T10:30:39+00:00"
         }
       },
       "catalog": {
@@ -1385,7 +1385,7 @@
         "verifiedSourceId": "src_red_hot_cyber_telegram",
         "publisherReference": "https://www.redhotcyber.com/",
         "ownershipVerifiedAt": "2026-07-24T09:04:39.000Z",
-        "activityVerifiedAt": "2026-07-24T09:04:39.000Z",
+        "activityVerifiedAt": "2026-08-09T08:38:54.000Z",
         "activityWindowSeconds": 2592000,
         "topics": [
           "malware",
@@ -1396,17 +1396,17 @@
         ],
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-24T09:04:39.000Z",
+          "verifiedAt": "2026-08-09T08:38:54.000Z",
           "outcome": "content_parsed",
           "observedItemCount": 20,
-          "observedUsefulItemCount": 5,
+          "observedUsefulItemCount": 3,
           "httpStatus": 200,
           "contentType": "text/html; charset=utf-8",
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://www.redhotcyber.com/",
-          "legalBasisVerifiedAt": "2026-07-24T09:04:39.000Z",
-          "latestPublishedAt": "2026-07-24T07:28:06+00:00"
+          "legalBasisVerifiedAt": "2026-08-09T08:38:54.000Z",
+          "latestPublishedAt": "2026-08-09T04:47:50+00:00"
         }
       },
       "catalog": {
@@ -1510,7 +1510,7 @@
         "verifiedSourceId": "src_segu_info_telegram",
         "publisherReference": "https://blog.segu-info.com.ar/",
         "ownershipVerifiedAt": "2026-07-24T09:04:39.000Z",
-        "activityVerifiedAt": "2026-07-24T09:04:39.000Z",
+        "activityVerifiedAt": "2026-08-09T08:38:54.000Z",
         "activityWindowSeconds": 2592000,
         "topics": [
           "vulnerabilities",
@@ -1521,17 +1521,17 @@
         ],
         "maxItemsPerFetch": 20,
         "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-24T09:04:39.000Z",
+          "verifiedAt": "2026-08-09T08:38:54.000Z",
           "outcome": "content_parsed",
           "observedItemCount": 20,
-          "observedUsefulItemCount": 10,
+          "observedUsefulItemCount": 5,
           "httpStatus": 200,
           "contentType": "text/html; charset=utf-8",
           "adapter": "telegram_public",
           "parserVersion": "telegram-public-preview:v1",
           "publisherReference": "https://blog.segu-info.com.ar/",
-          "legalBasisVerifiedAt": "2026-07-24T09:04:39.000Z",
-          "latestPublishedAt": "2026-07-23T22:56:34+00:00"
+          "legalBasisVerifiedAt": "2026-08-09T08:38:54.000Z",
+          "latestPublishedAt": "2026-08-08T17:11:21+00:00"
         }
       },
       "catalog": {
@@ -1582,6 +1582,132 @@
             "malware",
             "phishing",
             "ciberataque"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_securitylab_ru_telegram",
+      "name": "SecurityLab public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/SecLabNews",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.86,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian-language vulnerability and cybercrime reporting from SecurityLab's verified publisher channel. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T08:27:53.490Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "malware_research",
+          "cybercrime_reporting",
+          "vulnerability_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "SecLabNews",
+        "searchQuery": "уязвимость",
+        "verifiedSourceId": "src_securitylab_ru_telegram",
+        "publisherReference": "https://www.securitylab.ru/news/487639.php",
+        "ownershipVerifiedAt": "2026-08-09T08:27:53.490Z",
+        "activityVerifiedAt": "2026-08-09T08:38:54.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "vulnerabilities",
+          "malware",
+          "cyberattacks",
+          "data breaches",
+          "threat research"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T08:38:54.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 1,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.securitylab.ru/news/487639.php",
+          "legalBasisVerifiedAt": "2026-08-09T08:38:54.000Z",
+          "latestPublishedAt": "2026-08-02T09:23:01+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:ru:securitylab:telegram",
+        "publisher": {
+          "name": "SecurityLab",
+          "country": "RU",
+          "homepage": "https://www.securitylab.ru/",
+          "trustBasis": "publisher site identifies the exact channel and Telegram displays its verified publisher badge"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.86,
+        "intelligenceValue": 0.82,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "vulnerabilities",
+            "malware",
+            "cyberattacks",
+            "data breaches",
+            "threat research"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "finance",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Russia",
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [
+            "Russia"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "уязвимость",
+            "вредоносное ПО",
+            "кибератака",
+            "утечка данных"
           ]
         },
         "collection": {

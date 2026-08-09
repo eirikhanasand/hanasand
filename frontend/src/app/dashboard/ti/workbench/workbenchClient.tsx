@@ -3694,8 +3694,7 @@ function webhookDeliveryResultMessage(payload: Awaited<ReturnType<typeof readJso
         const suffix = deliveries.length > 3 ? `, +${deliveries.length - 3} more` : ''
         return `Webhook delivery result: ${summary}${suffix}.`
     }
-    if (typeof payload.attemptedCount === 'number') return `Webhook delivery attempted for ${payload.attemptedCount} alert${payload.attemptedCount === 1 ? '' : 's'}.`
-    return 'No webhook delivery has been sent.'
+    return 'No durable delivery result was returned.'
 }
 
 function alertReplayResultMessage(payload: Awaited<ReturnType<typeof readJson>>, item: WorkbenchCase) {

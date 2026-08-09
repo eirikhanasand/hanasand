@@ -9,6 +9,7 @@ test('dashboard DWM operator copy avoids backend-shaped returned wording', async
     const dwmPortal = await readFile(path.join(root, 'src/app/dashboard/dwm/dwm-analyst-portal.tsx'), 'utf8')
     const dashboardPage = await readFile(path.join(root, 'src/app/dashboard/page.tsx'), 'utf8')
     const workflowActions = await readFile(path.join(root, 'src/app/dashboard/dwm/dwm-workflow-actions.tsx'), 'utf8')
+    const workbench = await readFile(path.join(root, 'src/app/dashboard/ti/workbench/workbenchClient.tsx'), 'utf8')
     const caseDetail = await readFile(path.join(root, 'src/app/dashboard/dwm/cases/[id]/case-detail-client.tsx'), 'utf8')
 
     expect(dwmPage).toContain('The exposure monitor is showing live watchlists, sources, actors, and alerts.')
@@ -49,6 +50,8 @@ test('dashboard DWM operator copy avoids backend-shaped returned wording', async
     expect(workflowActions).toContain('Webhook test recorded a dry-run delivery.')
     expect(workflowActions).toContain('Webhook test recorded a failed delivery attempt.')
     expect(workflowActions).toContain('dryRun\n                        ? \'Webhook test recorded a dry-run delivery.')
+    expect(workbench).toContain('return \'No durable delivery result was returned.\'')
+    expect(workbench).not.toContain('Webhook delivery attempted for ${payload.attemptedCount} alert')
     expect(dwmPortal).toContain('Trace ${row.auditEventId || row.requestId}.')
 
     expect(dwmPage).not.toContain('returning live')
