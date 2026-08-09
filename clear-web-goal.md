@@ -27,7 +27,9 @@ A source counts only when its canonical direct RSS, Atom, JSON, or official API 
 
 ## Current state
 
-Open. Production at `57587954d1ebd455c731acaa5aee0cb0e8af3187` had 28 strictly qualifying clear-web sources at 2026-08-09T13:07Z, leaving a qualifying gap of 4,972. Newly imported source packs remain candidate-only and contribute no production credit until governed review and two useful retained scheduled cycles.
+Open. Production measured 28 strictly qualifying global clear-web sources at 2026-08-09T15:25Z, leaving a qualifying gap of 4,972. The global clear-web fleet had 1,317 registered rows, 50 active/executable rows, 165 candidates, and 1,102 retired rows. Newly imported source packs remain candidate-only and contribute no production credit until governed review and two useful retained scheduled cycles.
+
+The production write-path repair recorded in [`telegram-goal.md`](telegram-goal.md) is shared by clear-web collection: stable PostgreSQL `ANY($1::text[])` queries remove prepared-statement collisions without changing qualification policy. Continue measuring only after pending writes drain to zero; a fetched or in-memory item is not durable coverage.
 
 | Measured at | Deployed commit | Qualifying clear-web sources | Remaining |
 | --- | --- | ---: | ---: |
@@ -36,6 +38,7 @@ Open. Production at `57587954d1ebd455c731acaa5aee0cb0e8af3187` had 28 strictly q
 | 2026-08-09T07:43Z | `d37ab621c8d17f1bd32b23ba715dee4105f287fa` | 20 | 4,980 |
 | 2026-08-09T10:59Z | `b7877ca408c50fbbdcf2b4ebb460b107d9363f4a` | 24 | 4,976 |
 | 2026-08-09T13:07Z | `57587954d1ebd455c731acaa5aee0cb0e8af3187` | 28 | 4,972 |
+| 2026-08-09T15:25Z | `15d6120e6e4a84396d72f4928dce3b49f8bf65fa` | 28 | 4,972 |
 
 Update this file only from deployed live evidence; raw registry or candidate counts do not satisfy the goal.
 
