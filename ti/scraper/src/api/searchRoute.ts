@@ -21,7 +21,9 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   if (scope.error) return scope.error;
   const query = String(body.q ?? body.query ?? url.searchParams.get("q") ?? "").trim();
   if (!query || query.length > 300) return error("invalid_search_query", "Search query must contain 1-300 characters", 400);
-  if (!isSearchCaptureIndexReady(options.store)) return error("search_unavailable", "Search index is still starting", 503);
+  if (!isSearchCaptureIndexReady(options.store) && typeof (options.store as any).querySearchCaptures !== "function") {
+    return error("search_unavailable", "Search index is still starting", 503);
+  }
 
   const generatedAt = nowIso();
   const entityType = searchEntityType(query, body.entityType ?? url.searchParams.get("entityType"), options.store, scope.tenantId);
@@ -1064,7 +1066,7 @@ function searchEntityType(query: string, requested: unknown, store: any, tenantI
 }
 
 async function searchCaptures(store: any, query: string, entityType: SearchEntityType, identity: ReturnType<typeof actorIdentity>, limit: number, tenantId?: string) {
-  if (store.usesPostgresSearchIndex === true) {
+  if (store.usesPostgresSearchIndex === true && isSearchCaptureIndexReady(store)) {
     if (entityType !== "actor") return findSearchCaptures(store, query, limit, tenantId);
     return findActorSearchCaptures(store, identity.terms, limit, tenantId)
       .sort((a: any, b: any) => String(b.collectedAt ?? "").localeCompare(String(a.collectedAt ?? "")));

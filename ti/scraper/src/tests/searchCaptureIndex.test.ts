@@ -28,6 +28,30 @@ describe("search capture index", () => {
     expect(await response.json()).toEqual({ error: { code: "search_unavailable", message: "Search index is still starting" } });
   });
 
+  test("uses the bounded PostgreSQL search query while its optional index is warming", async () => {
+    let queryCalls = 0;
+    const response = await searchResponse(
+      new Request("http://local/v1/intel/search?q=APT29"),
+      {
+        store: {
+          usesPostgresSearchIndex: true,
+          querySearchCaptures: async () => { queryCalls++; return []; },
+          listSources: () => [],
+          listActorIdentities: () => [],
+          listActorProfiles: () => [],
+          listActorAliases: () => [],
+          listExtractedEntitiesByTypes: () => [],
+          listRuns: () => [],
+          listPlans: () => [],
+        },
+        frontier: { size: () => 0, groupedSnapshot: () => ({ queued: 0 }) },
+      } as any,
+      new URL("http://local/v1/intel/search?q=APT29")
+    );
+    expect(response.status).toBe(200);
+    expect(queryCalls).toBe(1);
+  });
+
   test("reports search startup separately from process health", async () => {
     const response = await handleApiRequest(
       new Request("http://local/v1/health"),
