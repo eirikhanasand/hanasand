@@ -92,8 +92,8 @@ export interface DwmAlert {
     sourceFamilyCounts: Record<string, number>;
     metadataOnlyCount: number;
     publicSafeCount: number;
-    firstObservedAt: string;
-    lastObservedAt: string;
+    firstObservedAt?: string;
+    lastObservedAt?: string;
   };
   routingContext: {
     queue: "identity_response" | "vendor_risk" | "incident_response" | "brand_protection" | "analyst_review";
@@ -140,7 +140,7 @@ export interface DwmActorOverview {
   sourceFamilies: DwmSourceFamily[];
   sourceCount: number;
   captureCount: number;
-  latestSeenAt: string;
+  latestSeenAt?: string;
   confidence: number;
   watchState: "active_monitoring" | "metadata_only" | "needs_more_sources";
   summary: string;
@@ -400,7 +400,7 @@ function buildActorOverviews(input: { sources: SourceRecord[]; captures: RawCapt
     sourceIds: Set<string>;
     families: Set<DwmSourceFamily>;
     captureCount: number;
-    latestSeenAt: string;
+    latestSeenAt?: string;
     confidence: number;
   }>();
 
@@ -421,14 +421,14 @@ function buildActorOverviews(input: { sources: SourceRecord[]; captures: RawCapt
       sourceIds: new Set<string>(),
       families: new Set<DwmSourceFamily>(),
       captureCount: 0,
-      latestSeenAt: seed.latestSeenAt ?? input.generatedAt,
+      latestSeenAt: seed.latestSeenAt,
       confidence: 55
     };
     if (seed.alias && seed.alias !== normalized) current.aliases.add(seed.alias);
     if (seed.sourceId) current.sourceIds.add(seed.sourceId);
     if (seed.family) current.families.add(seed.family);
     if (seed.capture) current.captureCount += 1;
-    if (seed.latestSeenAt && seed.latestSeenAt > current.latestSeenAt) current.latestSeenAt = seed.latestSeenAt;
+    if (seed.latestSeenAt && (!current.latestSeenAt || seed.latestSeenAt > current.latestSeenAt)) current.latestSeenAt = seed.latestSeenAt;
     current.confidence = Math.max(current.confidence, seed.confidence ?? current.confidence);
     groups.set(key, current);
   };
@@ -449,7 +449,7 @@ function buildActorOverviews(input: { sources: SourceRecord[]; captures: RawCapt
     touch(inferActor(capture, text) ?? inferActorFromSource(source), {
       sourceId: String((capture as any).sourceId ?? ""),
       family,
-      latestSeenAt: String((capture as any).collectedAt ?? input.generatedAt),
+      latestSeenAt: captureEvidenceTiming(capture).observedAt,
       confidence: inferConfidence({ text, source, sourceFamily: family, artifactType }),
       capture: true
     });
@@ -484,7 +484,7 @@ function buildActorOverviews(input: { sources: SourceRecord[]; captures: RawCapt
         summary: `${group.actor} is tracked across ${group.sourceIds.size} source(s), ${familyLabel}, with ${group.captureCount} recent capture(s).`
       };
     })
-    .sort((a, b) => b.confidence - a.confidence || b.captureCount - a.captureCount || b.latestSeenAt.localeCompare(a.latestSeenAt))
+    .sort((a, b) => b.confidence - a.confidence || b.captureCount - a.captureCount || (b.latestSeenAt ?? "").localeCompare(a.latestSeenAt ?? ""))
     .slice(0, 8);
 }
 
@@ -785,8 +785,8 @@ function evidenceSummaryFor(evidence: DwmEvidenceRef[]): DwmAlert["evidenceSumma
     sourceFamilyCounts,
     metadataOnlyCount: evidence.filter((item) => item.redactionState === "metadata_only" || item.provenance.metadataOnly).length,
     publicSafeCount: evidence.filter((item) => item.redactionState === "redacted" || item.redactionState === "public_safe").length,
-    firstObservedAt: observed[0] ?? nowIso(),
-    lastObservedAt: observed[observed.length - 1] ?? nowIso()
+    firstObservedAt: observed[0],
+    lastObservedAt: observed[observed.length - 1]
   };
 }
 

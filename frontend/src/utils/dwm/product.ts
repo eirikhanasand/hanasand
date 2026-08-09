@@ -45,8 +45,8 @@ export type DwmAlert = {
         sourceFamilyCounts: Record<string, number>
         metadataOnlyCount: number
         publicSafeCount: number
-        firstObservedAt: string
-        lastObservedAt: string
+        firstObservedAt?: string
+        lastObservedAt?: string
     }
     routingContext?: {
         queue: 'identity_response' | 'vendor_risk' | 'incident_response' | 'brand_protection' | 'analyst_review'
@@ -137,7 +137,7 @@ export type DwmActorOverview = {
     sourceFamilies: DwmSourceFamily[]
     sourceCount: number
     captureCount: number
-    latestSeenAt: string
+    latestSeenAt?: string
     confidence: number
     watchState: 'active_monitoring' | 'metadata_only' | 'needs_more_sources'
     summary: string

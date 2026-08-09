@@ -2574,7 +2574,8 @@ function buildAnalystBrief(
     }
 }
 
-function shortTime(value: string) {
+function shortTime(value: string | undefined) {
+    if (!value) return 'Observation date unavailable'
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return value
     const parts = new Intl.DateTimeFormat('en', {
@@ -2934,7 +2935,8 @@ function evidenceStrengthLabel(value: number) {
     return 'Low'
 }
 
-function relativeTimeLabel(value: string) {
+function relativeTimeLabel(value: string | undefined) {
+    if (!value) return 'Observation date unavailable'
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return value
     const deltaMs = Date.now() - date.getTime()

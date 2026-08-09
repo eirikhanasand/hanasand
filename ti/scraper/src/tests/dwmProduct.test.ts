@@ -280,6 +280,20 @@ describe("dwm product snapshot", () => {
     expect(snapshot.readiness.blockers).toContain("No approved metadata-only dark web source is active for this tenant.");
   });
 
+  test("does not use snapshot time when source observations are undated", () => {
+    const snapshot = buildDwmProductSnapshot({
+      tenantId: "tenant_acme",
+      watchlist: ["Akira"],
+      sources: [darkwebSource],
+      captures: [{ ...darkwebCapture, publishedAt: undefined, collectedAt: undefined }],
+      generatedAt: "2026-06-27T08:20:00.000Z"
+    });
+
+    const actor = snapshot.actorOverviews.find((item) => item.actor === "Akira");
+    expect(actor?.latestSeenAt).toBeUndefined();
+    expect(actor?.latestSeenAt).not.toBe("2026-06-27T08:20:00.000Z");
+  });
+
   test("treats zero matches as ready when watchlist and live sources exist", () => {
     const snapshot = buildDwmProductSnapshot({
       tenantId: "tenant_acme",
