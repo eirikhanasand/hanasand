@@ -23,6 +23,7 @@ import { publicChannelApplyPlan, publicChannelStatus } from "./publicChannelDisp
 import { qualityPayload } from "./qualityRoute.ts";
 import { buildRestrictedMetadataApplyPlanRouteResponse, buildRestrictedMetadataStatusRouteResponse } from "./restrictedMetadataRoutes.ts";
 import { createRun, exportRunStix, runResults, runStatus } from "./runRoutes.ts";
+import { isSearchCaptureIndexReady } from "./searchCaptureIndex.ts";
 import { searchResponse } from "./searchRoute.ts";
 import type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 import { metrics, productSlo } from "./sloRoute.ts";
@@ -89,7 +90,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
         ?? await (options.store as any).databaseHealth?.()
         ?? { ok: true, backend: "memory" };
       const runtime = runtimeResourceSnapshot(options);
-      return json({ ok: storage.ok !== false, service: "ti-scraper", version: "v1", storage, collection: { public: (options.canaryLoop as any)?.getState?.(), publicDefault: (options.defaultCanaryLoop as any)?.getState?.(), restrictedMetadata: (options.restrictedMetadataLoop as any)?.getState?.() }, ...runtime, generatedAt: nowIso() }, storage.ok === false ? 503 : 200);
+      const searchReady = isSearchCaptureIndexReady(options.store);
+      return json({ ok: storage.ok !== false, service: "ti-scraper", version: "v1", storage, search: { status: searchReady ? "ready" : "starting", ready: searchReady }, collection: { public: (options.canaryLoop as any)?.getState?.(), publicDefault: (options.defaultCanaryLoop as any)?.getState?.(), restrictedMetadata: (options.restrictedMetadataLoop as any)?.getState?.() }, ...runtime, generatedAt: nowIso() }, storage.ok === false ? 503 : 200);
     }
     if (url.pathname === "/v1/public/coverage" && request.method === "GET") return json(await publicCoverage(options));
     if (url.pathname === "/v1/auth/integration-notes" && request.method === "GET") {

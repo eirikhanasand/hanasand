@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { findSearchCaptures, findSearchCapturesFromRows, isSearchCaptureIndexReady, warmSearchCaptureIndex, warmSearchCaptureIndexAsync } from "../api/searchCaptureIndex.ts";
 import { searchResponse } from "../api/searchRoute.ts";
+import { handleApiRequest } from "../api/server.ts";
 import { automaticSourceReviewEvidenceBindingsMatch, sourceAutomaticReviewEvidenceBindings } from "../api/automaticReviewRoutes.ts";
 import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion, automaticSourceReviewIdentity, hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
@@ -25,6 +26,15 @@ describe("search capture index", () => {
     );
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: { code: "search_unavailable", message: "Search index is still starting" } });
+  });
+
+  test("reports search startup separately from process health", async () => {
+    const response = await handleApiRequest(
+      new Request("http://local/v1/health"),
+      { store: { usesPostgresSearchIndex: true }, frontier: { size: () => 0 } } as any
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, search: { status: "starting", ready: false } });
   });
 
   test("warms PostgreSQL search in yielding batches before marking it ready", async () => {
