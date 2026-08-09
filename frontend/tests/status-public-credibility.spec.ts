@@ -168,7 +168,7 @@ test('status monitors probe buyer-facing surfaces without inserting fake traffic
     expect(syntheticMonitor).toContain('\'https://api.hanasand.com/api/v1\'')
     expect(syntheticMonitor).toContain('\'https://hanasand.com\'')
     expect(syntheticMonitor).toContain('fetchJson(\'/openapi.json\', {}, publicApiBase)')
-    expect(syntheticMonitor).toContain("body?.mode === 'scraper'")
+    expect(syntheticMonitor).toContain('body?.mode === \'scraper\'')
     expect(syntheticMonitor).toContain('activityFreshnessMinutes(freshness ?? {})')
     expect(dashboardMonitor.indexOf('await monitorThreatIntelBackup()')).toBeLessThan(dashboardMonitor.indexOf('if (!username || !password)'))
     expect(dashboardMonitor).toContain('`${statusIngestBaseUrl}/api/status/ingest`')
