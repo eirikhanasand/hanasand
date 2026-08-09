@@ -73,6 +73,22 @@ describe('public TI v1', () => {
         expect(response.json()).toMatchObject({ query: 'APT29', mode: 'scraper', status: 'ready' })
     })
 
+    test('returns unavailable public search as HTTP 503 instead of a successful empty result', async () => {
+        const app = await testApp(undefined, async () => ({
+            ...searchResult,
+            mode: 'unavailable' as const,
+            status: 'unavailable' as const,
+            summary: 'Search unavailable',
+            confidence: 0,
+            recentActivity: [],
+            sources: [],
+        }))
+
+        const response = await app.inject({ method: 'POST', url: '/api/v1/ti/search', payload: { query: 'APT29' } })
+        expect(response.statusCode).toBe(503)
+        expect(response.json().error).toMatchObject({ code: 'search_unavailable' })
+    })
+
     test('serializes scraper results with null or scalar nested entries without failing the request', async () => {
         const app = await testApp(undefined, async () => ({
             ...searchResult,

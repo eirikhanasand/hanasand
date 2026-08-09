@@ -55,7 +55,9 @@ export default async function publicTiApi(fastify: FastifyInstance, options: Pub
         const query = normalizeQueryBody(req.body)
         if (!query) return sendError(reply, req.id, 400, 'invalid_query', 'query must contain 2-200 characters.')
         try {
-            return publicSearchResult(await searchImpl({ query, preflightHealth: true }))
+            const result = await searchImpl({ query, preflightHealth: true })
+            if (result.status === 'unavailable' || result.mode === 'unavailable') return sendError(reply, req.id, 503, 'search_unavailable', 'Threat-intelligence search is temporarily unavailable.')
+            return publicSearchResult(result)
         } catch {
             return sendError(reply, req.id, 503, 'search_unavailable', 'Threat-intelligence search is temporarily unavailable.')
         }
