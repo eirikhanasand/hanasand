@@ -19,6 +19,7 @@ import { canonicalActorIdentity, normalizeActorLabel, resolveMitreActorIdentity,
 import type { RansomwareOperationCatalogSnapshot } from "../pipeline/ransomwareOperationCatalog.ts";
 import { publicReferenceUrl } from "../pipeline/timelinessGroundTruth.ts";
 import { mayContainExposureQueueClaim } from "../product/exposureQueueCandidate.ts";
+import { isLegacySourceReviewCandidate } from "../policy/sourceAutomaticReview.ts";
 export interface RawEvidenceStore extends CaptureMetadataStore {} export interface ScraperStore extends CaptureMetadataStore {}
 export type ActorIdentityCatalogSnapshot = MitreActorCatalogSnapshot | RansomwareOperationCatalogSnapshot;
 export type ActorIdentityCatalogProvenance = { sourceId: string; captureId: string; importedAt?: string };
@@ -78,13 +79,14 @@ export class InMemoryScraperStore implements ScraperStore {
     const source = this.sources.get(previous.sourceId);
     const review = source?.metadata?.automaticSourceReview;
     if (!Array.isArray(review?.selectedEvidenceProvenance) || !review.selectedEvidenceProvenance.some((item: any) => item?.captureId === capture.id)) return;
+    const legacySource = isLegacySourceReviewCandidate(source);
     this.saveSource({
       ...source,
-      status: source.status === "active" ? "candidate" : source.status,
+      status: source.status === "active" && !legacySource ? "candidate" : source.status,
       countsAsCoverage: false,
       metadata: {
         ...source.metadata,
-        productionCollection: false,
+        productionCollection: legacySource,
         countsAsCoverage: false,
         sourcePortfolioQualificationState: "pending_sustained_productivity"
       },

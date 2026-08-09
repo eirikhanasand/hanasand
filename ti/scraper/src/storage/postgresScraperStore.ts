@@ -1038,7 +1038,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
               AND useful_cycles >= 2
               AND capture_count > 0
               AND (
-                (record->'metadata'->'sourcePortfolioVerification' IS NULL AND record->'metadata'->'sourceFeedDiscovery' IS NULL)
+                (record->'metadata'->'sourcePortfolioVerification' IS NULL
+                  AND record->'metadata'->'sourceFeedDiscovery' IS NULL
+                  AND record->'metadata'->'automaticSourceReview' IS NULL)
                 OR (
                   record->'metadata'->'automaticSourceReview'->>'schemaVersion' = '${SOURCE_AUTOMATIC_REVIEW_SCHEMA}'
                   AND record->'metadata'->'automaticSourceReview'->>'state' = 'approved'
@@ -3026,7 +3028,8 @@ function sourceReviewEvidenceMatchesSql(source: string) {
   const review = `${source}.record->'metadata'->'automaticSourceReview'`;
   return `(CASE
     WHEN ${source}.record->'metadata'->'sourcePortfolioVerification' IS NULL
-      AND ${source}.record->'metadata'->'sourceFeedDiscovery' IS NULL THEN TRUE
+      AND ${source}.record->'metadata'->'sourceFeedDiscovery' IS NULL
+      AND ${review} IS NULL THEN TRUE
     WHEN jsonb_typeof(${review}->'selectedEvidenceIds') IS DISTINCT FROM 'array'
       OR jsonb_typeof(${review}->'selectedEvidenceProvenance') IS DISTINCT FROM 'array' THEN FALSE
     ELSE NOT EXISTS (
