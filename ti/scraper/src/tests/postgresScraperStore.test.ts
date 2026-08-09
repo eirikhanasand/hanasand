@@ -23,6 +23,17 @@ import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 const collectedAt = "2026-07-19T12:00:00.000Z";
 
 describe("structured threat-intelligence storage contract", () => {
+  test("does not require the optional parser cleanup table during normal startup", async () => {
+    const store = Object.create(PostgresScraperStore.prototype) as any;
+    store.sql = ((strings: TemplateStringsArray) => strings[0].includes("to_regclass") ? [{ table_name: null }] : []) as any;
+
+    await expect(store.purgeParserDiagnosticArchiveObjects({ deleteObject: () => { throw new Error("must not delete without the table"); } })).resolves.toEqual({
+      pendingCount: 0,
+      deletedCount: 0,
+      failedIds: []
+    });
+  });
+
   test("repairs malformed Unicode before PostgreSQL JSON persistence", () => {
     expect(JSON.parse(toJson({ title: "Operating lower \ud835" }))).toEqual({ title: "Operating lower �" });
   });
