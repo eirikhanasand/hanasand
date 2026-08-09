@@ -38,17 +38,23 @@ describe('production monitor notification transitions', () => {
         expect(source).toContain('signal: AbortSignal.timeout(MONITOR_REQUEST_TIMEOUT_MS)')
     })
 
+    test('scraper backlog is visible before it becomes a write failure', async () => {
+        const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
+        expect(source).toContain('SCRAPER_PENDING_WRITES_DEGRADED_THRESHOLD = 1_000')
+        expect(source).toContain('Threat-intelligence storage has ${pendingWrites} pending writes.')
+    })
+
     test('latest activity failure does not retry inside one status read', async () => {
         const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
-        const latestActivity = source.slice(source.indexOf("check('dark-web-monitoring', 'Latest activity'"))
-        expect(latestActivity).toContain("fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase)")
+        const latestActivity = source.slice(source.indexOf('check(\'dark-web-monitoring\', \'Latest activity\''))
+        expect(latestActivity).toContain('fetchJson(\'/api/dwm/exposure-queue?limit=1\', {}, webBase)')
         expect(latestActivity).not.toContain('for (let attempt = 0; response.status >= 500')
         expect(latestActivity).not.toContain('setTimeout(resolve, 1_000)')
     })
 
     test('public search failure does not retry inside one status run', async () => {
         const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
-        const publicSearch = source.slice(source.indexOf("check('threat-intelligence', 'Public search'"))
+        const publicSearch = source.slice(source.indexOf('check(\'threat-intelligence\', \'Public search\''))
         expect(publicSearch).not.toContain('for (let attempt = 0;')
         expect(publicSearch).not.toContain('setTimeout(resolve, 1_000)')
     })
