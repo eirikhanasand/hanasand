@@ -143,8 +143,13 @@ async function fetchCollection(
     url.searchParams.set('limit', String(query.limit))
     url.searchParams.set('cursor', String(query.cursor))
     if (query.q) url.searchParams.set('q', query.q)
+    const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
     const response = await fetchImpl(url, {
-        headers: { accept: 'application/json', ...(organizationId ? { 'x-tenant-id': organizationId } : {}) },
+        headers: {
+            accept: 'application/json',
+            ...(serviceToken ? { 'x-hanasand-service-token': serviceToken } : {}),
+            ...(organizationId ? { 'x-tenant-id': organizationId } : {}),
+        },
         signal: AbortSignal.timeout(10_000),
     })
     if (!response.ok) throw new Error(`upstream returned ${response.status}`)

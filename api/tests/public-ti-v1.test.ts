@@ -119,24 +119,33 @@ describe('public TI v1', () => {
 
     test('protects global collections and returns typed cursor pages without accepting caller tenant scope', async () => {
         let requestedUrl = ''
-        const app = await testApp(async input => {
+        let serviceToken = ''
+        const previousServiceToken = process.env.TI_SCRAPER_SERVICE_TOKEN
+        process.env.TI_SCRAPER_SERVICE_TOKEN = 'service-secret'
+        const app = await testApp(async (input, init) => {
             requestedUrl = String(input)
+            serviceToken = new Headers(init?.headers).get('x-hanasand-service-token') ?? ''
             return Response.json({ actorProfiles: [{ id: 'actor-1', canonicalName: 'APT29', aliases: ['Cozy Bear'], confidence: 0.9, sourceIds: ['src-1'], captureIds: ['cap-1'], privateField: 'must-not-leak' }], total: 1 })
         })
+        try {
+            const anonymous = await app.inject({ method: 'GET', url: '/api/v1/actors' })
+            expect(anonymous.statusCode).toBe(401)
+            expect(anonymous.json().error.code).toBe('authentication_required')
 
-        const anonymous = await app.inject({ method: 'GET', url: '/api/v1/actors' })
-        expect(anonymous.statusCode).toBe(401)
-        expect(anonymous.json().error.code).toBe('authentication_required')
+            const response = await app.inject({ method: 'GET', url: '/api/v1/actors?q=apt&limit=10&cursor=0', headers: { 'x-api-key': 'valid' } })
+            expect(response.statusCode).toBe(200)
+            expect(response.json()).toEqual({ data: [{ id: 'actor-1', canonicalName: 'APT29', aliases: ['Cozy Bear'], confidence: 0.9, sourceIds: ['src-1'], captureIds: ['cap-1'] }], pagination: { limit: 10, total: 1, nextCursor: null }, meta: { requestId: response.headers['x-request-id'], organizationId: 'org-customer' } })
+            expect(requestedUrl).toContain('/v1/intel/actor-profiles?')
+            expect(requestedUrl).not.toContain('tenant')
+            expect(serviceToken).toBe('service-secret')
 
-        const response = await app.inject({ method: 'GET', url: '/api/v1/actors?q=apt&limit=10&cursor=0', headers: { 'x-api-key': 'valid' } })
-        expect(response.statusCode).toBe(200)
-        expect(response.json()).toEqual({ data: [{ id: 'actor-1', canonicalName: 'APT29', aliases: ['Cozy Bear'], confidence: 0.9, sourceIds: ['src-1'], captureIds: ['cap-1'] }], pagination: { limit: 10, total: 1, nextCursor: null }, meta: { requestId: response.headers['x-request-id'], organizationId: 'org-customer' } })
-        expect(requestedUrl).toContain('/v1/intel/actor-profiles?')
-        expect(requestedUrl).not.toContain('tenant')
-
-        const invalid = await app.inject({ method: 'GET', url: '/api/v1/actors?limit=101', headers: { 'x-api-key': 'valid' } })
-        expect(invalid.statusCode).toBe(400)
-        expect(invalid.json().error.code).toBe('invalid_pagination')
+            const invalid = await app.inject({ method: 'GET', url: '/api/v1/actors?limit=101', headers: { 'x-api-key': 'valid' } })
+            expect(invalid.statusCode).toBe(400)
+            expect(invalid.json().error.code).toBe('invalid_pagination')
+        } finally {
+            if (previousServiceToken === undefined) delete process.env.TI_SCRAPER_SERVICE_TOKEN
+            else process.env.TI_SCRAPER_SERVICE_TOKEN = previousServiceToken
+        }
     })
 
     test('derives alert tenant scope from the API key and ignores caller-selected tenant headers', async () => {
