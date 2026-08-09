@@ -103,6 +103,36 @@ describe("public collection boundary", () => {
     ]);
   });
 
+  test("times out a continuously streaming body even when reader promises keep resolving", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "streaming", url: "https://example.test/streaming.xml" }));
+    let cancelled = 0;
+    const loop = startCanaryCollectionLoop({
+      store,
+      frontier: new FocusedFrontier(),
+      enabled: false,
+      scheduleSourceFeedDiscovery: false,
+      scheduleWatchlistDiscovery: false,
+      maxSources: 1,
+      maxTasks: 1,
+      maxConcurrentTasks: 1,
+      timeoutMs: 20,
+      fetch: async () => new Response(new ReadableStream({
+        pull(controller) { controller.enqueue(new Uint8Array([60])); },
+        cancel() { cancelled++; }
+      }), { headers: { "content-type": "application/rss+xml" } })
+    });
+
+    loop.setEnabled(true, { approvedBy: "streaming-body-timeout-test" });
+    await loop.runOnce();
+    const state = loop.getState();
+    await loop.stop();
+
+    expect(state.latestResult).toMatchObject({ failedTaskCount: 1, completedTaskCount: 0 });
+    expect(cancelled).toBe(1);
+    expect(store.listRuns()).toContainEqual(expect.objectContaining({ error: "response body timeout after 20ms" }));
+  });
+
   test("runs only explicitly selected due sources", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "first", tenantId: "default", url: "https://example.test/first.xml", status: "active" }));

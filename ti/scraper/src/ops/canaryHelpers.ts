@@ -218,11 +218,13 @@ async function boundedText(response: Response, maxBytes: number, timeoutMs: numb
   const decoder = new TextDecoder();
   let text = "", bytesReceived = 0, truncated = false;
   let timeout: Timer | undefined;
+  const deadlineAt = Date.now() + timeoutMs;
   const deadline = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => reject(new Error(`response body timeout after ${timeoutMs}ms`)), timeoutMs);
   });
   try {
     while (true) {
+      if (Date.now() >= deadlineAt) throw new Error(`response body timeout after ${timeoutMs}ms`);
       const chunk = await Promise.race([reader.read(), deadline]);
       if (chunk.done) break;
       const remaining = maxBytes - bytesReceived;
