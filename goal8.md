@@ -30,6 +30,8 @@ Endpoint-only reconciliation found two cross-tenant canonical collisions. BrainC
 
 The production loss was a shared bootstrap identity defect, not missing source evidence. Restricted seed import assigned a new `createdAt` before qualification, changing the automatic-review identity hash and demoting already-qualified rows on every restart. Commit `14e1a7c2f1dbcd8ce942b16a8346894c856223fe` preserves the persisted identity during qualification, and `9f9e3a90f17e5973ed943cc1e8b0d6863d854474` preserves qualified legacy restricted sources that rely on real runtime evidence. Commit `7e357e448567e3149ecef0fe31b85c68fcd74526` fixes the second loss point: PostgreSQL now exposes successful run-linked `sourceReviewCandidate` captures to governed review even when their health row remains deliberately non-useful. After rollout, all 53 sources with that retained candidate evidence had source-review tasks and zero remained invisible; no health row received usefulness or qualification credit from the repair.
 
+At 2026-08-09T12:17:48Z, production commit `0b40ca8a8dcbdc8ead34e1ff1cce761c02679b38` closed the remaining runtime delivery failures. Public and Tor body reads now have one total deadline after headers, and both schedulers yield to the event loop between their existing bounded task waves. The exact rebuilt image bootstrapped 1,652 sources with zero errors, stayed healthy with restart 0/OOM false, served `/v1/health` in 31–32 ms during restricted work, completed both public loops, and drained both the task queue and pending writes to zero. During the natural 12:16Z recurrence with both public lanes active, six health probes completed in 146–272 ms; the global run finished 8/8 and the exact-default run 1/1 with zero failures or remaining tasks. All 143 results were duplicates, so no cycle or source received false productivity credit. PostgreSQL reported 16 global Tor candidates, 20 non-retired global Tor feeds with at least one retained productive scheduled cycle, and 14 approved source reviews. RansomHouse now has an approved evidence-bound source review but remains candidate/noncoverage because it has only one real productive cycle. Strict global qualification remains 3 and the gap remains 997.
+
 ## A source counts only when
 
 - its endpoint identity is canonical and unique across every source type;
@@ -63,6 +65,8 @@ The production loss was a shared bootstrap identity defect, not missing source e
 - Legacy restricted seeds without a shipped portfolio-verification receipt may evaluate their current governed runtime evidence; this does not bypass review, two-cycle, freshness, or retention requirements.
 - The PostgreSQL review index includes explicitly marked retained candidate evidence without changing its non-useful health state; ordinary non-useful captures remain excluded.
 - A current governed global Tor portfolio source owns its endpoint across tenant scopes; active tenant duplicates are recoverably retired during bootstrap so capture volume cannot split canonical ownership or hide global qualification.
+- Public and Tor response bodies share bounded total read deadlines, so a header-complete stalled stream cannot freeze a scheduler wave.
+- Public and restricted schedulers yield between bounded task waves, keeping health checks and runtime timers responsive without reducing source capacity or weakening qualification.
 
 ## Live progress ledger
 
@@ -77,6 +81,7 @@ The production loss was a shared bootstrap identity defect, not missing source e
 | 2026-08-09T09:42:20Z | `5f75ad6634ff5c3362ed0353b05a6e6d52f6b564` | 13 | 15 | 11 | 3 | 997 |
 | 2026-08-09T09:50Z | `bcac2d85028a434d232d335b1ddd9d3fc68a2053` | 13 | 14 | 11 | 3 | 997 |
 | 2026-08-09T10:36Z | `d38ec5f2d4f7aa5529cc763ca7e7a6bcce2bce2c` | 14 | 18 | 12 | 3 | 997 |
+| 2026-08-09T12:17:48Z | `0b40ca8a8dcbdc8ead34e1ff1cce761c02679b38` | 16 | 20 | 14 | 3 | 997 |
 
 Every later row must come from the live PostgreSQL/API/scheduler view. Never record onion locators or captured content in this file.
 
