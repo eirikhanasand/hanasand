@@ -143,8 +143,12 @@ test('ordinary customer overview does not present unscoped platform metrics', as
 test('organization onboarding reads organizations and readiness only from the persisted proxy', async() => {
     const organizationsRoute = await readFile(new URL('../src/app/api/organizations/route.ts', import.meta.url), 'utf8')
     const readinessRoute = await readFile(new URL('../src/app/api/organizations/[id]/alert-readiness/route.ts', import.meta.url), 'utf8')
+    const scraperControlRoute = await readFile(new URL('../src/app/api/ti/scraper/control/route.ts', import.meta.url), 'utf8')
     for (const source of [organizationsRoute, readinessRoute]) {
         assert.match(source, /proxyOrganizationApiRequest/)
         assert.doesNotMatch(source, /ProofLedger|productProgress|PRODUCT_PROGRESS/)
     }
+    assert.match(scraperControlRoute, /scraperBase\(\)/)
+    assert.match(scraperControlRoute, /ti_scraper_unavailable/)
+    assert.doesNotMatch(scraperControlRoute, /ProofLedger|productProgress|PRODUCT_PROGRESS/)
 })

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { loadProductSourceProxyProofLedger, sourceProxyFromLedger } from '@/utils/productProgress/sourceProofSource'
 import requireApiSession, { type ApiSessionIdentity } from '@/utils/proxy/requireApiSession'
 
 export const dynamic = 'force-dynamic'
@@ -30,13 +29,7 @@ export async function GET(request: NextRequest) {
     const base = scraperBase()
     const query = request.nextUrl.searchParams.get('q')?.trim() || 'APT29'
     const tenantId = request.headers.get('x-tenant-id') || 'default'
-    if (!base) {
-        const proofLedger = await loadProductSourceProxyProofLedger(query)
-        if (proofLedger) {
-            return NextResponse.json(sourceProxyFromLedger(proofLedger, query), { headers: { 'cache-control': 'no-store' } })
-        }
-        return unavailable('TI_SCRAPER_API_BASE is not configured.')
-    }
+    if (!base) return unavailable('TI_SCRAPER_API_BASE is not configured.')
 
     const [
         health,
