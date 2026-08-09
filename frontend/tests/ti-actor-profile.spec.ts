@@ -91,6 +91,8 @@ test.describe('public threat actor profile', () => {
         expect(source).toContain('{sourceBasisLabel(source.confidence)}</span>')
         expect(source).not.toContain('{Math.round(source.confidence * 100)}%</span>')
         expect(source).toContain('No sources are attached to this result yet.')
+        expect(source).toContain('confidence: item.confidence,')
+        expect(source).not.toContain('confidence: 0.76,')
         expect(source).toContain('summary: \'Checking sources\'')
         expect(source).not.toContain('The TI service did not return results.')
         expect(source).not.toContain('summary: \'Searching\'')

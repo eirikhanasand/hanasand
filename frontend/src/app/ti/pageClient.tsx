@@ -2202,7 +2202,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
             timestamp: item.timeframe,
             source: item.source,
             provenance: 'Country-level actor profile evidence',
-            confidence: 0.76,
+            confidence: item.confidence,
             assertionKind: 'source_claim',
             evidence: [
                 `Country: ${item.country}`,
