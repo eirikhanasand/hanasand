@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T14:11:18.000Z",
+  "generatedAt": "2026-08-09T14:17:30.000Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -40,10 +40,11 @@
     {
       "id": "restricted_ailock_victim_blog",
       "actorName": "AiLock",
+      "endpointHash": "0997c1f777fea690",
       "disposition": "rejected",
-      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
-      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
-      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/ailock",
+      "reason": "The current bounded HTML exposed status and layout labels rather than a victim listing; four candidate title nodes matched zero of 47 current public authority victim records.",
+      "evidenceCheckedAt": "2026-08-09T14:17:30.000Z",
+      "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/AiLock",
       "countsAsCoverage": false
     },
     {
@@ -211,10 +212,11 @@
     {
       "id": "restricted_wallstreet_victim_blog",
       "actorName": "Wallstreet",
+      "endpointHash": "07b675a375efe2a5",
       "disposition": "rejected",
-      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
-      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
-      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/wallstreet",
+      "reason": "The current 642-byte landing page exposed no repeated card or heading structure and produced no production-parser victim metadata.",
+      "evidenceCheckedAt": "2026-08-09T14:17:30.000Z",
+      "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/Wallstreet",
       "countsAsCoverage": false
     },
     {
@@ -247,19 +249,21 @@
     {
       "id": "restricted_dark_project_victim_blog",
       "actorName": "Dark Project",
+      "endpointHash": "7e7a60838a06ef0b",
       "disposition": "rejected",
-      "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.",
-      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
-      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/darkproject",
+      "reason": "The current bounded HTML exposed feed, tag, and contact panels rather than a victim listing; six candidate nodes matched zero of 19 current public authority victim records.",
+      "evidenceCheckedAt": "2026-08-09T14:17:30.000Z",
+      "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/Dark%20Project",
       "countsAsCoverage": false
     },
     {
       "id": "restricted_gammax_victim_blog",
       "actorName": "Gammax",
+      "endpointHash": "5f6b1b87d0e1e325",
       "disposition": "rejected",
-      "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.",
-      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
-      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/gammax",
+      "reason": "The current response reached the 64 KiB metadata ceiling without a repeated bounded victim-list structure or production-parser metadata, so no low-false-positive collection contract was available.",
+      "evidenceCheckedAt": "2026-08-09T14:17:30.000Z",
+      "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/Gammax",
       "countsAsCoverage": false
     },
     {
@@ -292,10 +296,11 @@
     {
       "id": "restricted_shiba_victim_blog",
       "actorName": "Shiba",
+      "endpointHash": "8e54304a1e04ae2b",
       "disposition": "rejected",
-      "reason": "The current public authority reported no victims and the approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.",
-      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
-      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/shiba",
+      "reason": "The current page was script-heavy and exposed no static repeated victim-list structure or production-parser metadata inside the bounded response.",
+      "evidenceCheckedAt": "2026-08-09T14:17:30.000Z",
+      "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/Shiba",
       "countsAsCoverage": false
     },
     {
