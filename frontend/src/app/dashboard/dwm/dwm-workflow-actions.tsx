@@ -864,7 +864,7 @@ async function alertRebuildFromWatchlistOrRequest(payload: Record<string, unknow
     if (inlineRebuild) {
         return normalizeAlertRebuildOutcome(inlineRebuild)
     }
-    return postJson('/api/dwm/alerts/rebuild', scope)
+    return normalizeAlertRebuildOutcome(await postJson('/api/dwm/alerts/rebuild', scope))
 }
 
 function readNumber(value: unknown, key: string) {
