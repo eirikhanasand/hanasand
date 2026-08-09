@@ -1218,7 +1218,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
             label: 'Webhook',
             value: latestDelivery ? stateLabel(latestDelivery.status) : workflowContext.hasWebhookRoute ? 'test available' : 'destination needed',
             detail: latestDelivery ? `${relativeTimeLabel(latestDelivery.attemptedAt)} · ${deliveryDestinationState(latestDelivery)}` : workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} destination${workflowContext.webhookDestinationIds.length === 1 ? '' : 's'}` : 'Customer send blocked: add or test a destination before sending.',
-            state: latestDelivery?.status === 'delivered' ? 'ready' : workflowContext.hasWebhookRoute ? 'action' : 'blocked',
+            state: latestDelivery?.status === 'delivered' && latestDelivery.dryRun !== true ? 'ready' : workflowContext.hasWebhookRoute ? 'action' : 'blocked',
         },
         {
             id: 'audit',

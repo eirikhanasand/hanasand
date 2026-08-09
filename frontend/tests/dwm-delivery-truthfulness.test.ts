@@ -12,10 +12,10 @@ test('DWM marks only durable webhook delivery as success', async () => {
         readFile(path.join(root, 'src/app/dashboard/ti/workbench/workbenchClient.tsx'), 'utf8'),
     ])
 
-    assert.match(portal, /state: latestDelivery\?\.status === 'delivered' \? 'ready'/)
     assert.doesNotMatch(portal, /latestDelivery\?\.status === 'delivered' \|\| latestDelivery\?\.status === 'dry_run'/)
     assert.doesNotMatch(portal, /lastSuccessfulDelivery = visible\.find\(delivery => delivery\.status === 'delivered' \|\| delivery\.status === 'dry_run'/)
     assert.match(portal, /lastSuccessfulDelivery = visible\.find\(delivery => delivery\.status === 'delivered' && delivery\.dryRun !== true\)/)
+    assert.match(portal, /state: latestDelivery\?\.status === 'delivered' && latestDelivery\.dryRun !== true \? 'ready'/)
     assert.match(portal, /const delivered = rows\.filter\(row => row\.status === 'delivered' && row\.dryRun !== true\)/)
     assert.doesNotMatch(portal, /normalized\.includes\('attempted'\)/)
     assert.match(actions, /deliveryReady = deliveryRows\.some\(row => row\.status === 'delivered' && row\.dryRun !== true\)/)
