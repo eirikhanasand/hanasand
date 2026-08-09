@@ -599,6 +599,11 @@ describe("scheduled public feed discovery", () => {
         createdAt: generatedAt,
         updatedAt: generatedAt
       });
+      let pendingWrites = 0;
+      const savePlan = store.savePlan.bind(store);
+      (store as any).savePlan = (plan: any) => { pendingWrites++; return savePlan(plan); };
+      (store as any).databaseHealthSnapshot = () => ({ ok: true, pendingWrites });
+      (store as any).flush = async () => { pendingWrites = 0; };
       let discoveryFetchCount = 0, watchlistExecutionCount = 0, canonicalFetchCount = 0;
       const loop = startCanaryCollectionLoop({
         store,
