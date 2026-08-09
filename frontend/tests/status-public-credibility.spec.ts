@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { toPublicServiceStatus } from '@/utils/status/publicStatus'
-import { unavailableServiceStatus } from '@/utils/status/getStatus'
+import getStatus, { unavailableServiceStatus } from '@/utils/status/getStatus'
 import type { ServiceStatus } from '@/utils/status/getStatus'
 
 const root = process.cwd()
@@ -174,6 +174,19 @@ test('status transport failure stays unavailable instead of becoming fresh synth
         expect(source).not.toContain('withFallback')
         expect(source).not.toContain('getFallbackServiceStatus')
         expect(source).not.toContain('publicStatusCoverageCheck')
+    }
+})
+
+test('status fetch failures preserve the unavailable contract for transport and non-2xx responses', async () => {
+    const originalFetch = globalThis.fetch
+    try {
+        globalThis.fetch = (async () => { throw new Error('status backend unavailable') }) as typeof fetch
+        await expect(getStatus()).resolves.toEqual(unavailableServiceStatus())
+
+        globalThis.fetch = (async () => new Response(null, { status: 503 })) as typeof fetch
+        await expect(getStatus()).resolves.toEqual(unavailableServiceStatus())
+    } finally {
+        globalThis.fetch = originalFetch
     }
 })
 
