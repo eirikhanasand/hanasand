@@ -49,10 +49,7 @@ export function isLegacySourceReviewCandidate(source: any) {
     && source?.risk === "low"
     && source?.governance?.approvalState === "approved"
     && Boolean(String(source?.legalNotes ?? "").trim())
-    && (source?.metadata?.automaticSourceReview || (
-      source?.countsAsCoverage === false
-      && source?.metadata?.productionCollection === true
-    ));
+    && (source?.metadata?.automaticSourceReview || source?.countsAsCoverage === false);
 }
 
 export function sourceAutomaticReviewPromptVersionMatches(source: any, promptVersion: unknown) {
