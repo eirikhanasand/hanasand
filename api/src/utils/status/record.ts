@@ -66,7 +66,9 @@ export async function recordMonitorResult(
             incident,
         }
     })
-    if (transition.incident) await notifyServiceMonitorIncident(transition.incident).catch(error => console.error(`[production-monitor] incident state sync failed: ${error instanceof Error ? error.message : String(error)}`))
+    if (transition.incident) {
+        void notifyServiceMonitorIncident(transition.incident).catch(error => console.error(`[production-monitor] incident state sync failed: ${error instanceof Error ? error.message : String(error)}`))
+    }
     const event = transition.event
     if (!event) return
     let claimed = true
