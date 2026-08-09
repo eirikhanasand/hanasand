@@ -13,13 +13,36 @@ export const AUTOMATIC_REVIEW_RESPONSE_SCHEMA = "ti.automatic_intelligence_revie
 export const SOURCE_AUTOMATIC_REVIEW_SCHEMA = "ti.automatic_source_review.v1";
 
 const compatibleSourceReviewPromptVersions = new Set<string>(SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS);
+const CATALOG_PROFILES = new Set(["mitre_actor_catalog", "ransomware_operation_catalog"]);
+const PUBLIC_INTELLIGENCE_SOURCE_TYPES = new Set(["rss", "api", "json_api", "blog", "telegram_public"]);
 
 export function automaticReviewModelVersion(explicit?: unknown) {
   return cleanModelVersion(explicit) ?? cleanModelVersion(Bun.env.HANASAND_AI_MODEL) ?? "hanasand";
 }
 
 export function sourceRequiresAutomaticReview(source: any) {
-  return Boolean(source?.metadata?.sourcePortfolioVerification || source?.metadata?.sourceFeedDiscovery);
+  if (source?.metadata?.transportCanary === true || CATALOG_PROFILES.has(source?.metadata?.extractionProfile)) return false;
+  return Boolean(source?.metadata?.sourcePortfolioVerification
+    || source?.metadata?.sourceFeedDiscovery
+    || isLegacySourceReviewCandidate(source));
+}
+
+export function isLegacySourceReviewCandidate(source: any) {
+  const tenantId = String(source?.tenantId ?? "").trim();
+  return source?.metadata?.transportCanary !== true
+    && !CATALOG_PROFILES.has(source?.metadata?.extractionProfile)
+    && !source?.metadata?.sourcePortfolioVerification
+    && !source?.metadata?.sourceFeedDiscovery
+    && (!tenantId || tenantId === "global")
+    && PUBLIC_INTELLIGENCE_SOURCE_TYPES.has(source?.type)
+    && source?.accessMethod === "public_http"
+    && source?.risk === "low"
+    && source?.governance?.approvalState === "approved"
+    && Boolean(String(source?.legalNotes ?? "").trim())
+    && (source?.metadata?.automaticSourceReview || (
+      source?.countsAsCoverage === false
+      && source?.metadata?.productionCollection === true
+    ));
 }
 
 export function sourceAutomaticReviewPromptVersionMatches(source: any, promptVersion: unknown) {
