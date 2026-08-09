@@ -20,8 +20,8 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(162);
-    expect(batch.exclusions).toHaveLength(180);
+    expect(batch.sources).toHaveLength(180);
+    expect(batch.exclusions).toHaveLength(209);
 
     const generatedAt = Date.parse(rawBatch.generatedAt);
     const evidenceTimes = [
@@ -513,6 +513,53 @@ describe("clear-web source portfolio batch", () => {
     expect(exclusions.get(hash(canonicalUrl("https://blog.talosintelligence.com/rss/")).slice(0, 24))).toBe("response_exceeds_max_bytes");
     expect(exclusions.get(hash(canonicalUrl("https://securitylab.github.com/feed.xml")).slice(0, 24))).toBe("parser_zero_items");
     expect(exclusions.get(hash(canonicalUrl("https://www.php.net/releases/feed.php")).slice(0, 24))).toBe("product_release_feed_not_security_intelligence");
+  });
+
+  test("keeps ledger 019 current, source-tolerant, and candidate-only until productive scheduled cycles exist", () => {
+    const expected = new Map([
+      ["S2 Grupo Lab52 Threat Intelligence Research", [6, 6, 6, 4, "Fri, 03 Jul 2026 17:28:57 +0000"]],
+      ["Morphisec Threat Research", [20, 20, 6, 4, "Tue, 16 Jun 2026 13:00:00 +0000"]],
+      ["HP Wolf Security Threat Research", [5, 5, 5, 4, "Thu, 11 Jun 2026 07:00:05 +0000"]],
+      ["Emsisoft Ransomware and Malware Research", [12, 12, 12, 9, "Tue, 21 Jul 2026 11:39:54 +0000"]],
+      ["IOActive Cybersecurity Research", [10, 10, 10, 6, "Thu, 06 Aug 2026 20:12:18 +0000"]],
+      ["Pentera Adversarial Exposure Research", [12, 12, 8, 2, "Thu, 30 Jul 2026 07:33:17 +0000"]],
+      ["XM Cyber Exposure Research", [10, 10, 10, 6, "Thu, 30 Jul 2026 12:51:55 +0000"]],
+      ["Compass Security Vulnerability Research", [10, 10, 10, 2, "Tue, 04 Aug 2026 07:00:00 +0000"]],
+      ["SCRT Offensive Security Research", [10, 10, 2, 2, "Tue, 21 Apr 2026 12:47:26 +0000"]],
+      ["TrustedSec Threat Hunting and Vulnerability Research", [10, 10, 10, 1, "Thu, 06 Aug 2026 00:00:00 -0400"]],
+      ["QNAP Product Security Advisories", [20, 20, 16, 16, "Wed, 17 Jun 2026 00:00:00 +0800"]],
+      ["Qt Product Security Advisories", [10, 10, 6, 5, "Thu, 23 Jul 2026 12:27:55 GMT"]],
+      ["Node.js Security and Release News", [250, 250, 43, 1, "Wed, 05 Aug 2026 16:25:55 GMT"]],
+      ["ownCloud Product Security Advisories", [10, 10, 1, 1, "Sat, 28 Mar 2026 10:42:15 +0000"]],
+      ["Uzbekistan UZCERT Cybersecurity Advisories", [10, 10, 10, 3, "Fri, 07 Aug 2026 08:28:00 +0000"]],
+      ["Albania AKSK Cybersecurity Advisories", [10, 10, 10, 0, "Tue, 04 Aug 2026 11:32:33 +0000"]],
+      ["Germany CERT-Bund Security Advisories", [250, 250, 250, 0, "Fri, 07 Aug 2026 11:26:06 GMT"]],
+      ["Trinidad and Tobago TT-CSIRT Security Advisories", [10, 10, 10, 6, "Tue, 21 Jul 2026 17:20:54 +0000"]],
+    ] as const);
+    const sourceTolerant = new Set([
+      "Albania AKSK Cybersecurity Advisories",
+      "Germany CERT-Bund Security Advisories",
+    ]);
+    const sources = batch.sources.filter((source: any) => expected.has(source.name));
+    expect(sources).toHaveLength(expected.size);
+    const totals = { parsed: 0, dated: 0, current: 0, useful: 0 };
+    for (const source of sources) {
+      const [observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt] = expected.get(source.name)!;
+      expect(source.id).toBe(`src_portfolio_cw_${hash(canonicalUrl(source.url)).slice(0, 20)}`);
+      expect(source.metadata.sourcePortfolioVerification).toMatchObject({ observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt });
+      expect(currentItemCount).toBeGreaterThan(0);
+      if (sourceTolerant.has(source.name)) expect(keywordUsefulItemCount).toBe(0);
+      else expect(keywordUsefulItemCount).toBeGreaterThan(0);
+      expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
+      expect(source.metadata).not.toHaveProperty("countsAsCoverage");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
+      totals.parsed += observedItemCount;
+      totals.dated += datedItemCount;
+      totals.current += currentItemCount;
+      totals.useful += keywordUsefulItemCount;
+    }
+    expect(totals).toEqual({ parsed: 675, dated: 675, current: 425, useful: 72 });
   });
 
   test("deduplicates by normalized endpoint across adapters and every reserved source pack", () => {
