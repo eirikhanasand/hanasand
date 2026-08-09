@@ -58,12 +58,11 @@ describe("compact pipeline value path", () => {
     expect(darknet.entities).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "ransomware_family", value: "Blackout", extractionMethod: "source_specific" }),
       expect.objectContaining({ type: "victim", value: "Example Energy AS", assertionKind: "source_claim", extractorVersion: SOURCE_SPECIFIC_EXTRACTOR_VERSION }),
-      expect.objectContaining({ type: "publication_strategy", value: "public victim listing", assertionKind: "observed" }),
-      expect.objectContaining({ type: "publicity_tactic", value: "public victim naming", assertionKind: "observed" }),
       expect.objectContaining({ type: "victim_pressure_tactic", value: "countdown to publication", assertionKind: "observed" }),
       expect.objectContaining({ type: "publication_strategy", value: "staged publication status", assertionKind: "observed" }),
       expect.objectContaining({ type: "publication_strategy", value: "public data release link", assertionKind: "observed" })
     ]));
+    expect(darknet.entities.some((entity: any) => entity.type === "publication_strategy" && entity.value === "public victim listing")).toBe(false);
     expect(darknet.entities.some((entity: any) => ["communication_channel", "buyer_seller_communication", "intermediary_communication", "monetization_path", "profitability_signal", "extortion_type", "channel_type"].includes(entity.type))).toBe(false);
     expect(darknet.entities.filter((entity: any) => entity.type === "victim")).toEqual([
       expect.objectContaining({ value: "Example Energy AS", extractionMethod: "source_specific" })
