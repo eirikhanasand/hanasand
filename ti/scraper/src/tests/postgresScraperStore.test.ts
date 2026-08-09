@@ -24,6 +24,22 @@ import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 const collectedAt = "2026-07-19T12:00:00.000Z";
 
 describe("structured threat-intelligence storage contract", () => {
+  test("reads latest source health once per tenant summary instead of once per source", async () => {
+    const store = Object.create(PostgresScraperStore.prototype) as any;
+    let query = "";
+    store.sql = {
+      unsafe: async (text: string) => {
+        query = text;
+        return [{ summary: {} }];
+      }
+    };
+
+    await store.querySourceOperationalSummary({ tenantId: "tenant_summary", generatedAt: collectedAt });
+
+    expect(query).toContain("SELECT DISTINCT ON (source_id, tenant_id)");
+    expect(query).not.toContain("LEFT JOIN LATERAL");
+  });
+
   test("does not require the optional parser cleanup table during normal startup", async () => {
     const store = Object.create(PostgresScraperStore.prototype) as any;
     store.sql = ((strings: TemplateStringsArray) => strings[0].includes("to_regclass") ? [{ table_name: null }] : []) as any;
@@ -220,6 +236,44 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         threat_intel.sources
       CASCADE;
     `);
+  });
+
+  test("summarizes latest health across more than 6,100 executable sources", async () => {
+    const store = await PostgresScraperStore.create({ databaseUrl });
+    await admin.unsafe(`
+      INSERT INTO threat_intel.sources (
+        id, name, source_type, url, access_method, status, risk, trust_score,
+        crawl_frequency_seconds, created_at, updated_at, collection_executable, record
+      )
+      SELECT
+        'src_summary_' || lpad(series::text, 5, '0'),
+        'Summary ' || series, 'rss', 'https://summary.example/' || series || '.xml', 'public_http', 'active', 'low', 0.8,
+        3600, '2026-07-01T00:00:00Z', '2026-07-01T00:00:00Z', TRUE,
+        jsonb_build_object('id', 'src_summary_' || lpad(series::text, 5, '0'), 'type', 'rss', 'status', 'active')
+      FROM generate_series(0, 6100) series
+    `);
+    store.saveSourceHealthObservation({
+      id: "health_summary_old", sourceId: "src_summary_06100", checkedAt: "2026-07-23T12:00:00.000Z",
+      status: "healthy", success: true, useful: true, captureCount: 1, legalMode: "public_content"
+    });
+    store.saveSourceHealthObservation({
+      id: "health_summary_latest", sourceId: "src_summary_06100", checkedAt: "2026-07-23T13:00:00.000Z",
+      status: "failed", success: false, useful: false, captureCount: 0, legalMode: "public_content"
+    });
+    await store.flush();
+
+    const result = await store.querySourceOperationalSummary({ generatedAt: "2026-07-23T13:00:00.000Z", executableOnly: true });
+
+    expect(result.summary).toMatchObject({
+      sourceCount: 6_101,
+      activeSourceCount: 6_101,
+      checkedSourceCount: 1,
+      successfulSourceCount: 0,
+      usefulSourceCount: 0,
+      failedSourceCount: 1,
+      neverObservedSourceCount: 6_100
+    });
+    await store.close();
   });
 
   test("excludes retired-only failures from current operations but keeps historical health queryable", async () => {
