@@ -3,7 +3,7 @@ import { publicAdvisoryFetcher, publicAdvisorySourceIdentity } from "../api/expo
 import { createCollectionPlan } from "../planner/intelligencePlanner.ts";
 import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
-import { isSellableIntelText } from "../value/sellableIntel.ts";
+import { hasThreatTerm, isSellableIntelText } from "../value/sellableIntel.ts";
 import { hashContent, nowIso, stableId } from "../utils.ts";
 import { sourceFieldReportTimestamp, zonedSourceTimestamp } from "../pipeline/sourceFieldReportTimestamp.ts";
 
@@ -326,7 +326,7 @@ function termOccursInText(text: string, term: string) {
 }
 
 function cyberIncidentText(text: string) {
-  return /\b(?:cyber(?:attack| attack|angrep)|ransomware|data breach|security incident|compromis(?:e|ed)|dataangrep|sikkerhetshendelse|datainnbrudd|løsepengevirus|stjålet|phishing|malware|credential theft)\b/i.test(text);
+  return hasThreatTerm(text);
 }
 
 function publicationTimestampFromHtml(html: string) {
