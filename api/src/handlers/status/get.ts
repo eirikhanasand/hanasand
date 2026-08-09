@@ -105,11 +105,37 @@ async function loadStatusPayload() {
         ORDER BY service ASC, check_name ASC, date ASC
     `)
     const incidentResult = await run(`
+        WITH sequenced AS (
+            SELECT
+                service,
+                check_name,
+                status,
+                message,
+                checked_at,
+                LAG(status) OVER window AS previous_status,
+                LAG(checked_at) OVER window AS previous_checked_at,
+                LEAD(status) OVER window AS next_status,
+                LEAD(checked_at) OVER window AS next_checked_at
+            FROM service_monitor_results
+            WHERE checked_at >= NOW() - INTERVAL '90 days'
+              AND NOT (service = 'core' AND check_name = 'API index')
+            WINDOW window AS (PARTITION BY service, check_name ORDER BY checked_at)
+        )
         SELECT service, check_name, status, message, checked_at
-        FROM service_monitor_results
-        WHERE checked_at >= NOW() - INTERVAL '90 days'
-          AND status <> 'up'
-          AND NOT (service = 'core' AND check_name = 'API index')
+        FROM sequenced
+        WHERE status <> 'up'
+          AND (
+            previous_status IS NULL
+            OR previous_status = 'up'
+            OR previous_status <> status
+            OR previous_checked_at IS NULL
+            OR checked_at - previous_checked_at > INTERVAL '15 minutes'
+            OR next_status IS NULL
+            OR next_status = 'up'
+            OR next_status <> status
+            OR next_checked_at IS NULL
+            OR next_checked_at - checked_at > INTERVAL '15 minutes'
+          )
         ORDER BY service ASC, check_name ASC, checked_at ASC
     `)
 
