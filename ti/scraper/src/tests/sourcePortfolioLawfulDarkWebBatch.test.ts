@@ -95,7 +95,7 @@ describe("lawful dark-web source portfolio batch", () => {
       expect(Number.isFinite(Date.parse(accepted.metadata.lastReportedVictimAt))).toBe(true);
     }
     expect(new Set(feedKeys).size).toBe(feedKeys.length);
-    expect(rejected).toHaveLength(161);
+    expect(rejected).toHaveLength(167);
     expect(new Set(rejected.map((row) => row.id)).size).toBe(rejected.length);
     expect(rejected.every((row) => row.disposition === "rejected" && row.countsAsCoverage === false)).toBe(true);
     expect([...new Map(rejected.map((row) => [row.endpointHash, row.probeOutcome])).entries()]).toEqual(expect.arrayContaining([
@@ -105,7 +105,13 @@ describe("lawful dark-web source portfolio batch", () => {
       ["8c5daa0504bce9ee", "parser_empty"],
       ["ea13dd5bdced628f", "fetch_failed"],
       ["a070a78020535edb", "authority_unavailable"],
-      ["4dd6b604ef86590f", "authority_identity_superseded"]
+      ["4dd6b604ef86590f", "authority_identity_superseded"],
+      ["ecfff1e2d3cacd92", "authority_identity_changed"],
+      ["699098fcac03c64c", "http_403"],
+      ["3071c8296f2d6e4d", "authority_unavailable"],
+      ["478fa2c1b6fe3f42", "duplicate_not_fetched"],
+      ["d60cfd5167a4a40b", "authority_missing"],
+      ["c7269c4f458a9559", "parser_empty"]
     ]));
     expect(rejected.some((row) => ["9957e9b30b3836eb", "edb691bd56d468b3"].includes(String(row.endpointHash)))).toBe(false);
     expect(JSON.stringify(rejected)).not.toMatch(/\.onion\b|https?:\/\/[a-z2-7]{56}\b/i);
