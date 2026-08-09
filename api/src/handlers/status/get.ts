@@ -54,7 +54,8 @@ function statusPayload() {
 }
 
 async function loadStatusPayload() {
-    const result = await run(`
+    const [result, historyResult, incidentResult] = await Promise.all([
+        run(`
         WITH latest AS (
             SELECT DISTINCT ON (service, check_name)
                 service, check_name, status, latency_ms, message, checked_at
@@ -87,8 +88,8 @@ async function loadStatusPayload() {
         FROM latest
         LEFT JOIN uptime USING (service, check_name)
         ORDER BY latest.service ASC, latest.check_name ASC
-    `)
-    const historyResult = await run(`
+    `),
+        run(`
         SELECT
             service,
             check_name,
@@ -103,8 +104,8 @@ async function loadStatusPayload() {
           AND NOT (service = 'core' AND check_name = 'API index')
         GROUP BY service, check_name, checked_at::date
         ORDER BY service ASC, check_name ASC, date ASC
-    `)
-    const incidentResult = await run(`
+    `),
+        run(`
         WITH sequenced AS (
             SELECT
                 service,
@@ -137,7 +138,8 @@ async function loadStatusPayload() {
             OR next_checked_at - checked_at > INTERVAL '15 minutes'
           )
         ORDER BY service ASC, check_name ASC, checked_at ASC
-    `)
+    `),
+    ])
 
     const rawChecks = addMissingRequiredChecks(result.rows as MonitorRow[])
     const checks = rawChecks.map(row => toPublicMonitorRow(row))
