@@ -9,6 +9,7 @@ describe("public coverage", () => {
       listSources: () => [
         source({ id: "global_one", name: "Global one" }),
         source({ id: "global_two", name: "Global two" }),
+        source({ id: "retired_global", name: "Retired global", status: "retired" }),
         source({ id: "tenant_one", name: "Tenant one", tenantId: "tenant_a" }),
       ],
       listTimelinessRecords: () => [
@@ -21,7 +22,7 @@ describe("public coverage", () => {
       listEvaluationLabels: () => [],
     };
     const body = await publicCoverage({ store, frontier: {} as any });
-    expect(body.registry).toEqual({ registeredSourceCount: 2, executableSourceCount: 2, inactiveSourceCount: 0 });
+    expect(body.registry).toEqual({ registeredSourceCount: 3, executableSourceCount: 2, inactiveSourceCount: 1 });
     expect(body.usefulCoverage).toMatchObject({ measurementState: "measured", everUsefulSourceCount: 0, sustainedUsefulSourceCount: 0, captureProducingSourceCount: 0 });
     expect(body.qualification).toMatchObject({ measurementState: "measured", counts: { clearWeb: 0, lawfulDarkWeb: 0, publicTelegram: 0, total: 0 }, gaps: { clearWeb: 5_000, lawfulDarkWeb: 1_000, publicTelegram: 100, total: 6_100 }, baselineMet: false });
     expect(body.observedAlertLatencySeconds).toMatchObject({ sampleCount: 1, medianSeconds: 120, p95Seconds: 120 });
