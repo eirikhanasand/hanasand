@@ -98,6 +98,30 @@ describe("restricted metadata collection", () => {
     }
   });
 
+  test("extracts only actor-scoped container and post-list victim names", async () => {
+    const pages: Record<string, string> = {
+      CMDOrganization: '<div class="item-card"><div class="item-header"><h2><a>CMD Victim</a></h2></div><div class="description-before">private detail</div></div>',
+      ExfilSquad: '<div class="company-header"><div class="company-name">Exfil Victim</div><div>private detail</div></div>',
+      "Global Secret Group": '<div class="card-body"><h3 class="card-title">Global Victim</h3><p class="card-description">private detail</p></div>',
+      "Triple X": '<div class="post"><h2 class="post-title">Triple Victim</h2><div class="post-content">private detail</div></div>'
+    };
+    const profiles: Record<string, string> = {
+      CMDOrganization: "item_header_link",
+      ExfilSquad: "company_header_name",
+      "Global Secret Group": "card_body_title",
+      "Triple X": "post_container_title"
+    };
+    for (const [actorName, html] of Object.entries(pages)) {
+      const boundary = new TorMetadataHttpBoundary({ proxyUrl: "http://onion-tor:8118", fetcher: async () => new Response(html, { headers: { "content-type": "text/html" } }) });
+      const parsed = await boundary.fetchMetadata({ url: `http://${"a".repeat(56)}.onion/`, actorName });
+      const unapproved = await boundary.fetchMetadata({ url: `http://${"a".repeat(56)}.onion/`, actorName: "Unapproved" });
+      expect(parsed).toMatchObject({ victimNames: [expect.stringContaining("Victim")], parserProfile: profiles[actorName] });
+      expect(parsed.description).not.toContain("private detail");
+      expect(unapproved.victimNames).toEqual([]);
+      expect(unapproved.parserProfile).toBeUndefined();
+    }
+  });
+
   test("persists Qilin, Nova, and Interlock victim-list formats as metadata only", async () => {
     const store = new InMemoryScraperStore();
     const pages: Record<string, string> = {
