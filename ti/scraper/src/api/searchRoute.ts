@@ -36,7 +36,10 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     queuePressureLimit: Number(options.liveSearchQueuePressureLimit ?? 50),
   });
   scheduleLiveSearch(liveSearch, options, generatedAt);
-  const persistedSearchCaptures = typeof (options.store as any).querySearchCaptures === "function"
+  const localSearchIndexAvailable = (options.store as any).usesPostgresSearchIndex === true;
+  const persistedSearchCaptures = localSearchIndexAvailable
+    ? findSearchCaptures(options.store, query, 300, scope.tenantId)
+    : typeof (options.store as any).querySearchCaptures === "function"
     ? await (options.store as any).querySearchCaptures([query], scope.tenantId, 300)
     : undefined;
   const publicChannelResult = buildPublicChannelStatusRouteResponse(
@@ -980,6 +983,11 @@ function searchEntityType(query: string, requested: unknown, store: any, tenantI
 }
 
 async function searchCaptures(store: any, query: string, entityType: SearchEntityType, identity: ReturnType<typeof actorIdentity>, limit: number, tenantId?: string) {
+  if (store.usesPostgresSearchIndex === true) {
+    if (entityType !== "actor") return findSearchCaptures(store, query, limit, tenantId);
+    return findActorSearchCaptures(store, identity.terms, limit, tenantId)
+      .sort((a: any, b: any) => String(b.collectedAt ?? "").localeCompare(String(a.collectedAt ?? "")));
+  }
   if (typeof store.querySearchCaptures === "function") {
     const terms = entityType === "actor" ? identity.terms : [query];
     const rows = await store.querySearchCaptures(terms, tenantId, Math.max(limit, 300));
