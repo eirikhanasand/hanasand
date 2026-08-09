@@ -88,6 +88,6 @@ Do not create a fake benchmark or force an artificial class balance. Instead:
 
 ## Already closed
 
-- Homepage exposure `0/0` display: live checks pass; the current page reports real exposure data and unavailable states honestly.
+- Closed: the former homepage exposure `0/0` display was verified fixed; the live endpoint currently returns real exposure data (3,535 retained records) and honest unavailable states.
 - Fake coverage-plan endpoint: removed and verified unreachable.
 - Legacy evaluation suppression cleanup: completed; remaining work is the broader reachability and release audit.
