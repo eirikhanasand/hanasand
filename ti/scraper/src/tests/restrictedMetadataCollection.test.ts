@@ -102,12 +102,16 @@ describe("restricted metadata collection", () => {
     const pages: Record<string, string> = {
       CMDOrganization: '<div class="item-card"><div class="item-header"><h2><a>CMD Victim</a></h2></div><div class="description-before">private detail</div></div>',
       ExfilSquad: '<div class="company-header"><div class="company-name">Exfil Victim</div><div>private detail</div></div>',
+      Exitium: '<div class="target-grid"><div class="target-card clickable-card"><div class="target-content"><h3 class="target-title">Exitium Victim</h3><p>private detail</p></div></div></div>',
+      Insomnia: '<div class="book-card"><div class="card-info"><h3 class="info-title"><a>Insomnia Victim</a></h3><p>private detail</p></div></div>',
       "Global Secret Group": '<div class="card-body"><h3 class="card-title">Global Victim</h3><p class="card-description">private detail</p></div>',
       "Triple X": '<div class="post"><h2 class="post-title">Triple Victim</h2><div class="post-content">private detail</div></div>'
     };
     const profiles: Record<string, string> = {
       CMDOrganization: "item_header_link",
       ExfilSquad: "company_header_name",
+      Exitium: "target_card_title",
+      Insomnia: "book_card_info_title",
       "Global Secret Group": "card_body_title",
       "Triple X": "post_container_title"
     };
