@@ -78,7 +78,7 @@ describe("api v1", () => {
         successCount: 0,
         errorCount: 0,
         consecutiveErrorCount: 0,
-        maxSources: 7,
+        maxSources: 2,
         maxTasks: 2,
         queueLimit: 42,
         activateSources: false,
