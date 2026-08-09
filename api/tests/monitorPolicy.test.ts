@@ -12,6 +12,8 @@ describe('production monitor notification transitions', () => {
         expect(source).not.toContain('WINDOW window AS')
         expect(source).toContain('const [result, historyResult, incidentResult] = await Promise.all([')
         expect(source).toContain("WHERE status <> 'up'")
+        expect(source).not.toContain('FROM service_monitor_results recovered')
+        expect(source).toContain('LAG(status) OVER status_history_window')
         expect(schema).toContain('idx_service_monitor_results_non_up')
         expect(source).toContain("res.header('Cache-Control', 'public, max-age=3, stale-while-revalidate=15')")
     })
