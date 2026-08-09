@@ -1,7 +1,7 @@
 import { DARKNET_METADATA_NETWORK_CONFIGS } from "./darknetMetadataConstants.ts";
 
 type MetadataFetcher = (input: string | URL | Request, init?: RequestInit & { proxy?: string }) => Promise<Response>;
-type BoundaryOptions = { proxyUrl: string; fetcher?: MetadataFetcher };
+type BoundaryOptions = { proxyUrl: string; fetcher?: MetadataFetcher; requestTimeoutMs?: number };
 
 export class TorMetadataHttpBoundary {
   readonly id = "tor-approved-metadata-proxy";
@@ -10,12 +10,15 @@ export class TorMetadataHttpBoundary {
   readonly config = DARKNET_METADATA_NETWORK_CONFIGS.tor;
   private readonly fetcher: MetadataFetcher;
   private readonly proxyUrl: string;
+  private readonly requestTimeoutMs: number;
 
   constructor(options: BoundaryOptions) {
     const proxy = new URL(options.proxyUrl);
     if (!["http:", "https:"].includes(proxy.protocol) || proxy.username || proxy.password) throw new Error("Tor metadata proxy must be an HTTP(S) URL without embedded credentials");
     this.proxyUrl = proxy.toString();
     this.fetcher = options.fetcher ?? fetch;
+    const requestTimeoutMs = Number(options.requestTimeoutMs ?? this.config.requestTimeoutMs);
+    this.requestTimeoutMs = Number.isFinite(requestTimeoutMs) ? Math.min(this.config.requestTimeoutMs, Math.max(1, requestTimeoutMs)) : this.config.requestTimeoutMs;
   }
 
   async fetchMetadata(request: any) {
@@ -25,7 +28,7 @@ export class TorMetadataHttpBoundary {
       const response = await this.fetcher(target.toString(), {
         headers: { "user-agent": "hanasand-ti-metadata/1.0" },
         redirect: "manual",
-        signal: AbortSignal.timeout(this.config.requestTimeoutMs),
+        signal: AbortSignal.timeout(this.requestTimeoutMs),
         proxy: this.proxyUrl
       } as RequestInit & { proxy: string });
       if ([301, 302, 303, 307, 308].includes(response.status)) {
@@ -37,7 +40,7 @@ export class TorMetadataHttpBoundary {
       if (!response.ok) throw Object.assign(new Error(`Tor metadata HTTP ${response.status}`), { httpStatus: response.status });
       const contentType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
       if (contentType && !["text/html", "application/xhtml+xml", "text/plain", "application/json"].includes(contentType)) throw new Error(`Tor metadata unsupported media type: ${contentType}`);
-      const body = await boundedText(response, maxBytes);
+      const body = await boundedText(response, maxBytes, this.requestTimeoutMs);
       return contentType === "application/json" ? metadataFromJson(body.text, request.actorName) : metadataFromHtml(body.text, request.actorName);
     }
     throw new Error("Tor metadata redirect limit exceeded");
@@ -50,22 +53,33 @@ function approvedOnionUrl(value: string): URL {
   return url;
 }
 
-async function boundedText(response: Response, maxBytes: number) {
+async function boundedText(response: Response, maxBytes: number, timeoutMs: number) {
   const reader = response.body?.getReader();
   if (!reader) return { text: "", truncated: false };
   const decoder = new TextDecoder();
   let text = "", bytes = 0;
-  while (true) {
-    const chunk = await reader.read();
-    if (chunk.done) break;
-    const remaining = maxBytes - bytes;
-    if (remaining <= 0) { await reader.cancel(); return { text: text + decoder.decode(), truncated: true }; }
-    const accepted = chunk.value.byteLength > remaining ? chunk.value.subarray(0, remaining) : chunk.value;
-    bytes += accepted.byteLength;
-    text += decoder.decode(accepted, { stream: true });
-    if (accepted.byteLength < chunk.value.byteLength) { await reader.cancel(); return { text: text + decoder.decode(), truncated: true }; }
+  let timeout: Timer | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error(`Tor metadata response body timeout after ${timeoutMs}ms`)), timeoutMs);
+  });
+  try {
+    while (true) {
+      const chunk = await Promise.race([reader.read(), deadline]);
+      if (chunk.done) break;
+      const remaining = maxBytes - bytes;
+      if (remaining <= 0) { await reader.cancel(); return { text: text + decoder.decode(), truncated: true }; }
+      const accepted = chunk.value.byteLength > remaining ? chunk.value.subarray(0, remaining) : chunk.value;
+      bytes += accepted.byteLength;
+      text += decoder.decode(accepted, { stream: true });
+      if (accepted.byteLength < chunk.value.byteLength) { await reader.cancel(); return { text: text + decoder.decode(), truncated: true }; }
+    }
+    return { text: text + decoder.decode(), truncated: false };
+  } catch (error) {
+    void reader.cancel().catch(() => undefined);
+    throw error;
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
-  return { text: text + decoder.decode(), truncated: false };
 }
 
 function metadataFromHtml(html: string, actorName?: string) {
