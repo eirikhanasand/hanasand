@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T13:05:00.000Z",
+  "generatedAt": "2026-08-09T13:43:33.000Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -1355,6 +1355,83 @@
           "contentType": "application/json",
           "adapter": "tor_metadata",
           "legalBasisVerifiedAt": "2026-08-09T11:00:47.000Z"
+        }
+      }
+    },
+    {
+      "id": "restricted_abyss_data_victim_js",
+      "name": "Abyss-Data victim metadata",
+      "type": "tor_metadata",
+      "url": "http://3ev4metjirohtdpshsqlkrqcmxq6zu3d7obrdhglpy5jpbr7whmlfgqd.onion/static/data.js",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.86,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public victim-listing organization titles from the credential-free JavaScript data asset. Never authenticate, interact with operators, follow payload or contact links, or retain descriptions, links, passwords, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-08-09T13:43:33.000Z",
+        "approvedBy": "source-review:goal8-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "AbyssData",
+        "actors": [
+          "AbyssData",
+          "Abyss Locker"
+        ],
+        "discoveryAuthorityUrl": "https://www.ransomlook.io/doc/",
+        "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/abyss-data",
+        "discoveryCheckedAt": "2026-08-09T13:43:33.000Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T13:43:33.000Z",
+        "productionCollectionVerifiedAt": "2026-08-09T13:43:33.000Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "js_data_title",
+        "parserShape": "const data = [{ 'title': '...' }]",
+        "observedParsedItemCount": 48,
+        "reportedVictimCount": 91,
+        "lastReportedVictimAt": "2026-06-01T17:49:38.186262Z",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+        "discoveryAuthorityChain": [
+          {
+            "name": "RansomLook",
+            "role": "current public ransomware-group registry matching the exact endpoint, victim-listing role, and availability",
+            "url": "https://www.ransomlook.io/doc/",
+            "recordUrl": "https://www.ransomlook.io/api/group/abyss-data"
+          },
+          {
+            "name": "FortiGuard Labs",
+            "role": "independent technical research identifying Abyss Locker ransomware and its data-theft activity",
+            "url": "https://www.fortinet.com/uk/blog/threat-research/",
+            "recordUrl": "https://www.fortinet.com/uk/blog/threat-research/ransomware-roundup-abyss-locker"
+          },
+          {
+            "name": "Red Piranha",
+            "role": "independent current reporting of June 2026 Abyss-Data ransomware activity",
+            "url": "https://redpiranha.net/news",
+            "recordUrl": "https://redpiranha.net/news/threat-intelligence-report-jun-2-jun-8-2026"
+          }
+        ],
+        "attribution": "Current RansomLook endpoint verification, independent FortiGuard Labs actor research, current Red Piranha activity reporting, and approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T13:43:33.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 48,
+          "httpStatus": 200,
+          "contentType": "application/javascript",
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T13:43:33.000Z"
         }
       }
     }

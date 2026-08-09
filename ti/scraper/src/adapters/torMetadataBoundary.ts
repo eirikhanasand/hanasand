@@ -39,9 +39,15 @@ export class TorMetadataHttpBoundary {
       }
       if (!response.ok) throw Object.assign(new Error(`Tor metadata HTTP ${response.status}`), { httpStatus: response.status });
       const contentType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
-      if (contentType && !["text/html", "application/xhtml+xml", "text/plain", "application/json"].includes(contentType)) throw new Error(`Tor metadata unsupported media type: ${contentType}`);
+      const actor = String(request.actorName ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const approvedJavascript = contentType === "application/javascript" && actor === "abyssdata" && target.pathname === "/static/data.js";
+      if (contentType && !["text/html", "application/xhtml+xml", "text/plain", "application/json"].includes(contentType) && !approvedJavascript) throw new Error(`Tor metadata unsupported media type: ${contentType}`);
       const body = await boundedText(response, maxBytes, this.requestTimeoutMs);
-      return contentType === "application/json" ? metadataFromJson(body.text, request.actorName) : metadataFromHtml(body.text, request.actorName);
+      return contentType === "application/json"
+        ? metadataFromJson(body.text, request.actorName)
+        : approvedJavascript
+          ? metadataFromJavascript(body.text, request.actorName)
+          : metadataFromHtml(body.text, request.actorName);
     }
     throw new Error("Tor metadata redirect limit exceeded");
   }
@@ -182,6 +188,16 @@ function metadataFromJson(json: string, actorName?: string) {
     sourceTimestamp,
     links: []
   };
+}
+
+function metadataFromJavascript(javascript: string, actorName?: string) {
+  if (!/^\s*(?:const|let|var)\s+data\s*=\s*\[[\s\S]*\]\s*;?\s*$/.test(javascript)) throw new Error("Tor metadata JavaScript parser rejected unsupported payload");
+  const titles = [...javascript.matchAll(/\{\s*'title'\s*:\s*'((?:\\.|[^'\\])*)'/g)]
+    .map((match) => match[1].replace(/\\'/g, "'").replace(/\\r|\\n|\\t/g, " ").replace(/\\\\/g, "\\"));
+  const victimNames = safeVictimNames(titles);
+  if (!victimNames.length) throw new Error("Tor metadata JavaScript parser found no approved victim listing");
+  const title = `${safeMetadataText(actorName ?? "")} victim metadata`.trim().slice(0, 300);
+  return { title, description: victimNames.join(" | ").slice(0, 1_000), actorName, parserProfile: "js_data_title", victimName: victimNames[0], victimNames, links: [] };
 }
 
 function tag(html: string, name: string): string { return html.match(new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)<\\/${name}>`, "i"))?.[1] ?? ""; }

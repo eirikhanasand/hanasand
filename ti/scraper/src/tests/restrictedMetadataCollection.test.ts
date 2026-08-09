@@ -262,6 +262,19 @@ describe("restricted metadata collection", () => {
     expect(JSON.stringify(parsed)).not.toMatch(/private|revenue|contact|navigation|rejected/i);
   });
 
+  test("extracts only allowlisted AbyssData JavaScript victim titles", async () => {
+    const body = `const data = [
+      {'title': 'Northwind Health', 'short': 'private response detail', 'full': 'do-not-store', 'links': ['secret'], 'password': 'credential'},
+      {'title': 'Contoso Manufacturing', 'short': 'private response detail', 'full': 'do-not-store', 'links': []}
+    ];`;
+    const boundary = new TorMetadataHttpBoundary({ proxyUrl: "http://onion-tor:8118", fetcher: async () => new Response(body, { headers: { "content-type": "application/javascript" } }) });
+    const parsed = await boundary.fetchMetadata({ url: `http://${"a".repeat(56)}.onion/static/data.js`, actorName: "AbyssData" });
+
+    expect(parsed).toMatchObject({ victimNames: ["Northwind Health", "Contoso Manufacturing"], parserProfile: "js_data_title", links: [] });
+    expect(JSON.stringify(parsed)).not.toMatch(/private|credential|secret|do-not-store|short|full|password/i);
+    await expect(boundary.fetchMetadata({ url: `http://${"a".repeat(56)}.onion/static/data.js`, actorName: "Unapproved" })).rejects.toThrow("unsupported media type");
+  });
+
   test("persists allowlisted Genesis section-card names without retaining card details", async () => {
     const store = new InMemoryScraperStore();
     const restrictedHost = `${"z".repeat(56)}.onion`;
