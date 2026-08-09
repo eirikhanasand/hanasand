@@ -67,11 +67,13 @@ export async function GET(request: NextRequest) {
         fetchJson(base, '/v1/dwm/webhooks/deliveries?tenantId=default'),
     ])
 
+    const scraperUnavailable = !health.ok
     return NextResponse.json({
-        ok: true,
+        ok: !scraperUnavailable,
         generatedAt: new Date().toISOString(),
         query,
         baseConfigured: true,
+        ...(scraperUnavailable ? { error: { code: 'ti_scraper_unavailable', message: 'The scraper health endpoint is unavailable.' } } : {}),
         endpoints: {
             health: endpointResult(health),
             sources: endpointResult(sources),
@@ -106,7 +108,7 @@ export async function GET(request: NextRequest) {
         alerts: alerts.json,
         watchlists: watchlists.json,
         deliveries: deliveries.json,
-    }, { headers: { 'cache-control': 'no-store' } })
+    }, { status: scraperUnavailable ? 503 : 200, headers: { 'cache-control': 'no-store' } })
 }
 
 export async function POST(request: NextRequest) {
