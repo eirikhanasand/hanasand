@@ -65,6 +65,25 @@ describe("public coverage", () => {
     expect(body.qualification).toMatchObject({ counts: { clearWeb: 28, lawfulDarkWeb: 4, publicTelegram: 13, total: 45 }, gaps: { lawfulDarkWeb: 996 } });
   });
 
+  test("does not publish qualification counts from an unmeasured raw PostgreSQL summary", async () => {
+    const store: any = {
+      querySourceOperationalSummary: async () => ({ summary: {
+        operationalMetricsMeasured: false,
+        sourceCount: 1699,
+        retainedSourceCount: 214,
+        inactiveSourceCount: 1485,
+        qualifyingClearWebSourceCount: 28,
+        qualifyingLawfulDarkWebSourceCount: 4,
+        qualifyingPublicTelegramSourceCount: 13
+      } }),
+      listTimelinessRecords: () => []
+    };
+
+    const body = await publicCoverage({ store, frontier: {} as any });
+    expect(body.usefulCoverage).toMatchObject({ measurementState: "not_measured", everUsefulSourceCount: null });
+    expect(body.qualification).toMatchObject({ measurementState: "not_measured", counts: { clearWeb: null, lawfulDarkWeb: null, publicTelegram: null, total: null }, baselineMet: null });
+  });
+
   test("is exposed as an unauthenticated read-only route", async () => {
     const store: any = { listSources: () => [], listTimelinessRecords: () => [] };
     const response = await handleApiRequest(new Request("http://local/v1/public/coverage"), { store, frontier: {} as any });
