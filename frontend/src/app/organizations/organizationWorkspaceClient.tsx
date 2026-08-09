@@ -402,7 +402,7 @@ function deliveryOutcomeSummary(delivery: DeliveryRow) {
 }
 
 function deliveryActionResultSummary(delivery: DeliveryRow | null | undefined, fallback: string) {
-    if (!delivery) return fallback
+    if (!delivery) throw new Error(`No durable delivery result was returned for ${fallback}.`)
     const trace = deliveryTraceLabel(delivery)
     const traceText = trace ? ` ${trace}.` : ''
     if (delivery.status === 'failed' || delivery.error) return `${deliveryFailureSummary(delivery)}${traceText}`
@@ -1215,7 +1215,7 @@ export default function OrganizationWorkspaceClient() {
             }),
         })
         const delivery = firstDelivery(result)
-        return deliveryActionResultSummary(delivery, `${destination.name || destination.id} tested.`)
+        return deliveryActionResultSummary(delivery, 'destination test')
     }, `destination-${destination.id}`)
 
     const replayDelivery = (delivery: DeliveryRow) => selectedOrganization && runAction('replay-delivery', async () => {
@@ -1229,7 +1229,7 @@ export default function OrganizationWorkspaceClient() {
             }),
         })
         const nextDelivery = firstDelivery(result)
-        return deliveryActionResultSummary(nextDelivery, 'Delivery replay requested.')
+        return deliveryActionResultSummary(nextDelivery, 'delivery replay')
     }, `delivery-${delivery.id}`, activitySubjectForDelivery(delivery, bundle.webhooks))
 
     const createSavedDestination = () => selectedOrganization && runAction('create-destination', async () => {
