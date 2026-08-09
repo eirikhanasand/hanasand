@@ -287,11 +287,11 @@ export default async function runSyntheticMonitor() {
         check('threat-intelligence', 'Processing backlog', async () => {
             const result = await run(`
                 WITH latest_review_tasks AS (
-                  SELECT DISTINCT ON (record->>'taskId') record, updated_at
+                  SELECT DISTINCT ON (record->>'id') record, updated_at
                   FROM threat_intel.workflow_records
                   WHERE record_type = 'analyst_metadata_review_task'
                     AND record->>'recordKind' = 'automatic_intelligence_review_task'
-                  ORDER BY record->>'taskId', updated_at DESC
+                  ORDER BY record->>'id', updated_at DESC
                 )
                 SELECT
                   (SELECT count(*)::int FROM latest_review_tasks
