@@ -12,6 +12,7 @@ import { createIndependentEvaluationReference, handleEvaluationBenchmarkRequest 
 import { handleTimelinessRequest } from "./timelinessRoutes.ts";
 import { reconcileActorIdentityCoverage } from "../pipeline/mitreActorCatalog.ts";
 import { handleAutomaticReviewRequest } from "./automaticReviewRoutes.ts";
+import { upsertServiceMonitorIncident } from "./serviceMonitorIncident.ts";
 
 const listRoutes = {
   "/v1/intel/sources": ["sources", "listSources"],
@@ -36,6 +37,18 @@ const listRoutes = {
 } as const;
 
 export async function handleStructuredIntelRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
+  if (new URL(request.url).pathname === "/v1/intel/service-monitor-incidents" && request.method === "POST") {
+    const authentication = await authenticateOperatorRequest(request, options);
+    if (authentication.error) return authentication.error;
+    if (!authentication.identity?.roles.includes("service")) return error("service_monitor_forbidden", "Service monitor incidents require the internal service token", 403);
+    const input = await readJson<any>(request);
+    const observationsValid = Array.isArray(input?.observations) && input.observations.every((observation: any) => observation && ["up", "down"].includes(observation.status) && Number.isFinite(Number(observation.latencyMs)) && Number.isFinite(Number(observation.consecutiveFailures)) && Number.isFinite(Date.parse(String(observation.checkedAt))));
+    if (!input || typeof input.service !== "string" || !input.service.trim() || typeof input.checkName !== "string" || !input.checkName.trim() || !["up", "down"].includes(input.status) || !Number.isFinite(Number(input.latencyMs)) || !Number.isFinite(Number(input.consecutiveFailures)) || !Number.isFinite(Date.parse(String(input.checkedAt))) || !Number.isFinite(Date.parse(String(input.incidentStartedAt))) || !observationsValid) {
+      return error("invalid_service_monitor_incident", "Service monitor incident fields are invalid", 400);
+    }
+    const result = await upsertServiceMonitorIncident(options, input);
+    return json({ incident: result.incident ? safeIncidentDto(result.incident) : undefined, queued: result.queued }, result.incident ? 201 : 200);
+  }
   const automaticReviewResponse = await handleAutomaticReviewRequest(request, options);
   if (automaticReviewResponse) return automaticReviewResponse;
   const url = new URL(request.url);
@@ -412,6 +425,7 @@ function apiRecord(collection: string, record: any, url: URL, tenantId?: string,
 
 function safeIncidentDto(incident: any) {
   const automatic = incident.automaticReview;
+  const monitor = incident.record?.serviceMonitor;
   const attribution = incident.reviewState === "confirmed" && incident.actorAttribution?.identityId && incident.actorAttribution?.canonicalName && incident.actorAttribution?.provenance
     ? {
       identityId: incident.actorAttribution.identityId,
@@ -451,6 +465,20 @@ function safeIncidentDto(incident: any) {
       action: automatic.decision?.action,
       claimValidity: automatic.decision?.claimValidity,
       confidence: automatic.decision?.confidence
+    } : undefined,
+    serviceMonitor: monitor ? {
+      schemaVersion: monitor.schemaVersion,
+      service: monitor.service,
+      checkName: monitor.checkName,
+      state: monitor.state,
+      firstDownAt: monitor.firstDownAt,
+      lastCheckedAt: monitor.lastCheckedAt,
+      lastStatus: monitor.lastStatus,
+      lastLatencyMs: monitor.lastLatencyMs,
+      lastError: monitor.lastError,
+      consecutiveFailures: monitor.consecutiveFailures,
+      recoveryAt: monitor.recoveryAt,
+      evidenceCount: monitor.evidenceCount,
     } : undefined,
     extractorVersion: incident.extractorVersion,
     reviewReasons: incident.reviewReasons ?? []
