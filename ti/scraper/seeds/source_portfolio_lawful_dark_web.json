@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T09:43:27.218Z",
+  "generatedAt": "2026-08-09T10:12:13.149Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -453,7 +453,6 @@
     { "id": "restricted_contfr_victim_blog", "actorName": "ContFR", "endpointHash": "a9cf176c2df1fda6", "disposition": "rejected", "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.", "evidenceCheckedAt": "2026-08-09T09:25:48.433Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/contfr", "countsAsCoverage": false },
     { "id": "restricted_doommageddon_victim_blog", "actorName": "Doommageddon", "endpointHash": "39ea7bcc64b7be46", "disposition": "rejected", "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.", "evidenceCheckedAt": "2026-08-09T09:25:47.570Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/doommageddon", "countsAsCoverage": false },
     { "id": "restricted_booba_project_victim_blog", "actorName": "Booba Project", "endpointHash": "364b1ac5fb08fa8d", "disposition": "rejected", "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.", "evidenceCheckedAt": "2026-08-09T09:41:23.791Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/Booba%20Project", "countsAsCoverage": false },
-    { "id": "restricted_dragonforce_victim_blog", "actorName": "DragonForce", "endpointHash": "4ae9811a2a380362", "disposition": "rejected", "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.", "evidenceCheckedAt": "2026-08-09T09:41:23.748Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/dragonforce", "countsAsCoverage": false },
     { "id": "restricted_embargo_victim_blog", "actorName": "Embargo", "endpointHash": "933fd6663d0da45f", "disposition": "rejected", "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.", "evidenceCheckedAt": "2026-08-09T09:41:28.946Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/embargo", "countsAsCoverage": false },
     { "id": "restricted_everest_victim_blog", "actorName": "Everest", "endpointHash": "5c83ef4e4d93819b", "disposition": "rejected", "reason": "The current approved-proxy page produced no useful output under existing or safely bounded actor-scoped parser contracts.", "evidenceCheckedAt": "2026-08-09T09:41:26.587Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/everest", "countsAsCoverage": false },
     { "id": "restricted_funksec_victim_blog", "actorName": "FunkSec", "disposition": "rejected", "reason": "The current authority inventory no longer reported an available credential-free v3 endpoint.", "evidenceCheckedAt": "2026-08-09T09:41:28.947Z", "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/funksec", "countsAsCoverage": false },
@@ -1025,6 +1024,76 @@
           "contentType": "text/html",
           "adapter": "tor_metadata",
           "legalBasisVerifiedAt": "2026-08-09T09:00:45.254Z"
+        }
+      }
+    },
+    {
+      "id": "restricted_dragonforce_victim_blog",
+      "name": "DragonForce victim blog",
+      "type": "tor_metadata",
+      "url": "http://dragonforxxbp3awc7mzs5dkswrua3znqyx5roefmi4smjrsdi22xwqd.onion",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.84,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public victim-listing organization names and publication metadata. Never authenticate, interact with operators, follow payload or contact links, or retain descriptions, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-08-09T10:12:13.149Z",
+        "approvedBy": "source-review:goal8-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "DragonForce",
+        "actors": [
+          "DragonForce"
+        ],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/developers",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/dragonforce",
+        "discoveryCheckedAt": "2026-08-09T10:12:13.149Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T10:12:13.149Z",
+        "productionCollectionVerifiedAt": "2026-08-09T10:12:13.149Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "companies_status_link",
+        "parserShape": "a.text-pointer-animations.link-{published|going|stopped}",
+        "observedParsedItemCount": 24,
+        "reportedVictimCount": 636,
+        "lastReportedVictimAt": "2026-08-06T10:24:56.336000+00:00",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+        "discoveryAuthorityChain": [
+          {
+            "name": "Ransomwhere.org",
+            "role": "current public proxy inventory for the upstream ransomware.live group catalog",
+            "url": "https://ransomwhere.org/developers",
+            "recordUrl": "https://ransomwhere.org/api/groups/dragonforce"
+          },
+          {
+            "name": "Check Point Research",
+            "role": "independent current ransomware activity and victim-volume research",
+            "url": "https://research.checkpoint.com/",
+            "recordUrl": "https://research.checkpoint.com/2026/the-state-of-ransomware-q1-2026/"
+          }
+        ],
+        "attribution": "Ransomwhere.org public inventory, current independent Check Point Research, and approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T10:12:13.149Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 24,
+          "httpStatus": 200,
+          "contentType": "text/html",
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T10:12:13.149Z"
         }
       }
     }

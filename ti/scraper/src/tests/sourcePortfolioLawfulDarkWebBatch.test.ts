@@ -26,7 +26,8 @@ describe("lawful dark-web source portfolio batch", () => {
       ["restricted_global_secret_group_victim_blog", ["card_body_title", 24]],
       ["restricted_triple_x_victim_blog", ["post_container_title", 4]],
       ["restricted_exitium_victim_blog", ["target_card_title", 4]],
-      ["restricted_insomnia_victim_blog", ["book_card_info_title", 24]]
+      ["restricted_insomnia_victim_blog", ["book_card_info_title", 24]],
+      ["restricted_dragonforce_victim_blog", ["companies_status_link", 24]]
     ]);
 
     expect(batch).toMatchObject({
@@ -38,7 +39,7 @@ describe("lawful dark-web source portfolio batch", () => {
       retentionClass: "restricted_metadata"
     });
     expect(report).toMatchObject({ valid: true, errors: [] });
-    expect(report.accepted).toHaveLength(8);
+    expect(report.accepted).toHaveLength(9);
     expect(report.accepted.find((row) => row.id === "restricted_ms13089_victim_blog")).toMatchObject({
       id: "restricted_ms13089_victim_blog",
       status: "candidate",
@@ -83,7 +84,7 @@ describe("lawful dark-web source portfolio batch", () => {
       expect(Number.isFinite(Date.parse(accepted.metadata.lastReportedVictimAt))).toBe(true);
     }
     expect(new Set(feedKeys).size).toBe(feedKeys.length);
-    expect(rejected).toHaveLength(80);
+    expect(rejected).toHaveLength(79);
     expect(new Set(rejected.map((row) => row.id)).size).toBe(rejected.length);
     expect(rejected.every((row) => row.disposition === "rejected" && row.countsAsCoverage === false)).toBe(true);
     expect(JSON.stringify(rejected)).not.toMatch(/\.onion\b|https?:\/\/[a-z2-7]{56}\b/i);
