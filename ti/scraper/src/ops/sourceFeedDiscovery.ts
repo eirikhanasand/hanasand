@@ -16,6 +16,7 @@ import { randomUUID } from "node:crypto";
 const REQUEST_ID = "req_source_feed_discovery";
 const DAY_SECONDS = 86_400;
 const MAX_RESPONSE_BYTES = 512_000;
+const RANSOMWARE_CATALOG_RESPONSE_BYTES = 2_000_000;
 
 type DiscoverySource = {
   id: string;
@@ -250,7 +251,7 @@ async function discoverFeedProofs(input: {
   const pageUrl = safePublicReference(response.url || input.reference.referenceUrl);
   if (!response.ok) throw new Error(`Public feed discovery returned HTTP ${response.status}.`);
   if (!pageUrl) throw new Error("Public feed discovery returned an unsafe response URL.");
-  const body = await abortable(boundedResponseText(response, MAX_RESPONSE_BYTES), input.signal);
+  const body = await abortable(boundedResponseText(response, responseMaxBytes(pageUrl)), input.signal);
   const direct = feedProof(body, pageUrl, response.headers.get("content-type"), input.generatedAt);
   if (direct) return [direct];
   const advertised = await advertisedFeedProofs(body, pageUrl, input.fetcher, input.generatedAt, input.maxFeeds, input.signal);
@@ -345,7 +346,7 @@ async function advertisedFeedProofs(html: string, pageUrl: string, fetcher: Cana
       if (!response.ok) continue;
       const effectiveUrl = safePublicReference(response.url || url);
       if (!effectiveUrl) continue;
-      const body = await abortable(boundedResponseText(response, MAX_RESPONSE_BYTES), signal);
+      const body = await abortable(boundedResponseText(response, responseMaxBytes(effectiveUrl)), signal);
       const proof = feedProof(body, effectiveUrl, response.headers.get("content-type"), generatedAt);
       if (proof && !proofs.some((row) => row.feedEndpointKey === proof.feedEndpointKey)) proofs.push(proof);
     } catch {
@@ -366,7 +367,7 @@ async function relatedPublisherFeedProofs(html: string, pageUrl: string, fetcher
       if (!response.ok) continue;
       const effectiveUrl = safePublicReference(response.url || url);
       if (!effectiveUrl) continue;
-      const body = await abortable(boundedResponseText(response, MAX_RESPONSE_BYTES), signal);
+      const body = await abortable(boundedResponseText(response, responseMaxBytes(effectiveUrl)), signal);
       const direct = feedProof(body, effectiveUrl, response.headers.get("content-type"), generatedAt);
       const discovered = direct ? [direct] : await advertisedFeedProofs(body, effectiveUrl, fetcher, generatedAt, 1, signal);
       for (const proof of discovered) {
@@ -672,6 +673,14 @@ async function boundedResponseText(response: Response, maxBytes: number) {
     await reader.cancel().catch(() => undefined);
     throw error;
   }
+}
+
+function responseMaxBytes(referenceUrl: string) {
+  try {
+    const url = new URL(referenceUrl);
+    if (url.hostname === "data.ransomware.live" && url.pathname === "/groups.json") return RANSOMWARE_CATALOG_RESPONSE_BYTES;
+  } catch {}
+  return MAX_RESPONSE_BYTES;
 }
 
 function safePublicReference(value: unknown): string | undefined {
