@@ -92,6 +92,19 @@ describe("public coverage", () => {
     });
   });
 
+  test("uses the bounded persisted latency aggregate instead of enumerating history", async () => {
+    let enumerated = false;
+    const store: any = {
+      querySourceOperationalSummary: async () => ({ summary: { measurementState: "not_measured", sourceCount: 0, retainedSourceCount: 0, inactiveSourceCount: 0 } }),
+      queryPublicCoverageLatency: async () => ({ status: "observed", sampleCount: 2, medianSeconds: 4, p95Seconds: 8 }),
+      listTimelinessRecords: () => { enumerated = true; return []; }
+    };
+
+    const body = await publicCoverage({ store, frontier: {} as any });
+    expect(body.observedAlertLatencySeconds).toEqual({ status: "observed", sampleCount: 2, medianSeconds: 4, p95Seconds: 8 });
+    expect(enumerated).toBe(false);
+  });
+
   test("does not publish qualification counts from an unmeasured raw PostgreSQL summary", async () => {
     const store: any = {
       querySourceOperationalSummary: async () => ({ summary: {

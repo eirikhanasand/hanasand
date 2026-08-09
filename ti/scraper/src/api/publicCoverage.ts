@@ -13,7 +13,9 @@ export async function publicCoverage(options: ApiServerOptions) {
   const measured = summary.operationalMetricsMeasured !== false
     && summary.measurementState !== "source_counts_only"
     && sourceQualification.measurementState !== "not_measured";
-  const latency = latencySummary((options.store.listTimelinessRecords?.() ?? []).filter((record: any) => !record.tenantId));
+  const latency = typeof options.store.queryPublicCoverageLatency === "function"
+    ? await options.store.queryPublicCoverageLatency()
+    : latencySummary((options.store.listTimelinessRecords?.() ?? []).filter((record: any) => !record.tenantId));
 
   return {
     schemaVersion: "public.coverage.v2",

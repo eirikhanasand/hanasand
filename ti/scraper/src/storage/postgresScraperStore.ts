@@ -1322,6 +1322,25 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return { schemaVersion: "ti.source_operations_summary.v1", generatedAt: input.generatedAt, tenantId: input.tenantId ?? "global", summary: row?.summary ?? {} };
   }
 
+  async queryPublicCoverageLatency() {
+    const [row] = await this.sql`
+      SELECT count(*)::int AS sample_count,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (alerted_at - first_reported_at))) AS median_seconds,
+        percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (alerted_at - first_reported_at))) AS p95_seconds
+      FROM threat_intel.timeliness_records
+      WHERE tenant_id IS NULL
+        AND first_reported_at IS NOT NULL
+        AND alerted_at IS NOT NULL
+        AND alerted_at >= first_reported_at
+    `;
+    return {
+      status: Number(row?.sample_count ?? 0) ? "observed" : "not_enough_observations",
+      sampleCount: Number(row?.sample_count ?? 0),
+      medianSeconds: row?.median_seconds == null ? null : Number(row.median_seconds),
+      p95Seconds: row?.p95_seconds == null ? null : Number(row.p95_seconds)
+    };
+  }
+
   override async listActorProfilesForOwnership(): Promise<any[]> {
     return (await this.sql`SELECT record FROM threat_intel.actor_profiles ORDER BY first_seen_at, id`).map(readRecord);
   }

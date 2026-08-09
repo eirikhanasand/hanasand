@@ -20,7 +20,9 @@ import type { RansomwareOperationCatalogSnapshot } from "../pipeline/ransomwareO
 import { publicReferenceUrl } from "../pipeline/timelinessGroundTruth.ts";
 import { mayContainExposureQueueClaim } from "../product/exposureQueueCandidate.ts";
 import { isLegacySourceReviewCandidate } from "../policy/sourceAutomaticReview.ts";
-export interface RawEvidenceStore extends CaptureMetadataStore {} export interface ScraperStore extends CaptureMetadataStore {}
+export interface RawEvidenceStore extends CaptureMetadataStore {} export interface ScraperStore extends CaptureMetadataStore {
+  queryPublicCoverageLatency?: () => Promise<{ status: string; sampleCount: number; medianSeconds: number | null; p95Seconds: number | null }>;
+}
 export type ActorIdentityCatalogSnapshot = MitreActorCatalogSnapshot | RansomwareOperationCatalogSnapshot;
 export type ActorIdentityCatalogProvenance = { sourceId: string; captureId: string; importedAt?: string };
 const mapValues = <T>(map: Map<string, T>) => [...map.values()];
