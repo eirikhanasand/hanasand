@@ -44,10 +44,8 @@ export type ExposureQueue = {
 
 export function exposureQueueFallback(status: 'checking' | 'unavailable', limit: number): ExposureQueue {
     return {
-        generatedAt: new Date().toISOString(),
+        generatedAt: '',
         status,
-        freshness: { latestClaimAt: null, ageMinutes: null, maxLiveAgeMinutes: 60 },
-        scheduler: { state: status, cadenceSeconds: 300 },
         page: { limit, offset: 0 },
         items: [],
     }
@@ -55,7 +53,7 @@ export function exposureQueueFallback(status: 'checking' | 'unavailable', limit:
 
 export function normalizeExposureQueue(value: unknown): ExposureQueue {
     const record = isRecord(value) ? value : {}
-    const generatedAt = typeof record.generatedAt === 'string' ? record.generatedAt : new Date().toISOString()
+    const generatedAt = typeof record.generatedAt === 'string' ? record.generatedAt : ''
     const items = Array.isArray(record.items) ? record.items.map(normalizeExposureQueueItem).filter((item): item is ExposureQueueItem => Boolean(item)) : []
     const freshnessRecord = isRecord(record.freshness) ? record.freshness : {}
     const schedulerRecord = isRecord(record.scheduler) ? record.scheduler : {}
@@ -63,7 +61,7 @@ export function normalizeExposureQueue(value: unknown): ExposureQueue {
     const pageRecord = isRecord(record.page) ? record.page : {}
     return {
         generatedAt,
-        status: String(record.status || (items.length ? 'stale' : 'checking')),
+        status: String(record.status || (generatedAt || items.length ? (items.length ? 'stale' : 'checking') : 'unavailable')),
         freshness: {
             latestClaimAt: typeof freshnessRecord.latestClaimAt === 'string' || freshnessRecord.latestClaimAt === null ? freshnessRecord.latestClaimAt : undefined,
             latestCollectedAt: typeof freshnessRecord.latestCollectedAt === 'string' || freshnessRecord.latestCollectedAt === null ? freshnessRecord.latestCollectedAt : undefined,

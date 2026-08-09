@@ -2,8 +2,20 @@ import { strict as assert } from 'node:assert'
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, test } from 'node:test'
 import { dwmOrganizationMutationDenial, dwmStorageScope, resolveDwmRequestScope, withDwmRequestScope } from '../src/app/api/dwm/_tiProxy'
+import { exposureQueueFallback, normalizeExposureQueue } from '../src/app/exposureQueue'
 
 describe('DWM tenant scope', () => {
+    test('keeps unavailable exposure data distinct from an empty successful feed', () => {
+        assert.deepEqual(exposureQueueFallback('unavailable', 10), {
+            generatedAt: '',
+            status: 'unavailable',
+            page: { limit: 10, offset: 0 },
+            items: [],
+        })
+        assert.equal(normalizeExposureQueue({}).status, 'unavailable')
+        assert.equal(normalizeExposureQueue({ items: [] }).status, 'unavailable')
+    })
+
     test('derives a personal tenant from the authenticated identity', () => {
         const scope = resolveDwmRequestScope({
             identityId: 'user-123',
