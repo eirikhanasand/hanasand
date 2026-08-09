@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { buildDwmWebhookDestinationLifecycle } from '../src/utils/dwm/webhooks.ts'
+import { buildDwmWebhookDestinationLifecycle, buildDwmWebhookDestinationTestContract } from '../src/utils/dwm/webhooks.ts'
 
 const baseDestination = {
     id: 'destination_1',
@@ -69,14 +69,14 @@ test('dry-run history never makes a webhook destination live-ready', () => {
         canManage: true,
     })[0]
     expect(dryRun.lifecycleState).toMatchObject({
-        primary: 'live_delivery_unverified',
+        primary: 'test_required',
         active: false,
         liveDeliveryUnverified: true,
         liveVerified: false,
-        verified: true,
+        verified: false,
     })
     expect(dryRun.lifecycleReadinessReceipt.status).toMatchObject({
-        nextDeliveryState: 'live_delivery_unverified',
+        nextDeliveryState: 'test_required',
         readyForLive: false,
     })
 
@@ -97,4 +97,39 @@ test('dry-run history never makes a webhook destination live-ready', () => {
         nextDeliveryState: 'ready',
         readyForLive: true,
     })
+
+    const noTest = buildDwmWebhookDestinationTestContract({
+        destination: { ...baseDestination, lastTestedAt: null, lastTestStatus: null } as any,
+        liveDeliveryEnabled: true,
+        viewerRole: 'owner',
+        canManage: true,
+    })
+    expect(noTest.status).toBe('pending')
+
+    const failed = buildDwmWebhookDestinationTestContract({
+        destination: { ...baseDestination, lastTestStatus: 'failed' } as any,
+        deliveries: [testDelivery('dry_run') as any],
+        liveDeliveryEnabled: true,
+        viewerRole: 'owner',
+        canManage: true,
+    })
+    expect(failed.status).toBe('test_failed')
+
+    const dryRunContract = buildDwmWebhookDestinationTestContract({
+        destination: baseDestination as any,
+        deliveries: [testDelivery('dry_run') as any],
+        liveDeliveryEnabled: true,
+        viewerRole: 'owner',
+        canManage: true,
+    })
+    expect(dryRunContract.status).toBe('pending')
+
+    const deliveredContract = buildDwmWebhookDestinationTestContract({
+        destination: { ...baseDestination, lastTestStatus: 'delivered' } as any,
+        deliveries: [testDelivery('delivered') as any],
+        liveDeliveryEnabled: true,
+        viewerRole: 'owner',
+        canManage: true,
+    })
+    expect(deliveredContract.status).toBe('verified')
 })

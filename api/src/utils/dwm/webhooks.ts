@@ -4891,7 +4891,7 @@ export function buildDwmWebhookDashboardReadinessAdapter({
             health.lastTest.status === 'failed' ? 'test_failed' : null,
             health.retry.retryable ? 'retry_scheduled' : null,
             terminalFailure ? 'terminal_failure' : null,
-            health.enabled && endpointPresent && health.lastTest.requestId && health.lastTest.status !== 'failed' ? 'verified' : null,
+            health.enabled && endpointPresent && health.lastTest.requestId && health.lastTest.status === 'delivered' ? 'verified' : null,
         ].filter(Boolean) as string[]
         const blockers = [
             ...policyBlockers.map(blocker => ({ ...blocker, destinationId: health.destinationId })),
@@ -7135,9 +7135,7 @@ export function buildDwmWebhookDestinationTestContract({
     if (!liveDeliveryEnabled) blockers.push(testContractBlocker('live_delivery_disabled', 'Live webhook delivery is disabled for this environment; tests default to dry-run.', destinationId, false))
     const uniqueBlockers = uniqueTestContractBlockers(blockers)
     const blockingCodes = uniqueBlockers.filter(blocker => blocker.blocking).map(blocker => blocker.code)
-    const verified = latestTest?.status === 'dry_run'
-        || latestTest?.status === 'delivered'
-        || persistedLastTest?.status === 'dry_run'
+    const verified = latestTest?.status === 'delivered'
         || persistedLastTest?.status === 'delivered'
     const latestTestStatus = latestTest?.status || persistedLastTest?.status || null
     const expectedIdempotencyKey = destination ? buildIdempotencyKey('dwm.alert.test', destination.orgId, destination.id, 'webhook_test') : null
@@ -10208,7 +10206,7 @@ function destinationLifecycleState({
         && !health.lastFailure.retryable
         && health.lastFailure.errorClass !== 'live_delivery_disabled'
     )
-    const verified = health.lastTest.status === 'dry_run' || health.lastTest.status === 'delivered'
+    const verified = health.lastTest.status === 'delivered'
     const liveVerified = health.lastTest.status === 'delivered'
     const liveDeliveryUnverified = health.enabled && endpointPresent && !liveVerified
     const testRequired = health.enabled && endpointPresent && (!verified || secretRotated)
@@ -11687,7 +11685,7 @@ function destinationHealthStates(health: ReturnType<typeof buildDwmWebhookDestin
         health.lastTest.status === 'failed' ? 'test_failed' : null,
         health.retry.retryable ? 'retry_scheduled' : null,
         terminalFailure ? 'terminal_failure' : null,
-        health.enabled && endpointPresent && health.lastTest.requestId && health.lastTest.status !== 'failed' ? 'verified' : null,
+        health.enabled && endpointPresent && health.lastTest.requestId && health.lastTest.status === 'delivered' ? 'verified' : null,
     ].filter(Boolean) as string[]
     return [...new Set(states.length ? states : ['unverified'])]
 }
