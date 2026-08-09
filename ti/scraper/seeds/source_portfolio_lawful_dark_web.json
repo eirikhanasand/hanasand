@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T11:00:47.000Z",
+  "generatedAt": "2026-08-09T13:05:00.000Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",

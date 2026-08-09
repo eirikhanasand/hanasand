@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { importRestrictedMetadataSeedBundle } from "../registry/restrictedSourceSeeds.ts";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
+import { validateSourcePortfolioBatch } from "../registry/sourcePortfolioBatch.ts";
 
 describe("lawful dark-web source portfolio batch", () => {
   test("admits only parser-verified feeds and keeps failed probes out of coverage", () => {
@@ -14,6 +15,7 @@ describe("lawful dark-web source portfolio batch", () => {
       "utf8"
     ));
     const report = importRestrictedMetadataSeedBundle(batch, "2026-08-09T10:00:00.000Z");
+    const portfolioReport = validateSourcePortfolioBatch(batch, batch.generatedAt);
     const rejected = batch.reviewedRejectedCandidates as Array<Record<string, unknown>>;
     const source = batch.sources.find((row: any) => row.id === "restricted_ms13089_victim_blog");
     const revalidated = batch.sources.find((row: any) => row.id === "restricted_deadlock_victim_blog");
@@ -42,6 +44,7 @@ describe("lawful dark-web source portfolio batch", () => {
       retentionClass: "restricted_metadata"
     });
     expect(report).toMatchObject({ valid: true, errors: [] });
+    expect(portfolioReport).toMatchObject({ valid: true, errors: [] });
     expect(report.accepted).toHaveLength(12);
     expect(report.accepted.find((row) => row.id === "restricted_ms13089_victim_blog")).toMatchObject({
       id: "restricted_ms13089_victim_blog",
