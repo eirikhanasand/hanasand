@@ -1209,6 +1209,12 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         FROM threat_intel.captures
         WHERE tenant_id IS NOT DISTINCT FROM $1::text
         GROUP BY source_id, tenant_id
+      ), latest_health AS (
+        SELECT DISTINCT ON (source_id, tenant_id)
+          source_id, tenant_id, checked_at, success, useful, capture_count, parser_warning_count
+        FROM threat_intel.source_health
+        WHERE tenant_id IS NOT DISTINCT FROM $1::text
+        ORDER BY source_id, tenant_id, checked_at DESC, id DESC
       ), ranked_sources AS (
         SELECT sources.*,
           row_number() OVER (
@@ -1274,15 +1280,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         'neverObservedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NULL)
       ) AS summary
       FROM ranked_sources sources
-      LEFT JOIN LATERAL (
-        SELECT source_health.source_id, source_health.checked_at, source_health.success,
-          source_health.useful, source_health.capture_count, source_health.parser_warning_count
-        FROM threat_intel.source_health
-        WHERE source_health.source_id = sources.id
-          AND source_health.tenant_id IS NOT DISTINCT FROM $1::text
-        ORDER BY source_health.checked_at DESC, source_health.id DESC
-        LIMIT 1
-      ) latest_health ON TRUE
+      LEFT JOIN latest_health
+        ON latest_health.source_id = sources.id
+        AND latest_health.tenant_id IS NOT DISTINCT FROM sources.tenant_id
       WHERE NOT $2::boolean OR sources.collection_executable
     `, [input.tenantId ?? null, input.executableOnly === true]);
     return { schemaVersion: "ti.source_operations_summary.v1", generatedAt: input.generatedAt, tenantId: input.tenantId ?? "global", summary: row?.summary ?? {} };
