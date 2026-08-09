@@ -47,6 +47,12 @@ export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
     const configuredRules = await loadConfiguredMillRules(key.organizationId)
     const accepted: string[] = []
     const normalizedEvents = (events as MillEvent[]).map(event => ({ normalized: normalizeMillEvent(event, source), eventId: randomUUID() }))
+    const missingTimestamps = normalizedEvents.flatMap(({ normalized }, index) => normalized.timestamp
+        ? []
+        : [{ field: `events[${index}].timestamp`, message: 'timestamp is required and must be provided by the event.' }])
+    if (missingTimestamps.length) {
+        return res.status(400).send({ error: { code: 'invalid_mill_event_fields', message: 'Correct the invalid event fields and try again.', fields: missingTimestamps } })
+    }
     for (let offset = 0; offset < normalizedEvents.length; offset += 50) {
         await Promise.all(normalizedEvents.slice(offset, offset + 50).map(async ({ normalized, eventId }) => {
             await run(`
@@ -460,7 +466,7 @@ export function normalizeMillEvent(event: MillEvent, source: Record<string, unkn
     const adapted = adaptVendorEvent(event, source)
     const user = object(adapted.user)
     const sourceContext = object(adapted.source)
-    const timestamp = typeof adapted.timestamp === 'string' && !Number.isNaN(Date.parse(adapted.timestamp)) ? new Date(adapted.timestamp).toISOString() : new Date().toISOString()
+    const timestamp = typeof adapted.timestamp === 'string' && !Number.isNaN(Date.parse(adapted.timestamp)) ? new Date(adapted.timestamp).toISOString() : ''
     const vendor = stringValue(source.vendor) || 'custom'
     const product = stringValue(source.product) || 'generic-json'
     const parserVersion = vendor.toLowerCase().includes('azure') || product.toLowerCase().includes('entra') ? 'mill.azure-entra.v1' : vendor.toLowerCase().includes('defender') || product.toLowerCase().includes('defender') ? 'mill.defender.v1' : /suricata|snort|eve|network/i.test(`${vendor} ${product}`) ? 'mill.network-eve.v1' : 'mill.v1'
