@@ -3884,6 +3884,7 @@ export function humanResultStatus(value?: string) {
     if (value === 'blocked_unsafe_target') return 'Review required'
     if (value === 'ready') return 'Ready'
     if (value === 'partial') return 'Updating'
+    if (value === 'unavailable') return 'Unavailable'
     if (value === 'searching' || value === 'queued') return 'Searching'
     return formatLabel(value)
 }

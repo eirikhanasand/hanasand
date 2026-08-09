@@ -33,8 +33,8 @@ test('does not synthesize an actor profile when canonical evidence is unavailabl
     delete process.env.TI_SCRAPER_API_BASE
     try {
         const result = await searchThreatIntel({ query: 'APT29' })
-        expect(result.status).toBe('searching')
-        expect(result.summary).toBe('Searching')
+        expect(result.status).toBe('unavailable')
+        expect(result.summary).toBe('Search unavailable')
         expect(result.confidence).toBe(0)
         expect(result.operationalStatus).toBeUndefined()
         expect(result.analystLoop).toBeUndefined()

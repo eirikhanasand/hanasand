@@ -1627,7 +1627,8 @@
               "ready",
               "metadata_review",
               "blocked_unsafe_target",
-              "needs_source_activation"
+              "needs_source_activation",
+              "unavailable"
             ]
           },
           "runId": {

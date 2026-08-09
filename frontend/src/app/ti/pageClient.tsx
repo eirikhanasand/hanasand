@@ -208,7 +208,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
     }, [initialQuery, initialResult])
 
     useEffect(() => {
-        if (!result?.refreshAfterSeconds || result.status === 'ready') return
+        if (!result?.refreshAfterSeconds || result.status === 'ready' || result.status === 'unavailable') return
         const expectedQuery = result.query
         const expectedKey = expectedQuery.trim().toLowerCase()
         const timer = window.setTimeout(async () => {

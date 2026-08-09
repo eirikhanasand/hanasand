@@ -362,7 +362,7 @@ export interface components {
             /** @enum {string} */
             cacheStatus?: "hit" | "miss";
             /** @enum {string} */
-            status?: "queued" | "searching" | "partial" | "ready" | "metadata_review" | "blocked_unsafe_target" | "needs_source_activation";
+            status?: "queued" | "searching" | "partial" | "ready" | "metadata_review" | "blocked_unsafe_target" | "needs_source_activation" | "unavailable";
             runId?: string;
             refreshAfterSeconds?: number;
             summary: string;

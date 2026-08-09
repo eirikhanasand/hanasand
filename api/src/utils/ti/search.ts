@@ -3,7 +3,7 @@ export interface TiSearchRequest {
     preferCached?: boolean
 }
 
-export type TiResultState = 'queued' | 'searching' | 'partial' | 'ready' | 'metadata_review' | 'blocked_unsafe_target' | 'needs_source_activation'
+export type TiResultState = 'queued' | 'searching' | 'partial' | 'ready' | 'metadata_review' | 'blocked_unsafe_target' | 'needs_source_activation' | 'unavailable'
 
 export interface TiActivity {
     date: string
@@ -190,9 +190,8 @@ function unavailableResult(query: string, queryKind: NonNullable<TiSearchRespons
         queryKind,
         generatedAt: new Date().toISOString(),
         mode: 'unavailable',
-        status: 'searching',
-        refreshAfterSeconds: 5,
-        summary: 'Searching',
+        status: 'unavailable',
+        summary: 'Search unavailable',
         confidence: 0,
         lastSeen: '',
         aliases: [],
