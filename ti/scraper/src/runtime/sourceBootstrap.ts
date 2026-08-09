@@ -158,8 +158,16 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
   const restricted = effectiveVerified.type === "tor_metadata" && effectiveVerified.metadata?.transportCanary !== true;
   const portfolio = Boolean(effectiveVerified.metadata?.sourcePortfolioVerification);
   const expiredPortfolio = portfolio && !isCurrentSourcePortfolioVerification(effectiveVerified, generatedAt);
-  const runtimeEvidence = portfolio ? currentRuntimeEvidence(existing, generatedAt, store) : undefined;
-  const revalidatedRestricted = restricted && isRevalidatedRetiredRestrictedSource(existing, effectiveVerified, generatedAt);
+  const runtimeEvidence = portfolio ? currentRuntimeEvidence({
+    ...existing,
+    ...effectiveVerified,
+    id: existing.id,
+    tenantId: existing.tenantId,
+    metadata: { ...(existing.metadata ?? {}), ...(effectiveVerified.metadata ?? {}) },
+    health: existing.health,
+    crawlState: existing.crawlState
+  }, generatedAt, store) : undefined;
+  const revalidatedRestricted = restricted && isRevalidatedRestrictedSource(existing, effectiveVerified, generatedAt);
   if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) || revalidatedRestricted : portfolio ? isSafePortfolioUpgradeTarget(existing) : isVerifiedProductionSource(effectiveVerified, generatedAt) && isSafeUpgradeTarget(existing))) return undefined;
   const sameSource = existing.id === effectiveVerified.id || existing.metadata?.verifiedSourceId === effectiveVerified.id;
   const metadata = {
@@ -186,6 +194,8 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
   if (revalidatedRestricted) {
     delete reconciled.metadata.retiredAt;
     delete reconciled.metadata.retiredReason;
+    reconciled.metadata.sourcePortfolioRevalidatedAt = effectiveVerified.metadata?.sourcePortfolioVerification?.verifiedAt;
+    reconciled.crawlState = { ...(existing.crawlState ?? {}), retryCount: 0, nextEligibleAt: generatedAt, backoffUntil: undefined, lastError: undefined, lastErrorAt: undefined };
   }
   if (runtimeEvidence) {
     reconciled.status = "active";
@@ -240,12 +250,15 @@ function isSafeRestrictedUpgradeTarget(source: SourceRecord) {
     && source.governance?.metadataOnly !== false;
 }
 
-function isRevalidatedRetiredRestrictedSource(source: SourceRecord, verified: SourceRecord, generatedAt: string) {
+function isRevalidatedRestrictedSource(source: SourceRecord, verified: SourceRecord, generatedAt: string) {
   const verifiedAt = Date.parse(String(verified.metadata?.sourcePortfolioVerification?.verifiedAt ?? ""));
-  const retiredAt = Date.parse(String(source.metadata?.sourcePortfolioRetiredAt ?? source.metadata?.retiredAt ?? source.updatedAt ?? ""));
-  return source.status === "retired"
+  const stateTimes = [source.metadata?.sourcePortfolioRetiredAt, source.metadata?.retiredAt, source.health?.lastFailureAt, source.crawlState?.lastErrorAt]
+    .map((value) => Date.parse(String(value ?? ""))).filter(Number.isFinite);
+  const lastRevalidatedAt = Date.parse(String(source.metadata?.sourcePortfolioRevalidatedAt ?? ""));
+  return ["active", "candidate", "degraded", "probation", "retired"].includes(source.status)
     && isCurrentSourcePortfolioVerification(verified, generatedAt)
-    && Number.isFinite(verifiedAt) && Number.isFinite(retiredAt) && verifiedAt > retiredAt
+    && stateTimes.length > 0 && Number.isFinite(verifiedAt) && verifiedAt > Math.max(...stateTimes)
+    && (!Number.isFinite(lastRevalidatedAt) || verifiedAt > lastRevalidatedAt)
     && ["high", "restricted"].includes(source.risk)
     && source.type === "tor_metadata"
     && source.accessMethod === "approved_proxy"

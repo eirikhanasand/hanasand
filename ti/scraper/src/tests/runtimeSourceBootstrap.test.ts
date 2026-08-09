@@ -738,7 +738,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       outcome: "content_parsed",
       observedItemCount: 3
     };
-    writeFileSync(seedPath, JSON.stringify({
+    const bundle = {
       version: 1,
       name: "verified Tor metadata",
       disabledByDefault: true,
@@ -749,7 +749,8 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       forbiddenOperations: ["credential_bypass", "captcha_solving", "threat_actor_interaction", "stolen_file_download", "stealth_or_evasion", "unapproved_proxy", "non_metadata_capture"],
       reviewedRejectedCandidates: [],
       sources: [current]
-    }));
+    };
+    writeFileSync(seedPath, JSON.stringify(bundle));
 
     try {
       const first = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-22T12:00:00.000Z" });
@@ -789,6 +790,41 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       const staleRevalidation = bootstrapRuntimeSources(restarted, { seedPaths: [seedPath], generatedAt: "2026-07-22T14:00:00.000Z" });
       expect(staleRevalidation).toMatchObject({ updatedSourceCount: 0, skippedSourceCount: 1 });
       expect(restarted.getSource("src_verified_restricted")).toMatchObject({ status: "retired", metadata: { retiredReason: "newer retirement" } });
+
+      const legacy: any = restrictedSource("src_legacy_canonical", onion("c"), "2026-07-21T00:00:00.000Z");
+      Object.assign(legacy, {
+        status: "active",
+        countsAsCoverage: true,
+        health: { status: "failing", checkedAt: "2026-07-22T09:00:00.000Z", lastFailureAt: "2026-07-22T09:00:00.000Z", lastError: "retry budget exhausted", consecutiveFailures: 15 },
+        crawlState: { retryCount: 15, lastErrorAt: "2026-07-22T09:00:00.000Z", lastError: "retry budget exhausted", backoffUntil: "2026-07-23T09:00:00.000Z" },
+        metadata: { ...legacy.metadata, productionCollection: true, sourcePortfolioQualificationState: "sustained_productive" }
+      });
+      restarted.saveSource(legacy);
+      const canonicalSeed = {
+        ...current,
+        id: "src_revalidated_canonical_seed",
+        url: onion("c"),
+        governance: { ...current.governance, approvedAt: "2026-07-22T12:00:00.000Z" },
+        metadata: {
+          ...current.metadata,
+          actorName: "canonical revalidation",
+          actors: ["canonical revalidation"],
+          productionCollectionVerifiedAt: "2026-07-22T12:00:00.000Z",
+          sourcePortfolioVerification: { ...current.metadata.sourcePortfolioVerification, verifiedAt: "2026-07-22T12:00:00.000Z", legalBasisVerifiedAt: "2026-07-22T12:00:00.000Z" }
+        }
+      };
+      writeFileSync(seedPath, JSON.stringify({ ...bundle, sources: [canonicalSeed] }));
+      const canonical = bootstrapRuntimeSources(restarted, { seedPaths: [seedPath], generatedAt: "2026-07-22T15:00:00.000Z" });
+      expect(canonical).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 1, skippedSourceCount: 0, totalSourceCount: 2 });
+      expect(restarted.getSource("src_legacy_canonical")).toMatchObject({
+        status: "candidate",
+        countsAsCoverage: false,
+        health: { lastError: "retry budget exhausted" },
+        crawlState: { retryCount: 0, nextEligibleAt: "2026-07-22T15:00:00.000Z" },
+        metadata: { sourcePortfolioRevalidatedAt: "2026-07-22T12:00:00.000Z", sourcePortfolioVerification: { verifiedAt: "2026-07-22T12:00:00.000Z" } }
+      });
+      expect(restarted.getSource("src_legacy_canonical")?.crawlState?.backoffUntil).toBeUndefined();
+      expect(restarted.getSource("src_legacy_canonical")?.crawlState?.lastError).toBeUndefined();
     } finally {
       if (previous === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
       else Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = previous;
