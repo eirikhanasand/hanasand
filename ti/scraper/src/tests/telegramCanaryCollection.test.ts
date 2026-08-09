@@ -111,7 +111,10 @@ describe("public Telegram canary collection", () => {
       "src_anti_malware_ru_telegram",
       "src_netlas_telegram",
       "src_f6_cybersecurity_telegram",
-      "src_tumar_one_telegram"
+      "src_tumar_one_telegram",
+      "src_lukas_stefanko_android_malware_telegram",
+      "src_ransomfeed_ransomware_telegram",
+      "src_threat_hunting_father_telegram"
     ]));
     expect(report.accepted.map((item: any) => item.language)).toEqual(expect.arrayContaining(["en", "es", "it", "ru", "hi", "uk", "az", "uz"]));
     expect(report.accepted.find((item: any) => item.id === "src_red_hot_cyber_telegram")).toMatchObject({
@@ -179,6 +182,24 @@ describe("public Telegram canary collection", () => {
       language: "ru",
       metadata: { publisherReference: "https://tumar.one/", sourcePortfolioVerification: { observedItemCount: 4, observedUsefulItemCount: 1 } }
     });
+    expect(report.accepted.find((item: any) => item.id === "src_lukas_stefanko_android_malware_telegram")).toMatchObject({
+      url: "https://t.me/androidMalware",
+      language: "en",
+      status: "candidate",
+      metadata: { productionCollection: false, publisherReference: "https://www.linkedin.com/posts/lukasstefanko_telegram-activity-7324047394982027264-d4PL", sourcePortfolioVerification: { observedItemCount: 20, observedUsefulItemCount: 12 } }
+    });
+    expect(report.accepted.find((item: any) => item.id === "src_ransomfeed_ransomware_telegram")).toMatchObject({
+      url: "https://t.me/RansomFeedNews",
+      language: "en",
+      status: "candidate",
+      metadata: { productionCollection: false, publisherReference: "https://ransomfeed.it/data/cards/recap-2025-01-31.pdf", sourcePortfolioVerification: { observedItemCount: 20, observedUsefulItemCount: 20 } }
+    });
+    expect(report.accepted.find((item: any) => item.id === "src_threat_hunting_father_telegram")).toMatchObject({
+      url: "https://t.me/ThreatHuntingFather",
+      language: "ru",
+      status: "candidate",
+      metadata: { productionCollection: false, publisherReference: "https://www.linkedin.com/posts/rarh1k_dfir-incidentresponse-threathunting-activity-7464006053022654465-mWAa", sourcePortfolioVerification: { observedItemCount: 12, observedUsefulItemCount: 4 } }
+    });
     expect([...families]).toEqual(expect.arrayContaining([
       "apt_research",
       "malware_research",
@@ -215,7 +236,10 @@ describe("public Telegram canary collection", () => {
       "src_anti_malware_ru_telegram",
       "src_netlas_telegram",
       "src_f6_cybersecurity_telegram",
-      "src_tumar_one_telegram"
+      "src_tumar_one_telegram",
+      "src_lukas_stefanko_android_malware_telegram",
+      "src_ransomfeed_ransomware_telegram",
+      "src_threat_hunting_father_telegram"
     ]);
     expect(candidates.every((item: any) => item.countsAsCoverage !== true
       && item.metadata.productionCollection === false
