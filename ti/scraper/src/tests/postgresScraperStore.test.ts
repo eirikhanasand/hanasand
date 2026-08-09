@@ -24,6 +24,23 @@ import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 const collectedAt = "2026-07-19T12:00:00.000Z";
 
 describe("structured threat-intelligence storage contract", () => {
+  test("source summary reads one latest health row per current source", async () => {
+    const store = Object.create(PostgresScraperStore.prototype) as any;
+    let query = "";
+    store.sql = {
+      unsafe: async (text: string) => {
+        query = text;
+        return [{ summary: {} }];
+      }
+    };
+
+    await store.querySourceOperationalSummary({ tenantId: "tenant_summary", generatedAt: collectedAt });
+
+    expect(query).toContain("LEFT JOIN LATERAL");
+    expect(query).toContain("source_health.source_id = sources.id");
+    expect(query).not.toContain("DISTINCT ON (source_id)");
+  });
+
   test("does not require the optional parser cleanup table during normal startup", async () => {
     const store = Object.create(PostgresScraperStore.prototype) as any;
     store.sql = ((strings: TemplateStringsArray) => strings[0].includes("to_regclass") ? [{ table_name: null }] : []) as any;

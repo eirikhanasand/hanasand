@@ -1104,13 +1104,6 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string; executableOnly?: boolean }) {
     const [row] = await this.sql.unsafe(`
-      WITH latest_health AS (
-        SELECT DISTINCT ON (source_id)
-          source_id, checked_at, success, useful, capture_count, parser_warning_count
-        FROM threat_intel.source_health
-        WHERE tenant_id IS NOT DISTINCT FROM $1::text
-        ORDER BY source_id, checked_at DESC
-      )
       SELECT jsonb_build_object(
         'sourceCount', count(*),
         'retainedSourceCount', count(*) FILTER (WHERE collection_executable),
@@ -1154,7 +1147,15 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         'neverObservedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NULL)
       ) AS summary
       FROM threat_intel.sources sources
-      LEFT JOIN latest_health ON latest_health.source_id = sources.id
+      LEFT JOIN LATERAL (
+        SELECT source_health.source_id, source_health.checked_at, source_health.success,
+          source_health.useful, source_health.capture_count, source_health.parser_warning_count
+        FROM threat_intel.source_health AS source_health
+        WHERE source_health.tenant_id IS NOT DISTINCT FROM $1::text
+          AND source_health.source_id = sources.id
+        ORDER BY source_health.checked_at DESC, source_health.id DESC
+        LIMIT 1
+      ) latest_health ON TRUE
       WHERE sources.tenant_id IS NOT DISTINCT FROM $1::text
         AND (NOT $2::boolean OR sources.collection_executable)
     `, [input.tenantId ?? null, input.executableOnly === true]);
