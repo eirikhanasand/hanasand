@@ -23,6 +23,33 @@ import type { CanaryCollectionCycleResult, CanaryCollectionLoopHandle, CanaryCol
 export async function runCanaryCollectionCycle(options: CanaryCollectionOptions): Promise<CanaryCollectionCycleResult> {
   if (options.store.batch && !options.batched) return options.store.batch(() => runCanaryCollectionCycle({ ...options, batched: true }));
   const generatedAt = options.now?.() ?? nowIso(), fetcher = options.fetch ?? fetch, mode = options.fetch ? "injected_proof_fetch" : "native_live_http";
+  const storageFailure = storageBackpressure(options.store);
+  if (storageFailure) {
+    const queueLimit = Math.max(1, Number(options.queueLimit ?? 500));
+    const counters = { leasedTaskCount: 0, completedTaskCount: 0, insertedCaptureCount: 0, duplicateCaptureCount: 0, failedTaskCount: 0, incidentCount: 0, exposureClaimCount: 0, skippedLowValueCount: 0, retryScheduledCount: 0, retryExhaustedCount: 0 };
+    return {
+      generatedAt,
+      tenantId: options.tenantId,
+      mode: "production_canary",
+      status: "failed",
+      activationApplied: false,
+      activatedSourceCount: 0,
+      retiredSourceCount: 0,
+      supersededTaskCount: 0,
+      activeSourceCount: 0,
+      deferredDueSourceCount: 0,
+      queuedTaskCount: 0,
+      queueLimit,
+      availableQueueSlots: Math.max(0, queueLimit - Number(options.frontier.size?.() ?? options.frontier.snapshot?.().length ?? 0)),
+      backpressureState: "storage_failed",
+      storage: storageFailure,
+      ...counters,
+      remainingQueuedTaskCount: 0,
+      latestCaptureIds: [],
+      errors: [{ code: "storage_backpressure", message: storageFailure.message }],
+      health: health(options.store, generatedAt, counters)
+    };
+  }
   const productivity = reconcilePublicSourceProductivity({ ...options, now: generatedAt });
   const activation = options.activateSources ? activatePublicCanarySources({ ...options, now: generatedAt }) : { activated: [], alreadyActive: [], rejected: [] };
   const maxSources = Math.max(1, options.maxSources ?? 10), maxTasks = Math.max(1, options.maxTasks ?? 5), maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
@@ -82,6 +109,16 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const completedAt = options.now?.() ?? nowIso();
   options.store.saveRun?.({ ...resumedRun, id: runId, tenantId: resumedRun?.tenantId ?? options.tenantId, planId, requestId: "req_public_canary", status: runStatus, createdAt: resumedRun?.createdAt ?? generatedAt, startedAt: resumedRun?.startedAt ?? generatedAt, completedAt: runStatus === "queued" ? undefined : completedAt, updatedAt: completedAt, taskCount: resumedRun?.taskCount ?? tasks.length, sourceCount: resumedRun?.sourceCount ?? scheduledSourceIds.size, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, duplicateCaptureCount: counters.duplicateCaptureCount, leasedTaskCount: counters.leasedTaskCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, retryScheduledCount: counters.retryScheduledCount, retryExhaustedCount: counters.retryExhaustedCount, error: errors[0]?.message });
   return { generatedAt, tenantId: options.tenantId, mode: "production_canary", status: runStatus, runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, retiredSourceCount: productivity.retired.length, supersededTaskCount, activeSourceCount: scheduledSourceIds.size, deferredDueSourceCount: allDue.length - scheduledSourceIds.size, queuedTaskCount: tasks.length, queueLimit, availableQueueSlots, backpressureState, ...counters, remainingQueuedTaskCount, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
+}
+
+function storageBackpressure(store: any) {
+  const snapshot = store?.databaseHealthSnapshot?.();
+  if (!snapshot) return undefined;
+  const pendingWrites = Number(snapshot.pendingWrites ?? 0);
+  const lastWriteError = typeof snapshot.lastWriteError === "string" ? snapshot.lastWriteError.trim() : "";
+  if (!lastWriteError && !(snapshot.ok === false && pendingWrites > 0)) return undefined;
+  const reason = lastWriteError || "PostgreSQL write queue is unhealthy.";
+  return { ok: false, pendingWrites, lastWriteError: reason, message: `Collection paused because PostgreSQL writes are unhealthy: ${reason}` };
 }
 
 export function retainCrossSourceEvaluationDiagnostics(store: any, completeCollectedCaptures: any[]) {
