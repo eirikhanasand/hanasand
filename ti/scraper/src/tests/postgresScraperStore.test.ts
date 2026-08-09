@@ -228,8 +228,8 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     const activeId = "src_active_failure";
     const checkedAt = "2026-08-09T10:00:00.000Z";
     const store = await PostgresScraperStore.create({ databaseUrl });
-    store.saveSource(source({ id: retiredId, tenantId, status: "retired" }));
-    store.saveSource(source({ id: activeId, tenantId, status: "active" }));
+    store.saveSource(source({ id: retiredId, tenantId, status: "retired", url: "https://retired.example.test/feed" }));
+    store.saveSource(source({ id: activeId, tenantId, status: "active", url: "https://active.example.test/feed" }));
     store.saveSourceHealthObservation({ id: "health_retired_history", tenantId, sourceId: retiredId, checkedAt, status: "failed", success: false, useful: false, captureCount: 0, legalMode: "public_content" });
     store.saveSourceHealthObservation({ id: "health_active_failure", tenantId, sourceId: activeId, checkedAt, status: "failed", success: false, useful: false, captureCount: 0, legalMode: "public_content" });
     await store.flush();
@@ -259,6 +259,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       metadata: {
         sourceFamily: "clear_web",
         productionCollection: true,
+        sourcePortfolioQualificationState: "sustained_productive",
         activityWindowSeconds: 2_592_000,
         sourcePortfolioVerification: { outcome: "content_parsed" }
       }
@@ -305,6 +306,11 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
 
     const clearWeb = await restarted.querySourceOperationalPage({ tenantId, generatedAt: "2026-07-23T13:00:00.000Z", sourceId });
     expect(clearWeb.totals.qualifyingClearWebSourceCount).toBe(1);
+    expect((await restarted.querySourceOperationalSummary({ tenantId, generatedAt: "2026-07-23T13:00:00.000Z" })).summary).toMatchObject({
+      qualifyingClearWebSourceCount: 1,
+      qualifyingLawfulDarkWebSourceCount: 0,
+      qualifyingPublicTelegramSourceCount: 0
+    });
 
     const current = restarted.getSource(sourceId)!;
     restarted.saveSource({ ...current, metadata: { ...current.metadata, sourceFamily: "dark_web_victim_feed" } });
