@@ -232,6 +232,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     store.saveSource(source({ id: retiredId, tenantId, status: "retired", url: "https://retired.example.test/feed" }));
     store.saveSource(source({ id: activeId, tenantId, status: "active", url: "https://active.example.test/feed" }));
     store.saveSource(source({ id: duplicateOnlyId, tenantId, status: "active", url: "https://duplicate.example.test/feed" }));
+    store.saveSource(source({ id: "src_unobserved", tenantId: "tenant_source_unobserved", status: "active", url: "https://unobserved.example.test/feed" }));
     store.saveSourceHealthObservation({ id: "health_retired_history", tenantId, sourceId: retiredId, checkedAt, status: "failed", success: false, useful: false, captureCount: 0, legalMode: "public_content" });
     store.saveSourceHealthObservation({ id: "health_active_failure", tenantId, sourceId: activeId, checkedAt, status: "failed", success: false, useful: false, captureCount: 0, legalMode: "public_content" });
     store.saveSourceHealthObservation({ id: "health_duplicate_only", tenantId, sourceId: duplicateOnlyId, checkedAt, status: "healthy", success: true, useful: true, captureCount: 0, legalMode: "public_content" });
@@ -247,6 +248,8 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(historical.total).toBe(3);
     expect(historical.rows.map((row: any) => row.record.id).sort()).toEqual([activeId, duplicateOnlyId, retiredId].sort());
     expect(health.map((row: any) => row.id).sort()).toEqual(["health_active_failure", "health_duplicate_only", "health_retired_history"].sort());
+    const unobserved = await store.querySourceOperationalSummary({ tenantId: "tenant_source_unobserved", generatedAt: checkedAt, executableOnly: true });
+    expect(unobserved.summary).toMatchObject({ sourceCount: 1, activeSourceCount: 1, measurementState: "source_counts_only" });
     await store.close();
   });
 

@@ -1251,7 +1251,11 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             AND sources.canonical_rank = 1
             AND source_type = 'telegram_public'
         ),
-        'measurementState', 'measured',
+        'measurementState', CASE
+          WHEN count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL) > 0
+            THEN 'measured'
+          ELSE 'source_counts_only'
+        END,
         'observedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
         'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
         'successfulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success),
