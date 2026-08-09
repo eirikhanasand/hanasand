@@ -195,6 +195,7 @@ describe("deploy hygiene", () => {
     expect(report.checks.find((item) => item.name === "compose.api_depends_on_scraper")?.ok).toBe(false);
     expect(report.checks.find((item) => item.name === "compose.scraper_evidence_volume")?.ok).toBe(false);
     expect(report.checks.find((item) => item.name === "compose.scraper_canary_no_auto_activate")?.ok).toBe(false);
+    expect(report.checks.find((item) => item.name === "compose.automatic_evaluation_opt_in")?.ok).toBe(false);
     expect(report.checks.find((item) => item.name === "dockerignore.root_excludes_env")?.ok).toBe(false);
     expect(() => assertDeployHygiene(report)).toThrow("dockerfile.test_enforced");
   });

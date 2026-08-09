@@ -53,6 +53,7 @@ export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygien
     check("compose.scraper_evidence_root", /TI_EVIDENCE_ROOT:\s*\/var\/lib\/ti-scraper\/evidence/.test(compose), "scraper uses durable production evidence root"),
     check("compose.scraper_evidence_volume", /ti-scraper:[\s\S]*volumes:[\s\S]*ti_scraper_evidence:\/var\/lib\/ti-scraper\/evidence/.test(compose) && /volumes:[\s\S]*ti_scraper_evidence:/.test(compose), "scraper mounts named durable evidence volume"),
     check("compose.scraper_canary_no_auto_activate", /TI_CANARY_AUTO_ACTIVATE:\s*"?false"?/.test(compose), "public canary does not auto-activate sources in production"),
+    check("compose.automatic_evaluation_opt_in", /TI_AUTOMATIC_EVALUATION_ENABLED:\s*\$\{TI_AUTOMATIC_EVALUATION_ENABLED:-false\}/.test(compose), "automatic model evaluation is opt-in in production"),
     check("dockerignore.root_excludes_node_modules", /(^|\n)(frontend\/node_modules|node_modules)(\n|$)/.test(rootDockerignore), "root .dockerignore excludes node_modules"),
     check("dockerignore.scraper_excludes_node_modules", /(^|\n)node_modules(\n|$)/.test(scraperDockerignore), "scraper .dockerignore excludes node_modules"),
     check("dockerignore.root_excludes_env", /(^|\n)frontend\/\.env(\n|$)/.test(rootDockerignore) && /(^|\n)api\/\.env(\n|$)/.test(rootDockerignore), "root .dockerignore excludes frontend/api env files"),

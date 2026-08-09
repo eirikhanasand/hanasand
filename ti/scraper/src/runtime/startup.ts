@@ -188,7 +188,7 @@ export async function startScraperRuntime() {
   const recoveredRuns = recoverCollectionRuns({ store, execute: executeRun });
   const evaluation = startAutomaticEvaluationLoop({
     store,
-    enabled: Bun.env.TI_AUTOMATIC_EVALUATION_ENABLED !== "false",
+    enabled: Bun.env.TI_AUTOMATIC_EVALUATION_ENABLED === "true",
     intervalSeconds: Number(Bun.env.TI_AUTOMATIC_EVALUATION_INTERVAL_SECONDS ?? "60"),
     maxTasks: Number(Bun.env.TI_AUTOMATIC_EVALUATION_MAX_TASKS_PER_CYCLE ?? "2"),
     sampleSize: Number(Bun.env.TI_AUTOMATIC_EVALUATION_SAMPLE_SIZE ?? "50"),
@@ -205,6 +205,6 @@ export async function startScraperRuntime() {
     onCycle: (result) => logger.info("automatic intelligence review cycle", { event: "automatic_review.cycle", ...result }),
     onError: (error: unknown) => logger.warn("automatic intelligence review cycle failed", { event: "automatic_review.error", error: error instanceof Error ? error.message : String(error) })
   });
-  logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0), publicCanaryEnabled: canaryEnabled, defaultCanaryEnabled, collectionConcurrency, publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", automaticEvaluationEnabled: Bun.env.TI_AUTOMATIC_EVALUATION_ENABLED !== "false", recoveredRuns, sourceBootstrap, ...paths });
+  logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0), publicCanaryEnabled: canaryEnabled, defaultCanaryEnabled, collectionConcurrency, publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", automaticEvaluationEnabled: Bun.env.TI_AUTOMATIC_EVALUATION_ENABLED === "true", recoveredRuns, sourceBootstrap, ...paths });
   return { stop: createScraperRuntimeStop({ scheduledRuns, server, canary, defaultCanary, restrictedMetadata, evaluation, automaticReview, store }) };
 }
