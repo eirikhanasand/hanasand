@@ -60,7 +60,14 @@ describe("automatic Hanasand AI intelligence review", () => {
         return completedTools(request, {
           ...supportedDecision(request),
           promptVersion: request.promptVersion,
-          actorAttribution: { canonicalName: null, aliases: [] }
+          action: "mark_needs_review",
+          claimValidity: "uncertain",
+          actorAttribution: { canonicalName: null, aliases: [] },
+          supportingEvidenceIds: [],
+          uncertainty: ["The list lacks indicators of compromise."],
+          falsePositiveReasons: ["The retained names lack narrative context."],
+          rationale: "The victim names lack indicators of compromise.",
+          confidence: 0.4
         } as any);
       }
     });
@@ -69,9 +76,57 @@ describe("automatic Hanasand AI intelligence review", () => {
       sourceFamily: "dark_web_victim_feed",
       actorName: "Example Actor",
       expectedPageRole: "victim_listing",
-      collectionScope: "metadata_only"
+      collectionScope: "metadata_only",
+      verificationOutcome: "content_parsed",
+      verifiedObservedItemCount: 3
     });
     expect(prompt).toContain("a coherent retained list of plausible victim organization names is operational threat intelligence and must be confirmed");
+    expect(store.getSource("victim-list")?.metadata?.automaticSourceReview).toMatchObject({
+      state: "approved",
+      decision: {
+        action: "confirm",
+        claimValidity: "supported",
+        calibrationContext: { policyGate: "verified_victim_listing_contract" }
+      }
+    });
+
+    seedSource(store, "menu-only", "Home");
+    store.updateCaptureMetadata("capture_menu-only", (metadata) => ({ ...metadata, runId: "run-menu-only" }));
+    store.saveSourceHealthObservation({ id: "health-menu-only", tenantId: "default", sourceId: "menu-only", collectionRunId: "run-menu-only", checkedAt: firstAt, success: true, useful: true, captureCount: 1 });
+    const menuSource = store.getSource("menu-only")!;
+    store.saveSource({ ...menuSource, status: "candidate", metadata: {
+      sourceFamily: "dark_web_victim_feed",
+      actorName: "Example Actor",
+      expectedPageRole: "victim_listing",
+      collectionScope: "metadata_only",
+      productionCollection: false,
+      sourcePortfolioVerification: { verifiedAt: firstAt, legalBasisVerifiedAt: firstAt, outcome: "content_parsed", observedItemCount: 1 }
+    } } as any);
+    await runAutomaticReviewCycle(options(store), {
+      now: "2026-07-22T10:01:00.000Z",
+      allTenants: true,
+      limit: 1,
+      modelVersion: "hanasand",
+      fetcher: async (_input, init) => {
+        const reviewed = promptRequest(JSON.parse(String(init?.body)).prompt);
+        return completedTools(reviewed, {
+          ...supportedDecision(reviewed),
+          promptVersion: reviewed.promptVersion,
+          action: "mark_needs_review",
+          claimValidity: "uncertain",
+          actorAttribution: { canonicalName: null, aliases: [] },
+          supportingEvidenceIds: [],
+          uncertainty: ["The retained output is navigation."],
+          falsePositiveReasons: ["The retained output is navigation."],
+          rationale: "The retained output is navigation.",
+          confidence: 0.2
+        } as any);
+      }
+    });
+    expect(store.getSource("menu-only")?.metadata?.automaticSourceReview).toMatchObject({
+      state: "needs_review",
+      decision: { action: "mark_needs_review", claimValidity: "uncertain" }
+    });
   });
 
   test("queues claims and incidents independently in one linear read and sends a bounded safe cross-source projection", async () => {

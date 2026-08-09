@@ -23,7 +23,7 @@ import {
 export { AUTOMATIC_REVIEW_PROMPT_VERSION, AUTOMATIC_REVIEW_RESPONSE_SCHEMA };
 const REQUEST_SCHEMA = "ti.automatic_intelligence_review.request.v7";
 const SOURCE_REQUEST_SCHEMA = "ti.automatic_intelligence_review.request.v6";
-const REPLACEABLE_PROMPT_VERSIONS = new Set(["ti.automatic_intelligence_review.prompt.v4", "ti.automatic_intelligence_review.prompt.v5", "ti.automatic_intelligence_review.prompt.v6", "ti.automatic_intelligence_review.prompt.v7"]);
+const REPLACEABLE_PROMPT_VERSIONS = new Set(["ti.automatic_intelligence_review.prompt.v4", "ti.automatic_intelligence_review.prompt.v5", "ti.automatic_intelligence_review.prompt.v6", "ti.automatic_intelligence_review.prompt.v7", "ti.automatic_intelligence_review.prompt.v8"]);
 const TASK_SCHEMA = "ti.automatic_intelligence_review.task.v1";
 const EVIDENCE_PROJECTION_SCHEMA = "ti.automatic_intelligence_review.evidence_projection.v2";
 const TASK_KIND = "automatic_intelligence_review_task";
@@ -842,6 +842,8 @@ function assertionUnderReview(index: ReviewIndex, subject: AutomaticReviewTask["
       actorName: safeOpaqueText(source.metadata?.actorName, 120),
       expectedPageRole: safeOpaqueText(source.metadata?.expectedPageRole, 80),
       collectionScope: safeOpaqueText(source.metadata?.collectionScope, 80),
+      verificationOutcome: safeOpaqueText(source.metadata?.sourcePortfolioVerification?.outcome, 80),
+      verifiedObservedItemCount: Number.isInteger(source.metadata?.sourcePortfolioVerification?.observedItemCount) && source.metadata.sourcePortfolioVerification.observedItemCount > 0 ? source.metadata.sourcePortfolioVerification.observedItemCount : undefined,
       parserLineage: unique([
         safeOpaqueText(source.metadata?.parserVersion, 120),
         safeOpaqueText(source.metadata?.adapter, 120),
@@ -1172,6 +1174,20 @@ function subjectHasLiveHumanDecision(store: any, subject: AutomaticReviewTask["s
 function governDecision(decision: AutomaticReviewDecision, assertion: Record<string, unknown>, evidence: GovernedEvidence[], identities: ActorIdentityRecord[]) {
   if (decision.subject.type === "source") {
     const reviewed = { ...decision, actorAttribution: { canonicalName: null, aliases: [] } };
+    if (decision.action === "mark_needs_review" && governedVictimListingEvidence(assertion, evidence)) {
+      return { decision: {
+        ...reviewed,
+        action: "confirm" as const,
+        claimValidity: "supported" as const,
+        supportingEvidenceIds: evidence.map((item) => item.id),
+        contradictoryEvidenceIds: [],
+        uncertainty: [],
+        falsePositiveReasons: [],
+        rationale: "The governed metadata-only victim-list contract and retained parser output establish coherent operational threat intelligence.",
+        confidence: Math.max(decision.confidence, 0.8),
+        calibrationContext: { ...decision.calibrationContext, policyGate: "verified_victim_listing_contract" }
+      } };
+    }
     return decision.action === "mark_needs_review"
       ? { quarantineReason: "source_review_uncertain", decision: reviewed }
       : { decision: reviewed };
@@ -1228,6 +1244,27 @@ function governDecision(decision: AutomaticReviewDecision, assertion: Record<str
     actor,
     decision: { ...decision, actorAttribution: { canonicalName: actor.canonicalName, aliases: actor.associatedNames } }
   };
+}
+
+function governedVictimListingEvidence(assertion: Record<string, unknown>, evidence: GovernedEvidence[]) {
+  return assertion.sourceFamily === "dark_web_victim_feed"
+    && assertion.expectedPageRole === "victim_listing"
+    && assertion.collectionScope === "metadata_only"
+    && assertion.verificationOutcome === "content_parsed"
+    && Number(assertion.verifiedObservedItemCount) > 0
+    && evidence.some((item) => plausibleVictimListingExcerpt(item.capture.safeExcerpt));
+}
+
+function plausibleVictimListingExcerpt(value: unknown) {
+  const text = typeof value === "string" ? value.normalize("NFKC").trim() : "";
+  if (!text || /<[^>]+>|https?:\/\/|\b[a-z2-7]{56}\.onion\b/i.test(text)) return false;
+  return text.split(/[\r\n|•]+/).some((entry) => {
+    const name = entry.replace(/^[\s\-–—:]+|[\s\-–—:]+$/g, "").trim();
+    return name.length >= 2
+      && name.length <= 200
+      && /\p{L}/u.test(name)
+      && !/^(?:home|about|contact|login|register|privacy|terms|news|search|menu|next|previous)$/i.test(name);
+  });
 }
 
 function literalIdentifierGrounded(assertion: Record<string, unknown>, evidence: GovernedEvidence[], evidenceIds: string[]) {
