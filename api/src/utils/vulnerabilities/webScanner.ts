@@ -83,6 +83,7 @@ function isApprovedTargetFormat(target: string) {
 }
 
 export async function withWebScanLock<T>(work: () => Promise<T>): Promise<T> {
+    await mkdir(path.dirname(STATE_PATH), { recursive: true })
     let reclaimedPath: string | undefined
     while (true) {
         try {

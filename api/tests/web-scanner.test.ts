@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, utimes } from 'node:fs/promises'
 import path from 'node:path'
 
 const stateDir = await mkdtemp(path.join('/tmp', 'hanasand-web-scan-'))
-process.env.WEB_SCAN_STATE_PATH = path.join(stateDir, 'web-scan.json')
+process.env.WEB_SCAN_STATE_PATH = path.join(stateDir, 'nested', 'missing', 'web-scan.json')
 process.env.WEB_SCAN_INTERVAL_MINUTES = 'not-a-number'
 
 const { countSeverities, headerChecks, normalizeIntervalMinutes, parseApprovedTargets, resolveApprovedTarget, setWebScanSchedule, withWebScanLock } = await import('../src/utils/vulnerabilities/webScanner.ts')
