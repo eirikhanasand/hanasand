@@ -7,6 +7,18 @@ import { expandSourcePortfolioBatch } from "../registry/sourcePortfolioBatch.ts"
 const portfolioPath = "seeds/source_portfolio_public_telegram.json";
 
 describe("independently verified public Telegram source portfolio", () => {
+  test("keeps shipped Telegram endpoints unique across seed packs", async () => {
+    const keys: string[] = [];
+    for await (const path of new Bun.Glob("seeds/*.json").scan(".")) {
+      const serialized = JSON.stringify(await Bun.file(path).json());
+      for (const match of serialized.matchAll(/"url":"(https:\/\/(?:t\.me|telegram\.me)\/[^"?]+)[^"]*"/gi)) {
+        keys.push(canonicalFeedKey(match[1]));
+      }
+    }
+
+    expect(keys.filter((key, index) => keys.indexOf(key) !== index)).toEqual([]);
+  });
+
   test("imports executable publisher-linked channels without endpoint aliases or scraped content", async () => {
     const rawBundle = await Bun.file(portfolioPath).json();
     const bundle = expandSourcePortfolioBatch(rawBundle);
