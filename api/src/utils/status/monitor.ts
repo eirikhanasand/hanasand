@@ -179,6 +179,12 @@ export default async function runSyntheticMonitor() {
             if (response.status !== 200 || !summary || !Number.isFinite(Number(summary.sourceCount))) {
                 throw new Error(`Threat-intelligence source operations are unavailable (${response.status}).`)
             }
+            if (summary.measurementState !== 'measured') {
+                return {
+                    status: 'degraded',
+                    message: `Source operations returned ${String(summary.sourceCount)} sources, but health metrics are not currently measured.`,
+                }
+            }
             const failed = Number(summary.failedSourceCount ?? 0)
             const degraded = Number(summary.degradedSourceCount ?? 0)
             if (failed > 0 || degraded > 0) {
