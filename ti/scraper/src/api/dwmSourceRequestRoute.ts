@@ -6602,13 +6602,12 @@ function sourceActorAlertCaseHandoffReadiness(input: {
 }
 
 function sourceActorIntakeRecommendation(query: string, family: string) {
-  const normalized = query.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "actor";
-  if (family === "telegram") return { type: "telegram_channel", family, targetTemplate: `@${normalized}_public_updates`, policyBoundary: "public_telegram_only" };
-  if (family === "darkweb_onion") return { type: "restricted_metadata", family, targetTemplate: `metadata://darkweb/onion/${normalized}-index`, policyBoundary: "metadata_only_restricted_source" };
-  if (family === "darkweb_metadata") return { type: "restricted_metadata", family, targetTemplate: `metadata://darkweb/${normalized}/claims`, policyBoundary: "metadata_only_restricted_source" };
-  if (family === "public_advisory") return { type: "public_url", family, targetTemplate: `https://example.com/security/advisory/${normalized}`, policyBoundary: "public_metadata_only" };
-  if (family === "actor_page") return { type: "public_url", family, targetTemplate: `https://example.com/threat-actors/${normalized}`, policyBoundary: "public_metadata_only" };
-  return { type: "public_url", family, targetTemplate: `https://example.com/blog/${normalized}-analysis`, policyBoundary: "public_metadata_only" };
+  if (family === "telegram") return { type: "telegram_channel", family, targetTemplate: null, requiresVerifiedTarget: true, policyBoundary: "public_telegram_only" };
+  if (family === "darkweb_onion") return { type: "restricted_metadata", family, targetTemplate: null, requiresVerifiedTarget: true, policyBoundary: "metadata_only_restricted_source" };
+  if (family === "darkweb_metadata") return { type: "restricted_metadata", family, targetTemplate: null, requiresVerifiedTarget: true, policyBoundary: "metadata_only_restricted_source" };
+  if (family === "public_advisory") return { type: "public_url", family, targetTemplate: null, requiresVerifiedTarget: true, policyBoundary: "public_metadata_only" };
+  if (family === "actor_page") return { type: "public_url", family, targetTemplate: null, requiresVerifiedTarget: true, policyBoundary: "public_metadata_only" };
+  return { type: "public_url", family, targetTemplate: null, requiresVerifiedTarget: true, policyBoundary: "public_metadata_only" };
 }
 
 function sourceActorCandidateIntakeContract(query: string, actorReadiness: Record<string, any>) {
@@ -6721,12 +6720,14 @@ function sourceActorCandidateIntakeWorkflow(query: string, sourcePackId: string,
 function sourceActorCandidateIntakePreview(query: string, gap: Record<string, any>) {
   const recommendation = gap.intakeRecommendation ?? sourceActorIntakeRecommendation(query, gap.family);
   const family = recommendation.family as SourceGrowthFamily;
+  const hasVerifiedTarget = typeof recommendation.targetTemplate === "string" && recommendation.targetTemplate.length > 0;
   const metadataOnly = family === "darkweb_onion" || family === "darkweb_metadata" || recommendation.policyBoundary === "metadata_only_restricted_source";
   const publicOnly = family === "telegram" || recommendation.policyBoundary === "public_metadata_only";
-  const policyAllowed = family === "telegram"
+  const policyAllowed = hasVerifiedTarget && (family === "telegram"
     ? recommendation.policyBoundary === "public_telegram_only"
-    : metadataOnly || publicOnly;
+    : metadataOnly || publicOnly);
   const blockers = [
+    ...(!hasVerifiedTarget ? [{ code: "verified_target_required", severity: "blocking", retryable: true }] : []),
     ...(policyAllowed ? [] : [{ code: "policy_rejected", severity: "blocking", retryable: false }]),
     ...(metadataOnly ? [{ code: "metadata_only_restricted_source", severity: "info", retryable: false }] : []),
     ...(family === "telegram" && recommendation.policyBoundary !== "public_telegram_only" ? [{ code: "private_telegram_not_allowed", severity: "blocking", retryable: false }] : [])

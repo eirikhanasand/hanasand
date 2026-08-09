@@ -1881,10 +1881,7 @@ describe("dwm source requests", () => {
               sourcePackId: expect.any(String),
               sourcePackLabel: "APT28 enrichment source pack",
               scope: "APT28",
-              candidates: expect.arrayContaining([
-                expect.objectContaining({ family: "darkweb_onion", type: "restricted_metadata" }),
-                expect.objectContaining({ family: "actor_page", type: "public_url" })
-              ])
+              candidates: []
             }),
             liveNetworkFetch: false
           }),
@@ -1895,7 +1892,7 @@ describe("dwm source requests", () => {
           }),
           expect.objectContaining({
             step: "review_activation",
-            body: expect.objectContaining({ action: "pack_review", packAction: "approve", approveMetadataOnly: true }),
+            body: expect.objectContaining({ action: "pack_review", packAction: "approve", approveMetadataOnly: false }),
             requiresOperatorApproval: true,
             liveNetworkFetch: false
           })
@@ -1911,8 +1908,8 @@ describe("dwm source requests", () => {
           sourcePackLabel: "APT28 enrichment source pack",
           scope: "APT28",
           candidates: expect.arrayContaining([
-            expect.objectContaining({ family: "darkweb_onion", type: "restricted_metadata" }),
-            expect.objectContaining({ family: "actor_page", type: "public_url" })
+            expect.objectContaining({ family: "darkweb_onion", targetTemplate: null, requiresVerifiedTarget: true }),
+            expect.objectContaining({ family: "actor_page", targetTemplate: null, requiresVerifiedTarget: true })
           ])
         }
       },
@@ -1922,52 +1919,13 @@ describe("dwm source requests", () => {
       },
       validationSummary: {
         totalCandidates: 5,
-        accepted: 5,
-        blocked: 0,
-        metadataOnly: expect.any(Number),
-        publicOnly: expect.any(Number)
+        accepted: 0,
+        blocked: 5,
+        metadataOnly: 2,
+        publicOnly: 3
       },
-      candidatePreviews: expect.arrayContaining([
-        expect.objectContaining({
-          schemaVersion: "dwm.actor_source_candidate_intake_preview.v1",
-          family: "darkweb_onion",
-          policyResult: expect.objectContaining({
-            allowed: true,
-            metadataOnly: true,
-            liveNetworkFetch: false,
-            rawRestrictedPayloadStorage: false
-          }),
-          parserExpectation: expect.objectContaining({
-            profile: "restricted_metadata",
-            expectedCaptureType: "darkweb_onion_metadata_observation",
-            liveNetworkRequiredForProof: false
-          }),
-          activationReadiness: expect.objectContaining({
-            canCreateCandidate: true,
-            canAutoActivate: false,
-            requiresOperatorApproval: true,
-            requiresMetadataOnlyApproval: true,
-            idempotencyKey: expect.any(String)
-          }),
-          blockers: expect.arrayContaining([
-            expect.objectContaining({ code: "metadata_only_restricted_source", severity: "info" })
-          ]),
-          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-        }),
-        expect.objectContaining({
-          family: "actor_page",
-          policyResult: expect.objectContaining({ allowed: true, publicOnly: true }),
-          parserExpectation: expect.objectContaining({
-            profile: "actor_page_metadata",
-            expectedCaptureType: "actor_page_metadata"
-          }),
-          alertability: expect.objectContaining({
-            canEventuallyProduceAlert: true,
-            alertableFields: expect.arrayContaining(["actorName", "aliases"])
-          })
-        })
-      ])
     });
+    expect(JSON.stringify(body.candidateIntakeContract)).not.toContain("example.com");
     expect(body.candidateIntakeContract).not.toHaveProperty("fixtureManifest");
     expect(body.proofArtifacts.publicTiQueryAdapter.sourceOperationsReadiness.rows
       .some((row: Record<string, unknown>) => "fixtureReadiness" in row)).toBe(false);
