@@ -818,7 +818,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       };
       writeFileSync(seedPath, JSON.stringify({ ...bundle, sources: [canonicalSeed] }));
       const canonical = bootstrapRuntimeSources(restarted, { seedPaths: [seedPath], generatedAt: "2026-07-22T15:00:00.000Z" });
-      expect(canonical).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 1, skippedSourceCount: 0, totalSourceCount: 3 });
+      expect(canonical).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 2, skippedSourceCount: 0, totalSourceCount: 3 });
       expect(restarted.getSource("src_legacy_canonical")).toMatchObject({
         status: "candidate",
         countsAsCoverage: false,
@@ -828,7 +828,30 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       });
       expect(restarted.getSource("src_legacy_canonical")?.crawlState?.backoffUntil).toBeUndefined();
       expect(restarted.getSource("src_legacy_canonical")?.crawlState?.lastError).toBeUndefined();
-      expect(restarted.getSource("src_tenant_canonical")).toMatchObject({ tenantId: "default", status: "active", countsAsCoverage: true });
+      expect(restarted.getSource("src_tenant_canonical")).toMatchObject({
+        tenantId: "default",
+        status: "retired",
+        countsAsCoverage: false,
+        metadata: {
+          productionCollection: false,
+          sourcePortfolioStatus: "retired_canonical_duplicate",
+          sourcePortfolioCanonicalOwnerId: "src_legacy_canonical"
+        }
+      });
+
+      const tenantOnly: any = restrictedSource("src_tenant_only_canonical", onion("d"), "2026-07-21T00:00:00.000Z");
+      Object.assign(tenantOnly, { tenantId: "default", status: "active", countsAsCoverage: true, metadata: { ...tenantOnly.metadata, productionCollection: true } });
+      restarted.saveSource(tenantOnly);
+      const globalSeed = { ...canonicalSeed, id: "src_new_global_canonical", url: onion("d") };
+      writeFileSync(seedPath, JSON.stringify({ ...bundle, sources: [globalSeed] }));
+      const importedGlobal = bootstrapRuntimeSources(restarted, { seedPaths: [seedPath], generatedAt: "2026-07-22T15:30:00.000Z" });
+      expect(importedGlobal).toMatchObject({ importedSourceCount: 1, updatedSourceCount: 1, skippedSourceCount: 0, totalSourceCount: 5 });
+      expect(restarted.getSource("src_new_global_canonical")).toMatchObject({ status: "candidate", countsAsCoverage: false });
+      expect(restarted.getSource("src_tenant_only_canonical")).toMatchObject({
+        tenantId: "default",
+        status: "retired",
+        metadata: { sourcePortfolioCanonicalOwnerId: "src_new_global_canonical" }
+      });
     } finally {
       if (previous === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
       else Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = previous;
