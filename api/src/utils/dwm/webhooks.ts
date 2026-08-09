@@ -6566,7 +6566,7 @@ export function buildDwmAlertWebhookReadinessHandoff({
     if (!watchlist.id && !watchlist.name && watchlist.terms.length === 0) blockers.push(alertReadinessBlocker('missing_watchlist_context', 'Watchlist identity or matched term is required for customer context.'))
     if (!normalizedAlert.sourceFamily || normalizedAlert.sourceFamily === 'dark_web' && !normalizedAlert.provenanceSummary) blockers.push(alertReadinessBlocker('missing_source_proof', 'Source family or provenance proof is required for customer delivery.'))
     if (normalizedAlert.evidenceCount <= 0) blockers.push(alertReadinessBlocker('missing_evidence', 'At least one evidence item is required for customer delivery.'))
-    if (!normalizedAlert.eventTimestamp) blockers.push(alertReadinessBlocker('missing_timestamp', 'An evidence-backed alert timestamp is required for customer delivery.'))
+    if (!normalizedAlert.eventTimestamp) blockers.push(alertReadinessBlocker('missing_timestamp', 'A source observation timestamp is required for customer delivery.'))
     if (dispatch.selectedDestinations.length === 0) blockers.push(alertReadinessBlocker('no_enabled_destination', 'No enabled destination is selected for this org alert.'))
     for (const skipped of dispatch.skippedDestinations) {
         if (skipped.reason === 'disabled') blockers.push(alertReadinessBlocker('destination_disabled', 'A destination exists but is disabled for this alert event.', skipped.id))
