@@ -119,6 +119,7 @@ describe("restricted metadata collection", () => {
       Insomnia: '<div class="book-card"><div class="card-info"><h3 class="info-title"><a>Insomnia Victim</a></h3><p>private detail</p></div></div>',
       Barracuda: '<article><div class="image-area">image only</div><div class="body"><h3>Barracuda Victim</h3><p>private detail</p></div></article>',
       CRPX0: '<div class="victim-card"><div class="card-header-info"><h3>CRPX0 Victim</h3><p>private detail</p></div></div>',
+      "Nasir Security": '<div class="news-content"><h3 class="news-title">Nasir Victim</h3><p class="news-summary">private detail</p></div>',
       DragonForce: '<div class="companies-list"><div class="text"><a class="text-pointer-animations link-published">DragonForce Victim</a></div><a class="text-pointer-animations navigation-link">private detail</a></div>',
       "Global Secret Group": '<div class="card-body"><h3 class="card-title">Global Victim</h3><p class="card-description">private detail</p></div>',
       "Triple X": '<div class="post"><h2 class="post-title">Triple Victim</h2><div class="post-content">private detail</div></div>'
@@ -130,6 +131,7 @@ describe("restricted metadata collection", () => {
       Insomnia: "book_card_info_title",
       Barracuda: "article_body_h3",
       CRPX0: "victim_card_h3",
+      "Nasir Security": "news_content_title",
       DragonForce: "companies_status_link",
       "Global Secret Group": "card_body_title",
       "Triple X": "post_container_title"

@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T14:11:18.000Z",
+  "generatedAt": "2026-08-09T14:20:26.000Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -1512,6 +1512,89 @@
           "contentType": "text/html",
           "adapter": "tor_metadata",
           "legalBasisVerifiedAt": "2026-08-09T14:11:18.000Z"
+        }
+      }
+    },
+    {
+      "id": "restricted_nasir_security_victim_blog",
+      "name": "Nasir Security public claim metadata",
+      "type": "tor_metadata",
+      "url": "http://yzcpwxuhbkyjnyn4qsf4o5dkvu6m2fyo7dwizmnlutanlmzlos7pa6qd.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.86,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public claimed-victim organization headings from the credential-free news listing. Never authenticate, interact with operators, follow payload or contact links, or retain summaries, categories, dates from prose, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-08-09T14:20:26.000Z",
+        "approvedBy": "source-review:goal8-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Nasir Security",
+        "actors": [
+          "Nasir Security",
+          "Nasir"
+        ],
+        "discoveryAuthorityUrl": "https://www.ransomlook.io/doc/",
+        "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/nasir%20security",
+        "discoveryCheckedAt": "2026-08-09T14:20:26.000Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T14:20:26.000Z",
+        "productionCollectionVerifiedAt": "2026-08-09T14:20:26.000Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "news_content_title",
+        "parserShape": ".news-content .news-title",
+        "observedParsedItemCount": 1,
+        "reportedVictimCount": 13,
+        "lastReportedVictimAt": "2026-04-15T14:51:41.185217Z",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+        "discoveryAuthorityChain": [
+          {
+            "name": "RansomLook",
+            "role": "current public ransomware-group registry matching the exact endpoint, claim-listing role, and availability",
+            "url": "https://www.ransomlook.io/doc/",
+            "recordUrl": "https://www.ransomlook.io/api/group/nasir%20security"
+          },
+          {
+            "name": "WatchGuard Technologies",
+            "role": "independent current ransomware tracker binding Nasir Security to the same public Tor endpoint and direct-extortion role",
+            "url": "https://www.watchguard.com/wgrd-security-hub/ransomware-tracker",
+            "recordUrl": "https://www.watchguard.com/wgrd-security-hub/ransomware-tracker/nasir"
+          },
+          {
+            "name": "ThaiCERT",
+            "role": "government CERT reporting of current Nasir Security targeting and supply-chain attack activity",
+            "url": "https://www.thaicert.or.th/en/",
+            "recordUrl": "https://www.thaicert.or.th/en/2026/03/25/nasir-security-group-targets-energy-companies-in-the-middle-east/"
+          },
+          {
+            "name": "Resecurity",
+            "role": "independent vendor research on Nasir Security activity against Middle Eastern energy organizations",
+            "url": "https://www.resecurity.com/blog",
+            "recordUrl": "https://www.resecurity.com/jp/blog/article/pro-iranian-nasir-security-is-targeting-the-energy-sector-in-the-middle-east"
+          }
+        ],
+        "attribution": "Current RansomLook and WatchGuard endpoint verification, ThaiCERT and Resecurity actor research, and approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T14:20:26.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 1,
+          "httpStatus": 200,
+          "contentType": "text/html",
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T14:20:26.000Z"
         }
       }
     }
