@@ -25,7 +25,11 @@ const saveCollectedClaim = (store: InMemoryScraperStore, item: any) => saveExpos
   source: { name: item.sourceName || "Collected exposure source", url: item.url || "https://collector.example/feed" },
   rawText: item.text,
   collectedAt: item.collectedAt || item.publishedAt || new Date().toISOString(),
-  metadata: { adapter: "rss", sourceFamily: item.sourceFamily || "darkweb_metadata" }
+  metadata: {
+    adapter: "rss",
+    sourceFamily: item.sourceFamily || "darkweb_metadata",
+    reportTimestamps: item.publishedAt ? [{ role: "publisher", timestamp: item.publishedAt, referenceUrl: item.url || "https://collector.example/feed", extractionMethod: "source_field" }] : undefined
+  }
 });
 
 describe("DWM exposure queue pipeline", () => {
@@ -84,6 +88,24 @@ describe("DWM exposure queue pipeline", () => {
       expect(store.listSources()).toHaveLength(0);
       expect(store.listCaptures()).toHaveLength(0);
     }
+  });
+
+  test("does not persist restricted collector claims without publisher evidence", async () => {
+    const store = new InMemoryScraperStore();
+    const collected = {
+      sourceId: "src_unproven_restricted",
+      source: { name: "Unproven actor feed", url: "https://collector.example/feed" },
+      title: "Akira has just published a new victim: Contoso",
+      rawText: "Akira victim: Contoso. 10 GB claimed.",
+      url: "https://collector.example/contoso",
+      collectedAt: "2026-07-20T09:04:00.000Z",
+      publishedAt: "2026-07-20T09:00:00.000Z",
+      metadata: { adapter: "rss", sourceFamily: "darkweb_metadata" }
+    };
+
+    expect(await saveExposureClaimFromCollectedItem(store, collected)).toBeUndefined();
+    expect(store.listSources()).toHaveLength(0);
+    expect(store.listCaptures()).toHaveLength(0);
   });
 
   test("fetches real tenant public-incident evidence without fabricating a dark-web victim claim", async () => {
