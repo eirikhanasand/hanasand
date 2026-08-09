@@ -193,8 +193,11 @@ describe("automatic Hanasand AI intelligence review", () => {
       linkedIndependentSourceCount: 1
     };
     const foreignTask = { ...task, id: "review_foreign", tenantId: "foreign" };
+    const requestedTaskLimits: number[] = [];
     const store: any = {
-      queryAutomaticReviewRecords: async () => ({
+      queryAutomaticReviewRecords: async (input: any) => {
+        requestedTaskLimits.push(input.taskLimit);
+        return {
         tasksAndEvents: [undefined, null, task, sourceTask, foreignTask],
         claims: [{ id: "claim_bounded", tenantId: "default", value: "bounded claim", summary: "retained claim" }],
         incidents: [],
@@ -207,8 +210,10 @@ describe("automatic Hanasand AI intelligence review", () => {
         claimEvidence: [{ id: "claim_evidence_bounded", tenantId: "default", claimId: "claim_bounded", sourceId: "source_bounded", captureId: "capture_claim_bounded", relationship: "supports", evidenceStage: "source_parser_output" }],
         evidenceLinks: [],
         reviews: [],
-        actorIdentities: []
-      }),
+        actorIdentities: [],
+        taskSummary: { total: 2, counts: { queued: 2 }, outcomeCounts: {}, subjectCounts: { claim: 1, source: 1 } }
+        };
+      },
       queryAllStructuredRecords: async () => { throw new Error("unbounded review projection"); }
     };
 
@@ -216,6 +221,7 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(snapshot).toMatchObject({ total: 2, displayedTaskCount: 1 });
     expect([task.id, sourceTask.id]).toContain(snapshot.tasks[0].id);
     const allTasks = await automaticReviewSnapshot(store, "default", 10);
+    expect(requestedTaskLimits).toEqual([100, 100]);
     const claimTask = allTasks.tasks.find((item: any) => item.id === task.id);
     const visibleSourceTask = allTasks.tasks.find((item: any) => item.id === sourceTask.id);
     expect(claimTask?.evidence).toHaveLength(1);

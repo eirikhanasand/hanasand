@@ -396,7 +396,20 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           AND ${tenantWhere}
       `, allTenants ? [] : [tenantId])
       : Promise.resolve([] as Array<{ id: string }>);
-    const [taskRows, eventRows, taskIdRows] = await Promise.all([
+    const taskSummaryQuery = taskLimit
+      ? this.sql.unsafe(`
+        SELECT record->>'state' AS state,
+          record->>'outcome' AS outcome,
+          record->'subject'->>'type' AS subject_type,
+          count(*)::int AS count
+        FROM threat_intel.workflow_records
+        WHERE record_type = 'analyst_metadata_review_task'
+          AND record->>'recordKind' = 'automatic_intelligence_review_task'
+          AND ${tenantWhere}
+        GROUP BY record->>'state', record->>'outcome', record->'subject'->>'type'
+      `, allTenants ? [] : [tenantId])
+      : Promise.resolve([] as Array<{ state?: string; outcome?: string; subject_type?: string; count?: number }>);
+    const [taskRows, eventRows, taskIdRows, taskSummaryRows] = await Promise.all([
       taskRowsQuery,
       taskLimit ? Promise.resolve([]) : this.sql.unsafe(`
         SELECT record
@@ -405,7 +418,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           AND record->>'recordKind' = 'automatic_intelligence_review_event'
           AND ${tenantWhere}
         ORDER BY created_at ASC, id ASC`, allTenants ? [] : [tenantId]),
-      taskIdsQuery
+      taskIdsQuery,
+      taskSummaryQuery
     ]);
     const tasksAndEvents = [...taskRows, ...eventRows].map(readRecord).filter(isRecord);
     const tasks = tasksAndEvents.filter((record: any) => record.recordKind === 'automatic_intelligence_review_task');
@@ -455,6 +469,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return {
       tasksAndEvents,
       taskIds: taskIdRows.map((row: { id: string }) => row.id).filter(Boolean),
+      taskSummary: taskLimit ? summarizeReviewTaskRows(taskSummaryRows) : undefined,
       claims,
       incidents,
       captures,
@@ -3249,6 +3264,22 @@ export function normalizeLegacySourceForImport(source: any): SourceRecord {
     updatedAt: at
   };
 }
+
+function summarizeReviewTaskRows(rows: Array<{ state?: string; outcome?: string; subject_type?: string; count?: number }>) {
+  const counts: Record<string, number> = {};
+  const outcomeCounts: Record<string, number> = {};
+  const subjectCounts: Record<string, number> = {};
+  let total = 0;
+  for (const row of rows) {
+    const rowCount = count(row.count);
+    total += rowCount;
+    if (row.state) counts[row.state] = (counts[row.state] ?? 0) + rowCount;
+    if (row.outcome) outcomeCounts[row.outcome] = (outcomeCounts[row.outcome] ?? 0) + rowCount;
+    if (row.subject_type) subjectCounts[row.subject_type] = (subjectCounts[row.subject_type] ?? 0) + rowCount;
+  }
+  return { total, counts, outcomeCounts, subjectCounts };
+}
+
 function nullable<T>(value: T | null | undefined): T | null { return value ?? null; }
 function score(value: unknown): number { const parsed = Number(value); return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 0; }
 function alertScore(value: unknown): number { const parsed = Number(value); return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : 0; }

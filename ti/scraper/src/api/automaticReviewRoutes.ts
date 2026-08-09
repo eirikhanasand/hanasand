@@ -145,6 +145,14 @@ type ReviewIndex = {
   healthBySource: Map<string, any[]>;
   reviewsByClaim: Map<string, any[]>;
   actorIdentities: ActorIdentityRecord[];
+  taskSummary?: ReviewTaskSummary;
+};
+
+type ReviewTaskSummary = {
+  total: number;
+  counts: Record<string, number>;
+  outcomeCounts: Record<string, number>;
+  subjectCounts: Record<string, number>;
 };
 
 type ReviewIndexCollections = {
@@ -159,6 +167,7 @@ type ReviewIndexCollections = {
   evidenceLinks: any[];
   reviews: any[];
   actorIdentities: ActorIdentityRecord[];
+  taskSummary?: ReviewTaskSummary;
 };
 
 const MAX_STALE_TASKS_SUPERSEDED_PER_CYCLE = 250;
@@ -387,7 +396,11 @@ export function startAutomaticReviewWorker(options: ApiServerOptions, input: { i
 export function automaticReviewSnapshot(store: any, tenantId?: string, requestedLimit = 100): any {
   const limit = Math.max(1, Math.min(250, Math.floor(requestedLimit || 100)));
   if (typeof store.queryAutomaticReviewRecords === "function") {
-    return store.queryAutomaticReviewRecords({ tenantId }).then((collections: ReviewIndexCollections) => reviewSnapshotFromIndex(buildReviewIndexFromCollections(collections), tenantId, limit));
+    const taskLimit = Math.max(100, Math.min(250, limit * 4));
+    return store.queryAutomaticReviewRecords({ tenantId, taskLimit }).then((collections: ReviewIndexCollections) => {
+      if (!collections.taskSummary) throw new Error("Bounded automatic-review query did not return task totals");
+      return reviewSnapshotFromIndex(buildReviewIndexFromCollections(collections), tenantId, limit);
+    });
   }
   if (typeof store.queryAllStructuredRecords === "function") {
     return buildReviewIndexAsync(store, tenantId, false).then((index) => reviewSnapshotFromIndex(index, tenantId, limit));
@@ -399,12 +412,13 @@ function reviewSnapshotFromIndex(index: ReviewIndex, tenantId: string | undefine
   const allTasks = index.tasks.filter((task) => inTenantScope(task, tenantId)).sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
   const allEvents = index.events.filter((event) => inTenantScope(event, tenantId));
   const visible = allTasks.slice(0, limit).map((task) => publicTask(task, index, allEvents));
+  const summary = index.taskSummary;
   return {
     schemaVersion: "ti.automatic_intelligence_review.queue.v1",
-    counts: Object.fromEntries(["queued", "running", "retrying", "dead_letter", "quarantined", "terminal"].map((state) => [state, allTasks.filter((task) => task.state === state).length])),
-    outcomeCounts: Object.fromEntries(["decided", "human_owned", "superseded"].map((outcome) => [outcome, allTasks.filter((task) => task.outcome === outcome).length])),
-    subjectCounts: Object.fromEntries(["claim", "incident", "source"].map((type) => [type, allTasks.filter((task) => task.subject.type === type).length])),
-    total: allTasks.length,
+    counts: summary?.counts ?? Object.fromEntries(["queued", "running", "retrying", "dead_letter", "quarantined", "terminal"].map((state) => [state, allTasks.filter((task) => task.state === state).length])),
+    outcomeCounts: summary?.outcomeCounts ?? Object.fromEntries(["decided", "human_owned", "superseded"].map((outcome) => [outcome, allTasks.filter((task) => task.outcome === outcome).length])),
+    subjectCounts: summary?.subjectCounts ?? Object.fromEntries(["claim", "incident", "source"].map((type) => [type, allTasks.filter((task) => task.subject.type === type).length])),
+    total: summary?.total ?? allTasks.length,
     displayedTaskCount: visible.length,
     hasMore: allTasks.length > visible.length,
     tasks: visible
@@ -1548,7 +1562,8 @@ function buildReviewIndexFromCollections(collections: ReviewIndexCollections): R
     incidentEvidenceByIncident: grouped(evidenceLinks.filter((item: any) => item.subjectType === "incident"), "subjectId"),
     healthBySource: grouped(health, "sourceId"),
     reviewsByClaim: grouped(reviews, "claimId"),
-    actorIdentities
+    actorIdentities,
+    taskSummary: collections.taskSummary
   };
 }
 
