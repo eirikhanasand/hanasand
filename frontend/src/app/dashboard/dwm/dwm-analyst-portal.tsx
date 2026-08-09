@@ -381,14 +381,29 @@ export function DwmAnalystPortal({
 
 function CaseOverview({ tenantId, organizationId, state, alerts }: { tenantId: string, organizationId?: string, state: CasesState, alerts: PortalAlert[] }) {
     const alertsById = new Map(alerts.map(alert => [alert.id, alert]))
+    const [query, setQuery] = useState('')
+    const [status, setStatus] = useState('all')
+    const filteredRows = state.rows.filter(row => {
+        const haystack = [row.title, row.summary, row.actor, row.victimName, row.company, row.organizationId].filter(Boolean).join(' ').toLowerCase()
+        return (!query.trim() || haystack.includes(query.trim().toLowerCase())) && (status === 'all' || row.status === status)
+    })
+    const statuses = Array.from(new Set(state.rows.map(row => row.status).filter(Boolean))).sort()
 
     return (
         <div className='grid gap-4' data-dwm-cases-overview='true'>
             <section className='min-w-0 rounded-lg border border-ui-border bg-ui-panel'>
                 <div className='flex flex-col gap-1 border-b border-ui-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
                     <h1 className='text-lg font-semibold text-ui-text'>Cases</h1>
-                    {state.status === 'ready' && <p className='text-xs font-medium text-ui-muted'>{state.rows.length} case{state.rows.length === 1 ? '' : 's'}</p>}
+                    {state.status === 'ready' && <p className='text-xs font-medium text-ui-muted'>{filteredRows.length} of {state.rows.length} case{state.rows.length === 1 ? '' : 's'}</p>}
                 </div>
+
+                {state.status === 'ready' && state.rows.length > 0 && <div className='flex flex-col gap-2 border-b border-ui-border p-3 sm:flex-row'>
+                    <input value={query} onChange={event => setQuery(event.target.value)} placeholder='Search title, actor, victim, or organization' aria-label='Search cases' className='h-9 min-w-0 flex-1 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text outline-none focus:border-ui-primary/50' />
+                    <select value={status} onChange={event => setStatus(event.target.value)} aria-label='Filter cases by status' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text'>
+                        <option value='all'>All statuses</option>
+                        {statuses.map(value => <option key={value} value={value}>{stateLabel(value)}</option>)}
+                    </select>
+                </div>}
 
                 {state.status === 'loading' && <div className='flex min-h-56 items-center justify-center px-4 py-16 text-sm text-ui-muted'>Loading cases…</div>}
                 {state.status === 'error' && <div className='flex min-h-56 items-center justify-center px-4 py-16 text-sm text-ui-danger'>{state.error || 'Cases unavailable.'}</div>}
@@ -398,7 +413,8 @@ function CaseOverview({ tenantId, organizationId, state, alerts }: { tenantId: s
                         <p className='max-w-md text-sm leading-6'>No alert is waiting for review. Cases appear after a scoped alert is retained and opened for investigation.</p>
                     </div>
                 )}
-                {state.status === 'ready' && state.rows.length > 0 && (
+                {state.status === 'ready' && state.rows.length > 0 && filteredRows.length === 0 && <div className='px-4 py-10 text-center text-sm text-ui-muted'>No cases match the current filters.</div>}
+                {state.status === 'ready' && filteredRows.length > 0 && (
                     <div className='overflow-x-auto' data-dwm-cases-table='true'>
                         <table className='min-w-full border-collapse text-left text-sm'>
                             <thead className='border-b border-ui-border bg-ui-raised text-xs font-semibold text-ui-muted'>
@@ -411,7 +427,7 @@ function CaseOverview({ tenantId, organizationId, state, alerts }: { tenantId: s
                                 </tr>
                             </thead>
                             <tbody className='divide-y divide-ui-border'>
-                                {state.rows.map(row => {
+                                {filteredRows.map(row => {
                                     const alert = row.alertId ? alertsById.get(row.alertId) : undefined
                                     const caseId = row.caseId || row.id
                                     const severity = alert?.severity || row.severity || row.priority || '—'

@@ -238,12 +238,11 @@ type LoadState = {
 
 const primaryActions = ['review', 'assign', 'escalate', 'suppress', 'false_positive', 'close', 'reopen', 'note']
 
-export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId, routeRun, initialDetail, initialExportPayload }: {
+export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId, initialDetail, initialExportPayload }: {
     caseId: string
     tenantId: string
     organizationId?: string
     alertId?: string
-    routeRun?: string
     initialDetail?: CaseDetail
     initialExportPayload?: CaseExport
 }) {
@@ -534,47 +533,21 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                     </div>
                 </div>
 
-                <div className='grid min-w-0 gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_360px]'>
+                <div className='grid min-w-0 gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_320px]'>
                     <section className='grid min-w-0 gap-3'>
-                        <CaseCommandBar
-                            caseId={caseRecord.id}
-                            tenantId={scopedTenantId}
-                            organizationId={scopedOrganizationId}
-                            alertId={scopedAlertId}
-                            exportReady={Boolean(state.exportPayload?.exportChecksum)}
-                            latestDelivery={latestDelivery}
-                            readOnly={readOnly}
-                        />
-
-                        {routeRun ? (
-                            <RouteHandoffStrip
-                                routeRun={routeRun}
-                                detail={state.detail}
-                                exportPayload={state.exportPayload}
-                                latestDelivery={latestDelivery}
-                            />
-                        ) : null}
-
-                        <div className='grid gap-2 md:grid-cols-4'>
+                        <div className='grid gap-2 sm:grid-cols-3'>
                             <Metric label='Watch terms' value={`${matchedTerms(state.detail).length}`} detail={matchedTerms(state.detail).slice(0, 2).join(', ') || 'watch term pending'} />
                             <Metric label='Evidence' value={`${evidence.length}`} detail={evidence.some(item => item.contentHash || item.provenance?.contentHash) ? 'hashes linked' : 'hashes pending'} />
-                            <Metric label='Deliveries' value={`${deliveries.length}`} detail={latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTime(latestDelivery.attemptedAt)}` : 'no attempts'} />
-                            <Metric label='Timeline' value={`${timeline.length}`} detail={caseRecord.updatedAt ? `updated ${relativeTime(caseRecord.updatedAt)}` : 'no update'} />
+                            <Metric label='Last activity' value={caseRecord.updatedAt ? relativeTime(caseRecord.updatedAt) : '—'} detail={`${timeline.length} recorded event${timeline.length === 1 ? '' : 's'}`} />
+                            <Metric label='Delivery' value={latestDelivery?.status || 'not sent'} detail={latestDelivery ? relativeTime(latestDelivery.attemptedAt) : 'no attempt'} />
                         </div>
 
-                        <DecisionBrief
-                            detail={state.detail}
-                            exportPayload={state.exportPayload}
-                            latestDelivery={latestDelivery}
-                            actionDockHref='#dwm-case-actions'
-                            destinationHref={destinationHref}
-                            deliveryHistoryHref={deliveryHistoryHref}
-                        />
-
-                        <WorkflowStrip detail={state.detail} exportPayload={state.exportPayload} />
-
                         <section className='grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]'>
-                            <CollapsiblePanel title='Evidence rows' action={`${evidence.length} rows`} defaultOpen={false}>
+                            <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
+                                <div className='flex items-center justify-between gap-2'>
+                                    <h2 className='text-sm font-semibold text-ui-text'>Evidence</h2>
+                                    <span className='text-xs text-ui-muted'>{evidence.length} rows · {selectedEvidenceIds.length} selected</span>
+                                </div>
                                 <div className='mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ui-border bg-ui-canvas p-2'>
                                     <p className='text-xs text-ui-muted'><span className='font-semibold text-ui-text'>{selectedEvidenceIds.length}</span> of {Math.min(evidence.length, DWM_CASE_REPORT_MAX_EVIDENCE)} selected for the report</p>
                                     <div className='flex gap-2'>
@@ -618,9 +591,13 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                         <EmptyLine text='No evidence rows are attached to this case.' />
                                     )}
                                 </div>
-                            </CollapsiblePanel>
+                            </section>
 
-                            <CollapsiblePanel title='Audit timeline' action={`${timeline.length} events`} defaultOpen={false}>
+                            <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
+                                <div className='flex items-center justify-between gap-2'>
+                                    <h2 className='text-sm font-semibold text-ui-text'>Activity</h2>
+                                    <span className='text-xs text-ui-muted'>{timeline.length} events</span>
+                                </div>
                                 <div className='max-h-[420px] overflow-y-auto pr-1'>
                                     <div className='grid gap-2'>
                                         {timeline.length ? timeline.slice(0, DWM_CASE_TIMELINE_PREVIEW_ROWS).map((row, index) => (
@@ -628,7 +605,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                         )) : <EmptyLine text='No case events have been recorded yet.' />}
                                     </div>
                                 </div>
-                            </CollapsiblePanel>
+                            </section>
                         </section>
                     </section>
 
@@ -738,6 +715,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     )
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function RouteHandoffStrip({ routeRun, detail, exportPayload, latestDelivery }: { routeRun: string, detail: CaseDetail, exportPayload?: CaseExport, latestDelivery?: DeliveryRow }) {
     const terms = matchedTerms(detail)
     const evidenceCount = detail.evidence?.length ?? exportPayload?.summary?.evidenceCount ?? 0
@@ -779,6 +757,7 @@ function RouteHandoffStrip({ routeRun, detail, exportPayload, latestDelivery }: 
     )
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function DecisionBrief({ detail, exportPayload, latestDelivery, actionDockHref, destinationHref, deliveryHistoryHref }: {
     detail: CaseDetail
     exportPayload?: CaseExport
@@ -871,6 +850,7 @@ function DecisionFact({ label, value, title }: { label: string, value: string, t
     )
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function WorkflowStrip({ detail, exportPayload }: { detail: CaseDetail, exportPayload?: CaseExport }) {
     const terms = matchedTerms(detail)
     const evidenceCount = detail.evidence?.length ?? exportPayload?.summary?.evidenceCount ?? 0
@@ -899,6 +879,7 @@ function WorkflowStrip({ detail, exportPayload }: { detail: CaseDetail, exportPa
     )
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady, latestDelivery, readOnly }: {
     caseId: string
     tenantId: string
@@ -981,6 +962,7 @@ function Panel({ title, action, children }: { title: string, action?: string, ch
     )
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function CollapsiblePanel({ title, action, children, defaultOpen = false }: { title: string, action?: string, children: ReactNode, defaultOpen?: boolean }) {
     return (
         <details className='group rounded-lg border border-ui-border bg-ui-panel' open={defaultOpen}>
