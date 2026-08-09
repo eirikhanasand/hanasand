@@ -23,8 +23,10 @@ describe("organization watchlist collection requests", () => {
     } as any);
     saveOrganization(store, "tenant_a", "org_a", "owner_a", "owner");
     saveOrganization(store, "tenant_a", "org_a", "analyst_a", "analyst");
+    saveOrganization(store, "tenant_a", "org_shared", "owner_shared", "owner");
     saveOrganization(store, "tenant_b", "org_b", "owner_b", "owner");
     store.saveDwmWatchlist(watchlist("tenant_a", "org_a", "Alpha Corp"));
+    store.saveDwmWatchlist(watchlist("tenant_a", "org_shared", "Shared Corp"));
     store.saveDwmWatchlist(watchlist("tenant_b", "org_b", "Beta Corp"));
 
     let release!: () => void;
@@ -69,6 +71,14 @@ describe("organization watchlist collection requests", () => {
     expect(visibleWatchlists.status).toBe(200);
     expect((await visibleWatchlists.json() as any).watchlists).toEqual(expect.arrayContaining([
       expect.objectContaining({ organizationId: "org_a", terms: expect.arrayContaining([expect.objectContaining({ value: "Alpha Corp" })]) })
+    ]));
+    const sameTenantOtherOrg = await handleApiRequest(request("/v1/dwm/watchlists?tenantId=tenant_a&organizationId=org_shared", "owner_shared"), options);
+    expect((await sameTenantOtherOrg.json() as any).watchlists).toEqual(expect.arrayContaining([
+      expect.objectContaining({ organizationId: "org_shared", terms: expect.arrayContaining([expect.objectContaining({ value: "Shared Corp" })]) })
+    ]));
+    const orgAAgain = await handleApiRequest(request("/v1/dwm/watchlists?tenantId=tenant_a&organizationId=org_a", "owner_a"), options);
+    expect((await orgAAgain.json() as any).watchlists).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ organizationId: "org_shared" })
     ]));
     const foreignWatchlists = await handleApiRequest(request("/v1/dwm/watchlists?tenantId=tenant_b&organizationId=org_b", "owner_b"), options);
     expect((await foreignWatchlists.json() as any).watchlists).toEqual(expect.arrayContaining([
