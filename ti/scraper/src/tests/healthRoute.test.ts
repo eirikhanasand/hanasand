@@ -27,6 +27,20 @@ describe("health route", () => {
     }
   });
 
+  test("reports a materially backlogged write queue as unavailable", async () => {
+    const store = new InMemoryScraperStore();
+    (store as any).databaseHealthSnapshot = () => ({ ok: true, backend: "postgresql", pendingWrites: 1_200 });
+    const server = startApiServer({ port: 0, store, frontier: new FocusedFrontier() });
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/v1/health`);
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({ ok: false, storage: { ok: false, status: "backlogged", pendingWrites: 1_200 } });
+    } finally {
+      await server.stop();
+    }
+  });
+
   test("keeps public search responsive while mutations wait for storage", async () => {
     const store = new InMemoryScraperStore();
     let release = () => {};
