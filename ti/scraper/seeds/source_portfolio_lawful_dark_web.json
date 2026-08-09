@@ -1193,7 +1193,7 @@
         "productionCollectionVerifiedAt": "2026-08-09T11:00:47.000Z",
         "productionCollectionOutcome": "metadata_only_parser_verified",
         "parserProfile": "json_data_header",
-        "parserShape": "data[].header where action is present",
+        "parserShape": "data[].header where action, 40-hex id, private=false, and valid DD/MM/YYYY actionDate are present",
         "observedParsedItemCount": 22,
         "reportedVictimCount": 205,
         "lastReportedVictimAt": "2026-08-07T13:33:22.504123+00:00",
