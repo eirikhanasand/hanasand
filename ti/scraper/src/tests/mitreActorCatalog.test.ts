@@ -201,6 +201,9 @@ describe("MITRE actor identity catalog", () => {
     const catalog = parseMitreActorCatalog(officialV191Excerpt, { retrievedAt: "2026-07-21T00:00:00.000Z", minimumCurrentIdentities: 6 });
     const store = new InMemoryScraperStore();
     store.replaceActorIdentityCatalog(catalog, { sourceId: "src_mitre_enterprise_stix", captureId: "cap_mitre_enterprise_v19_1" });
+    let sourceReads = 0;
+    const listSources = store.listSources.bind(store);
+    (store as any).listSources = () => { sourceReads += 1; return listSources(); };
     (store as any).querySearchCaptures = async () => {
       await Bun.sleep(1_000);
       throw new Error("retained search should not run in cached mode");
@@ -213,6 +216,8 @@ describe("MITRE actor identity catalog", () => {
 
     expect(response.status).toBe(200);
     expect(elapsedMs).toBeLessThan(500);
+    expect(sourceReads).toBe(0);
+    await Bun.sleep(10);
     expect(result).toMatchObject({
       mode: "seeded",
       status: "searching",

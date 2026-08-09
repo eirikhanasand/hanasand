@@ -405,6 +405,38 @@ describe('public TI v1', () => {
         expect(response.json().results[1]).toMatchObject({ query: 'FAIL', status: 'error', error: { code: 'search_unavailable' } })
     })
 
+    test('bounds batch fan-out before search and keeps valid work at three concurrent requests', async () => {
+        let active = 0
+        let peak = 0
+        const app = await testApp(undefined, async ({ query }) => {
+            active += 1
+            peak = Math.max(peak, active)
+            await new Promise(resolve => setTimeout(resolve, 1))
+            active -= 1
+            return { ...searchResult, query }
+        })
+
+        const oversized = await app.inject({
+            method: 'POST',
+            url: '/api/v1/ti/search/batch',
+            headers: { 'x-api-key': 'valid' },
+            payload: { queries: Array.from({ length: 26 }, (_, index) => `query-${index}`) },
+        })
+        expect(oversized.statusCode).toBe(400)
+        expect(oversized.json().error.code).toBe('too_many_queries')
+        expect(peak).toBe(0)
+
+        const bounded = await app.inject({
+            method: 'POST',
+            url: '/api/v1/ti/search/batch',
+            headers: { 'x-api-key': 'valid' },
+            payload: { queries: Array.from({ length: 25 }, (_, index) => `query-${index}`) },
+        })
+        expect(bounded.statusCode).toBe(200)
+        expect(bounded.json().count).toBe(25)
+        expect(peak).toBeLessThanOrEqual(3)
+    })
+
     test('returns a truthful unavailable response when the structured store cannot be reached', async () => {
         const app = await testApp(async () => new Response('offline', { status: 503 }))
         const response = await app.inject({ method: 'GET', url: '/api/v1/incidents', headers: { 'x-api-key': 'valid' } })

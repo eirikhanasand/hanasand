@@ -25,6 +25,11 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const generatedAt = nowIso();
   const entityType = searchEntityType(query, body.entityType ?? url.searchParams.get("entityType"), options.store, scope.tenantId);
   const actorQuery = entityType === "actor";
+  const identity = actorIdentity(options.store, scope.tenantId, query);
+  if (actorQuery && url.searchParams.get("cached") === "true") {
+    deferCachedLiveSearch(query, entityType, options, scope.tenantId, generatedAt);
+    return json(sanitizeDwmApiPayload(cachedSearchResponse(query, entityType, identity, {}, generatedAt)));
+  }
   const sourcesInScope = options.store.listSources().filter((source: any) => !source.tenantId || source.tenantId === scope.tenantId);
   const liveSearch = createLiveSearchPlan({
     request: { query, entityType, tenantId: scope.tenantId, createdAt: generatedAt },
@@ -36,10 +41,6 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     queuePressureLimit: Number(options.liveSearchQueuePressureLimit ?? 50),
   });
   scheduleLiveSearch(liveSearch, options, generatedAt);
-  const identity = actorIdentity(options.store, scope.tenantId, query);
-  if (actorQuery && url.searchParams.get("cached") === "true") {
-    return json(sanitizeDwmApiPayload(cachedSearchResponse(query, entityType, identity, liveSearch.dto, generatedAt)));
-  }
   const localSearchIndexAvailable = (options.store as any).usesPostgresSearchIndex === true;
   const persistedSearchCaptures = localSearchIndexAvailable
     ? findSearchCaptures(options.store, query, 300, scope.tenantId)
@@ -281,6 +282,26 @@ export async function searchResponse(request: Request, options: ApiServerOptions
       : { status: restricted.count ? "partial_metadata" : "searching", queuedTasks: 0 },
   };
   return json(sanitizeDwmApiPayload(response));
+}
+
+function deferCachedLiveSearch(query: string, entityType: SearchEntityType, options: ApiServerOptions, tenantId: string | undefined, generatedAt: string) {
+  setTimeout(() => {
+    try {
+      const sourcesInScope = options.store.listSources().filter((source: any) => !source.tenantId || source.tenantId === tenantId);
+      const liveSearch = createLiveSearchPlan({
+        request: { query, entityType, tenantId, createdAt: generatedAt },
+        actorIdentities: options.store.listActorIdentities?.() ?? [],
+        sources: sourcesInScope,
+        frontier: options.frontier,
+        activeRuns: options.store.listRuns?.() ?? [],
+        activePlans: options.store.listPlans?.() ?? [],
+        queuePressureLimit: Number(options.liveSearchQueuePressureLimit ?? 50),
+      });
+      scheduleLiveSearch(liveSearch, options, generatedAt);
+    } catch (error) {
+      console.error(`[ti-search] deferred cached enrichment failed for ${query}`, error);
+    }
+  }, 0);
 }
 
 function cachedSearchResponse(query: string, entityType: SearchEntityType, identity: ReturnType<typeof actorIdentity>, planner: any, generatedAt: string) {
