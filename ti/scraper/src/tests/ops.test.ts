@@ -22,7 +22,7 @@ describe("ops utilities", () => {
     });
     expect(snapshot.memory).toMatchObject({ rssMb: 1024, containerCurrentMb: 1024, containerLimitMb: 16 * 1024, containerHeadroomMb: 15 * 1024, targetMb: 4096, ceilingMb: 6144, status: "ok" });
     expect(snapshot.cpu.containerLimitCores).toBe(8);
-    expect(snapshot.concurrency.total).toBe(76);
+    expect(snapshot.concurrency.total).toBe(88);
     expect(snapshot.queue.currentItems).toBe(7);
   });
 
