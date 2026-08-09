@@ -33,6 +33,8 @@ import { handleStructuredIntelRequest } from "./structuredIntelRoutes.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
 import { InMemoryOrgAlertCaseActionLedgerRepository } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
 import { buildResourceSnapshot, readCgroupResourceSnapshot } from "../ops/resourceControls.ts";
+
+const MAX_HEALTHY_PENDING_WRITES = 1_000;
 import { authenticateOperatorRequest, authorizeOperatorScope } from "./requestAuthentication.ts";
 
 async function queryDwmEvidence(options: ApiServerOptions, tenantId: string) {
@@ -91,7 +93,13 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
         ?? { ok: true, backend: "memory" };
       const runtime = runtimeResourceSnapshot(options);
       const searchReady = isSearchCaptureIndexReady(options.store);
-      return json({ ok: storage.ok !== false, service: "ti-scraper", version: "v1", storage, search: { status: searchReady ? "ready" : "starting", ready: searchReady }, collection: { public: (options.canaryLoop as any)?.getState?.(), publicDefault: (options.defaultCanaryLoop as any)?.getState?.(), restrictedMetadata: (options.restrictedMetadataLoop as any)?.getState?.() }, ...runtime, generatedAt: nowIso() }, storage.ok === false ? 503 : 200);
+      const pendingWrites = Number(storage.pendingWrites ?? 0);
+      const storageBacklogged = Number.isFinite(pendingWrites) && pendingWrites > MAX_HEALTHY_PENDING_WRITES;
+      const reportedStorage = storageBacklogged
+        ? { ...storage, ok: false, status: "backlogged", lastWriteError: storage.lastWriteError ?? `Write queue exceeds ${MAX_HEALTHY_PENDING_WRITES} pending records.` }
+        : storage;
+      const healthy = reportedStorage.ok !== false;
+      return json({ ok: healthy, service: "ti-scraper", version: "v1", storage: reportedStorage, search: { status: searchReady ? "ready" : "starting", ready: searchReady }, collection: { public: (options.canaryLoop as any)?.getState?.(), publicDefault: (options.defaultCanaryLoop as any)?.getState?.(), restrictedMetadata: (options.restrictedMetadataLoop as any)?.getState?.() }, ...runtime, generatedAt: nowIso() }, healthy ? 200 : 503);
     }
     if (url.pathname === "/v1/public/coverage" && request.method === "GET") return json(await publicCoverage(options));
     if (url.pathname === "/v1/auth/integration-notes" && request.method === "GET") {
