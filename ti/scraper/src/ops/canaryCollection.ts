@@ -5,7 +5,7 @@ import { nowIso, stableId } from "../utils.ts";
 import { evidenceIndependence } from "../storage/memoryStore.ts";
 import { activatePublicCanarySources, currentProductiveSourceCycles, pausePublicCanarySources, reconcilePublicSourceProductivity } from "./canaryActivation.ts";
 import { canaryQueries, PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
-import { detachedState, externalize, fetchItems, health, maxItemsFor, tasksForSource } from "./canaryHelpers.ts";
+import { detachedState, externalize, fetchItems, health, maxItemsFor, nextAnchoredCycleAt, tasksForSource } from "./canaryHelpers.ts";
 import { isCisaKevSource, isNvdCveSource, isParserEmptyFallback } from "./canaryFeedItems.ts";
 import { isSellableIntelText, sellableReason } from "../value/sellableIntel.ts";
 import { sourceActivityWindowDays } from "../policy/sourceActivityWindow.ts";
@@ -187,7 +187,7 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
         options.onCycle?.(result);
       }
       catch (e) { state.errorCount++; state.consecutiveErrorCount++; state.lastError = e instanceof Error ? e.message : String(e); state.lastErrorAt = nowIso(); options.onError?.(e); }
-      finally { state.running = false; state.cycleCount++; state.nextCycleAt = state.enabled ? new Date(Date.now() + intervalMs).toISOString() : undefined; active = undefined; }
+      finally { state.running = false; state.cycleCount++; state.nextCycleAt = state.enabled ? nextAnchoredCycleAt(state.startedAt, intervalMs) : undefined; active = undefined; }
     })();
     return active;
   };
@@ -205,7 +205,7 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
       state.updatedAt = nowIso();
       state.updatedBy = metadata.approvedBy ?? metadata.operatorId ?? "operator";
       state.pausedReason = enabled ? undefined : metadata.reason ?? "Paused by operator.";
-      state.nextCycleAt = enabled ? new Date(Date.now() + intervalMs).toISOString() : undefined;
+      state.nextCycleAt = enabled ? nextAnchoredCycleAt(state.startedAt, intervalMs) : undefined;
       return { ...state };
     },
     runOnce: () => cycle()

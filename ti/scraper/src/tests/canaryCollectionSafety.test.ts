@@ -6,13 +6,19 @@ import { FocusedFrontier } from "../frontier/frontier.ts";
 import { findSearchCaptures } from "../api/searchCaptureIndex.ts";
 import { runCanaryCollectionCycle, startCanaryCollectionLoop } from "../ops/canaryCollection.ts";
 import { reconcilePublicSourceProductivity } from "../ops/canaryActivation.ts";
-import { fetchItems } from "../ops/canaryHelpers.ts";
+import { fetchItems, nextAnchoredCycleAt } from "../ops/canaryHelpers.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
 import { fixtureCapture } from "./helpers/storageFixtures.ts";
 
 describe("public collection boundary", () => {
+  test("reports the next timer-anchored cycle after a late completion", () => {
+    const startedAt = "2026-08-09T13:54:00.000Z", intervalMs = 15 * 60_000;
+    expect(nextAnchoredCycleAt(startedAt, intervalMs, Date.parse("2026-08-09T14:10:55.000Z"))).toBe("2026-08-09T14:24:00.000Z");
+    expect(nextAnchoredCycleAt(startedAt, intervalMs, Date.parse("2026-08-09T14:24:00.000Z"))).toBe("2026-08-09T14:39:00.000Z");
+  });
+
   test("never routes restricted or private-network targets through public fetch", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "restricted", type: "tor_metadata", url: "http://metadata-listing.onion", status: "active", risk: "restricted", governance: { metadataOnly: true } }));

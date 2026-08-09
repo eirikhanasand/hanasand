@@ -5,6 +5,7 @@ import { nowIso, stableId } from "../utils.ts";
 import { currentProductiveSourceCycles, reconcilePublicSourceProductivity } from "./canaryActivation.ts";
 import { hasApprovedAutomaticSourceReview, sourceRequiresAutomaticReview } from "../policy/sourceAutomaticReview.ts";
 import { automaticSourceReviewEvidenceBindingsMatch } from "../api/automaticReviewRoutes.ts";
+import { nextAnchoredCycleAt } from "./canaryHelpers.ts";
 
 export async function runRestrictedMetadataCollectionCycle(options: any) {
   const generatedAt = options.now?.() ?? nowIso();
@@ -108,9 +109,11 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
 
 export function startRestrictedMetadataCollectionLoop(options: any) {
   const intervalSeconds = Math.max(60, Number(options.intervalSeconds ?? 900));
+  const startedAt = nowIso();
   const state: any = {
     enabled: options.enabled === true,
     running: false,
+    startedAt,
     intervalSeconds,
     maxSources: Math.max(1, Number(options.maxSources ?? 250)),
     maxConcurrentSources: Math.max(1, Math.min(Number(options.boundary?.config?.maxConcurrency ?? 2), Number(options.maxConcurrentSources ?? 2))),
@@ -131,7 +134,7 @@ export function startRestrictedMetadataCollectionLoop(options: any) {
         state.lastSourceFailureAt = state.latestResult.failedSourceCount ? state.lastSuccessAt : undefined;
       }
       catch (caught) { state.errorCount++; state.lastError = safeError(caught); state.lastErrorAt = nowIso(); options.onError?.(caught); }
-      finally { state.running = false; state.cycleCount++; state.nextCycleAt = state.enabled ? new Date(Date.now() + intervalSeconds * 1_000).toISOString() : undefined; active = undefined; }
+      finally { state.running = false; state.cycleCount++; state.nextCycleAt = state.enabled ? nextAnchoredCycleAt(startedAt, intervalSeconds * 1_000) : undefined; active = undefined; }
     })();
     return active;
   };

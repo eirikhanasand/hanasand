@@ -201,10 +201,11 @@ function caseItem(value: unknown): SearchItem | null {
     return { id: `case:${id}`, title, detail, href }
 }
 
-function actorItems(payload: unknown, query: string): SearchItem[] {
+export function actorItems(payload: unknown, query: string): SearchItem[] {
     const rows = arrayFrom(payload, ['actors', 'actorOverviews', 'results', 'rows'])
     const fromRows = rows.map(actorItem).filter(isSearchItem)
     if (fromRows.length) return uniqueByHref(fromRows)
+    if (!payload || typeof payload !== 'object' || stringValue((payload as Record<string, unknown>).status).toLowerCase() !== 'ready') return []
     const fallbackTitle = stringValue((payload as Record<string, unknown> | null)?.actor) || stringValue((payload as Record<string, unknown> | null)?.query) || query
     return [{ id: `actor:${fallbackTitle}`, title: fallbackTitle, detail: 'Open threat intelligence result', href: `/ti/${encodeURIComponent(fallbackTitle)}` }]
 }
