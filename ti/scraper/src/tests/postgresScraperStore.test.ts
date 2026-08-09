@@ -234,6 +234,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       metadata: {
         sourceFamily: "clear_web",
         productionCollection: true,
+        sourcePortfolioQualificationState: "sustained_productive",
         activityWindowSeconds: 2_592_000,
         sourcePortfolioVerification: { outcome: "content_parsed" }
       }
@@ -280,6 +281,11 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
 
     const clearWeb = await restarted.querySourceOperationalPage({ tenantId, generatedAt: "2026-07-23T13:00:00.000Z", sourceId });
     expect(clearWeb.totals.qualifyingClearWebSourceCount).toBe(1);
+    expect((await restarted.querySourceOperationalSummary({ tenantId, generatedAt: "2026-07-23T13:00:00.000Z" })).summary).toMatchObject({
+      qualifyingClearWebSourceCount: 1,
+      qualifyingLawfulDarkWebSourceCount: 0,
+      qualifyingPublicTelegramSourceCount: 0
+    });
 
     const current = restarted.getSource(sourceId)!;
     restarted.saveSource({ ...current, metadata: { ...current.metadata, sourceFamily: "dark_web_victim_feed" } });

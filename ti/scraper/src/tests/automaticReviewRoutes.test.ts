@@ -15,6 +15,8 @@ import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { PostgresScraperStore } from "../storage/postgresScraperStore.ts";
 import { SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS, SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
 import { hashContent } from "../utils.ts";
+import { source } from "./helpers/apiSourceFixtures.ts";
+import { fixtureCapture } from "./helpers/storageFixtures.ts";
 
 const firstAt = "2026-07-22T10:00:00.000Z";
 const sourceReviewV7 = SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS[1];
@@ -982,6 +984,82 @@ postgresDescribe("automatic review PostgreSQL persistence", () => {
     expect(terminalEvents).toHaveLength(2);
     expect(restarted.getIncident("incident_pg")).toMatchObject({ reviewState: "confirmed", actorAttribution: { identityId: "actor_apt29" }, automaticReview: { configuredModelVersion: "hanasand-v2" } });
     await restarted.close();
+  });
+
+  test("queues retained parser evidence for source review without calling it useful", async () => {
+    const store = await PostgresScraperStore.create({ databaseUrl });
+    const sourceId = "source_review_candidate_pg";
+    const tenantId = undefined;
+    const runId = "run_review_candidate_pg";
+    const ordinaryRunId = "run_unmarked_non_useful_pg";
+    store.saveSource(source({
+      id: sourceId,
+      tenantId,
+      url: "https://example.test/review-candidate.xml",
+      status: "candidate",
+      metadata: { sourceFeedDiscovery: { referenceUrl: "https://example.test/report" } }
+    }));
+    store.saveRun({ id: runId, tenantId, requestId: "req_public_canary", status: "completed", startedAt: firstAt, completedAt: firstAt, updatedAt: firstAt } as any);
+    store.saveRun({ id: ordinaryRunId, tenantId, requestId: "req_public_canary", status: "completed", startedAt: firstAt, completedAt: firstAt, updatedAt: firstAt } as any);
+    const candidateCapture = fixtureCapture({
+      id: "capture_review_candidate_pg",
+      tenantId,
+      sourceId,
+      collectedAt: firstAt,
+      publishedAt: firstAt,
+      body: "Unauthorised database access through a crafted route.",
+      metadata: {
+        runId,
+        sourceReviewCandidate: true,
+        safeExcerpt: "Unauthorised database access through a crafted route."
+      }
+    });
+    store.saveCapture(candidateCapture);
+    store.saveCapture({
+      ...candidateCapture,
+      id: "capture_unmarked_non_useful_pg",
+      url: "https://example.test/routine-release",
+      contentHash: hashContent("ordinary retained publisher output"),
+      body: "Routine product release notes.",
+      metadata: { runId: ordinaryRunId, safeExcerpt: "Routine product release notes." }
+    });
+    store.saveSourceHealthObservation({
+      id: "health_review_candidate_pg",
+      tenantId,
+      sourceId,
+      collectionRunId: runId,
+      checkedAt: firstAt,
+      status: "healthy",
+      success: true,
+      useful: false,
+      captureCount: 1,
+      legalMode: "public_content"
+    });
+    store.saveSourceHealthObservation({
+      id: "health_unmarked_non_useful_pg",
+      tenantId,
+      sourceId,
+      collectionRunId: ordinaryRunId,
+      checkedAt: firstAt,
+      status: "healthy",
+      success: true,
+      useful: false,
+      captureCount: 1,
+      legalMode: "public_content"
+    });
+    await store.flush();
+
+    expect(await store.queryAutomaticReviewSourceHealth({ allTenants: true })).toEqual([
+      expect.objectContaining({ sourceId, collectionRunId: runId, useful: false })
+    ]);
+    expect(await syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(1);
+    expect(store.listAnalystMetadataReviewTasks()).toContainEqual(expect.objectContaining({
+      recordKind: "automatic_intelligence_review_task",
+      subject: { type: "source", id: sourceId, sourceId },
+      linkedEvidenceCount: 1
+    }));
+    expect(store.listSourceHealthObservations().find((row: any) => row.id === "health_review_candidate_pg")?.useful).toBe(false);
+    await store.close();
   });
 
   test("hydrates the trusted correction latch without rewriting prior version history", async () => {
