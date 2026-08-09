@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { destinationTestResponseOutcome } from '../src/handlers/dwm/webhooks.ts'
+import { destinationTestResponseOutcome, deliveryResponseOutcome } from '../src/handlers/dwm/webhooks.ts'
 
 describe('DWM webhook destination test response', () => {
     test('returns a failure response when the persisted test row failed', () => {
@@ -15,5 +15,16 @@ describe('DWM webhook destination test response', () => {
     test('keeps accepted status for durable non-failed outcomes', () => {
         expect(destinationTestResponseOutcome({ status: 'dry_run' })).toEqual({ status: 202, failed: false })
         expect(destinationTestResponseOutcome({ status: 'delivered' })).toEqual({ status: 202, failed: false })
+    })
+
+    test('does not report a durable failed delivery as accepted', () => {
+        expect(deliveryResponseOutcome([{ status: 'failed', error: 'receiver unavailable' }])).toEqual({
+            status: 502,
+            failed: true,
+            code: 'webhook_delivery_failed',
+            error: 'Webhook delivery failed.',
+        })
+        expect(deliveryResponseOutcome([{ status: 'dry_run' }, { status: 'skipped' }])).toEqual({ status: 202, failed: false })
+        expect(deliveryResponseOutcome([{ status: 'delivered' }])).toEqual({ status: 202, failed: false })
     })
 })

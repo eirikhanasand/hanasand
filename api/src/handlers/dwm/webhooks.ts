@@ -588,6 +588,13 @@ export function destinationTestResponseOutcome(delivery: { status?: string | nul
         : { status: 202, failed: false }
 }
 
+export function deliveryResponseOutcome(deliveries: Array<{ status?: string | null, error?: unknown }>) {
+    const failed = deliveries.some(delivery => delivery.status === 'failed' || Boolean(delivery.error))
+    return failed
+        ? { status: 502, failed: true, code: 'webhook_delivery_failed', error: 'Webhook delivery failed.' }
+        : { status: 202, failed: false }
+}
+
 export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring: OrgQuery }>, res: FastifyReply) {
     const userId = await authenticatedUserId(req, res)
     if (!userId) return
@@ -1135,7 +1142,7 @@ async function sendDwmWebhookDeliveryResult(res: FastifyReply, userId: string, o
     const destinations = await listDwmWebhookDestinations(userId, orgId)
     const ledgerDeliveries = await listDwmWebhookDeliveries(userId, orgId)
     const auditEvents = await listDwmWebhookAuditEvents(userId, orgId)
-    return res.status(202).send({
+    const response = {
         deliveries,
         deliveryReadiness: buildDwmWebhookDeliveryReadiness({
             destinations,
@@ -1371,7 +1378,9 @@ async function sendDwmWebhookDeliveryResult(res: FastifyReply, userId: string, o
         auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries: ledgerDeliveries, destinations }),
         dryRunDefault: true,
         liveDeliveryEnabled: process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
-    })
+    }
+    const outcome = deliveryResponseOutcome(deliveries)
+    return res.status(outcome.status).send(outcome.failed ? { ...response, error: outcome.error, code: outcome.code } : response)
 }
 
 export async function canonicalThirdPartyReportForDelivery(input: {
