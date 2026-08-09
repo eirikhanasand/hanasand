@@ -695,7 +695,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       const total = Number(totals.sourceCount ?? 0);
       return { rows, totals, total, nextCursor: offset + rows.length < total ? String(offset + rows.length) : undefined };
     }
-    const [rows, totalRows] = await Promise.all([
+    const [rows, totalResult] = await Promise.all([
       this.sql.unsafe(`
         WITH page AS (
           SELECT source.*
@@ -886,7 +886,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         ) labels ON TRUE
         ORDER BY lower(page.name), page.id
       `, [tenantId, sourceId, executableOnly, limit, offset, input.generatedAt]),
-      this.sql.unsafe(`
+      !sourceId && executableOnly
+        ? this.querySourceOperationalSummary(input)
+        : this.sql.unsafe(`
         WITH capture_counts AS (
           SELECT source_id, tenant_id, count(*) AS capture_count
           FROM threat_intel.captures
@@ -1179,7 +1181,11 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         FROM ranked
       `, [tenantId, sourceId, executableOnly, input.generatedAt, automaticReviewModelVersion()])
     ]);
-    const totals = totalRows[0]?.totals ?? {};
+    // Global executable pages use the already-indexed summary; source-specific
+    // pages retain their detailed totals and qualification calculations.
+    const totals = !sourceId && executableOnly
+      ? totalResult.summary
+      : (totalResult as any)[0]?.totals ?? {};
     const total = Number(totals.sourceCount ?? 0);
     return { rows, totals, total, nextCursor: offset + rows.length < total ? String(offset + rows.length) : undefined };
   }
