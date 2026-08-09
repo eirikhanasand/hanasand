@@ -1,5 +1,6 @@
 import { BellRing, Building2, Database, Filter, Globe2, Radar, Search, ShieldCheck } from 'lucide-react'
 import type { Metadata } from 'next'
+import { headers } from 'next/headers'
 import Link from 'next/link'
 import { buildRouteMetadata } from '../../../seo'
 
@@ -338,9 +339,13 @@ async function fetchDarkwebSearch(filters: { query: string; category: string; le
 }
 
 async function fetchJson<T>(path: string): Promise<T | null> {
-    const base = (process.env.TI_SCRAPER_API_BASE ?? 'http://ti-scraper:8097').replace(/\/$/, '')
     try {
-        const response = await fetch(`${base}${path}`, { cache: 'no-store' })
+        const incoming = await headers()
+        const host = incoming.get('x-forwarded-host')?.split(',')[0]?.trim() || incoming.get('host')
+        if (!host) return null
+        const protocol = incoming.get('x-forwarded-proto')?.split(',')[0]?.trim() || 'http'
+        const proxyPath = path.replace(/^\/v1\/darkweb\//, '/api/ti/darkweb/')
+        const response = await fetch(new URL(proxyPath, `${protocol}://${host}`), { cache: 'no-store', signal: AbortSignal.timeout(12_000) })
         if (!response.ok) return null
         return await response.json() as T
     } catch {
