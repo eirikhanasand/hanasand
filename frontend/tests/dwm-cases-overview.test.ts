@@ -12,6 +12,8 @@ test('renders a real cases overview without workflow sections', async () => {
     ])
 
     assert.match(portal, /function CaseOverview\(/)
+    assert.match(portal, /CaseOverview tenantId=\{tenantId\}/)
+    assert.match(portal, /row\.organizationId \|\| organizationId \|\| tenantId/)
     assert.match(portal, /data-dwm-cases-empty='true'/)
     assert.match(portal, />No cases\.<\/p>/)
     assert.match(portal, /data-dwm-cases-table='true'/)

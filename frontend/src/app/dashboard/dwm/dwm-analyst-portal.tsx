@@ -373,13 +373,13 @@ export function DwmAnalystPortal({
     }
 
     if (view === 'cases') {
-        return <CaseOverview organizationId={organizationId} state={casesState} alerts={alerts} />
+        return <CaseOverview tenantId={tenantId} organizationId={organizationId} state={casesState} alerts={alerts} />
     }
 
     return null
 }
 
-function CaseOverview({ organizationId, state, alerts }: { organizationId?: string, state: CasesState, alerts: PortalAlert[] }) {
+function CaseOverview({ tenantId, organizationId, state, alerts }: { tenantId: string, organizationId?: string, state: CasesState, alerts: PortalAlert[] }) {
     const alertsById = new Map(alerts.map(alert => [alert.id, alert]))
 
     return (
@@ -417,7 +417,7 @@ function CaseOverview({ organizationId, state, alerts }: { organizationId?: stri
                                     const severity = alert?.severity || row.severity || row.priority || '—'
                                     const status = row.status || '—'
                                     const reviewState = alert?.reviewState || row.reviewState
-                                    const organization = row.organizationId || organizationId || 'Unavailable'
+                                    const organization = row.organizationId || organizationId || tenantId
                                     const victim = alert?.company || row.victimName || row.company
                                     return (
                                         <tr key={caseId} className='align-top text-ui-text' data-dwm-case-row='true'>
