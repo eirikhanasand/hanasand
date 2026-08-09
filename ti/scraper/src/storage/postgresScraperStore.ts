@@ -1631,7 +1631,35 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           : this.sql`SELECT record FROM threat_intel.collection_runs ORDER BY started_at`,
         this.sql`SELECT record FROM threat_intel.intelligence_claims ORDER BY first_seen_at`,
         deferHighVolumeHydration
-          ? this.sql`SELECT DISTINCT ON (source_id, tenant_id) record FROM threat_intel.source_health ORDER BY source_id, tenant_id, checked_at DESC`
+          ? this.sql`WITH latest AS (
+              SELECT id, record,
+                row_number() OVER (PARTITION BY source_id, tenant_id ORDER BY checked_at DESC, id DESC) AS row_number
+              FROM threat_intel.source_health
+            ), productive AS (
+              SELECT health.id, health.record,
+                row_number() OVER (PARTITION BY health.source_id, health.tenant_id ORDER BY health.checked_at DESC, health.id DESC) AS row_number
+              FROM threat_intel.source_health health
+              JOIN threat_intel.sources source
+                ON source.id = health.source_id AND source.tenant_id IS NOT DISTINCT FROM health.tenant_id
+              WHERE health.success AND health.useful AND health.capture_count > 0
+                AND health.collection_run_id IS NOT NULL
+                AND health.checked_at >= now() - make_interval(secs => GREATEST(
+                  86400,
+                  COALESCE((source.record->>'crawlFrequencySeconds')::int, 86400) * 3,
+                  COALESCE((source.record->'metadata'->>'activityWindowSeconds')::int, 2592000)
+                ))
+                AND EXISTS (
+                  SELECT 1 FROM threat_intel.captures retained
+                  WHERE retained.source_id = health.source_id
+                    AND retained.tenant_id IS NOT DISTINCT FROM health.tenant_id
+                    AND retained.record->'metadata'->>'runId' = health.collection_run_id
+                )
+            ), bounded AS (
+              SELECT id, record FROM latest WHERE row_number = 1
+              UNION
+              SELECT id, record FROM productive WHERE row_number <= 2
+            )
+            SELECT record FROM bounded ORDER BY record->>'checkedAt'`
           : this.sql`SELECT record FROM threat_intel.source_health ORDER BY checked_at`,
         // Keep operational workflow records in memory, but do not make startup
         // proportional to the automatic-review history. The full history remains
