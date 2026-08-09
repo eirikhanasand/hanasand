@@ -60,6 +60,25 @@ describe('public TI v1', () => {
         expect(invalid.json()).toEqual({ error: { code: 'invalid_query', message: 'query must contain 2-200 characters.', requestId: invalid.headers['x-request-id'] } })
     })
 
+    test('removes restricted host locators from every public search URL surface', async () => {
+        const app = await testApp(undefined, async () => ({
+            ...searchResult,
+            recentActivity: [{ ...searchResult.recentActivity[0], url: 'https://hidden.example.onion/report' }],
+            datasets: [{ name: 'Restricted dataset', type: 'metadata_only', coverage: 'observed', status: 'metadata_only', url: 'https://hidden.example.i2p/dataset' }],
+            sources: [{ ...searchResult.sources[0], url: 'https://hidden.example.onion/source' }],
+            actorIntelligence: { ...searchResult.actorIntelligence, infrastructure: ['https://hidden.example.onion/path', 'https://clear.example/report'] },
+        }))
+
+        const response = await app.inject({ method: 'POST', url: '/api/v1/ti/search', payload: { query: 'APT29' } })
+        expect(response.statusCode).toBe(200)
+        const body = response.json()
+        expect(body.recentActivity[0]).not.toHaveProperty('url')
+        expect(body.datasets[0]).not.toHaveProperty('url')
+        expect(body.sources[0]).not.toHaveProperty('url')
+        expect(body.actorIntelligence.infrastructure).toEqual(['https://clear.example/report'])
+        expect(JSON.stringify(body)).not.toMatch(/\.onion|\.i2p/)
+    })
+
     test('protects global collections and returns typed cursor pages without accepting caller tenant scope', async () => {
         let requestedUrl = ''
         const app = await testApp(async input => {
