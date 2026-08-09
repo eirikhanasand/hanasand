@@ -24,6 +24,10 @@ import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 const collectedAt = "2026-07-19T12:00:00.000Z";
 
 describe("structured threat-intelligence storage contract", () => {
+  test("routes PostgreSQL search through the warmed capture index", () => {
+    expect(new (PostgresScraperStore as any)({}, []).usesPostgresSearchIndex).toBe(true);
+  });
+
   test("reads latest source health once per tenant summary instead of once per source", async () => {
     const store = Object.create(PostgresScraperStore.prototype) as any;
     let query = "";
