@@ -3,13 +3,13 @@ import { test } from 'node:test'
 import { actorItems, caseItem } from '../src/components/header/siteSearch'
 
 test('header search does not invent an actor result for unavailable or empty TI responses', () => {
-    assert.deepEqual(actorItems({ query: 'APT29', status: 'unavailable', mode: 'unavailable' }, 'APT29'), [])
-    assert.deepEqual(actorItems({}, 'APT29'), [])
-    assert.deepEqual(actorItems({ query: 'APT29', status: 'ready' }, 'APT29'), [])
+    assert.deepEqual(actorItems({ query: 'APT29', status: 'unavailable', mode: 'unavailable' }), [])
+    assert.deepEqual(actorItems({}), [])
+    assert.deepEqual(actorItems({ query: 'APT29', status: 'ready' }), [])
 })
 
 test('header search may link an explicit actor only from a ready response', () => {
-    assert.deepEqual(actorItems({ query: 'APT29', actor: 'APT29', status: 'ready' }, 'APT29'), [{
+    assert.deepEqual(actorItems({ query: 'APT29', actor: 'APT29', status: 'ready' }), [{
         id: 'actor:APT29',
         title: 'APT29',
         detail: 'Open threat intelligence result',
