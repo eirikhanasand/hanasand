@@ -98,7 +98,7 @@ type DatabaseHealth = {
 };
 
 export class PostgresScraperStore extends InMemoryScraperStore {
-  readonly usesPostgresSearchIndex = true;
+  readonly usesPostgresSearchIndex = false;
   private readonly sql: SQL;
   private readonly migrations: Migration[];
   private readonly latestMigrationVersion: string;
