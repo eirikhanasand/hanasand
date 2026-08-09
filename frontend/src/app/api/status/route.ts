@@ -1,23 +1,12 @@
 import { NextResponse } from 'next/server'
 import getStatus from '@/utils/status/getStatus'
-import { publicStatusCoverageCheck, toPublicServiceStatus } from '@/utils/status/publicStatus'
-import { loadProductDeployProofLedger } from '@/utils/productProgress/deployProofSource'
+import { toPublicServiceStatus } from '@/utils/status/publicStatus'
 
 export async function GET() {
-    const generatedAt = new Date().toISOString()
-    const status = await getStatus().catch(() => ({
-        overall: 'degraded' as const,
-        generated_at: generatedAt,
-        checks: [publicStatusCoverageCheck(generatedAt)],
-        history: [],
-        incidents: [],
-    }))
+    const status = await getStatus()
     const publicStatus = toPublicServiceStatus(status)
-    const productProgressDeployProof = await loadProductDeployProofLedger()
 
-    return NextResponse.json(productProgressDeployProof
-        ? { ...publicStatus, productProgressDeployProof }
-        : publicStatus, {
+    return NextResponse.json(publicStatus, {
         headers: {
             'cache-control': 'no-store, max-age=0',
         },

@@ -381,7 +381,16 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           AND record->>'recordKind' = 'automatic_intelligence_review_task'
           AND ${tenantWhere}
         ORDER BY updated_at DESC, id DESC`, allTenants ? [] : [tenantId]);
-    const [taskRows, eventRows] = await Promise.all([
+    const taskIdsQuery = taskLimit
+      ? this.sql.unsafe(`
+        SELECT record->>'id' AS id
+        FROM threat_intel.workflow_records
+        WHERE record_type = 'analyst_metadata_review_task'
+          AND record->>'recordKind' = 'automatic_intelligence_review_task'
+          AND ${tenantWhere}
+      `, allTenants ? [] : [tenantId])
+      : Promise.resolve([] as Array<{ id: string }>);
+    const [taskRows, eventRows, taskIdRows] = await Promise.all([
       taskRowsQuery,
       taskLimit ? Promise.resolve([]) : this.sql.unsafe(`
         SELECT record
@@ -389,7 +398,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         WHERE record_type = 'analyst_metadata_review_task'
           AND record->>'recordKind' = 'automatic_intelligence_review_event'
           AND ${tenantWhere}
-        ORDER BY created_at ASC, id ASC`, allTenants ? [] : [tenantId])
+        ORDER BY created_at ASC, id ASC`, allTenants ? [] : [tenantId]),
+      taskIdsQuery
     ]);
     const tasksAndEvents = [...taskRows, ...eventRows].map(readRecord);
     const tasks = tasksAndEvents.filter((record: any) => record.recordKind === 'automatic_intelligence_review_task');
@@ -438,6 +448,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       : [];
     return {
       tasksAndEvents,
+      taskIds: taskIdRows.map((row: { id: string }) => row.id).filter(Boolean),
       claims,
       incidents,
       captures,

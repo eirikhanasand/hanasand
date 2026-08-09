@@ -1,10 +1,10 @@
 {
-  "version": 10,
+  "version": 11,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-08-09T11:09:26.000Z",
+  "generatedAt": "2026-08-09T13:34:35.000Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 25,
+  "sourceCount": 28,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -2932,6 +2932,383 @@
             "bug bounty",
             "CVE",
             "исследование"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_lukas_stefanko_android_malware_telegram",
+      "name": "Lukas Stefanko Android Security & Malware public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/androidMalware",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.9,
+      "language": "en",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public mobile-malware research from the exact channel identified by its author, malware researcher Lukas Stefanko. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T13:34:35.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "malware_research",
+          "independent_research",
+          "mobile_security"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "androidMalware",
+        "verifiedSourceId": "src_lukas_stefanko_android_malware_telegram",
+        "publisherReference": "https://www.linkedin.com/posts/lukasstefanko_telegram-activity-7324047394982027264-d4PL",
+        "ownershipVerifiedAt": "2026-08-09T13:34:35.000Z",
+        "activityVerifiedAt": "2026-08-09T13:34:35.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "Android malware",
+          "mobile spyware",
+          "mobile fraud",
+          "phishing",
+          "mobile vulnerabilities"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T13:34:35.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 12,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.linkedin.com/posts/lukasstefanko_telegram-activity-7324047394982027264-d4PL",
+          "legalBasisVerifiedAt": "2026-08-09T13:34:35.000Z",
+          "latestPublishedAt": "2026-08-06T13:05:58+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "researcher:sk:lukas-stefanko:android-malware:telegram",
+        "publisher": {
+          "name": "Lukas Stefanko",
+          "country": "SK",
+          "homepage": "https://www.linkedin.com/in/lukasstefanko/",
+          "trustBasis": "the independent malware researcher states that he created the channel and links the exact public handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public researcher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public researcher channel used for defensive security research.",
+        "reliability": 0.9,
+        "intelligenceValue": 0.88,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "Android malware",
+            "mobile spyware",
+            "mobile fraud",
+            "phishing",
+            "mobile vulnerabilities"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "mobile",
+            "technology",
+            "finance",
+            "consumer"
+          ],
+          "regions": [
+            "Europe",
+            "Global"
+          ],
+          "countries": [
+            "Slovakia"
+          ],
+          "languages": [
+            "en"
+          ],
+          "queryPatterns": [
+            "Android malware",
+            "spyware",
+            "banking trojan",
+            "mobile threat"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_ransomfeed_ransomware_telegram",
+      "name": "RansomFeed ransomware victim reporting public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/RansomFeedNews",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.91,
+      "language": "en",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public factual ransomware-victim notifications from the exact Telegram channel published by RansomFeed. Collect only unauthenticated public-preview text for defensive threat intelligence with attribution; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim submissions.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T13:34:35.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "ransomware_research",
+          "victim_publication_reporting",
+          "cybercrime_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "RansomFeedNews",
+        "verifiedSourceId": "src_ransomfeed_ransomware_telegram",
+        "publisherReference": "https://ransomfeed.it/data/cards/recap-2025-01-31.pdf",
+        "ownershipVerifiedAt": "2026-08-09T13:34:35.000Z",
+        "activityVerifiedAt": "2026-08-09T13:34:35.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "ransomware groups",
+          "victim publications",
+          "extortion claims",
+          "global ransomware activity"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T13:34:35.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 20,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://ransomfeed.it/data/cards/recap-2025-01-31.pdf",
+          "legalBasisVerifiedAt": "2026-08-09T13:34:35.000Z",
+          "latestPublishedAt": "2026-08-08T19:30:34+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:it:ransomfeed:victim-reporting:telegram",
+        "publisher": {
+          "name": "RansomFeed",
+          "country": "IT",
+          "homepage": "https://ransomfeed.it/",
+          "trustBasis": "the publisher's own report lists the exact public Telegram channel for its continuous ransomware monitoring service"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public factual victim notifications; source attribution retained. The referenced report is CC BY-NC and is not redistributed.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive ransomware intelligence and factual claim monitoring.",
+        "reliability": 0.91,
+        "intelligenceValue": 0.92,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "ransomware groups",
+            "victim publications",
+            "extortion claims",
+            "global ransomware activity"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "education",
+            "legal",
+            "manufacturing",
+            "technology"
+          ],
+          "regions": [
+            "Italy",
+            "Europe",
+            "Global"
+          ],
+          "countries": [
+            "Italy"
+          ],
+          "languages": [
+            "en",
+            "it"
+          ],
+          "queryPatterns": [
+            "ransomware",
+            "victim",
+            "incransom",
+            "dragonforce",
+            "qilin"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "high",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_threat_hunting_father_telegram",
+      "name": "Threat Hunting Father public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/ThreatHuntingFather",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.86,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public threat-hunting and DFIR research from the exact channel linked by its author, independent researcher Ruslan Akhmetzhanov. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, exploit code, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T13:34:35.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "apt_research",
+          "malware_research",
+          "incident_response",
+          "independent_research",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "ThreatHuntingFather",
+        "verifiedSourceId": "src_threat_hunting_father_telegram",
+        "publisherReference": "https://www.linkedin.com/posts/rarh1k_dfir-incidentresponse-threathunting-activity-7464006053022654465-mWAa",
+        "ownershipVerifiedAt": "2026-08-09T13:34:35.000Z",
+        "activityVerifiedAt": "2026-08-09T13:34:35.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "threat hunting",
+          "DFIR",
+          "APT campaigns",
+          "malware analysis",
+          "detection engineering"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T13:34:35.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 12,
+          "observedUsefulItemCount": 4,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.linkedin.com/posts/rarh1k_dfir-incidentresponse-threathunting-activity-7464006053022654465-mWAa",
+          "legalBasisVerifiedAt": "2026-08-09T13:34:35.000Z",
+          "latestPublishedAt": "2026-08-05T14:59:58+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "researcher:kz:ruslan-akhmetzhanov:threat-hunting:telegram",
+        "publisher": {
+          "name": "Ruslan Akhmetzhanov",
+          "country": "KZ",
+          "homepage": "https://www.linkedin.com/in/rarh1k/",
+          "trustBasis": "the independent threat-hunting researcher links the exact channel as his own; ISACA Astana independently identifies him as its author"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public researcher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public researcher channel used for defensive security research.",
+        "reliability": 0.86,
+        "intelligenceValue": 0.86,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "threat hunting",
+            "DFIR",
+            "APT campaigns",
+            "malware analysis",
+            "detection engineering"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "critical infrastructure",
+            "technology",
+            "enterprise"
+          ],
+          "regions": [
+            "Kazakhstan",
+            "Central Asia",
+            "Eastern Europe"
+          ],
+          "countries": [
+            "Kazakhstan"
+          ],
+          "languages": [
+            "ru",
+            "en"
+          ],
+          "queryPatterns": [
+            "threat hunting",
+            "DFIR",
+            "APT",
+            "вредонос",
+            "кибератак"
           ]
         },
         "collection": {

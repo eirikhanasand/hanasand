@@ -226,6 +226,27 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(store.getAnalystMetadataReviewTask(task.id)).toMatchObject({ state: "terminal", outcome: "decided" });
   });
 
+  test("does not recreate tasks that are outside the bounded task window", async () => {
+    const store: any = seededClaimStore();
+    expect(await syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(1);
+    const task = store.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task");
+    store.queryAutomaticReviewRecords = async () => ({
+      tasksAndEvents: [],
+      taskIds: [task.id],
+      claims: store.listIntelligenceClaims(),
+      incidents: store.listIncidents(),
+      captures: store.listCaptures(),
+      sources: store.listSources(),
+      health: store.listSourceHealthObservations(),
+      claimEvidence: store.listClaimEvidence(),
+      evidenceLinks: store.listEvidenceLinks(),
+      reviews: store.listClaimReviews(),
+      actorIdentities: store.listActorIdentities()
+    });
+
+    expect(await syncAutomaticReviewQueue(options(store), { allTenants: true, now: "2026-07-22T10:01:00.000Z", modelVersion: "hanasand" })).toBe(0);
+  });
+
   test("treats governed metadata-only victim lists as operational source evidence", async () => {
     const store = new InMemoryScraperStore();
     seedSource(store, "victim-list", "Acme Manufacturing\nNorthwind Logistics\nContoso Energy");

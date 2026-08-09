@@ -20,8 +20,8 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(144);
-    expect(batch.exclusions).toHaveLength(163);
+    expect(batch.sources).toHaveLength(162);
+    expect(batch.exclusions).toHaveLength(180);
 
     const ids = new Set<string>();
     const endpoints = new Set<string>();
@@ -456,6 +456,55 @@ describe("clear-web source portfolio batch", () => {
     const auscert = sources.find((source: any) => source.name === "AusCERT Security Bulletins");
     expect(auscert.legalNotes).toContain("public unauthenticated RSS response");
     expect(auscert.legalNotes).toContain("does not access member-only portal content");
+  });
+
+  test("keeps ledger 018 production-parser-positive and candidate-only until productive scheduled cycles exist", () => {
+    const expected = new Map([
+      ["Arctic Wolf Labs Security Research", [10, 10, 10, 7, "Thu, 06 Aug 2026 23:15:55 +0000"]],
+      ["Netskope Threat Labs Research", [10, 10, 10, 5, "Thu, 06 Aug 2026 11:36:05 +0000"]],
+      ["Seqrite Labs Malware Research", [10, 10, 10, 8, "Mon, 03 Aug 2026 10:32:04 +0000"]],
+      ["Python Security Announcements", [30, 30, 30, 30, "Wed, 29 Jul 2026 18:35:14 +0000"]],
+      ["Socket Software Supply Chain Research", [10, 10, 10, 6, "2026-08-07T06:49:17.320Z"]],
+      ["StepSecurity Software Supply Chain Research", [100, 100, 97, 64, "Tue, 04 Aug 2026 20:33:23 GMT"]],
+      ["Chainguard Software Supply Chain Research", [246, 246, 97, 32, "Tue, 04 Aug 2026 00:00:00 GMT"]],
+      ["GitGuardian Secrets Security Research", [15, 15, 15, 10, "Fri, 07 Aug 2026 13:09:44 GMT"]],
+      ["Wallarm API Threat Research", [10, 10, 10, 2, "Mon, 27 Jul 2026 19:57:27 +0000"]],
+      ["Endor Labs Software Supply Chain Research", [100, 100, 100, 24, "Tue, 04 Aug 2026 23:05:06 GMT"]],
+      ["Legit Security Application Security Research", [10, 10, 10, 1, "Wed, 05 Aug 2026 23:50:27 GMT"]],
+      ["Semgrep Application Security Research", [250, 250, 61, 24, "Tue, 04 Aug 26 00:00:00 +0000"]],
+      ["Praetorian Offensive Security Research", [10, 10, 10, 3, "Fri, 10 Jul 2026 20:27:03 +0000"]],
+      ["Include Security Vulnerability Research", [10, 10, 3, 1, "Fri, 05 Jun 2026 16:01:11 +0000"]],
+      ["Pen Test Partners Security Research", [10, 10, 10, 3, "Fri, 07 Aug 2026 11:38:33 +0000"]],
+      ["Bishop Fox Security Research", [50, 50, 42, 7, "Fri, 31 Jul 2026 06:00:00 -0700"]],
+      ["Horizon3 Attack Research", [10, 10, 5, 2, "Fri, 12 Jun 2026 15:38:26 +0000"]],
+      ["VulnCheck Exploitation Intelligence Research", [179, 179, 26, 16, "2026-08-05T00:00:00.000Z"]],
+    ] as const);
+    const sources = batch.sources.filter((source: any) => expected.has(source.name));
+    expect(sources).toHaveLength(expected.size);
+    const totals = { parsed: 0, dated: 0, current: 0, useful: 0 };
+    for (const source of sources) {
+      const [observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt] = expected.get(source.name)!;
+      expect(source.id).toBe(`src_portfolio_cw_${hash(canonicalUrl(source.url)).slice(0, 20)}`);
+      expect(source.metadata.sourcePortfolioVerification).toMatchObject({ observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt });
+      expect(currentItemCount).toBeGreaterThan(0);
+      expect(keywordUsefulItemCount).toBeGreaterThan(0);
+      expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
+      expect(source.metadata).not.toHaveProperty("countsAsCoverage");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
+      totals.parsed += observedItemCount;
+      totals.dated += datedItemCount;
+      totals.current += currentItemCount;
+      totals.useful += keywordUsefulItemCount;
+    }
+    expect(totals).toEqual({ parsed: 1070, dated: 1070, current: 556, useful: 245 });
+
+    expect(sources.find((source: any) => source.name === "Semgrep Application Security Research").url).toBe("https://semgrep.dev/blog/rss/");
+    expect(sources.find((source: any) => source.name === "Bishop Fox Security Research").url).toBe("https://bishopfox.com/feeds/blog.rss");
+    const exclusions = new Map(batch.exclusions.map((entry: any) => [entry.idOrUrlHash, entry.reason]));
+    expect(exclusions.get(hash(canonicalUrl("https://blog.talosintelligence.com/rss/")).slice(0, 24))).toBe("response_exceeds_max_bytes");
+    expect(exclusions.get(hash(canonicalUrl("https://securitylab.github.com/feed.xml")).slice(0, 24))).toBe("parser_zero_items");
+    expect(exclusions.get(hash(canonicalUrl("https://www.php.net/releases/feed.php")).slice(0, 24))).toBe("product_release_feed_not_security_intelligence");
   });
 
   test("deduplicates by normalized endpoint across adapters and every reserved source pack", () => {

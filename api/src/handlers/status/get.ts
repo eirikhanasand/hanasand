@@ -27,13 +27,13 @@ type IncidentRow = {
     checked_at: string | Date
 }
 
-const STATUS_CACHE_MS = 3000
+const STATUS_CACHE_MS = 15_000
 const MONITOR_STALE_MS = 5 * 60 * 1000
 let statusCache: { expiresAt: number, payload: object } | null = null
 let statusInflight: Promise<object> | null = null
 
 export default async function getStatus(_req: FastifyRequest, res: FastifyReply) {
-    res.header('Cache-Control', 'public, max-age=3, stale-while-revalidate=15')
+    res.header('Cache-Control', 'public, max-age=15, stale-while-revalidate=30')
     return res.send(await statusPayload())
 }
 
