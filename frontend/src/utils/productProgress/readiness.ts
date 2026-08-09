@@ -162,22 +162,12 @@ function chooseCaseForAlert(alertId: string | undefined, cases: AnalystCaseProof
 }
 
 function sourceProxyHealth(input: DashboardSourceProofProxyPayload | undefined) {
-    const counts = (input?.sourceInventory as { counts?: { registeredActiveOrCanary?: number, registeredTotal?: number } } | undefined)?.counts
-    return Boolean(input?.ok && (
-        input.endpoints?.sourceInventory?.ok
-        || (counts?.registeredActiveOrCanary || 0) >= 1000
-        || (counts?.registeredTotal || 0) >= 1000
-    ))
+    return Boolean(input?.ok && input.endpoints?.sourceInventory?.ok)
 }
 
 function sourceProxyHasFreshWorker(input: DashboardSourceProofProxyPayload | undefined) {
     const worker = input?.sourcePacks?.workerReadiness || input?.sourcePacks?.readiness
-    const counts = (input?.sourceInventory as { counts?: { registeredActiveOrCanary?: number, registeredTotal?: number } } | undefined)?.counts
-    return Boolean(sourceProxyHealth(input) && (
-        (worker && (worker.collectionReadyRows || worker.activeSourceRows))
-        || (counts?.registeredActiveOrCanary || 0) >= 1000
-        || (counts?.registeredTotal || 0) >= 1000
-    ))
+    return Boolean(sourceProxyHealth(input) && worker && Number(worker.collectionReadyRows ?? 0) > 0)
 }
 
 function currentCommit() {

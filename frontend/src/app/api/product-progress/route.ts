@@ -156,11 +156,7 @@ export async function GET(request: NextRequest) {
 }
 
 function sourceProxyReady(input: DashboardSourceProofProxyPayload) {
-    return Boolean(input.ok && (
-        input.endpoints?.sourceInventory?.ok
-        || ((input.sourceInventory as { counts?: { registeredActiveOrCanary?: number, registeredTotal?: number } } | undefined)?.counts?.registeredActiveOrCanary || 0) >= 1000
-        || ((input.sourceInventory as { counts?: { registeredActiveOrCanary?: number, registeredTotal?: number } } | undefined)?.counts?.registeredTotal || 0) >= 1000
-    ))
+    return Boolean(input.ok && input.endpoints?.sourceInventory?.ok)
 }
 
 function publicTiSearchReady(input: FetchResult) {

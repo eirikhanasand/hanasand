@@ -1173,37 +1173,35 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
     const parserSourceFamilyNames = Object.keys(input.sourcePacks?.parserSourceFamilyCounts || {}).sort()
     const parserSourceFamilyCount = parserSourceFamilyNames.length
     const counts = input.sourceInventory?.counts
-    const productionCoverageReady = Boolean(inventoryReachable && ((counts?.registeredActiveOrCanary || 0) >= 1000 || (counts?.registeredTotal || 0) >= 1000))
-    const workerRowsReady = Boolean(worker && workerFresh && (worker.collectionReadyRows || worker.activeSourceRows))
+    const workerRowsReady = Boolean(worker && workerFresh && Number(worker.collectionReadyRows ?? 0) > 0)
     const workerReady = Boolean(
-        productionCoverageReady
-        || (workerRowsReady && sourceOperationsReady && sourceCustomerConfigReady && sourceReadinessArtifactReady && sourceProxyVerificationReady && schemaLookupReady && receiptMatrixReady && endToEndWorkflowReady && sourceFamilyCount > 0 && parserSourceFamilyCount > 0)
+        workerRowsReady && sourceOperationsReady && sourceCustomerConfigReady && sourceReadinessArtifactReady && sourceProxyVerificationReady && schemaLookupReady && receiptMatrixReady && endToEndWorkflowReady && sourceFamilyCount > 0 && parserSourceFamilyCount > 0
     )
     const blockers = [
         inventoryReachable ? '' : `Source inventory state is loading through ${options.route}.`,
-        productionCoverageReady || sourcePacksReachable ? '' : `Source-pack state is loading through ${options.route}.`,
-        productionCoverageReady || worker ? '' : 'Source-pack worker status is syncing to the dashboard proxy.',
-        productionCoverageReady || !worker || workerLastRunAt ? '' : 'Source-pack worker last run time is syncing.',
-        productionCoverageReady || !(worker && workerLastRunAt && !workerFresh) ? '' : `Source-pack worker status is stale; last run ${workerLastRunAt}.`,
-        productionCoverageReady || !(worker && workerFresh && !(worker.collectionReadyRows || worker.activeSourceRows)) ? '' : 'Source-pack worker is checking collection-ready source rows.',
-        productionCoverageReady || sourceOperationsReady ? '' : 'Collection status is syncing.',
-        productionCoverageReady || sourceCustomerConfigReady ? '' : 'Source customer configuration and redaction state are syncing.',
-        productionCoverageReady || sourceReadinessArtifactReady ? '' : 'Source status artifact is syncing ledger, trust, and safe-output checks.',
-        productionCoverageReady || sourceProxyVerificationReady ? '' : 'Source reachability checks are syncing.',
-        productionCoverageReady || schemaLookupReady ? '' : 'Safe contract schema lookup is syncing from the sources.',
-        productionCoverageReady || receiptMatrixReady ? '' : 'Product status delivery-check matrix is syncing from the sources.',
-        productionCoverageReady || endToEndWorkflowReady ? '' : endToEndWorkflow?.detail || 'End-to-end workflow status is syncing from the sources.',
-        productionCoverageReady || sourceFamilyCount > 0 ? '' : 'Source family counts are syncing from the source pack.',
-        productionCoverageReady || parserSourceFamilyCount > 0 ? '' : 'Parser family counts are syncing from the source pack.',
-        ...(!productionCoverageReady && Array.isArray(input.sourcePacks?.readiness?.blockers) ? input.sourcePacks.readiness.blockers.filter(Boolean) : []),
-        ...(!productionCoverageReady && Array.isArray(input.sourcePacks?.proxyVerification?.blockers) ? input.sourcePacks.proxyVerification.blockers.filter(Boolean) : []),
+        sourcePacksReachable ? '' : `Source-pack state is loading through ${options.route}.`,
+        worker ? '' : 'Source-pack worker status is syncing to the dashboard proxy.',
+        !worker || workerLastRunAt ? '' : 'Source-pack worker last run time is syncing.',
+        !(worker && workerLastRunAt && !workerFresh) ? '' : `Source-pack worker status is stale; last run ${workerLastRunAt}.`,
+        !(worker && workerFresh && Number(worker.collectionReadyRows ?? 0) === 0) ? '' : 'Source-pack worker is checking collection-ready source rows.',
+        sourceOperationsReady ? '' : 'Collection status is syncing.',
+        sourceCustomerConfigReady ? '' : 'Source customer configuration and redaction state are syncing.',
+        sourceReadinessArtifactReady ? '' : 'Source status artifact is syncing ledger, trust, and safe-output checks.',
+        sourceProxyVerificationReady ? '' : 'Source reachability checks are syncing.',
+        schemaLookupReady ? '' : 'Safe contract schema lookup is syncing from the sources.',
+        receiptMatrixReady ? '' : 'Product status delivery-check matrix is syncing from the sources.',
+        endToEndWorkflowReady ? '' : endToEndWorkflow?.detail || 'End-to-end workflow status is syncing from the sources.',
+        sourceFamilyCount > 0 ? '' : 'Source family counts are syncing from the source pack.',
+        parserSourceFamilyCount > 0 ? '' : 'Parser family counts are syncing from the source pack.',
+        ...(Array.isArray(input.sourcePacks?.readiness?.blockers) ? input.sourcePacks.readiness.blockers.filter(Boolean) : []),
+        ...(Array.isArray(input.sourcePacks?.proxyVerification?.blockers) ? input.sourcePacks.proxyVerification.blockers.filter(Boolean) : []),
     ].filter(Boolean)
-    const status: ReadinessStatus = inventoryReachable && (sourcePacksReachable || productionCoverageReady) && workerReady ? 'ready' : inventoryReachable || sourcePacksReachable ? 'needs_action' : 'blocked'
+    const status: ReadinessStatus = inventoryReachable && sourcePacksReachable && workerReady ? 'ready' : inventoryReachable || sourcePacksReachable ? 'needs_action' : 'blocked'
 
     return {
         schemaVersion: 'dwm.source_inventory.v1',
         status,
-        proxyExposed: inventoryReachable && (sourcePacksReachable || productionCoverageReady),
+        proxyExposed: inventoryReachable && sourcePacksReachable,
         inventoryReachable,
         sourcePacksReachable,
         sourceOperationsReady,
