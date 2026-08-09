@@ -99,6 +99,25 @@ describe('public TI v1', () => {
         expect(response.json().meta.organizationId).toBe('org-customer')
     })
 
+    test('does not re-expose restricted source locators through the public collection API', async () => {
+        const app = await testApp(async () => Response.json({
+            sources: [
+                { id: 'source-clear', name: 'Publisher feed', url: 'https://publisher.example/feed.xml', locatorRedacted: false, operatingMode: { metadataOnly: false, accessMethod: 'public_http' } },
+                { id: 'source-redacted', name: 'Restricted feed', url: 'https://secret.example/private', locatorRedacted: true, operatingMode: { metadataOnly: true, accessMethod: 'metadata_only_proxy' } },
+                { id: 'source-metadata-flag-only', name: 'Metadata-only feed', url: 'https://secret.example/another', operatingMode: { metadataOnly: true, accessMethod: 'public_http' } },
+            ],
+            total: 3,
+        }))
+
+        const response = await app.inject({ method: 'GET', url: '/api/v1/sources', headers: { 'x-api-key': 'valid' } })
+        expect(response.statusCode).toBe(200)
+        const rows = response.json().data
+        expect(rows[0].url).toBe('https://publisher.example/feed.xml')
+        expect(rows[1]).not.toHaveProperty('url')
+        expect(rows[2]).not.toHaveProperty('url')
+        expect(JSON.stringify(response.json())).not.toContain('secret.example')
+    })
+
     test('publishes governed incident attribution and automatic-review lineage without attributing ambiguous decisions', async () => {
         const baseIncident = {
             sourceId: 'internal-source-id-must-not-leak',
