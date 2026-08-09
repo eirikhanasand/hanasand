@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { buildProductProgressPayload } from '@/utils/productProgress/readiness'
 import { deployLedgerFromStatusPayload } from '@/utils/productProgress/deployLedger'
 import { helpdeskAuditFetchResultsFromLedger, loadProductHelpdeskAuditProofLedger } from '@/utils/productProgress/helpdeskAuditProofSource'
-import { loadProductPublicTiProofLedger, publicTiFetchResultFromLedger } from '@/utils/productProgress/publicTiProofSource'
 import type { AnalystCaseDetailProofInput, DwmAlertGenerationReadinessInput } from '@/utils/productProgress/readiness'
 import type { DashboardSourceProofProxyPayload, DwmDeliveryItem, DwmOrganizationSummary, DwmOrganizationWebhookDestination, DwmProductSnapshotReadiness, DwmWatchlistSummary, EntitlementReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
 
@@ -82,11 +81,6 @@ export async function GET(request: NextRequest) {
             recovery: supportRecovery,
             audit: auditEvents,
         })
-    const publicTiProofLedger = !publicTiSearchReady(publicTi)
-        ? await loadProductPublicTiProofLedger(query)
-        : undefined
-    const publicTiFallback = publicTiProofLedger ? publicTiFetchResultFromLedger(publicTiProofLedger, query) : undefined
-
     const payload = buildProductProgressPayload({
         generatedAt,
         checkedAt: generatedAt,
@@ -96,7 +90,7 @@ export async function GET(request: NextRequest) {
             generatedAt,
             query,
             route: routes.publicTiProvenance || '/api/ti/search',
-            fetch: publicTiFallback || publicTi,
+            fetch: publicTi,
         }),
         sourceProxy: normalizedSourceProxy,
         dwmProduct: dwmProductReadiness({
