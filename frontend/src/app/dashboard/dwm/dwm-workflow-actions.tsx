@@ -317,12 +317,25 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const deliveryRows = durableDeliveryRows(delivery)
             if (!deliveryRows.length) throw new Error('No durable delivery result was returned.')
             const attemptedCount = deliveryRows.length
-            setResult({ ok: true, message: `Webhook delivery attempted for ${attemptedCount} alert(s).` })
+            const failed = deliveryRows.some(row => row.status === 'failed' || Boolean(row.error))
+            const deliveredCount = deliveryRows.filter(row => row.status === 'delivered' && row.dryRun !== true).length
+            const dryRunCount = deliveryRows.filter(row => row.status === 'dry_run' || row.dryRun === true).length
+            const skippedCount = deliveryRows.filter(row => row.status === 'skipped').length
+            const message = failed
+                ? 'Webhook delivery recorded a failed attempt. Review delivery history before retrying.'
+                : deliveredCount
+                    ? `${deliveredCount} alert${deliveredCount === 1 ? '' : 's'} delivered to the configured destination.`
+                    : dryRunCount
+                        ? 'Webhook delivery recorded a dry-run; no customer notification was sent.'
+                        : skippedCount
+                            ? 'Webhook delivery was skipped; no customer notification was sent.'
+                            : 'No delivered customer notification was recorded.'
+            setResult({ ok: !failed && deliveredCount > 0, message })
             setLastRoute({
                 label: 'Webhook delivery',
                 watchTerms: effectiveTermCount,
                 deliveryAttempts: attemptedCount,
-                deliveryState: attemptedCount ? 'attempted' : 'nothing queued',
+                deliveryState: failed ? 'failed' : deliveredCount ? 'delivered' : dryRunCount ? 'dry-run recorded' : skippedCount ? 'skipped' : 'no delivery',
             })
             refreshWorkspace()
         } catch (error) {
