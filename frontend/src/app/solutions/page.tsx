@@ -23,7 +23,7 @@ const primarySolutions = [
     {
         title: 'Security Scanner',
         eyebrow: 'VALIDATION & ASSURANCE',
-        detail: 'Run safe, evidence-backed validation scans against approved assets, review historical runs, and keep recurring checks visible to operators.',
+        detail: 'Run safe validation scans against approved assets, review historical runs, and keep recurring checks visible to operators.',
         href: '/solutions/scanner',
         icon: ShieldCheck,
         points: ['Run approved checks on demand', 'Review severity and evidence by scan', 'Plan recurring validation runs'],
