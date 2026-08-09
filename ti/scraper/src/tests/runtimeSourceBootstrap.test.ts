@@ -938,12 +938,12 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
-  test("preserves legacy Tor qualification from persisted productive cycles after restart", () => {
+  test("requires current source review before restoring legacy Tor qualification after restart", () => {
     const previous = Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
     Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = "true";
     const seedPath = join(dirname(fileURLToPath(import.meta.url)), "../../seeds/restricted_metadata_source_packs.json");
     const store = new InMemoryScraperStore();
-    const sourceId = "restricted_safepay_victim_blog";
+    const sourceId = "restricted_qilin_victim_blog";
 
     try {
       bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-01T10:00:00.000Z" });
@@ -968,13 +968,39 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
           storageKind: "metadata_only",
           body: undefined,
           sensitive: true,
-          metadata: { runId }
+          metadata: { runId, safeExcerpt: "Public victim listing metadata." }
         }));
       }
+      const grandfathered = store.getSource(sourceId)!;
+      store.saveSource({
+        ...grandfathered,
+        status: "active",
+        countsAsCoverage: true,
+        metadata: {
+          ...grandfathered.metadata,
+          productionCollection: true,
+          countsAsCoverage: true,
+          sourcePortfolioQualificationState: "sustained_productive",
+          sourcePortfolioProductiveCheckCount: 2
+        }
+      } as any);
 
       const restarted = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-01T12:00:00.000Z" });
 
-      expect(restarted.activeSourceCount).toBe(2);
+      expect(restarted.activeSourceCount).toBe(1);
+      expect(store.getSource(sourceId)).toMatchObject({
+        status: "candidate",
+        countsAsCoverage: false,
+        metadata: {
+          productionCollection: false,
+          countsAsCoverage: false,
+          restrictedMetadataCandidate: true,
+          sourcePortfolioQualificationState: "pending_sustained_productivity"
+        }
+      });
+      approveSourceReview(store, sourceId);
+      const approved = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-01T12:01:00.000Z" });
+      expect(approved.activeSourceCount).toBe(2);
       expect(store.getSource(sourceId)).toMatchObject({
         status: "active",
         countsAsCoverage: true,
@@ -982,7 +1008,8 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
           productionCollection: true,
           countsAsCoverage: true,
           sourcePortfolioQualificationState: "sustained_productive",
-          sourcePortfolioProductiveCheckCount: 2
+          sourcePortfolioProductiveCheckCount: 2,
+          automaticSourceReview: { promptVersion: SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, state: "approved" }
         }
       });
       expect(store.getSource(sourceId)?.metadata).not.toHaveProperty("restrictedMetadataCandidate");

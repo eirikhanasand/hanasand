@@ -22,8 +22,18 @@ export function automaticReviewModelVersion(explicit?: unknown) {
 
 export function sourceRequiresAutomaticReview(source: any) {
   if (source?.metadata?.transportCanary === true || CATALOG_PROFILES.has(source?.metadata?.extractionProfile)) return false;
+  const tenantId = String(source?.tenantId ?? "").trim();
+  const governedRestrictedMetadata = (!tenantId || tenantId === "global")
+    && source?.type === "tor_metadata"
+    && source?.metadata?.sourceFamily === "dark_web_victim_feed"
+    && source?.accessMethod === "approved_proxy"
+    && source?.risk === "restricted"
+    && source?.governance?.approvalState === "approved"
+    && source?.governance?.metadataOnly === true
+    && Boolean(String(source?.legalNotes ?? "").trim());
   return Boolean(source?.metadata?.sourcePortfolioVerification
     || source?.metadata?.sourceFeedDiscovery
+    || governedRestrictedMetadata
     || isLegacySourceReviewCandidate(source));
 }
 

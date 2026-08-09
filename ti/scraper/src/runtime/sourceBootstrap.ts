@@ -217,6 +217,13 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
     reconciled.metadata.sourcePortfolioLastProductiveAt = runtimeEvidence.lastUsefulAt;
     if (reconciled.metadata.sourcePortfolioStatus === "verification_expired") delete reconciled.metadata.sourcePortfolioStatus;
     if (restricted) delete reconciled.metadata.restrictedMetadataCandidate;
+  } else if (restricted) {
+    reconciled.status = "candidate";
+    reconciled.countsAsCoverage = false;
+    reconciled.metadata.productionCollection = false;
+    reconciled.metadata.countsAsCoverage = false;
+    reconciled.metadata.sourcePortfolioQualificationState = "pending_sustained_productivity";
+    reconciled.metadata.restrictedMetadataCandidate = true;
   } else if (expiredPortfolio) {
     reconciled.status = "candidate";
     reconciled.countsAsCoverage = false;
