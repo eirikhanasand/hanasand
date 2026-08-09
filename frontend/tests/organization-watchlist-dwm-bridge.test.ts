@@ -46,6 +46,7 @@ test('mirrors a customer organization and authenticated owner before watchlist c
 test('organization workspace exposes destination lifecycle controls safely', () => {
     assert.match(organizationWebhookRouteSource, /proxyOrganizationApiRequest/, 'organization destinations must come from the persisted backend proxy.')
     assert.doesNotMatch(organizationWebhookRouteSource, /productProgress|proofLedger|PRODUCT_PROGRESS_WEBHOOK/, 'organization destinations must not fall back to a proof ledger.')
+    assert.doesNotMatch(organizationWorkspaceSource, /optionalContextEndpoints/, 'failed customer context endpoints must remain visible as load errors.')
     assert.match(organizationWorkspaceSource, /validDestinationUrl\(url\)/, 'destination save should validate URL shape before dry-run.')
     assert.match(organizationWorkspaceSource, /createSavedDestination/, 'organization settings should allow direct destination creation.')
     assert.match(organizationWorkspaceSource, /data-org-destination-create='true'/, 'saved destinations should expose a compact create control.')

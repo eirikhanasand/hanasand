@@ -361,7 +361,6 @@ const destinationKinds: DestinationDraft['kind'][] = ['discord', 'webhook']
 const webhookPolicies = ['active_destinations', 'manual_selection', 'disabled']
 const alertPolicies = ['members', 'admins', 'owners']
 const lifecycleStatuses = ['active', 'archived']
-const optionalContextEndpoints = new Set(['alerts', 'cases', 'deliveries'])
 
 function sanitizeOrganizationDisplayCopy(value: unknown) {
     if (value === undefined || value === null) return undefined
@@ -762,7 +761,6 @@ export default function OrganizationWorkspaceClient() {
         results.forEach((result, index) => {
             const [key, url] = endpoints[index]
             if (result.status === 'rejected') {
-                if (optionalContextEndpoints.has(key)) return
                 nextBundle.loadErrors.push(`${readableEndpoint(key)}: ${endpointErrorMessage(result.reason)}`)
                 return
             }
