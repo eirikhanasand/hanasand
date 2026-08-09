@@ -59,9 +59,7 @@ For every counted source:
 
 Source discovery must continue without Codex or manual source lists. The existing scraper and Hanasand AI path should follow bounded safe publisher references, test the real collector/parser, reject unsafe or low-value candidates, schedule accepted candidates, and retire sources that stop producing useful intelligence. Discovery has its own concurrency, queue, backoff, and resource limits so it cannot starve collection, review, alerts, or API traffic.
 
-The persistent public Telegram work loop and live acceptance ledger are in [`telegram-goal.md`](telegram-goal.md). Keep running that loop until 100 public Telegram feeds qualify in production; candidate registration and one-off probes do not reduce the remaining gap.
-
-The deployed source-operations response measured on 2026-08-09 reports only 3 qualifying sources (3 clear-web, 0 lawful Tor/dark-web, 0 public Telegram); this requirement is therefore substantially open. Keep this baseline dated to the latest live measurement rather than inferring it from raw registrations.
+The persistent public Telegram and clear-web work loops are in [`telegram-goal.md`](telegram-goal.md) and [`clear-web-goal.md`](clear-web-goal.md). Keep running them until 100 public Telegram and 5,000 clear-web feeds qualify in production; candidate registration and one-off probes do not reduce either remaining gap. Each family ledger owns its dated live baseline so this plan cannot retain a contradictory stale count.
 
 ## 6. Use automatic review without guessing
 
