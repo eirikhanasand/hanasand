@@ -8,4 +8,5 @@ test('product progress passes live helpdesk and TI responses through without pro
     assert.match(route, /audit: auditEvents/)
     assert.match(route, /fetch: publicTi/)
     assert.doesNotMatch(route, /loadProductHelpdeskAuditProofLedger|helpdeskAuditFetchResultsFromLedger|loadProductPublicTiProofLedger|publicTiFetchResultFromLedger|PRODUCT_PROGRESS_(HELPDESK_AUDIT|PUBLIC_TI)/)
+    assert.doesNotMatch(route, /webhookDeliveryProofLedger|product\.webhook_delivery_proof_ledger\.v1|delivery ledger when the ledger fallback is active/)
 })

@@ -42,7 +42,6 @@ export async function GET(request: NextRequest) {
     const organizationProof = organizationReadinessProof(organizationReadiness)
     const alertRows = rows((alerts.json as { alerts?: unknown[] } | undefined)?.alerts)
     const deliveryRows = rows((deliveries.json as { deliveries?: unknown[] } | undefined)?.deliveries) as DwmDeliveryItem[]
-    const deliveryProofLedger = webhookDeliveryProofLedger(deliveries)
     const caseRows = rows((cases.json as { cases?: unknown[] } | undefined)?.cases)
     const webhookRows = rows((organizationWebhooks.json as { destinations?: unknown[] } | undefined)?.destinations) as DwmOrganizationWebhookDestination[]
     const selectedCase = selectCaseForProductProgress(alertRows, caseRows, deliveryRows)
@@ -92,7 +91,6 @@ export async function GET(request: NextRequest) {
             fetch: alertGeneration,
         }),
         deliveries: deliveryRows,
-        deliveryProofLedger,
         cases: caseRows,
         caseDetail: selectedCaseProof,
         orgAlertExport: orgAlertExportReadiness({
@@ -119,7 +117,6 @@ export async function GET(request: NextRequest) {
             productProgress: webhookProductProgressProof(organizationWebhooks),
             destinations: webhookRows,
             deliveries: deliveryRows,
-            deliveryProofLedger,
             fetchOk: organizationWebhooks.ok || webhookRows.length > 0,
             fetchStatus: organizationWebhooks.status,
             fetchError: organizationWebhooks.error,
@@ -150,13 +147,6 @@ type DwmWebhookProductProgressProof = {
     liveDeliveryEnabled?: boolean
     blockerCodes?: string[]
     href?: string
-}
-
-type WebhookDeliveryProofLedgerRef = {
-    schemaVersion?: string
-    generatedAt?: string
-    source?: string
-    ledgerPath?: string
 }
 
 function productProgressRoutes(query: string) {
@@ -869,16 +859,10 @@ function webhookHealthReadiness(input: {
     productProgress?: DwmWebhookProductProgressProof
     destinations: DwmOrganizationWebhookDestination[]
     deliveries: DwmDeliveryItem[]
-    deliveryProofLedger?: WebhookDeliveryProofLedgerRef
     fetchOk: boolean
     fetchStatus: number
     fetchError?: string
 }): WebhookHealthReadiness {
-    const deliveryLedgerContract = input.deliveryProofLedger?.schemaVersion === 'product.webhook_delivery_proof_ledger.v1'
-        ? input.deliveryProofLedger.schemaVersion
-        : undefined
-    const ledgerSource = input.deliveryProofLedger?.source
-    const ledgerPath = input.deliveryProofLedger?.ledgerPath
     if (input.productProgress) {
         const proof = input.productProgress
         const blockerCodes = Array.isArray(proof.blockerCodes) ? proof.blockerCodes.filter(Boolean).map(String) : []
@@ -892,7 +876,7 @@ function webhookHealthReadiness(input: {
             schemaVersion: 'dwm.webhook_health.readiness.v1',
             status: blockers.length ? 'needs_action' : 'ready',
             checkedAt: input.generatedAt,
-            source: [input.route, ledgerSource].filter(Boolean).join(' + ') || input.route,
+            source: input.route,
             href: proof.href || '/dashboard/automations?setup=dwm',
             destinationCount: proof.destinationCount,
             activeDestinationCount: proof.activeDestinationCount,
@@ -903,13 +887,10 @@ function webhookHealthReadiness(input: {
             ownerLane: 'webhook',
             unavailableReason: blockers.length ? 'missing_webhook_lifecycle_health_api' : undefined,
             staleAfterSeconds: 900,
-            proofTimestamp: input.deliveryProofLedger?.generatedAt || input.generatedAt,
+            proofTimestamp: input.generatedAt,
             expectedDashboardRowId: 'webhook_health',
-            integrationProbeHint: 'GET /api/organizations/:id/webhooks must return destinationAdminProof.productProgress with dwm.webhook.destination_admin_product_progress.v1; GET /api/dwm/webhooks/deliveries should return the delivery ledger when the ledger fallback is active.',
-            backendProofContractVersion: [proof.schemaVersion, deliveryLedgerContract].filter(Boolean).join(' + ') || proof.schemaVersion,
-            deliveryProofLedgerSchemaVersion: deliveryLedgerContract,
-            deliveryProofLedgerSource: ledgerSource,
-            deliveryProofLedgerPath: ledgerPath,
+            integrationProbeHint: 'GET /api/organizations/:id/webhooks must return destinationAdminProof.productProgress with dwm.webhook.destination_admin_product_progress.v1, and GET /api/dwm/webhooks/deliveries must return persisted delivery rows.',
+            backendProofContractVersion: proof.schemaVersion,
             detail: blockers.length
                 ? blockers.join('; ')
                 : `${proof.activeDestinationCount || 0} active webhook destination${proof.activeDestinationCount === 1 ? '' : 's'} with ${proof.deliveryReadyCount || 0} delivery-ready destination${proof.deliveryReadyCount === 1 ? '' : 's'}.`,
@@ -930,7 +911,7 @@ function webhookHealthReadiness(input: {
         schemaVersion: 'dwm.webhook_health.readiness.v1',
         status: blockers.length ? 'needs_action' : 'ready',
         checkedAt: input.generatedAt,
-        source: [input.route, ledgerSource].filter(Boolean).join(' + ') || input.route,
+        source: input.route,
         href: '/dashboard/automations?setup=dwm',
         destinationCount: input.destinations.length,
         activeDestinationCount: activeDestinations.length,
@@ -941,27 +922,11 @@ function webhookHealthReadiness(input: {
         ownerLane: 'webhook',
         unavailableReason: blockers.length ? 'missing_webhook_lifecycle_health_api' : undefined,
         staleAfterSeconds: 900,
-        proofTimestamp: latestDeliveryAt || latestAuditEventAt || input.deliveryProofLedger?.generatedAt || input.generatedAt,
+        proofTimestamp: latestDeliveryAt || latestAuditEventAt || input.generatedAt,
         expectedDashboardRowId: 'webhook_health',
-        integrationProbeHint: 'GET /api/organizations/:id/webhooks and GET /api/dwm/webhooks/deliveries must return active destinations, delivery evidence, and the delivery ledger when the ledger fallback is active.',
-        backendProofContractVersion: ['dwm.webhook_health.readiness.v1', deliveryLedgerContract].filter(Boolean).join(' + ') || 'dwm.webhook_health.readiness.v1',
-        deliveryProofLedgerSchemaVersion: deliveryLedgerContract,
-        deliveryProofLedgerSource: ledgerSource,
-        deliveryProofLedgerPath: ledgerPath,
+        integrationProbeHint: 'GET /api/organizations/:id/webhooks and GET /api/dwm/webhooks/deliveries must return active destinations and persisted delivery evidence.',
+        backendProofContractVersion: 'dwm.webhook_health.readiness.v1',
         detail: blockers.length ? blockers.join('; ') : `${activeDestinations.length} active webhook destination${activeDestinations.length === 1 ? '' : 's'} with ${deliveryReadyCount} delivery-ready row${deliveryReadyCount === 1 ? '' : 's'}.`,
-    }
-}
-
-function webhookDeliveryProofLedger(result: FetchResult): WebhookDeliveryProofLedgerRef | undefined {
-    const ledger = (result.json as { proofLedger?: unknown } | undefined)?.proofLedger
-    if (!ledger || typeof ledger !== 'object') return undefined
-    const candidate = ledger as WebhookDeliveryProofLedgerRef
-    if (candidate.schemaVersion !== 'product.webhook_delivery_proof_ledger.v1') return undefined
-    return {
-        schemaVersion: candidate.schemaVersion,
-        generatedAt: stringOrUndefined(candidate.generatedAt),
-        source: stringOrUndefined(candidate.source),
-        ledgerPath: stringOrUndefined(candidate.ledgerPath),
     }
 }
 
