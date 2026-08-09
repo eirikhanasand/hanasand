@@ -107,7 +107,7 @@ Explicit exclusions from this iteration:
 - `https://t.me/EsGeeks` had exact first-party ownership and parsed 20 current posts with 6 classifier-useful items, but five were summaries of third-party publishers rather than independent reporting. Numeric sanitizer residual matches were reviewed as CVE identifiers, a GitHub username, and dates—not phone PII—but the channel was still rejected as copied aggregation rather than source-family expansion.
 - deepdarkCTI exposed only a request-access Telegram group, not an unauthenticated public channel. RansomLook and Ransomware.live exposed no exact first-party public Telegram endpoint, so no handle guesses were registered.
 
-The 2026-08-09T21:30Z–22:15Z iteration accepted eleven more non-coverage candidates:
+The 2026-08-09T19:30Z–20:15Z iteration accepted eleven more non-coverage candidates:
 
 - `src_codeby_security_telegram` is the exact `https://t.me/codeby_sec` endpoint linked by Codeby's first-party website. The shipped adapter parsed 20 current posts, classified 2 as useful, observed a latest post at 2026-08-08T09:01:19Z, and found zero sanitizer changes, sanitizer-idempotence failures, or residual email, bot-token, and credential matches. Both useful posts link back to Codeby's own current vulnerability analyses rather than copied publisher articles. It remains `candidate`, `productionCollection=false`, and `countsAsCoverage=false` until governed review and two distinct useful retained scheduled cycles.
 - `src_eset_ukraine_telegram` is the exact `https://t.me/eset_ua_news` endpoint linked by ESET Ukraine's first-party website. The shipped adapter parsed 20 posts, classified 2 current Ukrainian items as useful, observed a latest post at 2026-07-17T08:25:12Z, and found zero sanitizer changes or idempotence failures. The retained candidates include ESET's own malware telemetry and phishing analysis. It remains candidate-only under the same production qualification contract.
@@ -129,6 +129,17 @@ Explicit exclusions from this iteration:
 - `https://t.me/cyberseckz` parsed 0 public-preview items. `https://t.me/jetinfo`, CyberSec_TR, Cyber Cache, Dr.Web, Kaspersky ICS, ThreatMon, Enigma Security, and INCIBE's ProtegeTuEmpresa were stale or empty. SecureByte, ZeroDayResearch, and Malpedia lacked a current exact first-party endpoint reference. ImMALWARE's bounded payload retained a credential-pattern residual and was excluded as unsafe. Guessed vendor handles with no first-party endpoint evidence were not registered.
 - Generic Global CIO and TAdviser channels were excluded as irrelevant general-IT media, not because of classifier yield. CryptoPro was reassessed as a first-party security vendor and imported candidate-only above.
 - The examined national CERT/government portfolios in Brazil, Chile, Colombia, Moldova, Georgia, Kyrgyzstan, Poland, Saudi Arabia, Qatar, Oman, Bahrain, Kuwait, Pakistan, Malaysia, Thailand, and Singapore exposed no exact current public Telegram feed that also produced useful adapter yield.
+
+The 2026-08-09T21:34:45Z regional/government reassessment accepted two more non-coverage candidates under the corrected candidate-admission rule:
+
+- `src_armenia_cyberpolice_telegram` is the exact `https://t.me/cyberpolice_arm` channel linked by Armenia's Ministry of Internal Affairs launch notice, which states that the ministry's Cybercrime Department operates it. The shipped adapter parsed 19 current Armenian posts through 2026-08-08T08:02:58Z. The bounded fixed-term classifier returned 0 useful items, while sanitizer change, sanitizer-idempotence failure, residual email, bot-token, and credential counts were all zero. This supersedes the earlier classifier-only exclusion; the row remains candidate-only and receives no qualification credit.
+- `src_s2w_dailybrief_telegram` is the exact `https://t.me/s2wdailybrief` endpoint linked by S2W's first-party launch notice and described there as an expert-curated dark-web and Telegram threat brief. The shipped adapter parsed 20 English posts through 2026-07-13T09:36:40Z. The classifier returned 0 useful items and every sanitizer/residual count above was zero. The latest item was still within the 30-day activity window at verification but is near expiry, so governed scheduled evidence—not registration—must decide whether it remains productive.
+- The preceding eleven-source batch had recorded local CEST observation times with a `Z` suffix. Those five provenance fields per source were corrected by subtracting two hours (`21:40Z`→`19:40Z`, `22:10Z`→`20:10Z`, and `22:15Z`→`20:15Z`). Item counts, latest publication times, endpoints, and qualification state did not change.
+
+Explicit exclusions from this reassessment:
+
+- `https://t.me/dsszzi_official` is exact, current, and first-party, but it already exists globally as active production source `src_ssscip_cert_ua_telegram` in `verified_long_lived_sources.json`; no duplicate identity was added.
+- DragonJAR remained parser-positive and current, but this pass found only third-party directory results and the channel's self-description, not an exact link from the first-party publisher site. It remains unregistered until that ownership edge is independently verifiable.
 
 ## One iteration
 
