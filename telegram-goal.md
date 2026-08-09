@@ -21,6 +21,14 @@ Measured from PostgreSQL, the source-operations API, and the native scheduler on
 
 The next promotion queue is evidence-driven, not a raw-source target. Approved one-cycle candidates need a second naturally new retained item; uncertain reviews need new retained evidence before re-review. Duplicate-only checks, successful empty parses, and repeated copies must continue to record health without being counted as productive coverage.
 
+### 2026-08-09T16:20Z production follow-up
+
+- Canonical production commit `5595546ab34be1123e8ad9f925d2031364df2945` imported the DCiber and REDSEG candidates globally. The measured fleet is now 63 registered, 26 active, 28 candidate, 2 rejected, and 7 retired; 17 still satisfy the strict qualification contract.
+- Native scheduled run `canary-run_f8de0fa79a8877d7` completed both new sources over HTTP 200 with 20 parsed items each, 2 retained captures each, zero parser warnings, zero duplicates, and no retry. REDSEG recorded its first useful scheduled cycle; DCiber's healthy capture was not useful, so neither was promoted.
+- The write queue rose to 6,662 during post-restart processing and then drained to zero without a writer error, confirming the stable PostgreSQL array-query repair under real backlog. A later serialized scraper restart at `5595546a` reported `importedSourceCount=0`; global Telegram counts remained 63/26/28/2/7 and strict coverage remained 17.
+- That restart's first global run `canary-run_61d2c721e68ccfd` completed 38/38 tasks with zero failures, 56 duplicate captures, and no retry. Duplicate-only work recorded health but did not create false productive cycles or increase coverage.
+- A separate endpoint-identity defect remains outside the Telegram-owned files: retired `default` rows `src_dwm_tg_seed_3350ee2e45907a1c`, `src_dwm_tg_seed_eeab7dacdf627ceb`, and `src_dwm_tg_seed_ce1eadd686201526` still own The Hacker News, ANY.RUN, and BleepingComputer endpoints. `sourceBootstrap.ts` permits a new global owner to supersede a retired tenant duplicate only for Tor; a global Telegram portfolio candidate instead selects the retired row, fails the safe-upgrade check, and is skipped. The smallest shared hook is to extend canonical global-owner reconciliation to current, low-risk, approved `public_http` Telegram portfolio candidates, insert one global stable identity, and leave the tenant duplicate retired. Until that shared hook has its own global-versus-tenant restart regression, these endpoints remain excluded rather than being re-registered under alternate URLs.
+
 Replace this section after every deployment with the current database/API measurement and deployed commit. Never substitute pack size, candidate count, test fixtures, injected fetches, or status labels.
 
 ## Latest bounded discovery ledger
@@ -42,6 +50,18 @@ Explicit exclusions from the same pass:
 - `https://t.me/CyberSecurityIL` produced only 1 useful item across 17 parsed posts and predominantly linked third-party news, so it failed the independent-yield boundary.
 - Singapore PDPC's `https://t.me/pdpcsg` parsed 8 posts but was inactive after 2025-10-31 and produced 0 useful items; the government-linked `https://t.me/ncpcscamalert` parsed 0 posts.
 - Resecurity, CloudSEK, ThreatMon, Singapore CSA, CERT Polska, Oman CERT, and Jordan NCSA handle guesses resolved only to landing/empty previews or lacked exact ownership evidence; none were registered.
+
+The 2026-08-09T16:30Z–16:36Z iteration checked 262 first-party publisher homepages and accepted two more non-coverage candidates:
+
+- `src_alexander_leonov_english_telegram` is the exact `https://t.me/avleonovcom` English research channel linked by Alexander Leonov's first-party site. The shipped parser retained 20 current posts, classified 7 as useful, observed a latest post at 2026-08-07T15:48:16Z, and found zero sanitizer-idempotence or residual PII/credential matches. This is a distinct English vulnerability-research feed, not a copy of the already-qualified Russian-language `avleonovrus` endpoint.
+- `src_zhassulan_maldevcc_telegram` is the exact `https://t.me/maldevcc` channel linked in current first-party posts by independent malware researcher and Malpedia contributor Zhassulan Zhussupov. The shipped parser retained 16 posts, classified 13 as useful, observed a latest post at 2026-08-08T20:13:52Z, and found zero sanitizer-idempotence or residual PII/credential matches. Collection remains public-preview text only; linked samples and proof-of-concept files are never fetched.
+
+Explicit exclusions from this iteration:
+
+- The Hacker News parsed 20 posts with 12 useful and ANY.RUN parsed 19 with 7 useful; both have exact current first-party ownership evidence, but both collide with retired tenant-scoped endpoint owners and therefore remain blocked on the shared canonical-owner hook above. BleepingComputer parsed 20 posts with 17 useful, but its current first-party site did not link the exact Telegram endpoint, so ownership was not established.
+- `https://t.me/w2hack` parsed 18 posts, produced 0 useful items, and was inactive after 2026-06-03.
+- First-party RUSCADASEC portfolio links `ruscadasec`, `scadasecbr`, `yayca`, and `TG_3side` returned empty previews; `shipulin_anton` was stale after 2022; `zlonov`, `luntry_official`, `osint_mindset`, and `avleonovnews` were current but produced zero independently useful items or copied aggregated publisher news. `soxoj` was empty.
+- `https://t.me/avleonovnews` produced 20 parser-useful current items but is an aggregation stream of other publishers; it was rejected as copied/generated padding.
 
 Keep this ledger append-only per bounded discovery iteration so rejected endpoints are not repeatedly guessed and accepted candidates are never mistaken for coverage.
 

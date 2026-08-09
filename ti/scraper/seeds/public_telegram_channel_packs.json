@@ -1,10 +1,10 @@
 {
-  "version": 13,
+  "version": 14,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-08-09T16:04:20.000Z",
+  "generatedAt": "2026-08-09T16:36:41.000Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 30,
+  "sourceCount": 32,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -3559,6 +3559,254 @@
             "malware",
             "vulnerabilidad",
             "incidente cibernetico"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_alexander_leonov_english_telegram",
+      "name": "Alexander Leonov English vulnerability research public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/avleonovcom",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.87,
+      "language": "en",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public English-language vulnerability-management research from the exact channel linked by independent researcher Alexander Leonov's first-party website. Collect only unauthenticated public-preview text for defensive threat intelligence with attribution; do not join, authenticate, interact, follow private invitations, or download media, files, samples, exploit code, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T16:36:41.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "independent_research",
+          "vulnerability_reporting",
+          "threat_intelligence",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "avleonovcom",
+        "verifiedSourceId": "src_alexander_leonov_english_telegram",
+        "publisherReference": "https://avleonov.com/",
+        "ownershipVerifiedAt": "2026-08-09T16:36:41.000Z",
+        "activityVerifiedAt": "2026-08-09T16:36:41.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "vulnerability management",
+          "CVE analysis",
+          "exploitation",
+          "security automation"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T16:36:41.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 7,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://avleonov.com/",
+          "legalBasisVerifiedAt": "2026-08-09T16:36:41.000Z",
+          "latestPublishedAt": "2026-08-07T15:48:16+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "researcher:ru:alexander-leonov:vulnerability-management:telegram:en",
+        "publisher": {
+          "name": "Alexander Leonov",
+          "country": "RU",
+          "homepage": "https://avleonov.com/",
+          "trustBasis": "the independent researcher's first-party website links the exact English-language public Telegram channel"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public researcher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public researcher channel used for defensive vulnerability intelligence.",
+        "reliability": 0.87,
+        "intelligenceValue": 0.88,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "vulnerability management",
+            "CVE analysis",
+            "exploitation",
+            "security automation"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [
+            "Russia"
+          ],
+          "languages": [
+            "en"
+          ],
+          "queryPatterns": [
+            "vulnerability management",
+            "CVE",
+            "exploitation",
+            "Patch Tuesday"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_zhassulan_maldevcc_telegram",
+      "name": "Zhassulan Zhussupov malware research public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/maldevcc",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.86,
+      "language": "en",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public English-language malware analysis, defensive research, and threat-hunting notes from the exact channel linked by independent researcher Zhassulan Zhussupov. Collect only unauthenticated public-preview text for defensive threat intelligence with attribution; do not join, authenticate, interact, follow private invitations, or download media, files, samples, proof-of-concept code, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T16:36:41.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "malware_research",
+          "apt_research",
+          "independent_research",
+          "threat_hunting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "maldevcc",
+        "verifiedSourceId": "src_zhassulan_maldevcc_telegram",
+        "publisherReference": "https://www.linkedin.com/in/zhassulan-zhussupov-cocomelonc/",
+        "ownershipVerifiedAt": "2026-08-09T16:36:41.000Z",
+        "activityVerifiedAt": "2026-08-09T16:36:41.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "malware analysis",
+          "malware development research",
+          "threat hunting",
+          "APT research",
+          "defensive detection"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T16:36:41.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 16,
+          "observedUsefulItemCount": 13,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.linkedin.com/in/zhassulan-zhussupov-cocomelonc/",
+          "legalBasisVerifiedAt": "2026-08-09T16:36:41.000Z",
+          "latestPublishedAt": "2026-08-08T20:13:52+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "researcher:kz:zhassulan-zhussupov:malware-research:telegram",
+        "publisher": {
+          "name": "Zhassulan Zhussupov",
+          "country": "KZ",
+          "homepage": "https://cocomelonc.github.io/",
+          "trustBasis": "the independent malware researcher links the exact channel in current first-party LinkedIn posts and identifies the linked research as his own"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public researcher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public researcher channel used for defensive malware and threat-hunting intelligence.",
+        "reliability": 0.86,
+        "intelligenceValue": 0.88,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "malware analysis",
+            "malware development research",
+            "threat hunting",
+            "APT research",
+            "defensive detection"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "government",
+            "critical infrastructure",
+            "research"
+          ],
+          "regions": [
+            "Kazakhstan",
+            "Central Asia",
+            "Global"
+          ],
+          "countries": [
+            "Kazakhstan"
+          ],
+          "languages": [
+            "en"
+          ],
+          "queryPatterns": [
+            "malware analysis",
+            "APT",
+            "threat hunting",
+            "persistence",
+            "malware detection"
           ]
         },
         "collection": {
