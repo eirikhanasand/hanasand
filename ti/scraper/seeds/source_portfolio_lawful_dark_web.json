@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T14:37:11.000Z",
+  "generatedAt": "2026-08-09T14:50:11.000Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -1683,6 +1683,83 @@
           "contentType": "application/javascript",
           "adapter": "tor_metadata",
           "legalBasisVerifiedAt": "2026-08-09T14:37:11.000Z"
+        }
+      }
+    },
+    {
+      "id": "restricted_booba_team_victim_api",
+      "name": "Booba Team victim metadata",
+      "type": "tor_metadata",
+      "url": "http://7t3zi3e7ki6iseun77ofqtr6wmbpgnpc2ada6gstcxp54lw6q2zb7jad.onion/tada/posts/leaks?page=1&perPage=10",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.86,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public claimed-victim organization titles and machine-readable publication timestamps from the credential-free leak-list API. Never authenticate, interact with operators, follow payload or contact links, or retain post text, previews, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-08-09T14:50:11.000Z",
+        "approvedBy": "source-review:goal8-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Booba Team",
+        "actors": [
+          "Booba Team",
+          "Booba Project"
+        ],
+        "discoveryAuthorityUrl": "https://www.ransomlook.io/doc/",
+        "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/booba%20team",
+        "discoveryCheckedAt": "2026-08-09T14:50:11.000Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T14:50:11.000Z",
+        "productionCollectionVerifiedAt": "2026-08-09T14:50:11.000Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "json_items_leak_title",
+        "parserShape": "items[].title where section=leaks, id is a positive integer, isPinned=false, and date is an absolute timestamp",
+        "observedParsedItemCount": 9,
+        "reportedVictimCount": 16,
+        "lastReportedVictimAt": "2026-07-31T16:54:23.982417Z",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+        "discoveryAuthorityChain": [
+          {
+            "name": "RansomLook",
+            "role": "current public ransomware-group registry matching the public victim-listing service and current availability",
+            "url": "https://www.ransomlook.io/doc/",
+            "recordUrl": "https://www.ransomlook.io/api/group/booba%20team"
+          },
+          {
+            "name": "WatchGuard Technologies",
+            "role": "independent current ransomware tracker identifying Booba Project as active since June 2026",
+            "url": "https://www.watchguard.com/wgrd-security-hub/ransomware-tracker",
+            "recordUrl": "https://www.watchguard.com/de/wgrd-security-hub/ransomware-tracker"
+          },
+          {
+            "name": "SOCRadar",
+            "role": "independent current threat-intelligence reporting of a July 2026 Booba Project victim listing",
+            "url": "https://socradar.io/blog/data-breach/",
+            "recordUrl": "https://socradar.io/blog/data-breach/jani-king-booba-project-ransomware-2026/"
+          }
+        ],
+        "attribution": "Current RansomLook endpoint verification, independent WatchGuard and SOCRadar activity reporting, and approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T14:50:11.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 9,
+          "httpStatus": 200,
+          "contentType": "application/json",
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T14:50:11.000Z"
         }
       }
     }

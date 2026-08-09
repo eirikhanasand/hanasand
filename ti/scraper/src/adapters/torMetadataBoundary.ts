@@ -47,7 +47,7 @@ export class TorMetadataHttpBoundary {
       if (contentType && !["text/html", "application/xhtml+xml", "text/plain", "application/json"].includes(contentType) && !approvedJavascript) throw new Error(`Tor metadata unsupported media type: ${contentType}`);
       const body = await boundedText(response, maxBytes, this.requestTimeoutMs);
       return contentType === "application/json"
-        ? metadataFromJson(body.text, request.actorName)
+        ? metadataFromJson(body.text, request.actorName, target.pathname)
         : approvedJavascript
           ? metadataFromJavascript(body.text, request.actorName)
           : metadataFromHtml(body.text, request.actorName);
@@ -146,12 +146,26 @@ function victimNamesFromHtml(html: string, actorName?: string) {
   return { victimNames: safeVictimNames(profiles.flatMap((profile) => profile.names)), parserProfile: profiles.find((profile) => profile.names.length)?.profile };
 }
 
-function metadataFromJson(json: string, actorName?: string) {
+function metadataFromJson(json: string, actorName?: string, pathname?: string) {
   const actor = actorName?.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (!actor || !["lamashtu", "incransom", "ransomhouse"].includes(actor)) throw new Error("Tor metadata JSON parser is not approved for this actor");
+  if (!actor || !["lamashtu", "incransom", "ransomhouse", "boobateam"].includes(actor)) throw new Error("Tor metadata JSON parser is not approved for this actor");
   let document: any;
   try { document = JSON.parse(json); }
   catch { throw new Error("Tor metadata JSON parser rejected invalid payload"); }
+  if (actor === "boobateam") {
+    if (pathname !== "/tada/posts/leaks") throw new Error("Tor metadata JSON parser is not approved for this endpoint");
+    const rows = document?.items;
+    if (!Array.isArray(rows)) throw new Error("Tor metadata JSON parser found no approved victim listing");
+    const candidates = rows.map((row: any) => ({
+      name: row?.title,
+      timestamp: validTimestamp(row?.date),
+      valid: row?.section === "leaks" && Number.isInteger(row?.id) && row.id > 0 && row?.isPinned === false
+    })).filter((item: any) => item.valid && typeof item.name === "string" && item.timestamp);
+    const victimNames = safeVictimNames(candidates.map((item: any) => item.name));
+    const sourceTimestamp = candidates.filter((item: any) => victimNames.includes(safeMetadataText(item.name))).map((item: any) => item.timestamp).sort((left: string, right: string) => Date.parse(right) - Date.parse(left))[0];
+    const title = `${safeMetadataText(actorName ?? "")} victim metadata`.trim().slice(0, 300);
+    return { title, description: victimNames.join(" | ").slice(0, 1_000) || undefined, actorName, parserProfile: "json_items_leak_title", victimName: victimNames[0], victimNames, sourceTimestamp, links: [] };
+  }
   if (actor === "incransom") {
     const rows = document?.payload?.announcements;
     if (!Array.isArray(rows)) throw new Error("Tor metadata JSON parser found no approved victim listing");

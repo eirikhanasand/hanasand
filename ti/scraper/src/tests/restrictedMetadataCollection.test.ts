@@ -266,6 +266,25 @@ describe("restricted metadata collection", () => {
     expect(JSON.stringify(parsed)).not.toMatch(/private|revenue|contact|navigation|rejected/i);
   });
 
+  test("extracts only allowlisted Booba Team JSON leak titles", async () => {
+    const body = {
+      items: [
+        { id: 1, date: "2026-08-09T12:00:00.000Z", section: "leaks", title: "Northwind Health", text: "private response detail", isPinned: false },
+        { id: 2, date: "2026-08-08T12:00:00.000Z", section: "leaks", title: "Contoso Manufacturing", text: "do-not-store", isPinned: false },
+        { id: 3, date: "2026-08-07T12:00:00.000Z", section: "news", title: "Rejected Section", text: "private", isPinned: false },
+        { id: 4, date: "2026-08-06T12:00:00.000Z", section: "leaks", title: "Rejected Pinned", text: "private", isPinned: true }
+      ],
+      imagePreviews: ["private.png"],
+      files: ["secret.zip"]
+    };
+    const boundary = new TorMetadataHttpBoundary({ proxyUrl: "http://onion-tor:8118", fetcher: async () => new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } }) });
+    const parsed = await boundary.fetchMetadata({ url: `http://${"b".repeat(56)}.onion/tada/posts/leaks?page=1&perPage=10`, actorName: "Booba Team" });
+
+    expect(parsed).toMatchObject({ victimNames: ["Northwind Health", "Contoso Manufacturing"], parserProfile: "json_items_leak_title", sourceTimestamp: "2026-08-09T12:00:00.000Z", links: [] });
+    expect(JSON.stringify(parsed)).not.toMatch(/private|secret|do-not-store|rejected/i);
+    await expect(boundary.fetchMetadata({ url: `http://${"b".repeat(56)}.onion/tada/posts/news`, actorName: "Booba Team" })).rejects.toThrow("not approved for this endpoint");
+  });
+
   test("extracts only allowlisted AbyssData JavaScript victim titles", async () => {
     const body = `const data = [
       {'title': 'Northwind Health', 'short': 'private response detail', 'full': 'do-not-store', 'links': ['secret'], 'password': 'credential'},
