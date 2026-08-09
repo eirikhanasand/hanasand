@@ -1,6 +1,6 @@
 'use server'
 
-import { getVulnerabilities, getWebScan, triggerVulnerabilityScan, triggerWebScan } from '@/utils/monitoring/data'
+import { getVulnerabilities, getWebScan, triggerVulnerabilityScan, triggerWebScan, updateWebScanSchedule } from '@/utils/monitoring/data'
 
 export async function refreshVulnerabilityData() {
     return await getVulnerabilities()
@@ -12,3 +12,4 @@ export async function runVulnerabilityScanAction() {
 
 export async function refreshWebScan() { return await getWebScan() }
 export async function runWebScanAction() { return await triggerWebScan() }
+export async function updateWebScanScheduleAction(input: { enabled?: boolean, intervalMinutes?: number }) { return await updateWebScanSchedule(input) }

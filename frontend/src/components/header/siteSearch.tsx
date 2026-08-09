@@ -17,6 +17,7 @@ const publicRouteItems: SearchItem[] = [
     route('Threat search', 'Search companies, actors, domains, and activity', '/ti'),
     route('Browser', 'Regular and Tor browser runs', '/browser'),
     route('Security Monitoring', 'Managed detection from customer security logs', '/solutions/mill'),
+    route('Security Scanner', 'Safe validation scans and historical results', '/solutions/scanner'),
     route('Organizations', 'Members, watchlists, and destinations', '/organizations'),
     route('Developers', 'API and webhook documentation', '/developers'),
     route('Pricing', 'Plans and subscription details', '/pricing'),
@@ -29,6 +30,7 @@ const publicRouteItems: SearchItem[] = [
 const dashboardRouteItems: SearchItem[] = [
     route('Dashboard overview', 'Customer console overview', '/dashboard/overview'),
     route('Security Monitoring', 'Suspicious login and security event review', '/dashboard/mill'),
+    route('Security Scanner', 'Run and schedule approved Hanasand scans', '/dashboard/scanner'),
     route('DWM cases', 'Dark web monitoring case review', '/dashboard/dwm/cases'),
     route('DWM watchlists', 'Watched companies, vendors, domains, and brands', '/dashboard/dwm/watchlists'),
     route('DWM sources', 'Source health and capture state', '/dashboard/dwm/sources'),

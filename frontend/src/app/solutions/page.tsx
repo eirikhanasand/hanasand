@@ -21,6 +21,15 @@ const primarySolutions = [
         price: 'Prioritize real threats',
     },
     {
+        title: 'Security Scanner',
+        eyebrow: 'VALIDATION & ASSURANCE',
+        detail: 'Run safe, evidence-backed validation scans against approved assets, review historical runs, and keep recurring checks visible to operators.',
+        href: '/solutions/scanner',
+        icon: ShieldCheck,
+        points: ['Run approved checks on demand', 'Review severity and evidence by scan', 'Plan recurring validation runs'],
+        price: 'Know what changed',
+    },
+    {
         title: 'Dark Web Monitoring',
         eyebrow: 'EXPOSURE INTELLIGENCE',
         detail: 'Know when your company, people, brands, or suppliers appear in places where attackers operate—before an exposure becomes an incident.',

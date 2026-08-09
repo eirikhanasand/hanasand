@@ -10,12 +10,14 @@ import { runDueAutomations } from './automations.ts'
 import runProductionLogMonitors from './status/logMonitors.ts'
 import { runTrackedBackgroundJob } from './backgroundJobRuntime.ts'
 import { runDueVulnerabilityScan, VULNERABILITY_SCAN_JOB_ID } from './vulnerabilities/scanner.ts'
+import { runDueWebScan } from './vulnerabilities/webScanner.ts'
 import { DATABASE_BACKUP_JOB_ID, runDueDatabaseBackup } from './db/backups.ts'
 import run, { queryOnce } from '#db'
 import { ORGANIZATION_RETENTION_JOB_ID, runOrganizationRetentionWorker } from './organizationPrivacy.ts'
 import { persistHostUpdateStatus, readHostUpdateStatus } from './aptUpdates.ts'
 
 export const HOST_UPDATE_MONITOR_JOB_ID = 'api-host-update-monitor'
+export const WEB_SCAN_JOB_ID = 'api-web-security-scanner'
 
 const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
     'api-auth-token-cleanup': invalidateOldTokens,
@@ -31,6 +33,7 @@ const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
     },
     'api-vm-ensure-running': ensureAlwaysRunningVms,
     [VULNERABILITY_SCAN_JOB_ID]: runDueVulnerabilityScan,
+    [WEB_SCAN_JOB_ID]: runDueWebScan,
     [DATABASE_BACKUP_JOB_ID]: runDueDatabaseBackup,
     'api-agent-automations': runDueAutomations,
     'api-mail-account-provisioning': provisionExistingMailAccounts,
@@ -99,6 +102,7 @@ export default function cron() {
                 runDueApiCronJob(HOST_UPDATE_MONITOR_JOB_ID),
                 runDueApiCronJob('api-vm-ensure-running'),
                 runDueApiCronJob(VULNERABILITY_SCAN_JOB_ID),
+                runDueApiCronJob(WEB_SCAN_JOB_ID),
                 runDueApiCronJob(DATABASE_BACKUP_JOB_ID),
                 runDueApiCronJob('api-agent-automations'),
                 runDueApiCronJob(ORGANIZATION_RETENTION_JOB_ID),

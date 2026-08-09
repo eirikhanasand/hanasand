@@ -1,6 +1,6 @@
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 import PageClient from './pageClient'
-import { refreshVulnerabilityData, refreshWebScan, runVulnerabilityScanAction, runWebScanAction } from './actions'
+import { refreshVulnerabilityData, refreshWebScan, runVulnerabilityScanAction, runWebScanAction, updateWebScanScheduleAction } from './actions'
 import { getVulnerabilities, getWebScan } from '@/utils/monitoring/data'
 import WebScanPanel from './webScanPanel'
 
@@ -23,7 +23,7 @@ export default async function Page({
                 eyebrow='Security'
                 description='Operate image vulnerability scanning and the approved Hanasand web validation scanner.'
             />
-            <WebScanPanel initialData={webScan} refreshAction={refreshWebScan} runAction={runWebScanAction} />
+            <WebScanPanel initialData={webScan} refreshAction={refreshWebScan} runAction={runWebScanAction} scheduleAction={updateWebScanScheduleAction} />
             <PageClient
                 initialData={data}
                 initialQuery={query}

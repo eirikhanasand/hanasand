@@ -31,6 +31,11 @@ export async function triggerWebScan() {
     if (typeof result === 'string') throw new Error(result)
     return result
 }
+export async function updateWebScanSchedule(input: { enabled?: boolean, intervalMinutes?: number }) {
+    const result = await requestService<WebScanReport>('internal', 'vulnerabilities/web-scan/schedule', { method: 'PUT', body: JSON.stringify(input) })
+    if (typeof result === 'string') throw new Error(result)
+    return result
+}
 
 export async function getTrafficDomains() {
     return await requestService<TrafficDomains>('cdn', 'traffic/domains')
