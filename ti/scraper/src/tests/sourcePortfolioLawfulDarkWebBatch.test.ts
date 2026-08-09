@@ -14,7 +14,8 @@ describe("lawful dark-web source portfolio batch", () => {
     ));
     const report = importRestrictedMetadataSeedBundle(batch, "2026-07-23T10:06:20.000Z");
     const rejected = batch.reviewedRejectedCandidates as Array<Record<string, unknown>>;
-    const source = batch.sources[0];
+    const source = batch.sources.find((row: any) => row.id === "restricted_ms13089_victim_blog");
+    const revalidated = batch.sources.find((row: any) => row.id === "restricted_deadlock_victim_blog");
     const hosts = [...existing.sources, ...batch.sources].map((row) => new URL(row.url).hostname);
 
     expect(batch).toMatchObject({
@@ -26,8 +27,8 @@ describe("lawful dark-web source portfolio batch", () => {
       retentionClass: "restricted_metadata"
     });
     expect(report).toMatchObject({ valid: true, errors: [] });
-    expect(report.accepted).toHaveLength(1);
-    expect(report.accepted[0]).toMatchObject({
+    expect(report.accepted).toHaveLength(2);
+    expect(report.accepted.find((row) => row.id === "restricted_ms13089_victim_blog")).toMatchObject({
       id: "restricted_ms13089_victim_blog",
       status: "candidate",
       metadata: {
@@ -41,6 +42,13 @@ describe("lawful dark-web source portfolio batch", () => {
       observedItemCount: 3,
       httpStatus: 200,
       adapter: "tor_metadata"
+    });
+    expect(revalidated).toMatchObject({
+      metadata: {
+        observedParsedItemCount: 10,
+        qualificationState: "pending_import_and_two_productive_scheduled_cycles",
+        sourcePortfolioVerification: { outcome: "content_parsed", observedItemCount: 10, httpStatus: 200 }
+      }
     });
     expect(new Set(hosts).size).toBe(hosts.length);
     expect(rejected).toHaveLength(25);

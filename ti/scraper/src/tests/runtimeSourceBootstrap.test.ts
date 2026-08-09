@@ -775,6 +775,20 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       const second = bootstrapRuntimeSources(restarted, { seedPaths: [seedPath], generatedAt: "2026-07-22T13:00:00.000Z" });
       expect(second).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 1, activeSourceCount: 0, totalSourceCount: 1 });
       expect(restarted.listSources()).toEqual(beforeRestart);
+
+      const retired = restarted.getSource("src_verified_restricted")!;
+      restarted.saveSource({ ...retired, status: "retired", metadata: { ...retired.metadata, retiredAt: "2026-07-22T09:00:00.000Z", retiredReason: "prior probe failure" } });
+      const revalidated = bootstrapRuntimeSources(restarted, { seedPaths: [seedPath], generatedAt: "2026-07-22T13:30:00.000Z" });
+      expect(revalidated).toMatchObject({ updatedSourceCount: 1, skippedSourceCount: 0 });
+      expect(restarted.getSource("src_verified_restricted")).toMatchObject({ status: "candidate", metadata: { restrictedMetadataCandidate: true } });
+      expect(restarted.getSource("src_verified_restricted")?.metadata).not.toHaveProperty("retiredAt");
+      expect(restarted.getSource("src_verified_restricted")?.metadata).not.toHaveProperty("retiredReason");
+
+      const reRetired = restarted.getSource("src_verified_restricted")!;
+      restarted.saveSource({ ...reRetired, status: "retired", metadata: { ...reRetired.metadata, retiredAt: "2026-07-22T11:00:00.000Z", retiredReason: "newer retirement" } });
+      const staleRevalidation = bootstrapRuntimeSources(restarted, { seedPaths: [seedPath], generatedAt: "2026-07-22T14:00:00.000Z" });
+      expect(staleRevalidation).toMatchObject({ updatedSourceCount: 0, skippedSourceCount: 1 });
+      expect(restarted.getSource("src_verified_restricted")).toMatchObject({ status: "retired", metadata: { retiredReason: "newer retirement" } });
     } finally {
       if (previous === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
       else Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = previous;

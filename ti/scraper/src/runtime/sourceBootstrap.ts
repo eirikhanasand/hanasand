@@ -159,7 +159,8 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
   const portfolio = Boolean(effectiveVerified.metadata?.sourcePortfolioVerification);
   const expiredPortfolio = portfolio && !isCurrentSourcePortfolioVerification(effectiveVerified, generatedAt);
   const runtimeEvidence = portfolio ? currentRuntimeEvidence(existing, generatedAt, store) : undefined;
-  if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) : portfolio ? isSafePortfolioUpgradeTarget(existing) : isVerifiedProductionSource(effectiveVerified, generatedAt) && isSafeUpgradeTarget(existing))) return undefined;
+  const revalidatedRestricted = restricted && isRevalidatedRetiredRestrictedSource(existing, effectiveVerified, generatedAt);
+  if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) || revalidatedRestricted : portfolio ? isSafePortfolioUpgradeTarget(existing) : isVerifiedProductionSource(effectiveVerified, generatedAt) && isSafeUpgradeTarget(existing))) return undefined;
   const sameSource = existing.id === effectiveVerified.id || existing.metadata?.verifiedSourceId === effectiveVerified.id;
   const metadata = {
     ...(existing.metadata ?? {}),
@@ -182,6 +183,10 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
     health: existing.health,
     crawlState: existing.crawlState
   };
+  if (revalidatedRestricted) {
+    delete reconciled.metadata.retiredAt;
+    delete reconciled.metadata.retiredReason;
+  }
   if (runtimeEvidence) {
     reconciled.status = "active";
     reconciled.countsAsCoverage = true;
@@ -229,6 +234,18 @@ function isSafePortfolioUpgradeTarget(source: SourceRecord) {
 
 function isSafeRestrictedUpgradeTarget(source: SourceRecord) {
   return ["active", "candidate", "degraded", "probation"].includes(source.status)
+    && ["high", "restricted"].includes(source.risk)
+    && source.type === "tor_metadata"
+    && source.accessMethod === "approved_proxy"
+    && source.governance?.metadataOnly !== false;
+}
+
+function isRevalidatedRetiredRestrictedSource(source: SourceRecord, verified: SourceRecord, generatedAt: string) {
+  const verifiedAt = Date.parse(String(verified.metadata?.sourcePortfolioVerification?.verifiedAt ?? ""));
+  const retiredAt = Date.parse(String(source.metadata?.sourcePortfolioRetiredAt ?? source.metadata?.retiredAt ?? source.updatedAt ?? ""));
+  return source.status === "retired"
+    && isCurrentSourcePortfolioVerification(verified, generatedAt)
+    && Number.isFinite(verifiedAt) && Number.isFinite(retiredAt) && verifiedAt > retiredAt
     && ["high", "restricted"].includes(source.risk)
     && source.type === "tor_metadata"
     && source.accessMethod === "approved_proxy"
