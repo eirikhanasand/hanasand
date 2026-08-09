@@ -38,7 +38,9 @@ export async function upsertServiceMonitorIncident(options: ApiServerOptions, in
   if (input.status === "up" && !open) return { incident: undefined, queued: 0 };
 
   const statusUrl = "https://hanasand.com/status";
-  const generatedSourceId = stableId("service-monitor-source", `${service}:${checkName}`);
+  // All service checks are observations of one status document. Keep one source identity
+  // so concurrent checks cannot race the source_type/url uniqueness constraint.
+  const generatedSourceId = stableId("service-monitor-source", statusUrl);
   const source = store.getSource?.(generatedSourceId)
     ?? store.listSources?.().find((candidate: any) => candidate.type === "service_monitor" && candidate.url === statusUrl);
   const sourceId = source?.id ?? generatedSourceId;

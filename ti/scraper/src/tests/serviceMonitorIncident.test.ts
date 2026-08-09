@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
+import { stableId } from "../utils.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { api, body } from "./helpers/apiSourceFixtures.ts";
 
@@ -67,7 +68,9 @@ test("deduplicates sustained public service incidents, queues Hanasand AI once, 
 
   const incidents = store.listIncidents().filter((incident: any) => incident.record?.serviceMonitor);
   expect(incidents).toHaveLength(2);
-  expect(store.listSources().filter((source: any) => source.type === "service_monitor")).toHaveLength(1);
+  const monitorSources = store.listSources().filter((source: any) => source.type === "service_monitor");
+  expect(monitorSources).toHaveLength(1);
+  expect(monitorSources[0].id).toBe(stableId("service-monitor-source", "https://hanasand.com/status"));
   expect(store.listAnalystMetadataReviewTasks().filter((item: any) => item.recordKind === "automatic_intelligence_review_task")).toHaveLength(2);
   for (const incident of incidents) {
     expect(store.listEvidenceLinks().filter((link: any) => link.subjectType === "incident" && link.subjectId === incident.id)).toHaveLength(5);
