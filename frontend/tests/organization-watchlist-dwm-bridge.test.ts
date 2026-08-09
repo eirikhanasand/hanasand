@@ -354,6 +354,39 @@ test('mirrors org watchlist save into DWM alert rebuild and returns alert delta'
     assert.equal(calls[1].headers['x-tenant-id'], 'org_acme')
 })
 
+test('does not report empty, queued, or failed alert rebuilds as successful syncs', async () => {
+    const mirrorPayloads = buildDwmWatchlistMirrorPayloads({
+        organizationId: 'org_scope',
+        organizationPayload: {
+            watchlistItem: { id: 'term_scope', kind: 'company', value: 'Scoped Company', status: 'active' },
+        },
+    })
+    for (const alertRebuild of [
+        { savedAlertCount: 0, alertIds: [] },
+        { status: 'queued', savedAlertCount: 0, alertIds: [] },
+    ]) {
+        const result = await mirrorOrganizationWatchlistToDwmResult({
+            base: 'http://scraper.local',
+            organizationId: 'org_scope',
+            mirrorPayloads,
+            fetchImpl: (async () => Response.json({ watchlist: { id: 'org_term_scope' }, alertRebuild }, { status: 201 })) as typeof fetch,
+        })
+        assert.equal(result.ok, false)
+        assert.equal(result.status, 502)
+        assert.equal(result.mirrors[0].rebuildStatus, alertRebuild.status ?? 'completed')
+    }
+
+    const failed = await mirrorOrganizationWatchlistToDwmResult({
+        base: 'http://scraper.local',
+        organizationId: 'org_scope',
+        mirrorPayloads,
+        fetchImpl: (async () => Response.json({ error: { code: 'backend_failed' } }, { status: 503 })) as typeof fetch,
+    })
+    assert.equal(failed.ok, false)
+    assert.equal(failed.status, 502)
+    assert.equal(failed.mirrors[0].rebuildStatus, 'failed')
+})
+
 function headersObject(value: HeadersInit | undefined) {
     return Object.fromEntries(new Headers(value).entries())
 }

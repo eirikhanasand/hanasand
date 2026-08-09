@@ -260,16 +260,32 @@ export async function mirrorOrganizationWatchlistToDwmResult(input: {
         const payload = parseJsonObject(text)
         const watchlist = objectValue(payload.watchlist)
         const alertRebuild = objectValue(payload.alertRebuild)
+        const rebuildStatus = typeof alertRebuild?.status === 'string'
+            ? alertRebuild.status.toLowerCase()
+            : response.ok ? 'completed' : 'failed'
         mirrors.push({
-            ok: response.ok,
+            ok: response.ok
+                && !['failed', 'error', 'unavailable', 'queued', 'running', 'pending'].includes(rebuildStatus)
+                && Number(alertRebuild?.savedAlertCount ?? 0) > 0
+                && arrayOfStrings(alertRebuild?.alertIds).length > 0,
             status: response.status,
+            rebuildStatus,
             watchlistId: stringValue(watchlist?.id) ?? mirrorPayload.id,
             watchlistStatus: mirrorPayload.status,
             savedAlertCount: numberValue(alertRebuild?.savedAlertCount) ?? 0,
             alertIds: arrayOfStrings(alertRebuild?.alertIds),
             sourceFamilies: arrayOfStrings(alertRebuild?.sourceFamilies),
             matchedTerms: arrayOfStrings(alertRebuild?.matchedTerms),
-            error: response.ok ? undefined : payload.error ?? payload,
+            error: response.ok && rebuildStatus === 'completed' && Number(alertRebuild?.savedAlertCount ?? 0) > 0
+                ? undefined
+                : payload.error ?? {
+                    code: response.ok ? `dwm_alert_rebuild_${rebuildStatus}` : 'dwm_watchlist_mirror_failed',
+                    message: response.ok
+                        ? rebuildStatus === 'queued' || rebuildStatus === 'running' || rebuildStatus === 'pending'
+                            ? 'Watchlist sync is still waiting for persisted alert results.'
+                            : 'Watchlist sync completed without a persisted alert match.'
+                        : 'DWM watchlist sync failed.',
+                },
         })
     }
     const first = mirrors[0]
@@ -279,7 +295,7 @@ export async function mirrorOrganizationWatchlistToDwmResult(input: {
         : undefined
     return {
         ok: mirrors.every(item => item.ok),
-        status: mirrors.every(item => item.ok) ? first.status : mirrors.find(item => !item.ok)?.status ?? first.status,
+        status: mirrors.every(item => item.ok) ? first.status : 502,
         watchlistId: first.watchlistId,
         watchlistStatus: first.watchlistStatus,
         savedAlertCount: mirrors.reduce((total, item) => total + item.savedAlertCount, 0),
