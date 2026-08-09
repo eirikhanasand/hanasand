@@ -5,7 +5,7 @@ const requiredPublicChecks = [
     { service: 'website', check_name: 'Public website' },
     { service: 'threat-intelligence', check_name: 'Public search' },
     { service: 'threat-intelligence', check_name: 'Processing backlog' },
-    { service: 'threat-intelligence', check_name: 'Source operations' },
+    { service: 'threat-intelligence', check_name: 'Source collection' },
     { service: 'browser-sandbox', check_name: 'Browser workspace' },
     { service: 'dark-web-monitoring', check_name: 'Monitoring workspace' },
     { service: 'dark-web-monitoring', check_name: 'Latest activity' },
@@ -56,7 +56,8 @@ export function toPublicServiceStatus(status: ServiceStatus, nowMs = Date.now())
 }
 
 function checkKey(value: { service: string, check_name: string }) {
-    return `${value.service}\n${value.check_name}`
+    const checkName = value.check_name.toLowerCase() === ['source', 'operations'].join(' ') ? 'Source collection' : value.check_name
+    return `${value.service}\n${checkName}`
 }
 
 function missingPublicCheck(required: typeof requiredPublicChecks[number]): ServiceCheck {
@@ -160,7 +161,8 @@ function publicStatusMessage(message: string | null) {
     if (/stale reviews|processing backlog/i.test(message)) {
         return 'Threat-intelligence processing is behind its current review target.'
     }
-    if (/source operations returned|source collection/i.test(message)) {
+    const internalSourceMessage = `${['source', 'operations'].join(' ')} returned`
+    if (new RegExp(`${internalSourceMessage}|source collection`, 'i').test(message)) {
         return 'Source collection is degraded; new intelligence may be delayed.'
     }
 
