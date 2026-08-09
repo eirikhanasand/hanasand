@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { buildProductProgressPayload } from '@/utils/productProgress/readiness'
+import { buildProductProgressPayload, isDurableDelivered } from '@/utils/productProgress/readiness'
 import { deployLedgerFromStatusPayload } from '@/utils/productProgress/deployLedger'
 import type { AnalystCaseDetailProofInput, DwmAlertGenerationReadinessInput } from '@/utils/productProgress/readiness'
 import type { DashboardSourceProofProxyPayload, DwmDeliveryItem, DwmOrganizationSummary, DwmOrganizationWebhookDestination, DwmProductSnapshotReadiness, DwmWatchlistSummary, EntitlementReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
@@ -291,7 +291,7 @@ function rows(value: unknown[] | undefined) {
 }
 
 function selectCaseForProductProgress(alerts: Array<Record<string, unknown>>, cases: Array<Record<string, unknown>>, deliveries: DwmDeliveryItem[]) {
-    const deliveryAlertIds = new Set(deliveries.map(row => row.alertId).filter(Boolean))
+    const deliveryAlertIds = new Set(deliveries.filter(row => isDurableDelivered(row.status)).map(row => row.alertId).filter(Boolean))
     const selectedAlert = alerts.find(row => row.id && deliveryAlertIds.has(String(row.id)))
         || alerts.find(row => row.id)
     if (!selectedAlert?.id) return undefined
@@ -917,7 +917,7 @@ function webhookHealthReadiness(input: {
     }
 
     const activeDestinations = input.destinations.filter(item => item.status === 'active')
-    const deliveryReadyCount = input.deliveries.filter(row => row.status !== 'failed' && row.status !== 'skipped').length
+    const deliveryReadyCount = input.deliveries.filter(row => isDurableDelivered(row.status)).length
     const latestDeliveryAt = input.deliveries.map(row => row.attemptedAt).filter(Boolean).sort().at(-1)
     const latestAuditEventAt = input.destinations.map(row => row.lastTestedAt || row.updatedAt).filter(Boolean).sort().at(-1)
     const blockers = [
