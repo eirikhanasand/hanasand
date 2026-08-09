@@ -65,6 +65,33 @@ describe("public coverage", () => {
     expect(body.qualification).toMatchObject({ counts: { clearWeb: 28, lawfulDarkWeb: 4, publicTelegram: 13, total: 45 }, gaps: { lawfulDarkWeb: 996 } });
   });
 
+  test("keeps historical usefulness separate from latest source health", async () => {
+    const store: any = {
+      querySourceOperationalSummary: async () => ({ summary: {
+        measurementState: "measured",
+        sourceCount: 1,
+        retainedSourceCount: 1,
+        inactiveSourceCount: 0,
+        everUsefulSourceCount: 1,
+        usefulSourceCount: 0,
+        latestUsefulSourceCount: 0,
+        captureProducingSourceCount: 0,
+        qualifyingClearWebSourceCount: 0,
+        qualifyingLawfulDarkWebSourceCount: 0,
+        qualifyingPublicTelegramSourceCount: 0
+      } }),
+      listTimelinessRecords: () => []
+    };
+
+    const body = await publicCoverage({ store, frontier: {} as any });
+    expect(body.usefulCoverage).toMatchObject({
+      measurementState: "measured",
+      everUsefulSourceCount: 1,
+      currentlyUsefulSourceCount: 0,
+      captureProducingSourceCount: 0
+    });
+  });
+
   test("does not publish qualification counts from an unmeasured raw PostgreSQL summary", async () => {
     const store: any = {
       querySourceOperationalSummary: async () => ({ summary: {
