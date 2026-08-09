@@ -51,7 +51,8 @@ describe("public collection boundary", () => {
       errors: [{ code: "storage_backpressure" }]
     });
     expect(fetchCount).toBe(0);
-    expect(store.listRuns()).toHaveLength(0);
+    expect(store.listRuns()).toHaveLength(1);
+    expect(store.listRuns()[0]).toMatchObject({ status: "failed", taskCount: 0, captureCount: 0, error: expect.stringContaining("Failed to read data") });
   });
 
   test("continues with a bounded write queue while it drains", async () => {

@@ -31,6 +31,15 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const generatedAt = options.now?.() ?? nowIso(), fetcher = options.fetch ?? fetch, mode = options.fetch ? "injected_proof_fetch" : "native_live_http";
   const storageFailure = storageBackpressure(options.store);
   if (storageFailure) {
+    const planId = stableId("canary-plan", `${options.tenantId ?? "global"}:${generatedAt}`);
+    const runId = stableId("canary-run", planId);
+    const runError = { code: "storage_backpressure", message: storageFailure.message };
+    try {
+      options.store.savePlan?.({ id: planId, tenantId: options.tenantId, requestId: "req_public_canary", createdAt: generatedAt, tasks: [], request: { query: canaryQueries }, reviewRequired: [], rejected: [], audit: [] });
+      options.store.saveRun?.({ id: runId, tenantId: options.tenantId, planId, requestId: "req_public_canary", status: "failed", createdAt: generatedAt, startedAt: generatedAt, completedAt: generatedAt, updatedAt: generatedAt, taskCount: 0, sourceCount: 0, captureCount: 0, incidentCount: 0, failedTaskCount: 0, error: runError.message });
+    } catch {
+      // Preserve the original storage error; the existing write queue will retry queued records.
+    }
     const queueLimit = Math.max(1, Number(options.queueLimit ?? 500));
     const counters = { leasedTaskCount: 0, completedTaskCount: 0, insertedCaptureCount: 0, duplicateCaptureCount: 0, failedTaskCount: 0, incidentCount: 0, exposureClaimCount: 0, skippedLowValueCount: 0, retryScheduledCount: 0, retryExhaustedCount: 0 };
     return {
@@ -38,6 +47,8 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
       tenantId: options.tenantId,
       mode: "production_canary",
       status: "failed",
+      runId,
+      planId,
       activationApplied: false,
       activatedSourceCount: 0,
       retiredSourceCount: 0,
@@ -52,7 +63,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
       ...counters,
       remainingQueuedTaskCount: 0,
       latestCaptureIds: [],
-      errors: [{ code: "storage_backpressure", message: storageFailure.message }],
+      errors: [runError],
       health: health(options.store, generatedAt, counters)
     };
   }
