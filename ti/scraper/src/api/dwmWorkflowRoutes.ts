@@ -63,7 +63,7 @@ export function listDwmWatchlists(url: URL, options: ApiServerOptions, request?:
     organization: scope.organization,
     visibilityDecision: access.visibilityDecision,
     watchlists: watchlists
-      .filter((row: DwmWatchlist) => row.tenantId === tenantId)
+      .filter((row: DwmWatchlist) => row.tenantId === tenantId && (!scope.organizationId || row.organizationId === scope.organizationId))
       .map((watchlist: DwmWatchlist) => buildDwmWatchlistDetail(watchlist, options, access))
   });
 }
