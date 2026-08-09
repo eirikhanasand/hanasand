@@ -86,6 +86,8 @@ At 2026-08-09T18:03:09Z, publisher-authoritative discovery added three held endp
 
 At 2026-08-09T18:13:40.147857Z, one exact read-only PostgreSQL snapshot on deployed commit `51dc30bb91b74bb136203ac52f31f2855260a298` reported 28 registered global Tor rows, 27 non-retired rows, 21 candidates, 24 feeds with at least one retained productive run-linked cycle, 24 current identity-bound v9 approvals, and four strict qualifiers. The strict set is Blackwater, Genesis, Qilin, and RansomHouse; each has a current approved review and two retained productive cycles. Qilin therefore requalified through the governed path after its earlier truthful demotion rather than through grandfathered credit. The remaining gap is 996.
 
+At 2026-08-09T18:23:42Z, a second publisher-authoritative pass added three more held endpoint identities without contacting Tor. WatchGuard Threat Lab's active tracker identities canonicalize exactly to the same currently available public v3 services reported by Ransomwhere for Blackout, Cl0p, and Everest: hashes `478fa2c1b6fe3f42`, `d60cfd5167a4a40b`, and `c7269c4f458a9559`. Ransomwhere reports 12, 1,295, and 384 victim-list observations respectively, with current July-August 2026 activity. Repository endpoint-only reconciliation found no source or hashed-exclusion match. These three join the later bounded probe queue as unprobed discovery candidates only; they earn no admission or qualification credit before live database dedupe, approved boundary parsing, governance, and two natural retained productive cycles.
+
 ## A source counts only when
 
 - its endpoint identity is canonical and unique across every source type;
