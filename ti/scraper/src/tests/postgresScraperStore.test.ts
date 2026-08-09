@@ -40,7 +40,7 @@ describe("structured threat-intelligence storage contract", () => {
     expect(query).not.toContain("LEFT JOIN LATERAL");
   });
 
-  test("keeps historical usefulness separate from latest health usefulness", async () => {
+  test("joins retained run evidence once for historical usefulness", async () => {
     const store = Object.create(PostgresScraperStore.prototype) as any;
     let summaryQuery = "";
     store.sql = {
@@ -52,7 +52,9 @@ describe("structured threat-intelligence storage contract", () => {
 
     const result = await store.querySourceOperationalSummary({ tenantId: "tenant_summary", generatedAt: collectedAt });
     expect(summaryQuery).toContain("historical_usefulness");
-    expect(summaryQuery).toContain("historical_usefulness.last_useful_at IS NOT NULL");
+    expect(summaryQuery).toContain("JOIN threat_intel.captures retained");
+    expect(summaryQuery).toContain("retained.record->'metadata'->>'runId' = health.collection_run_id");
+    expect(summaryQuery).not.toContain("AND EXISTS (");
     expect(summaryQuery).toContain("latest_health.useful AND latest_health.capture_count > 0");
     expect(result.summary).toMatchObject({ everUsefulSourceCount: 1, usefulSourceCount: 0, latestUsefulSourceCount: 0 });
   });
@@ -281,8 +283,13 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         jsonb_build_object('id', 'src_summary_' || lpad(series::text, 5, '0'), 'type', 'rss', 'status', 'active')
       FROM generate_series(0, 6100) series
     `);
+    store.saveCapture(fixtureCapture({
+      id: "capture_summary_old", sourceId: "src_summary_06100", collectedAt: "2026-07-23T12:00:00.000Z",
+      publishedAt: "2026-07-23T12:00:00.000Z", metadata: { runId: "run_summary_old" }
+    }));
+    store.saveRun({ id: "run_summary_old", requestId: "req_public_canary", status: "completed", startedAt: "2026-07-23T12:00:00.000Z", completedAt: "2026-07-23T12:00:00.000Z", updatedAt: "2026-07-23T12:00:00.000Z" } as any);
     store.saveSourceHealthObservation({
-      id: "health_summary_old", sourceId: "src_summary_06100", checkedAt: "2026-07-23T12:00:00.000Z",
+      id: "health_summary_old", sourceId: "src_summary_06100", collectionRunId: "run_summary_old", checkedAt: "2026-07-23T12:00:00.000Z",
       status: "healthy", success: true, useful: true, captureCount: 1, legalMode: "public_content"
     });
     store.saveSourceHealthObservation({
@@ -298,7 +305,9 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       activeSourceCount: 6_101,
       checkedSourceCount: 1,
       successfulSourceCount: 0,
+      everUsefulSourceCount: 1,
       usefulSourceCount: 0,
+      latestUsefulSourceCount: 0,
       failedSourceCount: 1,
       neverObservedSourceCount: 6_100
     });
