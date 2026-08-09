@@ -130,7 +130,7 @@ export function dwmAlertToWorkbenchCase(input: DwmAlert): WorkbenchCase {
         alertId: String(row.alertId ?? alert.id),
         status: String(row.status ?? 'recorded'),
         deliveryKind: row.deliveryKind,
-        attemptedAt: String(row.attemptedAt ?? alert.updatedAt ?? alert.lastSeenAt ?? alert.firstSeenAt),
+        attemptedAt: String(row.attemptedAt ?? ''),
         webhookDestinationId: row.webhookDestinationId,
         endpointHash: String(row.endpointHash ?? 'endpoint_hash_not_returned'),
         payloadHash: String(row.payloadHash ?? alert.webhookDelivery?.payloadHash ?? 'payload_hash_not_returned'),

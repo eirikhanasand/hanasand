@@ -3340,7 +3340,7 @@ async function readCaseDetailJson(response: Response) {
     try {
         return await response.json() as CaseDetailPayload
     } catch {
-        return { generatedAt: new Date().toISOString(), error: { message: 'Case detail response was not JSON.' } }
+        return { generatedAt: '', error: { message: 'Case detail response was not JSON.' } }
     }
 }
 
@@ -3348,7 +3348,7 @@ async function readAlertDetailJson(response: Response) {
     try {
         return await response.json() as AlertDetailPayload
     } catch {
-        return { generatedAt: new Date().toISOString(), error: { message: 'Alert detail response was not JSON.' } }
+        return { generatedAt: '', error: { message: 'Alert detail response was not JSON.' } }
     }
 }
 
@@ -3361,7 +3361,7 @@ async function readJson(response: Response) {
 }
 
 function deliveryEvidenceFromPayload(payload: WorkbenchApiPayload | undefined, fallbackAlertId: string) {
-    const attemptedAt = payload?.deliveredAt || payload?.testedAt || new Date().toISOString()
+    const attemptedAt = payload?.deliveredAt || payload?.testedAt || ''
     return deliveryCandidatesFromPayload(payload)
         .map(delivery => normalizeDeliveryEvidence(delivery, fallbackAlertId, attemptedAt))
         .filter((delivery): delivery is WorkbenchDeliveryEvidence => Boolean(delivery))
@@ -3902,6 +3902,7 @@ function customerOperationalText(value: string) {
 }
 
 function relativeTime(value: string) {
+    if (!value) return 'Time unavailable'
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return value
     const minutes = Math.max(1, Math.round((Date.now() - date.getTime()) / 60000))
