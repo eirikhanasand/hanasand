@@ -53,6 +53,65 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(snapshot).toMatchObject({ total: 0, displayedTaskCount: 0, tasks: [] });
   });
 
+  test("uses the bounded PostgreSQL review projection instead of enumerating captures", async () => {
+    const task = {
+      id: "review_task_bounded",
+      recordKind: "automatic_intelligence_review_task",
+      tenantId: "default",
+      subject: { type: "claim", id: "claim_bounded", claimId: "claim_bounded" },
+      selectedEvidenceIds: [],
+      state: "queued",
+      attempt: 0,
+      maxAttempts: 3,
+      replayCount: 0,
+      promptVersion: AUTOMATIC_REVIEW_PROMPT_VERSION,
+      responseSchemaVersion: AUTOMATIC_REVIEW_RESPONSE_SCHEMA,
+      requestedModelVersion: "test-model",
+      queuedAt: firstAt,
+      nextAttemptAt: firstAt,
+      updatedAt: firstAt,
+      unsafeMaterialAccessed: false
+    };
+    const sourceTask = {
+      ...task,
+      id: "review_source_bounded",
+      subject: { type: "source", id: "source_bounded", sourceId: "source_bounded" },
+      linkedEvidenceCount: 1,
+      linkedSourceCount: 1,
+      linkedIndependentSourceCount: 1
+    };
+    const foreignTask = { ...task, id: "review_foreign", tenantId: "foreign" };
+    const store: any = {
+      queryAutomaticReviewRecords: async () => ({
+        tasksAndEvents: [task, sourceTask, foreignTask],
+        claims: [{ id: "claim_bounded", tenantId: "default", value: "bounded claim", summary: "retained claim" }],
+        incidents: [],
+        captures: [
+          { id: "capture_claim_bounded", tenantId: "default", sourceId: "source_bounded", collectedAt: firstAt, publishedAt: firstAt, metadata: { safeExcerpt: "bounded claim evidence" } },
+          { id: "capture_source_bounded", tenantId: "default", sourceId: "source_bounded", collectedAt: firstAt, metadata: { runId: "run_bounded", sourceReviewCandidate: true, safeExcerpt: "bounded source evidence" } }
+        ],
+        sources: [{ id: "source_bounded", tenantId: "default", name: "Bounded source", type: "static_web", metadata: {} }],
+        health: [{ id: "health_bounded", tenantId: "default", sourceId: "source_bounded", collectionRunId: "run_bounded", checkedAt: firstAt, success: true, useful: false, captureCount: 1 }],
+        claimEvidence: [{ id: "claim_evidence_bounded", tenantId: "default", claimId: "claim_bounded", sourceId: "source_bounded", captureId: "capture_claim_bounded", relationship: "supports", evidenceStage: "source_parser_output" }],
+        evidenceLinks: [],
+        reviews: [],
+        actorIdentities: []
+      }),
+      queryAllStructuredRecords: async () => { throw new Error("unbounded review projection"); }
+    };
+
+    const snapshot = await automaticReviewSnapshot(store, "default", 1);
+    expect(snapshot).toMatchObject({ total: 2, displayedTaskCount: 1 });
+    expect([task.id, sourceTask.id]).toContain(snapshot.tasks[0].id);
+    const allTasks = await automaticReviewSnapshot(store, "default", 10);
+    const claimTask = allTasks.tasks.find((item: any) => item.id === task.id);
+    const visibleSourceTask = allTasks.tasks.find((item: any) => item.id === sourceTask.id);
+    expect(claimTask?.evidence).toHaveLength(1);
+    expect(claimTask?.evidence[0]?.capture?.id).toBe("capture_claim_bounded");
+    expect(visibleSourceTask).toMatchObject({ linkedEvidenceCount: 1, linkedSourceCount: 1, linkedIndependentSourceCount: 1 });
+    expect(allTasks.tasks).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: foreignTask.id })]));
+  });
+
   test("treats governed metadata-only victim lists as operational source evidence", async () => {
     const store = new InMemoryScraperStore();
     seedSource(store, "victim-list", "Acme Manufacturing\nNorthwind Logistics\nContoso Energy");
