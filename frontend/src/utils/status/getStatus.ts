@@ -40,14 +40,26 @@ export type ServiceStatus = {
     incidents: ServiceIncident[]
 }
 
-export default async function getStatus(): Promise<ServiceStatus> {
-    const response = await fetch(`${config.url.api}/status`, { cache: 'no-store' })
-    if (!response.ok) {
-        return { overall: 'down', generated_at: new Date().toISOString(), checks: [], history: [], incidents: [] }
+export function unavailableServiceStatus(): ServiceStatus {
+    return {
+        overall: 'down',
+        generated_at: '',
+        checks: [],
+        history: [],
+        incidents: [],
     }
+}
 
-    const payload = await response.json()
-    return normalizeStatus(payload)
+export default async function getStatus(): Promise<ServiceStatus> {
+    try {
+        const response = await fetch(`${config.url.api}/status`, { cache: 'no-store', signal: AbortSignal.timeout(5000) })
+        if (!response.ok) return unavailableServiceStatus()
+
+        const payload = await response.json()
+        return normalizeStatus(payload)
+    } catch {
+        return unavailableServiceStatus()
+    }
 }
 
 function normalizeStatus(payload: Partial<ServiceStatus>): ServiceStatus {
