@@ -4,11 +4,17 @@ const MULTILINGUAL_TERM_RE = /(?:кібератак|кіберінцид|кіб�
 const BAD_RE = /\b(test fixture|example\.test|proof-only|synthetic|webinar|newsletter|conference|podcast|product launch|press release|request a demo|book a demo|schedule a demo|launches free|free \d+-day|free .* assessment|free .* trial|buyer'?s guide|whitepaper|case study|sponsored|award|awards|named top vendor|recognizes .* as the best|top \d+ .* service|static analyzer|AI threats move fast|sessions to catch|expert panel|what'?s the difference|operationalize identity|what is application security testing|what is managed cloud security|practical guide|why halcyon|mythos era|new standard for url analysis)\b/i;
 const BAD_SOURCE_RE = /\b(src_canary_halcyon|src_canary_jamf|src_canary_wired_security|src_canary_healthcareinfosec|src_canary_securityledger)\b/i;
 
-export function isSellableIntelText(input: { text: string; title?: string; sourceId?: string; publishedAt?: string; collectedAt?: string; now?: string; maxAgeDays?: number }) {
-  const text = clean(`${input.title ?? ""} ${input.text ?? ""}`);
+export function isSellableIntelText(input: { text: string; title?: string; sourceId?: string; sourceName?: string; adapter?: string; publishedAt?: string; collectedAt?: string; now?: string; maxAgeDays?: number }) {
+  const sourceName = String(input.sourceName ?? "").trim();
+  const publisherText = sourceName && (input.text === sourceName || input.text.startsWith(`${sourceName}\n`))
+    ? input.text.slice(sourceName.length).replace(/^\n/, "")
+    : input.text;
+  const syntheticTitle = input.title === sourceName
+    || input.adapter === "telegram_public" && input.title?.startsWith(`${sourceName} message `);
+  const text = clean(`${syntheticTitle ? "" : input.title ?? ""} ${publisherText}`);
   if (!input.sourceId || BAD_SOURCE_RE.test(input.sourceId)) return false;
   if (text.length < 80 || BAD_RE.test(text)) return false;
-  if (!hasThreatTerm(text) && !hasThreatTerm(input.sourceId ?? "")) return false;
+  if (!hasThreatTerm(text)) return false;
   const age = ageDays(input.publishedAt || input.collectedAt, input.now);
   return age === undefined || age <= (input.maxAgeDays ?? 30);
 }
