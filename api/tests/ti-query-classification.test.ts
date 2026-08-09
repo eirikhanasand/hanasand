@@ -113,6 +113,33 @@ test('reports whether a search was served from the in-process cache', async () =
     }
 })
 
+test('preflights the scraper before a public search and keeps full query timing after healthy response', async () => {
+    const previousScraperBase = process.env.TI_SCRAPER_API_BASE
+    const originalFetch = globalThis.fetch
+    process.env.TI_SCRAPER_API_BASE = 'http://scraper.test'
+    const requestedPaths: string[] = []
+    globalThis.fetch = async input => {
+        const url = new URL(String(input))
+        requestedPaths.push(url.pathname)
+        if (url.pathname === '/v1/health') return Response.json({ status: 'ok' })
+        return Response.json({
+            query: 'APT7654333', generatedAt: '2026-08-09T15:00:00.000Z', mode: 'scraper', status: 'ready',
+            summary: 'Evidence is available.', confidence: 0.8, lastSeen: '2026-08-09T14:00:00.000Z', aliases: [],
+            recentActivity: [], targets: [], ttps: [], datasets: [], sources: [], notes: [],
+        })
+    }
+
+    try {
+        const result = await searchThreatIntel({ query: 'APT7654333', preflightHealth: true })
+        expect(result.mode).toBe('scraper')
+        expect(requestedPaths).toEqual(['/v1/health', '/v1/intel/search'])
+    } finally {
+        globalThis.fetch = originalFetch
+        if (previousScraperBase === undefined) delete process.env.TI_SCRAPER_API_BASE
+        else process.env.TI_SCRAPER_API_BASE = previousScraperBase
+    }
+})
+
 test('refreshes a cached pending search before its advertised poll interval', async () => {
     const previousScraperBase = process.env.TI_SCRAPER_API_BASE
     const originalFetch = globalThis.fetch

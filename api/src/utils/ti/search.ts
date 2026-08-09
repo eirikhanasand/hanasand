@@ -1,6 +1,7 @@
 export interface TiSearchRequest {
     query: string
     preferCached?: boolean
+    preflightHealth?: boolean
 }
 
 export type TiResultState = 'queued' | 'searching' | 'partial' | 'ready' | 'metadata_review' | 'blocked_unsafe_target' | 'needs_source_activation' | 'unavailable'
@@ -139,7 +140,10 @@ export async function searchThreatIntel(input: TiSearchRequest): Promise<TiSearc
 
     const scraperBase = process.env.TI_SCRAPER_API_BASE?.replace(/\/$/, '')
     if (scraperBase) {
-        const scraperResult = await fetchCanonicalScraperSearch(scraperBase, query, { cachedOnly: input.preferCached && queryKind === 'actor' })
+        const scraperResult = await fetchCanonicalScraperSearch(scraperBase, query, {
+            cachedOnly: input.preferCached && queryKind === 'actor',
+            preflightHealth: input.preflightHealth,
+        })
         if (scraperResult) {
             const result = { ...scraperResult, queryKind: scraperResult.queryKind ?? queryKind, mode: 'scraper' as const, cacheStatus: 'miss' as const }
             if (!(input.preferCached && queryKind === 'actor')) writeCache(key, result)
@@ -160,8 +164,12 @@ export function classifyTiQuery(query: string): NonNullable<TiSearchResponse['qu
     return 'free_text'
 }
 
-async function fetchCanonicalScraperSearch(scraperBase: string, query: string, options: { cachedOnly?: boolean } = {}): Promise<TiSearchResponse | null> {
+async function fetchCanonicalScraperSearch(scraperBase: string, query: string, options: { cachedOnly?: boolean, preflightHealth?: boolean } = {}): Promise<TiSearchResponse | null> {
     try {
+        if (options.preflightHealth) {
+            const health = await fetch(new URL('/v1/health', `${scraperBase}/`), { signal: AbortSignal.timeout(350) })
+            if (!health.ok) return null
+        }
         const target = new URL('/v1/intel/search', `${scraperBase}/`)
         target.searchParams.set('q', query)
         const entityType = scraperEntityType(query)
