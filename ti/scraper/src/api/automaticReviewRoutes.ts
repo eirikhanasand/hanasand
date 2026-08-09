@@ -263,6 +263,20 @@ function syncQueueWithIndex(store: any, index: ReviewIndex, input: { tenantId?: 
 export async function runAutomaticReviewCycle(options: ApiServerOptions, input: CycleInput = {}) {
   const store = options.store as any;
   const at = validIso(input.now) ?? nowIso();
+  const storageFailure = reviewStorageBackpressure(store);
+  if (storageFailure) {
+    return {
+      status: "failed",
+      storage: storageFailure,
+      queued: 0,
+      superseded: 0,
+      recovered: 0,
+      attempted: 0,
+      concurrency: 0,
+      results: [],
+      error: { code: "storage_backpressure", message: storageFailure.message }
+    };
+  }
   const modelVersion = input.modelVersion ?? configuredModelVersion(options);
   const index = await buildReviewIndexAsync(store, input.tenantId, input.allTenants === true, {
     taskLimit: Math.max(100, boundedInteger(input.limit, 50, 1, 50) * 4),
@@ -288,6 +302,16 @@ export async function runAutomaticReviewCycle(options: ApiServerOptions, input: 
   }));
   await store.flush?.();
   return { queued, superseded, recovered, attempted: due.length, concurrency, results };
+}
+
+function reviewStorageBackpressure(store: any) {
+  const snapshot = store?.databaseHealthSnapshot?.();
+  if (!snapshot) return undefined;
+  const pendingWrites = Number(snapshot.pendingWrites ?? 0);
+  const lastWriteError = typeof snapshot.lastWriteError === "string" ? snapshot.lastWriteError.trim() : "";
+  if (!lastWriteError && !(snapshot.ok === false && pendingWrites > 0)) return undefined;
+  const reason = lastWriteError || "PostgreSQL write queue is unhealthy.";
+  return { ok: false, pendingWrites, lastWriteError: reason, message: `Review paused because PostgreSQL writes are unhealthy: ${reason}` };
 }
 
 function fairDueTasks(tasks: AutomaticReviewTask[], limit: number) {

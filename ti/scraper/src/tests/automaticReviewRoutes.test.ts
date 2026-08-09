@@ -23,6 +23,26 @@ const sourceReviewV7 = SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS[1];
 const sourceReviewV8 = SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS[2];
 
 describe("automatic Hanasand AI intelligence review", () => {
+  test("fails honestly before indexing when PostgreSQL writes are unhealthy", async () => {
+    const store: any = new InMemoryScraperStore();
+    store.databaseHealthSnapshot = () => ({ ok: false, pendingWrites: 2, lastWriteError: "Failed to read data" });
+    store.queryAllStructuredRecords = async () => { throw new Error("must not enumerate while storage is failed"); };
+    let modelCalls = 0;
+
+    const cycle = await runAutomaticReviewCycle({ store } as any, {
+      allTenants: true,
+      fetcher: async () => { modelCalls++; throw new Error("must not call model"); }
+    });
+
+    expect(cycle).toMatchObject({
+      status: "failed",
+      storage: { pendingWrites: 2, lastWriteError: "Failed to read data" },
+      error: { code: "storage_backpressure" },
+      attempted: 0
+    });
+    expect(modelCalls).toBe(0);
+  });
+
   test("async review snapshots do not re-enumerate high-volume collections", async () => {
     const store: any = new InMemoryScraperStore();
     const querySources: Record<string, () => any[]> = {
