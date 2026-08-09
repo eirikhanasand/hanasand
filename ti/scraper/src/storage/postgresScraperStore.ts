@@ -465,12 +465,13 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   private async queryRecordsByIds(table: string, column: string, ids: Iterable<string>, tenantId?: string, allTenants = false) {
     const values = [...new Set([...ids].map(String).filter(Boolean))];
     if (!values.length) return [];
+    const arrayLiteral = `{${values.map((value) => `"${value.replace(/[\\\"]/g, "\\$&")}"`).join(",")}}`;
     const tenantWhere = allTenants ? "TRUE" : "tenant_id IS NOT DISTINCT FROM $2::text";
     const rows = await this.sql.unsafe(
       `SELECT record FROM threat_intel.${table}
        WHERE ${column} = ANY($1::text[])
          AND ${tenantWhere}`,
-      allTenants ? [this.sql.array(values)] : [this.sql.array(values), tenantId ?? null]
+      allTenants ? [arrayLiteral] : [arrayLiteral, tenantId ?? null]
     );
     return rows.map(readRecord);
   }
