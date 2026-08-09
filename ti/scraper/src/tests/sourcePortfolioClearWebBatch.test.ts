@@ -20,8 +20,8 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(97);
-    expect(batch.exclusions).toHaveLength(150);
+    expect(batch.sources).toHaveLength(115);
+    expect(batch.exclusions).toHaveLength(151);
 
     const ids = new Set<string>();
     const endpoints = new Set<string>();
@@ -328,6 +328,58 @@ describe("clear-web source portfolio batch", () => {
       totals.useful += keywordUsefulItemCount;
     }
     expect(totals).toEqual({ parsed: 1041, dated: 1041, current: 423, useful: 221 });
+  });
+
+  test("keeps ledger 016 current, collision-free, and candidate-only until productive scheduled cycles exist", () => {
+    const expected = new Map([
+      ["Moxa Product Security Advisories", [200, 200, 13, 11, "2026-07-24T18:36:34.000Z"]],
+      ["Qualys Security Research Blog", [10, 10, 10, 9, "2026-08-03T16:00:49.000Z"]],
+      ["Akamai Security and Threat Research", [249, 249, 138, 20, "2026-08-07T13:00:00.000Z"]],
+      ["Cloudflare Security Research Blog", [20, 20, 20, 6, "2026-07-09T14:00:00.000Z"]],
+      ["Permiso Cloud Identity Threat Research", [10, 10, 10, 3, "2026-07-09T12:27:17.000Z"]],
+      ["Cloudflare WAF Vulnerability Mitigation Updates", [106, 106, 28, 24, "2026-08-04T00:00:00.000Z"]],
+      ["Cloudflare Security Center Threat Intelligence Updates", [24, 24, 14, 6, "2026-06-10T00:00:00.000Z"]],
+      ["Mitsubishi Electric Product Security Advisories", [5, 5, 5, 5, "2026-07-30T03:00:00.000Z"]],
+      ["New Zealand NCSC Cybersecurity News", [53, 53, 7, 4, "2026-08-03T21:00:00.000Z"]],
+      ["Latvia CERT Cybersecurity and Threat Updates", [20, 20, 6, 1, "2026-06-26T06:42:59.000Z"]],
+      ["Finland NCSC Information Security Now", [193, 193, 17, 6, "2026-08-07T06:41:36.000Z"]],
+      ["Estonia RIA English Cybersecurity Updates", [100, 100, 14, 4, "2026-08-06T07:06:50.000Z"]],
+      ["Slovenia SI-CERT Cybersecurity Alerts", [10, 10, 10, 2, "2026-07-21T09:01:13.000Z"]],
+      ["Spain INCIBE-CERT Spanish Security Advisories", [10, 10, 10, 10, "2026-08-07T08:43:09.000Z"]],
+      ["Italy CERT-AGID Public Cyber Threat Reports", [10, 10, 10, 4, "2026-08-08T09:53:12.000Z"]],
+      ["Bulgaria Government CERT Cybersecurity Alerts", [10, 10, 6, 1, "2026-07-21T08:17:53.000Z"]],
+      ["ThaiCERT Cybersecurity Advisories", [10, 10, 10, 2, "2026-08-07T09:34:02.000Z"]],
+      ["Paraguay CERT-PY Cybersecurity Advisories", [70, 70, 70, 70, "2026-08-07T17:33:47.000Z"]],
+    ] as const);
+    const sources = batch.sources.filter((source: any) => expected.has(source.name));
+    expect(sources).toHaveLength(expected.size);
+    const totals = { parsed: 0, dated: 0, current: 0, useful: 0 };
+    for (const source of sources) {
+      const [observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt] = expected.get(source.name)!;
+      expect(source.id).toBe(`src_portfolio_cw_${hash(canonicalUrl(source.url)).slice(0, 20)}`);
+      expect(source.metadata.sourcePortfolioVerification).toMatchObject({ observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt });
+      expect(currentItemCount).toBeGreaterThan(0);
+      expect(keywordUsefulItemCount).toBeGreaterThan(0);
+      expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
+      expect(source.metadata).not.toHaveProperty("countsAsCoverage");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
+      totals.parsed += observedItemCount;
+      totals.dated += datedItemCount;
+      totals.current += currentItemCount;
+      totals.useful += keywordUsefulItemCount;
+    }
+    expect(totals).toEqual({ parsed: 1110, dated: 1110, current: 398, useful: 188 });
+
+    const exclusions = new Map(batch.exclusions.map((entry: any) => [entry.idOrUrlHash, entry.reason]));
+    expect(exclusions.get(hash(canonicalUrl("https://www.crowdstrike.com/blog/feed/")).slice(0, 24))).toBe("redirected_to_duplicate_canonical_endpoint");
+    expect(exclusions.get(hash(canonicalUrl("https://cert.lv/en/rss/news.xml")).slice(0, 24))).toBe("duplicate_publisher_feed_content");
+    expect(exclusions.get(hash(canonicalUrl("https://developers.cloudflare.com/changelog/rss/application-security.xml")).slice(0, 24))).toBe("duplicate_publisher_feed_content");
+    expect(batch.sources.some((source: any) => canonicalUrl(source.url) === canonicalUrl("https://www.crowdstrike.com/en-us/blog/feed"))).toBe(false);
+
+    const certAgid = sources.find((source: any) => source.name === "Italy CERT-AGID Public Cyber Threat Reports");
+    expect(certAgid.legalNotes).toContain("public unauthenticated website RSS feed");
+    expect(certAgid.legalNotes).toContain("does not access or redistribute CERT-AGID's restricted tokenized IoC service");
   });
 
   test("deduplicates by normalized endpoint across adapters and every reserved source pack", () => {
