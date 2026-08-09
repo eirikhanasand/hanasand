@@ -222,6 +222,31 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     `);
   });
 
+  test("excludes retired-only failures from current operations but keeps historical health queryable", async () => {
+    const tenantId = "tenant_source_lifecycle";
+    const retiredId = "src_retired_history";
+    const activeId = "src_active_failure";
+    const checkedAt = "2026-08-09T10:00:00.000Z";
+    const store = await PostgresScraperStore.create({ databaseUrl });
+    store.saveSource(source({ id: retiredId, tenantId, status: "retired" }));
+    store.saveSource(source({ id: activeId, tenantId, status: "active" }));
+    store.saveSourceHealthObservation({ id: "health_retired_history", tenantId, sourceId: retiredId, checkedAt, status: "failed", success: false, useful: false, captureCount: 0, legalMode: "public_content" });
+    store.saveSourceHealthObservation({ id: "health_active_failure", tenantId, sourceId: activeId, checkedAt, status: "failed", success: false, useful: false, captureCount: 0, legalMode: "public_content" });
+    await store.flush();
+
+    const current = await store.querySourceOperationalPage({ tenantId, generatedAt: checkedAt, executableOnly: true, limit: 100 });
+    const historical = await store.querySourceOperationalPage({ tenantId, generatedAt: checkedAt, limit: 100 });
+    const health = store.listSourceHealthObservations().filter((row: any) => row.tenantId === tenantId);
+
+    expect(current.total).toBe(1);
+    expect(current.rows.map((row: any) => row.record.id)).toEqual([activeId]);
+    expect(current.totals).toMatchObject({ sourceCount: 1, failedSourceCount: 1 });
+    expect(historical.total).toBe(2);
+    expect(historical.rows.map((row: any) => row.record.id).sort()).toEqual([activeId, retiredId].sort());
+    expect(health.map((row: any) => row.id).sort()).toEqual(["health_active_failure", "health_retired_history"].sort());
+    await store.close();
+  });
+
   test("keeps governed prior-version clear-web approval but requires current victim-list review", async () => {
     const sourceId = "src_review_version_scope";
     const tenantId = "tenant_review_version_scope";

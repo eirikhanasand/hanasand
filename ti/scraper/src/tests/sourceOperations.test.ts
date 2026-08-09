@@ -103,6 +103,24 @@ describe("source operations", () => {
     expect(payload.sources[0].qualification.lastUsefulAt).toBeUndefined();
   });
 
+  test("excludes retired health failures from current operations while retaining history", async () => {
+    const store = new InMemoryScraperStore();
+    const checkedAt = new Date().toISOString();
+    store.saveSource(source({ id: "src_retired", status: "retired" }));
+    store.saveSource(source({ id: "src_active_failed", status: "active" }));
+    store.saveSourceHealthObservation({ id: "health_retired", sourceId: "src_retired", checkedAt, status: "failed", success: false, useful: false, captureCount: 0, legalMode: "public_content" });
+    store.saveSourceHealthObservation({ id: "health_active_failed", sourceId: "src_active_failed", checkedAt, status: "failed", success: false, useful: false, captureCount: 0, legalMode: "public_content" });
+
+    const options = { store, frontier: new FocusedFrontier(), serviceToken: "source-ops-test" };
+    const payload = await (await handleApiRequest(authenticatedApi("/v1/intel/source-operations"), options)).json() as any;
+    const summary = await (await handleApiRequest(authenticatedApi("/v1/intel/source-operations?summary=true"), options)).json() as any;
+
+    expect(payload.sources.map((row: any) => row.id)).toEqual(["src_active_failed"]);
+    expect(payload.summary).toMatchObject({ sourceCount: 1, failedSourceCount: 1, retiredSourceCount: 0 });
+    expect(summary.summary).toMatchObject({ sourceCount: 1, failedSourceCount: 1 });
+    expect(store.listSourceHealthObservations()).toHaveLength(2);
+  });
+
   test("preserves rejected automatic reviews instead of calling them monitoring", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({

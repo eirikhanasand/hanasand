@@ -22,7 +22,9 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
   }
   const inTenant = (record: any) => inTenantScope(record, input.tenantId);
   const tenantSources = records(store, "listSources").filter(inTenant);
-  const sources = tenantSources.filter((source) => !input.sourceId || source.id === input.sourceId);
+  const sources = tenantSources
+    .filter((source) => !input.sourceId || source.id === input.sourceId)
+    .filter((source) => !input.executableOnly || isExecutableSource(source));
   const observations = records(store, "listSourceHealthObservations").filter(inTenant);
   const captures = records(store, "listCaptures").filter(inTenant);
   const entities = records(store, "listExtractedEntities").filter(inTenant);
@@ -199,18 +201,18 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
   };
 }
 
-export async function buildSourceOperationsSummary(store: any, input: { tenantId?: string; generatedAt?: string } = {}) {
+export async function buildSourceOperationsSummary(store: any, input: { tenantId?: string; generatedAt?: string; executableOnly?: boolean } = {}) {
   const generatedAt = input.generatedAt ?? nowIso();
   if (typeof store?.querySourceOperationalSummary === "function") {
-    return await store.querySourceOperationalSummary({ tenantId: input.tenantId, generatedAt });
+    return await store.querySourceOperationalSummary({ tenantId: input.tenantId, generatedAt, executableOnly: input.executableOnly });
   }
   const result = typeof store?.querySourceOperationalPage === "function"
-    ? await store.querySourceOperationalPage({ tenantId: input.tenantId, generatedAt, limit: 1 })
+    ? await store.querySourceOperationalPage({ tenantId: input.tenantId, generatedAt, limit: 1, executableOnly: input.executableOnly })
     : undefined;
   if (result) {
     return { schemaVersion: "ti.source_operations_summary.v1", generatedAt, tenantId: input.tenantId ?? "global", summary: result.totals ?? {} };
   }
-  const snapshot = await buildSourceOperationsSnapshot(store, { tenantId: input.tenantId, generatedAt, limit: 1 });
+  const snapshot = await buildSourceOperationsSnapshot(store, { tenantId: input.tenantId, generatedAt, limit: 1, executableOnly: input.executableOnly });
   return { schemaVersion: "ti.source_operations_summary.v1", generatedAt, tenantId: input.tenantId ?? "global", summary: snapshot.summary };
 }
 
