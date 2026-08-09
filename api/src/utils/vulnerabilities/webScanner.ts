@@ -1,24 +1,26 @@
 import { connect } from 'node:net'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 
 const STATE_PATH = process.env.WEB_SCAN_STATE_PATH || '/var/lib/hanasand/web-scan.json'
+const LOCK_PATH = `${STATE_PATH}.lock`
 const TARGET = 'https://hanasand.com'
 const PORTS = [80, 443, 8080, 8443]
-const DEFAULT_INTERVAL_MINUTES = Math.max(Number(process.env.WEB_SCAN_INTERVAL_MINUTES || 60), 5)
+const DEFAULT_INTERVAL_MINUTES = normalizeIntervalMinutes(process.env.WEB_SCAN_INTERVAL_MINUTES, 60)
 const MAX_HISTORY = 100
+const LOCK_STALE_MS = 10 * 60 * 1000
 
 export type WebScanSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info'
 export type WebScanCheck = { id: string, status: 'pass' | 'warn' | 'fail' | 'error', severity: WebScanSeverity, title: string, evidence: Record<string, unknown> }
 export type WebScanTargetResult = { target: string, status: string, checks: WebScanCheck[], ports: Array<{ port: number, open: boolean, elapsedMs: number }> }
 export type WebScanRun = { scanId: string, status: 'running' | 'completed' | 'failed', startedAt: string, finishedAt: string | null, durationMs: number | null, target: string, targets: WebScanTargetResult[], severityCounts: Record<WebScanSeverity, number>, error: string | null }
-export type WebScanSchedule = { enabled: boolean, intervalMinutes: number, nextRunAt: string | null, lastRunAt: string | null, target: string, organization: string }
+export type WebScanSchedule = { enabled: boolean, intervalMinutes: number, nextRunAt: string | null, lastRunAt: string | null, target: string, scope: 'global' }
 export type WebScanReport = { current: WebScanRun | null, history: WebScanRun[], schedule: WebScanSchedule, error: string | null }
 
 let active: Promise<WebScanRun> | null = null
 
-const emptyReport = (): WebScanReport => ({ current: null, history: [], schedule: { enabled: true, intervalMinutes: DEFAULT_INTERVAL_MINUTES, nextRunAt: new Date().toISOString(), lastRunAt: null, target: TARGET, organization: 'Hanasand' }, error: null })
+const emptyReport = (): WebScanReport => ({ current: null, history: [], schedule: { enabled: true, intervalMinutes: DEFAULT_INTERVAL_MINUTES, nextRunAt: new Date().toISOString(), lastRunAt: null, target: TARGET, scope: 'global' }, error: null })
 
 export async function getWebScanReport() { return readState() }
 
@@ -38,31 +40,69 @@ export async function runDueWebScan() {
 }
 
 export async function setWebScanSchedule(input: { enabled?: boolean, intervalMinutes?: number }) {
-    const report = await readState()
-    const intervalMinutes = input.intervalMinutes === undefined ? report.schedule.intervalMinutes : Math.min(Math.max(Math.floor(input.intervalMinutes), 5), 1440)
-    const enabled = input.enabled === undefined ? report.schedule.enabled : input.enabled
-    const nextRunAt = enabled ? new Date(Date.now() + intervalMinutes * 60_000).toISOString() : null
-    const next = { ...report, schedule: { ...report.schedule, enabled, intervalMinutes, nextRunAt } }
-    await writeState(next)
-    return next
+    return withWebScanLock(async() => {
+        const report = await readState()
+        const intervalMinutes = input.intervalMinutes === undefined ? report.schedule.intervalMinutes : normalizeIntervalMinutes(input.intervalMinutes, report.schedule.intervalMinutes)
+        const enabled = input.enabled === undefined ? report.schedule.enabled : input.enabled
+        const nextRunAt = enabled ? new Date(Date.now() + intervalMinutes * 60_000).toISOString() : null
+        const next = { ...report, schedule: { ...report.schedule, enabled, intervalMinutes, nextRunAt, scope: 'global' as const } }
+        await writeState(next)
+        return next
+    })
+}
+
+export function normalizeIntervalMinutes(value: unknown, fallback = 60) {
+    const parsed = Number(value)
+    const safeFallback = Number.isFinite(fallback) ? Math.floor(fallback) : 60
+    return Math.min(Math.max(Number.isFinite(parsed) ? Math.floor(parsed) : safeFallback, 5), 1440)
+}
+
+export async function withWebScanLock<T>(work: () => Promise<T>): Promise<T> {
+    while (true) {
+        try {
+            await mkdir(LOCK_PATH)
+            break
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+            let lockAge: number
+            try {
+                lockAge = Date.now() - (await stat(LOCK_PATH)).mtimeMs
+            } catch (statError) {
+                if ((statError as NodeJS.ErrnoException).code === 'ENOENT') continue
+                throw statError
+            }
+            if (lockAge > LOCK_STALE_MS) {
+                await rm(LOCK_PATH, { recursive: true, force: true })
+                continue
+            }
+            throw Object.assign(new Error('Hanasand web scan is already running.'), { cause: error })
+        }
+    }
+    try {
+        return await work()
+    } finally {
+        await rm(LOCK_PATH, { recursive: true, force: true })
+    }
 }
 
 async function runWebScan(): Promise<WebScanRun> {
-    const previous = await readState()
-    const scanId = `webscan_${randomUUID()}`
-    const startedAt = new Date().toISOString()
-    const current: WebScanRun = { scanId, status: 'running', startedAt, finishedAt: null, durationMs: null, target: TARGET, targets: [], severityCounts: emptySeverityCounts(), error: null }
-    await writeState({ ...previous, current, error: null })
-    try {
-        const targets = [await scanTarget(TARGET, scanId)]
-        const finishedAt = new Date().toISOString()
-        const completed: WebScanRun = { ...current, status: 'completed', finishedAt, durationMs: Date.parse(finishedAt) - Date.parse(startedAt), targets, severityCounts: countSeverities(targets), error: null }
-        return await finishRun(previous, completed)
-    } catch (error) {
-        const finishedAt = new Date().toISOString()
-        const failed: WebScanRun = { ...current, status: 'failed', finishedAt, durationMs: Date.parse(finishedAt) - Date.parse(startedAt), error: error instanceof Error ? error.message : String(error) }
-        return await finishRun(previous, failed)
-    }
+    return withWebScanLock(async() => {
+        const previous = await readState()
+        const scanId = `webscan_${randomUUID()}`
+        const startedAt = new Date().toISOString()
+        const current: WebScanRun = { scanId, status: 'running', startedAt, finishedAt: null, durationMs: null, target: TARGET, targets: [], severityCounts: emptySeverityCounts(), error: null }
+        await writeState({ ...previous, current, error: null })
+        try {
+            const targets = [await scanTarget(TARGET, scanId)]
+            const finishedAt = new Date().toISOString()
+            const completed: WebScanRun = { ...current, status: 'completed', finishedAt, durationMs: Date.parse(finishedAt) - Date.parse(startedAt), targets, severityCounts: countSeverities(targets), error: null }
+            return await finishRun(previous, completed)
+        } catch (error) {
+            const finishedAt = new Date().toISOString()
+            const failed: WebScanRun = { ...current, status: 'failed', finishedAt, durationMs: Date.parse(finishedAt) - Date.parse(startedAt), error: error instanceof Error ? error.message : String(error) }
+            return await finishRun(previous, failed)
+        }
+    })
 }
 
 async function finishRun(previous: WebScanReport, run: WebScanRun) {
@@ -124,4 +164,13 @@ async function readState(): Promise<WebScanReport> {
     } catch { return emptyReport() }
 }
 
-async function writeState(report: WebScanReport) { await mkdir(path.dirname(STATE_PATH), { recursive: true }); await writeFile(STATE_PATH, JSON.stringify(report, null, 2), 'utf8') }
+async function writeState(report: WebScanReport) {
+    await mkdir(path.dirname(STATE_PATH), { recursive: true })
+    const temporaryPath = `${STATE_PATH}.${process.pid}.${randomUUID()}.tmp`
+    try {
+        await writeFile(temporaryPath, JSON.stringify(report, null, 2), 'utf8')
+        await rename(temporaryPath, STATE_PATH)
+    } finally {
+        await rm(temporaryPath, { force: true })
+    }
+}
