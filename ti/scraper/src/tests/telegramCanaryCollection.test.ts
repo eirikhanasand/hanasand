@@ -109,7 +109,9 @@ describe("public Telegram canary collection", () => {
       "src_security_vision_telegram",
       "src_angara_security_telegram",
       "src_anti_malware_ru_telegram",
-      "src_netlas_telegram"
+      "src_netlas_telegram",
+      "src_f6_cybersecurity_telegram",
+      "src_tumar_one_telegram"
     ]));
     expect(report.accepted.map((item: any) => item.language)).toEqual(expect.arrayContaining(["en", "es", "it", "ru", "hi", "uk", "az", "uz"]));
     expect(report.accepted.find((item: any) => item.id === "src_red_hot_cyber_telegram")).toMatchObject({
@@ -167,6 +169,16 @@ describe("public Telegram canary collection", () => {
       language: "en",
       metadata: { publisherReference: "https://netlas.io/", sourcePortfolioVerification: { observedItemCount: 20, observedUsefulItemCount: 16 } }
     });
+    expect(report.accepted.find((item: any) => item.id === "src_f6_cybersecurity_telegram")).toMatchObject({
+      url: "https://t.me/f6_cybersecurity",
+      language: "ru",
+      metadata: { publisherReference: "https://www.f6.ru/media-center/news/", sourcePortfolioVerification: { observedItemCount: 15, observedUsefulItemCount: 2 } }
+    });
+    expect(report.accepted.find((item: any) => item.id === "src_tumar_one_telegram")).toMatchObject({
+      url: "https://t.me/tumar_one",
+      language: "ru",
+      metadata: { publisherReference: "https://tumar.one/", sourcePortfolioVerification: { observedItemCount: 4, observedUsefulItemCount: 1 } }
+    });
     expect([...families]).toEqual(expect.arrayContaining([
       "apt_research",
       "malware_research",
@@ -201,7 +213,9 @@ describe("public Telegram canary collection", () => {
       "src_security_vision_telegram",
       "src_angara_security_telegram",
       "src_anti_malware_ru_telegram",
-      "src_netlas_telegram"
+      "src_netlas_telegram",
+      "src_f6_cybersecurity_telegram",
+      "src_tumar_one_telegram"
     ]);
     expect(candidates.every((item: any) => item.countsAsCoverage !== true
       && item.metadata.productionCollection === false

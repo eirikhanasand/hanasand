@@ -1203,6 +1203,20 @@ postgresDescribe("automatic review PostgreSQL persistence", () => {
       captureCount: 1,
       legalMode: "public_content"
     });
+    for (const [suffix, ageMs] of [["recent", 1_000], ["old", 2_000]] as const) {
+      store.saveSourceHealthObservation({
+        id: `health_review_candidate_pg_${suffix}`,
+        tenantId,
+        sourceId,
+        collectionRunId: runId,
+        checkedAt: new Date(Date.parse(firstAt) - ageMs).toISOString(),
+        status: "healthy",
+        success: true,
+        useful: false,
+        captureCount: 1,
+        legalMode: "public_content"
+      });
+    }
     store.saveSourceHealthObservation({
       id: "health_unmarked_non_useful_pg",
       tenantId,
@@ -1217,9 +1231,16 @@ postgresDescribe("automatic review PostgreSQL persistence", () => {
     });
     await store.flush();
 
-    expect(await store.queryAutomaticReviewSourceHealth({ allTenants: true })).toEqual([
-      expect.objectContaining({ sourceId, collectionRunId: runId, useful: false })
+    const boundedHealth = await store.queryAutomaticReviewSourceHealth({ allTenants: true });
+    expect(boundedHealth).toHaveLength(2);
+    expect(boundedHealth.map((row: any) => row.id)).toEqual([
+      "health_review_candidate_pg",
+      "health_review_candidate_pg_recent"
     ]);
+    const reviewRecords = await store.queryAutomaticReviewRecords({ allTenants: true });
+    expect(reviewRecords.sources).toContainEqual(expect.objectContaining({ id: sourceId }));
+    expect(reviewRecords.health).toHaveLength(2);
+    expect(reviewRecords.captures).toContainEqual(expect.objectContaining({ id: candidateCapture.id }));
     expect(await syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(1);
     expect(store.listAnalystMetadataReviewTasks()).toContainEqual(expect.objectContaining({
       recordKind: "automatic_intelligence_review_task",

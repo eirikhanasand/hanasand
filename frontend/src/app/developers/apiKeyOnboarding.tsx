@@ -33,7 +33,7 @@ export default function ApiKeyOnboarding({ server }: { server: string }) {
     async function loadOrganizations() {
         setState('loading')
         try {
-            const response = await fetch('/api/backend/organizations', { cache: 'no-store' })
+            const response = await fetch('/api/organizations', { cache: 'no-store' })
             if (response.status === 401) return setState('signed-out')
             const payload = await responseJson<{ organizations?: Organization[] }>(response)
             const next = (payload.organizations ?? []).filter(organization => organization.role === 'owner' || organization.role === 'admin')
@@ -50,7 +50,7 @@ export default function ApiKeyOnboarding({ server }: { server: string }) {
     }
 
     async function loadApiKeys(id: string) {
-        const response = await fetch(`/api/backend/organizations/${encodeURIComponent(id)}/api-keys`, { cache: 'no-store' })
+        const response = await fetch(`/api/organizations/${encodeURIComponent(id)}/api-keys`, { cache: 'no-store' })
         const payload = await responseJson<{ apiKeys?: ApiKey[] }>(response)
         setApiKeys(payload.apiKeys ?? [])
     }
@@ -106,7 +106,7 @@ export default function ApiKeyOnboarding({ server }: { server: string }) {
         setBusy('key')
         setMessage('')
         try {
-            const response = await fetch(`/api/backend/organizations/${encodeURIComponent(organizationId)}/api-keys`, {
+            const response = await fetch(`/api/organizations/${encodeURIComponent(organizationId)}/api-keys`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ name }),
@@ -128,7 +128,7 @@ export default function ApiKeyOnboarding({ server }: { server: string }) {
         setBusy(keyId)
         setMessage('')
         try {
-            const response = await fetch(`/api/backend/organizations/${encodeURIComponent(organizationId)}/api-keys/${encodeURIComponent(keyId)}`, { method: 'DELETE' })
+            const response = await fetch(`/api/organizations/${encodeURIComponent(organizationId)}/api-keys/${encodeURIComponent(keyId)}`, { method: 'DELETE' })
             await responseJson(response)
             setSecret('')
             setConfirmRevoke('')

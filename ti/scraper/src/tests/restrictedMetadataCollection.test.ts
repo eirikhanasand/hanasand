@@ -231,8 +231,11 @@ describe("restricted metadata collection", () => {
     const body = {
       data: [
         { header: "Navigation", info: "private response detail" },
-        { header: "Northwind Health", action: "published", actionDate: "08/09/2026", content: "private detail", contactUrl: "secret" },
-        { header: "Contoso Manufacturing", action: "published", actionDate: "08/08/2026", revenue: "private" }
+        { id: "a".repeat(40), private: "false", header: "Northwind Health", action: "published", actionDate: "09/08/2026", content: "private detail", contactUrl: "secret" },
+        { id: "b".repeat(40), private: "false", header: "Contoso Manufacturing", action: "published", actionDate: "08/08/2026", revenue: "private" },
+        { id: "invalid", private: "false", header: "Rejected ID", action: "published", actionDate: "07/08/2026" },
+        { id: "c".repeat(40), private: "true", header: "Rejected Private", action: "published", actionDate: "06/08/2026" },
+        { id: "d".repeat(40), private: "false", header: "Rejected Date", action: "published", actionDate: "31/02/2026" }
       ],
       errors: [],
       views: "private"
@@ -240,8 +243,8 @@ describe("restricted metadata collection", () => {
     const boundary = new TorMetadataHttpBoundary({ proxyUrl: "http://onion-tor:8118", fetcher: async () => new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } }) });
     const parsed = await boundary.fetchMetadata({ url: `http://${"r".repeat(56)}.onion/`, actorName: "RansomHouse" });
 
-    expect(parsed).toMatchObject({ victimNames: ["Northwind Health", "Contoso Manufacturing"], parserProfile: "json_data_header", links: [] });
-    expect(JSON.stringify(parsed)).not.toMatch(/private|revenue|contact|navigation/i);
+    expect(parsed).toMatchObject({ victimNames: ["Northwind Health", "Contoso Manufacturing"], parserProfile: "json_data_header", sourceTimestamp: "2026-08-09T00:00:00.000Z", links: [] });
+    expect(JSON.stringify(parsed)).not.toMatch(/private|revenue|contact|navigation|rejected/i);
   });
 
   test("persists allowlisted Genesis section-card names without retaining card details", async () => {
