@@ -146,6 +146,9 @@ test('organization workspace exposes destination lifecycle controls safely', () 
     assert.match(organizationWorkspaceSource, /\/api\/organizations\/\$\{encodeURIComponent\(selectedOrganization\.id\)\}\/collection-requests/, 'fresh collection should use the organization-scoped request proxy.')
     assert.match(organizationWorkspaceSource, /data-org-collection-request='true'/, 'fresh collection should show persisted request status and counts.')
     assert.match(organizationWorkspaceSource, /Check status/, 'queued collection requests should expose an explicit status refresh.')
+    assert.match(organizationWorkspaceSource, /collectionRequestKeyRef/, 'fresh collection retries should retain their idempotency key.')
+    assert.match(organizationWorkspaceSource, /headers: \{ 'idempotency-key': idempotencyKey \}/, 'fresh collection should send the retained idempotency key.')
+    assert.match(organizationWorkspaceSource, /collectionRequestKeyRef\.current = null/, 'a successful persisted request should release its retry key.')
 })
 
 test('builds DWM mirror payloads for org watchlist mutations', () => {

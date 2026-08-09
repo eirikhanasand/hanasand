@@ -72,12 +72,14 @@ function metadataFromHtml(html: string, actorName?: string) {
   const title = safeMetadataText(tag(html, "title") || tag(html, "h1")).slice(0, 300) || undefined;
   const visible = clean(html.replace(/<script\b[\s\S]*?<\/script>|<style\b[\s\S]*?<\/style>|<!--[\s\S]*?-->/gi, " "));
   const rawDescription = safeMetadataText(meta(html, "description") || visible).slice(0, 1_000) || undefined;
-  const victimNames = victimNamesFromHtml(html, actorName);
+  const parsed = victimNamesFromHtml(html, actorName);
+  const victimNames = parsed.victimNames;
   const description = clean(victimNames.length ? [title, ...victimNames].filter(Boolean).join(" | ") : rawDescription ?? "").slice(0, 1_000) || undefined;
   return {
     title,
     description,
     actorName,
+    parserProfile: parsed.parserProfile,
     victimName: labeled(rawDescription, ["victim", "company", "organization"]) ?? victimNames[0],
     victimNames,
     claimedSector: labeled(rawDescription, ["sector", "industry"]),
@@ -96,19 +98,23 @@ function metadataFromHtml(html: string, actorName?: string) {
   };
 }
 
-function victimNamesFromHtml(html: string, actorName?: string): string[] {
+function victimNamesFromHtml(html: string, actorName?: string) {
   const actor = actorName?.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const names = [
-    ...[...html.matchAll(/<article\b[^>]*class=["'][^"']*\bnews-item\b[^"']*["'][^>]*>[\s\S]*?<h2\b[^>]*class=["'][^"']*\bheadline\b[^"']*["'][^>]*>([\s\S]*?)<\/h2>/gi)].map((match) => clean(match[1])),
-    ...[...html.matchAll(/<div\b[^>]*class=["'][^"']*\bpost-title\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)].map((match) => clean(match[1])),
-    ...(["safepay", "blackwater"].includes(actor ?? "") ? [...html.matchAll(/<h5\b[^>]*class=["'][^"']*\bcard-title\b[^"']*["'][^>]*>([\s\S]*?)<\/h5>/gi)].map((match) => clean(match[1])) : []),
-    ...(actor === "spacebears" ? [...html.matchAll(/<div\b[^>]*class=["'][^"']*\bcompanies-list__item\b[^"']*["'][^>]*>[\s\S]*?<div\b[^>]*class=["'][^"']*\bname\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)].map((match) => clean(match[1])) : []),
-    ...(actor === "qilin" ? [...html.matchAll(/<([a-z0-9]+)\b[^>]*class=["'][^"']*\bitem_box-title\b[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi)].map((match) => clean(match[2])) : []),
-    ...(actor === "nova" ? [...html.matchAll(/<[^>]*class=["'][^"']*\bpost-card\b[^"']*["'][^>]*>[\s\S]*?<a\b[^>]*class=["'][^"']*\blogo\b[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi)].map((match) => clean(match[1])) : []),
-    ...(actor === "interlock" ? [...html.matchAll(/<([a-z0-9]+)\b[^>]*class=["'][^"']*\badvert_info_title\b[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi)].map((match) => clean(match[2])) : []),
-    ...(actor === "genesis" ? [...html.matchAll(/<section\b[^>]*class=["'][^"']*\bblock-bg\b[^"']*["'][^>]*>\s*<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)].map((match) => clean(match[1])) : [])
+  const profiles = [
+    { profile: "news_item_headline", names: [...html.matchAll(/<article\b[^>]*class=["'][^"']*\bnews-item\b[^"']*["'][^>]*>[\s\S]*?<h2\b[^>]*class=["'][^"']*\bheadline\b[^"']*["'][^>]*>([\s\S]*?)<\/h2>/gi)].map((match) => clean(match[1])) },
+    { profile: "post_title_victim_listing", names: [...html.matchAll(/<div\b[^>]*class=["'][^"']*\bpost-title\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)].map((match) => clean(match[1])) },
+    { profile: "victim_card_title", names: ["safepay", "blackwater"].includes(actor ?? "") ? [...html.matchAll(/<h5\b[^>]*class=["'][^"']*\bcard-title\b[^"']*["'][^>]*>([\s\S]*?)<\/h5>/gi)].map((match) => clean(match[1])) : [] },
+    { profile: "companies_list_name", names: actor === "spacebears" ? [...html.matchAll(/<div\b[^>]*class=["'][^"']*\bcompanies-list__item\b[^"']*["'][^>]*>[\s\S]*?<div\b[^>]*class=["'][^"']*\bname\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)].map((match) => clean(match[1])) : [] },
+    { profile: "item_box_title", names: actor === "qilin" ? [...html.matchAll(/<([a-z0-9]+)\b[^>]*class=["'][^"']*\bitem_box-title\b[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi)].map((match) => clean(match[2])) : [] },
+    { profile: "post_card_logo", names: actor === "nova" ? [...html.matchAll(/<[^>]*class=["'][^"']*\bpost-card\b[^"']*["'][^>]*>[\s\S]*?<a\b[^>]*class=["'][^"']*\blogo\b[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi)].map((match) => clean(match[1])) : [] },
+    { profile: "advert_info_title", names: actor === "interlock" ? [...html.matchAll(/<([a-z0-9]+)\b[^>]*class=["'][^"']*\badvert_info_title\b[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi)].map((match) => clean(match[2])) : [] },
+    { profile: "section_block_h2", names: actor === "genesis" ? [...html.matchAll(/<section\b[^>]*class=["'][^"']*\bblock-bg\b[^"']*["'][^>]*>\s*<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)].map((match) => clean(match[1])) : [] },
+    { profile: "item_header_link", names: actor === "cmdorganization" ? [...html.matchAll(/<div\b[^>]*class=["'][^"']*\bitem-header\b[^"']*["'][^>]*>[\s\S]*?<h2\b[^>]*>[\s\S]*?<a\b[^>]*>([\s\S]*?)<\/a>/gi)].map((match) => clean(match[1])) : [] },
+    { profile: "company_header_name", names: actor === "exfilsquad" ? [...html.matchAll(/<div\b[^>]*class=["'][^"']*\bcompany-header\b[^"']*["'][^>]*>[\s\S]*?<div\b[^>]*class=["'][^"']*\bcompany-name\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)].map((match) => clean(match[1])) : [] },
+    { profile: "card_body_title", names: actor === "globalsecretgroup" ? [...html.matchAll(/<div\b[^>]*class=["'][^"']*\bcard-body\b[^"']*["'][^>]*>[\s\S]*?<h3\b[^>]*class=["'][^"']*\bcard-title\b[^"']*["'][^>]*>([\s\S]*?)<\/h3>/gi)].map((match) => clean(match[1])) : [] },
+    { profile: "post_container_title", names: actor === "triplex" ? [...html.matchAll(/<div\b[^>]*class=["'][^"']*\bpost\b[^"']*["'][^>]*>[\s\S]*?<h2\b[^>]*class=["'][^"']*\bpost-title\b[^"']*["'][^>]*>([\s\S]*?)<\/h2>/gi)].map((match) => clean(match[1])) : [] }
   ];
-  return safeVictimNames(names);
+  return { victimNames: safeVictimNames(profiles.flatMap((profile) => profile.names)), parserProfile: profiles.find((profile) => profile.names.length)?.profile };
 }
 
 function metadataFromJson(json: string, actorName?: string) {
@@ -130,6 +136,7 @@ function metadataFromJson(json: string, actorName?: string) {
     title,
     description: victimNames.join(" | ").slice(0, 1_000) || undefined,
     actorName,
+    parserProfile: "json_posts_title",
     victimName: victimNames[0],
     victimNames,
     sourceTimestamp,
