@@ -236,15 +236,6 @@
       "countsAsCoverage": false
     },
     {
-      "id": "restricted_barracuda_victim_blog",
-      "actorName": "Barracuda",
-      "disposition": "rejected",
-      "reason": "Parser structure matched bounded victim metadata, but a second current independent public identity reference was not established.",
-      "evidenceCheckedAt": "2026-08-09T08:19:12.405Z",
-      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/barracuda",
-      "countsAsCoverage": false
-    },
-    {
       "id": "restricted_black_x_victim_blog",
       "actorName": "Black X",
       "disposition": "rejected",
@@ -501,6 +492,76 @@
     { "id": "restricted_stormous_victim_blog_6", "actorName": "Stormous", "endpointHash": "bf3c64f267aa0fa7", "disposition": "rejected", "reason": "The current authority marks this historical endpoint down, so it was excluded before any restricted fetch.", "evidenceCheckedAt": "2026-08-09T12:42:50.356Z", "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/group/stormous", "countsAsCoverage": false }
   ],
   "sources": [
+    {
+      "id": "restricted_barracuda_victim_blog",
+      "name": "Barracuda victim blog",
+      "type": "tor_metadata",
+      "url": "http://uvm6hk4wwstfddja5z5htgtlehmfyflffijz6iozsuqyacyibzxefkqd.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.86,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public victim-listing organization names and publication metadata. Never authenticate, interact with operators, follow payload or contact links, or retain descriptions, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-08-09T12:53:08.528Z",
+        "approvedBy": "source-review:goal8-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Barracuda",
+        "actors": [
+          "Barracuda"
+        ],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/developers",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/barracuda",
+        "discoveryCheckedAt": "2026-08-09T12:53:08.528Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T12:53:08.528Z",
+        "productionCollectionVerifiedAt": "2026-08-09T12:53:08.528Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "article_body_h3",
+        "parserShape": "article > div.body > h3",
+        "observedParsedItemCount": 4,
+        "reportedVictimCount": 4,
+        "lastReportedVictimAt": "2026-08-06T09:03:00.556090+00:00",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+        "discoveryAuthorityChain": [
+          {
+            "name": "Ransomwhere.org",
+            "role": "current public proxy inventory for the upstream ransomware.live group catalog",
+            "url": "https://ransomwhere.org/developers",
+            "recordUrl": "https://ransomwhere.org/api/groups/barracuda"
+          },
+          {
+            "name": "RansomLook",
+            "role": "independent current public ransomware-group registry matching the exact endpoint and availability",
+            "url": "https://www.ransomlook.io/doc/",
+            "recordUrl": "https://www.ransomlook.io/api/group/barracuda"
+          }
+        ],
+        "attribution": "Ransomwhere.org public inventory, independent RansomLook endpoint verification, and approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T12:53:08.528Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 4,
+          "httpStatus": 200,
+          "contentType": "text/html",
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T12:53:08.528Z"
+        }
+      }
+    },
     {
       "id": "restricted_ms13089_victim_blog",
       "name": "MS-13089 victim blog",
