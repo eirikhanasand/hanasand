@@ -124,6 +124,7 @@ describe('public TI v1', () => {
                 { id: 'source-clear', name: 'Publisher feed', url: 'https://publisher.example/feed.xml', locatorRedacted: false, operatingMode: { metadataOnly: false, accessMethod: 'public_http' } },
                 { id: 'source-redacted', name: 'Restricted feed', url: 'https://secret.example/private', locatorRedacted: true, operatingMode: { metadataOnly: true, accessMethod: 'metadata_only_proxy' } },
                 { id: 'source-metadata-flag-only', name: 'Metadata-only feed', url: 'https://secret.example/another', operatingMode: { metadataOnly: true, accessMethod: 'public_http' } },
+                { id: 'source-legacy-metadata', name: 'Legacy metadata feed', type: 'darkweb_metadata', url: 'https://secret.example/legacy' },
             ],
             total: 3,
         }))
@@ -134,6 +135,7 @@ describe('public TI v1', () => {
         expect(rows[0].url).toBe('https://publisher.example/feed.xml')
         expect(rows[1]).not.toHaveProperty('url')
         expect(rows[2]).not.toHaveProperty('url')
+        expect(rows[3]).not.toHaveProperty('url')
         expect(JSON.stringify(response.json())).not.toContain('secret.example')
     })
 
