@@ -818,12 +818,12 @@ describe("dwm alert repository", () => {
     });
     expect(JSON.stringify(first.alerts)).not.toContain("cap_repo_tg_notacme_false_positive");
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.sourceCount).toBe(1);
+    expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.workflowContext.actor).toBeUndefined();
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.workflowContext).toMatchObject({
       organizationId: "org_repo_acme",
       visibilityPolicy: "admins",
       watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
       watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"],
-      actor: "Repo Public",
       entity: {
         company: "acme",
         artifactType: "nhi_exposure_hint"
