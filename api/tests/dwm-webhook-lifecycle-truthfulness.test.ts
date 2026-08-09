@@ -22,7 +22,7 @@ const baseDestination = {
     signingConfigured: true,
 } as const
 
-function testDelivery(status: 'dry_run' | 'delivered') {
+function testDelivery(status: 'dry_run' | 'delivered', dryRun = status === 'dry_run') {
     return {
         id: `delivery_${status}`,
         destinationId: baseDestination.id,
@@ -31,7 +31,7 @@ function testDelivery(status: 'dry_run' | 'delivered') {
         alertId: 'alert_test',
         eventType: 'dwm.alert.test',
         status,
-        dryRun: status === 'dry_run',
+        dryRun,
         endpointHint: baseDestination.endpointHint,
         endpointHash: baseDestination.endpointHash,
         payloadHash: 'payload_hash',
@@ -97,6 +97,33 @@ test('dry-run history never makes a webhook destination live-ready', () => {
         nextDeliveryState: 'ready',
         readyForLive: true,
     })
+
+    const deliveredDryRun = buildDwmWebhookDestinationLifecycle({
+        destinations: [{ ...baseDestination, lastTestStatus: 'delivered' } as any],
+        deliveries: [testDelivery('delivered', true) as any],
+        liveDeliveryEnabled: true,
+        viewerRole: 'owner',
+        canManage: true,
+    })[0]
+    expect(deliveredDryRun.lifecycleState).toMatchObject({
+        primary: 'test_required',
+        active: false,
+        liveDeliveryUnverified: true,
+        liveVerified: false,
+        verified: false,
+    })
+    expect(deliveredDryRun.lifecycleReadinessReceipt.status).toMatchObject({
+        readyForLive: false,
+    })
+
+    const deliveredDryRunContract = buildDwmWebhookDestinationTestContract({
+        destination: { ...baseDestination, lastTestStatus: 'delivered' } as any,
+        deliveries: [testDelivery('delivered', true) as any],
+        liveDeliveryEnabled: true,
+        viewerRole: 'owner',
+        canManage: true,
+    })
+    expect(deliveredDryRunContract.status).toBe('pending')
 
     const noTest = buildDwmWebhookDestinationTestContract({
         destination: { ...baseDestination, lastTestedAt: null, lastTestStatus: null } as any,
