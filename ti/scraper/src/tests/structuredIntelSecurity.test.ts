@@ -198,9 +198,18 @@ describe("structured intelligence API boundary", () => {
     store.saveIncident({ id: "incident_a", tenantId: "tenant_a", sourceId: "src_a", captureId: "cap_a", title: "Alpha incident", summary: "APT29 at Alpha", firstSeenAt: "2026-07-20T10:00:00.000Z", confidence: 0.8 });
     store.saveIncident({ id: "incident_b", tenantId: "tenant_b", sourceId: "src_b", captureId: "cap_b", title: "Beta incident", summary: "APT29 at Beta", firstSeenAt: "2026-07-20T10:00:00.000Z", confidence: 0.8 });
     store.saveExtractedEntity({ id: "entity_a", tenantId: "tenant_a", sourceId: "src_a", captureId: "cap_a", type: "actor", value: "APT29", confidence: 0.98 });
+    const listByType = store.listExtractedEntitiesByTypes.bind(store);
+    let listByTypeCalls = 0;
+    store.listExtractedEntitiesByTypes = ((types: Iterable<string>, tenantId?: string) => {
+      listByTypeCalls++;
+      if (listByTypeCalls > 1) throw new Error("actor search must not enumerate all entity types twice");
+      return listByType(types, tenantId);
+    }) as any;
+    (store as any).usesPostgresSearchIndex = true;
     const options = { store, frontier: new FocusedFrontier() };
 
     const search = await body(await handleApiRequest(api("/v1/intel/search?q=APT29", { headers: { "x-tenant-id": "tenant_a" } }), options));
+    expect(listByTypeCalls).toBe(1);
     expect((search.rows as any[]).map((row) => row.id)).toEqual(["cap_a"]);
     expect(search).toMatchObject({ status: "partial", confidence: 0.69, actionability: { shouldAlert: false }, quality: { status: "partial", canPromoteToReady: false } });
     expect(search).toMatchObject({
