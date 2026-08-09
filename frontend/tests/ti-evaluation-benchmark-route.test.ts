@@ -1,12 +1,17 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 // @ts-expect-error Bun provides this module when running focused tests.
-import { afterAll, test } from 'bun:test'
+import { afterAll, mock, test } from 'bun:test'
 import { NextRequest } from 'next/server'
 
 const originalFetch = globalThis.fetch
 const originalAuthApi = process.env.FRONTEND_AUTH_API
 const originalScraperApi = process.env.TI_SCRAPER_API_BASE
+let activeRoles: string[] = []
+
+mock.module('@/utils/proxy/tokenIsValid', () => ({
+    default: async() => ({ valid: true, state: 'valid', token: 'validated-token', roles: activeRoles.map(id => ({ id })) }),
+}))
 
 process.env.FRONTEND_AUTH_API = 'http://auth.test/api'
 process.env.TI_SCRAPER_API_BASE = 'http://scraper.test'
@@ -26,10 +31,10 @@ function request(headers: Record<string, string> = {}, url = 'http://frontend.te
 }
 
 function mockFetch(roles: string[], response = Response.json({ ok: true }, { status: 200 })) {
+    activeRoles = roles
     const calls: Array<{ url: string, headers: Headers }> = []
     globalThis.fetch = async(input, init) => {
         const url = String(input)
-        if (url.startsWith('http://auth.test/')) return Response.json({ token: 'validated-token', roles: roles.map(id => ({ id })) })
         calls.push({ url, headers: new Headers(init?.headers) })
         return response
     }
