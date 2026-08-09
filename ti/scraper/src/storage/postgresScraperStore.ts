@@ -1004,7 +1004,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return { rows, totals, total, nextCursor: offset + rows.length < total ? String(offset + rows.length) : undefined };
   }
 
-  async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string }) {
+  async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string; executableOnly?: boolean }) {
     const [row] = await this.sql.unsafe(`
       WITH latest_health AS (
         SELECT DISTINCT ON (source_id)
@@ -1036,7 +1036,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       FROM threat_intel.sources sources
       LEFT JOIN latest_health ON latest_health.source_id = sources.id
       WHERE sources.tenant_id IS NOT DISTINCT FROM $1::text
-    `, [input.tenantId ?? null]);
+        AND (NOT $2::boolean OR sources.collection_executable)
+    `, [input.tenantId ?? null, input.executableOnly === true]);
     return { schemaVersion: "ti.source_operations_summary.v1", generatedAt: input.generatedAt, tenantId: input.tenantId ?? "global", summary: row?.summary ?? {} };
   }
 
