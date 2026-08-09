@@ -97,6 +97,52 @@ describe("public collection boundary", () => {
     expect(store.getSource("c")?.health?.checkedAt).toBeUndefined();
   });
 
+  test("does not adopt a queued watchlist run owned by the scheduled executor", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "canonical", url: "https://example.test/canonical.xml" }));
+    store.saveSource(source({
+      id: "watchlist-provider",
+      url: "https://news.example.test/search.xml",
+      crawlState: { nextEligibleAt: "2026-07-24T12:00:00.000Z" }
+    }));
+    store.saveRun({
+      id: "watchlist-run",
+      requestId: "req_watchlist_discovery",
+      status: "queued",
+      startedAt: "2026-07-23T11:00:00.000Z",
+      updatedAt: "2026-07-23T11:00:00.000Z"
+    } as any);
+    const frontier = new FocusedFrontier();
+    frontier.enqueueTask({
+      id: "watchlist-task",
+      sourceId: "watchlist-provider",
+      sourceType: "rss",
+      targetUrl: "https://news.example.test/search.xml",
+      runId: "watchlist-run",
+      queuedAt: "2026-07-23T11:00:00.000Z",
+      retryCount: 0,
+      planning: { watchlistDiscovery: { watchlistId: "watchlist-owned-elsewhere" } }
+    } as any);
+    const fetched: string[] = [];
+
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier,
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => "2026-07-23T12:00:00.000Z",
+      fetch: async (url: string) => {
+        fetched.push(url);
+        return new Response("<rss><channel></channel></rss>", { headers: { "content-type": "application/rss+xml" } });
+      }
+    });
+
+    expect(cycle).toMatchObject({ status: "completed", activeSourceCount: 1, completedTaskCount: 1 });
+    expect(fetched).toEqual(["https://example.test/canonical.xml"]);
+    expect(frontier.snapshot().map((item: any) => item.id)).toEqual(["watchlist-task"]);
+    expect(store.getRun("watchlist-run")).toMatchObject({ status: "queued" });
+  });
+
   test("supersedes an unleased queued task after a competing run covers the same source job", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "covered", url: "https://example.test/covered.xml", crawlFrequencySeconds: 900 }));
