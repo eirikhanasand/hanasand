@@ -210,6 +210,21 @@ describe("dwm product snapshot", () => {
     expect(classifySourceFamily(darkwebSource)).toBe("darkweb_metadata");
   });
 
+  test("does not attribute an actor from an unannotated capture or source name", () => {
+    const source = { ...telegramSource, name: "Akira public feed", metadata: { adapter: "telegram_public" } };
+    const capture = { ...telegramCapture, body: "Akira mentioned acme.com in a public message." };
+    const snapshot = buildDwmProductSnapshot({
+      tenantId: "tenant_acme",
+      watchlist: ["acme.com"],
+      sources: [source],
+      captures: [capture],
+      generatedAt: "2026-06-27T08:20:00.000Z"
+    });
+
+    expect(snapshot.actorOverviews).toEqual([]);
+    expect(snapshot.alerts[0]?.actor).toBeUndefined();
+  });
+
   test("builds workflow-ready alerts from Telegram and metadata-only darkweb captures", () => {
     const snapshot = buildDwmProductSnapshot({
       tenantId: "tenant_acme",
