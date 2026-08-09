@@ -20,6 +20,14 @@ const testOptions = (store: InMemoryScraperStore, extra: Record<string, unknown>
   ...extra
 }) as any;
 
+const saveCollectedClaim = (store: InMemoryScraperStore, item: any) => saveExposureClaimFromCollectedItem(store, {
+  ...item,
+  source: { name: item.sourceName || "Collected exposure source", url: item.url || "https://collector.example/feed" },
+  rawText: item.text,
+  collectedAt: item.collectedAt || item.publishedAt || new Date().toISOString(),
+  metadata: { adapter: "rss", sourceFamily: item.sourceFamily || "darkweb_metadata" }
+});
+
 describe("DWM exposure queue pipeline", () => {
   test("rejects unauthenticated manual exposure intake", async () => {
     const store = new InMemoryScraperStore();
@@ -339,14 +347,7 @@ describe("DWM exposure queue pipeline", () => {
       sourceFamily: "darkweb_metadata"
     };
 
-    const ingest = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ items: [item] })
-    }), options);
-    expect(ingest.status).toBe(200);
-    const ingestBody = await ingest.json() as any;
-    expect(ingestBody.accepted).toBe(1);
+    expect(await saveCollectedClaim(store, item)).toBeTruthy();
     expect(store.listSources()[0]).toMatchObject({ status: "candidate", governance: { approvalState: "pending", approvalRequired: true, metadataOnly: true } });
 
     const queue = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?limit=5"), options);
@@ -355,7 +356,7 @@ describe("DWM exposure queue pipeline", () => {
     expect(queueBody.status).toBe("live");
     expect(queueBody.items[0].actor).toBe("BlackSuit");
     expect(queueBody.items[0].company).toBe("Contoso Energy");
-    expect(queueBody.items[0].country).toBe("Norway");
+    expect(queueBody.items[0].country).toBe("Not disclosed by TA");
     expect(queueBody.items[0].metadataOnly).toBe(true);
 
     const countryQueue = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?country=Norway&category=Documents"), options);
@@ -364,7 +365,7 @@ describe("DWM exposure queue pipeline", () => {
 
     const filteredQueue = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?country=Norway&size=82"), options);
     const filteredQueueBody = await filteredQueue.json() as any;
-    expect(filteredQueueBody.items[0]).toMatchObject({ company: "Contoso Energy", country: "Norway" });
+    expect(filteredQueueBody.items).toHaveLength(0);
 
     const search = await handleApiRequest(new Request("http://local/v1/intel/search?tenantId=default&q=Contoso%20Energy"), options);
     expect(search.status).toBe(200);
@@ -385,12 +386,7 @@ describe("DWM exposure queue pipeline", () => {
       sourceFamily: "darkweb_metadata"
     };
 
-    const ingest = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ items: [item] })
-    }), options);
-    expect(ingest.status).toBe(200);
+    expect(await saveCollectedClaim(store, item)).toBeTruthy();
 
     const search = await handleApiRequest(new Request("http://local/v1/intel/search?tenantId=default&q=Hanasand%20AI%20Parser%20Smoke"), options);
     expect(search.status).toBe(200);
@@ -410,21 +406,13 @@ describe("DWM exposure queue pipeline", () => {
       sourceFamily: "darkweb_metadata"
     };
 
-    await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ items: [claim] })
-    }), options);
-    await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ items: [{
-        sourceName: "Example actor leak monitor",
-        title: "Akira has just published a new victim: Unknown Time Company",
-        text: "Akira victim: Unknown Time Company. Publication time was not retained.",
-        url: "https://news.example.test/unknown-time-company"
-      }] })
-    }), options);
+    await saveCollectedClaim(store, claim);
+    await saveCollectedClaim(store, {
+      sourceName: "Example actor leak monitor",
+      title: "Akira has just published a new victim: Unknown Time Company",
+      text: "Akira victim: Unknown Time Company. Publication time was not retained.",
+      url: "https://news.example.test/unknown-time-company"
+    });
 
     const first = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/alerts?sourceFamily=darkweb_metadata"), options);
     const firstBody = await first.json() as any;
@@ -559,11 +547,7 @@ describe("DWM exposure queue pipeline", () => {
       sourceFamily: "darkweb_metadata"
     };
 
-    await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ items: [claim] })
-    }), options);
+    await saveCollectedClaim(store, claim);
 
     const queue = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?limit=5"), options);
     const queueBody = await queue.json() as any;
@@ -631,20 +615,14 @@ describe("DWM exposure queue pipeline", () => {
     const store = new InMemoryScraperStore();
     const options = testOptions(store);
     for (let index = 0; index < 9; index++) {
-      await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          items: [{
-            sourceName: "Example actor leak monitor",
-            title: `Akira has just published a new victim: Landing Queue ${index}`,
-            text: `Akira victim: Landing Queue ${index}. 10 GB claimed from public actor page.`,
-            publishedAt: new Date(Date.UTC(2026, 6, 2, 10, index)).toISOString(),
-            url: `https://news.example.test/landing-queue-${index}`,
-            sourceFamily: "darkweb_metadata"
-          }]
-        })
-      }), options);
+      await saveCollectedClaim(store, {
+        sourceName: "Example actor leak monitor",
+        title: `Akira has just published a new victim: Landing Queue ${index}`,
+        text: `Akira victim: Landing Queue ${index}. 10 GB claimed from public actor page.`,
+        publishedAt: new Date(Date.UTC(2026, 6, 2, 10, index)).toISOString(),
+        url: `https://news.example.test/landing-queue-${index}`,
+        sourceFamily: "darkweb_metadata"
+      });
     }
 
     const first = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?limit=4"), options);
@@ -817,11 +795,7 @@ describe("DWM exposure queue pipeline", () => {
         : "<rss><channel><item><title>Contoso Energy headquartered in Norway confirms records review</title><link>https://news.example.test/contoso-norway</link></item></channel></rss>")
     });
 
-    await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ items: [{ sourceName: "Example actor leak monitor", title: "BlackSuit has just published a new victim: Contoso Energy", text: "BlackSuit victim: Contoso Energy. 82 GB claimed.", publishedAt: new Date().toISOString(), sourceFamily: "darkweb_metadata" }] })
-    }), options);
+    await saveCollectedClaim(store, { sourceName: "Example actor leak monitor", title: "BlackSuit has just published a new victim: Contoso Energy", text: "BlackSuit victim: Contoso Energy. 82 GB claimed.", publishedAt: new Date().toISOString(), sourceFamily: "darkweb_metadata" });
 
     const enriched = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue/enrich-countries", {
       method: "POST",

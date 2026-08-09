@@ -310,6 +310,86 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return rows.map(readRecord);
   }
 
+  async queryAutomaticReviewRecords(input: { tenantId?: string; allTenants?: boolean } = {}) {
+    const tenantId = input.tenantId ?? null;
+    const allTenants = input.allTenants === true;
+    const tenantWhere = allTenants ? "TRUE" : "tenant_id IS NOT DISTINCT FROM $1::text";
+    const [taskRows, eventRows] = await Promise.all([
+      this.sql.unsafe(`
+        SELECT record
+        FROM threat_intel.workflow_records
+        WHERE record_type = 'analyst_metadata_review_task'
+          AND record->>'recordKind' = 'automatic_intelligence_review_task'
+          AND ${tenantWhere}
+        ORDER BY updated_at DESC, id DESC`, allTenants ? [] : [tenantId]),
+      this.sql.unsafe(`
+        SELECT record
+        FROM threat_intel.workflow_records
+        WHERE record_type = 'analyst_metadata_review_task'
+          AND record->>'recordKind' = 'automatic_intelligence_review_event'
+          AND ${tenantWhere}
+        ORDER BY created_at ASC, id ASC`, allTenants ? [] : [tenantId])
+    ]);
+    const tasksAndEvents = [...taskRows, ...eventRows].map(readRecord);
+    const tasks = tasksAndEvents.filter((record: any) => record.recordKind === 'automatic_intelligence_review_task');
+    const claimIds = tasks.map((task: any) => task.subject?.claimId).filter(Boolean);
+    const incidentIds = tasks.map((task: any) => task.subject?.incidentId).filter(Boolean);
+    const [claims, incidents, claimEvidence, evidenceLinks, reviews] = await Promise.all([
+      this.queryRecordsByIds('intelligence_claims', 'id', claimIds, input.tenantId, allTenants),
+      this.queryRecordsByIds('incidents', 'id', incidentIds, input.tenantId, allTenants),
+      this.queryRecordsByIds('claim_evidence', 'subject_id', claimIds, input.tenantId, allTenants),
+      this.queryRecordsByIds('evidence_links', 'subject_id', incidentIds, input.tenantId, allTenants),
+      this.queryRecordsByIds('claim_reviews', 'claim_id', claimIds, input.tenantId, allTenants)
+    ]);
+    const sourceIds = [...new Set([
+      ...tasks.map((task: any) => task.subject?.sourceId),
+      ...claimEvidence.map((record: any) => record.sourceId),
+      ...evidenceLinks.map((record: any) => record.sourceId)
+    ].filter(Boolean).map(String))];
+    const [sources, health] = await Promise.all([
+      this.queryRecordsByIds('sources', 'id', sourceIds, input.tenantId, allTenants),
+      sourceIds.length ? this.queryAutomaticReviewSourceHealth({ tenantId: input.tenantId, allTenants, sourceIds }) : Promise.resolve([])
+    ]);
+    const captureIds = [...new Set([
+      ...claimEvidence.map((record: any) => record.captureId),
+      ...evidenceLinks.map((record: any) => record.captureId)
+    ].filter(Boolean).map(String))];
+    const runIds = [...new Set(health.map((record: any) => record.collectionRunId).filter(Boolean).map(String))];
+    const captureConditions: string[] = [];
+    const captureValues: unknown[] = allTenants ? [] : [tenantId];
+    const captureTenantWhere = allTenants ? "TRUE" : "tenant_id IS NOT DISTINCT FROM $1::text";
+    const captureIdOffset = captureValues.length + 1;
+    if (captureIds.length) {
+      captureConditions.push(`id IN (${captureIds.map((_, index) => `$${captureIdOffset + index}`).join(', ')})`);
+      captureValues.push(...captureIds);
+    }
+    if (sourceIds.length && runIds.length) {
+      const offset = captureValues.length + 1;
+      captureConditions.push(`source_id IN (${sourceIds.map((_, index) => `$${offset + index}`).join(', ')}) AND record->'metadata'->>'runId' IN (${runIds.map((_, index) => `$${offset + sourceIds.length + index}`).join(', ')})`);
+      captureValues.push(...sourceIds, ...runIds);
+    }
+    const captures = captureConditions.length
+      ? (await this.sql.unsafe(`
+          SELECT record
+          FROM threat_intel.captures
+          WHERE ${captureTenantWhere}
+            AND (${captureConditions.join(' OR ')})
+          ORDER BY collected_at DESC, id DESC`, captureValues)).map(readRecord)
+      : [];
+    return {
+      tasksAndEvents,
+      claims,
+      incidents,
+      captures,
+      sources,
+      health,
+      claimEvidence,
+      evidenceLinks,
+      reviews,
+      actorIdentities: this.listActorIdentities?.() ?? []
+    };
+  }
+
   // Query bounded evidence edges from PostgreSQL; high-volume history must not be hydrated into memory at startup.
   private async queryRecordsByIds(table: string, column: string, ids: Iterable<string>, tenantId?: string, allTenants = false) {
     const values = [...new Set([...ids].map(String).filter(Boolean))];
@@ -346,12 +426,17 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return this.queryRecordsByIds("evidence_links", "subject_id", subjectIds, tenantId, allTenants);
   }
 
-  async queryAutomaticReviewSourceHealth(input: { tenantId?: string; allTenants?: boolean } = {}) {
+  async queryAutomaticReviewSourceHealth(input: { tenantId?: string; allTenants?: boolean; sourceIds?: Iterable<string> } = {}) {
     const tenantWhere = input.allTenants
       ? "TRUE"
-      : input.tenantId === undefined
-        ? "health.tenant_id IS NULL"
-        : "health.tenant_id IS NOT DISTINCT FROM $1::text";
+        : input.tenantId === undefined
+          ? "health.tenant_id IS NULL"
+          : "health.tenant_id IS NOT DISTINCT FROM $1::text";
+    const sourceIds = [...new Set([...(input.sourceIds ?? [])].map(String).filter(Boolean))];
+    const sourceParameterOffset = input.allTenants || input.tenantId === undefined ? 1 : 2;
+    const sourceWhere = sourceIds.length
+      ? `AND health.source_id IN (${sourceIds.map((_, index) => `$${sourceParameterOffset + index}`).join(", ")})`
+      : "";
     const rows = await this.sql.unsafe(`
       SELECT health.record
       FROM threat_intel.source_health AS health
@@ -370,8 +455,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
               AND capture.record->'metadata'->>'sourceReviewCandidate' = 'true'
           )
         )
+        ${sourceWhere}
       ORDER BY health.checked_at DESC
-    `, input.allTenants || input.tenantId === undefined ? [] : [input.tenantId]);
+    `, input.allTenants || input.tenantId === undefined ? sourceIds : [input.tenantId, ...sourceIds]);
     return rows.map(readRecord);
   }
 

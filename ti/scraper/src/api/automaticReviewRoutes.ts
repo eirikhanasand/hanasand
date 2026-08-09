@@ -252,8 +252,8 @@ export async function runAutomaticReviewCycle(options: ApiServerOptions, input: 
   const at = validIso(input.now) ?? nowIso();
   const modelVersion = input.modelVersion ?? configuredModelVersion(options);
   const index = await buildReviewIndexAsync(store, input.tenantId, input.allTenants === true);
-  const superseded = supersedeStaleTasks(store, index.tasks, input, at, modelVersion, MAX_STALE_TASKS_SUPERSEDED_PER_CYCLE);
   const queued = syncQueueWithIndex(store, index, input, at, modelVersion);
+  const superseded = supersedeStaleTasks(store, index.tasks, input, at, modelVersion, MAX_STALE_TASKS_SUPERSEDED_PER_CYCLE);
   const recovered = recoverExpiredLeases(store, index.tasks, at, input);
   const eligible = index.tasks
     .filter((task) => input.allTenants || inTenantScope(task, input.tenantId))
@@ -291,13 +291,25 @@ function fairDueTasks(tasks: AutomaticReviewTask[], limit: number) {
 }
 
 function supersedeStaleTasks(store: any, tasks: AutomaticReviewTask[], input: Pick<CycleInput, "tenantId" | "allTenants">, at: string, modelVersion: string, limit: number) {
+  const currentSourceTasks = new Map<string, string>();
+  for (const task of tasks
+    .filter((candidate) => candidate.subject.sourceId && candidate.attempt === 0 && ["queued", "running", "retrying"].includes(candidate.state))
+    .sort((left, right) => Number(right.state === "running") - Number(left.state === "running")
+      || Date.parse(right.queuedAt) - Date.parse(left.queuedAt)
+      || right.id.localeCompare(left.id))) {
+    const key = sourceTaskDedupeKey(task);
+    if (!currentSourceTasks.has(key)) currentSourceTasks.set(key, task.id);
+  }
   let count = 0;
   for (const task of tasks) {
     if (count >= limit) break;
     const currentPromptVersion = reviewPromptVersion(task.subject);
+    const duplicateSourceTask = task.subject.sourceId && task.attempt === 0 && task.state !== "running"
+      && currentSourceTasks.get(sourceTaskDedupeKey(task)) !== task.id;
     const replaceable = (task.promptVersion !== currentPromptVersion && REPLACEABLE_PROMPT_VERSIONS.has(String(task.promptVersion)))
       || (task.promptVersion === currentPromptVersion && task.requestedModelVersion !== modelVersion)
-      || (task.attempt === 0 && task.subject.sourceId && !sourceTaskIsCurrent(store, task));
+      || (task.attempt === 0 && task.subject.sourceId && !sourceTaskIsCurrent(store, task))
+      || duplicateSourceTask;
     if ((!input.allTenants && !inTenantScope(task, input.tenantId))
       || !["queued", "running", "retrying"].includes(task.state)
       || !replaceable) continue;
@@ -307,6 +319,10 @@ function supersedeStaleTasks(store: any, tasks: AutomaticReviewTask[], input: Pi
     count++;
   }
   return count;
+}
+
+function sourceTaskDedupeKey(task: AutomaticReviewTask) {
+  return [task.tenantId ?? "global", task.subject.sourceId, task.promptVersion, task.requestedModelVersion, task.sourceIdentitySha256].join(":");
 }
 
 export function startAutomaticReviewWorker(options: ApiServerOptions, input: { intervalMs?: number; limit?: number; concurrency?: number; onCycle?: (result: Record<string, unknown>) => void; onError?: (error: unknown) => void } = {}) {
@@ -329,6 +345,9 @@ export function startAutomaticReviewWorker(options: ApiServerOptions, input: { i
 
 export function automaticReviewSnapshot(store: any, tenantId?: string, requestedLimit = 100): any {
   const limit = Math.max(1, Math.min(250, Math.floor(requestedLimit || 100)));
+  if (typeof store.queryAutomaticReviewRecords === "function") {
+    return store.queryAutomaticReviewRecords({ tenantId }).then((collections: ReviewIndexCollections) => reviewSnapshotFromIndex(buildReviewIndexFromCollections(collections), tenantId, limit));
+  }
   if (typeof store.queryAllStructuredRecords === "function") {
     return buildReviewIndexAsync(store, tenantId, false).then((index) => reviewSnapshotFromIndex(index, tenantId, limit));
   }
@@ -1355,6 +1374,10 @@ function buildReviewIndex(store: any): ReviewIndex {
 
 async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants = false): Promise<ReviewIndex> {
   if (typeof store.queryAllStructuredRecords !== "function") return buildReviewIndex(store);
+  if (typeof store.queryAutomaticReviewRecords === "function") {
+    const collections = await store.queryAutomaticReviewRecords({ tenantId, allTenants });
+    return buildReviewIndexFromCollections(collections);
+  }
   await store.flush?.();
   const scope = allTenants ? {} : { tenantId };
   const load = (collection: string, method: string) => store.queryAllStructuredRecords(collection, scope);
@@ -1458,7 +1481,7 @@ function linkedEvidence(index: ReviewIndex, subject: AutomaticReviewTask["subjec
         return capture.tenantId === source.tenantId && retainedRunIds.has(runId)
           && (usefulRunIds.has(runId) || capture.metadata?.sourceReviewCandidate === true);
       })
-      .sort((left: any, right: any) => Date.parse(right.collectedAt ?? "") - Date.parse(left.collectedAt ?? ""))
+      .sort((left: any, right: any) => Date.parse(right.collectedAt ?? "") - Date.parse(left.collectedAt ?? "") || String(left.id).localeCompare(String(right.id)))
       .slice(0, 8)
       .map((capture: any) => ({
         id: sourceEvidenceId(capture.id),
