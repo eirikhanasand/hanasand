@@ -10,7 +10,7 @@ import { nextAnchoredCycleAt } from "./canaryHelpers.ts";
 export async function runRestrictedMetadataCollectionCycle(options: any) {
   const generatedAt = options.now?.() ?? nowIso();
   const productivity = reconcilePublicSourceProductivity({ ...options, now: generatedAt });
-  const maxSources = Math.max(1, Number(options.maxSources ?? 250));
+  const maxSources = Math.max(1, Number(options.maxSources ?? 300));
   const maxConcurrentSources = Math.max(1, Math.min(
     Number(options.boundary?.config?.maxConcurrency ?? 2),
     Number(options.maxConcurrentSources ?? 2)
@@ -115,7 +115,7 @@ export function startRestrictedMetadataCollectionLoop(options: any) {
     running: false,
     startedAt,
     intervalSeconds,
-    maxSources: Math.max(1, Number(options.maxSources ?? 250)),
+    maxSources: Math.max(1, Number(options.maxSources ?? 300)),
     maxConcurrentSources: Math.max(1, Math.min(Number(options.boundary?.config?.maxConcurrency ?? 2), Number(options.maxConcurrentSources ?? 2))),
     cycleCount: 0,
     successCount: 0,

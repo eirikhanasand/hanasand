@@ -57,6 +57,25 @@ describe("public collection boundary", () => {
     }));
   });
 
+  test("caps ordinary publisher rows at the scheduler limit", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ metadata: { productionCollection: true, maxItemsPerFetch: 150 } }));
+    const items = Array.from({ length: 5 }, (_, index) => `<item><title>CVE-2026-42${index} remote code execution</title><link>https://example.test/${index}</link><description>Critical vulnerability with a security patch.</description><pubDate>Thu, 23 Jul 2026 12:00:00 GMT</pubDate></item>`).join("");
+
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      maxSources: 1,
+      maxTasks: 1,
+      maxItemsPerTask: 2,
+      now: () => "2026-07-23T12:00:00.000Z",
+      fetch: async () => new Response(`<rss><channel>${items}</channel></rss>`, { headers: { "content-type": "application/rss+xml" } })
+    });
+
+    expect(cycle.insertedCaptureCount).toBe(2);
+    expect(store.listCaptures()).toHaveLength(2);
+  });
+
   test("times out a stalled response body without wedging the recurring loop", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "stalled", url: "https://example.test/stalled.xml" }));

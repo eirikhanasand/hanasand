@@ -185,7 +185,7 @@ export async function startScraperRuntime() {
     boundary: restrictedBoundary,
     enabled: restrictedEnabled,
     intervalSeconds: Number(Bun.env.TI_RESTRICTED_METADATA_INTERVAL_SECONDS ?? "900"),
-    maxSources: Number(Bun.env.TI_RESTRICTED_METADATA_MAX_SOURCES ?? "250"),
+    maxSources: Number(Bun.env.TI_RESTRICTED_METADATA_MAX_SOURCES ?? "300"),
     maxConcurrentSources: Math.max(1, Math.min(
       config.limits.maxConcurrentDarknetMetadataTasks,
       restrictedBoundary?.config.maxConcurrency ?? 1
