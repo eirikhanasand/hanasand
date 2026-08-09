@@ -101,7 +101,13 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       const healthy = reportedStorage.ok !== false;
       return json({ ok: healthy, service: "ti-scraper", version: "v1", storage: reportedStorage, search: { status: searchReady ? "ready" : "starting", ready: searchReady }, collection: { public: (options.canaryLoop as any)?.getState?.(), publicDefault: (options.defaultCanaryLoop as any)?.getState?.(), restrictedMetadata: (options.restrictedMetadataLoop as any)?.getState?.() }, ...runtime, generatedAt: nowIso() }, healthy ? 200 : 503);
     }
-    if (url.pathname === "/v1/public/coverage" && request.method === "GET") return json(await publicCoverage(options));
+    if (url.pathname === "/v1/public/coverage" && request.method === "GET") {
+      try {
+        return json(await publicCoverage(options));
+      } catch (caught) {
+        return error("coverage_unavailable", caught instanceof Error ? caught.message : String(caught), 503);
+      }
+    }
     if (url.pathname === "/v1/auth/integration-notes" && request.method === "GET") {
       return json({
         version: "v1",

@@ -159,4 +159,13 @@ describe("public coverage", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ schemaVersion: "public.coverage.v2", registry: { registeredSourceCount: 0 }, qualification: { counts: { total: 0 } } });
   });
+
+  test("returns explicit unavailable on a coverage storage failure", async () => {
+    const response = await handleApiRequest(new Request("http://local/v1/public/coverage"), {
+      store: { querySourceOperationalSummary: async () => { throw new Error("coverage query timed out"); } } as any,
+      frontier: {} as any
+    });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: { code: "coverage_unavailable", message: "coverage query timed out" } });
+  });
 });
