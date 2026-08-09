@@ -46,6 +46,13 @@ describe('production monitor notification transitions', () => {
         expect(latestActivity).not.toContain('setTimeout(resolve, 1_000)')
     })
 
+    test('public search failure does not retry inside one status run', async () => {
+        const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
+        const publicSearch = source.slice(source.indexOf("check('threat-intelligence', 'Public search'"))
+        expect(publicSearch).not.toContain('for (let attempt = 0;')
+        expect(publicSearch).not.toContain('setTimeout(resolve, 1_000)')
+    })
+
     test('incident hook cannot delay alert delivery when the scraper is slow', async () => {
         const source = await readFile(path.join(import.meta.dir, '../src/utils/status/record.ts'), 'utf8')
         expect(source).toContain('void notifyServiceMonitorIncident(transition.incident).catch')
