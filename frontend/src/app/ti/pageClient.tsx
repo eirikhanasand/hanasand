@@ -5356,10 +5356,9 @@ function EmptyState() {
 }
 
 function searchingResult(query: string): TiSearchResponse {
-    const now = new Date().toISOString()
     return {
         query,
-        generatedAt: now,
+        generatedAt: '',
         mode: 'unavailable',
         status: 'searching',
         refreshAfterSeconds: 3,
