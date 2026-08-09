@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { buildDwmWebhookDeliveryReadiness, buildDwmWebhookDeliveryReadinessConsumerProof, buildDwmWebhookDestinationLifecycle, buildDwmWebhookDestinationTestContract } from '../src/utils/dwm/webhooks.ts'
+import { buildDwmWebhookDeliveryReadiness, buildDwmWebhookDeliveryReadinessConsumerProof, buildDwmWebhookDestinationContracts, buildDwmWebhookDestinationLifecycle, buildDwmWebhookDestinationTestContract } from '../src/utils/dwm/webhooks.ts'
 
 const baseDestination = {
     id: 'destination_1',
@@ -124,6 +124,27 @@ test('dry-run history never makes a webhook destination live-ready', () => {
         canManage: true,
     })
     expect(deliveredDryRunContract.status).toBe('pending')
+
+    const legacyDeliveredContract = buildDwmWebhookDestinationContracts({
+        destinations: [{ ...baseDestination, lastTestStatus: 'delivered' } as any],
+    })[0]
+    expect(legacyDeliveredContract.lastTest).toMatchObject({
+        status: 'unknown',
+        dryRun: null,
+        live: false,
+        requestId: null,
+    })
+
+    const legacyDeliveredTestContract = buildDwmWebhookDestinationTestContract({
+        destination: { ...baseDestination, lastTestStatus: 'delivered' } as any,
+        liveDeliveryEnabled: true,
+        viewerRole: 'owner',
+        canManage: true,
+    })
+    expect(legacyDeliveredTestContract).toMatchObject({
+        status: 'pending',
+        latestTest: { status: 'unknown', dryRun: null, live: false },
+    })
 
     const noTest = buildDwmWebhookDestinationTestContract({
         destination: { ...baseDestination, lastTestedAt: null, lastTestStatus: null } as any,
