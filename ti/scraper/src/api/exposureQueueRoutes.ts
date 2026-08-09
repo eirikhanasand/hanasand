@@ -296,10 +296,10 @@ function exposureWriteScope(request: Request, body: any, options: ApiServerOptio
 function exposureClaimInput(value: unknown): ExposureClaimItem | undefined {
   if (!value || typeof value !== "object") return undefined;
   const item: any = value;
-  const sourceFamily = ["darkweb_metadata", "telegram_public", "public_advisory", "public_actor_claims"].includes(item.sourceFamily) ? item.sourceFamily : "manual_metadata";
+  const sourceFamily = ["darkweb_metadata", "telegram_public", "public_advisory", "public_actor_claims"].includes(item.sourceFamily) ? item.sourceFamily : undefined;
   const sourceUrl = submittedUrl(item.sourceUrl);
   const url = submittedUrl(item.url);
-  if (sourceFamily === "manual_metadata" && (sourceUrl || url)) return undefined;
+  if (!sourceFamily) return undefined;
   const text = boundedText(item.text, 2000);
   const title = boundedText(item.title, 240);
   if ((item.text !== undefined && !text) || (item.title !== undefined && !title)) return undefined;

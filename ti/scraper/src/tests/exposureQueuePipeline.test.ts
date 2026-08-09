@@ -41,6 +41,19 @@ describe("DWM exposure queue pipeline", () => {
     expect(store.listCaptures()).toHaveLength(0);
   });
 
+  test("rejects unclassified operator metadata before it can become a victim publication", async () => {
+    const store = new InMemoryScraperStore();
+    const response = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ items: [{ actor: "Akira", company: "Contoso" }] })
+    }), testOptions(store));
+
+    expect(await response.json()).toMatchObject({ accepted: 0, rejected: 1 });
+    expect(store.listSources()).toHaveLength(0);
+    expect(store.listCaptures()).toHaveLength(0);
+  });
+
   test("fetches real tenant public-incident evidence without fabricating a dark-web victim claim", async () => {
     const store = new InMemoryScraperStore();
     store.saveOrganization({ id: "org_ntnu_research", tenantId: "org_ntnu_research", name: "NTNU research monitor", status: "active" });
@@ -807,7 +820,7 @@ describe("DWM exposure queue pipeline", () => {
     await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ items: [{ sourceName: "Example actor leak monitor", title: "BlackSuit has just published a new victim: Contoso Energy", text: "BlackSuit victim: Contoso Energy. 82 GB claimed.", publishedAt: new Date().toISOString() }] })
+      body: JSON.stringify({ items: [{ sourceName: "Example actor leak monitor", title: "BlackSuit has just published a new victim: Contoso Energy", text: "BlackSuit victim: Contoso Energy. 82 GB claimed.", publishedAt: new Date().toISOString(), sourceFamily: "darkweb_metadata" }] })
     }), options);
 
     const enriched = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue/enrich-countries", {
