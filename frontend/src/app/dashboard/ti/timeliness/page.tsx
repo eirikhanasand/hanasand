@@ -3,7 +3,9 @@ import TimelinessClient from './timelinessClient'
 
 export const dynamic = 'force-dynamic'
 
-export default function TimelinessPage() {
+export default async function TimelinessPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
+    const params = await searchParams
+    const organizationId = firstParam(params?.organizationId)?.trim() || ''
     return (
         <DashboardPage>
             <DashboardHeader
@@ -11,7 +13,11 @@ export default function TimelinessPage() {
                 title='Report-to-alert timeliness'
                 description='Resolve authoritative first-report evidence, inspect timestamp provenance, and measure retained incidents through alert delivery.'
             />
-            <TimelinessClient />
+            <TimelinessClient initialOrganizationId={organizationId} />
         </DashboardPage>
     )
+}
+
+function firstParam(value: string | string[] | undefined) {
+    return Array.isArray(value) ? value[0] : value
 }

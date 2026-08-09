@@ -22,10 +22,12 @@ async function forward(request: NextRequest, path: string, body?: string | NextR
     if (!base) return failure(503, 'timeliness_unavailable', 'The timeliness service is unavailable.')
     const scope = request.nextUrl.searchParams.get('scope') || 'global'
     const tenantId = request.nextUrl.searchParams.get('tenantId')?.trim()
+    const organizationId = request.nextUrl.searchParams.get('organizationId')?.trim()
     if (scope !== 'tenant' && scope !== 'global') return failure(400, 'invalid_timeliness_scope', 'Use a tenant or global timeliness scope.')
+    if (scope === 'global' && !session.identity.roles.includes('system_admin')) return failure(403, 'global_timeliness_scope_forbidden', 'Global timeliness data is restricted to system administrators.')
     if (scope === 'tenant' && !/^[A-Za-z0-9_.:-]{1,200}$/.test(tenantId || '')) return failure(400, 'invalid_timeliness_tenant', 'Select a valid tenant before loading timeliness evidence.')
     if (scope === 'tenant') {
-        const scopeError = await organizationScopeError(tenantId!, session.identity.token, session.identity.id, request.method !== 'GET')
+        const scopeError = await organizationScopeError(organizationId || tenantId!, session.identity.token, session.identity.id, request.method !== 'GET')
         if (scopeError) return scopeError
     }
     const target = new URL(path, base)
@@ -42,6 +44,7 @@ async function forward(request: NextRequest, path: string, body?: string | NextR
                 'x-actor-id': session.identity.id,
                 'x-user-id': session.identity.id,
                 ...(scope === 'tenant' ? { 'x-tenant-id': tenantId! } : {}),
+                ...(scope === 'tenant' && organizationId ? { 'x-organization-id': organizationId } : {}),
                 ...(body ? { 'content-type': 'application/json' } : {}),
             },
             body: typeof body === 'string' ? body : undefined,

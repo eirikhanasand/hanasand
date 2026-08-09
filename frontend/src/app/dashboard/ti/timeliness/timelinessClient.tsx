@@ -74,11 +74,14 @@ const statuses: Array<{ value: '' | QueueStatus, label: string }> = [
 ]
 const stageOrder = ['observed', 'first_report', 'publication', 'collection', 'processing', 'first_visible', 'reviewed', 'alert_created', 'delivery_attempt', 'delivered']
 
-export default function TimelinessClient() {
+type Organization = { id: string, tenantId?: string, role?: string }
+
+export default function TimelinessClient({ initialOrganizationId = '' }: { initialOrganizationId?: string }) {
     const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
     const [selectedId, setSelectedId] = useState('')
-    const [scope, setScope] = useState<'tenant' | 'global'>('global')
+    const [scope, setScope] = useState<'tenant' | 'global'>('tenant')
     const [tenantId, setTenantId] = useState('')
+    const [organizationId, setOrganizationId] = useState(initialOrganizationId)
     const [status, setStatus] = useState<'' | QueueStatus>('')
     const [search, setSearch] = useState('')
     const [query, setQuery] = useState('')
@@ -98,6 +101,7 @@ export default function TimelinessClient() {
         try {
             const params = new URLSearchParams({ scope, limit: '200' })
             if (scope === 'tenant') params.set('tenantId', tenantId.trim())
+            if (scope === 'tenant' && organizationId.trim()) params.set('organizationId', organizationId.trim())
             if (status) params.set('status', status)
             if (query) params.set('q', query)
             const next = await api<Snapshot>(`/api/ti/timeliness?${params}`)
@@ -108,7 +112,31 @@ export default function TimelinessClient() {
         } finally {
             setLoading(false)
         }
-    }, [query, scope, status, tenantId])
+    }, [organizationId, query, scope, status, tenantId])
+
+    useEffect(() => {
+        if (initialOrganizationId.trim()) {
+            setOrganizationId(initialOrganizationId.trim())
+            setTenantId(initialOrganizationId.trim())
+            return
+        }
+        let cancelled = false
+        void fetch('/api/organizations', { cache: 'no-store' })
+            .then(response => response.ok ? response.json() as Promise<{ organizations?: Organization[] }> : Promise.reject(new Error('Organizations could not be loaded.')))
+            .then(payload => {
+                if (cancelled) return
+                const organization = (payload.organizations || [])[0]
+                if (organization) {
+                    setOrganizationId(organization.id)
+                    setTenantId(organization.tenantId || organization.id)
+                } else {
+                    setLoading(false)
+                    setError('Select an organization before loading timeliness evidence.')
+                }
+            })
+            .catch(cause => { if (!cancelled) { setLoading(false); setError(message(cause)) } })
+        return () => { cancelled = true }
+    }, [initialOrganizationId])
 
     useEffect(() => { void load() }, [load])
     const selected = snapshot?.items.find(item => item.id === selectedId)
@@ -123,6 +151,7 @@ export default function TimelinessClient() {
         try {
             const params = new URLSearchParams({ scope })
             if (scope === 'tenant') params.set('tenantId', tenantId.trim())
+            if (scope === 'tenant' && organizationId.trim()) params.set('organizationId', organizationId.trim())
             const response = await api<{ item: Item }>('/api/ti/timeliness?' + params, {
                 method: 'POST',
                 body: JSON.stringify({ recordId: selected.id, ...form, referenceTitle: form.referenceTitle || undefined }),
@@ -192,7 +221,7 @@ export default function TimelinessClient() {
                     </div>
                     <div className='max-h-[calc(100vh-13rem)] min-h-72 overflow-auto'>
                         {snapshot?.items.map(item => <QueueRow key={item.id} item={item} active={selected?.id === item.id} onClick={() => setSelectedId(item.id)} />)}
-                        {!snapshot?.items.length ? <div className='grid min-h-56 place-items-center p-6 text-center text-xs text-ui-muted'>{loading ? <LoaderCircle className='h-5 w-5 animate-spin' /> : 'No retained timeliness records match this scope and queue.'}</div> : null}
+                        {!snapshot?.items.length ? <div className='grid min-h-56 place-items-center p-6 text-center text-xs text-ui-muted'>{loading ? <LoaderCircle className='h-5 w-5 animate-spin' /> : scope === 'tenant' && !tenantId ? 'Select an organization before loading timeliness evidence.' : 'No retained timeliness records match this scope and queue.'}</div> : null}
                     </div>
                 </DashboardPanel>
 
