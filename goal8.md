@@ -4,7 +4,7 @@
 
 Keep discovering, validating, deploying, and monitoring lawful Tor metadata feeds until the live source-operations API reports at least **1,000 qualifying lawful dark-web/Tor feeds**.
 
-Live sustained baseline on 2026-08-09: **4 qualifying Tor feeds**. Raw registrations, transport canaries, candidates, mirrors, and retired rows do not count.
+Live sustained baseline on 2026-08-09: **3 qualifying Tor feeds**. Raw registrations, transport canaries, candidates, mirrors, and retired rows do not count. The remaining gap is 997.
 
 The corrected production scheduler first shipped at `e7aae5ba71e5a1a4a74111f62d0322e54fc9949d`; governed review follow-through is at `06b360c60a409214db6d2d0126785bf8adea151a`, and Tor bootstrap readiness is at `79e976b85ef0bb1ec1626c4eb9295b23b8aead15`. Restart reconciliation at `9f9e3a90f17e5973ed943cc1e8b0d6863d854474` now preserves both evidence-bound portfolio identities and legacy governed Tor sources with two current retained productive cycles. At 2026-08-09T09:50Z, PostgreSQL reported 13 admitted candidates, 14 current feeds with at least one productive scheduled cycle, 11 approved source reviews, and 3 complete persisted qualification proofs; the public coverage API independently reported 3 qualifying lawful-dark-web feeds. The remaining gap is 997.
 
@@ -70,6 +70,10 @@ At 2026-08-09T16:02:23Z, the natural restricted run completed 18/18 with zero fa
 
 At 2026-08-09T16:34Z, another external scraper recreation reset the restricted scheduler anchor before the current Tor cycle could run. The durable cause was deployment coupling, not missing source evidence: Compose made API deployment depend on scraper health, so ordinary API reconciliation could replace the independently scheduled scraper. Commit `31f9ca15a82cfc9766de020f54725e33ca0d2298` removes only that dependency, makes deploy hygiene require isolation, and documents an explicit serialized scraper-only build and `--no-deps` replacement. Commit `70cf525f61f53710ec90eac128f5f2e1ae8398a7` separately replaces the production summary's per-source latest-health lookup with one tenant-scoped pass, allowing coverage to report the real fleet instead of timing out at current scale.
 
+At 2026-08-09T17:22:14Z, the cumulative `998f10ef974be6d11a099e2a4953c99e7ff30dd2` scraper was healthy with restart 0/OOM false and completed its second restricted cycle on the new anchor: five intelligence sources completed, none failed, one produced a new metadata-only capture, and four were duplicates. PostgreSQL reported 28 non-retired global Tor rows, 22 candidates, 24 feeds with at least one retained productive run-linked cycle, 24 current evidence-bound v9 approvals, four executable rows, and three strict qualifiers. The legacy Qilin row now has a current approved review but remains candidate/noncoverage until the existing managed-candidate qualifier recomputes its retained two-cycle evidence; no early credit is granted.
+
+The remaining public coverage timeout was traced to the later `historical_usefulness` regression, which correlated a retained-capture lookup for every health row. Commit `453645e29f6585c3319d4bfa025475a1703a573f` preserves the exact retained run-linked count of 79 executable ever-useful sources, replaces the correlated lookup with one indexed set join, and removes an unreachable duplicate summary branch. The live PostgreSQL plan completed in 4.604 seconds, inside the eight-second endpoint bound; it still requires one serialized scraper rollout and internal/public live acceptance before the probe queue is released.
+
 The same reconciliation found one grandfathered global Tor row receiving strict credit without a current automatic source review. That is an accounting defect, not accepted family policy. Commit `3471c9a22aa078f5f1f089da2257aefee1510a7c` classifies only the governed global metadata-only Tor class as review-required and reuses the existing bootstrap migration: without a current evidence-bound v9 approval the row becomes candidate/noncoverage with `restrictedMetadataCandidate`; its unchanged retained useful run-linked cycles may restore active coverage only after approval. Until that migration is deployed and the canonical API recomputes the result, the pre-migration database still reports four Tor qualifiers; do not treat the grandfathered row as durable completion credit.
 
 The production loss was a shared bootstrap identity defect, not missing source evidence. Restricted seed import assigned a new `createdAt` before qualification, changing the automatic-review identity hash and demoting already-qualified rows on every restart. Commit `14e1a7c2f1dbcd8ce942b16a8346894c856223fe` preserves the persisted identity during qualification, and `9f9e3a90f17e5973ed943cc1e8b0d6863d854474` preserves qualified legacy restricted sources that rely on real runtime evidence. Commit `7e357e448567e3149ecef0fe31b85c68fcd74526` fixes the second loss point: PostgreSQL now exposes successful run-linked `sourceReviewCandidate` captures to governed review even when their health row remains deliberately non-useful. After rollout, all 53 sources with that retained candidate evidence had source-review tasks and zero remained invisible; no health row received usefulness or qualification credit from the repair.
@@ -114,6 +118,7 @@ At 2026-08-09T12:17:48Z, production commit `0b40ca8a8dcbdc8ead34e1ff1cce761c0267
 - API/frontend deployments are isolated from the scraper lifecycle; only an explicit serialized scraper build and `up -d --no-deps ti-scraper` may reset its scheduler anchor.
 - Legacy governed metadata-only Tor sources require the same current evidence-bound v9 review as newly admitted Tor candidates; stale coverage and sustained flags are cleared until that review is approved.
 - PostgreSQL source coverage reads latest health once per tenant instead of once per source, keeping the public progress view bounded at the 6,100-feed target.
+- Historical usefulness is computed by one set join between health and retained run evidence; persisted source timestamps are not used as a shortcut because production reconciliation found one false negative and four false positives.
 
 ## Live progress ledger
 
@@ -132,6 +137,7 @@ At 2026-08-09T12:17:48Z, production commit `0b40ca8a8dcbdc8ead34e1ff1cce761c0267
 | 2026-08-09T12:30:26Z | `0b40ca8a8dcbdc8ead34e1ff1cce761c02679b38` | 15 | 18 | 14 | 4 | 996 |
 | 2026-08-09T15:03:58Z | `1f6c65e15ff5dfcde22d02a5dd951c6a3e2fa086` | 20 | 23 | 17 | 4 | 996 |
 | 2026-08-09T16:02:23Z | `15d6120e6e4a84396d72f4928dce3b49f8bf65fa` | 21 | 24 | 20 | 4 | 996 |
+| 2026-08-09T17:22:14Z | `998f10ef974be6d11a099e2a4953c99e7ff30dd2` | 22 | 24 | 24 | 3 | 997 |
 
 Every later row must come from the live PostgreSQL/API/scheduler view. Never record onion locators or captured content in this file.
 
