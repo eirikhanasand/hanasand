@@ -27,7 +27,14 @@ A source counts only when its canonical direct RSS, Atom, JSON, or official API 
 
 ## Current state
 
-Open. The last truthful production measurement in `goals.md` is 3 qualifying clear-web sources on 2026-08-09. Update this file only from deployed live evidence; raw registry or candidate counts do not satisfy the goal.
+Open. Production at `98d393e81f90427f3a75c27dbbbf868bd89d288b` had 15 qualifying clear-web sources at 2026-08-09T07:20Z. All 15 were executable coverage rows backed by at least two distinct retained productive run IDs; the smallest count was 2 and the largest was 56. The remaining gap is 4,985.
+
+| Measured at | Deployed commit | Qualifying clear-web sources | Remaining |
+| --- | --- | ---: | ---: |
+| 2026-08-09T06:49Z | `b64cdf05428dc2f6b5f60f258a6c348026a55060` | 3 | 4,997 |
+| 2026-08-09T07:20Z | `98d393e81f90427f3a75c27dbbbf868bd89d288b` | 15 | 4,985 |
+
+Update this file only from deployed live evidence; raw registry or candidate counts do not satisfy the goal.
 
 ## Completion condition
 
