@@ -11,6 +11,7 @@ This file replaces `goal.md`, `goal2.md`, `goal3.md`, and `goal4.md`.
 
 ## 1. Keep the product reliable and observable
 
+- Make every internal and external route useful quickly: return the first actionable server-rendered or API-backed content within 500ms, including honest next actions, recent incidents, or relevant operational context when the primary list is empty. Target a server response time below 20ms for ordinary requests; measure p50/p95/p99 by route and separate server time, database time, rendering time, and network time. Never satisfy this objective with a blank shell, an empty placeholder, fabricated records, or a loading label presented as content. Slow work must be deferred behind the first useful response, cached where truthful, paginated, or moved to an asynchronous job with visible progress.
 - Persist the real event times needed for a customer timeline: first report, publication, collection, processing, first visibility, alert creation, delivery attempt, and delivery. Unknown values stay unknown; impossible ordering is recorded and surfaced.
 - Measure useful customer delays from real records and report median/p95 only when the sample is large enough to be meaningful. Include source family and pipeline stage; do not copy one timestamp into another.
 - Keep PostgreSQL, collection, review, evaluation, API, and frontend health visible. Alert on source failures, queue age, parser regressions, duplicate growth, evaluation regressions, delivery failures, and unhealthy services.
