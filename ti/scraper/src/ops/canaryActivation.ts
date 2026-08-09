@@ -67,6 +67,24 @@ export function reconcilePublicSourceProductivity(input: any) {
   return { generatedAt, retired };
 }
 
+export function currentProductiveSourceCycles(store: any, source: any, generatedAt: string) {
+  const now = Date.parse(generatedAt);
+  const windowSeconds = sourceMonitoringWindowSeconds(source);
+  const retainedRunIds = new Set((store.listCaptures?.() ?? [])
+    .filter((capture: any) => capture.sourceId === source.id && capture.tenantId === source.tenantId)
+    .map((capture: any) => String(capture.metadata?.runId ?? ""))
+    .filter(Boolean));
+  const byRun = new Map<string, any>();
+  for (const row of store.listSourceHealthObservations?.() ?? []) {
+    const checkedAt = Date.parse(row.checkedAt), runId = String(row.collectionRunId ?? "");
+    if (row.sourceId !== source.id || row.tenantId !== source.tenantId || !runId || row.useful !== true
+      || Number(row.captureCount ?? 0) < 1 || !retainedRunIds.has(runId)
+      || !Number.isFinite(checkedAt) || checkedAt > now || now - checkedAt > windowSeconds * 1_000) continue;
+    if (!byRun.has(runId) || checkedAt > Date.parse(byRun.get(runId).checkedAt)) byRun.set(runId, row);
+  }
+  return [...byRun.values()].sort((left, right) => Date.parse(left.checkedAt) - Date.parse(right.checkedAt));
+}
+
 function governedPortfolioCandidate(source: any) {
   return source.status === "candidate"
     && source.metadata?.productionCollection === false

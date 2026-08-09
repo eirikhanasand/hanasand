@@ -21,6 +21,7 @@ import {
   sourceAutomaticReviewPromptVersionMatches,
   sourceRequiresAutomaticReview
 } from "../policy/sourceAutomaticReview.ts";
+import { currentProductiveSourceCycles } from "../ops/canaryActivation.ts";
 
 export { AUTOMATIC_REVIEW_PROMPT_VERSION, AUTOMATIC_REVIEW_RESPONSE_SCHEMA };
 const REQUEST_SCHEMA = "ti.automatic_intelligence_review.request.v7";
@@ -211,6 +212,14 @@ export function syncAutomaticReviewQueue(options: ApiServerOptions, input: { ten
 function syncQueueWithIndex(store: any, index: ReviewIndex, input: { tenantId?: string; allTenants?: boolean }, at: string, modelVersion: string) {
   const existing = new Set(index.tasks.map((task) => task.id));
   let queued = 0;
+
+  for (let position = 0; position < index.sources.length; position++) {
+    const source = index.sources[position];
+    if (!input.allTenants && !inTenantScope(source, input.tenantId)) continue;
+    const reconciled = reconcileApprovedPublicCandidate(store, source, at);
+    index.sources[position] = reconciled;
+    index.sourcesById.set(reconciled.id, reconciled);
+  }
 
   for (const claim of index.claims) {
     if ((!input.allTenants && !inTenantScope(claim, input.tenantId)) || !claimEligible(claim, index.reviewsByClaim.get(claim.id) ?? [], modelVersion)) continue;
@@ -757,7 +766,7 @@ function persistSubjectDecision(store: any, index: ReviewIndex, task: AutomaticR
     const approved = decision.action === "confirm" && decision.claimValidity === "supported";
     const state = approved ? "approved" : decision.action === "mark_needs_review" ? "needs_review" : "rejected";
     const backoffUntil = approved ? undefined : new Date(Date.parse(at) + 86_400_000).toISOString();
-    const updated = store.saveSource({
+    let updated = store.saveSource({
       ...source,
       status: approved ? source.status : state === "rejected" ? "rejected" : "candidate",
       countsAsCoverage: approved ? source.countsAsCoverage : false,
@@ -796,6 +805,7 @@ function persistSubjectDecision(store: any, index: ReviewIndex, task: AutomaticR
       },
       updatedAt: at
     });
+    if (approved) updated = reconcileApprovedPublicCandidate(store, updated, at);
     index.sourcesById.set(updated.id, updated);
     return;
   }
@@ -846,6 +856,49 @@ function persistSubjectDecision(store: any, index: ReviewIndex, task: AutomaticR
     }
   });
   index.incidentsById.set(updated.id, updated);
+}
+
+function reconcileApprovedPublicCandidate(store: any, source: any, at: string) {
+  if (source.status !== "candidate"
+    || source.metadata?.productionCollection !== false
+    || source.metadata?.sourcePortfolioVerification?.outcome !== "content_parsed"
+    || source.accessMethod !== "public_http"
+    || source.risk !== "low"
+    || source.governance?.approvalState !== "approved"
+    || !["rss", "api", "json_api", "telegram_public"].includes(source.type)
+    || !hasApprovedAutomaticSourceReview(source)
+    || !automaticSourceReviewEvidenceBindingsMatch(source, (id) => store.getCapture?.(id))) return source;
+  const productiveCycles = currentProductiveSourceCycles(store, source, at);
+  const sustained = productiveCycles.length >= 2;
+  const lastProductiveAt = productiveCycles.at(-1)?.checkedAt;
+  const reviewBackoff = String(source.crawlState?.lastError ?? "").startsWith("Automatic source review:");
+  if (source.countsAsCoverage === sustained
+    && source.metadata?.countsAsCoverage === sustained
+    && source.metadata?.sourcePortfolioQualificationState === (sustained ? "sustained_productive" : "pending_sustained_productivity")
+    && source.metadata?.sourcePortfolioProductiveCheckCount === productiveCycles.length
+    && source.metadata?.sourcePortfolioLastProductiveAt === lastProductiveAt
+    && !reviewBackoff) return source;
+  return store.saveSource({
+    ...source,
+    status: sustained ? "active" : "candidate",
+    countsAsCoverage: sustained,
+    crawlState: reviewBackoff ? {
+      ...(source.crawlState ?? {}),
+      nextEligibleAt: undefined,
+      backoffUntil: undefined,
+      lastErrorAt: undefined,
+      lastError: undefined
+    } : source.crawlState,
+    metadata: {
+      ...(source.metadata ?? {}),
+      productionCollection: sustained,
+      countsAsCoverage: sustained,
+      sourcePortfolioQualificationState: sustained ? "sustained_productive" : "pending_sustained_productivity",
+      sourcePortfolioProductiveCheckCount: productiveCycles.length,
+      sourcePortfolioLastProductiveAt: lastProductiveAt
+    },
+    updatedAt: at
+  });
 }
 
 function policyQuarantineDecision(task: AutomaticReviewTask, policyGate = "missing_governed_evidence", reason = "No governed evidence was available"): AutomaticReviewDecision {

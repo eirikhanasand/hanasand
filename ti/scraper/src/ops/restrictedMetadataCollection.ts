@@ -2,8 +2,7 @@ import { DarknetMetadataAdapter } from "../adapters/darknetMetadataAdapter.ts";
 import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { nowIso, stableId } from "../utils.ts";
-import { reconcilePublicSourceProductivity } from "./canaryActivation.ts";
-import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
+import { currentProductiveSourceCycles, reconcilePublicSourceProductivity } from "./canaryActivation.ts";
 import { hasApprovedAutomaticSourceReview, sourceRequiresAutomaticReview } from "../policy/sourceAutomaticReview.ts";
 import { automaticSourceReviewEvidenceBindingsMatch } from "../api/automaticReviewRoutes.ts";
 
@@ -63,7 +62,7 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
         : currentSource.health?.lastContentAt;
       const transportCanary = currentSource.metadata?.transportCanary === true;
       const managedCandidate = currentSource.metadata?.restrictedMetadataCandidate === true;
-      const productiveCycles = transportCanary ? [] : currentProductiveCycles(options.store, currentSource, checkedAt);
+      const productiveCycles = transportCanary ? [] : currentProductiveSourceCycles(options.store, currentSource, checkedAt);
       const sustained = hasApprovedAutomaticSourceReview(currentSource)
         && automaticSourceReviewEvidenceBindingsMatch(currentSource, (id) => options.store.getCapture?.(id))
         && productiveCycles.length >= 2;
@@ -155,30 +154,6 @@ function governedCandidate(source: any, _generatedAt: string) {
     && source.governance?.metadataOnly === true
     && source.metadata?.restrictedMetadataCandidate === true
     && source.metadata?.productionCollection === false;
-}
-function currentProductiveCycles(store: any, source: any, generatedAt: string) {
-  const now = Date.parse(generatedAt);
-  const windowSeconds = sourceMonitoringWindowSeconds(source);
-  const retainedRunIds = new Set((store.listCaptures?.() ?? [])
-    .filter((capture: any) => capture.sourceId === source.id && capture.tenantId === source.tenantId)
-    .map((capture: any) => String(capture.metadata?.runId ?? ""))
-    .filter(Boolean));
-  const byRun = new Map<string, any>();
-  for (const row of store.listSourceHealthObservations?.() ?? []) {
-    if (row.sourceId === source.id
-      && row.tenantId === source.tenantId
-      && typeof row.collectionRunId === "string"
-      && row.useful === true
-      && Number(row.captureCount ?? 0) > 0
-      && retainedRunIds.has(row.collectionRunId)
-      && Number.isFinite(Date.parse(row.checkedAt))
-      && now - Date.parse(row.checkedAt) >= 0
-      && now - Date.parse(row.checkedAt) <= windowSeconds * 1_000) {
-      const previous = byRun.get(row.collectionRunId);
-      if (!previous || Date.parse(row.checkedAt) > Date.parse(previous.checkedAt)) byRun.set(row.collectionRunId, row);
-    }
-  }
-  return [...byRun.values()].sort((left: any, right: any) => Date.parse(left.checkedAt) - Date.parse(right.checkedAt));
 }
 function cadence(source: any) { return Math.max(900, Number(source.crawlFrequencySeconds ?? (source.crawlFrequencyMinutes ?? 60) * 60)); }
 function sourceScheduleTime(source: any) { return Date.parse(source.health?.checkedAt ?? source.crawlState?.lastCollectedAt ?? source.updatedAt ?? source.createdAt ?? "") || 0; }

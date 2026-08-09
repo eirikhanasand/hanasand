@@ -1105,7 +1105,18 @@ describe("scheduled public feed discovery", () => {
     });
     expect(reReview).toMatchObject({ queued: 1, attempted: 1 });
     expect(reReviewCalls).toBe(1);
-    expect(store.getSource(candidate.id)?.metadata?.automaticSourceReview).toMatchObject({ state: "approved" });
+    expect(store.getSource(candidate.id)).toMatchObject({
+      status: "active",
+      countsAsCoverage: true,
+      crawlState: { backoffUntil: undefined, nextEligibleAt: "2026-07-25T12:03:00.000Z", lastError: undefined },
+      metadata: {
+        productionCollection: true,
+        countsAsCoverage: true,
+        sourcePortfolioQualificationState: "sustained_productive",
+        sourcePortfolioProductiveCheckCount: 2,
+        automaticSourceReview: { state: "approved" }
+      }
+    });
     expect(store.getSource(candidate.id)?.metadata?.automaticSourceReview?.taskId).not.toBe(firstTaskId);
     expect(await runAutomaticReviewCycle({ store } as any, {
       now: "2026-07-25T12:03:01.000Z",
@@ -1126,8 +1137,129 @@ describe("scheduled public feed discovery", () => {
     expect(store.getSource(candidate.id)).toMatchObject({
       status: "active",
       countsAsCoverage: true,
-      metadata: { sourcePortfolioProductiveCheckCount: 3, automaticSourceReview: { state: "approved" } }
+      metadata: { sourcePortfolioProductiveCheckCount: 2, automaticSourceReview: { state: "approved" } }
     });
+  });
+
+  test("preserves collection failure backoff when automatic review approves a public candidate", async () => {
+    const store = new InMemoryScraperStore();
+    const candidate = reviewableCandidate(store, "approved-with-collection-backoff");
+    store.saveSource({
+      ...candidate,
+      countsAsCoverage: false,
+      governance: { approvalRequired: false, approvalState: "approved", metadataOnly: false },
+      crawlState: {
+        retryCount: 2,
+        lastError: "HTTP 429",
+        lastErrorAt: "2026-07-24T11:59:00.000Z",
+        backoffUntil: "2026-07-24T13:00:00.000Z",
+        nextEligibleAt: "2026-07-24T13:00:00.000Z"
+      }
+    });
+
+    expect(await runAutomaticReviewCycle({ store } as any, {
+      now: "2026-07-24T12:00:00.000Z",
+      clock: () => "2026-07-24T12:00:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      aiBase: "http://ai.test",
+      fetcher: async (_input, init) => completedSourceReview(JSON.parse(String(init?.body)), true)
+    })).toMatchObject({ queued: 1, attempted: 1, results: [{ state: "terminal" }] });
+    expect(store.getSource(candidate.id)).toMatchObject({
+      status: "candidate",
+      countsAsCoverage: false,
+      crawlState: {
+        retryCount: 2,
+        lastError: "HTTP 429",
+        lastErrorAt: "2026-07-24T11:59:00.000Z",
+        backoffUntil: "2026-07-24T13:00:00.000Z",
+        nextEligibleAt: "2026-07-24T13:00:00.000Z"
+      },
+      metadata: {
+        productionCollection: false,
+        sourcePortfolioProductiveCheckCount: 1,
+        automaticSourceReview: { state: "approved" }
+      }
+    });
+  });
+
+  test("reconciles an already-approved public candidate without waiting for another review or collection", () => {
+    const store = new InMemoryScraperStore();
+    const candidate = reviewableCandidate(store, "approved-before-qualification");
+    store.saveSourceHealthObservation({
+      id: "health-approved-before-qualification-2",
+      sourceId: candidate.id,
+      collectionRunId: "run-approved-before-qualification-2",
+      checkedAt: "2026-07-24T11:58:00.000Z",
+      status: "healthy",
+      success: true,
+      useful: true,
+      captureCount: 1
+    });
+    store.saveCapture({
+      id: "capture-approved-before-qualification-2",
+      sourceId: candidate.id,
+      url: "https://approved-before-qualification.example/report-2",
+      collectedAt: "2026-07-24T11:58:00.000Z",
+      publishedAt: "2026-07-24T11:58:00.000Z",
+      contentHash: hashContent("approved-before-qualification-2"),
+      mediaType: "text/plain",
+      storageKind: "inline_text",
+      body: "CVE-2026-9998 is a current retained operational advisory.",
+      sensitive: false,
+      metadata: { runId: "run-approved-before-qualification-2" }
+    });
+    store.saveSource({
+      ...store.getSource(candidate.id)!,
+      countsAsCoverage: false,
+      governance: { approvalRequired: false, approvalState: "approved", metadataOnly: false }
+    });
+    approveSourceReview(store, candidate.id);
+    const reviewed = store.getSource(candidate.id)!;
+    store.saveSource({
+      ...reviewed,
+      status: "candidate",
+      countsAsCoverage: false,
+      crawlState: {
+        retryCount: 0,
+        lastError: "Automatic source review: needs_review",
+        lastErrorAt: "2026-07-24T11:00:00.000Z",
+        backoffUntil: "2026-07-25T11:00:00.000Z",
+        nextEligibleAt: "2026-07-25T11:00:00.000Z"
+      },
+      metadata: {
+        ...reviewed.metadata,
+        productionCollection: false,
+        countsAsCoverage: false,
+        sourcePortfolioQualificationState: "pending_sustained_productivity",
+        sourcePortfolioProductiveCheckCount: 2
+      }
+    });
+
+    expect(syncAutomaticReviewQueue({ store } as any, {
+      allTenants: true,
+      now: "2026-07-24T12:00:00.000Z",
+      modelVersion: "hanasand"
+    })).toBe(0);
+    expect(store.getSource(candidate.id)).toMatchObject({
+      status: "active",
+      countsAsCoverage: true,
+      crawlState: { backoffUntil: undefined, nextEligibleAt: undefined, lastError: undefined },
+      metadata: {
+        productionCollection: true,
+        countsAsCoverage: true,
+        sourcePortfolioQualificationState: "sustained_productive",
+        sourcePortfolioProductiveCheckCount: 2,
+        automaticSourceReview: { state: "approved" }
+      }
+    });
+    const updatedAt = store.getSource(candidate.id)?.updatedAt;
+    expect(syncAutomaticReviewQueue({ store } as any, {
+      allTenants: true,
+      now: "2026-07-24T12:01:00.000Z",
+      modelVersion: "hanasand"
+    })).toBe(0);
+    expect(store.getSource(candidate.id)?.updatedAt).toBe(updatedAt);
   });
 
   test("preserves an existing source-v6 nonterminal while binding its current source identity", async () => {

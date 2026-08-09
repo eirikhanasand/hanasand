@@ -3,12 +3,12 @@ import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { evidenceIndependence } from "../storage/memoryStore.ts";
-import { activatePublicCanarySources, pausePublicCanarySources, reconcilePublicSourceProductivity } from "./canaryActivation.ts";
+import { activatePublicCanarySources, currentProductiveSourceCycles, pausePublicCanarySources, reconcilePublicSourceProductivity } from "./canaryActivation.ts";
 import { canaryQueries, PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 import { detachedState, externalize, fetchItems, health, maxItemsFor, tasksForSource } from "./canaryHelpers.ts";
 import { isCisaKevSource, isNvdCveSource, isParserEmptyFallback } from "./canaryFeedItems.ts";
 import { isSellableIntelText, sellableReason } from "../value/sellableIntel.ts";
-import { sourceActivityWindowDays, sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
+import { sourceActivityWindowDays } from "../policy/sourceActivityWindow.ts";
 import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { buildRawCapture } from "../pipeline/pipelineCapture.ts";
 import { activeWatchlistDiscoveryTerms, collectWatchlistDiscoveryEvidence, scheduleWatchlistDiscoveryRuns } from "./watchlistDiscovery.ts";
@@ -286,7 +286,7 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
     if (!currentSource || currentSource.tenantId !== source.tenantId) return;
     const lastContentAt = useful ? latestTimestamp(taskMetrics.productivePublishedAt) ?? checkedAt : currentSource.health?.lastContentAt;
     const portfolioCandidate = governedPortfolioCandidate(currentSource, checkedAt, options.store);
-    const productiveCycles = portfolioCandidate ? currentProductiveCycles(options.store, currentSource, checkedAt) : [];
+    const productiveCycles = portfolioCandidate ? currentProductiveSourceCycles(options.store, currentSource, checkedAt) : [];
     const sustained = hasApprovedAutomaticSourceReview(currentSource)
       && automaticSourceReviewEvidenceBindingsMatch(currentSource, (id) => options.store.getCapture?.(id))
       && productiveCycles.length >= 2;
@@ -433,23 +433,6 @@ function governedPortfolioCandidate(source: any, generatedAt: string, store: any
     && source.risk === "low"
     && source.governance?.approvalState === "approved"
     && ["rss", "api", "json_api", "telegram_public"].includes(source.type);
-}
-function currentProductiveCycles(store: any, source: any, generatedAt: string) {
-  const now = Date.parse(generatedAt);
-  const windowSeconds = sourceMonitoringWindowSeconds(source);
-  const retainedRunIds = new Set((store.listCaptures?.() ?? [])
-    .filter((capture: any) => capture.sourceId === source.id && capture.tenantId === source.tenantId)
-    .map((capture: any) => String(capture.metadata?.runId ?? ""))
-    .filter(Boolean));
-  const byRun = new Map<string, any>();
-  for (const row of store.listSourceHealthObservations?.() ?? []) {
-    const checkedAt = Date.parse(row.checkedAt), runId = String(row.collectionRunId ?? "");
-    if (row.sourceId !== source.id || row.tenantId !== source.tenantId || !runId || row.useful !== true
-      || Number(row.captureCount ?? 0) < 1 || !retainedRunIds.has(runId)
-      || !Number.isFinite(checkedAt) || checkedAt > now || now - checkedAt > windowSeconds * 1_000) continue;
-    if (!byRun.has(runId) || checkedAt > Date.parse(byRun.get(runId).checkedAt)) byRun.set(runId, row);
-  }
-  return [...byRun.values()].sort((left, right) => Date.parse(left.checkedAt) - Date.parse(right.checkedAt));
 }
 function supersedeCoveredQueuedTasks(options: any, generatedAt: string, selectedSourceIds: Set<string>) {
   const observations = options.store.listSourceHealthObservations?.() ?? [];
