@@ -6,7 +6,7 @@ Keep discovering, validating, deploying, and monitoring lawful Tor metadata feed
 
 Live baseline on 2026-08-09: **0 qualifying Tor feeds**. Raw registrations, transport canaries, candidates, mirrors, and retired rows do not count.
 
-The production scheduler includes the governed Tor path at `06b360c60a409214db6d2d0126785bf8adea151a`. At 2026-08-09T06:49Z, PostgreSQL reported 9 admitted Tor candidates, 6 with one current productive scheduled cycle, 3 with an approved source review, and 0 with the complete two-cycle qualification proof. The remaining gap is 1,000.
+The corrected production scheduler first shipped at `e7aae5ba71e5a1a4a74111f62d0322e54fc9949d`; the running image at `b64cdf05428dc2f6b5f60f258a6c348026a55060` contains the governed review follow-through from `06b360c60a409214db6d2d0126785bf8adea151a`. At 2026-08-09T06:49Z, PostgreSQL reported 9 governed Tor portfolio candidates, 6 with one current productive scheduled cycle, 3 with an approved source review, and 0 with the complete two-cycle qualification proof. Three additional active Tor rows are a transport canary or legacy rows and do not qualify. The remaining gap is 1,000.
 
 ## A source counts only when
 
@@ -42,6 +42,7 @@ The production scheduler includes the governed Tor path at `06b360c60a409214db6d
 | Measured at | Deployed commit | Admitted candidates | At least one productive cycle | Approved review | Qualifying | Remaining |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | 2026-08-09T06:22Z | `e7aae5ba71e5a1a4a74111f62d0322e54fc9949d` | 9 | 6 | 1 | 0 | 1,000 |
+| 2026-08-09T06:47Z | `b64cdf05428dc2f6b5f60f258a6c348026a55060` | 9 | 6 | 2 | 0 | 1,000 |
 | 2026-08-09T06:49Z | `b64cdf05428dc2f6b5f60f258a6c348026a55060` | 9 | 6 | 3 | 0 | 1,000 |
 
 Every later row must come from the live PostgreSQL/API/scheduler view. Never record onion locators or captured content in this file.
