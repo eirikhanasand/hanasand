@@ -1,10 +1,10 @@
 {
-  "version": 14,
+  "version": 15,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-08-09T16:36:41.000Z",
+  "generatedAt": "2026-08-09T20:39:32.166Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 32,
+  "sourceCount": 33,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -3807,6 +3807,131 @@
             "threat hunting",
             "persistence",
             "malware detection"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_hispasec_unaaldia_telegram",
+      "name": "Hispasec Una al Dia public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/unaaldia",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.86,
+      "language": "es",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Spanish-language vulnerability, malware, fraud, and cybercrime reporting from the exact channel linked by Hispasec's Una al Dia publication. Collect only unauthenticated public-preview text for defensive threat intelligence with attribution; do not join, authenticate, interact, follow private invitations, or download media, files, samples, proof-of-concept code, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T20:39:32.166Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "malware_research",
+          "cybercrime_reporting",
+          "vulnerability_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "unaaldia",
+        "verifiedSourceId": "src_hispasec_unaaldia_telegram",
+        "publisherReference": "https://unaaldia.hispasec.com/reto-ctf-uam-diciembre-porropwnpwn/",
+        "ownershipVerifiedAt": "2026-08-09T20:39:32.166Z",
+        "activityVerifiedAt": "2026-08-09T20:39:32.166Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "vulnerabilities",
+          "malware",
+          "fraud",
+          "cybercrime",
+          "security research"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T20:39:32.166Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 10,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://unaaldia.hispasec.com/reto-ctf-uam-diciembre-porropwnpwn/",
+          "legalBasisVerifiedAt": "2026-08-09T20:39:32.166Z",
+          "latestPublishedAt": "2026-08-07T14:57:03+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:es:hispasec:una-al-dia:telegram",
+        "publisher": {
+          "name": "Hispasec Una al Dia",
+          "country": "ES",
+          "homepage": "https://unaaldia.hispasec.com/",
+          "trustBasis": "Hispasec's Una al Dia publication links the exact public Telegram channel"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.86,
+        "intelligenceValue": 0.85,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "vulnerabilities",
+            "malware",
+            "fraud",
+            "cybercrime",
+            "security research"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "finance",
+            "government",
+            "consumer"
+          ],
+          "regions": [
+            "Spain",
+            "Europe",
+            "Latin America"
+          ],
+          "countries": [
+            "Spain"
+          ],
+          "languages": [
+            "es"
+          ],
+          "queryPatterns": [
+            "vulnerabilidad",
+            "malware",
+            "fraude",
+            "ciberataque"
           ]
         },
         "collection": {

@@ -80,6 +80,20 @@ Explicit exclusions from this iteration:
 
 Keep this ledger append-only per bounded discovery iteration so rejected endpoints are not repeatedly guessed and accepted candidates are never mistaken for coverage.
 
+The 2026-08-09T20:39Z iteration accepted one more non-coverage candidate:
+
+- `src_hispasec_unaaldia_telegram` is the exact `https://t.me/unaaldia` channel linked by Hispasec's first-party Una al Dia publication. The shipped public-preview adapter parsed 20 current posts, classified 10 as useful, observed a latest post at 2026-08-07T14:57:03Z, and found zero sanitizer-idempotence or residual email, bot-token, and credential matches. It remains `candidate`, `productionCollection=false`, and `countsAsCoverage=false` until governed approval and two distinct useful retained scheduled cycles.
+
+Explicit exclusions from this iteration:
+
+- `https://t.me/siberbulten` had an exact first-party Siber Bulten reference but its public preview parsed 0 items and produced 0 useful items.
+- `https://t.me/cyberthint` had an exact current first-party reference in Cyberthint's 2026 threat-intelligence report but its public preview parsed 0 items and produced 0 useful items.
+- `https://t.me/hackplayers` had a first-party Hackplayers reference but its public preview parsed 0 items and produced 0 useful items.
+- `https://t.me/dragonjar` parsed 20 current posts but produced 0 useful items through the shipped classifier.
+- `https://t.me/elcomsoft` parsed 20 posts but produced only 1 useful item and lacked a current exact first-party endpoint reference in this pass.
+- `https://t.me/criptored` parsed 0 items and produced 0 useful items.
+- Ransomware.live's current first-party homepage exposed no exact public Telegram endpoint, so no handle guess was registered.
+
 ## One iteration
 
 1. Measure registered, executable, qualifying, current-useful, stale, failed, and backoff counts from PostgreSQL and the source-operations API.
