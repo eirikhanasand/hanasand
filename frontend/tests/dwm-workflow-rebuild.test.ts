@@ -8,7 +8,9 @@ test('inline alert rebuild reports only durable outcomes as success', () => {
     expect(normalizeAlertRebuildOutcome({ status: 'completed', savedAlertCount: 0, alertIds: [] }).ok).toBe(false)
     expect(normalizeAlertRebuildOutcome({ status: 'queued', savedAlertCount: 0 }).ok).toBe(false)
     expect(normalizeAlertRebuildOutcome({ ok: true, savedAlertCount: 0, alertIds: [] }).ok).toBe(false)
+    expect(normalizeAlertRebuildOutcome({ ok: true, savedAlertCount: 1 }).ok).toBe(false)
     expect(normalizeAlertRebuildOutcome({ status: 'completed', savedAlertCount: 1, alertIds: ['alert_1'], tenantId: 'tenant_1', organizationId: 'org_1' })).toMatchObject({ ok: true, tenantId: 'tenant_1', organizationId: 'org_1' })
+    expect(normalizeAlertRebuildOutcome({ savedAlertCount: 1, alerts: [{ id: 'alert_1' }] }).ok).toBe(true)
 })
 
 test('without inline outcome, the helper keeps the scoped rebuild POST path', async () => {
