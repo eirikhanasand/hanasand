@@ -869,6 +869,60 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
+  test("preserves legacy Tor qualification from persisted productive cycles after restart", () => {
+    const previous = Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
+    Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = "true";
+    const seedPath = join(dirname(fileURLToPath(import.meta.url)), "../../seeds/restricted_metadata_source_packs.json");
+    const store = new InMemoryScraperStore();
+    const sourceId = "restricted_safepay_victim_blog";
+
+    try {
+      bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-01T10:00:00.000Z" });
+      for (const [index, checkedAt] of ["2026-08-01T10:30:00.000Z", "2026-08-01T11:30:00.000Z"].entries()) {
+        const runId = `restricted-run-restart-${index + 1}`;
+        store.saveSourceHealthObservation({
+          id: `health-restricted-restart-${index + 1}`,
+          sourceId,
+          collectionRunId: runId,
+          checkedAt,
+          status: "healthy",
+          success: true,
+          useful: true,
+          captureCount: 1
+        } as any);
+        store.saveCapture(fixtureCapture({
+          id: `capture-restricted-restart-${index + 1}`,
+          tenantId: undefined,
+          sourceId,
+          collectedAt: checkedAt,
+          publishedAt: checkedAt,
+          storageKind: "metadata_only",
+          body: undefined,
+          sensitive: true,
+          metadata: { runId }
+        }));
+      }
+
+      const restarted = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-01T12:00:00.000Z" });
+
+      expect(restarted.activeSourceCount).toBe(2);
+      expect(store.getSource(sourceId)).toMatchObject({
+        status: "active",
+        countsAsCoverage: true,
+        metadata: {
+          productionCollection: true,
+          countsAsCoverage: true,
+          sourcePortfolioQualificationState: "sustained_productive",
+          sourcePortfolioProductiveCheckCount: 2
+        }
+      });
+      expect(store.getSource(sourceId)?.metadata).not.toHaveProperty("restrictedMetadataCandidate");
+    } finally {
+      if (previous === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
+      else Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = previous;
+    }
+  });
+
   test("uses one canonical Google News provider for query jobs", async () => {
     const seedPath = join(dirname(fileURLToPath(import.meta.url)), "../../seeds/verified_query_providers.json");
     const store = new InMemoryScraperStore();

@@ -168,7 +168,7 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
     health: existing.health,
     crawlState: existing.crawlState
   } : existing;
-  const runtimeEvidence = portfolio ? currentRuntimeEvidence(runtimeEvidenceSource, generatedAt, store) : undefined;
+  const runtimeEvidence = portfolio || restricted ? currentRuntimeEvidence(runtimeEvidenceSource, generatedAt, store) : undefined;
   const revalidatedRestricted = restricted && isRevalidatedRestrictedSource(existing, effectiveVerified, generatedAt);
   if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) || revalidatedRestricted : portfolio ? isSafePortfolioUpgradeTarget(existing) : isVerifiedProductionSource(effectiveVerified, generatedAt) && isSafeUpgradeTarget(existing))) return undefined;
   const sameSource = existing.id === effectiveVerified.id || existing.metadata?.verifiedSourceId === effectiveVerified.id;
