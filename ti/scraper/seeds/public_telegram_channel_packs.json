@@ -1,10 +1,10 @@
 {
-  "version": 8,
+  "version": 9,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-08-09T09:49:15.903Z",
+  "generatedAt": "2026-08-09T10:23:54.000Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 19,
+  "sourceCount": 23,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -2197,6 +2197,492 @@
             "ICS",
             "SCADA",
             "IIoT",
+            "CVE",
+            "vulnerability"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_security_vision_telegram",
+      "name": "Security Vision public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/svplatform",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.87,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian-language vulnerability, incident, and defensive-security reporting from the exact Telegram channel linked by Security Vision's official website. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T10:23:54.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "vendor_research",
+          "vulnerability_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "svplatform",
+        "verifiedSourceId": "src_security_vision_telegram",
+        "publisherReference": "https://www.securityvision.ru/",
+        "ownershipVerifiedAt": "2026-08-09T10:23:54.000Z",
+        "activityVerifiedAt": "2026-08-09T10:23:54.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "vulnerabilities",
+          "cyberattacks",
+          "threat intelligence",
+          "incident response"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T10:23:54.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 19,
+          "observedUsefulItemCount": 1,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.securityvision.ru/",
+          "legalBasisVerifiedAt": "2026-08-09T10:23:54.000Z",
+          "latestPublishedAt": "2026-08-07T12:35:19+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:ru:security-vision:telegram",
+        "publisher": {
+          "name": "Security Vision",
+          "country": "RU",
+          "homepage": "https://www.securityvision.ru/",
+          "trustBasis": "publisher homepage links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.87,
+        "intelligenceValue": 0.84,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "vulnerabilities",
+            "cyberattacks",
+            "threat intelligence",
+            "incident response"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "finance",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Russia",
+            "Eastern Europe"
+          ],
+          "countries": [
+            "Russia"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "уязвимость",
+            "кибератака",
+            "инцидент",
+            "угроза"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_angara_security_telegram",
+      "name": "Angara Security public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/angarasecurity",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.87,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian-language vulnerability and incident-response reporting from the exact Telegram channel linked by Angara Security's official website. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T10:23:54.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "incident_response",
+          "vulnerability_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "angarasecurity",
+        "verifiedSourceId": "src_angara_security_telegram",
+        "publisherReference": "https://www.angarasecurity.ru/",
+        "ownershipVerifiedAt": "2026-08-09T10:23:54.000Z",
+        "activityVerifiedAt": "2026-08-09T10:23:54.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "security incidents",
+          "vulnerabilities",
+          "cyberattacks",
+          "incident response"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T10:23:54.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 11,
+          "observedUsefulItemCount": 1,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.angarasecurity.ru/",
+          "legalBasisVerifiedAt": "2026-08-09T10:23:54.000Z",
+          "latestPublishedAt": "2026-08-07T10:14:01+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:ru:angara-security:telegram",
+        "publisher": {
+          "name": "Angara Security",
+          "country": "RU",
+          "homepage": "https://www.angarasecurity.ru/",
+          "trustBasis": "publisher homepage links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.87,
+        "intelligenceValue": 0.84,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "security incidents",
+            "vulnerabilities",
+            "cyberattacks",
+            "incident response"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "finance",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Russia",
+            "Eastern Europe"
+          ],
+          "countries": [
+            "Russia"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "инцидент",
+            "уязвимость",
+            "кибератака",
+            "вредоносное ПО"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_anti_malware_ru_telegram",
+      "name": "Anti-Malware.ru public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/anti_malware",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.86,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian-language malware, vulnerability, cybercrime, and incident reporting from the exact Telegram channel linked by independent security publication Anti-Malware.ru. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T10:23:54.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "malware_research",
+          "cybercrime_reporting",
+          "vulnerability_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "anti_malware",
+        "verifiedSourceId": "src_anti_malware_ru_telegram",
+        "publisherReference": "https://www.anti-malware.ru/",
+        "ownershipVerifiedAt": "2026-08-09T10:23:54.000Z",
+        "activityVerifiedAt": "2026-08-09T10:23:54.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "malware",
+          "ransomware",
+          "cybercrime",
+          "vulnerabilities",
+          "security incidents"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T10:23:54.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 20,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.anti-malware.ru/",
+          "legalBasisVerifiedAt": "2026-08-09T10:23:54.000Z",
+          "latestPublishedAt": "2026-08-07T15:59:58+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:ru:anti-malware:telegram",
+        "publisher": {
+          "name": "Anti-Malware.ru",
+          "country": "RU",
+          "homepage": "https://www.anti-malware.ru/",
+          "trustBasis": "independent publisher homepage links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.86,
+        "intelligenceValue": 0.9,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "malware",
+            "ransomware",
+            "cybercrime",
+            "vulnerabilities",
+            "security incidents"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "finance",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Russia",
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [
+            "Russia"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "вредоносное ПО",
+            "шифровальщик",
+            "кибератака",
+            "уязвимость"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_netlas_telegram",
+      "name": "Netlas public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/netlas",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.86,
+      "language": "en",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public English-language attack-surface, exposed-service, and vulnerability research from the exact Telegram channel linked by Netlas's official website. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T10:23:54.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "attack_surface_research",
+          "vulnerability_reporting",
+          "independent_research"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "netlas",
+        "verifiedSourceId": "src_netlas_telegram",
+        "publisherReference": "https://netlas.io/",
+        "ownershipVerifiedAt": "2026-08-09T10:23:54.000Z",
+        "activityVerifiedAt": "2026-08-09T10:23:54.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "attack surface",
+          "internet scanning",
+          "exposed services",
+          "vulnerabilities",
+          "threat research"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T10:23:54.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 16,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://netlas.io/",
+          "legalBasisVerifiedAt": "2026-08-09T10:23:54.000Z",
+          "latestPublishedAt": "2026-08-07T07:19:38+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:global:netlas:telegram",
+        "publisher": {
+          "name": "Netlas",
+          "country": "GLOBAL",
+          "homepage": "https://netlas.io/",
+          "trustBasis": "publisher homepage links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.86,
+        "intelligenceValue": 0.91,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "attack surface",
+            "internet scanning",
+            "exposed services",
+            "vulnerabilities",
+            "threat research"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "internet infrastructure",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Global"
+          ],
+          "countries": [],
+          "languages": [
+            "en"
+          ],
+          "queryPatterns": [
+            "attack surface",
+            "exposed service",
             "CVE",
             "vulnerability"
           ]
