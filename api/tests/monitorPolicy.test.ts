@@ -31,6 +31,14 @@ describe('production monitor notification transitions', () => {
         expect(source).toContain('signal: AbortSignal.timeout(MONITOR_REQUEST_TIMEOUT_MS)')
     })
 
+    test('latest activity failure does not retry inside one status read', async () => {
+        const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
+        const latestActivity = source.slice(source.indexOf("check('dark-web-monitoring', 'Latest activity'"))
+        expect(latestActivity).toContain("fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase)")
+        expect(latestActivity).not.toContain('for (let attempt = 0; response.status >= 500')
+        expect(latestActivity).not.toContain('setTimeout(resolve, 1_000)')
+    })
+
     test('unavailable dependency records down promptly without substituting success', async () => {
         const originalFetch = globalThis.fetch
         const recorded: Array<{ status: string, message: string }> = []

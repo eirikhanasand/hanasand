@@ -691,6 +691,21 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             FROM threat_intel.source_health
             WHERE tenant_id IS NOT DISTINCT FROM ${tenantId}
             ORDER BY source_id, checked_at DESC
+          ), historical_usefulness AS (
+            SELECT health.source_id, health.tenant_id, max(health.checked_at) AS last_useful_at
+            FROM threat_intel.source_health health
+            WHERE health.tenant_id IS NOT DISTINCT FROM ${tenantId}
+              AND health.success
+              AND health.useful
+              AND health.capture_count > 0
+              AND EXISTS (
+                SELECT 1
+                FROM threat_intel.captures retained
+                WHERE retained.source_id = health.source_id
+                  AND retained.tenant_id IS NOT DISTINCT FROM health.tenant_id
+                  AND retained.record->'metadata'->>'runId' = health.collection_run_id
+              )
+            GROUP BY health.source_id, health.tenant_id
           )
           SELECT jsonb_build_object(
             'operationalMetricsMeasured', TRUE,
@@ -720,7 +735,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
             'successfulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success),
             'usefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful),
-            'everUsefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful),
+            'everUsefulSourceCount', count(*) FILTER (WHERE collection_executable AND historical_usefulness.last_useful_at IS NOT NULL),
             'latestUsefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful),
             'checkedWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.checked_at >= now() - interval '24 hours'),
             'successfulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND latest_health.checked_at >= now() - interval '24 hours'),
@@ -740,6 +755,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           ) AS totals
           FROM threat_intel.sources
           LEFT JOIN latest_health ON latest_health.source_id = sources.id
+          LEFT JOIN historical_usefulness
+            ON historical_usefulness.source_id = sources.id
+            AND historical_usefulness.tenant_id IS NOT DISTINCT FROM sources.tenant_id
           WHERE sources.tenant_id IS NOT DISTINCT FROM ${tenantId}
         `
       ]);
@@ -1265,6 +1283,21 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         FROM threat_intel.source_health
         WHERE tenant_id IS NOT DISTINCT FROM $1::text
         ORDER BY source_id, tenant_id, checked_at DESC, id DESC
+      ), historical_usefulness AS (
+        SELECT health.source_id, health.tenant_id, max(health.checked_at) AS last_useful_at
+        FROM threat_intel.source_health health
+        WHERE health.tenant_id IS NOT DISTINCT FROM $1::text
+          AND health.success
+          AND health.useful
+          AND health.capture_count > 0
+          AND EXISTS (
+            SELECT 1
+            FROM threat_intel.captures retained
+            WHERE retained.source_id = health.source_id
+              AND retained.tenant_id IS NOT DISTINCT FROM health.tenant_id
+              AND retained.record->'metadata'->>'runId' = health.collection_run_id
+          )
+        GROUP BY health.source_id, health.tenant_id
       ), ranked_sources AS (
         SELECT sources.*,
           row_number() OVER (
@@ -1319,6 +1352,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
         'successfulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success),
         'usefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.capture_count > 0),
+        'everUsefulSourceCount', count(*) FILTER (WHERE collection_executable AND historical_usefulness.last_useful_at IS NOT NULL),
+        'latestUsefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.capture_count > 0),
         'captureProducingSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.capture_count > 0),
         'healthySourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND COALESCE(latest_health.parser_warning_count, 0) = 0),
         'degradedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND COALESCE(latest_health.parser_warning_count, 0) > 0),
@@ -1333,6 +1368,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       LEFT JOIN latest_health
         ON latest_health.source_id = sources.id
         AND latest_health.tenant_id IS NOT DISTINCT FROM sources.tenant_id
+      LEFT JOIN historical_usefulness
+        ON historical_usefulness.source_id = sources.id
+        AND historical_usefulness.tenant_id IS NOT DISTINCT FROM sources.tenant_id
       WHERE NOT $2::boolean OR sources.collection_executable
     `, [input.tenantId ?? null, input.executableOnly === true]);
     return { schemaVersion: "ti.source_operations_summary.v1", generatedAt: input.generatedAt, tenantId: input.tenantId ?? "global", summary: row?.summary ?? {} };
