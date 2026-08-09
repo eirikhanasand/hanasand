@@ -76,6 +76,28 @@ describe("health route", () => {
     }
   });
 
+  test("keeps source operations responsive while unrelated writes flush", async () => {
+    const store = new InMemoryScraperStore();
+    let release = () => {};
+    const blockedFlush = new Promise<void>((resolve) => { release = resolve; });
+    (store as any).flush = () => blockedFlush;
+    const server = startApiServer({ port: 0, store, frontier: new FocusedFrontier(), serviceToken: "source-ops-test" });
+
+    try {
+      const response = await Promise.race([
+        fetch(`http://127.0.0.1:${server.port}/v1/intel/source-operations?summary=true`, {
+          headers: { "x-hanasand-service-token": "source-ops-test" }
+        }),
+        Bun.sleep(200).then(() => undefined),
+      ]);
+      expect(response).toBeInstanceOf(Response);
+      expect(response!.status).toBe(200);
+    } finally {
+      release();
+      await server.stop();
+    }
+  });
+
   test("keeps the live exposure queue responsive while mutations wait for storage", async () => {
     const store = new InMemoryScraperStore();
     let release = () => {};
