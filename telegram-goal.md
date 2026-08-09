@@ -25,9 +25,10 @@ Replace this section after every deployment with the current database/API measur
 
 ## Latest bounded discovery ledger
 
-The 2026-08-09T15:47Z iteration accepted one unreleased, non-coverage candidate on commit `8ed91922d182f3a9268c2e684437a495243583c9`:
+The 2026-08-09T15:47Z–16:04Z iteration accepted two unreleased, non-coverage candidates on the current Telegram feature branch:
 
 - `src_dciber_brazil_telegram` is the exact `https://t.me/dciber` channel linked by Instituto de Defesa Cibernetica's first-party organization page. The shipped public-preview adapter parsed 20 posts, classified 3 as useful, observed a latest post at 2026-08-03T19:45:54Z, and found zero sanitizer-idempotence or residual PII/credential matches. It remains `candidate`, `productionCollection=false`, and `countsAsCoverage=false` until deployment, two useful scheduled retained-capture cycles, and review approval.
+- `src_redseg_latam_telegram` is the exact `https://t.me/redseg` channel linked by REDSEG LATINOAMERICA's CIBERSEG incident-response organization page. The shipped adapter parsed 20 posts, classified 5 as useful, observed a latest post at 2026-08-09T15:33:24Z, and found zero forwarded-message markers, sanitizer-idempotence failures, or residual PII/credential matches. It remains candidate-only under the same production qualification contract.
 
 Explicit exclusions from the same pass:
 
@@ -36,6 +37,10 @@ Explicit exclusions from the same pass:
 - `https://t.me/senq_cyber` was first-party but parsed 0 posts and produced 0 useful items.
 - `https://t.me/UAEcybersecurity` parsed 3 stale posts, produced 0 useful items, and had no current activity after 2025-12-30.
 - `https://t.me/vxunderground` was current and parser-useful, but no exact first-party publisher reference to that Telegram endpoint was verified in this pass.
+- `https://t.me/s2wdailybrief` had an exact current S2W ownership reference but produced 0 useful items across 20 parsed posts; its latest preview post was 2026-07-13T09:36:40Z.
+- `https://t.me/kryptonite_channel` was current but produced 0 useful items across 15 parsed posts.
+- `https://t.me/CyberSecurityIL` produced only 1 useful item across 17 parsed posts and predominantly linked third-party news, so it failed the independent-yield boundary.
+- Singapore PDPC's `https://t.me/pdpcsg` parsed 8 posts but was inactive after 2025-10-31 and produced 0 useful items; the government-linked `https://t.me/ncpcscamalert` parsed 0 posts.
 - Resecurity, CloudSEK, ThreatMon, Singapore CSA, CERT Polska, Oman CERT, and Jordan NCSA handle guesses resolved only to landing/empty previews or lacked exact ownership evidence; none were registered.
 
 Keep this ledger append-only per bounded discovery iteration so rejected endpoints are not repeatedly guessed and accepted candidates are never mistaken for coverage.
