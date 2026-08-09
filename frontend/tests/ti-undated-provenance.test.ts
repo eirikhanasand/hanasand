@@ -3,6 +3,8 @@ import { buildTiActionability } from '../src/utils/ti/actionability'
 import { buildActorIntelligence } from '../src/utils/ti/actorIntelligence'
 import { victimObservationsFor } from '../src/utils/ti/actorProfile'
 import { actorOperationsRowsFor } from '../src/app/ti/pageModel'
+import { enrichmentGapWorkbenchRowsFor } from '../src/app/ti/pageModel'
+import { buildActorArtifacts } from '../src/utils/ti/actorWorkbench'
 import type { TiSearchResponse } from '../src/utils/ti/search'
 
 const result: TiSearchResponse = {
@@ -71,6 +73,22 @@ const undatedTechniqueActor = buildActorIntelligence({
     ttps: [{ name: 'Undated technique', tactic: 'execution', detail: 'No source date.', confidence: 0.4 }],
 }, [])
 assert.equal(actorOperationsRowsFor(result, undatedTechniqueActor, [])[0]?.timestamp, 'Observation date unavailable')
+
+const undatedArtifacts = buildActorArtifacts({
+    ...result,
+    ttps: [{ name: 'Undated technique', tactic: 'execution', detail: 'No source date.', confidence: 0.4 }],
+}, undatedTechniqueActor, [], actionability)
+assert.equal(undatedArtifacts[0]?.freshness, '')
+
+const undatedGapRows = enrichmentGapWorkbenchRowsFor({
+    tasks: [{ title: 'Attach source date', status: 'needs_api', detail: 'The source has no date.' }],
+    result,
+    actor: undatedTechniqueActor,
+    actionability,
+    workItems: [],
+    artifacts: undatedArtifacts,
+})
+assert.equal(undatedGapRows[0]?.newestAt, undefined)
 
 const noEvidenceActor = buildActorIntelligence({ ...result, aliases: [], notes: [], sources: [], actorIntelligence: undefined }, [])
 assert.equal(noEvidenceActor.attribution, 'No attribution evidence')

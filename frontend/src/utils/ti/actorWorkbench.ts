@@ -153,7 +153,7 @@ export function buildActorArtifacts(
                 label: item.country,
                 subtitle: item.role === 'operator' ? 'Attribution context' : `${item.observationCount} victim or targeting observation${item.observationCount === 1 ? '' : 's'}`,
                 confidence: actor.confidence,
-                freshness: result.lastSeen || result.generatedAt,
+                freshness: observedFreshnessFor(result, actor),
                 evidence: unique([
                     item.provenanceSummary,
                     ...victims.map(victim => `${victim.victim}: ${victim.sector}; ${victim.timeframe}; ${victim.incident}`),
@@ -233,7 +233,7 @@ export function buildActorArtifacts(
             label: ttp.attackId ? `${ttp.attackId} ${ttp.name}` : ttp.name,
             subtitle: ttp.tactic,
             confidence: ttp.confidence,
-            freshness: result.lastSeen || result.generatedAt,
+            freshness: observedFreshnessFor(result, actor),
             evidence: unique([ttp.tactic, ttp.detail, ...matchingActivity(result, ttp.name)]),
             provenance: unique([ttp.attackId ? 'MITRE ATT&CK mapped profile field' : 'Profile tradecraft field', ...provenance]).slice(0, 6),
             watchlistTerms: [],
@@ -759,7 +759,7 @@ function artifactFromActorList(input: {
             label: input.label,
             subtitle: input.subtitle,
             confidence: input.actor.confidence,
-            freshness: input.result.lastSeen || input.result.generatedAt,
+            freshness: observedFreshnessFor(input.result, input.actor),
             evidence: unique(input.evidence.length ? input.evidence : [`${input.label} is present in the actor intelligence profile.`]),
             provenance,
             watchlistTerms: matchedWatchTerms.length ? matchedWatchTerms : [{
@@ -770,6 +770,11 @@ function artifactFromActorList(input: {
             enrichmentTasks: [input.enrichmentTask],
         },
     })
+}
+
+function observedFreshnessFor(result: TiSearchResponse, actor: TiActorIntelligenceProfile) {
+    const candidate = actor.sourceCoverage.latestReportDate || result.lastSeen
+    return candidate && Number.isFinite(Date.parse(candidate)) ? candidate : ''
 }
 
 function withReadiness(input: { result: TiSearchResponse; artifact: Omit<ActorArtifact, 'readiness'> }): ActorArtifact {

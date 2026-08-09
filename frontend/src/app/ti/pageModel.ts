@@ -1896,7 +1896,7 @@ export function selectedCaseActionTrailFor(
     const events: CaseActionTrailEvent[] = [
         {
             id: `selected:${selected.id}`,
-            at: selected.timestamp || result.generatedAt,
+            at: selected.timestamp,
             label: 'Selected evidence',
             detail: selected.subtitle,
             state: 'review',
@@ -3007,6 +3007,7 @@ export function enrichmentGapWorkbenchRowsFor({
     artifacts: ActorArtifact[]
 }): EnrichmentGapWorkbenchRow[] {
     const rows: EnrichmentGapWorkbenchRow[] = []
+    const observedActorDate = actor.sourceCoverage.latestReportDate || (typeof result.lastSeen === 'string' && Number.isFinite(Date.parse(result.lastSeen)) ? result.lastSeen : '')
 
     for (const task of tasks) {
         const evidenceItems = matchingWorkItemsForGap(workItems, task.title, task.detail)
@@ -3017,7 +3018,7 @@ export function enrichmentGapWorkbenchRowsFor({
             label: task.title,
             entity: task.sourceFamily ? formatLabel(task.sourceFamily) : task.ownerLane ? readinessOwnerLabel(task.ownerLane) : taskStatusLabel(task.status),
             state: task.status === 'ready' ? 'ready' : task.status === 'needs_api' ? 'blocked' : 'review',
-            newestAt: newestDate([...evidenceItems.map(item => item.timestamp), actor.sourceCoverage.latestReportDate || result.lastSeen || result.generatedAt]),
+            newestAt: newestDate([...evidenceItems.map(item => item.timestamp), observedActorDate]),
             source: task.sourceFamily ? formatLabel(task.sourceFamily) : 'Analyst review',
             impact: task.detail,
             route: task.route,
