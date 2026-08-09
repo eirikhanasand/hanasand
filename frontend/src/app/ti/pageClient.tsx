@@ -5293,7 +5293,6 @@ function EvidenceBox({ href, children }: { href?: string; children: React.ReactN
 function EmptyState() {
     const [showSearchHelp, setShowSearchHelp] = useState(false)
     const launchItems = [
-        { label: 'acworth-ga.gov', href: '/ti/acworth-ga.gov', icon: <Building2 className='h-4 w-4' /> },
         { label: 'APT29', href: '/ti/APT29', icon: <ShieldCheck className='h-4 w-4' /> },
         { label: 'LockBit', href: '/ti/LockBit', icon: <ShieldAlert className='h-4 w-4' /> },
         { label: 'microsoft.com', href: '/ti/Microsoft', icon: <Building2 className='h-4 w-4' /> },
