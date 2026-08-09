@@ -531,10 +531,35 @@ describe("scheduled public feed discovery", () => {
     const firstCapture = store.listCaptures().find((capture: any) => capture.sourceId === candidate.id)!;
     expect(firstCapture.metadata).toMatchObject({ sourceReviewCandidate: true, sellableCandidate: false, sellableReason: "missing_threat_intel_terms" });
     expect(store.listExtractedEntities().filter((entity: any) => entity.captureId === firstCapture.id)).toEqual([]);
-    expect(store.listSourceHealthObservations().filter((row: any) => row.sourceId === candidate.id).at(-1)).toMatchObject({ useful: false, captureCount: 1 });
+    const firstHealth = store.listSourceHealthObservations().filter((row: any) => row.sourceId === candidate.id).at(-1)!;
+    expect(firstHealth).toMatchObject({ success: true, useful: false, captureCount: 1 });
+    store.saveCapture({
+      ...firstCapture,
+      id: "capture-unmarked-non-useful",
+      url: "https://adaptive-source.example/reports/routine-release",
+      body: "Routine product release notes without reviewed threat content.",
+      contentHash: hashContent("unmarked-non-useful"),
+      metadata: { runId: firstCapture.metadata.runId }
+    });
+    store.saveSourceHealthObservation({ ...firstHealth, captureCount: 2 });
     expect(findSearchCaptures(store, "unauthorised database", 10)).toEqual([]);
 
-    approveSourceReview(store, candidate.id);
+    let reviewCalls = 0;
+    expect(await runAutomaticReviewCycle({ store } as any, {
+      now: "2026-07-24T12:01:00.000Z",
+      clock: () => "2026-07-24T12:01:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      aiBase: "http://ai.test",
+      fetcher: async (_input, init) => {
+        reviewCalls++;
+        const request = JSON.parse(String(init?.body));
+        expect(request.evidence).toEqual([expect.objectContaining({ capture: expect.objectContaining({ safeExcerpt: expect.stringContaining("Unauthorised database access") }) })]);
+        return completedSourceReview(request, true);
+      }
+    })).toMatchObject({ queued: 1, attempted: 1, results: [{ state: "terminal" }] });
+    expect(reviewCalls).toBe(1);
+    expect(store.getSource(candidate.id)?.metadata?.automaticSourceReview).toMatchObject({ state: "approved" });
     expect(findSearchCaptures(store, "unauthorised database", 10).map((capture: any) => capture.id)).toContain(firstCapture.id);
     expect(await collect("2026-07-25T12:00:00.000Z")).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 0 });
     expect(await collect("2026-07-26T12:00:00.000Z")).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 0 });
