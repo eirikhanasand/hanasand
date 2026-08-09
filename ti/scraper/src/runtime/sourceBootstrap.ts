@@ -145,47 +145,53 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
 }
 
 function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord, generatedAt: string, store: SourceStore): SourceRecord | undefined {
-  const restricted = verified.type === "tor_metadata" && verified.metadata?.transportCanary !== true;
-  const portfolio = Boolean(verified.metadata?.sourcePortfolioVerification);
-  const expiredPortfolio = Boolean(verified.metadata?.sourcePortfolioVerification) && !isCurrentSourcePortfolioVerification(verified, generatedAt);
-  const runtimeAdmission = portfolio && hasCurrentRuntimeEvidence(existing, generatedAt, store);
-  if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) : portfolio ? isSafePortfolioUpgradeTarget(existing) : isVerifiedProductionSource(verified, generatedAt) && isSafeUpgradeTarget(existing))) return undefined;
-  const sameSource = existing.id === verified.id || existing.metadata?.verifiedSourceId === verified.id;
+  const existingVerification = existing.metadata?.sourcePortfolioVerification as { verifiedAt?: unknown } | undefined;
+  const seedVerification = verified.metadata?.sourcePortfolioVerification as { verifiedAt?: unknown } | undefined;
+  const effectiveVerification = seedDuplicateKey(existing) === seedDuplicateKey(verified)
+    && Date.parse(String(existingVerification?.verifiedAt ?? "")) > Date.parse(String(seedVerification?.verifiedAt ?? ""))
+    ? existingVerification
+    : seedVerification;
+  const effectiveVerified = effectiveVerification === seedVerification ? verified : {
+    ...verified,
+    metadata: { ...verified.metadata, sourcePortfolioVerification: effectiveVerification }
+  };
+  const restricted = effectiveVerified.type === "tor_metadata" && effectiveVerified.metadata?.transportCanary !== true;
+  const portfolio = Boolean(effectiveVerified.metadata?.sourcePortfolioVerification);
+  const expiredPortfolio = portfolio && !isCurrentSourcePortfolioVerification(effectiveVerified, generatedAt);
+  const runtimeEvidence = portfolio ? currentRuntimeEvidence(existing, generatedAt, store) : undefined;
+  if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) : portfolio ? isSafePortfolioUpgradeTarget(existing) : isVerifiedProductionSource(effectiveVerified, generatedAt) && isSafeUpgradeTarget(existing))) return undefined;
+  const sameSource = existing.id === effectiveVerified.id || existing.metadata?.verifiedSourceId === effectiveVerified.id;
   const metadata = {
     ...(existing.metadata ?? {}),
-    ...(verified.metadata ?? {}),
-    ...(verified.metadata?.productionCollection === true ? { verifiedSourceId: verified.id } : {}),
+    ...(effectiveVerified.metadata ?? {}),
+    ...(effectiveVerified.metadata?.productionCollection === true ? { verifiedSourceId: effectiveVerified.id } : {}),
     sourceImportedAt: sameSource
-      ? existing.metadata?.sourceImportedAt ?? verified.metadata?.sourceImportedAt
-      : verified.metadata?.sourceImportedAt
+      ? existing.metadata?.sourceImportedAt ?? effectiveVerified.metadata?.sourceImportedAt
+      : effectiveVerified.metadata?.sourceImportedAt
   };
-  if (restricted && verified.metadata?.productionCollection === true) delete metadata.restrictedMetadataCandidate;
+  if (restricted && effectiveVerified.metadata?.productionCollection === true) delete metadata.restrictedMetadataCandidate;
   else if (restricted) delete metadata.verifiedSourceId;
   const reconciled = {
     ...existing,
-    ...verified,
+    ...effectiveVerified,
     id: existing.id,
     tenantId: existing.tenantId,
-    createdAt: existing.createdAt ?? verified.createdAt,
+    createdAt: existing.createdAt ?? effectiveVerified.createdAt,
     updatedAt: generatedAt,
     metadata,
     health: existing.health,
     crawlState: existing.crawlState
   };
-  if (existing.metadata?.sourcePortfolioQualificationState === "sustained_productive" && runtimeAdmission) {
-    reconciled.status = existing.status;
-    reconciled.countsAsCoverage = existing.countsAsCoverage === true;
-    reconciled.metadata.productionCollection = existing.metadata?.productionCollection === true;
-    reconciled.metadata.countsAsCoverage = existing.metadata?.countsAsCoverage === true;
+  if (runtimeEvidence) {
+    reconciled.status = "active";
+    reconciled.countsAsCoverage = true;
+    reconciled.metadata.productionCollection = true;
+    reconciled.metadata.countsAsCoverage = true;
     reconciled.metadata.sourcePortfolioQualificationState = "sustained_productive";
-    reconciled.metadata.sourcePortfolioProductiveCheckCount = existing.metadata?.sourcePortfolioProductiveCheckCount;
-    reconciled.metadata.sourcePortfolioLastProductiveAt = existing.metadata?.sourcePortfolioLastProductiveAt;
-    if (restricted) delete reconciled.metadata.restrictedMetadataCandidate;
-  } else if (runtimeAdmission) {
-    reconciled.status = existing.status;
-    reconciled.countsAsCoverage = existing.countsAsCoverage === true;
-    reconciled.metadata.productionCollection = existing.metadata?.productionCollection !== false;
+    reconciled.metadata.sourcePortfolioProductiveCheckCount = runtimeEvidence.productiveCheckCount;
+    reconciled.metadata.sourcePortfolioLastProductiveAt = runtimeEvidence.lastUsefulAt;
     if (reconciled.metadata.sourcePortfolioStatus === "verification_expired") delete reconciled.metadata.sourcePortfolioStatus;
+    if (restricted) delete reconciled.metadata.restrictedMetadataCandidate;
   } else if (expiredPortfolio) {
     reconciled.status = "candidate";
     reconciled.countsAsCoverage = false;
@@ -309,13 +315,20 @@ export function prepareRuntimeSource(source: SourceRecord, seedPath: string, gen
   };
 }
 
-function hasCurrentRuntimeEvidence(source: SourceRecord, generatedAt: string, store: SourceStore) {
-  return qualifySourcePortfolio({
-    sources: [source],
+function currentRuntimeEvidence(source: SourceRecord, generatedAt: string, store: SourceStore) {
+  const projected = {
+    ...source,
+    status: "active",
+    countsAsCoverage: true,
+    metadata: { ...source.metadata, productionCollection: true, countsAsCoverage: true }
+  };
+  const qualification = qualifySourcePortfolio({
+    sources: [projected],
     observations: (store.listSourceHealthObservations?.() ?? []).filter((row) => row.sourceId === source.id && row.tenantId === source.tenantId),
     captures: (store.listCaptures?.() ?? []).filter((row) => row.sourceId === source.id && row.tenantId === source.tenantId),
     generatedAt
-  }).sources[0]?.qualifies === true;
+  }).sources[0];
+  return qualification?.qualifies === true ? qualification : undefined;
 }
 
 function positiveNumber(value: unknown, fallback: number) {

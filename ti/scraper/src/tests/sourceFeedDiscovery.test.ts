@@ -431,6 +431,76 @@ describe("scheduled public feed discovery", () => {
     expect(store.getSource(candidate.id)?.metadata?.sourcePortfolioStatus).toBe("verification_expired");
   });
 
+  test("immediately repairs a completed revalidation erased by an old restart", async () => {
+    const store = new InMemoryScraperStore();
+    const candidate = expiredPortfolioRss("erased-revalidation", "https://erased-revalidation.example/security.xml");
+    store.saveSource(candidate);
+    let fetches = 0;
+    const options = {
+      store,
+      sourceFeedDiscoveryFetch: async () => {
+        fetches++;
+        return response(rss("CVE-2026-8181", `${candidate.url}#CVE-2026-8181`, generatedAt), candidate.url, "application/rss+xml");
+      }
+    };
+
+    expect(await runSourceFeedDiscoveryCycle(options, generatedAt)).toMatchObject({ revalidatedSourceCount: 1 });
+    const completedPlan = store.listPlans().find((plan: any) => plan.requestId === "req_source_feed_discovery")!;
+    expect(completedPlan).toMatchObject({
+      status: "completed",
+      attemptCount: 1,
+      nextEligibleAt: "2026-07-24T12:00:00.000Z",
+      result: { outcome: "feeds_proven", revalidatedSourceCount: 1 }
+    });
+    store.saveSource(candidate);
+
+    expect(await runSourceFeedDiscoveryCycle(options, "2026-07-23T12:01:00.000Z")).toMatchObject({ revalidatedSourceCount: 1 });
+    expect(store.getSource(candidate.id)?.metadata?.sourcePortfolioStatus).toBeUndefined();
+    expect(store.listPlans().find((plan: any) => plan.id === completedPlan.id)).toMatchObject({
+      status: "completed",
+      attemptCount: 2,
+      nextEligibleAt: "2026-07-24T12:01:00.000Z"
+    });
+    expect(await runSourceFeedDiscoveryCycle(options, "2026-07-23T12:02:00.000Z")).toMatchObject({ status: "skipped", processedPublisherCount: 0 });
+    expect(fetches).toBe(2);
+  });
+
+  test("lets an approved expired candidate retain its second useful cycle", async () => {
+    const store = new InMemoryScraperStore();
+    const candidate = expiredPortfolioRss("approved-expired-candidate", "https://approved-expired.example/security.xml", {
+      crawlFrequencySeconds: 60,
+      metadata: { sourcePortfolioStatus: undefined }
+    });
+    store.saveSource(candidate);
+    let version = 0;
+    const collect = (at: string) => runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      sourceIds: [candidate.id],
+      scheduleSourceFeedDiscovery: false,
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => at,
+      fetch: async () => {
+        version++;
+        return response(rss(`CVE-2026-82${version}`, `https://approved-expired.example/CVE-2026-82${version}`, at), candidate.url, "application/rss+xml");
+      }
+    });
+
+    expect(await collect("2026-07-02T12:00:00.000Z")).toMatchObject({ insertedCaptureCount: 1 });
+    approveSourceReview(store, candidate.id);
+    expect(await collect("2026-07-12T12:00:00.000Z")).toMatchObject({ insertedCaptureCount: 1 });
+    expect(store.getSource(candidate.id)).toMatchObject({
+      status: "active",
+      countsAsCoverage: true,
+      metadata: {
+        productionCollection: true,
+        sourcePortfolioQualificationState: "sustained_productive",
+        sourcePortfolioProductiveCheckCount: 2
+      }
+    });
+  });
+
   test("bounds stuck auxiliary work before the canonical run and remains restart-idempotent", async () => {
     const directory = mkdtempSync(join(tmpdir(), "source-feed-discovery-timeout-"));
     const snapshotPath = join(directory, "store.json");

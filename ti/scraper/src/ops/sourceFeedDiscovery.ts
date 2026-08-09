@@ -138,7 +138,8 @@ export async function runSourceFeedDiscoveryCycle(options: DiscoveryOptions, gen
       const plan = store.getPlan?.(planId(reference.publisherKey))
         ?? store.listPlans?.().find((row) => row.requestId === REQUEST_ID && row.publisherKey === reference.publisherKey);
       const next = Date.parse(String(plan?.nextEligibleAt ?? ""));
-      return !plan || !Number.isFinite(next) || next <= now || successfulPlanRefreshDue(plan, generatedAt);
+      return !plan || !Number.isFinite(next) || next <= now || successfulPlanRefreshDue(plan, generatedAt)
+        || erasedSuccessfulRevalidation(store, reference, plan, generatedAt);
     })
     .slice(0, positiveInteger(options.sourceFeedDiscoveryMaxReferences, 100, 100));
   if (!due.length) {
@@ -507,12 +508,14 @@ async function claimAttempt(
     evidenceCaptureId: reference.captureId,
     activeRunId,
     generatedAt,
-    runExpiresAt: addSeconds(generatedAt, 120)
+    runExpiresAt: addSeconds(generatedAt, 120),
+    recoverCompletedRevalidation: erasedSuccessfulRevalidation(store, reference, store.getPlan?.(planId(reference.publisherKey))
+      ?? store.listPlans?.().find((row) => row.requestId === REQUEST_ID && row.publisherKey === reference.publisherKey), generatedAt)
   };
   if (store.claimSourceFeedDiscoveryPlan) return await store.claimSourceFeedDiscoveryPlan(input);
   const previous = store.getPlan?.(input.planId)
     ?? store.listPlans?.().find((row) => row.requestId === REQUEST_ID && row.publisherKey === reference.publisherKey);
-  if (!claimable(previous, generatedAt)) return undefined;
+  if (!claimable(previous, generatedAt, input.recoverCompletedRevalidation)) return undefined;
   const plan: DiscoveryPlan = {
     ...previous,
     id: input.planId,
@@ -711,13 +714,23 @@ function attribute(tag: string, name: string) { return tag.match(new RegExp(`\\b
 function decodeHtml(value: string) { return value.replace(/&amp;/gi, "&").replace(/&quot;/gi, "\"").replace(/&#39;/gi, "'"); }
 function addSeconds(value: string, seconds: number) { return new Date(Date.parse(value) + seconds * 1_000).toISOString(); }
 function boundedError(error: unknown) { return (error instanceof Error ? error.message : String(error)).slice(0, 500); }
-function claimable(plan: DiscoveryPlan | undefined, generatedAt: string) {
+function claimable(plan: DiscoveryPlan | undefined, generatedAt: string, recoverCompletedRevalidation = false) {
   if (!plan) return true;
   const now = Date.parse(generatedAt);
   const due = Date.parse(String(plan.nextEligibleAt ?? ""));
   const expires = Date.parse(String(plan.runExpiresAt ?? ""));
   return (!plan.activeRunId || !Number.isFinite(expires) || expires <= now)
-    && (!Number.isFinite(due) || due <= now || successfulPlanRefreshDue(plan, generatedAt));
+    && (!Number.isFinite(due) || due <= now || successfulPlanRefreshDue(plan, generatedAt) || recoverCompletedRevalidation);
+}
+function erasedSuccessfulRevalidation(store: DiscoveryStore, reference: PublisherReference, plan: DiscoveryPlan | undefined, generatedAt: string) {
+  const result = plan?.result as AttemptResult | undefined;
+  const target = reference.revalidationSourceId
+    ? store.getSource?.(reference.revalidationSourceId) ?? store.listSources().find((source) => source.id === reference.revalidationSourceId)
+    : undefined;
+  return plan?.status === "completed"
+    && result?.outcome === "feeds_proven"
+    && Number(result.revalidatedSourceCount ?? 0) > 0
+    && Boolean(target && expiredPortfolioRssCandidate(target, generatedAt));
 }
 function successfulPlanRefreshDue(plan: DiscoveryPlan | undefined, generatedAt: string) {
   const updatedAt = Date.parse(String(plan?.updatedAt ?? plan?.completedAt ?? ""));

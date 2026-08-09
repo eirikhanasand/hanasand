@@ -1257,7 +1257,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         && Number.isFinite(completedAt)
         && now - completedAt >= 86_400 * 1_000;
       if ((current?.activeRunId && Number.isFinite(expires) && expires > now)
-        || (Number.isFinite(due) && due > now && !dailyRefreshDue)) return;
+        || (Number.isFinite(due) && due > now && !dailyRefreshDue && input.recoverCompletedRevalidation !== true)) return;
       claimed = {
         ...current,
         id: input.planId,
