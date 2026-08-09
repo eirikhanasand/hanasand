@@ -10,6 +10,19 @@ import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
 
 describe("restricted metadata collection", () => {
+  test("bounds stalled Tor response bodies with the request deadline", async () => {
+    let cancelled = 0;
+    const body = new ReadableStream({ pull() {}, cancel() { cancelled++; } });
+    const boundary = new TorMetadataHttpBoundary({
+      proxyUrl: "http://onion-tor:8118",
+      requestTimeoutMs: 20,
+      fetcher: async () => new Response(body, { status: 200, headers: { "content-type": "application/json" } })
+    });
+
+    await expect(boundary.fetchMetadata({ url: `http://${"s".repeat(56)}.onion/`, actorName: "Lamashtu" })).rejects.toThrow("Tor metadata response body timeout after 20ms");
+    expect(cancelled).toBe(1);
+  });
+
   test("collects approved onion metadata through the proxy boundary without persisting page content", async () => {
     const store = new InMemoryScraperStore();
     const onion = `${"a".repeat(56)}.onion`;
