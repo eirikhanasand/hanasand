@@ -17,6 +17,7 @@ import {
   automaticReviewModelVersion,
   hasApprovedAutomaticSourceReview,
   isLegacySourceReviewCandidate,
+  sourceGovernanceAllowsAutomaticReview,
   sourceAutomaticReviewEvidenceBound,
   sourceAutomaticReviewIdentityMatches,
   sourceAutomaticReviewPromptVersionMatches,
@@ -934,7 +935,7 @@ function reconcileApprovedPublicCandidate(store: any, source: any, at: string) {
   if ((!portfolioCandidate && !legacySource)
     || source.accessMethod !== "public_http"
     || source.risk !== "low"
-    || source.governance?.approvalState !== "approved"
+    || !sourceGovernanceAllowsAutomaticReview(source)
     || !["rss", "api", "json_api", "telegram_public"].includes(source.type)
     || !hasApprovedAutomaticSourceReview(source)
     || !automaticSourceReviewEvidenceBindingsMatch(source, (id) => store.getCapture?.(id))) return source;

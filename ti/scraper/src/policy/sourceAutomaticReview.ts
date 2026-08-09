@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
+import { requiresApproval } from "../registry/sourceRegistry.ts";
 
 export const AUTOMATIC_REVIEW_PROMPT_VERSION = "ti.automatic_intelligence_review.prompt.v7";
 export const SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION = "ti.automatic_intelligence_review.prompt.v9";
@@ -28,7 +29,7 @@ export function sourceRequiresAutomaticReview(source: any) {
     && source?.metadata?.sourceFamily === "dark_web_victim_feed"
     && source?.accessMethod === "approved_proxy"
     && source?.risk === "restricted"
-    && source?.governance?.approvalState === "approved"
+    && sourceGovernanceAllowsAutomaticReview(source)
     && source?.governance?.metadataOnly === true
     && Boolean(String(source?.legalNotes ?? "").trim());
   return Boolean(source?.metadata?.sourcePortfolioVerification
@@ -47,9 +48,14 @@ export function isLegacySourceReviewCandidate(source: any) {
     && PUBLIC_INTELLIGENCE_SOURCE_TYPES.has(source?.type)
     && source?.accessMethod === "public_http"
     && source?.risk === "low"
-    && source?.governance?.approvalState === "approved"
+    && sourceGovernanceAllowsAutomaticReview(source)
     && Boolean(String(source?.legalNotes ?? "").trim())
     && (source?.metadata?.automaticSourceReview || source?.countsAsCoverage === false);
+}
+
+export function sourceGovernanceAllowsAutomaticReview(source: any) {
+  const state = source?.governance?.approvalState;
+  return state === "approved" || !requiresApproval(source) && (!state || state === "not_required");
 }
 
 export function sourceAutomaticReviewPromptVersionMatches(source: any, promptVersion: unknown) {
