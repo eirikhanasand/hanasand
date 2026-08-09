@@ -25,7 +25,9 @@ describe("scheduled organization watchlist discovery", () => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
       if (url.includes("news.google.test/rss/search")) {
         const term = decodeURIComponent(url).includes("NTNU") ? "NTNU" : "Tine";
-        return response(`<rss><channel><item><title>${term} supplier remote code execution vulnerability</title><description>${term} reports a critical vulnerability that enabled remote code execution against public systems.</description><link>https://reports.example.test/${term.toLowerCase()}</link><pubDate>${publishedAt}</pubDate></item></channel></rss>`, url, "application/rss+xml");
+        const summary = term === "NTNU" ? "Latest supplier update" : `${term} reports a critical vulnerability that enabled remote code execution against public systems.`;
+        const title = term === "NTNU" ? "Latest supplier update" : `${term} supplier remote code execution vulnerability`;
+        return response(`<rss><channel><item><title>${title}</title><description>${summary}</description><link>https://reports.example.test/${term.toLowerCase()}</link><pubDate>${publishedAt}</pubDate></item></channel></rss>`, url, "application/rss+xml");
       }
       if (url.endsWith("/robots.txt")) return response("", url, "text/plain", 404);
       if (url.endsWith("/ntnu")) return response(`<!doctype html><html><head><title>NTNU supplier vulnerability</title><meta property="article:published_time" content="${publishedAt}"></head><body><main><h1>NTNU supplier vulnerability</h1><p>NTNU reports that a critical vulnerability enabled remote code execution and exposed names and email addresses. The incident was contained and public guidance was issued.</p></main></body></html>`, url, "text/html");

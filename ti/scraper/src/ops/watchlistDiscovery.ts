@@ -135,9 +135,6 @@ export async function collectWatchlistDiscoveryEvidence(input: {
   const collected: any[] = [];
 
   for (const candidate of candidates) {
-    const candidateText = `${candidate.title ?? ""} ${candidate.rawText ?? candidate.body ?? ""}`;
-    const matched = terms.filter((term: any) => termOccursInText(candidateText, term.value));
-    if (!matched.length || !cyberIncidentText(candidateText)) continue;
     const requestedUrl = httpsUrl(candidate.url);
     if (!requestedUrl) continue;
     const candidateSourceId = publicAdvisorySourceIdentity(requestedUrl, input.store.listSources?.()).id;
@@ -176,10 +173,11 @@ export async function collectWatchlistDiscoveryEvidence(input: {
       maxBytes: Math.max(64_000, Math.min(input.maxBytes, 2_000_000))
     } as any);
     const page = result.items[0];
+    if (!page) continue;
     const text = String(page?.rawText ?? "").replace(/\s+/g, " ").trim().slice(0, 24_000);
-    const pageMatches = matched.filter((term: any) => termOccursInText(text, term.value));
+    const pageMatches = terms.filter((term: any) => termOccursInText(text, term.value));
     const publishedAt = publicationTimestampFromHtml(String(page?.html ?? ""));
-    if (!page || !publishedAt || !pageMatches.length || !cyberIncidentText(text) || !isSellableIntelText({
+    if (!publishedAt || !pageMatches.length || !cyberIncidentText(text) || !isSellableIntelText({
       text,
       title: page.title,
       sourceId: candidateSourceId,
