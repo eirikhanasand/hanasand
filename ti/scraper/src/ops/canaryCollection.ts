@@ -31,7 +31,8 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const queuedTasks = options.frontier.snapshot().map(frontierTask).filter((task: any) => taskInScope(options, task, selectedSourceIds));
   const leasedTasks = options.frontier.leasedSnapshot().filter((task: any) => taskInScope(options, task, selectedSourceIds));
   const pendingJobKeys = new Set([...queuedTasks, ...leasedTasks].map(sourceJobKey));
-  const resumedRunId = queuedTasks.find((task: any) => (!task.availableAt || Date.parse(task.availableAt) <= Date.parse(generatedAt)) && task.runId)?.runId;
+  const resumedRunId = queuedTasks.find((task: any) => (!task.availableAt || Date.parse(task.availableAt) <= Date.parse(generatedAt))
+    && task.runId && options.store.getRun?.(task.runId)?.requestId === "req_public_canary")?.runId;
   const resumedTasks = resumedRunId ? queuedTasks.filter((task: any) => task.runId === resumedRunId).slice(0, maxTasks) : [];
   const resumedRun = resumedRunId ? options.store.getRun?.(resumedRunId) : undefined;
   const allDue = options.store.listSources()

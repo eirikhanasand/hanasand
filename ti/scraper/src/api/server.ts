@@ -54,7 +54,8 @@ async function handleDurableApiRequest(request: Request, options: ApiServerOptio
   const response = await handleApiRequest(request, options);
   const pathname = new URL(request.url).pathname;
   const readOnlyExposureQueue = request.method === "GET" && ["/v1/dwm/exposure-queue", "/api/dwm/exposure-queue"].includes(pathname);
-  if ((request.method === "GET" && pathname === "/v1/health") || ["/v1/intel/search", "/api/ti/search"].includes(pathname) || readOnlyExposureQueue) return response;
+  const readOnlySourceOperations = request.method === "GET" && pathname === "/v1/intel/source-operations";
+  if ((request.method === "GET" && pathname === "/v1/health") || ["/v1/intel/search", "/api/ti/search"].includes(pathname) || readOnlyExposureQueue || readOnlySourceOperations) return response;
   try {
     await (options.store as any).flush?.();
     return response;
