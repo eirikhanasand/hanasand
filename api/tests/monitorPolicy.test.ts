@@ -17,6 +17,13 @@ describe('production monitor notification transitions', () => {
         expect(source).toContain('res.header(\'Cache-Control\', \'public, max-age=15, stale-while-revalidate=30\')')
     })
 
+    test('status returns the last truthful payload while refreshing an expired cache', async () => {
+        const source = await readFile(path.join(import.meta.dir, '../src/handlers/status/get.ts'), 'utf8')
+        expect(source).toContain('if (statusCache) {')
+        expect(source).toContain('return Promise.resolve(statusCache.payload)')
+        expect(source).toContain('status refresh failed')
+    })
+
     test('processing backlog deduplicates current review tasks by their persisted id', async () => {
         const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
         expect(source).toContain('SELECT DISTINCT ON (record->>\'id\') record, updated_at')
