@@ -1773,7 +1773,7 @@ export function buildDwmWebhookDeliveryReadinessConsumerProof({
     const rows = history.rows.map((row) => {
         const retryableFailure = Boolean(row.retry.nextRetryAt) && !row.retry.terminalFailure && !row.idempotency.alreadyDelivered
         const nonRetryableFailure = row.retry.terminalFailure || row.blockers.some(blocker => blocker.code === 'terminal_failure')
-        const success = row.status === 'sent' || row.rawStatus === 'delivered' || (row.rawStatus === 'dry_run' && row.dryRun)
+        const success = row.status === 'sent' || row.rawStatus === 'delivered'
         const idempotentReplay = row.replayHistory.duplicateReplay || row.idempotency.duplicate || row.idempotency.alreadyDelivered
         const redactedDryRun = row.dryRun && row.discord.safeForCustomerDisplay && row.redactedDestination.endpointExposed === false
         const state = nonRetryableFailure

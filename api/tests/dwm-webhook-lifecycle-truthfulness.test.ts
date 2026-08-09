@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { buildDwmWebhookDestinationLifecycle, buildDwmWebhookDestinationTestContract } from '../src/utils/dwm/webhooks.ts'
+import { buildDwmWebhookDeliveryReadinessConsumerProof, buildDwmWebhookDestinationLifecycle, buildDwmWebhookDestinationTestContract } from '../src/utils/dwm/webhooks.ts'
 
 const baseDestination = {
     id: 'destination_1',
@@ -132,4 +132,29 @@ test('dry-run history never makes a webhook destination live-ready', () => {
         canManage: true,
     })
     expect(deliveredContract.status).toBe('verified')
+
+    const dryRunReadiness = buildDwmWebhookDeliveryReadinessConsumerProof({
+        destinations: [baseDestination as any],
+        deliveries: [testDelivery('dry_run') as any],
+        liveDeliveryEnabled: true,
+        viewerRole: 'owner',
+        canManage: true,
+    })
+    expect(dryRunReadiness.rows[0]).toMatchObject({
+        state: 'blocked',
+        dryRun: true,
+        readiness: { success: false },
+    })
+
+    const deliveredReadiness = buildDwmWebhookDeliveryReadinessConsumerProof({
+        destinations: [{ ...baseDestination, lastTestStatus: 'delivered' } as any],
+        deliveries: [testDelivery('delivered') as any],
+        liveDeliveryEnabled: true,
+        viewerRole: 'owner',
+        canManage: true,
+    })
+    expect(deliveredReadiness.rows[0]).toMatchObject({
+        state: 'idempotent_replay',
+        readiness: { success: true },
+    })
 })
