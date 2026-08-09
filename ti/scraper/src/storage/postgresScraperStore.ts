@@ -311,16 +311,17 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   // Query bounded evidence edges from PostgreSQL; high-volume history must not be hydrated into memory at startup.
-  private async queryRecordsByIds(table: string, column: string, ids: Iterable<string>, tenantId?: string) {
+  private async queryRecordsByIds(table: string, column: string, ids: Iterable<string>, tenantId?: string, allTenants = false) {
     const values = [...new Set([...ids].map(String).filter(Boolean))];
     if (!values.length) return [];
     const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
     const tenantPlaceholder = `$${values.length + 1}`;
+    const tenantWhere = allTenants ? "TRUE" : `tenant_id IS NOT DISTINCT FROM ${tenantPlaceholder}::text`;
     const rows = await this.sql.unsafe(
       `SELECT record FROM threat_intel.${table}
        WHERE ${column} IN (${placeholders})
-         AND tenant_id IS NOT DISTINCT FROM ${tenantPlaceholder}::text`,
-      [...values, tenantId ?? null]
+         AND ${tenantWhere}`,
+      allTenants ? values : [...values, tenantId ?? null]
     );
     return rows.map(readRecord);
   }
@@ -337,8 +338,37 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return this.queryRecordsByIds("claim_evidence", "capture_id", captureIds, tenantId);
   }
 
-  async queryClaimEvidenceBySubjectIds(subjectIds: Iterable<string>, tenantId?: string) {
-    return this.queryRecordsByIds("claim_evidence", "subject_id", subjectIds, tenantId);
+  async queryClaimEvidenceBySubjectIds(subjectIds: Iterable<string>, tenantId?: string, allTenants = false) {
+    return this.queryRecordsByIds("claim_evidence", "subject_id", subjectIds, tenantId, allTenants);
+  }
+
+  async queryEvidenceLinksBySubjectIds(subjectIds: Iterable<string>, tenantId?: string, allTenants = false) {
+    return this.queryRecordsByIds("evidence_links", "subject_id", subjectIds, tenantId, allTenants);
+  }
+
+  async queryUsefulSourceHealth(input: { tenantId?: string; allTenants?: boolean } = {}) {
+    const rows = input.allTenants
+      ? await this.sql`
+          SELECT record
+          FROM threat_intel.source_health
+          WHERE useful = TRUE AND capture_count > 0
+          ORDER BY checked_at DESC
+        `
+      : input.tenantId === undefined
+        ? await this.sql`
+            SELECT record
+            FROM threat_intel.source_health
+            WHERE tenant_id IS NULL AND useful = TRUE AND capture_count > 0
+            ORDER BY checked_at DESC
+          `
+        : await this.sql`
+            SELECT record
+            FROM threat_intel.source_health
+            WHERE tenant_id IS NOT DISTINCT FROM ${input.tenantId}
+              AND useful = TRUE AND capture_count > 0
+            ORDER BY checked_at DESC
+          `;
+    return rows.map(readRecord);
   }
 
   async queryClaimReviewsByClaimIds(claimIds: Iterable<string>, tenantId?: string) {

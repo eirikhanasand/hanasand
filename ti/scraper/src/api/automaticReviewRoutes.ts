@@ -1339,18 +1339,40 @@ async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants =
   await store.flush?.();
   const scope = allTenants ? {} : { tenantId };
   const load = (collection: string, method: string) => store.queryAllStructuredRecords(collection, scope);
-  const [claims, incidents, captures, sources, health, claimEvidence, evidenceLinks, reviews] = await Promise.all([
+  const [claims, incidents, captures, sources, reviews] = await Promise.all([
     load("claims", "listIntelligenceClaims"),
     load("incidents", "listIncidents"),
     load("captures", "listCaptures"),
     load("sources", "listSources"),
-    load("sourceHealth", "listSourceHealthObservations"),
-    load("claimEvidence", "listClaimEvidence"),
-    load("evidenceLinks", "listEvidenceLinks"),
     load("claimReviews", "listClaimReviews")
   ]);
+  const taskRecords = store.listAnalystMetadataReviewTasks?.() ?? [];
+  const modelVersion = automaticReviewModelVersion();
+  const reviewsByClaim = grouped(reviews, "claimId");
+  const claimIds = new Set(claims
+    .filter((claim: any) => claimEligible(claim, reviewsByClaim.get(claim.id) ?? [], modelVersion))
+    .map((claim: any) => claim.id));
+  const incidentIds = new Set(incidents
+    .filter((incident: any) => incidentEligible(incident, modelVersion))
+    .map((incident: any) => incident.id));
+  for (const task of taskRecords) {
+    if (task.subject?.claimId) claimIds.add(task.subject.claimId);
+    if (task.subject?.incidentId) incidentIds.add(task.subject.incidentId);
+  }
+  const [health, claimEvidence, evidenceLinks] = await Promise.all([
+    typeof store.queryUsefulSourceHealth === "function"
+      ? store.queryUsefulSourceHealth({ tenantId, allTenants })
+      : load("sourceHealth", "listSourceHealthObservations"),
+    typeof store.queryClaimEvidenceBySubjectIds === "function"
+      ? store.queryClaimEvidenceBySubjectIds(claimIds, tenantId, allTenants)
+      : load("claimEvidence", "listClaimEvidence"),
+    typeof store.queryEvidenceLinksBySubjectIds === "function"
+      ? store.queryEvidenceLinksBySubjectIds(incidentIds, tenantId, allTenants)
+      : load("evidenceLinks", "listEvidenceLinks")
+  ]);
   return {
-    ...buildReviewIndex(store),
+    tasks: taskRecords.filter((item: any) => item.recordKind === TASK_KIND),
+    events: taskRecords.filter((item: any) => item.recordKind === EVENT_KIND),
     claims,
     incidents,
     sources,
@@ -1362,7 +1384,8 @@ async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants =
     claimEvidenceByClaim: grouped(claimEvidence, "claimId"),
     incidentEvidenceByIncident: grouped(evidenceLinks.filter((item: any) => item.subjectType === "incident"), "subjectId"),
     healthBySource: grouped(health, "sourceId"),
-    reviewsByClaim: grouped(reviews, "claimId")
+    reviewsByClaim,
+    actorIdentities: store.listActorIdentities?.() ?? []
   };
 }
 
