@@ -187,6 +187,40 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(allTasks.tasks).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: foreignTask.id })]));
   });
 
+  test("processes bounded PostgreSQL tasks that are absent from the startup memory window", async () => {
+    const store: any = seededClaimStore();
+    expect(await syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(1);
+    const task = store.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task");
+    store.analystMetadataReviewTasks.delete(task.id);
+    store.queryAutomaticReviewRecords = async () => ({
+      tasksAndEvents: [task],
+      claims: store.listIntelligenceClaims(),
+      incidents: store.listIncidents(),
+      captures: store.listCaptures(),
+      sources: store.listSources(),
+      health: store.listSourceHealthObservations(),
+      claimEvidence: store.listClaimEvidence(),
+      evidenceLinks: store.listEvidenceLinks(),
+      reviews: store.listClaimReviews(),
+      actorIdentities: store.listActorIdentities()
+    });
+
+    const cycle = await runAutomaticReviewCycle(options(store), {
+      allTenants: true,
+      now: firstAt,
+      modelVersion: "hanasand",
+      limit: 1,
+      concurrency: 1,
+      fetcher: async (_input, init) => {
+        const request = promptRequest(JSON.parse(String(init?.body)).prompt);
+        return completedTools(request, supportedDecision(request));
+      }
+    });
+
+    expect(cycle).toMatchObject({ attempted: 1, results: [{ state: "terminal", action: "confirm" }] });
+    expect(store.getAnalystMetadataReviewTask(task.id)).toMatchObject({ state: "terminal", outcome: "decided" });
+  });
+
   test("treats governed metadata-only victim lists as operational source evidence", async () => {
     const store = new InMemoryScraperStore();
     seedSource(store, "victim-list", "Acme Manufacturing\nNorthwind Logistics\nContoso Energy");
