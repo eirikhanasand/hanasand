@@ -182,6 +182,7 @@ describe("api v1", () => {
     store.saveExtractedEntity({ id: "actor_google_attribution", tenantId: "tenant_api", captureId: "cap_google_attribution", sourceId: "src_google_attribution", type: "actor", value: "APT29", normalizedValue: "apt29", confidence: 0.9 });
     store.saveIndicator({ id: "indicator_google_wrapper", tenantId: "tenant_api", captureId: "cap_google_attribution", sourceId: "src_google_attribution", type: "url", value: "https://news.google.com/rss/articles/opaque-aggregator-id?oc=5", normalizedValue: "https://news.google.com/rss/articles/opaque-aggregator-id?oc=5", confidence: 0.9 });
     store.saveIndicator({ id: "indicator_public_infrastructure", tenantId: "tenant_api", captureId: "cap_google_attribution", sourceId: "src_google_attribution", type: "url", value: "https://infra.example.test/path", normalizedValue: "https://infra.example.test/path", confidence: 0.9 });
+    store.saveIndicator({ id: "indicator_rejected_wrapper", tenantId: "tenant_api", captureId: "cap_google_attribution", sourceId: "src_google_attribution", type: "domain", value: "external reference removed", reviewState: "rejected", confidence: 0.9 });
 
     const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&entityType=actor&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
 
