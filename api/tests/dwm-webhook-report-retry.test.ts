@@ -245,6 +245,28 @@ afterEach(() => {
     failReceiptBind = false
 })
 
+test('rejects an undated alert before network or delivery persistence', async () => {
+    const { deliverDwmAlertNotification } = await import('../src/utils/dwm/webhooks.ts')
+    let networkAttempts = 0
+    const input = deliveryInput('undated_alert', false)
+    input.alert = {
+        ...input.alert,
+        firstSeenAt: undefined,
+        sourceFamily: 'clear_web',
+        evidenceCount: 1,
+        provenance: { captureIds: ['capture_1'], sourceIds: ['source_1'] },
+        casePath: '/dashboard/dwm?alert=alert_1',
+        watchlist: { id: 'watch_1', terms: ['example.com'] },
+    }
+
+    await expect(deliverDwmAlertNotification('owner_1', input, async () => {
+        networkAttempts += 1
+        return { status: 202, body: '' }
+    })).rejects.toMatchObject({ code: 'missing_timestamp' })
+    expect(networkAttempts).toBe(0)
+    expect(ledger).toHaveLength(0)
+})
+
 test('retries a failed report after persistence reload with the exact stored payload and idempotency lineage', async () => {
     const { computeOutboundThirdPartyReportChecksum, retryDwmWebhookDelivery } = await import('../src/utils/dwm/webhooks.ts')
     const draft = {

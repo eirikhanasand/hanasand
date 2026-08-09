@@ -69,6 +69,19 @@ describe('DWM webhook network boundary', () => {
         expect(payload.alert.evidenceTimestamp).toBe('2026-07-21T07:15:42.826Z')
     })
 
+    test('does not invent current timestamps for an undated alert payload', () => {
+        const payload = buildDwmAlertDeliveryPayload({
+            destination: { id: 'destination_1', kind: 'webhook', name: 'Customer receiver', org_id: 'org_1' },
+            eventType: 'dwm.alert.created',
+            deliveryId: 'delivery_undated',
+            alert: { id: 'alert_undated', title: 'Undated alert', severity: 'low' },
+        }) as any
+
+        expect(String(payload.occurredAt || '')).not.toMatch(/^\d{4}-\d{2}-\d{2}T/)
+        expect(String(payload.alert.eventTimestamp || '')).not.toMatch(/^\d{4}-\d{2}-\d{2}T/)
+        expect(String(payload.alert.evidenceTimestamp || '')).not.toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    })
+
     test('preserves one bounded validated report and keys delivery idempotency to its checksum', () => {
         const report = reportFixture()
         expect(validateOutboundThirdPartyReport(report, { organizationId: 'org_1', alertId: 'alert_1', dedupeKey: report.exportChecksum })).toMatchObject({ valid: true, report })

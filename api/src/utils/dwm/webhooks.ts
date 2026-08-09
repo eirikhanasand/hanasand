@@ -6566,6 +6566,7 @@ export function buildDwmAlertWebhookReadinessHandoff({
     if (!watchlist.id && !watchlist.name && watchlist.terms.length === 0) blockers.push(alertReadinessBlocker('missing_watchlist_context', 'Watchlist identity or matched term is required for customer context.'))
     if (!normalizedAlert.sourceFamily || normalizedAlert.sourceFamily === 'dark_web' && !normalizedAlert.provenanceSummary) blockers.push(alertReadinessBlocker('missing_source_proof', 'Source family or provenance proof is required for customer delivery.'))
     if (normalizedAlert.evidenceCount <= 0) blockers.push(alertReadinessBlocker('missing_evidence', 'At least one evidence item is required for customer delivery.'))
+    if (!normalizedAlert.eventTimestamp) blockers.push(alertReadinessBlocker('missing_timestamp', 'An evidence-backed alert timestamp is required for customer delivery.'))
     if (dispatch.selectedDestinations.length === 0) blockers.push(alertReadinessBlocker('no_enabled_destination', 'No enabled destination is selected for this org alert.'))
     for (const skipped of dispatch.skippedDestinations) {
         if (skipped.reason === 'disabled') blockers.push(alertReadinessBlocker('destination_disabled', 'A destination exists but is disabled for this alert event.', skipped.id))
@@ -7327,6 +7328,15 @@ export async function deliverDwmAlertNotification(
         input,
         destinations: candidateDestinations,
     })
+    const normalizedPlanAlert = normalizeAlert(plan.alert)
+    if (!normalizedPlanAlert.eventTimestamp) {
+        const error = new Error('Webhook delivery requires an evidence-backed alert timestamp.')
+        Object.assign(error, {
+            code: 'missing_timestamp',
+            blockers: [{ code: 'missing_timestamp', path: 'alert.eventTimestamp', message: error.message, blocking: true }],
+        })
+        throw error
+    }
 
     const deliveries = []
     const persistableSkipped = buildDwmAlertWebhookSkippedDeliveryIntents(plan)
@@ -9795,9 +9805,9 @@ function normalizeAlert(alert: Record<string, unknown>) {
         matchedTerm,
         sourceFamily: firstClean(alert.sourceFamily, alert.source, webhookContext.sourceFamily, workflowContext.sourceFamily) || 'dark_web',
         artifactType: firstClean(alert.artifactType, alert.type, webhookContext.artifactType, workflowContext.artifactType) || 'mention',
-        firstSeenAt: clean(alert.firstSeenAt) || clean(alert.createdAt) || eventTimestamp || new Date().toISOString(),
-        eventTimestamp: eventTimestamp || clean(alert.firstSeenAt) || clean(alert.createdAt) || new Date().toISOString(),
-        evidenceTimestamp: evidenceTimestamp || eventTimestamp || clean(alert.firstSeenAt) || clean(alert.createdAt) || new Date().toISOString(),
+        firstSeenAt: clean(alert.firstSeenAt) || clean(alert.createdAt) || eventTimestamp,
+        eventTimestamp: eventTimestamp || clean(alert.firstSeenAt) || clean(alert.createdAt),
+        evidenceTimestamp: evidenceTimestamp || eventTimestamp || clean(alert.firstSeenAt) || clean(alert.createdAt),
         savedAt: clean(alert.savedAt) || null,
         reviewState: clean(alert.reviewState) || 'needs_review',
         deliveryState: clean(alert.deliveryState) || 'pending_review',
