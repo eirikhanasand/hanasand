@@ -6,7 +6,8 @@ RUN apk add --no-cache privoxy su-exec tor \
 COPY torrc /etc/tor/torrc
 COPY privoxy.conf /etc/privoxy/config
 COPY entrypoint.sh /usr/local/bin/onion-proxy-entrypoint
-RUN chmod 0755 /usr/local/bin/onion-proxy-entrypoint
+COPY healthcheck.sh /usr/local/bin/onion-proxy-healthcheck
+RUN chmod 0755 /usr/local/bin/onion-proxy-entrypoint /usr/local/bin/onion-proxy-healthcheck
 
 EXPOSE 8118 9050
 
