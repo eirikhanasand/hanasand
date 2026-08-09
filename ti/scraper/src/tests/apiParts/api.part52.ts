@@ -420,4 +420,17 @@ describe("api v1", () => {
       expect(response.recentActivity.every((item: any) => item.reviewState === expectedState && item.publisherCount === 1 && item.corroboratingSourceIds.length === 0 && item.corroborationState !== "corroborated")).toBe(true);
     }
   });
+
+  test("does not promote rejected incident records into actor campaigns", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_campaign_review", tenantId: "tenant_api", name: "Reviewed public feed" }));
+    store.saveCapture(fixtureCapture({ id: "cap_campaign_review", sourceId: "src_campaign_review", url: "https://reviewed.example/campaign", title: "APT29 campaign report", body: "A public malware investigation reports that APT29 conducted a credential phishing campaign against diplomatic organizations.", publishedAt: "2026-07-20T00:00:00.000Z", metadata: { actorName: "APT29" } }));
+    store.saveCapture(fixtureCapture({ id: "cap_campaign_rejected", sourceId: "src_campaign_review", url: "https://reviewed.example/rejected", title: "APT29 rejected report", body: "A public malware investigation reports that APT29 conducted a credential phishing campaign against diplomatic organizations.", publishedAt: "2026-07-21T00:00:00.000Z", metadata: { actorName: "APT29" } }));
+    store.saveIncident({ id: "inc_campaign_review", tenantId: "tenant_api", sourceId: "src_campaign_review", captureId: "cap_campaign_review", title: "APT29 campaign report", summary: "Reviewable campaign report.", firstSeenAt: "2026-07-20T00:00:00.000Z", confidence: 0.8, reviewState: "needs_review" });
+    store.saveIncident({ id: "inc_campaign_rejected", tenantId: "tenant_api", sourceId: "src_campaign_review", captureId: "cap_campaign_rejected", title: "APT29 rejected report", summary: "Rejected campaign report.", firstSeenAt: "2026-07-21T00:00:00.000Z", confidence: 0.8, reviewState: "rejected" });
+
+    const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&entityType=actor&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
+
+    expect(response.actorIntelligence.campaigns).toEqual(["APT29 campaign report"]);
+  });
 });
