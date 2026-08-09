@@ -22,6 +22,7 @@ for (const token of [
 ]) {
     assert.ok(productProgressRouteSource.includes(token), `Product-progress route missing public-TI token: ${token}`)
 }
+assert.doesNotMatch(productProgressRouteSource, /loadProductPublicTiProofLedger|publicTiFetchResultFromLedger|PRODUCT_PROGRESS_PUBLIC_TI_PROOF/)
 
 for (const token of [
     'proxyApiTiRequest',
