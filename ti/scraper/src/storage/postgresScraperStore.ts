@@ -1479,7 +1479,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   private async hydrate(): Promise<void> {
     const deferHighVolumeHydration = this.deferHighVolumeHydration;
     const workflowHistoryLimit = Math.max(0, Math.min(100_000, Number(Bun.env.TI_WORKFLOW_HYDRATION_HISTORY_LIMIT ?? "5000") || 5000));
-    const collectionPlanHydrationLimit = Math.max(0, Math.min(20_000, Number(Bun.env.TI_COLLECTION_PLAN_HYDRATION_LIMIT ?? "5000") || 5000));
+    // Keep current/future plans above this cap; PostgreSQL remains the full history source.
+    const collectionPlanHydrationLimit = Math.max(0, Math.min(20_000, Number(Bun.env.TI_COLLECTION_PLAN_HYDRATION_LIMIT ?? "500") || 500));
     {
       const [sources, captures, incidents, entities, actorProfiles, actorIdentityCatalogs, actorIdentities, validations, alerts, evaluationLabels, timeliness, runs, claims, sourceHealth, workflows, reviewTasks, workflowEvents] = await Promise.all([
         this.sql`SELECT record FROM threat_intel.sources ORDER BY created_at`,
