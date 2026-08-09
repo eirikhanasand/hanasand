@@ -697,6 +697,32 @@ describe("scheduled public feed discovery", () => {
     }
   });
 
+  test("does not report canonical collection success when discovery persistence fails", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "canonical-after-discovery", url: "https://canonical.example/feed.xml", status: "active", metadata: { productionCollection: true } }));
+    (store as any).flush = async () => { throw new Error("discovery writes were not durable"); };
+    let fetchCount = 0;
+    const loop = startCanaryCollectionLoop({
+      store,
+      frontier: new FocusedFrontier(),
+      enabled: false,
+      sourceIds: ["canonical-after-discovery"],
+      maxSources: 1,
+      maxTasks: 1,
+      scheduleWatchlistDiscovery: false,
+      fetch: async () => { fetchCount++; return response("<rss><channel></channel></rss>", "https://canonical.example/feed.xml", "application/rss+xml"); },
+      now: () => generatedAt,
+    });
+
+    loop.setEnabled(true);
+    await loop.runOnce();
+    expect(loop.getState()).toMatchObject({ running: false, cycleCount: 1, successCount: 0, errorCount: 1, lastError: "discovery writes were not durable" });
+    expect(loop.getState().latestResult).toBeUndefined();
+    expect(store.listRuns().filter((run: any) => run.requestId === "req_public_canary")).toEqual([]);
+    expect(fetchCount).toBe(0);
+    await loop.stop();
+  });
+
   test("does not leave the scheduler running when a durable discovery claim stalls", async () => {
     const store = new InMemoryScraperStore();
     usefulCapture(store, "stuck-claim-parent", undefined, "run-stuck-claim-parent", ["https://stuck-claim.example/report"]);
