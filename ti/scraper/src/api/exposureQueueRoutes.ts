@@ -67,15 +67,20 @@ export async function listExposureQueue(request: Request, url: URL, options: Api
   const offset = Math.max(0, Math.floor(numberQuery(url.searchParams.get("offset")) ?? 0));
   const filters = exposureQueueFilters(url);
   const at = nowIso();
-  const allItems = exposureClaimsFromStore(options.store, filters, { tenantId });
+  const postgresPage = typeof (options.store as any).queryExposureQueuePage === "function"
+    ? await (options.store as any).queryExposureQueuePage({ tenantId, filters, limit, offset })
+    : undefined;
+  const allItems = postgresPage
+    ? postgresPage.captures.map((capture: any) => exposureClaimFromCapture(capture, options.store.getSource?.(capture.sourceId))).filter(Boolean)
+    : exposureClaimsFromStore(options.store, filters, { tenantId });
   // The full filtered list is already materialized for totals/freshness; slicing it
   // here avoids a second full capture-store scan on every public read.
-  const items = allItems.slice(offset, offset + limit);
-  const latestClaimAt = latestTime(allItems.map((item: any) => item.claimTime));
-  const latestCollectedAt = latestTime(allItems.map((item: any) => item.collectedAt));
+  const items = postgresPage ? allItems : allItems.slice(offset, offset + limit);
+  const latestClaimAt = postgresPage?.latestClaimAt ? new Date(String(postgresPage.latestClaimAt)).toISOString() : latestTime(allItems.map((item: any) => item.claimTime));
+  const latestCollectedAt = postgresPage?.latestCollectedAt ? new Date(String(postgresPage.latestCollectedAt)).toISOString() : latestTime(allItems.map((item: any) => item.collectedAt));
   const claimAgeMinutes = ageMinutes(at, latestClaimAt);
   const collectionAgeMinutes = ageMinutes(at, latestCollectedAt);
-  const sourceIds = new Set(allItems.map((item: any) => item.sourceId).filter(Boolean));
+  const sourceIds = new Set<string>(allItems.map((item: any) => item.sourceId).filter(Boolean).map(String));
   const sourceHealthTimes = [...sourceIds].flatMap((sourceId) => {
     const source = options.store.getSource?.(sourceId);
     if (source?.tenantId && source.tenantId !== tenantId) return [];
@@ -123,16 +128,16 @@ export async function listExposureQueue(request: Request, url: URL, options: Api
     },
     counts: {
       visible: items.length,
-      total: allItems.length,
-      needsReview: allItems.filter((item) => item.status === "needs_review").length,
-      metadataOnly: allItems.filter((item) => item.metadataOnly).length
+      total: postgresPage?.total ?? allItems.length,
+      needsReview: postgresPage?.needsReview ?? allItems.filter((item) => item.status === "needs_review").length,
+      metadataOnly: postgresPage?.metadataOnly ?? allItems.filter((item) => item.metadataOnly).length
     },
     page: {
       limit,
       offset,
-      total: allItems.length,
-      nextOffset: offset + items.length < allItems.length ? offset + items.length : null,
-      hasMore: offset + items.length < allItems.length
+      total: postgresPage?.total ?? allItems.length,
+      nextOffset: offset + items.length < (postgresPage?.total ?? allItems.length) ? offset + items.length : null,
+      hasMore: offset + items.length < (postgresPage?.total ?? allItems.length)
     },
     items
   });

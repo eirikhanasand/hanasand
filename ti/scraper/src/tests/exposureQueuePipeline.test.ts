@@ -772,6 +772,34 @@ describe("DWM exposure queue pipeline", () => {
     expect(body).toMatchObject({ status: "stale", counts: { visible: 1, total: 1 }, page: { total: 1 }, items: [{ company: "Indexed Company" }] });
   });
 
+  test("uses the PostgreSQL exposure page instead of enumerating captures", async () => {
+    const store = new InMemoryScraperStore();
+    await saveExposureClaimFromCollectedItem(store, {
+      sourceId: "src_postgres_exposure",
+      source: { name: "Ransomware.live Victim Feed", url: "https://ransomware.live/" },
+      title: "Akira has just published a new victim: Query Company",
+      rawText: "Akira victim: Query Company. 10 GB claimed.",
+      url: "https://ransomware.live/id/query-company",
+      collectedAt: new Date().toISOString(),
+      publishedAt: new Date().toISOString(),
+      metadata: { adapter: "rss", sourceFamily: "victim_feed" }
+    } as any);
+    const capture = store.listExposureQueueCaptures()[0];
+    (store as any).queryExposureQueuePage = async () => ({
+      captures: [capture],
+      total: 1,
+      needsReview: 0,
+      metadataOnly: 1,
+      latestClaimAt: capture.publishedAt,
+      latestCollectedAt: capture.collectedAt
+    });
+    (store as any).listCaptures = () => { throw new Error("full capture scan"); };
+    const response = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=1"), { store, frontier: new FocusedFrontier(), port: 0 } as any);
+    const body = await response.json() as any;
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ counts: { total: 1 }, page: { total: 1 }, items: [{ company: "Query Company" }] });
+  });
+
   test("keeps the exposure index aligned with metadata, retention, and source changes", () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "src_reindexed", name: "Generic source" }));

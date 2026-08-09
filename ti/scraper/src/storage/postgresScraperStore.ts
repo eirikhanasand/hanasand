@@ -571,6 +571,56 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return rows.map(readRecord);
   }
 
+  async queryExposureQueuePage(input: {
+    tenantId?: string;
+    filters?: { q?: string; company?: string; actor?: string; category?: string; size?: string; country?: string; from?: string; to?: string };
+    limit: number;
+    offset: number;
+  }) {
+    const filters = input.filters ?? {};
+    const values: unknown[] = [input.tenantId === "default" ? null : input.tenantId ?? null];
+    const where = [
+      "capture.tenant_id IS NOT DISTINCT FROM $1::text",
+      "(source.tenant_id IS NULL OR source.tenant_id IS NOT DISTINCT FROM capture.tenant_id)",
+      "NOT (concat_ws(' ', capture.source_id, source.record->>'name', source.record->'metadata'->>'sourceFamily') ~* '(cisa known exploited|known exploited vulnerabilities|mitre att&ck|attack enterprise|groups dataset|public groups dataset|nvd recent cve|github advisory database)')",
+      "((capture.record->'metadata'->'leakSite'->>'actorName' <> '' AND capture.record->'metadata'->'leakSite'->>'victimName' <> '') OR (concat_ws(' ', capture.source_id, source.record->>'name', source.record->'metadata'->>'sourceFamily') ~* '(victim feed|ransomware\\.live victim|ransomlook|leak site|extortion|darkweb|darknet|actor claim|tor_metadata|i2p_metadata|freenet_metadata)' AND capture.record->>'title' ~* '(has just published a new victim|claims victim|claimed victim|claims victim|victim\\s*:|added victim|listed victim|published victim)'))"
+    ];
+    const add = (sql: string, value: unknown) => { values.push(value); where.push(sql.replace("?", `$${values.length}`)); };
+    const text = () => "lower(capture.record::text || ' ' || COALESCE(source.record::text, '')) LIKE '%' || lower(?) || '%'";
+    if (filters.q) add(text(), filters.q);
+    if (filters.company) add("lower(capture.record::text) LIKE '%' || lower(?) || '%'", filters.company);
+    if (filters.actor) add("lower(capture.record::text) LIKE '%' || lower(?) || '%'", filters.actor);
+    if (filters.category) add("lower(capture.record::text) LIKE '%' || lower(?) || '%'", filters.category);
+    if (filters.size) add("lower(capture.record::text) LIKE '%' || lower(?) || '%'", filters.size);
+    if (filters.country) add("lower(capture.record::text) LIKE '%' || lower(?) || '%'", filters.country);
+    if (filters.from) add("COALESCE(capture.published_at, capture.collected_at) >= ?::timestamptz", `${filters.from}T00:00:00.000Z`);
+    if (filters.to) add("COALESCE(capture.published_at, capture.collected_at) <= ?::timestamptz", `${filters.to}T23:59:59.999Z`);
+    const filtered = `
+      FROM threat_intel.captures capture
+      LEFT JOIN threat_intel.sources source ON source.id = capture.source_id
+      WHERE ${where.join(" AND ")}`;
+    const [summaryRows, rows] = await Promise.all([
+      this.sql.unsafe(`SELECT count(*) AS total,
+        count(*) FILTER (WHERE capture.record->'metadata'->'review'->>'state' = 'needs_review' OR capture.published_at IS NULL) AS needs_review,
+        count(*) FILTER (WHERE capture.storage_kind = 'metadata_only') AS metadata_only,
+        max(capture.published_at) AS latest_claim_at,
+        max(capture.collected_at) AS latest_collected_at${filtered}`, values),
+      this.sql.unsafe(`SELECT capture.record${filtered}
+        ORDER BY COALESCE(capture.published_at, capture.collected_at) DESC, capture.id DESC
+        LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+        [...values, Math.max(1, Math.min(250, Math.floor(input.limit))), Math.max(0, Math.floor(input.offset))])
+    ]);
+    const first = summaryRows[0] as Record<string, unknown> | undefined;
+    return {
+      captures: rows.map((row: Record<string, unknown>) => readRecord(row.record)),
+      total: Number(first?.total ?? 0),
+      needsReview: Number(first?.needs_review ?? 0),
+      metadataOnly: Number(first?.metadata_only ?? 0),
+      latestClaimAt: first?.latest_claim_at,
+      latestCollectedAt: first?.latest_collected_at
+    };
+  }
+
   async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; sourceId?: string; executableOnly?: boolean } ) {
     // ponytail: row-level evidence joins are bounded to 25 per global page so
     // the operator endpoint stays responsive; pagination still exposes every row.
