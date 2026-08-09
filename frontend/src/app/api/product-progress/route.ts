@@ -53,15 +53,7 @@ export async function GET(request: NextRequest) {
         : { ok: false, status: 0, error: 'No selected analyst case was available for case detail readiness.' }
     const selectedCaseProof = analystCaseDetailProof(selectedCaseDetail, selectedCaseDetailRoute || '/api/cases/:id')
     const fetchedSourceProxy = normalizeSourceProxy(sourceProxy, query, generatedAt)
-    const normalizedSourceProxy = sourceProxyReady(fetchedSourceProxy)
-        ? fetchedSourceProxy
-        : sourceProxyFromDwmProductFallback({
-            fetch: dwmProduct,
-            previous: fetchedSourceProxy,
-            query,
-            generatedAt,
-            route: routes.dwmProduct || '/api/dwm/product',
-        }) || fetchedSourceProxy
+    const normalizedSourceProxy = fetchedSourceProxy
     const supportAudit = helpdeskAuditReadiness({
         generatedAt,
         recoveryRoute: routes.supportRecovery || '/api/backend/admin/support/access-recovery',
@@ -238,43 +230,6 @@ function normalizeSourceProxy(result: FetchResult, query: string, generatedAt: s
             code: result.status ? 'source_proxy_http_error' : 'source_proxy_fetch_failed',
             message: result.error || `Source proxy returned HTTP ${result.status}.`,
         },
-    }
-}
-
-function sourceProxyFromDwmProductFallback(input: {
-    fetch: FetchResult
-    previous: DashboardSourceProofProxyPayload
-    query: string
-    generatedAt: string
-    route: string
-}): DashboardSourceProofProxyPayload | undefined {
-    const payload = input.fetch.json as {
-        schemaVersion?: string
-        generatedAt?: string
-        sourceInventory?: DashboardSourceProofProxyPayload['sourceInventory']
-        sourcePacks?: DashboardSourceProofProxyPayload['sourcePacks']
-    } | undefined
-    const inventory = payload?.sourceInventory
-    if (!input.fetch.ok || payload?.schemaVersion !== 'dwm.product.v1' || inventory?.schemaVersion !== 'dwm.source_inventory.v1') {
-        return undefined
-    }
-
-    return {
-        ok: true,
-        generatedAt: inventory.generatedAt || payload.generatedAt || input.generatedAt,
-        query: input.query,
-        baseConfigured: input.previous.baseConfigured ?? false,
-        endpoints: {
-            ...input.previous.endpoints,
-            sourceInventory: { ok: true, status: 200 },
-            ...(payload.sourcePacks ? { sourcePacks: { ok: true, status: 200 } } : {}),
-        },
-        sourceInventory: inventory,
-        sourcePacks: payload.sourcePacks,
-        error: input.previous.error ? {
-            code: 'source_proxy_fallback_from_dwm_product',
-            message: `Using ${input.route} source inventory because scraper control proxy was unavailable: ${input.previous.error.message || input.previous.error.code || 'unknown error'}.`,
-        } : undefined,
     }
 }
 

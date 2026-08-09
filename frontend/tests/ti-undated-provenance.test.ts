@@ -92,8 +92,23 @@ assert.equal(undatedGapRows[0]?.newestAt, undefined)
 
 const noEvidenceActor = buildActorIntelligence({ ...result, aliases: [], notes: [], sources: [], actorIntelligence: undefined }, [])
 assert.equal(noEvidenceActor.attribution, 'No attribution evidence')
+assert.equal(noEvidenceActor.actorClass, '')
 assert.equal(noEvidenceActor.motivation.length, 0)
 assert.equal(noEvidenceActor.lastSeen, 'Observation date unavailable')
+
+const genericActivityActor = buildActorIntelligence({
+    ...result,
+    actorIntelligence: undefined,
+    recentActivity: [{
+        date: '2026-01-01',
+        title: 'A source reported suspicious access.',
+        detail: 'General activity, not a campaign classification.',
+        confidence: 0.5,
+        sourceIds: ['src_seed_mitre_attack_apt29'],
+        claimType: 'general_activity',
+    }],
+}, [])
+assert.deepEqual(genericActivityActor.campaigns, [])
 
 const datedAttributionResult: TiSearchResponse = {
     ...result,

@@ -60,6 +60,19 @@ describe('public TI v1', () => {
         expect(invalid.json()).toEqual({ error: { code: 'invalid_query', message: 'query must contain 2-200 characters.', requestId: invalid.headers['x-request-id'] } })
     })
 
+    test('preflights scraper health for public search without changing the search payload contract', async () => {
+        let request: { query: string, preflightHealth?: boolean } | undefined
+        const app = await testApp(undefined, async input => {
+            request = input
+            return searchResult
+        })
+
+        const response = await app.inject({ method: 'POST', url: '/api/v1/ti/search', payload: { query: 'APT29' } })
+        expect(response.statusCode).toBe(200)
+        expect(request).toEqual({ query: 'APT29', preflightHealth: true })
+        expect(response.json()).toMatchObject({ query: 'APT29', mode: 'scraper', status: 'ready' })
+    })
+
     test('serializes scraper results with null or scalar nested entries without failing the request', async () => {
         const app = await testApp(undefined, async () => ({
             ...searchResult,

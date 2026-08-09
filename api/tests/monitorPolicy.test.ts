@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { addMissingRequiredChecks, notificationEvent } from '../src/utils/status/monitorPolicy.ts'
+import { addMissingRequiredChecks, notificationEvent, watchlistProcessingStatus } from '../src/utils/status/monitorPolicy.ts'
 
 describe('production monitor notification transitions', () => {
     test('status history SQL avoids reserved PostgreSQL window identifier', async () => {
@@ -39,5 +39,14 @@ describe('production monitor notification transitions', () => {
             status: 'down',
             message: 'No persisted monitor result is available for this required check.',
         })
+    })
+
+    test('does not report watchlist processing up when the scraper is unavailable', () => {
+        expect(watchlistProcessingStatus(14, 14, false)).toEqual({
+            status: 'down',
+            message: 'Customer watchlists are synchronized, but the scraper is unavailable for collection.',
+        })
+        expect(watchlistProcessingStatus(14, 13, true).status).toBe('degraded')
+        expect(watchlistProcessingStatus(14, 14, true).status).toBe('up')
     })
 })

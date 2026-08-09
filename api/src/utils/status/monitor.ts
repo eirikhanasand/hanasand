@@ -1,6 +1,6 @@
 import run from '#db'
 import crypto from 'crypto'
-import { activityCountDrop, activityFreshnessMinutes, latencyStatus, type MonitorStatus } from './monitorPolicy.ts'
+import { activityCountDrop, activityFreshnessMinutes, latencyStatus, type MonitorStatus, watchlistProcessingStatus } from './monitorPolicy.ts'
 import { recordMonitorResult } from './record.ts'
 
 const apiBase = process.env.MONITOR_API_BASE || `http://127.0.0.1:${Number(process.env.PORT) || 8081}/api`
@@ -261,7 +261,7 @@ export default async function runSyntheticMonitor() {
             return `Latest customer activity returned ${total} retained records; newest successful collection check is ${ageMinutes} minutes old.`
         }, { degraded: 3_000, down: 10_000 }),
         check('dark-web-monitoring', 'Watchlist processing', async () => {
-            const result = await run(`
+            const [result, scraper] = await Promise.all([run(`
                 SELECT
                   (SELECT count(DISTINCT item.organization_id)::int
                    FROM public.organization_watchlist_items item
@@ -272,17 +272,11 @@ export default async function runSyntheticMonitor() {
                    WHERE record_type = 'dwm_watchlist'
                      AND record->>'orgSharedWatchlist' = 'true'
                      AND record->>'status' = 'active') AS runtime_organizations
-            `)
+            `), fetchJson('/v1/health', { signal: AbortSignal.timeout(350) }, scraperBase)])
             const row = result.rows[0] as { configured_organizations?: number; runtime_organizations?: number } | undefined
             const configured = Number(row?.configured_organizations ?? 0)
             const runtime = Number(row?.runtime_organizations ?? 0)
-            if (configured > 0 && runtime === 0) {
-                return { status: 'down', message: `Customer watchlists exist for ${configured} organizations but none are in the scraper runtime.` }
-            }
-            if (configured > 0 && runtime < configured) {
-                return { status: 'degraded', message: `Customer watchlist synchronization is incomplete (${runtime} runtime organizations for ${configured} configured organizations).` }
-            }
-            return `Customer watchlists are represented in the scraper runtime (${runtime} runtime organizations for ${configured} configured organizations).`
+            return watchlistProcessingStatus(configured, runtime, scraper.response.status === 200)
         }),
         check('threat-intelligence', 'Processing backlog', async () => {
             const result = await run(`
