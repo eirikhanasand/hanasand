@@ -1443,13 +1443,21 @@ function linkedEvidence(index: ReviewIndex, subject: AutomaticReviewTask["subjec
           }]
         : [];
     });
-    const usefulRunIds = new Set((index.healthBySource.get(source.id) ?? [])
-      .filter((row: any) => row.tenantId === source.tenantId && row.useful === true && Number(row.captureCount ?? 0) > 0)
+    const retainedRuns = (index.healthBySource.get(source.id) ?? [])
+      .filter((row: any) => row.tenantId === source.tenantId && row.success === true && Number(row.captureCount ?? 0) > 0);
+    const retainedRunIds = new Set(retainedRuns
+      .map((row: any) => String(row.collectionRunId ?? ""))
+      .filter(Boolean));
+    const usefulRunIds = new Set(retainedRuns
+      .filter((row: any) => row.useful === true)
       .map((row: any) => String(row.collectionRunId ?? ""))
       .filter(Boolean));
     return (index.capturesBySource.get(source.id) ?? [])
-      .filter((capture: any) => capture.tenantId === source.tenantId
-        && usefulRunIds.has(String(capture.metadata?.runId ?? "")))
+      .filter((capture: any) => {
+        const runId = String(capture.metadata?.runId ?? "");
+        return capture.tenantId === source.tenantId && retainedRunIds.has(runId)
+          && (usefulRunIds.has(runId) || capture.metadata?.sourceReviewCandidate === true);
+      })
       .sort((left: any, right: any) => Date.parse(right.collectedAt ?? "") - Date.parse(left.collectedAt ?? ""))
       .slice(0, 8)
       .map((capture: any) => ({
