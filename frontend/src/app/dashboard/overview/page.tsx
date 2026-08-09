@@ -65,7 +65,7 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
                 </div>
             ) : null}
 
-            <DwmOverviewPanel />
+            <DwmOverviewPanel organizationId={typeof params.organizationId === 'string' ? params.organizationId.trim() : undefined} />
 
             <div className='grid gap-3 md:grid-cols-2'>
                 <OverviewCard title='Vulnerability monitoring' value='Not configured' detail='no organization-scoped image scanner' icon={<ShieldAlert className='h-4 w-4' />} tone='neutral' />
