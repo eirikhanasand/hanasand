@@ -33,6 +33,7 @@ let statusCache: { expiresAt: number, payload: object } | null = null
 let statusInflight: Promise<object> | null = null
 
 export default async function getStatus(_req: FastifyRequest, res: FastifyReply) {
+    res.header('Cache-Control', 'public, max-age=3, stale-while-revalidate=15')
     return res.send(await statusPayload())
 }
 
