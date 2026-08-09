@@ -283,7 +283,7 @@ export function DwmAnalystPortal({
             const payload = await readPayload(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
             const nextDeliveries = upsertDeliveryRows(payload.deliveries ?? (payload.delivery ? [payload.delivery] : []))
-            return deliveryActionMessage(nextDeliveries, payload.attemptedCount, 'Webhook delivery')
+            return deliveryActionMessage(nextDeliveries, 'Webhook delivery')
         })
     }
 
@@ -298,7 +298,7 @@ export function DwmAnalystPortal({
             const payload = await readPayload(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
             const nextDeliveries = upsertDeliveryRows(payload.deliveries ?? (payload.delivery ? [payload.delivery] : []))
-            return deliveryActionMessage(nextDeliveries, payload.attemptedCount, 'Webhook test')
+            return deliveryActionMessage(nextDeliveries, 'Webhook test')
         })
     }
 
@@ -2608,9 +2608,9 @@ function mergeDeliveries(incoming: DeliveryItem[], current: DeliveryItem[]) {
         }))
 }
 
-function deliveryActionMessage(rows: DeliveryItem[], attemptedCount: number | undefined, fallback: string) {
+function deliveryActionMessage(rows: DeliveryItem[], fallback: string) {
     const row = rows[0]
-    if (!row) return attemptedCount ? `${fallback} attempted.` : `${fallback} blocked: no active Discord/webhook destination is configured for this alert organization or watchlist.`
+    if (!row) return `${fallback} blocked: no durable delivery result was returned.`
     const destination = deliveryDestinationState(row)
     const retry = row.nextRetryAt ? ` Retry ${relativeTimeLabel(row.nextRetryAt)}.` : ''
     const error = row.error ? ` ${safeTimelineDetail(row.error)}` : ''

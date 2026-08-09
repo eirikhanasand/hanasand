@@ -193,9 +193,10 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     attachToWatchlist: true,
                 })
                 if (!delivery.ok) throw new Error(delivery.message)
-                const attemptedCount = typeof delivery.attemptedCount === 'number' ? delivery.attemptedCount : 0
-                deliveryReady = attemptedCount > 0
-                deliveryText = deliveryReady ? ' Dry-run delivery recorded.' : ' Delivery needs setup.'
+                const deliveryRows = durableDeliveryRows(delivery)
+                if (!deliveryRows.length) throw new Error('No durable delivery result was returned.')
+                deliveryReady = true
+                deliveryText = ' Dry-run delivery recorded.'
             }
 
             setTerms(nextTerms)
@@ -309,7 +310,9 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 webhookUrl: webhookConfigured ? webhookUrl.trim() : undefined,
             })
             if (!delivery.ok) throw new Error(delivery.message)
-            const attemptedCount = typeof delivery.attemptedCount === 'number' ? delivery.attemptedCount : 0
+            const deliveryRows = durableDeliveryRows(delivery)
+            if (!deliveryRows.length) throw new Error('No durable delivery result was returned.')
+            const attemptedCount = deliveryRows.length
             setResult({ ok: true, message: `Webhook delivery attempted for ${attemptedCount} alert(s).` })
             setLastRoute({
                 label: 'Webhook delivery',
@@ -335,12 +338,23 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 webhookUrl: webhookUrl.trim() || undefined,
             })
             if (!test.ok) throw new Error(test.message)
-            setResult({ ok: true, message: 'Webhook test delivered. Future alerts can use this destination.' })
+            const deliveryRows = durableDeliveryRows(test)
+            if (!deliveryRows.length) throw new Error('No durable delivery result was returned.')
+            const failed = deliveryRows.some(row => row.status === 'failed' || Boolean(row.error))
+            const dryRun = deliveryRows.some(row => row.status === 'dry_run' || row.dryRun === true)
+            setResult({
+                ok: !failed,
+                message: failed
+                    ? 'Webhook test recorded a failed delivery attempt. Review delivery history before retrying.'
+                    : dryRun
+                        ? 'Webhook test recorded a dry-run delivery. Future alerts can use this destination.'
+                        : 'Webhook test delivered. Future alerts can use this destination.',
+            })
             setLastRoute({
                 label: 'Webhook test',
                 watchTerms: effectiveTermCount,
-                deliveryAttempts: 1,
-                deliveryState: 'test delivered',
+                deliveryAttempts: deliveryRows.length,
+                deliveryState: failed ? 'test failed' : dryRun ? 'test recorded' : 'test delivered',
             })
             refreshWorkspace()
         } catch (error) {
@@ -833,4 +847,13 @@ function readNumber(value: unknown, key: string) {
     if (!value || typeof value !== 'object') return 0
     const candidate = (value as Record<string, unknown>)[key]
     return typeof candidate === 'number' ? candidate : 0
+}
+
+function durableDeliveryRows(value: Record<string, unknown>) {
+    const rows = Array.isArray(value.deliveries)
+        ? value.deliveries
+        : isRecord(value.delivery)
+            ? [value.delivery]
+            : []
+    return rows.filter(isRecord)
 }

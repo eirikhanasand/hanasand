@@ -43,6 +43,12 @@ test('dashboard DWM operator copy avoids backend-shaped returned wording', async
     expect(caseDetail).toContain('<DecisionFact label=\'Assertion\'')
     expect(caseDetail).toContain('this confirms a source mention, not the underlying incident')
     expect(dwmPortal).toContain('no active Discord/webhook destination is configured for this alert organization or watchlist')
+    expect(dwmPortal).toContain('no durable delivery result was returned')
+    expect(workflowActions).toContain('No durable delivery result was returned.')
+    expect(workflowActions).not.toContain('Webhook delivery attempted for ${attemptedCount} alert(s).')
+    expect(workflowActions).toContain('Webhook test recorded a dry-run delivery.')
+    expect(workflowActions).toContain('Webhook test recorded a failed delivery attempt.')
+    expect(workflowActions).toContain('dryRun\n                        ? \'Webhook test recorded a dry-run delivery.')
     expect(dwmPortal).toContain('Trace ${row.auditEventId || row.requestId}.')
 
     expect(dwmPage).not.toContain('returning live')
