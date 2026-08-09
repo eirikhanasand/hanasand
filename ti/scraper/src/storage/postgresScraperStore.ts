@@ -1255,14 +1255,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         'observedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
         'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
         'successfulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success),
-        'usefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful),
+        'usefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.capture_count > 0),
         'captureProducingSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.capture_count > 0),
         'healthySourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND COALESCE(latest_health.parser_warning_count, 0) = 0),
         'degradedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND COALESCE(latest_health.parser_warning_count, 0) > 0),
         'failedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL AND latest_health.success = FALSE),
         'checkedWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.checked_at >= now() - interval '24 hours'),
         'successfulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND latest_health.checked_at >= now() - interval '24 hours'),
-        'usefulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.checked_at >= now() - interval '24 hours'),
+        'usefulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.capture_count > 0 AND latest_health.checked_at >= now() - interval '24 hours'),
         'backoffSourceCount', count(*) FILTER (WHERE collection_executable AND NULLIF(sources.record->'crawlState'->>'backoffUntil', '')::timestamptz > now()),
         'neverObservedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NULL)
       ) AS summary
