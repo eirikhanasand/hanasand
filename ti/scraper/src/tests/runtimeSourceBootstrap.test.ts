@@ -60,6 +60,22 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
+  test("indexes retained evidence once before reconciling portfolio sources", () => {
+    const store = new InMemoryScraperStore();
+    let healthReads = 0;
+    let captureReads = 0;
+    const readHealth = store.listSourceHealthObservations.bind(store);
+    const readCaptures = store.listCaptures.bind(store);
+    store.listSourceHealthObservations = () => { healthReads += 1; return readHealth(); };
+    store.listCaptures = () => { captureReads += 1; return readCaptures(); };
+    const seedPath = join(dirname(fileURLToPath(import.meta.url)), "../../seeds/source_portfolio_clear_web.json");
+
+    bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-09T18:00:00.000Z" });
+
+    expect(healthReads).toBe(1);
+    expect(captureReads).toBe(1);
+  });
+
   test("uses verification for admission and current runtime evidence after restart", async () => {
     const store = new InMemoryScraperStore();
     const dir = mkdtempSync(join(tmpdir(), "hanasand-source-portfolio-bootstrap-"));
