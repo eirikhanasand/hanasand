@@ -65,7 +65,7 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
                 </div>
             ) : null}
 
-            <DwmOverviewPanel organizationId={typeof params.organizationId === 'string' ? params.organizationId.trim() : undefined} />
+            <DwmOverviewPanel organizationId={firstParam(params.organizationId) || firstParam(params.orgId)} />
 
             <div className='grid gap-3 md:grid-cols-2'>
                 <OverviewCard title='Vulnerability monitoring' value='Not configured' detail='no organization-scoped image scanner' icon={<ShieldAlert className='h-4 w-4' />} tone='neutral' />
@@ -128,6 +128,10 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
             </div>
         </DashboardPage>
     )
+}
+
+function firstParam(value: string | string[] | undefined) {
+    return (Array.isArray(value) ? value[0] : value)?.trim() || undefined
 }
 
 function OverviewCard({ href, title, value, detail, icon, tone }: { href?: string, title: string, value: string, detail: string, icon: React.ReactNode, tone: 'ok' | 'watch' | 'bad' | 'neutral' }) {

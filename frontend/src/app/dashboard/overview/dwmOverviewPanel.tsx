@@ -18,6 +18,7 @@ export default function DwmOverviewPanel({ organizationId }: { organizationId?: 
                 const body = await response.json().catch(() => null) as DwmProductSnapshot | { error?: { message?: string } } | null
                 const errorMessage = body && 'error' in body ? body.error?.message : undefined
                 if (!response.ok || !body || !('schemaVersion' in body)) throw new Error(errorMessage || 'Tenant monitoring is unavailable.')
+                if (organizationId && body.tenantId !== organizationId) throw new Error('Organization monitoring returned an unexpected tenant scope.')
                 setState({ status: 'ready', snapshot: body })
             })
             .catch(error => {
