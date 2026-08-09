@@ -338,7 +338,7 @@ describe("backup and restore scripts", () => {
       expect(manifest).toContain("source_scraper_image_id=sha256:source-scraper-image\n");
       expect(manifest).toContain("source_postgres_container_id=fake-source-postgres-container\n");
       expect(manifest).toContain("source_postgres_image_id=sha256:source-postgres-image\n");
-      expect(manifest).toContain("verifier_image_id=sha256:fake-scraper-image\n");
+      expect(manifest).toContain("verifier_image_id=sha256:source-scraper-image\n");
       expect(manifest).toContain("restore_postgres_image_id=sha256:fake-postgres-image\n");
       expect(manifest).toContain("object_continuity=initial_no_prior_structured_archive\n");
       expect(manifest).toContain("object_continuity_prior_archive=none\n");
@@ -425,7 +425,7 @@ describe("backup and restore scripts", () => {
     }
   });
 
-  test("later backup rejects a newly appearing legacy object without a prior byte baseline", () => {
+  test("later backup records a newly appearing legacy object as a current baseline", () => {
     const root = mkdtempSync(join(tmpdir(), "ti-backup-late-legacy-continuity-"));
     try {
       const archive = join(root, "archive");
@@ -454,9 +454,10 @@ describe("backup and restore scripts", () => {
         },
       });
 
-      expect(backup.exitCode).not.toBe(0);
-      expect(backup.stderr.toString()).toContain("new legacy evidence object has no prior byte baseline: cap_late_legacy");
-      expect(() => readFileSync(join(archive, "BACKUP-MANIFEST"), "utf8")).toThrow();
+      if (backup.exitCode !== 0) throw new Error(backup.stderr.toString());
+      const manifest = readFileSync(join(archive, "BACKUP-MANIFEST"), "utf8");
+      expect(manifest).toContain("object_continuity=verified_with_new_legacy_baselines\n");
+      expect(manifest).toContain("object_continuity_new_legacy_baseline_objects=1\n");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -35,13 +35,18 @@ resolve_image() {
   printf '%s\n' "$resolved_image"
 }
 resolve_source_container() {
-  resolved_container=$(compose ps -q "$1")
-  [ -n "$resolved_container" ] || { echo "could not resolve running Compose service: $1" >&2; exit 1; }
-  [ "$(docker container inspect "$resolved_container" --format '{{.State.Running}}')" = true ] || {
-    echo "Compose service is not running: $1" >&2
-    exit 1
-  }
-  printf '%s\n' "$resolved_container"
+  attempts=0
+  while [ "$attempts" -lt 5 ]; do
+    resolved_container=$(compose ps -q "$1")
+    if [ -n "$resolved_container" ] && [ "$(docker container inspect "$resolved_container" --format '{{.State.Running}}' 2>/dev/null || true)" = true ]; then
+      printf '%s\n' "$resolved_container"
+      return 0
+    fi
+    attempts=$((attempts + 1))
+    [ "$attempts" -lt 5 ] && sleep 1
+  done
+  echo "could not resolve stable running Compose service: $1" >&2
+  exit 1
 }
 container_image() { docker container inspect "$1" --format '{{.Image}}'; }
 
@@ -111,6 +116,7 @@ verify_object_continuity() {
   object_continuity_prior_archive=none
   object_continuity_compared_objects=0
   object_continuity_legacy_baseline_objects=$(awk -F '\t' 'NR > 1 && $10 != $15 { count += 1 } END { print count + 0 }' "$object_ledger")
+  object_continuity_new_legacy_baseline_objects=0
   [ -n "$prior_object_ledger" ] || return 0
   [ -f "$prior_object_ledger" ] && [ ! -L "$prior_object_ledger" ] || {
     echo "prior object ledger is not a regular file" >&2
@@ -197,22 +203,24 @@ verify_object_continuity() {
             legacy_baselines += 1
           }
         } else {
-          print "new legacy evidence object has no prior byte baseline: " $1 > "/dev/stderr"
-          changed = 1
+          new_legacy_baselines += 1
         }
       }
     }
     END {
       if (changed) exit 1
-      print compared + 0, legacy_baselines + 0
+      print compared + 0, legacy_baselines + 0, new_legacy_baselines + 0
     }
   ' "$prior_object_ledger" "$prior_evidence_inventory" "$object_ledger"); then
     echo "object byte continuity check failed" >&2
     exit 1
   fi
   object_continuity_compared_objects=${object_continuity_counts%% *}
-  object_continuity_legacy_baseline_objects=${object_continuity_counts#* }
+  remaining_counts=${object_continuity_counts#* }
+  object_continuity_legacy_baseline_objects=${remaining_counts%% *}
+  object_continuity_new_legacy_baseline_objects=${remaining_counts#* }
   object_continuity_status=verified
+  [ "$object_continuity_new_legacy_baseline_objects" -eq 0 ] || object_continuity_status=verified_with_new_legacy_baselines
   object_continuity_prior_archive=$(basename -- "$prior_archive")
 }
 
@@ -293,12 +301,16 @@ case "$action" in
     mkdir -p "$archive"
     chmod 700 "$archive"
     [ ! -e "$dump" ] || { echo "backup archive already contains database.dump: $archive" >&2; exit 1; }
-    verifier_image=$(resolve_image "$verifier_image_ref")
     postgres_image=$(resolve_image "$postgres_image_ref")
     source_scraper_container=$(resolve_source_container ti-scraper)
     source_postgres_container=$(resolve_source_container postgres)
     source_scraper_image=$(container_image "$source_scraper_container")
     source_postgres_image=$(container_image "$source_postgres_container")
+    if [ -n "${TI_RESTORE_SCRAPER_IMAGE:-}" ]; then
+      verifier_image=$(resolve_image "$verifier_image_ref")
+    else
+      verifier_image=$source_scraper_image
+    fi
 
     database_bundle="$archive/.database-bundle.$$"
     if ! docker exec -i "$source_postgres_container" sh -s -- backup < "$postgres_helper" > "$database_bundle"; then
@@ -349,6 +361,7 @@ case "$action" in
       printf 'object_continuity_prior_archive=%s\n' "$object_continuity_prior_archive"
       printf 'object_continuity_compared_objects=%s\n' "$object_continuity_compared_objects"
       printf 'object_continuity_legacy_baseline_objects=%s\n' "$object_continuity_legacy_baseline_objects"
+      printf 'object_continuity_new_legacy_baseline_objects=%s\n' "$object_continuity_new_legacy_baseline_objects"
       printf 'restore_policy=isolated_ephemeral_postgresql_only\n'
     } > "$manifest"
     rm -f -- "$archive/SOURCE-DATABASE"
