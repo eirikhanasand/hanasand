@@ -141,6 +141,19 @@ type ReviewIndex = {
   actorIdentities: ActorIdentityRecord[];
 };
 
+type ReviewIndexCollections = {
+  tasksAndEvents: any[];
+  claims: any[];
+  incidents: any[];
+  captures: any[];
+  sources: any[];
+  health: any[];
+  claimEvidence: any[];
+  evidenceLinks: any[];
+  reviews: any[];
+  actorIdentities: ActorIdentityRecord[];
+};
+
 const MAX_STALE_TASKS_SUPERSEDED_PER_CYCLE = 250;
 
 export async function handleAutomaticReviewRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
@@ -1306,32 +1319,18 @@ function containsLabel(text: string, label: string) {
 }
 
 function buildReviewIndex(store: any): ReviewIndex {
-  const workflow = store.listAnalystMetadataReviewTasks?.() ?? [];
-  const claims = store.listIntelligenceClaims?.() ?? [];
-  const incidents = store.listIncidents?.() ?? [];
-  const captures = store.listCaptures?.() ?? [];
-  const sources = store.listSources?.() ?? [];
-  const health = store.listSourceHealthObservations?.() ?? [];
-  const claimEvidence = store.listClaimEvidence?.() ?? [];
-  const evidenceLinks = store.listEvidenceLinks?.() ?? [];
-  const reviews = store.listClaimReviews?.() ?? [];
-  return {
-    tasks: workflow.filter((item: any) => item.recordKind === TASK_KIND),
-    events: workflow.filter((item: any) => item.recordKind === EVENT_KIND),
-    claims,
-    incidents,
-    sources,
-    claimsById: keyed(claims),
-    incidentsById: keyed(incidents),
-    capturesById: keyed(captures),
-    capturesBySource: grouped(captures, "sourceId"),
-    sourcesById: keyed(sources),
-    claimEvidenceByClaim: grouped(claimEvidence, "claimId"),
-    incidentEvidenceByIncident: grouped(evidenceLinks.filter((item: any) => item.subjectType === "incident"), "subjectId"),
-    healthBySource: grouped(health, "sourceId"),
-    reviewsByClaim: grouped(reviews, "claimId"),
+  return buildReviewIndexFromCollections({
+    tasksAndEvents: store.listAnalystMetadataReviewTasks?.() ?? [],
+    claims: store.listIntelligenceClaims?.() ?? [],
+    incidents: store.listIncidents?.() ?? [],
+    captures: store.listCaptures?.() ?? [],
+    sources: store.listSources?.() ?? [],
+    health: store.listSourceHealthObservations?.() ?? [],
+    claimEvidence: store.listClaimEvidence?.() ?? [],
+    evidenceLinks: store.listEvidenceLinks?.() ?? [],
+    reviews: store.listClaimReviews?.() ?? [],
     actorIdentities: store.listActorIdentities?.() ?? []
-  };
+  });
 }
 
 async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants = false): Promise<ReviewIndex> {
@@ -1349,8 +1348,27 @@ async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants =
     load("evidenceLinks", "listEvidenceLinks"),
     load("claimReviews", "listClaimReviews")
   ]);
+  // The high-volume collections above are already loaded from PostgreSQL. Do not
+  // call buildReviewIndex here: it re-enumerates the same collections in memory.
+  return buildReviewIndexFromCollections({
+    tasksAndEvents: store.listAnalystMetadataReviewTasks?.() ?? [],
+    claims,
+    incidents,
+    captures,
+    sources,
+    health,
+    claimEvidence,
+    evidenceLinks,
+    reviews,
+    actorIdentities: store.listActorIdentities?.() ?? []
+  });
+}
+
+function buildReviewIndexFromCollections(collections: ReviewIndexCollections): ReviewIndex {
+  const { tasksAndEvents, claims, incidents, captures, sources, health, claimEvidence, evidenceLinks, reviews, actorIdentities } = collections;
   return {
-    ...buildReviewIndex(store),
+    tasks: tasksAndEvents.filter((item: any) => item.recordKind === TASK_KIND),
+    events: tasksAndEvents.filter((item: any) => item.recordKind === EVENT_KIND),
     claims,
     incidents,
     sources,
@@ -1362,7 +1380,8 @@ async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants =
     claimEvidenceByClaim: grouped(claimEvidence, "claimId"),
     incidentEvidenceByIncident: grouped(evidenceLinks.filter((item: any) => item.subjectType === "incident"), "subjectId"),
     healthBySource: grouped(health, "sourceId"),
-    reviewsByClaim: grouped(reviews, "claimId")
+    reviewsByClaim: grouped(reviews, "claimId"),
+    actorIdentities
   };
 }
 
