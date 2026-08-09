@@ -273,6 +273,18 @@ describe("public Telegram canary collection", () => {
         metadata: { productionCollection: false, publisherReference: expected[2], sourcePortfolioVerification: { observedItemCount: expected[3], observedUsefulItemCount: 0 } }
       });
     }
+    expect(report.accepted.find((item: any) => item.id === "src_armenia_cyberpolice_telegram")).toMatchObject({
+      url: "https://t.me/cyberpolice_arm",
+      language: "hy",
+      status: "candidate",
+      metadata: { productionCollection: false, publisherReference: "https://mia.gov.am/2025/09/16/cyber-15/", sourcePortfolioVerification: { observedItemCount: 19, observedUsefulItemCount: 0 } }
+    });
+    expect(report.accepted.find((item: any) => item.id === "src_s2w_dailybrief_telegram")).toMatchObject({
+      url: "https://t.me/s2wdailybrief",
+      language: "en",
+      status: "candidate",
+      metadata: { productionCollection: false, publisherReference: "https://www.s2w.inc/en/news/detail/566", sourcePortfolioVerification: { observedItemCount: 20, observedUsefulItemCount: 0 } }
+    });
     expect([...families]).toEqual(expect.arrayContaining([
       "apt_research",
       "malware_research",
@@ -329,7 +341,9 @@ describe("public Telegram canary collection", () => {
       "src_aktiv_security_telegram",
       "src_phishman_security_telegram",
       "src_cryptopro_security_telegram",
-      "src_tsarka_certkznews_telegram"
+      "src_tsarka_certkznews_telegram",
+      "src_armenia_cyberpolice_telegram",
+      "src_s2w_dailybrief_telegram"
     ]);
     expect(candidates.every((item: any) => item.countsAsCoverage !== true
       && item.metadata.productionCollection === false
@@ -340,7 +354,7 @@ describe("public Telegram canary collection", () => {
       && item.metadata.sourcePortfolioVerification.observedUsefulItemCount >= 0
       && !evaluateSourceForCollection(item).allowed
       && !isExecutableSource(item))).toBe(true);
-    expect(candidates.filter((item: any) => item.metadata.sourcePortfolioVerification.observedUsefulItemCount === 0)).toHaveLength(9);
+    expect(candidates.filter((item: any) => item.metadata.sourcePortfolioVerification.observedUsefulItemCount === 0)).toHaveLength(11);
     expect(report.accepted.map((item: any) => item.url)).not.toEqual(expect.arrayContaining([
       "https://t.me/FalconFeedsio",
       "https://t.me/noname05716",
