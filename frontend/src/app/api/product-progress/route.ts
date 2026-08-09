@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { buildProductProgressPayload } from '@/utils/productProgress/readiness'
 import { deployLedgerFromStatusPayload } from '@/utils/productProgress/deployLedger'
-import { helpdeskAuditFetchResultsFromLedger, loadProductHelpdeskAuditProofLedger } from '@/utils/productProgress/helpdeskAuditProofSource'
 import type { AnalystCaseDetailProofInput, DwmAlertGenerationReadinessInput } from '@/utils/productProgress/readiness'
 import type { DashboardSourceProofProxyPayload, DwmDeliveryItem, DwmOrganizationSummary, DwmOrganizationWebhookDestination, DwmProductSnapshotReadiness, DwmWatchlistSummary, EntitlementReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
 
@@ -62,25 +61,13 @@ export async function GET(request: NextRequest) {
             generatedAt,
             route: routes.dwmProduct || '/api/dwm/product',
         }) || fetchedSourceProxy
-    const helpdeskProofLedger = (!supportRecovery.ok || !auditEvents.ok || !supportAuditExportProof(auditEvents))
-        ? await loadProductHelpdeskAuditProofLedger()
-        : undefined
-    const helpdeskFallback = helpdeskProofLedger ? helpdeskAuditFetchResultsFromLedger(helpdeskProofLedger) : undefined
-    const supportAudit = helpdeskFallback
-        ? helpdeskAuditReadiness({
-            generatedAt,
-            recoveryRoute: routes.supportRecovery || '/api/backend/admin/support/access-recovery',
-            auditRoute: routes.adminAuditEvents || '/api/backend/admin/audit-events?limit=50',
-            recovery: helpdeskFallback.recovery,
-            audit: helpdeskFallback.audit,
-        })
-        : helpdeskAuditReadiness({
-            generatedAt,
-            recoveryRoute: routes.supportRecovery || '/api/backend/admin/support/access-recovery',
-            auditRoute: routes.adminAuditEvents || '/api/backend/admin/audit-events?limit=50',
-            recovery: supportRecovery,
-            audit: auditEvents,
-        })
+    const supportAudit = helpdeskAuditReadiness({
+        generatedAt,
+        recoveryRoute: routes.supportRecovery || '/api/backend/admin/support/access-recovery',
+        auditRoute: routes.adminAuditEvents || '/api/backend/admin/audit-events?limit=50',
+        recovery: supportRecovery,
+        audit: auditEvents,
+    })
     const payload = buildProductProgressPayload({
         generatedAt,
         checkedAt: generatedAt,
