@@ -425,16 +425,16 @@ function CaseOverview({ organizationId, state, alerts }: { organizationId?: stri
                                                 <Link href={caseDetailHref(caseId, row.alertId, row.organizationId || organizationId, 'case_overview')} className='font-semibold text-ui-primary underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
                                                     {row.title}
                                                 </Link>
-                                                <p className='mt-1 break-words text-xs text-ui-muted'>{alert?.actor || row.actor || '—'}</p>
+                                                <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{alert?.actor || row.actor || '—'}</p>
                                             </td>
                                             <td className='px-4 py-3'>
-                                                <p className='break-words'>{organization}</p>
-                                                <p className='mt-1 break-words text-xs text-ui-muted'>{victim || '—'}</p>
+                                                <p className='wrap-break-word'>{organization}</p>
+                                                <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{victim || '—'}</p>
                                             </td>
                                             <td className='px-4 py-3'>
                                                 <div className='flex flex-wrap items-center gap-2'>
                                                     <span className={severity === '—' ? 'text-ui-muted' : severityClass(severity)}>{stateLabel(severity)}</span>
-                                                    <span className='break-words text-xs text-ui-muted'>{stateLabel(status)}</span>
+                                                    <span className='wrap-break-word text-xs text-ui-muted'>{stateLabel(status)}</span>
                                                 </div>
                                             </td>
                                             <td className='px-4 py-3 text-xs text-ui-muted'>
