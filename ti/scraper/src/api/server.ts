@@ -33,6 +33,12 @@ import { resolveTenantScope } from "./tenantScope.ts";
 import { InMemoryOrgAlertCaseActionLedgerRepository } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
 import { buildResourceSnapshot, readCgroupResourceSnapshot } from "../ops/resourceControls.ts";
 import { authenticateOperatorRequest, authorizeOperatorScope } from "./requestAuthentication.ts";
+
+async function queryDwmEvidence(options: ApiServerOptions, tenantId: string) {
+  const query = (options.store as any).queryDwmEvidence;
+  if (typeof query === "function") return query.call(options.store, tenantId);
+  return { sources: options.store.listSources(), captures: options.store.listCaptures() };
+}
 export type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 export function startApiServer(options: ApiServerOptions): ApiServerHandle {
   const serve = (port: number) => Bun.serve({ port, hostname: options.port === 0 ? "127.0.0.1" : "0.0.0.0", fetch: (request) => handleDurableApiRequest(request, options) });
@@ -191,11 +197,12 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       if (access.error) return access.error;
       const tenantId = scope.tenantId;
       const explicitWatchlist = parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? url.searchParams.get("q") ?? "");
+      const evidence = await queryDwmEvidence(options, tenantId);
       return json(sanitizeDwmApiPayload(buildDwmProductSnapshot({
         tenantId,
         watchlist: explicitWatchlist.length ? explicitWatchlist : storedWatchlistTerms(options, tenantId),
-        sources: options.store.listSources(),
-        captures: options.store.listCaptures()
+        sources: evidence.sources,
+        captures: evidence.captures
       })));
     }
     if ((url.pathname === "/v1/dwm/product" || url.pathname === "/api/dwm/product") && request.method === "POST") {
@@ -205,11 +212,12 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       const access = authorizeDwmWorkflowAccess({ options, scope, request, url, body, mode: "read" });
       if (access.error) return access.error;
       const tenantId = scope.tenantId;
+      const evidence = await queryDwmEvidence(options, tenantId);
       return json(sanitizeDwmApiPayload(buildDwmProductSnapshot({
         tenantId,
         watchlist: Array.isArray(body.watchlist) ? body.watchlist : parseWatchlistParam(String(body.watchlist ?? body.terms ?? "")),
-        sources: options.store.listSources(),
-        captures: options.store.listCaptures()
+        sources: evidence.sources,
+        captures: evidence.captures
       })));
     }
     if ((url.pathname === "/v1/dwm/operations" || url.pathname === "/api/dwm/operations") && request.method === "GET") {
@@ -219,11 +227,12 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       if (access.error) return access.error;
       const tenantId = scope.tenantId;
       const explicitWatchlist = parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? url.searchParams.get("q") ?? "");
+      const evidence = await queryDwmEvidence(options, tenantId);
       return json(buildDwmOperationsSnapshot({
         tenantId,
         watchlist: explicitWatchlist.length ? explicitWatchlist : storedWatchlistTerms(options, tenantId),
-        sources: options.store.listSources(),
-        captures: options.store.listCaptures(),
+        sources: evidence.sources,
+        captures: evidence.captures,
         runs: options.store.listRuns()
       }));
     }
@@ -234,12 +243,13 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
       if (access.error) return access.error;
       const generatedAt = url.searchParams.get("generatedAt") ?? nowIso();
+      const evidence = await queryDwmEvidence(options, scope.tenantId);
       return json({
         ...buildDwmSourceInventory({
           tenantId: scope.tenantId,
           watchlist: parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? ""),
-          sources: options.store.listSources(),
-          captures: options.store.listCaptures(),
+          sources: evidence.sources,
+          captures: evidence.captures,
           includeCandidates: url.searchParams.get("full") === "true",
           generatedAt
         }),

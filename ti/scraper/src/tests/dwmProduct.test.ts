@@ -315,6 +315,8 @@ describe("dwm product snapshot", () => {
     store.saveSource(darkwebSource);
     store.saveCapture(telegramCapture);
     store.saveCapture(darkwebCapture);
+    let queryCalled = 0;
+    (store as any).queryDwmEvidence = async () => { queryCalled += 1; return { sources: store.listSources(), captures: store.listCaptures() }; };
 
     const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/product?tenantId=tenant_acme&watchlist=acme.com"), {
       store,
@@ -323,6 +325,7 @@ describe("dwm product snapshot", () => {
     const body = await response.json() as any;
 
     expect(response.status).toBe(200);
+    expect(queryCalled).toBe(1);
     expect(body.schemaVersion).toBe("dwm.product.v1");
     expect(body.alerts).toHaveLength(2);
     expect(body.sourceCoverage.find((row: any) => row.family === "telegram_public").activeCount).toBe(1);
