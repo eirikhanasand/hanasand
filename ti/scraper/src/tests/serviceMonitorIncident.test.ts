@@ -67,6 +67,7 @@ test("deduplicates sustained public service incidents, queues Hanasand AI once, 
 
   const incidents = store.listIncidents().filter((incident: any) => incident.record?.serviceMonitor);
   expect(incidents).toHaveLength(2);
+  expect(store.listSources().filter((source: any) => source.type === "service_monitor")).toHaveLength(1);
   expect(store.listAnalystMetadataReviewTasks().filter((item: any) => item.recordKind === "automatic_intelligence_review_task")).toHaveLength(2);
   for (const incident of incidents) {
     expect(store.listEvidenceLinks().filter((link: any) => link.subjectType === "incident" && link.subjectId === incident.id)).toHaveLength(5);

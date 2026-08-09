@@ -37,15 +37,18 @@ export async function upsertServiceMonitorIncident(options: ApiServerOptions, in
   });
   if (input.status === "up" && !open) return { incident: undefined, queued: 0 };
 
-  const sourceId = stableId("service-monitor-source", `${service}:${checkName}`);
-  const source = store.getSource?.(sourceId);
+  const statusUrl = "https://hanasand.com/status";
+  const generatedSourceId = stableId("service-monitor-source", `${service}:${checkName}`);
+  const source = store.getSource?.(generatedSourceId)
+    ?? store.listSources?.().find((candidate: any) => candidate.type === "service_monitor" && candidate.url === statusUrl);
+  const sourceId = source?.id ?? generatedSourceId;
   const at = nowIso();
   if (!source) {
     store.saveSource({
       id: sourceId,
       name: `${service} service monitor`,
       type: "service_monitor",
-      url: "https://hanasand.com/status",
+      url: statusUrl,
       accessMethod: "internal",
       status: "active",
       risk: "low",
@@ -69,7 +72,7 @@ export async function upsertServiceMonitorIncident(options: ApiServerOptions, in
     const observationAt = validIso(observation.checkedAt) ?? checkedAt;
     const message = boundedText(observation.message, 1_000);
     const body = `${service} / ${checkName}: ${observation.status}; checked ${observationAt}; latency ${Math.max(0, Number(observation.latencyMs) || 0)} ms; consecutive failures ${Math.max(0, Number(observation.consecutiveFailures) || 0)}${message ? `; error ${message}` : ""}`;
-    const id = stableId("service-monitor-capture", `${sourceId}:${observationAt}:${observation.status}:${observation.latencyMs}:${message}:${observation.consecutiveFailures}`);
+    const id = stableId("service-monitor-capture", `${sourceId}:${service}:${checkName}:${observationAt}:${observation.status}:${observation.latencyMs}:${message}:${observation.consecutiveFailures}`);
     return {
       id,
       sourceId,
