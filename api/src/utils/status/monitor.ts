@@ -26,7 +26,10 @@ export async function check(
         const explicit = typeof result === 'object' && result ? result : undefined
         const status = explicit?.status || latencyStatus(latency, latencyThresholds)
         const message = explicit?.message || (typeof result === 'string' ? result : '')
-        await recorder(service, checkName, status, latency, status === 'up' ? message : message || `Response took ${latency} ms.`)
+        const recordedMessage = status !== 'up' && !explicit && typeof result === 'string'
+            ? `Response took ${latency} ms.`
+            : message
+        await recorder(service, checkName, status, latency, status === 'up' ? recordedMessage : recordedMessage || `Response took ${latency} ms.`)
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         await recorder(service, checkName, 'down', Math.round(performance.now() - started), message)
