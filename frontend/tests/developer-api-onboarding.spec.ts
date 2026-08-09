@@ -28,21 +28,21 @@ test('signed-in customer creates an organization key, runs the shown request, an
         organizations = [organization]
         await route.fulfill({ json: { organization } })
     })
-    await page.route(url => new URL(url).pathname.startsWith('/api/backend/organizations'), async route => {
+    await page.route(url => new URL(url).pathname.startsWith('/api/organizations'), async route => {
         const request = route.request()
         const path = new URL(request.url()).pathname
         requests.push({ method: request.method(), path })
-        if (path === `/api/backend/organizations/${organization.id}/api-keys` && request.method() === 'POST') {
+        if (path === `/api/organizations/${organization.id}/api-keys` && request.method() === 'POST') {
             activeKey = key
             await route.fulfill({ status: 201, json: { apiKey: key, secret: issuedSecret } })
             return
         }
-        if (path === `/api/backend/organizations/${organization.id}/api-keys/${key.id}` && request.method() === 'DELETE') {
+        if (path === `/api/organizations/${organization.id}/api-keys/${key.id}` && request.method() === 'DELETE') {
             activeKey = undefined
             await route.fulfill({ json: { apiKey: { ...key, enabled: false } } })
             return
         }
-        if (path === `/api/backend/organizations/${organization.id}/api-keys`) {
+        if (path === `/api/organizations/${organization.id}/api-keys`) {
             await route.fulfill({ json: { organizationId: organization.id, apiKeys: activeKey ? [activeKey] : [] } })
             return
         }
@@ -67,13 +67,13 @@ test('signed-in customer creates an organization key, runs the shown request, an
 
     expect(requests).toEqual(expect.arrayContaining([
         { method: 'POST', path: '/api/organizations' },
-        { method: 'POST', path: `/api/backend/organizations/${organization.id}/api-keys` },
-        { method: 'DELETE', path: `/api/backend/organizations/${organization.id}/api-keys/${key.id}` },
+        { method: 'POST', path: `/api/organizations/${organization.id}/api-keys` },
+        { method: 'DELETE', path: `/api/organizations/${organization.id}/api-keys/${key.id}` },
     ]))
 })
 
 test('signed-out customer gets direct registration and login choices instead of a sales contact', async ({ page }) => {
-    await page.route(url => new URL(url).pathname === '/api/backend/organizations', route => route.fulfill({ status: 401, json: { error: 'Unauthorized.' } }))
+    await page.route(url => new URL(url).pathname === '/api/organizations', route => route.fulfill({ status: 401, json: { error: 'Unauthorized.' } }))
     await page.goto('/developers#api-access', { waitUntil: 'domcontentloaded' })
 
     await expect(page.getByRole('heading', { name: 'Sign in to create a real key' })).toBeVisible()
