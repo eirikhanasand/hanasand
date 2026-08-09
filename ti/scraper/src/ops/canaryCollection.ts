@@ -21,6 +21,11 @@ export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanary
 export type * from "./canaryCollectionTypes.ts";
 import type { CanaryCollectionCycleResult, CanaryCollectionLoopHandle, CanaryCollectionOptions } from "./canaryCollectionTypes.ts";
 const MAX_CANARY_TASKS_PER_CYCLE = 60;
+function effectiveCanaryLimits(options: any) {
+  const maxConcurrentTasks = Math.max(1, Math.min(Number(options.maxConcurrentTasks ?? 5), 32));
+  const maxTasks = Math.min(Math.max(1, options.maxTasks ?? 5), MAX_CANARY_TASKS_PER_CYCLE);
+  return { maxSources: Math.min(Math.max(1, options.maxSources ?? 10), maxTasks), maxTasks, maxConcurrentTasks };
+}
 export async function runCanaryCollectionCycle(options: CanaryCollectionOptions): Promise<CanaryCollectionCycleResult> {
   const generatedAt = options.now?.() ?? nowIso(), fetcher = options.fetch ?? fetch, mode = options.fetch ? "injected_proof_fetch" : "native_live_http";
   const storageFailure = storageBackpressure(options.store);
@@ -53,10 +58,8 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   if (options.store.batch && !options.batched) return options.store.batch(() => runCanaryCollectionCycle({ ...options, batched: true }));
   const productivity = reconcilePublicSourceProductivity({ ...options, now: generatedAt });
   const activation = options.activateSources ? activatePublicCanarySources({ ...options, now: generatedAt }) : { activated: [], alreadyActive: [], rejected: [] };
-  const maxConcurrentTasks = Math.max(1, Math.min(Number(options.maxConcurrentTasks ?? 5), 32));
   // ponytail: keep one cycle bounded; remaining due work stays queued for the next cadence.
-  const maxTasks = Math.min(Math.max(1, options.maxTasks ?? 5), MAX_CANARY_TASKS_PER_CYCLE);
-  const maxSources = Math.min(Math.max(1, options.maxSources ?? 10), maxTasks), maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
+  const { maxSources, maxTasks, maxConcurrentTasks } = effectiveCanaryLimits(options), maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
   const selectedSourceIds = new Set<string>(options.sourceIds ?? []);
   const supersededTaskCount = supersedeCoveredQueuedTasks(options, generatedAt, selectedSourceIds);
   const queuedTasks = options.frontier.snapshot().map(frontierTask).filter((task: any) => taskInScope(options, task, selectedSourceIds));
@@ -232,7 +235,8 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
     })();
     return active;
   };
-  Object.assign(state, { supervisorAttached: true, enabled: options.enabled !== false, intervalSeconds: options.intervalSeconds ?? 300, maxSources: options.maxSources ?? 10, maxTasks: options.maxTasks ?? 5, maxConcurrentTasks: options.maxConcurrentTasks ?? 5, maxItemsPerTask: options.maxItemsPerTask ?? 40, maxBytes: options.maxBytes ?? 512_000, timeoutMs: options.timeoutMs ?? 30_000, queueLimit: options.queueLimit ?? 500, activateSources: Boolean(options.activateSources) });
+  const limits = effectiveCanaryLimits(options);
+  Object.assign(state, { supervisorAttached: true, enabled: options.enabled !== false, intervalSeconds: options.intervalSeconds ?? 300, maxSources: limits.maxSources, maxTasks: limits.maxTasks, maxConcurrentTasks: limits.maxConcurrentTasks, maxItemsPerTask: options.maxItemsPerTask ?? 40, maxBytes: options.maxBytes ?? 512_000, timeoutMs: options.timeoutMs ?? 30_000, queueLimit: options.queueLimit ?? 500, activateSources: Boolean(options.activateSources) });
   if (state.enabled) {
     state.nextCycleAt = new Date(Date.now() + 1_000).toISOString();
     startupTimer = setTimeout(cycle, 1_000);
