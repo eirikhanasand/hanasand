@@ -358,6 +358,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
             })
             const payload = await response.json().catch(() => ({}))
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            if (!payload.case || typeof payload.case.id !== 'string') throw new Error('No durable case update was returned.')
             setMessage({ ok: true, text: `${actionLabel(actionId)} recorded.` })
             await load()
         } catch (error) {
@@ -389,6 +390,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
             })
             const payload = await response.json().catch(() => ({}))
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            if (!payload.receipt || typeof payload.receipt.id !== 'string') throw new Error('No durable notification record was returned.')
             setMessage({ ok: true, text: 'Notification dry run recorded.' })
             await load()
         } catch (error) {
