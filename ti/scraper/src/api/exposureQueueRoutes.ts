@@ -246,7 +246,8 @@ export async function exposureParserHealth() {
 export async function saveExposureClaimFromCollectedItem(store: any, item: any, at = nowIso()) {
   if (!shouldPromoteExposureClaim(item)) return undefined;
   const sourceFamily = collectedExposureSourceFamily(item);
-  if (restrictedExposureFamily(sourceFamily) && !hasPublisherEvidence(item)) return undefined;
+  const publisherTimestamp = validTimestamp(item.publishedAt) ?? publisherEvidenceTimestamp(item);
+  if (!publisherTimestamp || (restrictedExposureFamily(sourceFamily) && !hasPublisherEvidence(item))) return undefined;
   const claim = await parseExposureClaim({
     sourceId: item.sourceId,
     sourceName: item.source?.name || item.metadata?.sourceName,
@@ -255,7 +256,7 @@ export async function saveExposureClaimFromCollectedItem(store: any, item: any, 
     title: item.title,
     text: item.rawText || item.body,
     capturedAt: item.collectedAt || at,
-    publishedAt: item.publishedAt,
+    publishedAt: publisherTimestamp,
     reportTimestamps: item.metadata?.reportTimestamps,
     sourceFamily
   }, at);
@@ -283,6 +284,18 @@ function hasPublisherEvidence(item: any) {
     && reference.referenceUrl.startsWith("https://")
     && reference.extractionMethod === "source_field"
   );
+}
+
+function publisherEvidenceTimestamp(item: any) {
+  const reference = Array.isArray(item?.metadata?.reportTimestamps)
+    ? item.metadata.reportTimestamps.find((candidate: any) =>
+      candidate?.role === "publisher"
+      && validTimestamp(candidate.timestamp)
+      && typeof candidate.referenceUrl === "string"
+      && candidate.referenceUrl.startsWith("https://")
+      && candidate.extractionMethod === "source_field")
+    : undefined;
+  return validTimestamp(reference?.timestamp);
 }
 
 type ExposureQueueFilters = { q?: string; company?: string; actor?: string; category?: string; size?: string; country?: string; from?: string; to?: string };

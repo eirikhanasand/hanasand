@@ -10,7 +10,9 @@ export async function publicCoverage(options: ApiServerOptions) {
     : await buildSourceOperationsSnapshot(options.store, { generatedAt, limit: 1 });
   const summary: any = operations.summary ?? {};
   const sourceQualification: any = operations.qualification ?? qualificationFromSummary(summary);
-  const measured = summary.measurementState !== "source_counts_only" && sourceQualification.measurementState !== "not_measured";
+  const measured = summary.operationalMetricsMeasured !== false
+    && summary.measurementState !== "source_counts_only"
+    && sourceQualification.measurementState !== "not_measured";
   const latency = latencySummary((options.store.listTimelinessRecords?.() ?? []).filter((record: any) => !record.tenantId));
 
   return {
@@ -56,7 +58,7 @@ function qualificationFromSummary(summary: any) {
   };
   counts.total = counts.clearWeb + counts.lawfulDarkWeb + counts.publicTelegram;
   return {
-    measurementState: summary.measurementState === "source_counts_only" ? "not_measured" : "measured",
+    measurementState: summary.operationalMetricsMeasured === false || summary.measurementState === "source_counts_only" ? "not_measured" : "measured",
     baseline: SOURCE_PORTFOLIO_BASELINE,
     counts,
     gaps: {
