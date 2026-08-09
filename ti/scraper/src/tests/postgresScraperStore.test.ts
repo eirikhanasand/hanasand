@@ -14,7 +14,7 @@ import { parseCurrentRansomwareOperations } from "../pipeline/ransomwareOperatio
 import { qualifySourcePortfolio } from "../ops/sourcePortfolioQualification.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryObjectEvidenceStore, InMemoryScraperStore } from "../storage/memoryStore.ts";
-import { PostgresScraperStore, normalizeLegacySourceForImport, toJson } from "../storage/postgresScraperStore.ts";
+import { PostgresScraperStore, createPostgresClient, normalizeLegacySourceForImport, toJson } from "../storage/postgresScraperStore.ts";
 import { hashContent, stableId } from "../utils.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
 import { fixtureCapture } from "./helpers/storageFixtures.ts";
@@ -24,6 +24,12 @@ import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 const collectedAt = "2026-07-19T12:00:00.000Z";
 
 describe("structured threat-intelligence storage contract", () => {
+  test("disables prepared-query pipelining for durable FIFO writes", async () => {
+    const sql = createPostgresClient("postgres://test:test@127.0.0.1:1/test");
+    expect(sql.options.prepare).toBe(false);
+    await sql.close({ timeout: 0 });
+  });
+
   test("routes PostgreSQL search through the warmed capture index", () => {
     expect(new (PostgresScraperStore as any)({}, []).usesPostgresSearchIndex).toBe(true);
   });
