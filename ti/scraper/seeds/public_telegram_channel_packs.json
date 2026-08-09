@@ -1,10 +1,10 @@
 {
-  "version": 6,
+  "version": 7,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-08-09T08:38:54.000Z",
+  "generatedAt": "2026-08-09T09:22:42.651Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 15,
+  "sourceCount": 17,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -1708,6 +1708,252 @@
             "вредоносное ПО",
             "кибератака",
             "утечка данных"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_csirt_italia_telegram",
+      "name": "CSIRT Italia public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/CSIRT_italia",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.94,
+      "language": "it",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Italian-language security advisories from the Telegram-verified official CSIRT Italia channel linked by Italy's National Cybersecurity Agency. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T09:22:42.651Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "cert_government",
+          "vulnerability_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "CSIRT_italia",
+        "verifiedSourceId": "src_csirt_italia_telegram",
+        "publisherReference": "https://www.acn.gov.it/portale/csirt-italia",
+        "ownershipVerifiedAt": "2026-08-09T09:22:42.651Z",
+        "activityVerifiedAt": "2026-08-09T09:22:42.651Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "security advisories",
+          "vulnerabilities",
+          "exploitation",
+          "malware",
+          "incident response"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T09:22:42.651Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 1,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.acn.gov.it/portale/csirt-italia",
+          "legalBasisVerifiedAt": "2026-08-09T09:22:42.651Z",
+          "latestPublishedAt": "2026-08-07T14:54:57+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "government:it:csirt-italia:telegram",
+        "publisher": {
+          "name": "CSIRT Italia",
+          "country": "IT",
+          "homepage": "https://www.csirt.gov.it/",
+          "trustBasis": "Italian National Cybersecurity Agency page links the exact Telegram-verified official channel"
+        },
+        "tier": "tier_1",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public government security communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public government channel used for defensive security research.",
+        "reliability": 0.94,
+        "intelligenceValue": 0.88,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "security advisories",
+            "vulnerabilities",
+            "exploitation",
+            "malware",
+            "incident response"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "critical infrastructure",
+            "technology"
+          ],
+          "regions": [
+            "Italy",
+            "European Union"
+          ],
+          "countries": [
+            "Italy"
+          ],
+          "languages": [
+            "it"
+          ],
+          "queryPatterns": [
+            "vulnerabilità",
+            "sfruttamento",
+            "malware",
+            "incidente"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_bizone_telegram",
+      "name": "BI.ZONE public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/bizone_channel",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.88,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian-language APT, malware, vulnerability, and threat-hunting research from the channel linked by BI.ZONE's official website. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T09:22:42.651Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "apt_research",
+          "malware_research",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "bizone_channel",
+        "verifiedSourceId": "src_bizone_telegram",
+        "publisherReference": "https://bi.zone/",
+        "ownershipVerifiedAt": "2026-08-09T09:22:42.651Z",
+        "activityVerifiedAt": "2026-08-09T09:22:42.651Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "APT campaigns",
+          "malware",
+          "vulnerabilities",
+          "threat hunting",
+          "incident research"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T09:22:42.651Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 17,
+          "observedUsefulItemCount": 2,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://bi.zone/",
+          "legalBasisVerifiedAt": "2026-08-09T09:22:42.651Z",
+          "latestPublishedAt": "2026-08-07T14:41:37+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:ru:bi-zone:telegram",
+        "publisher": {
+          "name": "BI.ZONE",
+          "country": "RU",
+          "homepage": "https://bi.zone/",
+          "trustBasis": "publisher website links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.88,
+        "intelligenceValue": 0.88,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "APT campaigns",
+            "malware",
+            "vulnerabilities",
+            "threat hunting",
+            "incident research"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "finance",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Russia",
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [
+            "Russia"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "кибератака",
+            "вредоносное ПО",
+            "уязвимость",
+            "угроза"
           ]
         },
         "collection": {
