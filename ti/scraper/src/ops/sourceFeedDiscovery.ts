@@ -207,9 +207,10 @@ async function processReference(input: {
   maxFeeds: number;
 }): Promise<ProcessedReference | undefined> {
   const activeRunId = `source-feed-discovery:${randomUUID()}`;
-  const claimed = await claimAttempt(input.store, input.reference, input.generatedAt, activeRunId);
-  if (!claimed) return undefined;
+  let claimed: DiscoveryPlan | undefined;
   try {
+    claimed = await abortable(claimAttempt(input.store, input.reference, input.generatedAt, activeRunId), input.signal);
+    if (!claimed || input.signal.aborted) return undefined;
     const advertised = await abortable(discoverFeedProofs(input), input.signal);
     if (input.signal.aborted) throw input.signal.reason;
     const admissions: Admission[] = [];
@@ -225,6 +226,7 @@ async function processReference(input: {
     const saved = await finishAttempt(input.store, input.reference, input.generatedAt, activeRunId, result);
     return saved ? { planId: saved.id, ...result } : undefined;
   } catch (error) {
+    if (input.signal.aborted && !claimed) return undefined;
     const result: AttemptResult = {
       outcome: "fetch_failed",
       importedSourceCount: 0,

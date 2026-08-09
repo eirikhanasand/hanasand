@@ -692,6 +692,24 @@ describe("scheduled public feed discovery", () => {
     }
   });
 
+  test("does not leave the scheduler running when a durable discovery claim stalls", async () => {
+    const store = new InMemoryScraperStore();
+    usefulCapture(store, "stuck-claim-parent", undefined, "run-stuck-claim-parent", ["https://stuck-claim.example/report"]);
+    (store as any).claimSourceFeedDiscoveryPlan = async () => await new Promise<undefined>(() => undefined) as any;
+
+    const result = await Promise.race([
+      runSourceFeedDiscoveryCycle({
+        store,
+        sourceFeedDiscoveryMaxReferences: 1,
+        sourceFeedDiscoveryCycleTimeoutMs: 10,
+        sourceFeedDiscoveryFetch: async () => { throw new Error("fetch must not start after a stalled claim"); }
+      }, generatedAt),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("discovery cycle remained blocked by claim")), 250))
+    ]);
+
+    expect(result).toMatchObject({ status: "completed", processedPublisherCount: 0, deferredPublisherCount: 1 });
+  });
+
   test("requires persisted AI source review and two useful retained cycles across restart", async () => {
     const directory = mkdtempSync(join(tmpdir(), "source-ai-review-"));
     const snapshotPath = join(directory, "store.json");
