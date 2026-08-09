@@ -14,7 +14,7 @@ import { buildRawCapture } from "../pipeline/pipelineCapture.ts";
 import { activeWatchlistDiscoveryTerms, collectWatchlistDiscoveryEvidence, scheduleWatchlistDiscoveryRuns } from "./watchlistDiscovery.ts";
 import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
 import { runSourceFeedDiscoveryCycle } from "./sourceFeedDiscovery.ts";
-import { hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
+import { hasApprovedAutomaticSourceReview, hasGovernedAutomaticSourceReviewLineage } from "../policy/sourceAutomaticReview.ts";
 import { automaticSourceReviewEvidenceBindingsMatch } from "../api/automaticReviewRoutes.ts";
 export { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts"; export { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanaryReadinessPacket, buildCanarySoakReport } from "./canaryReports.ts";
@@ -401,12 +401,14 @@ function isProductionCollectionSource(source: any, generatedAt: string, store: a
   return !nextEligibleAt || Date.parse(nextEligibleAt) <= Date.parse(generatedAt);
 }
 function governedPortfolioCandidate(source: any, generatedAt: string, store: any) {
+  const reviewState = source.metadata?.automaticSourceReview?.state;
   return source.status === "candidate"
     && source.metadata?.productionCollection === false
     && source.metadata?.sourcePortfolioExcluded !== true
     && source.metadata?.sourcePortfolioVerification?.outcome === "content_parsed"
     && (isCurrentSourcePortfolioVerification(source, generatedAt)
-      || hasApprovedAutomaticSourceReview(source)
+      || ["approved", "needs_review"].includes(reviewState)
+        && hasGovernedAutomaticSourceReviewLineage(source)
         && automaticSourceReviewEvidenceBindingsMatch(source, (id) => store.getCapture?.(id)))
     && source.accessMethod === "public_http"
     && source.risk === "low"

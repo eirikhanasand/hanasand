@@ -54,14 +54,20 @@ export function sourceAutomaticReviewEvidenceBound(review: any) {
 export function hasApprovedAutomaticSourceReview(source: any, modelVersion = automaticReviewModelVersion()) {
   if (!sourceRequiresAutomaticReview(source)) return true;
   const review = source?.metadata?.automaticSourceReview;
-  return review?.schemaVersion === SOURCE_AUTOMATIC_REVIEW_SCHEMA
+  return hasGovernedAutomaticSourceReviewLineage(source, modelVersion)
     && review?.state === "approved"
+    && review?.decision?.action === "confirm"
+    && review?.decision?.claimValidity === "supported";
+}
+
+export function hasGovernedAutomaticSourceReviewLineage(source: any, modelVersion = automaticReviewModelVersion()) {
+  if (!sourceRequiresAutomaticReview(source)) return false;
+  const review = source?.metadata?.automaticSourceReview;
+  return review?.schemaVersion === SOURCE_AUTOMATIC_REVIEW_SCHEMA
     && review?.promptVersion === SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION
     && review?.configuredModelVersion === modelVersion
     && review?.decision?.subject?.type === "source"
     && review?.decision?.subject?.id === source.id
-    && review?.decision?.action === "confirm"
-    && review?.decision?.claimValidity === "supported"
     && sourceAutomaticReviewIdentityMatches(source, review)
     && review?.runtimeIdentity?.status === "completed"
     && typeof review?.runtimeIdentity?.conversationId === "string"

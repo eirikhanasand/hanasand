@@ -189,7 +189,7 @@ describe("public Telegram canary collection", () => {
     });
   });
 
-  test("promotes an approved Telegram candidate after two useful cycles even when initial verification expires", async () => {
+  test("keeps reviewed Telegram candidates collecting after seed verification expires", async () => {
     const seedPath = new URL("../../seeds/public_telegram_channel_packs.json", import.meta.url);
     const bundle = await Bun.file(seedPath).json();
     const store = new InMemoryScraperStore();
@@ -233,21 +233,24 @@ describe("public Telegram canary collection", () => {
     });
 
     expect(await collect("2026-08-01T17:00:00.000Z")).toMatchObject({ queuedTaskCount: 0, completedTaskCount: 0 });
-    approveSourceReview(store, sourceId);
+    approveSourceReview(store, sourceId, "needs_review");
     expect(await collect("2026-08-01T17:00:01.000Z")).toMatchObject({ completedTaskCount: 1, insertedCaptureCount: 1, failedTaskCount: 0 });
+    expect(store.getSource(sourceId)).toMatchObject({ status: "candidate", countsAsCoverage: false, metadata: { automaticSourceReview: { state: "needs_review" } } });
+    approveSourceReview(store, sourceId);
+    expect(await collect("2026-08-01T17:30:01.000Z")).toMatchObject({ completedTaskCount: 1, insertedCaptureCount: 1, failedTaskCount: 0 });
     expect(store.getSource(sourceId)).toMatchObject({
       status: "active",
       countsAsCoverage: true,
       metadata: {
         productionCollection: true,
         sourcePortfolioQualificationState: "sustained_productive",
-        sourcePortfolioProductiveCheckCount: 2
+        sourcePortfolioProductiveCheckCount: 3
       }
     });
     expect(isExecutableSource(store.getSource(sourceId)!)).toBe(true);
-    expect(store.listSourceHealthObservations().filter((row: any) => row.sourceId === sourceId)).toHaveLength(2);
+    expect(store.listSourceHealthObservations().filter((row: any) => row.sourceId === sourceId)).toHaveLength(3);
 
-    const restart = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: "2026-08-01T17:01:00.000Z" });
+    const restart = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: "2026-08-01T17:31:00.000Z" });
     expect(restart).toMatchObject({ importedSourceCount: 0, activeSourceCount: 8, totalSourceCount: 14, errors: [] });
     expect(bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: restart.generatedAt })).toMatchObject({
       importedSourceCount: 0,
@@ -261,12 +264,12 @@ describe("public Telegram canary collection", () => {
     expect(store.getSource(sourceId)).toMatchObject({
       status: "active",
       countsAsCoverage: true,
-      metadata: { productionCollection: true, sourcePortfolioProductiveCheckCount: 2 }
+      metadata: { productionCollection: true, sourcePortfolioProductiveCheckCount: 3 }
     });
   });
 });
 
-function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
+function approveSourceReview(store: InMemoryScraperStore, sourceId: string, state: "approved" | "needs_review" = "approved") {
   const current = store.getSource(sourceId)!;
   const selectedEvidenceProvenance = sourceAutomaticReviewEvidenceBindings(current, store.listCaptures()).slice(0, 1);
   store.saveSource({
@@ -275,7 +278,7 @@ function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
       ...current.metadata,
       automaticSourceReview: {
         schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
-        state: "approved",
+        state,
         promptVersion: SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION,
         configuredModelVersion: "hanasand",
         sourceIdentity: automaticSourceReviewIdentity(current),
@@ -283,7 +286,7 @@ function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
         selectedEvidenceIds: selectedEvidenceProvenance.map((item) => item.evidenceId),
         selectedEvidenceProvenance,
         runtimeIdentity: { status: "completed", conversationId: "source-review-proof" },
-        decision: { subject: { type: "source", id: sourceId }, action: "confirm", claimValidity: "supported" }
+        decision: { subject: { type: "source", id: sourceId }, action: state === "approved" ? "confirm" : "mark_needs_review", claimValidity: state === "approved" ? "supported" : "unresolved" }
       }
     }
   } as any);
