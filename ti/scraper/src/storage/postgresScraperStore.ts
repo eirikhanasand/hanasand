@@ -1192,7 +1192,26 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string; executableOnly?: boolean }) {
     const [row] = await this.sql.unsafe(`
-      WITH latest_health AS (
+      WITH capture_counts AS (
+        SELECT source_id, tenant_id, count(*) AS capture_count
+        FROM threat_intel.captures
+        WHERE tenant_id IS NOT DISTINCT FROM $1::text
+        GROUP BY source_id, tenant_id
+      ), ranked_sources AS (
+        SELECT sources.*,
+          row_number() OVER (
+            PARTITION BY COALESCE(sources.canonical_feed_key, 'source:' || sources.id)
+            ORDER BY sources.collection_executable DESC,
+              COALESCE(capture_counts.capture_count, 0) DESC,
+              COALESCE(sources.record->>'createdAt', ''),
+              sources.id
+          ) AS canonical_rank
+        FROM threat_intel.sources sources
+        LEFT JOIN capture_counts
+          ON capture_counts.source_id = sources.id
+          AND capture_counts.tenant_id IS NOT DISTINCT FROM sources.tenant_id
+        WHERE sources.tenant_id IS NOT DISTINCT FROM $1::text
+      ), latest_health AS (
         SELECT DISTINCT ON (source_id)
           source_id, checked_at, success, useful, capture_count, parser_warning_count
         FROM threat_intel.source_health
@@ -1209,6 +1228,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             AND COALESCE((sources.record->>'countsAsCoverage')::boolean, FALSE)
             AND COALESCE((sources.record->'metadata'->>'productionCollection')::boolean, FALSE)
             AND sources.record->'metadata'->>'sourcePortfolioQualificationState' = 'sustained_productive'
+            AND ranked_sources.canonical_rank = 1
             AND source_type IN ('rss', 'api', 'json_api', 'blog')
         ),
         'qualifyingLawfulDarkWebSourceCount', count(*) FILTER (
@@ -1216,6 +1236,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             AND COALESCE((sources.record->>'countsAsCoverage')::boolean, FALSE)
             AND COALESCE((sources.record->'metadata'->>'productionCollection')::boolean, FALSE)
             AND sources.record->'metadata'->>'sourcePortfolioQualificationState' = 'sustained_productive'
+            AND ranked_sources.canonical_rank = 1
             AND source_type IN ('tor_metadata', 'darkweb_metadata')
             AND COALESCE((sources.record->'governance'->>'metadataOnly')::boolean, (sources.record->'metadata'->>'captureMode') = 'metadata_only')
         ),
@@ -1224,6 +1245,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             AND COALESCE((sources.record->>'countsAsCoverage')::boolean, FALSE)
             AND COALESCE((sources.record->'metadata'->>'productionCollection')::boolean, FALSE)
             AND sources.record->'metadata'->>'sourcePortfolioQualificationState' = 'sustained_productive'
+            AND ranked_sources.canonical_rank = 1
             AND source_type = 'telegram_public'
         ),
         'measurementState', 'measured',
@@ -1241,10 +1263,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         'backoffSourceCount', count(*) FILTER (WHERE collection_executable AND NULLIF(sources.record->'crawlState'->>'backoffUntil', '')::timestamptz > now()),
         'neverObservedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NULL)
       ) AS summary
-      FROM threat_intel.sources sources
-      LEFT JOIN latest_health ON latest_health.source_id = sources.id
-      WHERE sources.tenant_id IS NOT DISTINCT FROM $1::text
-        AND (NOT $2::boolean OR sources.collection_executable)
+      FROM ranked_sources sources
+      LEFT JOIN latest_health ON latest_health.source_id = ranked_sources.id
+      WHERE NOT $2::boolean OR ranked_sources.collection_executable
     `, [input.tenantId ?? null, input.executableOnly === true]);
     return { schemaVersion: "ti.source_operations_summary.v1", generatedAt: input.generatedAt, tenantId: input.tenantId ?? "global", summary: row?.summary ?? {} };
   }
