@@ -108,6 +108,43 @@ describe("DWM exposure queue pipeline", () => {
     expect(store.listCaptures()).toHaveLength(0);
   });
 
+  test("does not turn collection time into publisher time when a collector item is undated", async () => {
+    const store = new InMemoryScraperStore();
+    const collected = {
+      sourceId: "src_undated_exposure",
+      source: { name: "Undated exposure source", url: "https://collector.example/feed" },
+      title: "Akira has just published a new victim: Contoso",
+      rawText: "Akira victim: Contoso. 10 GB claimed.",
+      url: "https://collector.example/contoso",
+      collectedAt: "2026-07-20T09:04:00.000Z",
+      metadata: { adapter: "rss", sourceFamily: "clear_web" }
+    };
+
+    expect(await saveExposureClaimFromCollectedItem(store, collected, "2026-07-20T09:05:00.000Z")).toBeUndefined();
+    expect(store.listSources()).toHaveLength(0);
+    expect(store.listCaptures()).toHaveLength(0);
+  });
+
+  test("uses the existing publisher evidence timestamp when the item field is absent", async () => {
+    const store = new InMemoryScraperStore();
+    const collected = {
+      sourceId: "src_evidence_timestamp",
+      source: { name: "Timestamped exposure source", url: "https://collector.example/feed" },
+      title: "Akira has just published a new victim: Contoso",
+      rawText: "Akira victim: Contoso. 10 GB claimed.",
+      url: "https://collector.example/contoso",
+      collectedAt: "2026-07-20T09:04:00.000Z",
+      metadata: {
+        adapter: "rss",
+        sourceFamily: "darkweb_metadata",
+        reportTimestamps: [{ role: "publisher", timestamp: "2026-07-19T09:00:00.000Z", referenceUrl: "https://collector.example/contoso", extractionMethod: "source_field" }]
+      }
+    };
+
+    const capture = await saveExposureClaimFromCollectedItem(store, collected, "2026-07-20T09:05:00.000Z");
+    expect(capture).toMatchObject({ publishedAt: "2026-07-19T09:00:00.000Z", collectedAt: "2026-07-20T09:04:00.000Z" });
+  });
+
   test("fetches real tenant public-incident evidence without fabricating a dark-web victim claim", async () => {
     const store = new InMemoryScraperStore();
     store.saveOrganization({ id: "org_ntnu_research", tenantId: "org_ntnu_research", name: "NTNU research monitor", status: "active" });
