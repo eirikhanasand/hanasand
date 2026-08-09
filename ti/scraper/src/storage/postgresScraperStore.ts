@@ -1176,22 +1176,36 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string; executableOnly?: boolean }) {
     const [row] = await this.sql.unsafe(`
-      WITH capture_counts AS (
-        SELECT source_id, tenant_id, count(*) AS capture_count
-        FROM threat_intel.captures
-        WHERE tenant_id IS NOT DISTINCT FROM $1::text
-        GROUP BY source_id, tenant_id
+      WITH source_scope AS MATERIALIZED (
+        SELECT sources.*
+        FROM threat_intel.sources sources
+        WHERE sources.tenant_id IS NOT DISTINCT FROM $1::text
+          AND (NOT $2::boolean OR sources.collection_executable)
+      ), capture_counts AS (
+        SELECT captures.source_id, captures.tenant_id, count(*) AS capture_count
+        FROM threat_intel.captures captures
+        JOIN source_scope scoped
+          ON scoped.id = captures.source_id
+          AND scoped.tenant_id IS NOT DISTINCT FROM captures.tenant_id
+        WHERE captures.tenant_id IS NOT DISTINCT FROM $1::text
+        GROUP BY captures.source_id, captures.tenant_id
       ), latest_health AS (
-        SELECT DISTINCT ON (source_id, tenant_id)
-          source_id, tenant_id, checked_at, success, useful, capture_count, parser_warning_count
-        FROM threat_intel.source_health
-        WHERE tenant_id IS NOT DISTINCT FROM $1::text
-        ORDER BY source_id, tenant_id, checked_at DESC, id DESC
+        SELECT DISTINCT ON (health.source_id, health.tenant_id)
+          health.source_id, health.tenant_id, health.checked_at, health.success, health.useful, health.capture_count, health.parser_warning_count
+        FROM threat_intel.source_health health
+        JOIN source_scope scoped
+          ON scoped.id = health.source_id
+          AND scoped.tenant_id IS NOT DISTINCT FROM health.tenant_id
+        WHERE health.tenant_id IS NOT DISTINCT FROM $1::text
+        ORDER BY health.source_id, health.tenant_id, health.checked_at DESC, health.id DESC
       ), retained_runs AS MATERIALIZED (
-        SELECT DISTINCT source_id, tenant_id, record->'metadata'->>'runId' AS collection_run_id
-        FROM threat_intel.captures
-        WHERE tenant_id IS NOT DISTINCT FROM $1::text
-          AND record->'metadata'->>'runId' IS NOT NULL
+        SELECT DISTINCT captures.source_id, captures.tenant_id, captures.record->'metadata'->>'runId' AS collection_run_id
+        FROM threat_intel.captures captures
+        JOIN source_scope scoped
+          ON scoped.id = captures.source_id
+          AND scoped.tenant_id IS NOT DISTINCT FROM captures.tenant_id
+        WHERE captures.tenant_id IS NOT DISTINCT FROM $1::text
+          AND captures.record->'metadata'->>'runId' IS NOT NULL
       ), historical_usefulness AS (
         SELECT health.source_id, health.tenant_id, max(health.checked_at) AS last_useful_at
         FROM threat_intel.source_health health
@@ -1213,7 +1227,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
               COALESCE(sources.record->>'createdAt', ''),
               sources.id
           ) AS canonical_rank
-        FROM threat_intel.sources sources
+        FROM source_scope sources
         LEFT JOIN capture_counts
           ON capture_counts.source_id = sources.id
           AND capture_counts.tenant_id IS NOT DISTINCT FROM sources.tenant_id
