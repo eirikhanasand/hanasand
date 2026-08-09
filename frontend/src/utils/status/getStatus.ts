@@ -114,17 +114,17 @@ function normalizeIncidents(value: unknown): ServiceIncident[] {
             id: item.id || '',
             service: item.service || '',
             check_name: item.check_name || '',
-            title: item.title || 'Service incident',
+            title: item.title || '',
             impact: item.impact === 'Outage' ? 'Outage' : 'Instability',
             status: item.status === 'investigating' ? 'investigating' : 'resolved',
             started_at: item.started_at || '',
             resolved_at: item.resolved_at || null,
-            summary: item.summary || 'Automated monitors detected a service issue.',
-            cause: item.cause || item.summary || 'Automated monitor evidence is attached to this incident.',
+            summary: item.summary || '',
+            cause: item.cause || item.summary || '',
             updates: Array.isArray(item.updates) ? item.updates.map(update => ({
                 at: String(update.at || item.started_at || ''),
-                status: String(update.status || 'update'),
-                message: String(update.message || item.summary || 'Monitor update.'),
+                status: String(update.status || ''),
+                message: String(update.message || item.summary || ''),
             })) : [],
         }]
     }).filter(incident => incident.id)
