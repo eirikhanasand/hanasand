@@ -35,7 +35,7 @@ import { operationalQueryRow } from "../api/sourceOperations.ts";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
-import { SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS, SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion } from "../policy/sourceAutomaticReview.ts";
+import { AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS, SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion } from "../policy/sourceAutomaticReview.ts";
 import { orgWatchlistContractToRuntimeDwmWatchlists } from "./dwmOrgWatchlistBridge.ts";
 import { mayContainExposureQueueClaim } from "../product/exposureQueueCandidate.ts";
 
@@ -310,19 +310,80 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return rows.map(readRecord);
   }
 
-  async queryAutomaticReviewRecords(input: { tenantId?: string; allTenants?: boolean } = {}) {
+  async queryAutomaticReviewRecords(input: { tenantId?: string; allTenants?: boolean; taskLimit?: number; modelVersion?: string } = {}) {
     const tenantId = input.tenantId ?? null;
     const allTenants = input.allTenants === true;
     const tenantWhere = allTenants ? "TRUE" : "tenant_id IS NOT DISTINCT FROM $1::text";
-    const [taskRows, eventRows] = await Promise.all([
-      this.sql.unsafe(`
+    const taskLimit = Number.isFinite(input.taskLimit) ? Math.max(1, Math.min(250, Math.floor(input.taskLimit!))) : undefined;
+    const boundedValues = allTenants ? [] : [tenantId];
+    const limitParameter = `$${boundedValues.length + 1}`;
+    const claimPromptParameter = `$${boundedValues.length + 2}`;
+    const sourcePromptParameter = `$${boundedValues.length + 3}`;
+    const modelParameter = `$${boundedValues.length + 4}`;
+    const taskRowsQuery = taskLimit
+      ? this.sql.unsafe(`
+        WITH ranked AS (
+          SELECT record, updated_at, id,
+            record->'subject'->>'type' AS subject_type,
+            record->>'state' AS task_state,
+            row_number() OVER (
+              PARTITION BY tenant_id, record->'subject'->>'type', record->'subject'->>'id'
+              ORDER BY updated_at DESC, id DESC
+            ) AS subject_rank,
+            row_number() OVER (
+              PARTITION BY tenant_id, record->'subject'->>'type', record->'subject'->>'id', record->>'state'
+              ORDER BY updated_at DESC, id DESC
+            ) AS state_rank,
+            row_number() OVER (
+              PARTITION BY record->'subject'->>'type', record->>'state'
+              ORDER BY COALESCE(NULLIF(record->>'nextAttemptAt', '')::timestamptz, updated_at), updated_at, id
+            ) AS lane_rank
+          FROM threat_intel.workflow_records
+          WHERE record_type = 'analyst_metadata_review_task'
+            AND record->>'recordKind' = 'automatic_intelligence_review_task'
+            AND ${tenantWhere}
+            AND (
+              record->'subject'->>'type' = 'source'
+              OR (
+                record->'subject'->>'type' IN ('claim', 'incident')
+                AND record->>'state' IN ('queued', 'running', 'retrying')
+                AND record->>'promptVersion' = ${claimPromptParameter}
+                AND record->>'requestedModelVersion' = ${modelParameter}
+              )
+            )
+        )
+        SELECT record
+        FROM ranked
+        WHERE (
+            subject_type = 'source'
+            AND (
+              subject_rank = 1
+              OR (
+                task_state IN ('queued', 'running', 'retrying')
+                AND state_rank <= 2
+                AND record->>'promptVersion' = ${sourcePromptParameter}
+                AND record->>'requestedModelVersion' = ${modelParameter}
+              )
+            )
+          )
+          OR (subject_type IN ('claim', 'incident') AND lane_rank <= ${limitParameter})
+        ORDER BY updated_at DESC, id DESC`, [
+          ...boundedValues,
+          taskLimit,
+          AUTOMATIC_REVIEW_PROMPT_VERSION,
+          SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION,
+          input.modelVersion ?? automaticReviewModelVersion()
+        ])
+      : this.sql.unsafe(`
         SELECT record
         FROM threat_intel.workflow_records
         WHERE record_type = 'analyst_metadata_review_task'
           AND record->>'recordKind' = 'automatic_intelligence_review_task'
           AND ${tenantWhere}
-        ORDER BY updated_at DESC, id DESC`, allTenants ? [] : [tenantId]),
-      this.sql.unsafe(`
+        ORDER BY updated_at DESC, id DESC`, allTenants ? [] : [tenantId]);
+    const [taskRows, eventRows] = await Promise.all([
+      taskRowsQuery,
+      taskLimit ? Promise.resolve([]) : this.sql.unsafe(`
         SELECT record
         FROM threat_intel.workflow_records
         WHERE record_type = 'analyst_metadata_review_task'
