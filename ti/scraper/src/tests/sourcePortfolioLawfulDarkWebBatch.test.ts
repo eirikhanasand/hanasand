@@ -91,7 +91,7 @@ describe("lawful dark-web source portfolio batch", () => {
       expect(Number.isFinite(Date.parse(accepted.metadata.lastReportedVictimAt))).toBe(true);
     }
     expect(new Set(feedKeys).size).toBe(feedKeys.length);
-    expect(rejected).toHaveLength(140);
+    expect(rejected).toHaveLength(143);
     expect(new Set(rejected.map((row) => row.id)).size).toBe(rejected.length);
     expect(rejected.every((row) => row.disposition === "rejected" && row.countsAsCoverage === false)).toBe(true);
     expect(JSON.stringify(rejected)).not.toMatch(/\.onion\b|https?:\/\/[a-z2-7]{56}\b/i);
