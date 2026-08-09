@@ -14,7 +14,7 @@ import { buildRawCapture } from "../pipeline/pipelineCapture.ts";
 import { activeWatchlistDiscoveryTerms, collectWatchlistDiscoveryEvidence, scheduleWatchlistDiscoveryRuns } from "./watchlistDiscovery.ts";
 import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
 import { runSourceFeedDiscoveryCycle } from "./sourceFeedDiscovery.ts";
-import { hasApprovedAutomaticSourceReview, hasGovernedAutomaticSourceReviewLineage, sourceRequiresAutomaticReview } from "../policy/sourceAutomaticReview.ts";
+import { hasApprovedAutomaticSourceReview, hasGovernedAutomaticSourceReviewLineage, isLegacySourceReviewCandidate, sourceRequiresAutomaticReview } from "../policy/sourceAutomaticReview.ts";
 import { automaticSourceReviewEvidenceBindingsMatch } from "../api/automaticReviewRoutes.ts";
 export { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts"; export { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanaryReadinessPacket, buildCanarySoakReport } from "./canaryReports.ts";
@@ -286,22 +286,23 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
     if (!currentSource || currentSource.tenantId !== source.tenantId) return;
     const lastContentAt = useful ? latestTimestamp(taskMetrics.productivePublishedAt) ?? checkedAt : currentSource.health?.lastContentAt;
     const portfolioCandidate = governedPortfolioCandidate(currentSource, checkedAt, options.store);
-    const productiveCycles = portfolioCandidate ? currentProductiveSourceCycles(options.store, currentSource, checkedAt) : [];
+    const reviewGovernedSource = portfolioCandidate || isLegacySourceReviewCandidate(currentSource);
+    const productiveCycles = reviewGovernedSource ? currentProductiveSourceCycles(options.store, currentSource, checkedAt) : [];
     const sustained = hasApprovedAutomaticSourceReview(currentSource)
       && automaticSourceReviewEvidenceBindingsMatch(currentSource, (id) => options.store.getCapture?.(id))
       && productiveCycles.length >= 2;
     options.store.saveSource({
       ...currentSource,
       status: portfolioCandidate ? sustained ? "active" : "candidate" : currentSource.status,
-      countsAsCoverage: portfolioCandidate ? sustained : currentSource.countsAsCoverage,
+      countsAsCoverage: reviewGovernedSource ? sustained : currentSource.countsAsCoverage,
       lastSeenAt: lastContentAt ?? currentSource.lastSeenAt,
       health: { ...(currentSource.health ?? {}), status: taskMetrics.parserWarningCount ? "degraded" : "healthy", checkedAt, lastSuccessAt: checkedAt, lastContentAt, lastUsefulAt: useful ? checkedAt : currentSource.health?.lastUsefulAt, consecutiveFailures: 0, errorRate: 0, parserStatus: taskMetrics.parserWarningCount ? "warnings" : "healthy", lastError: undefined },
       crawlState: { ...(currentSource.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + (currentSource.crawlFrequencySeconds ?? 3600) * 1000).toISOString(), backoffUntil: undefined, lastError: undefined },
       metadata: {
         ...(currentSource.metadata ?? {}),
         lastCanaryFetchMode: mode,
-        ...(portfolioCandidate ? {
-          productionCollection: sustained,
+        ...(reviewGovernedSource ? {
+          productionCollection: portfolioCandidate ? sustained : currentSource.metadata?.productionCollection,
           countsAsCoverage: sustained,
           sourcePortfolioQualificationState: sustained ? "sustained_productive" : "pending_sustained_productivity",
           sourcePortfolioProductiveCheckCount: productiveCycles.length,
