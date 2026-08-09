@@ -36,6 +36,11 @@ type RuntimeSourceBootstrapInput = {
   batched?: boolean;
 };
 
+type RuntimeEvidenceIndex = {
+  observationsBySource: Map<string, any[]>;
+  capturesBySource: Map<string, any[]>;
+};
+
 const seedDirectory = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "seeds");
 const defaultSeedPaths = [
   "public_cti_sources.json",
@@ -63,6 +68,7 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
     const key = seedDuplicateKey(source);
     existingByKey.set(key, [...(existingByKey.get(key) ?? []), source]);
   }
+  const runtimeEvidenceIndex = buildRuntimeEvidenceIndex(store);
   const errors: RuntimeSourceBootstrapResult["errors"] = [];
   let importedSourceCount = 0;
   let updatedSourceCount = 0;
@@ -109,7 +115,7 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
       const globalPortfolioOwner = governedGlobalTorPortfolioSource(prepared, generatedAt);
       const existing = existingCandidates.find((candidate) => sameTenantScope(candidate, source)) ?? (globalPortfolioOwner ? undefined : existingCandidates[0]);
       if (existing) {
-        const reconciled = reconcileVerifiedSource(existing, prepared, generatedAt, store);
+        const reconciled = reconcileVerifiedSource(existing, prepared, generatedAt, store, runtimeEvidenceIndex);
         if (reconciled) {
           const saved = store.saveSource(reconciled);
           const retired = retireTenantCanonicalDuplicates(store, existingCandidates, saved, globalPortfolioOwner, generatedAt);
@@ -152,7 +158,7 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
   };
 }
 
-function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord, generatedAt: string, store: SourceStore): SourceRecord | undefined {
+function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord, generatedAt: string, store: SourceStore, runtimeEvidenceIndex: RuntimeEvidenceIndex): SourceRecord | undefined {
   const existingVerification = existing.metadata?.sourcePortfolioVerification as { verifiedAt?: unknown } | undefined;
   const seedVerification = verified.metadata?.sourcePortfolioVerification as { verifiedAt?: unknown } | undefined;
   const effectiveVerification = seedDuplicateKey(existing) === seedDuplicateKey(verified)
@@ -176,7 +182,7 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
     health: existing.health,
     crawlState: existing.crawlState
   } : existing;
-  const runtimeEvidence = portfolio || restricted ? currentRuntimeEvidence(runtimeEvidenceSource, generatedAt, store) : undefined;
+  const runtimeEvidence = portfolio || restricted ? currentRuntimeEvidence(runtimeEvidenceSource, generatedAt, runtimeEvidenceIndex) : undefined;
   const revalidatedRestricted = restricted && isRevalidatedRestrictedSource(existing, effectiveVerified, generatedAt);
   if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) || revalidatedRestricted : portfolio ? isSafePortfolioUpgradeTarget(existing) : isVerifiedProductionSource(effectiveVerified, generatedAt) && isSafeUpgradeTarget(existing))) return undefined;
   const sameSource = existing.id === effectiveVerified.id || existing.metadata?.verifiedSourceId === effectiveVerified.id;
@@ -362,7 +368,25 @@ export function prepareRuntimeSource(source: SourceRecord, seedPath: string, gen
   };
 }
 
-function currentRuntimeEvidence(source: SourceRecord, generatedAt: string, store: SourceStore) {
+function buildRuntimeEvidenceIndex(store: SourceStore): RuntimeEvidenceIndex {
+  const observationsBySource = new Map<string, any[]>();
+  const capturesBySource = new Map<string, any[]>();
+  for (const observation of store.listSourceHealthObservations?.() ?? []) {
+    const key = sourceScopeKey(observation.tenantId, observation.sourceId);
+    observationsBySource.set(key, [...(observationsBySource.get(key) ?? []), observation]);
+  }
+  for (const capture of store.listCaptures?.() ?? []) {
+    const key = sourceScopeKey(capture.tenantId, capture.sourceId);
+    capturesBySource.set(key, [...(capturesBySource.get(key) ?? []), capture]);
+  }
+  return { observationsBySource, capturesBySource };
+}
+
+function sourceScopeKey(tenantId: unknown, sourceId: unknown) {
+  return `${String(tenantId ?? "")}\u0000${String(sourceId ?? "")}`;
+}
+
+function currentRuntimeEvidence(source: SourceRecord, generatedAt: string, runtimeEvidenceIndex: RuntimeEvidenceIndex) {
   const projected = {
     ...source,
     status: "active",
@@ -371,8 +395,8 @@ function currentRuntimeEvidence(source: SourceRecord, generatedAt: string, store
   };
   const qualification = qualifySourcePortfolio({
     sources: [projected],
-    observations: (store.listSourceHealthObservations?.() ?? []).filter((row) => row.sourceId === source.id && row.tenantId === source.tenantId),
-    captures: (store.listCaptures?.() ?? []).filter((row) => row.sourceId === source.id && row.tenantId === source.tenantId),
+    observations: runtimeEvidenceIndex.observationsBySource.get(sourceScopeKey(source.tenantId, source.id)) ?? [],
+    captures: runtimeEvidenceIndex.capturesBySource.get(sourceScopeKey(source.tenantId, source.id)) ?? [],
     generatedAt
   }).sources[0];
   return qualification?.qualifies === true ? qualification : undefined;
