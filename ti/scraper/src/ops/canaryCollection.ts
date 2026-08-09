@@ -20,6 +20,7 @@ export { activatePublicCanarySources, pausePublicCanarySources } from "./canaryA
 export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanaryReadinessPacket, buildCanarySoakReport } from "./canaryReports.ts";
 export type * from "./canaryCollectionTypes.ts";
 import type { CanaryCollectionCycleResult, CanaryCollectionLoopHandle, CanaryCollectionOptions } from "./canaryCollectionTypes.ts";
+const MAX_CANARY_TASKS_PER_CYCLE = 60;
 export async function runCanaryCollectionCycle(options: CanaryCollectionOptions): Promise<CanaryCollectionCycleResult> {
   const generatedAt = options.now?.() ?? nowIso(), fetcher = options.fetch ?? fetch, mode = options.fetch ? "injected_proof_fetch" : "native_live_http";
   const storageFailure = storageBackpressure(options.store);
@@ -52,7 +53,10 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   if (options.store.batch && !options.batched) return options.store.batch(() => runCanaryCollectionCycle({ ...options, batched: true }));
   const productivity = reconcilePublicSourceProductivity({ ...options, now: generatedAt });
   const activation = options.activateSources ? activatePublicCanarySources({ ...options, now: generatedAt }) : { activated: [], alreadyActive: [], rejected: [] };
-  const maxSources = Math.max(1, options.maxSources ?? 10), maxTasks = Math.max(1, options.maxTasks ?? 5), maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
+  const maxConcurrentTasks = Math.max(1, Math.min(Number(options.maxConcurrentTasks ?? 5), 32));
+  // ponytail: keep one cycle bounded; remaining due work stays queued for the next cadence.
+  const maxTasks = Math.min(Math.max(1, options.maxTasks ?? 5), MAX_CANARY_TASKS_PER_CYCLE);
+  const maxSources = Math.min(Math.max(1, options.maxSources ?? 10), maxTasks), maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
   const selectedSourceIds = new Set<string>(options.sourceIds ?? []);
   const supersededTaskCount = supersedeCoveredQueuedTasks(options, generatedAt, selectedSourceIds);
   const queuedTasks = options.frontier.snapshot().map(frontierTask).filter((task: any) => taskInScope(options, task, selectedSourceIds));
@@ -98,7 +102,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
     retryExhaustedCount: Number(resumedRun?.retryExhaustedCount ?? 0)
   };
   const latestCaptureIds: string[] = [], completeEvaluationCaptures: any[] = [], errors: any[] = [];
-  const concurrency = Math.max(1, Math.min(tasks.length || 1, Number(options.maxConcurrentTasks ?? 5)));
+  const concurrency = Math.max(1, Math.min(tasks.length || 1, maxConcurrentTasks));
   for (let done = 0; done < tasks.length; done += concurrency) {
     await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length - done) }, () => runLeasedTask(options, runId, generatedAt, fetcher, mode, maxBytes, counters, latestCaptureIds, errors, completeEvaluationCaptures)));
     if (done + concurrency < tasks.length) await new Promise<void>((resolve) => setTimeout(resolve, 0));

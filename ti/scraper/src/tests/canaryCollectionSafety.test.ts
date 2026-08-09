@@ -114,6 +114,26 @@ describe("public collection boundary", () => {
     expect(store.listCaptures()).toHaveLength(2);
   });
 
+  test("bounds an oversized configured cycle to the established task cap", async () => {
+    const store = new InMemoryScraperStore();
+    for (let index = 0; index < 80; index++) {
+      store.saveSource(source({ id: `bounded-${index}`, url: `https://example.test/bounded-${index}.xml`, metadata: { productionCollection: true } }));
+    }
+
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      maxSources: 80,
+      maxTasks: 100,
+      maxConcurrentTasks: 2,
+      fetch: async () => new Response("<rss><channel></channel></rss>", { headers: { "content-type": "application/rss+xml" } })
+    });
+
+    expect(cycle.queuedTaskCount).toBe(60);
+    expect(cycle.completedTaskCount).toBe(60);
+    expect(cycle.status).toBe("completed");
+  });
+
   test("times out a stalled response body without wedging the recurring loop", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "stalled", url: "https://example.test/stalled.xml" }));
