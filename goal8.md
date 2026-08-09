@@ -84,6 +84,8 @@ At 2026-08-09T12:17:48Z, production commit `0b40ca8a8dcbdc8ead34e1ff1cce761c0267
 
 At 2026-08-09T18:03:09Z, publisher-authoritative discovery added three held endpoint identities without contacting Tor or changing production. WatchGuard Threat Lab's current tracker identifies TITAN, Coinbase Cartel, and KryBit as active operations and publishes Tor identities that canonicalize exactly to the public v3 services RansomLook currently marks available: hashes `ecfff1e2d3cacd92`, `699098fcac03c64c`, and `3071c8296f2d6e4d`. RansomLook has observed 15, 200, and 97 posts respectively, with the latter two still reporting activity on August 8-9; AhnLab and SOCRadar independently corroborate current TITAN and Coinbase Cartel activity. Repository endpoint-only reconciliation found no source or hashed-exclusion match, although the older discovery ledger correctly records that Coinbase Cartel and KryBit had no available service in July. All three remain unprobed discovery candidates and earn no admission or qualification credit until live database dedupe, the approved 64 KiB boundary, production parser, governance review, and two natural retained productive cycles all succeed.
 
+At 2026-08-09T18:13:40.147857Z, one exact read-only PostgreSQL snapshot on deployed commit `51dc30bb91b74bb136203ac52f31f2855260a298` reported 28 registered global Tor rows, 27 non-retired rows, 21 candidates, 24 feeds with at least one retained productive run-linked cycle, 24 current identity-bound v9 approvals, and four strict qualifiers. The strict set is Blackwater, Genesis, Qilin, and RansomHouse; each has a current approved review and two retained productive cycles. Qilin therefore requalified through the governed path after its earlier truthful demotion rather than through grandfathered credit. The remaining gap is 996.
+
 ## A source counts only when
 
 - its endpoint identity is canonical and unique across every source type;
@@ -142,6 +144,7 @@ At 2026-08-09T18:03:09Z, publisher-authoritative discovery added three held endp
 | 2026-08-09T15:03:58Z | `1f6c65e15ff5dfcde22d02a5dd951c6a3e2fa086` | 20 | 23 | 17 | 4 | 996 |
 | 2026-08-09T16:02:23Z | `15d6120e6e4a84396d72f4928dce3b49f8bf65fa` | 21 | 24 | 20 | 4 | 996 |
 | 2026-08-09T17:22:14Z | `998f10ef974be6d11a099e2a4953c99e7ff30dd2` | 22 | 24 | 24 | 3 | 997 |
+| 2026-08-09T18:13:40.147857Z | `51dc30bb91b74bb136203ac52f31f2855260a298` | 21 | 24 | 24 | 4 | 996 |
 
 Every later row must come from the live PostgreSQL/API/scheduler view. Never record onion locators or captured content in this file.
 
