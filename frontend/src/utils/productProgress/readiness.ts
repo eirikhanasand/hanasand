@@ -30,6 +30,10 @@ type AnalystCaseProofRow = {
     createdAt?: string
 }
 
+export function isDurableDelivered(status: unknown): boolean {
+    return status === 'delivered'
+}
+
 export type AnalystCaseDetailProofInput = {
     route: string
     fetchOk: boolean
@@ -147,13 +151,13 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
 }
 
 function chooseDashboardAlert(alerts: AlertProofRow[], deliveries: DeliveryProofRow[]) {
-    const deliveryAlertIds = new Set(deliveries.map(row => row.alertId).filter(Boolean))
+    const deliveryAlertIds = new Set(deliveries.filter(row => isDurableDelivered(row.status)).map(row => row.alertId).filter(Boolean))
     return alerts.find(row => row.id && deliveryAlertIds.has(row.id)) || alerts.find(row => row.id)
 }
 
 function chooseDeliveryForAlert(alertId: string | undefined, deliveries: DeliveryProofRow[]) {
     if (!alertId) return undefined
-    return deliveries.find(row => row.alertId === alertId && row.status !== 'failed' && row.status !== 'skipped')
+    return deliveries.find(row => row.alertId === alertId && isDurableDelivered(row.status))
 }
 
 function chooseCaseForAlert(alertId: string | undefined, cases: AnalystCaseProofRow[]) {
@@ -294,7 +298,7 @@ function entitlementReadiness(input: EntitlementReadiness | undefined, source: s
 }
 
 function webhookHealthFromDeliveries(source: string, checkedAt: string, deliveries: DeliveryProofRow[], proofLedger?: DeliveryProofLedger): WebhookHealthReadiness {
-    const deliveryReadyCount = deliveries.filter(row => row.status !== 'failed' && row.status !== 'skipped').length
+    const deliveryReadyCount = deliveries.filter(row => isDurableDelivered(row.status)).length
     const contractStack = ['dwm.webhook_health.readiness.v1', proofLedger?.schemaVersion].filter(Boolean).join(' + ')
     return {
         schemaVersion: 'dwm.webhook_health.readiness.v1',

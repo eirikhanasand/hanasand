@@ -687,20 +687,16 @@ function confidenceReasoningFor(input: { text: string; source?: SourceRecord; so
 
 function inferActor(capture: RawCapture, text: string): string | undefined {
   const metadata = (capture.metadata ?? {}) as any;
-  const named = metadata.actorName ?? metadata.actor ?? metadata.leakSite?.actorName ?? metadata.channel;
+  const named = metadata.actorName ?? metadata.actor ?? metadata.leakSite?.actorName;
   if (named) return formatActorName(String(named));
-  const match = text.match(/\b(Akira|LockBit|BlackCat|RansomHouse|Lumma C2|RedLine|Vidar)\b/i);
-  return match?.[1] ? formatActorName(match[1]) : undefined;
+  return undefined;
 }
 
 function inferActorFromSource(source: SourceRecord | undefined): string | undefined {
   const metadata = ((source as any)?.metadata ?? {}) as any;
   const named = metadata.actorName ?? metadata.actor ?? metadata.group ?? metadata.threatActor;
   if (named) return formatActorName(String(named));
-  const text = `${String((source as any)?.name ?? "")} ${String((source as any)?.url ?? "")}`;
-  const match = text.match(/\b(Akira|LockBit|BlackCat|BlackCat\/ALPHV|ALPHV|RansomHouse|Lumma C2|RedLine|Vidar|Scattered Spider|APT29|APT28)\b/i);
-  if (!match) return undefined;
-  return formatActorName(match[1]);
+  return undefined;
 }
 
 function formatActorName(value: string): string {
