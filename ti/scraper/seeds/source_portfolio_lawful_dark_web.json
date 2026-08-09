@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T14:20:26.000Z",
+  "generatedAt": "2026-08-09T14:37:11.000Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -1595,6 +1595,89 @@
           "contentType": "text/html",
           "adapter": "tor_metadata",
           "legalBasisVerifiedAt": "2026-08-09T14:20:26.000Z"
+        }
+      }
+    },
+    {
+      "id": "restricted_atomsilo_victim_js",
+      "name": "AtomSilo victim metadata",
+      "type": "tor_metadata",
+      "url": "http://npmh5ahrgakbniuntyc7io4adm6ietbdbuejrfonowqtyqn24or556qd.onion/javascript/data.js",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.86,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect only public claimed-victim organization names from the credential-free victim-list data asset linked by the public listing page. Never authenticate, interact with operators, follow payload or contact links, or retain descriptions, domains, files, page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-08-09T14:37:11.000Z",
+        "approvedBy": "source-review:goal8-lawful-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "AtomSilo",
+        "actors": [
+          "AtomSilo",
+          "Atom Silo"
+        ],
+        "discoveryAuthorityUrl": "https://www.ransomlook.io/doc/",
+        "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/atomsilo",
+        "discoveryCheckedAt": "2026-08-09T14:37:11.000Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-08-09T14:37:11.000Z",
+        "productionCollectionVerifiedAt": "2026-08-09T14:37:11.000Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "js_companies_name",
+        "parserShape": "const companies = { ... name: \"...\" }",
+        "observedParsedItemCount": 4,
+        "reportedVictimCount": 1,
+        "lastReportedVictimAt": "2026-02-24T14:43:06.063221Z",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "qualificationState": "pending_import_and_two_productive_scheduled_cycles",
+        "discoveryAuthorityChain": [
+          {
+            "name": "RansomLook",
+            "role": "current public ransomware-group registry matching the public victim-listing endpoint, its linked metadata asset, and current availability",
+            "url": "https://www.ransomlook.io/doc/",
+            "recordUrl": "https://www.ransomlook.io/api/group/atomsilo"
+          },
+          {
+            "name": "WatchGuard Technologies",
+            "role": "independent current ransomware tracker identifying AtomSilo as active and reemerged in February 2026",
+            "url": "https://www.watchguard.com/wgrd-security-hub/ransomware-tracker",
+            "recordUrl": "https://www.watchguard.com/wgrd-security-hub/ransomware-tracker/atomsilo"
+          },
+          {
+            "name": "Bitdefender",
+            "role": "independent current threat research documenting AtomSilo's February 2026 reemergence",
+            "url": "https://www.bitdefender.com/en-us/blog/businessinsights/",
+            "recordUrl": "https://www.bitdefender.com/en-us/blog/businessinsights/bitdefender-threat-debrief-march-2026/"
+          },
+          {
+            "name": "Red Piranha",
+            "role": "independent current threat-intelligence reporting of February 2026 AtomSilo activity",
+            "url": "https://redpiranha.net/news",
+            "recordUrl": "https://redpiranha.net/media/429/download"
+          }
+        ],
+        "attribution": "Current RansomLook endpoint verification, independent WatchGuard, Bitdefender, and Red Piranha activity reporting, and approved-proxy metadata-only parser verification",
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T14:37:11.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 4,
+          "httpStatus": 200,
+          "contentType": "application/javascript",
+          "adapter": "tor_metadata",
+          "legalBasisVerifiedAt": "2026-08-09T14:37:11.000Z"
         }
       }
     }

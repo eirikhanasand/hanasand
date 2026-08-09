@@ -35,7 +35,8 @@ describe("lawful dark-web source portfolio batch", () => {
       ["restricted_barracuda_victim_blog", ["article_body_h3", 4]],
       ["restricted_abyss_data_victim_js", ["js_data_title", 48]],
       ["restricted_crpx0_victim_blog", ["victim_card_h3", 10]],
-      ["restricted_nasir_security_victim_blog", ["news_content_title", 1]]
+      ["restricted_nasir_security_victim_blog", ["news_content_title", 1]],
+      ["restricted_atomsilo_victim_js", ["js_companies_name", 4]]
     ]);
 
     expect(batch).toMatchObject({
@@ -48,7 +49,7 @@ describe("lawful dark-web source portfolio batch", () => {
     });
     expect(report).toMatchObject({ valid: true, errors: [] });
     expect(portfolioReport).toMatchObject({ valid: true, errors: [] });
-    expect(report.accepted).toHaveLength(15);
+    expect(report.accepted).toHaveLength(16);
     expect(report.accepted.find((row) => row.id === "restricted_ms13089_victim_blog")).toMatchObject({
       id: "restricted_ms13089_victim_blog",
       status: "candidate",
