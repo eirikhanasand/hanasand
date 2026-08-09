@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, RotateCcw, Send, ShieldCheck, SlidersHorizontal, UserRound, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmAlertAnalystAction, DwmProductSnapshot } from '@/utils/dwm/product'
 import { safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
 import { dwmNextOperatorAction, type DwmNextOperatorActionKind } from '@/utils/dwm/nextOperatorAction'
@@ -124,6 +124,33 @@ type DeliveryItem = {
     deliveryKind?: string
 }
 
+type CaseListItem = {
+    id: string
+    caseId?: string
+    tenantId?: string
+    organizationId?: string
+    alertId?: string
+    title: string
+    summary?: string
+    status: string
+    priority?: string
+    severity?: string
+    assignedOwner?: string
+    createdAt?: string
+    updatedAt?: string
+    firstSeenAt?: string
+    reviewState?: string
+    actor?: string
+    victimName?: string
+    company?: string
+}
+
+type CasesState = {
+    status: 'loading' | 'ready' | 'error'
+    rows: CaseListItem[]
+    error?: string
+}
+
 type PortalProps = {
     tenantId: string
     organizationId?: string
@@ -168,7 +195,6 @@ export function DwmAnalystPortal({
     deliveries: initialDeliveries,
     dataHealth: initialDataHealth,
     initialAlertId,
-    publicTiHandoff,
     view = 'cases',
 }: PortalProps) {
     const router = useRouter()
@@ -177,6 +203,7 @@ export function DwmAnalystPortal({
     const [operations, setOperations] = useState(initialOperations)
     const [alerts, setAlerts] = useState(initialAlerts)
     const [dataHealth, setDataHealth] = useState(initialDataHealth)
+    const [casesState, setCasesState] = useState<CasesState>(() => ({ status: view === 'cases' ? 'loading' : 'ready', rows: [] }))
     const [selectedId, setSelectedId] = useState(initialAlertId && alerts.some(alert => alert.id === initialAlertId) ? initialAlertId : alerts[0]?.id ?? '')
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
@@ -217,7 +244,7 @@ export function DwmAnalystPortal({
         alertCount: alerts.length,
         deliveryCount: localDeliveries.length,
     }
-    const workflowActions = (
+    const workflowActions = view === 'cases' ? null : (
         <DwmWorkflowActions
             key={`${tenantId}:${snapshot.watchlist.map(term => term.value).join('\u0000')}`}
             tenantId={tenantId}
@@ -244,14 +271,19 @@ export function DwmAnalystPortal({
     useEffect(() => {
         const controller = new AbortController()
         const params = dwmScopeSearchParams(tenantId, organizationId)
-        void refreshDwmProduct(params, controller.signal, setSnapshot, setDataHealth)
-        void refreshDwmOperations(params, controller.signal, setOperations, setDataHealth)
-        void refreshDwmAlerts(params, controller.signal, setAlerts, setDataHealth)
-        void refreshDwmDeliveries(params, controller.signal, setLocalDeliveries, setDataHealth)
+        if (view === 'cases') {
+            void refreshCases(params, controller.signal, setCasesState)
+            void refreshDwmAlerts(params, controller.signal, setAlerts, setDataHealth)
+        } else {
+            void refreshDwmProduct(params, controller.signal, setSnapshot, setDataHealth)
+            void refreshDwmOperations(params, controller.signal, setOperations, setDataHealth)
+            void refreshDwmAlerts(params, controller.signal, setAlerts, setDataHealth)
+            void refreshDwmDeliveries(params, controller.signal, setLocalDeliveries, setDataHealth)
+        }
         return () => {
             controller.abort()
         }
-    }, [tenantId, organizationId, refreshVersion])
+    }, [tenantId, organizationId, refreshVersion, view])
 
     async function updateAlert(alertId: string, reviewState: string, deliveryState: string, note: string, assignedOwner?: string) {
         await runAction(`update:${alertId}`, async () => {
@@ -455,151 +487,82 @@ export function DwmAnalystPortal({
         )
     }
 
+    if (view === 'cases') {
+        return <CaseOverview tenantId={tenantId} organizationId={organizationId} state={casesState} alerts={alerts} />
+    }
+
+    return null
+}
+
+function CaseOverview({ tenantId, organizationId, state, alerts }: { tenantId: string, organizationId?: string, state: CasesState, alerts: PortalAlert[] }) {
+    const alertsById = new Map(alerts.map(alert => [alert.id, alert]))
+
     return (
-        <div className='grid gap-4'>
-            <section className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
-                <div className='border-b border-ui-border bg-ui-raised px-4 py-3 text-ui-text'>
-                    <div className='flex flex-wrap items-center justify-between gap-3'>
-                        <div className='min-w-0 flex-1 border-l border-ui-border pl-3 dark:border-ui-border'>
-                            <p className='wrap-break-word text-sm font-semibold text-ui-text'>
-                                {alerts.length} alerts · {activeCount} active · {criticalCount} critical · {readyCount} sendable
-                            </p>
-                            <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted'>
-                                {freshCount} fresh · {highConfidenceCount} strong evidence · {watchTermCount} watchlist terms · webhook {webhookState} · run {latestRunLabel} · {apiProblemCount ? `${apiProblemCount} data issue${apiProblemCount === 1 ? '' : 's'}` : 'data live'}
-                            </p>
-                        </div>
-                        <div className='min-w-0 text-left sm:shrink-0 sm:text-right'>
-                            <p className='text-[10px] font-semibold uppercase text-ui-primary'>Monitoring state</p>
-                            <p className='mt-1 text-sm font-semibold text-ui-text'>{activeSourceCount}/{sourceCount} shared sources active</p>
-                        </div>
+        <div className='grid gap-4' data-dwm-cases-overview='true'>
+            <section className='min-w-0 rounded-lg border border-ui-border bg-ui-panel'>
+                <div className='flex flex-col gap-1 border-b border-ui-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
+                    <h1 className='text-lg font-semibold text-ui-text'>Cases</h1>
+                    {state.status === 'ready' && <p className='text-xs font-medium text-ui-muted'>{state.rows.length} case{state.rows.length === 1 ? '' : 's'}</p>}
+                </div>
+
+                {state.status === 'loading' && <div className='flex min-h-56 items-center justify-center px-4 py-16 text-sm text-ui-muted'>Loading cases…</div>}
+                {state.status === 'error' && <div className='flex min-h-56 items-center justify-center px-4 py-16 text-sm text-ui-danger'>{state.error || 'Cases unavailable.'}</div>}
+                {state.status === 'ready' && !state.rows.length && (
+                    <div className='flex min-h-56 items-center justify-center px-4 py-16 text-sm text-ui-muted' data-dwm-cases-empty='true'>No cases.</div>
+                )}
+                {state.status === 'ready' && state.rows.length > 0 && (
+                    <div className='overflow-x-auto' data-dwm-cases-table='true'>
+                        <table className='min-w-full border-collapse text-left text-sm'>
+                            <thead className='border-b border-ui-border bg-ui-raised text-xs font-semibold text-ui-muted'>
+                                <tr>
+                                    <th className='px-4 py-3'>Title / actor</th>
+                                    <th className='px-4 py-3'>Organization / victim</th>
+                                    <th className='px-4 py-3'>Severity / status</th>
+                                    <th className='px-4 py-3'>First seen / updated</th>
+                                    <th className='px-4 py-3'>Review</th>
+                                </tr>
+                            </thead>
+                            <tbody className='divide-y divide-ui-border'>
+                                {state.rows.map(row => {
+                                    const alert = row.alertId ? alertsById.get(row.alertId) : undefined
+                                    const caseId = row.caseId || row.id
+                                    const severity = alert?.severity || row.severity || row.priority || '—'
+                                    const status = row.status || '—'
+                                    const reviewState = alert?.reviewState || row.reviewState
+                                    const organization = row.organizationId || organizationId || 'Unavailable'
+                                    const victim = alert?.company || row.victimName || row.company
+                                    return (
+                                        <tr key={caseId} className='align-top text-ui-text' data-dwm-case-row='true'>
+                                            <td className='px-4 py-3'>
+                                                <Link href={caseDetailHref(caseId, row.alertId, row.organizationId || organizationId, 'case_overview')} className='font-semibold text-ui-primary underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
+                                                    {row.title}
+                                                </Link>
+                                                <p className='mt-1 break-words text-xs text-ui-muted'>{alert?.actor || row.actor || '—'}</p>
+                                            </td>
+                                            <td className='px-4 py-3'>
+                                                <p className='break-words'>{organization}</p>
+                                                <p className='mt-1 break-words text-xs text-ui-muted'>{victim || '—'}</p>
+                                            </td>
+                                            <td className='px-4 py-3'>
+                                                <div className='flex flex-wrap items-center gap-2'>
+                                                    <span className={severity === '—' ? 'text-ui-muted' : severityClass(severity)}>{stateLabel(severity)}</span>
+                                                    <span className='break-words text-xs text-ui-muted'>{stateLabel(status)}</span>
+                                                </div>
+                                            </td>
+                                            <td className='px-4 py-3 text-xs text-ui-muted'>
+                                                <p>{caseDateLabel(alert?.firstSeenAt || row.firstSeenAt || row.createdAt)}</p>
+                                                <p className='mt-1'>{caseDateLabel(row.updatedAt)}</p>
+                                            </td>
+                                            <td className='px-4 py-3'>
+                                                {reviewState ? <span className={reviewStateClass(reviewState)}>{stateLabel(reviewState)}</span> : <span className='text-sm text-ui-muted'>—</span>}
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-
-                <WorkflowRouteStrip
-                    watchTermCount={watchTermCount}
-                    activeSourceCount={activeSourceCount}
-                    sourceCount={sourceCount}
-                    captureCount={tenantRunCaptureCount}
-                    watchlistMatchCount={watchlistMatchCount}
-                    alertCount={alerts.length}
-                    caseCount={caseCount}
-                    deliveryCount={localDeliveries.length}
-                    latestRunLabel={latestRunLabel}
-                    webhookState={webhookState}
-                />
-
-                {publicTiHandoff ? (
-                    <PublicTiDwmIntake
-                        handoff={publicTiHandoff}
-                        params={searchParams}
-                        tenantId={tenantId}
-                        organizationId={organizationId}
-                        activeSourceCount={activeSourceCount}
-                        sourceCount={sourceCount}
-                        caseCount={caseCount}
-                    />
-                ) : null}
-
-                <div className='grid min-h-[480px] min-w-0 2xl:grid-cols-[300px_minmax(0,1fr)]'>
-                    <aside className='order-2 min-w-0 border-b border-ui-border bg-ui-raised 2xl:order-none 2xl:border-b-0 2xl:border-r'>
-                        <div className='border-b border-ui-border p-4'>
-                            <div className='flex items-center justify-between gap-3'>
-                                <div>
-                                    <h3 className='text-sm font-semibold text-ui-text'>Recent attacks</h3>
-                                    <p className='mt-1 text-xs text-ui-muted'>{alerts.length ? `${visibleQueue.length}/${queue.length} shown after filters.` : 'Collectors are monitoring the saved watchlist.'}</p>
-                                </div>
-                                <Radar className='h-4 w-4 text-ui-primary' />
-                            </div>
-                            <div className='mt-4 grid gap-2'>
-                                <label className='relative block'>
-                                    <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-muted' />
-                                    <input
-                                        value={queueQuery}
-                                        onChange={event => updateQueueQuery(event.target.value)}
-                                        placeholder='Search company, actor, term, or status'
-                                        className='h-10 w-full rounded-lg border border-ui-border bg-ui-panel pl-9 pr-3 text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
-                                    />
-                                </label>
-                                <div className='grid grid-cols-2 gap-1.5'>
-                                    {queueFilters.map(filter => (
-                                        <button
-                                            key={filter.id}
-                                            type='button'
-                                            onClick={() => updateQueueFilter(filter.id)}
-                                            className={`h-8 rounded-lg border px-2 text-xs font-semibold transition ${queueFilter === filter.id ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-muted hover:bg-ui-canvas'}`}
-                                        >
-                                            {filter.label}
-                                        </button>
-                                    ))}
-                                </div>
-                                {(queueQuery.trim() || queueFilter !== 'active') && (
-                                    <button
-                                        type='button'
-                                        onClick={clearQueueView}
-                                        className='inline-flex h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-muted transition hover:bg-ui-canvas hover:text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/20'
-                                    >
-                                        Clear queue view
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                        <div className='max-h-[480px] overflow-auto'>
-                            {queue.length ? visibleQueue.map(alert => (
-                                <button
-                                    key={alert.id}
-                                    type='button'
-                                    onClick={() => selectAlert(alert)}
-                                    className={`grid w-full gap-1 border-b border-ui-border px-3 py-2 text-left transition last:border-b-0 ${selectedAlert?.id === alert.id ? 'bg-ui-panel' : 'hover:bg-ui-panel'}`}
-                                >
-                                    <div className='flex min-w-0 items-center justify-between gap-2'>
-                                        <span className='truncate text-sm font-semibold text-ui-text'>{alert.company}</span>
-                                        <span className={severityClass(alert.severity)}>{alert.severity}</span>
-                                    </div>
-                                    <p className='truncate text-xs font-semibold text-ui-muted'>Watched term: {alert.matchedTerm.value}</p>
-                                    <p className='line-clamp-1 text-xs leading-5 text-ui-muted'>{safeAlertSummary(alert)}</p>
-                                    <span className='flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 text-[11px] leading-4 text-ui-muted'>
-                                        <span>{stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)}</span>
-                                        <span className={alert.routingContext?.urgency === 'immediate' || alert.severity === 'critical' ? 'font-semibold text-ui-danger' : ''}>{stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))}</span>
-                                        <span>{alert.evidenceSummary?.evidenceCount ?? alert.evidence.length} evidence</span>
-                                        {alert.matchTiming?.kind === 'historical_backfill' && <span className='font-semibold text-ui-warning'>Historical match</span>}
-                                        {Number(alert.matchTiming?.historicalEvidenceCount ?? 0) > 0 && <span className='font-semibold text-ui-warning'>{alert.matchTiming?.historicalEvidenceCount} historical evidence</span>}
-                                        {alert.matchTiming?.kind === 'unknown' && <span className='font-semibold text-ui-muted'>Timing unknown</span>}
-                                        <span>{relativeTimeLabel(alert.lastSeenAt || alert.evidenceSummary?.lastObservedAt || alert.firstSeenAt)}</span>
-                                    </span>
-                                </button>
-                            )) : (
-                                <div className='rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 text-sm leading-6 text-ui-muted'>
-                                    {alerts.length ? 'No attacks match the current filters.' : 'No alert is waiting for review. Monitoring stays live while watchlist terms listen for new captures.'}
-                                </div>
-                            )}
-                            {queue.length > visibleQueue.length && (
-                                <p className='px-2 py-1 text-xs leading-5 text-ui-muted'>Narrow the search or filters to see more matching attacks.</p>
-                            )}
-                        </div>
-                    </aside>
-
-                    <main className='order-1 min-w-0 bg-ui-panel 2xl:order-none'>
-                        {selectedAlert ? (
-                            <CaseWorkspace
-                                key={`${tenantId}:${selectedAlert.id}`}
-                                alert={selectedAlert}
-                                deliveries={selectedDeliveries}
-                                sourceCoverage={snapshot.sourceCoverage}
-                                sourceHealth={operations?.sourceHealth ?? []}
-                                busyAction={busyAction}
-                                actionMessage={message}
-                                onUpdate={updateAlert}
-                                onOpenCase={openCase}
-                                onReplay={replayAlert}
-                                onTest={testDelivery}
-                                onSend={sendAlert}
-                            />
-                        ) : (
-                            <NoCaseWorkspace latestCaptures={latestCaptures} workflowActions={workflowActions} watchTermCount={watchTermCount} dataHealth={dataHealth} />
-                        )}
-                    </main>
-
-                </div>
+                )}
             </section>
         </div>
     )
@@ -724,6 +687,26 @@ async function refreshDwmAlerts(
         setDataHealth(current => ({ ...current, alerts: { state: 'live', label: 'Alerts live', detail: `${savedAlerts.length} saved alert(s).` } }))
     } catch (error) {
         if (!isAbortError(error)) setDataHealth(current => ({ ...current, alerts: { state: 'error', label: 'Alerts unavailable', detail: requestFailureDetail(error) } }))
+    }
+}
+
+async function refreshCases(
+    params: URLSearchParams,
+    signal: AbortSignal,
+    setCasesState: Dispatch<SetStateAction<CasesState>>,
+) {
+    setCasesState({ status: 'loading', rows: [] })
+    try {
+        const response = await fetch(`/api/cases?${params.toString()}`, { cache: 'no-store', signal })
+        if (!response.ok) {
+            setCasesState({ status: 'error', rows: [], error: await responseProblem(response) })
+            return
+        }
+        const payload = await response.json() as { items?: CaseListItem[], cases?: CaseListItem[] }
+        const rows = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.cases) ? payload.cases : []
+        setCasesState({ status: 'ready', rows })
+    } catch (error) {
+        if (!isAbortError(error)) setCasesState({ status: 'error', rows: [], error: requestFailureDetail(error) })
     }
 }
 
@@ -2949,4 +2932,11 @@ function relativeTimeLabel(value: string | undefined) {
     const absDays = Math.round(absHours / 24)
     if (absDays < 7) return `${absDays} day${absDays === 1 ? '' : 's'} ${suffix}`
     return shortTime(value)
+}
+
+function caseDateLabel(value?: string) {
+    if (!value) return '—'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return value
+    return `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`
 }
