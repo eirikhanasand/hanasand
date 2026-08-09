@@ -5,7 +5,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "../ops/canaryPortfolio.ts";
 import { importSeedBundle, seedDuplicateKey } from "../registry/sourceSeedsBundle.ts";
-import { expandSourcePortfolioBatch } from "../registry/sourcePortfolioBatch.ts";
+import { expandSourcePortfolioBatch, validateSourcePortfolioBatch } from "../registry/sourcePortfolioBatch.ts";
 import { canonicalUrl } from "../registry/sourceSeedUtils.ts";
 
 const batchPath = new URL("../../seeds/source_portfolio_clear_web.json", import.meta.url);
@@ -22,6 +22,14 @@ describe("clear-web source portfolio batch", () => {
     });
     expect(batch.sources).toHaveLength(162);
     expect(batch.exclusions).toHaveLength(180);
+
+    const generatedAt = Date.parse(rawBatch.generatedAt);
+    const evidenceTimes = [
+      ...batch.sources.flatMap((source: any) => [source.metadata.sourcePortfolioVerification.verifiedAt, source.metadata.sourcePortfolioVerification.legalBasisVerifiedAt]),
+      ...batch.exclusions.map((exclusion: any) => exclusion.verifiedAt),
+    ].map(Date.parse);
+    expect(Math.max(...evidenceTimes)).toBeLessThanOrEqual(generatedAt);
+    expect(validateSourcePortfolioBatch(rawBatch, new Date().toISOString())).toEqual({ recognized: true, valid: true, errors: [] });
 
     const ids = new Set<string>();
     const endpoints = new Set<string>();
