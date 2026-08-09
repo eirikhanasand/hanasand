@@ -334,22 +334,21 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const tasks = tasksAndEvents.filter((record: any) => record.recordKind === 'automatic_intelligence_review_task');
     const claimIds = tasks.map((task: any) => task.subject?.claimId).filter(Boolean);
     const incidentIds = tasks.map((task: any) => task.subject?.incidentId).filter(Boolean);
-    const [claims, incidents, claimEvidence, evidenceLinks, reviews] = await Promise.all([
+    const [claims, incidents, claimEvidence, evidenceLinks, reviews, health] = await Promise.all([
       this.queryRecordsByIds('intelligence_claims', 'id', claimIds, input.tenantId, allTenants),
       this.queryRecordsByIds('incidents', 'id', incidentIds, input.tenantId, allTenants),
       this.queryRecordsByIds('claim_evidence', 'subject_id', claimIds, input.tenantId, allTenants),
       this.queryRecordsByIds('evidence_links', 'subject_id', incidentIds, input.tenantId, allTenants),
-      this.queryRecordsByIds('claim_reviews', 'claim_id', claimIds, input.tenantId, allTenants)
+      this.queryRecordsByIds('claim_reviews', 'claim_id', claimIds, input.tenantId, allTenants),
+      this.queryAutomaticReviewSourceHealth({ tenantId: input.tenantId, allTenants })
     ]);
     const sourceIds = [...new Set([
       ...tasks.map((task: any) => task.subject?.sourceId),
       ...claimEvidence.map((record: any) => record.sourceId),
-      ...evidenceLinks.map((record: any) => record.sourceId)
+      ...evidenceLinks.map((record: any) => record.sourceId),
+      ...health.map((record: any) => record.sourceId)
     ].filter(Boolean).map(String))];
-    const [sources, health] = await Promise.all([
-      this.queryRecordsByIds('sources', 'id', sourceIds, input.tenantId, allTenants),
-      sourceIds.length ? this.queryAutomaticReviewSourceHealth({ tenantId: input.tenantId, allTenants, sourceIds }) : Promise.resolve([])
-    ]);
+    const sources = await this.queryRecordsByIds('sources', 'id', sourceIds, input.tenantId, allTenants);
     const captureIds = [...new Set([
       ...claimEvidence.map((record: any) => record.captureId),
       ...evidenceLinks.map((record: any) => record.captureId)
@@ -438,25 +437,34 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       ? `AND health.source_id IN (${sourceIds.map((_, index) => `$${sourceParameterOffset + index}`).join(", ")})`
       : "";
     const rows = await this.sql.unsafe(`
-      SELECT health.record
-      FROM threat_intel.source_health AS health
-      WHERE ${tenantWhere}
-        AND health.success = TRUE
-        AND health.capture_count > 0
-        AND health.collection_run_id IS NOT NULL
-        AND (
-          health.useful = TRUE
-          OR EXISTS (
-            SELECT 1
-            FROM threat_intel.captures AS capture
-            WHERE capture.tenant_id IS NOT DISTINCT FROM health.tenant_id
-              AND capture.source_id = health.source_id
-              AND capture.record->'metadata'->>'runId' = health.collection_run_id
-              AND capture.record->'metadata'->>'sourceReviewCandidate' = 'true'
+      WITH eligible AS (
+        SELECT health.record, health.checked_at, health.id,
+          row_number() OVER (
+            PARTITION BY health.tenant_id, health.source_id
+            ORDER BY health.checked_at DESC, health.id DESC
+          ) AS evidence_rank
+        FROM threat_intel.source_health AS health
+        WHERE ${tenantWhere}
+          AND health.success = TRUE
+          AND health.capture_count > 0
+          AND health.collection_run_id IS NOT NULL
+          AND (
+            health.useful = TRUE
+            OR EXISTS (
+              SELECT 1
+              FROM threat_intel.captures AS capture
+              WHERE capture.tenant_id IS NOT DISTINCT FROM health.tenant_id
+                AND capture.source_id = health.source_id
+                AND capture.record->'metadata'->>'runId' = health.collection_run_id
+                AND capture.record->'metadata'->>'sourceReviewCandidate' = 'true'
+            )
           )
-        )
-        ${sourceWhere}
-      ORDER BY health.checked_at DESC
+          ${sourceWhere}
+      )
+      SELECT record
+      FROM eligible
+      WHERE evidence_rank <= 2
+      ORDER BY checked_at DESC, id DESC
     `, input.allTenants || input.tenantId === undefined ? sourceIds : [input.tenantId, ...sourceIds]);
     return rows.map(readRecord);
   }
