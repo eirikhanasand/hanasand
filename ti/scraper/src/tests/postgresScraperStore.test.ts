@@ -24,6 +24,27 @@ import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 const collectedAt = "2026-07-19T12:00:00.000Z";
 
 describe("structured threat-intelligence storage contract", () => {
+  test("review hydration bounds source health to task evidence sources", async () => {
+    const store = Object.create(PostgresScraperStore.prototype) as any;
+    const queries: Array<{ text: string; values: unknown[] }> = [];
+    store.sql = {
+      unsafe: async (text: string, values: unknown[] = []) => {
+        queries.push({ text, values });
+        if (text.includes("record->>'recordKind' = 'automatic_intelligence_review_task'")) {
+          return [{ record: { recordKind: "automatic_intelligence_review_task", subject: { sourceId: "source_review" } } }];
+        }
+        return [];
+      }
+    };
+    store.listActorIdentities = () => [];
+
+    await store.queryAutomaticReviewRecords({ tenantId: "tenant_review" });
+
+    const healthQuery = queries.find(({ text }) => text.includes("FROM threat_intel.source_health"));
+    expect(healthQuery?.text).toContain("health.source_id IN");
+    expect(healthQuery?.values).toEqual(["tenant_review", "source_review"]);
+  });
+
   test("does not require the optional parser cleanup table during normal startup", async () => {
     const store = Object.create(PostgresScraperStore.prototype) as any;
     store.sql = ((strings: TemplateStringsArray) => strings[0].includes("to_regclass") ? [{ table_name: null }] : []) as any;

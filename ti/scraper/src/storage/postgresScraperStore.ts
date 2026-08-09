@@ -334,20 +334,23 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const tasks = tasksAndEvents.filter((record: any) => record.recordKind === 'automatic_intelligence_review_task');
     const claimIds = tasks.map((task: any) => task.subject?.claimId).filter(Boolean);
     const incidentIds = tasks.map((task: any) => task.subject?.incidentId).filter(Boolean);
-    const [claims, incidents, claimEvidence, evidenceLinks, reviews, health] = await Promise.all([
+    const [claims, incidents, claimEvidence, evidenceLinks, reviews] = await Promise.all([
       this.queryRecordsByIds('intelligence_claims', 'id', claimIds, input.tenantId, allTenants),
       this.queryRecordsByIds('incidents', 'id', incidentIds, input.tenantId, allTenants),
       this.queryRecordsByIds('claim_evidence', 'subject_id', claimIds, input.tenantId, allTenants),
       this.queryRecordsByIds('evidence_links', 'subject_id', incidentIds, input.tenantId, allTenants),
-      this.queryRecordsByIds('claim_reviews', 'claim_id', claimIds, input.tenantId, allTenants),
-      this.queryAutomaticReviewSourceHealth({ tenantId: input.tenantId, allTenants })
+      this.queryRecordsByIds('claim_reviews', 'claim_id', claimIds, input.tenantId, allTenants)
     ]);
     const sourceIds = [...new Set([
       ...tasks.map((task: any) => task.subject?.sourceId),
       ...claimEvidence.map((record: any) => record.sourceId),
-      ...evidenceLinks.map((record: any) => record.sourceId),
-      ...health.map((record: any) => record.sourceId)
+      ...evidenceLinks.map((record: any) => record.sourceId)
     ].filter(Boolean).map(String))];
+    const health = await this.queryAutomaticReviewSourceHealth({
+      tenantId: input.tenantId,
+      allTenants,
+      sourceIds
+    });
     const sources = await this.queryRecordsByIds('sources', 'id', sourceIds, input.tenantId, allTenants);
     const captureIds = [...new Set([
       ...claimEvidence.map((record: any) => record.captureId),
