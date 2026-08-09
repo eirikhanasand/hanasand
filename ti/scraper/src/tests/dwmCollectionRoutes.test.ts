@@ -116,6 +116,10 @@ describe("organization watchlist collection requests", () => {
     await Bun.sleep(0);
     const failedStatus = await handleApiRequest(request(`/v1/dwm/collection-requests/${failedId}?tenantId=tenant_a&organizationId=org_a`, "owner_a"), options);
     expect(await failedStatus.json()).toMatchObject({ collectionRequest: { requestId: failedId, status: "failed", captureCount: 0, alertCount: 0, errors: ["provider unavailable"] } });
+
+    store.savePlan({ id: "plan_async_pending", tenantId: "tenant_a", request: { organizationId: "org_a", collectionRequestId: "async-pending" }, createdAt: "2026-08-08T02:00:00.000Z", updatedAt: "2026-08-08T02:00:00.000Z", tasks: [] });
+    const pending = await handleApiRequest(request("/v1/dwm/collection-requests/async-pending?tenantId=tenant_a&organizationId=org_a", "owner_a"), options);
+    expect(await pending.json()).toMatchObject({ collectionRequest: { requestId: "async-pending", status: "queued", runIds: [], captureCount: 0, alertCount: 0 } });
   });
 });
 

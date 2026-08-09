@@ -69,7 +69,8 @@ function collectionRequestStatus(options: ApiServerOptions, tenantId: string, or
     .filter((alert: any) => alertCaptureIds(alert).some((id) => captureIds.has(id)))
     .map((alert: any) => alert.id);
   const statuses = runs.map((run: any) => String(run.status));
-  const status = statuses.some((value) => value === "running") ? "running"
+  const status = !statuses.length ? "queued"
+    : statuses.some((value) => value === "running") ? "running"
     : statuses.some((value) => value === "queued") ? "queued"
     : statuses.length && statuses.every((value) => value === "completed") ? "completed"
     : "failed";
@@ -80,9 +81,9 @@ function collectionRequestStatus(options: ApiServerOptions, tenantId: string, or
     captureCount: runs.reduce((total: number, run: any) => total + Number(run.captureCount ?? 0), 0),
     alertCount: alertIds.length,
     alertIds,
-    createdAt: runs.map((run: any) => run.createdAt).filter(Boolean).sort()[0],
-    updatedAt: runs.map((run: any) => run.updatedAt).filter(Boolean).sort().at(-1),
-    completedAt: statuses.every((value) => !["queued", "running"].includes(value))
+    createdAt: runs.map((run: any) => run.createdAt).filter(Boolean).sort()[0] ?? plans.map((plan: any) => plan.createdAt).filter(Boolean).sort()[0],
+    updatedAt: runs.map((run: any) => run.updatedAt).filter(Boolean).sort().at(-1) ?? plans.map((plan: any) => plan.updatedAt).filter(Boolean).sort().at(-1),
+    completedAt: statuses.length > 0 && statuses.every((value) => !["queued", "running"].includes(value))
       ? runs.map((run: any) => run.completedAt).filter(Boolean).sort().at(-1)
       : undefined,
     errors: runs.map((run: any) => run.error).filter(Boolean)
