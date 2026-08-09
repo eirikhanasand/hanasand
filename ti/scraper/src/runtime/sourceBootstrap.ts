@@ -158,7 +158,7 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
   const restricted = effectiveVerified.type === "tor_metadata" && effectiveVerified.metadata?.transportCanary !== true;
   const portfolio = Boolean(effectiveVerified.metadata?.sourcePortfolioVerification);
   const expiredPortfolio = portfolio && !isCurrentSourcePortfolioVerification(effectiveVerified, generatedAt);
-  const runtimeEvidence = portfolio ? currentRuntimeEvidence({
+  const runtimeEvidenceSource = restricted ? {
     ...existing,
     ...effectiveVerified,
     id: existing.id,
@@ -166,7 +166,8 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
     metadata: { ...(existing.metadata ?? {}), ...(effectiveVerified.metadata ?? {}) },
     health: existing.health,
     crawlState: existing.crawlState
-  }, generatedAt, store) : undefined;
+  } : existing;
+  const runtimeEvidence = portfolio ? currentRuntimeEvidence(runtimeEvidenceSource, generatedAt, store) : undefined;
   const revalidatedRestricted = restricted && isRevalidatedRestrictedSource(existing, effectiveVerified, generatedAt);
   if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) || revalidatedRestricted : portfolio ? isSafePortfolioUpgradeTarget(existing) : isVerifiedProductionSource(effectiveVerified, generatedAt) && isSafeUpgradeTarget(existing))) return undefined;
   const sameSource = existing.id === effectiveVerified.id || existing.metadata?.verifiedSourceId === effectiveVerified.id;
