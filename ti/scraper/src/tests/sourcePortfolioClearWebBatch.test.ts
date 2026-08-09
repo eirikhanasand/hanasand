@@ -20,8 +20,8 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(43);
-    expect(batch.exclusions).toHaveLength(83);
+    expect(batch.sources).toHaveLength(60);
+    expect(batch.exclusions).toHaveLength(108);
 
     const ids = new Set<string>();
     const endpoints = new Set<string>();
@@ -165,6 +165,54 @@ describe("clear-web source portfolio batch", () => {
       });
       expect(currentItemCount).toBeGreaterThan(0);
       expect(keywordUsefulItemCount).toBeGreaterThan(0);
+      expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
+      expect(source.metadata).not.toHaveProperty("countsAsCoverage");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
+    }
+  });
+
+  test("keeps ledger 013 current, source-tolerant, and candidate-only until productive scheduled cycles exist", () => {
+    const expected = new Map([
+      ["Center for Internet Security Current Vulnerability Advisories", [50, 50, 50, 50, "2026-08-07T03:22:07.000Z"]],
+      ["CERT@VDE Industrial Product Security Advisories", [150, 150, 80, 65, "2026-08-07T10:00:00.000Z"]],
+      ["Centre for Cybersecurity Belgium Critical Advisories", [10, 10, 10, 10, "2026-08-07T14:02:31.000Z"]],
+      ["CERT.at English Cyber Security Analysis", [50, 50, 5, 3, "2026-06-01T13:21:06.000Z"]],
+      ["Croatia National CERT Security Warnings", [10, 10, 10, 2, "2026-07-06T08:29:47.000Z"]],
+      ["Danish DKCERT Threat and Vulnerability News", [10, 10, 10, 10, "2026-07-17T11:55:43.000Z"]],
+      ["Hong Kong GovCERT Security Alerts", [150, 150, 150, 150, "2026-08-07T04:00:00.000Z"]],
+      ["Italian National Cybersecurity Agency Security Updates", [50, 50, 50, 2, "2026-08-07T14:52:07.000Z"]],
+      ["JPCERT Coordination Center English Security Alerts", [6, 6, 6, 3, "2026-07-31T09:00:00.000Z"]],
+      ["Slovenian SI-CERT Security News", [10, 10, 4, 2, "2026-05-29T07:16:33.000Z"]],
+      ["Spain INCIBE-CERT Early Warning Advisories", [10, 10, 10, 10, "2026-07-30T09:10:46.000Z"]],
+      ["Swiss NCSC Cyber Threat News", [94, 94, 6, 2, "2026-05-20T00:00:00.000Z"]],
+      ["NCSC Netherlands Current Cybersecurity News", [100, 100, 53, 31, "2026-08-07T14:04:56.000Z"]],
+      ["Czech NUKIB Cyber Threat Warnings", [15, 15, 6, 0, "2026-08-07T08:59:00.000Z"]],
+      ["Estonian RIA Cyber Incident and Threat Updates", [100, 100, 33, 0, "2026-08-05T07:12:56.000Z"]],
+      ["Romanian DNSC Cybersecurity Alerts", [10, 10, 10, 0, "2026-08-06T11:58:29.000Z"]],
+      ["Oracle Product Security Alerts and Patch Updates", [127, 127, 6, 0, "2026-07-21T19:30:54.000Z"]],
+    ] as const);
+    const sourceTolerant = new Set([
+      "Czech NUKIB Cyber Threat Warnings",
+      "Estonian RIA Cyber Incident and Threat Updates",
+      "Romanian DNSC Cybersecurity Alerts",
+      "Oracle Product Security Alerts and Patch Updates",
+    ]);
+    const sources = batch.sources.filter((source: any) => expected.has(source.name));
+    expect(sources).toHaveLength(expected.size);
+    for (const source of sources) {
+      const [observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt] = expected.get(source.name)!;
+      expect(source.id).toBe(`src_portfolio_cw_${hash(canonicalUrl(source.url)).slice(0, 20)}`);
+      expect(source.metadata.sourcePortfolioVerification).toMatchObject({
+        observedItemCount,
+        datedItemCount,
+        currentItemCount,
+        keywordUsefulItemCount,
+        latestPublishedAt,
+      });
+      expect(currentItemCount).toBeGreaterThan(0);
+      if (sourceTolerant.has(source.name)) expect(keywordUsefulItemCount).toBe(0);
+      else expect(keywordUsefulItemCount).toBeGreaterThan(0);
       expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
       expect(source.metadata).not.toHaveProperty("countsAsCoverage");
       expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
