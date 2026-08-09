@@ -3687,6 +3687,58 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(await admin`SELECT id, status, completed_at, updated_at, error, record FROM threat_intel.collection_runs ORDER BY id`).toEqual(snapshot);
   });
 
+  test("hydrates two retained productive cycles plus latest health in bounded production mode", async () => {
+    const first = await PostgresScraperStore.create({ databaseUrl });
+    const sourceId = "src_bounded_productive_health";
+    first.saveSource(source({
+      id: sourceId,
+      status: "candidate",
+      metadata: { productionCollection: false, activityWindowSeconds: 2_592_000 }
+    }));
+    const now = Date.now();
+    for (const [index, checkedAt] of [new Date(now - 7_200_000).toISOString(), new Date(now - 3_600_000).toISOString()].entries()) {
+      const runId = `run_bounded_productive_${index + 1}`;
+      first.saveCapture(fixtureCapture({
+        id: `capture_bounded_productive_${index + 1}`,
+        sourceId,
+        collectedAt: checkedAt,
+        publishedAt: checkedAt,
+        metadata: { runId }
+      }));
+      first.saveSourceHealthObservation({
+        id: `health_bounded_productive_${index + 1}`,
+        sourceId,
+        collectionRunId: runId,
+        checkedAt,
+        status: "healthy",
+        success: true,
+        useful: true,
+        captureCount: 1,
+        legalMode: "public_content"
+      });
+    }
+    first.saveSourceHealthObservation({
+      id: "health_bounded_latest",
+      sourceId,
+      collectionRunId: "run_bounded_latest",
+      checkedAt: new Date(now - 1_800_000).toISOString(),
+      status: "healthy",
+      success: true,
+      useful: false,
+      captureCount: 0,
+      legalMode: "public_content"
+    });
+    await first.close();
+
+    const restarted = await PostgresScraperStore.create({ databaseUrl, deferHighVolumeHydration: true });
+    expect(restarted.listSourceHealthObservations().filter((row) => row.sourceId === sourceId).map((row) => row.id).sort()).toEqual([
+      "health_bounded_latest",
+      "health_bounded_productive_1",
+      "health_bounded_productive_2"
+    ]);
+    await restarted.close();
+  });
+
   test("bounds operational reads with exact totals and page-scoped evidence beyond source 6,100", async () => {
     const store = await PostgresScraperStore.create({ databaseUrl });
     await admin.unsafe(`
