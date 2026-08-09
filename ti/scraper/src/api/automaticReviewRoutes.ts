@@ -143,6 +143,19 @@ type ReviewIndex = {
   actorIdentities: ActorIdentityRecord[];
 };
 
+type ReviewIndexCollections = {
+  tasksAndEvents: any[];
+  claims: any[];
+  incidents: any[];
+  captures: any[];
+  sources: any[];
+  health: any[];
+  claimEvidence: any[];
+  evidenceLinks: any[];
+  reviews: any[];
+  actorIdentities: ActorIdentityRecord[];
+};
+
 const MAX_STALE_TASKS_SUPERSEDED_PER_CYCLE = 250;
 
 export async function handleAutomaticReviewRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
@@ -1376,9 +1389,27 @@ async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants =
       ? store.queryEvidenceLinksBySubjectIds(incidentIds, tenantId, allTenants)
       : load("evidenceLinks", "listEvidenceLinks")
   ]);
+  // These high-volume collections are already loaded from PostgreSQL. Reusing
+  // them avoids a second full enumeration through the synchronous builder.
+  return buildReviewIndexFromCollections({
+    tasksAndEvents: taskRecords,
+    claims,
+    incidents,
+    captures,
+    sources,
+    health,
+    claimEvidence,
+    evidenceLinks,
+    reviews,
+    actorIdentities: store.listActorIdentities?.() ?? []
+  });
+}
+
+function buildReviewIndexFromCollections(collections: ReviewIndexCollections): ReviewIndex {
+  const { tasksAndEvents, claims, incidents, captures, sources, health, claimEvidence, evidenceLinks, reviews, actorIdentities } = collections;
   return {
-    tasks: taskRecords.filter((item: any) => item.recordKind === TASK_KIND),
-    events: taskRecords.filter((item: any) => item.recordKind === EVENT_KIND),
+    tasks: tasksAndEvents.filter((item: any) => item.recordKind === TASK_KIND),
+    events: tasksAndEvents.filter((item: any) => item.recordKind === EVENT_KIND),
     claims,
     incidents,
     sources,
@@ -1390,8 +1421,8 @@ async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants =
     claimEvidenceByClaim: grouped(claimEvidence, "claimId"),
     incidentEvidenceByIncident: grouped(evidenceLinks.filter((item: any) => item.subjectType === "incident"), "subjectId"),
     healthBySource: grouped(health, "sourceId"),
-    reviewsByClaim,
-    actorIdentities: store.listActorIdentities?.() ?? []
+    reviewsByClaim: grouped(reviews, "claimId"),
+    actorIdentities
   };
 }
 
