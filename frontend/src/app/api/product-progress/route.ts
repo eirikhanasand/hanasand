@@ -140,40 +140,6 @@ function sourceProxyReady(input: DashboardSourceProofProxyPayload) {
     return Boolean(input.ok && input.endpoints?.sourceInventory?.ok)
 }
 
-function publicTiSearchReady(input: FetchResult) {
-    const payload = input.json as {
-        rows?: unknown[]
-        results?: unknown[]
-        publicTiAnswer?: { status?: string, evidenceLedgerReferences?: unknown[] }
-        actionability?: {
-            schemaVersion?: string
-            sourceProvenance?: unknown[]
-            handoffs?: {
-                watchlist?: { endpoint?: string }
-                alertRebuild?: { endpoint?: string }
-                caseCreate?: { endpoint?: string }
-            }
-            sourceFamilyCoverageMatrix?: SourceFamilyCoverageMatrix
-        }
-    } | undefined
-    const matrix = sourceFamilyCoverageMatrix(payload)
-    return Boolean(
-        input.ok
-        && rows(payload?.rows || payload?.results).length > 0
-        && payload?.publicTiAnswer?.status === 'ready'
-        && rows(payload.publicTiAnswer.evidenceLedgerReferences).length > 0
-        && payload.actionability?.schemaVersion === 'ti.query.actionability.v1'
-        && rows(payload.actionability.sourceProvenance).length > 0
-        && payload.actionability.handoffs?.watchlist?.endpoint
-        && payload.actionability.handoffs?.alertRebuild?.endpoint
-        && payload.actionability.handoffs?.caseCreate?.endpoint
-        && matrix?.schemaVersion === 'ti.public_actor.source_family_coverage_matrix.v1'
-        && rows(matrix.rows).length > 0
-        && stringsFrom(matrix.summary?.publicTiReadyFamilies).length > 0
-        && stringOrUndefined(matrix.summary?.latestCaptureAt),
-    )
-}
-
 type DwmWebhookProductProgressProof = {
     schemaVersion: 'dwm.webhook.destination_admin_product_progress.v1'
     status?: string
