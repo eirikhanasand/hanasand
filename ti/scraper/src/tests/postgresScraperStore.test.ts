@@ -52,8 +52,10 @@ describe("structured threat-intelligence storage contract", () => {
 
     const result = await store.querySourceOperationalSummary({ tenantId: "tenant_summary", generatedAt: collectedAt });
     expect(summaryQuery).toContain("historical_usefulness");
-    expect(summaryQuery).toContain("JOIN threat_intel.captures retained");
-    expect(summaryQuery).toContain("retained.record->'metadata'->>'runId' = health.collection_run_id");
+    expect(summaryQuery).toContain("retained_runs AS MATERIALIZED");
+    expect(summaryQuery).toContain("SELECT DISTINCT source_id, tenant_id, record->'metadata'->>'runId' AS collection_run_id");
+    expect(summaryQuery).toContain("JOIN retained_runs retained");
+    expect(summaryQuery).toContain("retained.collection_run_id = health.collection_run_id");
     expect(summaryQuery).not.toContain("AND EXISTS (");
     expect(summaryQuery).toContain("latest_health.useful AND latest_health.capture_count > 0");
     expect(result.summary).toMatchObject({ everUsefulSourceCount: 1, usefulSourceCount: 0, latestUsefulSourceCount: 0 });
