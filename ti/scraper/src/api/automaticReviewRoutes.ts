@@ -15,8 +15,10 @@ import {
   SOURCE_AUTOMATIC_REVIEW_SCHEMA,
   automaticSourceReviewIdentity,
   automaticReviewModelVersion,
+  hasApprovedAutomaticSourceReview,
   sourceAutomaticReviewEvidenceBound,
   sourceAutomaticReviewIdentityMatches,
+  sourceAutomaticReviewPromptVersionMatches,
   sourceRequiresAutomaticReview
 } from "../policy/sourceAutomaticReview.ts";
 
@@ -281,7 +283,8 @@ function supersedeStaleTasks(store: any, tasks: AutomaticReviewTask[], input: Pi
     if (count >= limit) break;
     const currentPromptVersion = reviewPromptVersion(task.subject);
     const replaceable = (task.promptVersion !== currentPromptVersion && REPLACEABLE_PROMPT_VERSIONS.has(String(task.promptVersion)))
-      || (task.promptVersion === currentPromptVersion && task.requestedModelVersion !== modelVersion);
+      || (task.promptVersion === currentPromptVersion && task.requestedModelVersion !== modelVersion)
+      || (task.attempt === 0 && task.subject.sourceId && !sourceTaskIsCurrent(store, task));
     if ((!input.allTenants && !inTenantScope(task, input.tenantId))
       || !["queued", "running", "retrying"].includes(task.state)
       || !replaceable) continue;
@@ -341,13 +344,13 @@ function newTask(index: ReviewIndex, subject: AutomaticReviewTask["subject"], at
   const source = subject.sourceId ? index.sourcesById.get(subject.sourceId) : undefined;
   const previousSourceReview = source?.metadata?.automaticSourceReview;
   const identityBindingRevision = source
-    && previousSourceReview?.promptVersion === SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION
+    && sourceAutomaticReviewPromptVersionMatches(source, previousSourceReview?.promptVersion)
     && previousSourceReview?.configuredModelVersion === modelVersion
     && !sourceAutomaticReviewIdentityMatches(source, previousSourceReview)
     ? ":bind-source-identity-v1"
     : "";
   const evidenceBindingRevision = source
-    && previousSourceReview?.promptVersion === SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION
+    && sourceAutomaticReviewPromptVersionMatches(source, previousSourceReview?.promptVersion)
     && previousSourceReview?.configuredModelVersion === modelVersion
     && !automaticSourceReviewEvidenceBindingsMatch(source, index.capturesById, previousSourceReview)
     ? `:bind-source-evidence-v1:${createHash("sha256").update(JSON.stringify({
@@ -1112,7 +1115,7 @@ function sourceEligible(source: any, index: ReviewIndex, modelVersion: string, a
   const previous = source.metadata?.automaticSourceReview;
   const evidence = linkedEvidence(index, { type: "source", id: source.id, sourceId: source.id });
   if (!evidence.length) return false;
-  if (previous?.configuredModelVersion !== modelVersion || previous?.promptVersion !== SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION) return true;
+  if (previous?.configuredModelVersion !== modelVersion || !sourceAutomaticReviewPromptVersionMatches(source, previous?.promptVersion)) return true;
   if (!sourceAutomaticReviewIdentityMatches(source, previous)) return true;
   if (!automaticSourceReviewEvidenceBindingsMatch(source, index.capturesById, previous)) return true;
   if (previous.state !== "needs_review" || Date.parse(previous.nextReviewAt ?? source.crawlState?.backoffUntil ?? "") > Date.parse(at)) return false;
@@ -1134,6 +1137,9 @@ function sourceTaskIsCurrent(store: any, task: AutomaticReviewTask) {
     && sourceRequiresAutomaticReview(source)
     && source.metadata?.transportCanary !== true
     && ["candidate", "active", "degraded", "probation"].includes(source.status)
+    && !(task.attempt === 0
+      && hasApprovedAutomaticSourceReview(source)
+      && automaticSourceReviewEvidenceBindingsMatch(source, (id) => store.getCapture?.(id), source.metadata?.automaticSourceReview))
     && (task.attempt === 0 || automaticSourceReviewEvidenceBindingsMatch(source, (id) => store.getCapture?.(id), task)));
 }
 

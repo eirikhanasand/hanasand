@@ -11,13 +11,14 @@ import { FocusedFrontier } from "../frontier/frontier.ts";
 import type { MitreActorCatalogSnapshot, MitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { parseCurrentRansomwareOperations } from "../pipeline/ransomwareOperationCatalog.ts";
+import { qualifySourcePortfolio } from "../ops/sourcePortfolioQualification.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryObjectEvidenceStore, InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { PostgresScraperStore, normalizeLegacySourceForImport, toJson } from "../storage/postgresScraperStore.ts";
 import { hashContent, stableId } from "../utils.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
 import { fixtureCapture } from "./helpers/storageFixtures.ts";
-import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
+import { SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS, SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 
 const collectedAt = "2026-07-19T12:00:00.000Z";
@@ -219,6 +220,73 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         threat_intel.sources
       CASCADE;
     `);
+  });
+
+  test("keeps governed prior-version clear-web approval but requires current victim-list review", async () => {
+    const sourceId = "src_review_version_scope";
+    const tenantId = "tenant_review_version_scope";
+    const store = await PostgresScraperStore.create({ databaseUrl });
+    store.saveSource(source({
+      id: sourceId,
+      tenantId,
+      url: "https://review-version.example/feed.xml",
+      countsAsCoverage: true,
+      metadata: {
+        sourceFamily: "clear_web",
+        productionCollection: true,
+        activityWindowSeconds: 2_592_000,
+        sourcePortfolioVerification: { outcome: "content_parsed" }
+      }
+    }));
+    for (const [index, checkedAt] of ["2026-07-22T12:00:00.000Z", "2026-07-23T12:00:00.000Z"].entries()) {
+      const runId = `run_review_version_scope_${index}`;
+      store.saveRun({ id: runId, tenantId, requestId: "req_public_canary", status: "completed", startedAt: checkedAt, completedAt: checkedAt, updatedAt: checkedAt } as any);
+      store.saveCapture(fixtureCapture({ id: `capture_review_version_scope_${index}`, tenantId, sourceId, url: `https://review-version.example/${index}`, collectedAt: checkedAt, publishedAt: checkedAt, metadata: { runId } }));
+      store.saveSourceHealthObservation({ id: `health_review_version_scope_${index}`, tenantId, sourceId, collectionRunId: runId, checkedAt, status: "healthy", success: true, useful: true, captureCount: 1, legalMode: "public_content" });
+    }
+    store.saveRun({ id: "run_review_version_scope_latest", tenantId, requestId: "req_public_canary", status: "completed", startedAt: "2026-07-23T12:30:00.000Z", completedAt: "2026-07-23T12:30:00.000Z", updatedAt: "2026-07-23T12:30:00.000Z" } as any);
+    store.saveSourceHealthObservation({ id: "health_review_version_scope_latest", tenantId, sourceId, collectionRunId: "run_review_version_scope_latest", checkedAt: "2026-07-23T12:30:00.000Z", status: "healthy", success: true, useful: false, captureCount: 0, legalMode: "public_content" });
+    const reviewed = store.getSource(sourceId)!;
+    const selectedEvidenceProvenance = sourceAutomaticReviewEvidenceBindings(reviewed, store.listCaptures()).slice(0, 1);
+    store.saveSource({
+      ...reviewed,
+      countsAsCoverage: true,
+      metadata: {
+        ...reviewed.metadata,
+        productionCollection: true,
+        automaticSourceReview: {
+          schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
+          state: "approved",
+          promptVersion: SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS[1],
+          configuredModelVersion: "hanasand",
+          sourceIdentity: automaticSourceReviewIdentity(reviewed),
+          requestSha256: "a".repeat(64),
+          selectedEvidenceIds: selectedEvidenceProvenance.map((item) => item.evidenceId),
+          selectedEvidenceProvenance,
+          runtimeIdentity: { status: "completed", conversationId: "source-review-version-scope" },
+          decision: { subject: { type: "source", id: sourceId }, action: "confirm", claimValidity: "supported" }
+        }
+      }
+    });
+    await store.close();
+    const restarted = await PostgresScraperStore.create({ databaseUrl, deferHighVolumeHydration: true, runMaintenanceMigrations: false });
+    expect(restarted.listSourceHealthObservations().filter((row: any) => row.sourceId === sourceId)).toHaveLength(3);
+    expect(qualifySourcePortfolio({
+      sources: [restarted.getSource(sourceId)!],
+      observations: restarted.listSourceHealthObservations(),
+      captures: restarted.listCaptures(),
+      generatedAt: "2026-07-23T13:00:00.000Z"
+    }).counts.total).toBe(1);
+
+    const clearWeb = await restarted.querySourceOperationalPage({ tenantId, generatedAt: "2026-07-23T13:00:00.000Z", sourceId });
+    expect(clearWeb.totals.qualifyingClearWebSourceCount).toBe(1);
+
+    const current = restarted.getSource(sourceId)!;
+    restarted.saveSource({ ...current, metadata: { ...current.metadata, sourceFamily: "dark_web_victim_feed" } });
+    await restarted.flush();
+    const victimList = await restarted.querySourceOperationalPage({ tenantId, generatedAt: "2026-07-23T13:00:00.000Z", sourceId });
+    expect(victimList.totals.qualifyingClearWebSourceCount).toBe(0);
+    await restarted.close();
   });
 
   test("archives parser-empty diagnostics and removes their live intelligence graph", async () => {
@@ -3732,7 +3800,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         automaticSourceReview: {
           schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
           state: "approved",
-          promptVersion: "ti.automatic_intelligence_review.prompt.v6",
+          promptVersion: SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS[0],
           configuredModelVersion: "hanasand",
           sourceIdentity: automaticSourceReviewIdentity({ id: sourceId, tenantId: "tenant_bound", url: "https://bounded.example/6100.xml", createdAt: "1970-01-01T00:00:00.000Z" }),
           requestSha256: "a".repeat(64),

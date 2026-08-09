@@ -35,7 +35,7 @@ import { operationalQueryRow } from "../api/sourceOperations.ts";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
-import { SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion } from "../policy/sourceAutomaticReview.ts";
+import { SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS, SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion } from "../policy/sourceAutomaticReview.ts";
 import { orgWatchlistContractToRuntimeDwmWatchlists } from "./dwmOrgWatchlistBridge.ts";
 import { mayContainExposureQueueClaim } from "../product/exposureQueueCandidate.ts";
 
@@ -803,6 +803,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                   record->'metadata'->'automaticSourceReview'->>'schemaVersion' = '${SOURCE_AUTOMATIC_REVIEW_SCHEMA}'
                   AND record->'metadata'->'automaticSourceReview'->>'state' = 'approved'
                   AND record->'metadata'->'automaticSourceReview'->>'promptVersion' IN (${SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS.map((version) => `'${version}'`).join(", ")})
+                  AND (
+                    COALESCE(record->'metadata'->>'sourceFamily', '') <> 'dark_web_victim_feed'
+                    OR record->'metadata'->'automaticSourceReview'->>'promptVersion' = '${SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION}'
+                  )
                   AND record->'metadata'->'automaticSourceReview'->>'configuredModelVersion' = $5::text
                   AND record->'metadata'->'automaticSourceReview'->'sourceIdentity'->>'sourceId' = id
                   AND record->'metadata'->'automaticSourceReview'->'sourceIdentity'->>'tenantKey' = COALESCE(tenant_id, 'global')
@@ -1631,7 +1635,41 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           : this.sql`SELECT record FROM threat_intel.collection_runs ORDER BY started_at`,
         this.sql`SELECT record FROM threat_intel.intelligence_claims ORDER BY first_seen_at`,
         deferHighVolumeHydration
-          ? this.sql`SELECT DISTINCT ON (source_id, tenant_id) record FROM threat_intel.source_health ORDER BY source_id, tenant_id, checked_at DESC`
+          ? this.sql`
+              WITH latest AS (
+                SELECT record, checked_at, id FROM (
+                  SELECT record, checked_at, id,
+                    row_number() OVER (PARTITION BY source_id, tenant_id ORDER BY checked_at DESC, id DESC) AS latest_rank
+                  FROM threat_intel.source_health
+                ) ranked_latest
+                WHERE latest_rank = 1
+              ), productive_runs AS (
+                SELECT record, checked_at, id, source_id, tenant_id, collection_run_id,
+                  row_number() OVER (PARTITION BY source_id, tenant_id, collection_run_id ORDER BY checked_at DESC, id DESC) AS run_rank
+                FROM threat_intel.source_health health
+                WHERE success AND useful AND capture_count > 0 AND collection_run_id IS NOT NULL
+                  AND EXISTS (
+                    SELECT 1 FROM threat_intel.captures retained
+                    WHERE retained.source_id = health.source_id
+                      AND retained.tenant_id IS NOT DISTINCT FROM health.tenant_id
+                      AND retained.record->'metadata'->>'runId' = health.collection_run_id
+                  )
+              ), productive AS (
+                SELECT record, checked_at, id FROM (
+                  SELECT record, checked_at, id, source_id, tenant_id,
+                    row_number() OVER (PARTITION BY source_id, tenant_id ORDER BY checked_at DESC, id DESC) AS productive_rank
+                  FROM productive_runs
+                  WHERE run_rank = 1
+                ) ranked_productive
+                WHERE productive_rank <= 2
+              )
+              SELECT record FROM (
+                SELECT record, checked_at, id FROM latest
+                UNION
+                SELECT record, checked_at, id FROM productive
+              ) current_health
+              ORDER BY checked_at, id
+            `
           : this.sql`SELECT record FROM threat_intel.source_health ORDER BY checked_at`,
         // Keep operational workflow records in memory, but do not make startup
         // proportional to the automatic-review history. The full history remains
