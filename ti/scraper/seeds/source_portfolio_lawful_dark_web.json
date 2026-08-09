@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T14:50:11.000Z",
+  "generatedAt": "2026-08-09T15:33:48.000Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -158,10 +158,11 @@
     {
       "id": "restricted_bravox_victim_blog",
       "actorName": "Bravox",
+      "endpointHash": "6ed02bbc159613ed",
       "disposition": "rejected",
-      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
-      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
-      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/bravox",
+      "reason": "The current authority-marked public root returned only a bounded application shell and zero production-parser victim metadata.",
+      "evidenceCheckedAt": "2026-08-09T15:33:48.000Z",
+      "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/bravox",
       "countsAsCoverage": false
     },
     {
@@ -520,7 +521,12 @@
     { "id": "restricted_section9_victim_blog_19", "actorName": "Section9", "endpointHash": "3621f1e56e13960c", "disposition": "rejected", "reason": "No authoritative current publisher or vendor reference independently binds this third-party-listed endpoint to Section9, so it was excluded without restricted collection.", "evidenceCheckedAt": "2026-08-09T13:23:45.933Z", "discoveryAuthorityRecordUrl": "https://breach.house/groups/section9", "countsAsCoverage": false },
     { "id": "restricted_killsec3_victim_blog", "actorName": "KillSec3", "endpointHash": "009e247113e90d6b", "disposition": "rejected", "reason": "The current credential-free root returned only a script loader and no production-parser victim metadata; its client data request is separately credential-blocked.", "evidenceCheckedAt": "2026-08-09T13:53:55.000Z", "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/killsec3", "countsAsCoverage": false },
     { "id": "restricted_killsec3_victim_api", "actorName": "KillSec3", "endpointHash": "c13d4de78a75cc7a", "disposition": "rejected", "reason": "The public client-referenced data endpoint returned HTTP 403 with a credential prompt through the approved proxy, so it is not lawful credential-free metadata collection.", "evidenceCheckedAt": "2026-08-09T13:53:55.000Z", "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/killsec3", "countsAsCoverage": false },
-    { "id": "restricted_killsec3_file_server", "actorName": "KillSec3", "endpointHash": "07ac0a259bbb3f71", "disposition": "rejected", "reason": "The current authority classifies this location as a file server and its public response is HTTP 403, so it is outside the metadata-only victim-feed scope.", "evidenceCheckedAt": "2026-08-09T13:53:55.000Z", "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/killsec3", "countsAsCoverage": false }
+    { "id": "restricted_killsec3_file_server", "actorName": "KillSec3", "endpointHash": "07ac0a259bbb3f71", "disposition": "rejected", "reason": "The current authority classifies this location as a file server and its public response is HTTP 403, so it is outside the metadata-only victim-feed scope.", "evidenceCheckedAt": "2026-08-09T13:53:55.000Z", "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/killsec3", "countsAsCoverage": false },
+    { "id": "restricted_bravox_victim_blog_2", "actorName": "Bravox", "endpointHash": "de471407b66b4470", "disposition": "rejected", "reason": "The second authority-marked public root returned the same bounded application shell and zero production-parser victim metadata, so it is a non-qualifying relay.", "evidenceCheckedAt": "2026-08-09T15:33:48.000Z", "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/bravox", "countsAsCoverage": false },
+    { "id": "restricted_mydata_victim_blog", "actorName": "MyData", "endpointHash": "9cdaea1bc73ef973", "disposition": "rejected", "reason": "The current credential-free public page was reachable, but the production parser returned zero victim-listing items.", "evidenceCheckedAt": "2026-08-09T15:33:48.000Z", "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/mydata", "countsAsCoverage": false },
+    { "id": "restricted_metaencryptor_victim_blog", "actorName": "MetaEncryptor", "endpointHash": "9e1fe21b3ef252e2", "disposition": "rejected", "reason": "The current authority-marked endpoint failed the approved metadata boundary because its TLS certificate was not valid, before any useful metadata could be parsed.", "evidenceCheckedAt": "2026-08-09T15:33:48.000Z", "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/metaencryptor", "countsAsCoverage": false },
+    { "id": "restricted_threatmarket_victim_blog", "actorName": "ThreatMarket", "endpointHash": "42b16a6c8674b032", "disposition": "rejected", "reason": "The current public market page was reachable, but it exposed no production-parser victim listing and is outside independently useful ransomware-feed coverage.", "evidenceCheckedAt": "2026-08-09T15:33:48.000Z", "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/threatmarket", "countsAsCoverage": false },
+    { "id": "restricted_ciphbit_victim_blog", "actorName": "CiphBit", "endpointHash": "17154b54e0f7dabd", "disposition": "rejected", "reason": "The current authority-marked endpoint returned HTTP 403 through the approved proxy before any useful victim metadata could be parsed.", "evidenceCheckedAt": "2026-08-09T15:33:48.000Z", "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/ciphbit", "countsAsCoverage": false }
   ],
   "sources": [
     {
