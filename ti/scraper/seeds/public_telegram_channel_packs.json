@@ -1,10 +1,10 @@
 {
-  "version": 9,
+  "version": 10,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-08-09T10:23:54.000Z",
+  "generatedAt": "2026-08-09T11:09:26.000Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 23,
+  "sourceCount": 25,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -2685,6 +2685,253 @@
             "exposed service",
             "CVE",
             "vulnerability"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_f6_cybersecurity_telegram",
+      "name": "F6 cybersecurity public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/f6_cybersecurity",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.9,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian-language APT, malware, cybercrime, incident, and victim reporting published by F6. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T11:09:26.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "apt_research",
+          "malware_research",
+          "cybercrime_reporting",
+          "victim_publication_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "f6_cybersecurity",
+        "verifiedSourceId": "src_f6_cybersecurity_telegram",
+        "publisherReference": "https://www.f6.ru/media-center/news/",
+        "ownershipVerifiedAt": "2026-08-09T11:09:26.000Z",
+        "activityVerifiedAt": "2026-08-09T11:09:26.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "APT",
+          "malware",
+          "cybercrime",
+          "victim reporting",
+          "security incidents"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T11:09:26.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 15,
+          "observedUsefulItemCount": 2,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.f6.ru/media-center/news/",
+          "legalBasisVerifiedAt": "2026-08-09T11:09:26.000Z",
+          "latestPublishedAt": "2026-08-07T07:15:14+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:ru:f6:telegram",
+        "publisher": {
+          "name": "F6",
+          "country": "RU",
+          "homepage": "https://www.f6.ru/",
+          "trustBasis": "publisher research site and branded official public channel identify the same F6 research operation"
+        },
+        "tier": "tier_1",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.9,
+        "intelligenceValue": 0.92,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "APT",
+            "malware",
+            "cybercrime",
+            "victim reporting",
+            "security incidents"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "finance",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Russia",
+            "Eastern Europe",
+            "CIS"
+          ],
+          "countries": [
+            "Russia"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "APT",
+            "вредоносное ПО",
+            "кибератака",
+            "утечка данных"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_tumar_one_telegram",
+      "name": "Tumar.One public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/tumar_one",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.86,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public regional vulnerability and bug-bounty reporting from the exact Telegram channel linked by the Tumar.One platform. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T11:09:26.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "vulnerability_reporting",
+          "independent_research",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "tumar_one",
+        "verifiedSourceId": "src_tumar_one_telegram",
+        "publisherReference": "https://tumar.one/",
+        "ownershipVerifiedAt": "2026-08-09T11:09:26.000Z",
+        "activityVerifiedAt": "2026-08-09T11:09:26.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "vulnerabilities",
+          "bug bounty",
+          "attack surface",
+          "responsible disclosure"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T11:09:26.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 4,
+          "observedUsefulItemCount": 1,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://tumar.one/",
+          "legalBasisVerifiedAt": "2026-08-09T11:09:26.000Z",
+          "latestPublishedAt": "2026-07-21T11:47:01+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "publisher:kz:tumar-one:telegram",
+        "publisher": {
+          "name": "Tumar.One",
+          "country": "KZ",
+          "homepage": "https://tumar.one/",
+          "trustBasis": "publisher homepage links the exact official public Telegram channel"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.86,
+        "intelligenceValue": 0.84,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "vulnerabilities",
+            "bug bounty",
+            "attack surface",
+            "responsible disclosure"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "finance",
+            "government",
+            "telecommunications"
+          ],
+          "regions": [
+            "Kazakhstan",
+            "Central Asia"
+          ],
+          "countries": [
+            "Kazakhstan"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "уязвимость",
+            "bug bounty",
+            "CVE",
+            "исследование"
           ]
         },
         "collection": {
