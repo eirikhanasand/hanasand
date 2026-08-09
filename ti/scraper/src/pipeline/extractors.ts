@@ -44,7 +44,6 @@ export function extractEntities(text: string, context: ExtractionContext, actorI
   addEntityMatches(rows, "victim", text, /\bagainst\s+([A-Z][A-Za-z0-9&.,' -]{2,80})\s+(?:in|using|after|with)\b/g, context, 0.58);
   addEntityMatches(rows, "victim", text, /\bagainst\s+([A-Z][A-Za-z0-9&.,' -]{2,80})(?:[.,;]|$)/g, context, 0.56);
   addEntityMatches(rows, "sector", text, /\bsector\s*:\s*([A-Za-z][A-Za-z -]{2,60})/gi, context, 0.58); addEntityMatches(rows, "country", text, /\bcountry\s*:\s*([A-Za-z][A-Za-z -]{1,60})/gi, context, 0.58); addEntityMatches(rows, "cve", text, RES.cve, context, 0.9);
-  const ransomware = /\bransomware\b/i.exec(text); if (ransomware) rows.push(ent("ttp", "ransomware activity", ransomware[0], context, ransomware.index, ransomware.index + ransomware[0].length, 0.62));
   return dedupe(rows, (e) => `${e.type}:${e.value.toLowerCase()}`);
 }
 

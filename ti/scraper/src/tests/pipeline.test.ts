@@ -87,6 +87,7 @@ describe("compact pipeline value path", () => {
     const actors = item("ShinyHunters was mentioned alongside Scattered Spider.").entities.filter((entity: any) => entity.type === "actor").map((entity: any) => entity.value);
     expect(actors).toEqual(expect.arrayContaining(["ShinyHunters", "Scattered Spider"]));
     expect(item("A malware report says ransomware activity increased. Google Play Protect blocked the unrelated Android app.").entities.some((entity: any) => entity.type === "ransomware_family" && entity.value === "Play")).toBe(false);
+    expect(item("A malware report says ransomware activity increased.").entities.some((entity: any) => entity.type === "ttp" && entity.value === "ransomware activity")).toBe(false);
     expect(item("The Play ransomware group claimed a new victim.").entities).toContainEqual(expect.objectContaining({ type: "ransomware_family", value: "Play" }));
   });
 
