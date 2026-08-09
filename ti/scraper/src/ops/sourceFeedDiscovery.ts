@@ -9,7 +9,6 @@ import { prepareRuntimeSource } from "../runtime/sourceBootstrap.ts";
 import { publicSourceReferenceUrl } from "../pipeline/sourceFieldReportTimestamp.ts";
 import type { CaptureMetadataStore } from "../storage/evidenceStore.ts";
 import { nowIso, stableId } from "../utils.ts";
-import { isSellableIntelText } from "../value/sellableIntel.ts";
 import type { CanaryFetch } from "./canaryCollectionTypes.ts";
 import { feedItems } from "./canaryFeedItems.ts";
 import { randomUUID } from "node:crypto";
@@ -406,16 +405,7 @@ function feedProof(body: string, feedUrl: string, mediaType: string | null, gene
   const probe = { id: "source-feed-discovery-probe", name: "Public intelligence feed", type: "rss", url: feedUrl };
   const productionRows = (feedItems(probe, { id: "source-feed-discovery-probe", targetUrl: feedUrl }, body, generatedAt, {}, 150) as FeedItem[])
     .filter((row) => !row.metadata?.parserWarnings?.length
-      && currentPublisherTimestamp(row.publishedAt, generatedAt)
-      && isSellableIntelText({
-        text: String(row.rawText ?? ""),
-        title: row.title,
-        sourceId: probe.id,
-        publishedAt: row.publishedAt,
-        collectedAt: row.collectedAt,
-        now: generatedAt,
-        maxAgeDays: 365
-      }));
+      && currentPublisherTimestamp(row.publishedAt, generatedAt));
   if (!productionRows.length) return undefined;
   return {
     url: feedUrl,

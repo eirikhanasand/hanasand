@@ -14,7 +14,7 @@ import { buildRawCapture } from "../pipeline/pipelineCapture.ts";
 import { activeWatchlistDiscoveryTerms, collectWatchlistDiscoveryEvidence, scheduleWatchlistDiscoveryRuns } from "./watchlistDiscovery.ts";
 import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
 import { runSourceFeedDiscoveryCycle } from "./sourceFeedDiscovery.ts";
-import { hasApprovedAutomaticSourceReview, hasGovernedAutomaticSourceReviewLineage } from "../policy/sourceAutomaticReview.ts";
+import { hasApprovedAutomaticSourceReview, hasGovernedAutomaticSourceReviewLineage, sourceRequiresAutomaticReview } from "../policy/sourceAutomaticReview.ts";
 import { automaticSourceReviewEvidenceBindingsMatch } from "../api/automaticReviewRoutes.ts";
 export { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts"; export { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanaryReadinessPacket, buildCanarySoakReport } from "./canaryReports.ts";
@@ -211,7 +211,7 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
   const leased = options.frontier.next(new Date(generatedAt), (task: any) => task.runId === runId); if (!leased) return;
   const originalTask = leased.task, source = options.store.getSource?.(originalTask.sourceId), startedMs = Date.now(); counters.leasedTaskCount++;
   const task = source && isNvdCveSource(source) ? nvdEvaluationTask(options.store, originalTask, source) : originalTask;
-  const taskMetrics: any = { itemCount: 0, captureCount: 0, incidentCount: 0, duplicateCount: 0, parserWarningCount: 0, actorIds: new Set<string>(), publishedAt: [], productivePublishedAt: [] };
+  const taskMetrics: any = { itemCount: 0, captureCount: 0, usefulCaptureCount: 0, incidentCount: 0, duplicateCount: 0, parserWarningCount: 0, actorIds: new Set<string>(), publishedAt: [], productivePublishedAt: [] };
   try {
     if (!source) throw new Error("source missing");
     if (task.planning?.watchlistDiscovery) {
@@ -228,16 +228,28 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
     taskMetrics.httpStatus = discoveredItems[0]?.metadata?.fetchProvenance?.httpStatus;
     taskMetrics.parserWarningCount = discoveredItems.reduce((total: number, item: any) => total + (Array.isArray(item.metadata?.parserWarnings) ? item.metadata.parserWarnings.length : 0), 0);
     taskMetrics.publishedAt = discoveredItems.map((item: any) => item.publishedAt).filter(Boolean);
-    const sellableItems = task.planning?.watchlistDiscovery ? collectedItems : collectedItems.filter((collected: any) => isNvdCveSource(source) || ["cisa_kev", "ransomware_group_metadata", "mitre_actor_catalog", "ransomware_operation_catalog", "ransomware_operation_activity_evidence"].includes(collected.metadata?.extractionProfile) || isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt, maxAgeDays: sourceActivityWindowDays(source) }));
-    counters.skippedLowValueCount += intelligenceItems.length - sellableItems.length;
-    for (const collected of sellableItems.slice(0, itemLimit(source, options, task))) {
+    const reviewedSource = options.store.getSource?.(source.id) ?? source;
+    const sourceReviewApproved = hasApprovedAutomaticSourceReview(reviewedSource)
+      && automaticSourceReviewEvidenceBindingsMatch(reviewedSource, (id) => options.store.getCapture?.(id));
+    const itemUseful = (collected: any) => Boolean(task.planning?.watchlistDiscovery
+      || isNvdCveSource(source)
+      || ["cisa_kev", "ransomware_group_metadata", "mitre_actor_catalog", "ransomware_operation_catalog", "ransomware_operation_activity_evidence"].includes(collected.metadata?.extractionProfile)
+      || sourceReviewApproved && currentReviewedItem(collected, source, generatedAt)
+      || isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt, maxAgeDays: sourceActivityWindowDays(source) }));
+    const retainedItems = task.planning?.watchlistDiscovery
+      ? collectedItems
+      : collectedItems.filter((collected: any) => itemUseful(collected) || sourceRequiresAutomaticReview(source));
+    counters.skippedLowValueCount += Math.max(0, intelligenceItems.length - retainedItems.filter(itemUseful).length);
+    for (const collected of retainedItems.slice(0, itemLimit(source, options, task))) {
+      const usefulItem = itemUseful(collected);
+      const sourceReviewCandidate = !usefulItem && sourceRequiresAutomaticReview(source);
       collected.tenantId = task.tenantId ?? collected.tenantId ?? source.tenantId;
       collected.organizationId = task.planning?.watchlistDiscovery?.organizationId ?? collected.organizationId;
-      collected.metadata = { ...collected.metadata, runId, queryTerms: task.planning?.watchlistDiscovery ? (collected.metadata?.matchedWatchlistTerms ?? []).map((term: any) => term.value) : task.planning?.queryTerms ?? [], sellableCandidate: true, sellableReason: sellableReason(collected.rawText) };
+      collected.metadata = { ...collected.metadata, runId, queryTerms: task.planning?.watchlistDiscovery ? (collected.metadata?.matchedWatchlistTerms ?? []).map((term: any) => term.value) : task.planning?.queryTerms ?? [], sellableCandidate: usefulItem, sellableReason: usefulItem && sourceReviewApproved ? "approved_source_review" : sellableReason(`${collected.title ?? ""} ${collected.rawText}`), ...(sourceReviewCandidate ? { sourceReviewCandidate: true } : {}) };
       const actorIdentityCatalogSnapshot = collected.metadata?.actorIdentityCatalogSnapshot ?? collected.metadata?.ransomwareOperationCatalogSnapshot;
       const catalogEvidenceOnly = collected.metadata?.catalogEvidenceOnly === true;
       const { actorIdentityCatalogSnapshot: _mitreSnapshot, ransomwareOperationCatalogSnapshot: _ransomwareSnapshot, ...captureMetadata } = collected.metadata ?? {};
-      let pipeline = actorIdentityCatalogSnapshot || catalogEvidenceOnly
+      let pipeline = actorIdentityCatalogSnapshot || catalogEvidenceOnly || sourceReviewCandidate
         ? { capture: buildRawCapture({ ...collected, metadata: captureMetadata }), entities: [], indicators: [] }
         : processCollectedItem(collected, { actorIdentities: options.store.listActorIdentities?.() ?? [] });
       const completeEvaluationCapture = pipeline.capture;
@@ -251,17 +263,20 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
       if (duplicate) { counters.duplicateCaptureCount++; taskMetrics.duplicateCount++; } else {
         counters.insertedCaptureCount++;
         taskMetrics.captureCount++;
-        if (collected.publishedAt) taskMetrics.productivePublishedAt.push(collected.publishedAt);
+        if (usefulItem) {
+          taskMetrics.usefulCaptureCount++;
+          if (collected.publishedAt) taskMetrics.productivePublishedAt.push(collected.publishedAt);
+        }
       }
       if (saved.incident) { counters.incidentCount++; taskMetrics.incidentCount++; }
       if (task.planning?.watchlistDiscovery && collected.sourceId !== source.id) recordWatchlistEvidenceHealth(options.store, collected, task, runId, generatedAt, Boolean(duplicate), Boolean(saved.incident));
       for (const entity of pipeline.entities ?? []) if (["actor", "ransomware_family"].includes(entity.type)) taskMetrics.actorIds.add(String(entity.normalizedValue ?? entity.value));
-      if (!task.planning?.watchlistDiscovery && !actorIdentityCatalogSnapshot && !catalogEvidenceOnly && await saveExposureClaimFromCollectedItem(options.store, collected, generatedAt)) counters.exposureClaimCount++;
+      if (usefulItem && !task.planning?.watchlistDiscovery && !actorIdentityCatalogSnapshot && !catalogEvidenceOnly && await saveExposureClaimFromCollectedItem(options.store, collected, generatedAt)) counters.exposureClaimCount++;
       latestCaptureIds.push(saved.capture.id);
       if (isNvdCveSource(source) || isCisaKevSource(source)) completeEvaluationCaptures.push({ capture: completeEvaluationCapture, evaluationCveSet: collected.evaluationCveSet });
     }
     counters.completedTaskCount++; options.frontier.complete(task);
-    const checkedAt = options.now?.() ?? nowIso(), useful = taskMetrics.captureCount > 0;
+    const checkedAt = options.now?.() ?? nowIso(), useful = taskMetrics.usefulCaptureCount > 0;
     options.store.saveSourceHealthObservation?.(sourceHealthObservation(source, task, runId, checkedAt, Date.now() - startedMs, taskMetrics, { success: true, useful }));
     const currentSource = options.store.getSource?.(source.id);
     if (!currentSource || currentSource.tenantId !== source.tenantId) return;
@@ -481,6 +496,11 @@ function sourceScheduleTime(source: any) {
 }
 function latestTimestamp(values: unknown[]) {
   return values.map((value) => Date.parse(String(value ?? ""))).filter(Number.isFinite).sort((left, right) => right - left).map((value) => new Date(value).toISOString())[0];
+}
+function currentReviewedItem(item: any, source: any, generatedAt: string) {
+  const itemAt = Date.parse(String(item.publishedAt ?? item.collectedAt ?? ""));
+  const ageMs = Date.parse(generatedAt) - itemAt;
+  return Number.isFinite(ageMs) && ageMs >= -5 * 60_000 && ageMs <= sourceActivityWindowDays(source) * 86_400_000;
 }
 function positiveNumber(value: unknown, fallback: number) {
   const number = Number(value);

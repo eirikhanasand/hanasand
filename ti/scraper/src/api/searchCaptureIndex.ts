@@ -2,6 +2,8 @@ import { isSellableIntelText } from "../value/sellableIntel.ts";
 import { derivedHints } from "./searchDerivedHints.ts";
 import { termRegex } from "./searchTerm.ts";
 import { sourceActivityWindowDays } from "../policy/sourceActivityWindow.ts";
+import { hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
+import { automaticSourceReviewEvidenceBindingsMatch } from "./automaticReviewRoutes.ts";
 type SearchDoc = { capture: any; text: string; title: string; collectedAt: string };
 type CachedDoc = { doc?: SearchDoc; postingKeys: string[]; tenantKey: string };
 type SearchIndex = { revision: number; records: Map<string, CachedDoc>; postings: Map<string, Set<string>>; tenantIds: Map<string, Set<string>> };
@@ -44,6 +46,7 @@ export function findSearchCapturesFromRows(captures: any[], sources: any[], quer
   const overlay = {
     listSearchCaptureChanges: () => ({ revision: rows.length, captures: rows }),
     getSource: (sourceId: string) => sourceById.get(sourceId),
+    getCapture: (captureId: string) => rows.find((capture: any) => capture.id === captureId),
     listIncidentsByCaptureIds: () => []
   };
   return actorTerms ? findActorSearchCaptures(overlay, actorTerms, limit, tenantId) : findSearchCaptures(overlay, query, limit, tenantId);
@@ -59,7 +62,7 @@ function indexForStore(store: any): SearchIndex {
     removeCachedDoc(index, capture.id);
     const source = store.getSource?.(capture.sourceId);
     const candidate = withLegacyIncidentTitle(capture, incidentTitles.get(capture.id));
-    const doc = sellableCapture(candidate, source) ? docFor(candidate, source) : undefined;
+    const doc = sellableCapture(candidate, source, store) ? docFor(candidate, source) : undefined;
     const tenant = tenantKey(capture.tenantId || undefined);
     const postingKeys = doc ? indexedTerms(doc).map((term) => postingKey(tenant, term)) : [];
     index.records.set(capture.id, { doc, postingKeys, tenantKey: tenant });
@@ -106,8 +109,11 @@ function docFor(capture: any, source: any): SearchDoc {
   const text = searchableText(capture);
   return { capture, title: norm(capture.title), collectedAt: capture.collectedAt ?? "", text: unique([text, sourceHints(source), derivedHints(text)]).join(" ").toLowerCase() };
 }
-function sellableCapture(capture: any, source: any) {
+function sellableCapture(capture: any, source: any, store: any) {
   if (capture?.metadata?.exposureClaim || capture?.metadata?.leakSite) return true;
+  if (capture?.metadata?.sourceReviewCandidate === true
+    && hasApprovedAutomaticSourceReview(source)
+    && automaticSourceReviewEvidenceBindingsMatch(source, (id) => store.getCapture?.(id))) return true;
   return isSellableIntelText({ text: searchableText(capture), title: capture.title, sourceId: capture.sourceId, publishedAt: capture.publishedAt, collectedAt: capture.collectedAt, maxAgeDays: sourceActivityWindowDays(source) });
 }
 function searchableText(capture: any) {
