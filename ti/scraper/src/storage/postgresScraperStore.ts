@@ -780,7 +780,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             'duplicateCount', COALESCE(sum(h.duplicate_count), 0),
             'reportedCaptureCount', COALESCE(sum(h.capture_count), 0),
             'observedFalsePositiveRate', avg(h.false_positive_rate),
-            'latest', (array_agg(h.record ORDER BY h.checked_at DESC))[1],
+            'latest', (
+              SELECT latest_health.record
+              FROM threat_intel.source_health AS latest_health
+              WHERE latest_health.source_id = page.id
+                AND latest_health.tenant_id IS NOT DISTINCT FROM page.tenant_id
+              ORDER BY latest_health.checked_at DESC, latest_health.id DESC
+              LIMIT 1
+            ),
             'lastSuccessAt', CASE WHEN max(h.checked_at) FILTER (WHERE h.success) IS NULL THEN NULL ELSE rtrim(rtrim(to_char((max(h.checked_at) FILTER (WHERE h.success)) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS'), '0'), '.') || '+00:00' END,
             'lastUsefulAt', CASE WHEN max(h.checked_at) FILTER (
               WHERE h.success AND h.useful AND h.capture_count > 0
@@ -830,7 +837,15 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                     AND retained.record->'metadata'->>'runId' = latest_observation.collection_run_id
                 )
             ), FALSE),
-            'lastFailure', (array_agg(h.record ORDER BY h.checked_at DESC) FILTER (WHERE NOT h.success))[1]
+            'lastFailure', (
+              SELECT failed_health.record
+              FROM threat_intel.source_health AS failed_health
+              WHERE failed_health.source_id = page.id
+                AND failed_health.tenant_id IS NOT DISTINCT FROM page.tenant_id
+                AND failed_health.success = FALSE
+              ORDER BY failed_health.checked_at DESC, failed_health.id DESC
+              LIMIT 1
+            )
           ) AS stats
           FROM threat_intel.source_health h
           WHERE h.source_id = page.id AND h.tenant_id IS NOT DISTINCT FROM page.tenant_id
@@ -865,10 +880,16 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           LEFT JOIN threat_intel.entities le ON le.id = l.entity_id
           LEFT JOIN threat_intel.indicators li ON li.id = l.indicator_id
           LEFT JOIN threat_intel.incidents ln ON ln.id = l.incident_id
-          LEFT JOIN threat_intel.claim_evidence ce ON ce.claim_id = l.claim_id
-          LEFT JOIN threat_intel.captures cc ON cc.id = ce.capture_id
+          LEFT JOIN LATERAL (
+            SELECT evidence_capture.source_id
+            FROM threat_intel.claim_evidence evidence
+            JOIN threat_intel.captures evidence_capture ON evidence_capture.id = evidence.capture_id
+            WHERE evidence.claim_id = l.claim_id
+            ORDER BY (evidence_capture.source_id = page.id) DESC, evidence.id
+            LIMIT 1
+          ) ce ON TRUE
           WHERE l.tenant_id IS NOT DISTINCT FROM page.tenant_id
-            AND COALESCE(lc.source_id, le.source_id, li.source_id, ln.source_id, cc.source_id) = page.id
+            AND COALESCE(lc.source_id, le.source_id, li.source_id, ln.source_id, ce.source_id) = page.id
         ) labels ON TRUE
         ORDER BY lower(page.name), page.id
       `, [tenantId, sourceId, executableOnly, limit, offset, input.generatedAt]),
