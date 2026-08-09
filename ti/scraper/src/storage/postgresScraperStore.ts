@@ -1235,18 +1235,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         JOIN source_scope scoped
           ON scoped.id = health.source_id
           AND scoped.tenant_id IS NOT DISTINCT FROM health.tenant_id
+        JOIN threat_intel.captures retained
+          ON retained.source_id = health.source_id
+          AND retained.tenant_id IS NOT DISTINCT FROM health.tenant_id
+          AND retained.record->'metadata'->>'runId' = health.collection_run_id
         WHERE health.tenant_id IS NOT DISTINCT FROM $1::text
           AND health.success
           AND health.useful
           AND health.capture_count > 0
-          AND health.collection_run_id IS NOT NULL
-          AND EXISTS (
-            SELECT 1
-            FROM threat_intel.captures retained
-            WHERE retained.source_id = health.source_id
-              AND retained.tenant_id IS NOT DISTINCT FROM health.tenant_id
-              AND retained.record->'metadata'->>'runId' = health.collection_run_id
-          )
         GROUP BY health.source_id, health.tenant_id
       ), ranked_sources AS (
         SELECT sources.*,
