@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 
 const STATE_PATH = process.env.WEB_SCAN_STATE_PATH || '/var/lib/hanasand/web-scan.json'
 const LOCK_PATH = `${STATE_PATH}.lock`
+const RECOVERY_LOCK_PATH = `${LOCK_PATH}.recovery`
 const TARGET = 'https://hanasand.com'
 const PORTS = [80, 443, 8080, 8443]
 const DEFAULT_INTERVAL_MINUTES = normalizeIntervalMinutes(process.env.WEB_SCAN_INTERVAL_MINUTES, 60)
@@ -73,21 +74,32 @@ export async function withWebScanLock<T>(work: () => Promise<T>): Promise<T> {
                 throw statError
             }
             if (lockAge > LOCK_STALE_MS) {
-                const candidate = `${LOCK_PATH}.reclaim-${randomUUID()}`
                 try {
-                    await rename(LOCK_PATH, candidate)
-                } catch (renameError) {
-                    if ((renameError as NodeJS.ErrnoException).code === 'ENOENT') continue
-                    throw renameError
+                    await mkdir(RECOVERY_LOCK_PATH)
+                } catch (recoveryError) {
+                    if ((recoveryError as NodeJS.ErrnoException).code === 'EEXIST') {
+                        throw Object.assign(new Error('Hanasand web scan is already running.'), { cause: recoveryError })
+                    }
+                    throw recoveryError
                 }
                 try {
-                    await mkdir(LOCK_PATH)
+                    let currentAge: number
+                    try {
+                        currentAge = Date.now() - (await stat(LOCK_PATH)).mtimeMs
+                    } catch (statError) {
+                        if ((statError as NodeJS.ErrnoException).code === 'ENOENT') continue
+                        throw statError
+                    }
+                    if (currentAge <= LOCK_STALE_MS) {
+                        throw Object.assign(new Error('Hanasand web scan is already running.'), { cause: error })
+                    }
+                    const candidate = `${LOCK_PATH}.reclaim-${randomUUID()}`
+                    await rename(LOCK_PATH, candidate)
                     reclaimedPath = candidate
+                    await mkdir(LOCK_PATH)
                     break
-                } catch (mkdirError) {
-                    await rm(candidate, { recursive: true, force: true })
-                    if ((mkdirError as NodeJS.ErrnoException).code === 'EEXIST') continue
-                    throw mkdirError
+                } finally {
+                    await rm(RECOVERY_LOCK_PATH, { recursive: true, force: true })
                 }
             }
             throw Object.assign(new Error('Hanasand web scan is already running.'), { cause: error })
