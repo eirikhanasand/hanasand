@@ -275,7 +275,7 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
       if (saved.incident) { counters.incidentCount++; taskMetrics.incidentCount++; }
       if (task.planning?.watchlistDiscovery && collected.sourceId !== source.id) recordWatchlistEvidenceHealth(options.store, collected, task, runId, generatedAt, Boolean(duplicate), Boolean(saved.incident));
       for (const entity of pipeline.entities ?? []) if (["actor", "ransomware_family"].includes(entity.type)) taskMetrics.actorIds.add(String(entity.normalizedValue ?? entity.value));
-      if (usefulItem && !task.planning?.watchlistDiscovery && !actorIdentityCatalogSnapshot && !catalogEvidenceOnly && await saveExposureClaimFromCollectedItem(options.store, collected, generatedAt)) counters.exposureClaimCount++;
+      if (!duplicate && usefulItem && !task.planning?.watchlistDiscovery && !actorIdentityCatalogSnapshot && !catalogEvidenceOnly && await saveExposureClaimFromCollectedItem(options.store, collected, generatedAt)) counters.exposureClaimCount++;
       latestCaptureIds.push(saved.capture.id);
       if (isNvdCveSource(source) || isCisaKevSource(source)) completeEvaluationCaptures.push({ capture: completeEvaluationCapture, evaluationCveSet: collected.evaluationCveSet });
     }

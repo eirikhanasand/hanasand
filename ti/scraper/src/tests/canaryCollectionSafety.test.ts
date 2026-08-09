@@ -370,22 +370,36 @@ describe("public collection boundary", () => {
     expect(frontier.snapshot()).toHaveLength(0);
   });
 
-  test("does not refresh useful or content timestamps for duplicate-only checks", async () => {
+  test("does not reparse exposure claims or refresh useful timestamps for duplicate-only checks", async () => {
     const store = new InMemoryScraperStore();
-    const feed = "<rss><channel><item><title>APT29 campaign report</title><link>https://example.test/report</link><description>APT29 targeted government victims with malware and command infrastructure.</description><pubDate>Wed, 22 Jul 2026 10:00:00 GMT</pubDate></item></channel></rss>";
-    store.saveSource(source({ id: "truthful", url: "https://example.test/truthful.xml" }));
-    const first = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, now: () => "2026-07-22T12:00:00.000Z", fetch: async () => new Response(feed, { headers: { "content-type": "application/rss+xml" } }) });
-    const firstSource = structuredClone(store.getSource("truthful"));
-    const second = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, now: () => "2026-07-23T12:00:00.000Z", fetch: async () => new Response(feed, { headers: { "content-type": "application/rss+xml" } }) });
-    const observations = store.listSourceHealthObservations().filter((row: any) => row.sourceId === "truthful");
+    const feed = "<rss><channel><item><title>LockBit has just published a new victim: Acme Corp</title><link>https://example.test/report</link><description>LockBit claimed a company victim in a ransomware data leak.</description><pubDate>Wed, 22 Jul 2026 10:00:00 GMT</pubDate></item></channel></rss>";
+    store.saveSource(source({ id: "truthful", name: "Ransomware victim feed", url: "https://example.test/truthful.xml" }));
+    const previousAiBase = Bun.env.HANASAND_AI_API_BASE, previousFetch = globalThis.fetch;
+    let exposureParserCalls = 0;
+    Bun.env.HANASAND_AI_API_BASE = "https://ai.example.test";
+    globalThis.fetch = (async () => {
+      exposureParserCalls++;
+      return new Response(JSON.stringify({ actor: "LockBit", company: "Acme Corp", confidence: 1 }), { headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+    try {
+      const first = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, now: () => "2026-07-22T12:00:00.000Z", fetch: async () => new Response(feed, { headers: { "content-type": "application/rss+xml" } }) });
+      const firstSource = structuredClone(store.getSource("truthful"));
+      const second = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, now: () => "2026-07-23T12:00:00.000Z", fetch: async () => new Response(feed, { headers: { "content-type": "application/rss+xml" } }) });
+      const observations = store.listSourceHealthObservations().filter((row: any) => row.sourceId === "truthful");
 
-    expect(first.insertedCaptureCount).toBe(1);
-    expect(second.duplicateCaptureCount).toBe(1);
-    expect(observations.map((row: any) => [row.captureCount, row.useful])).toEqual([[1, true], [0, false]]);
-    expect(store.getSource("truthful")).toMatchObject({
-      lastSeenAt: firstSource?.lastSeenAt,
-      health: { lastContentAt: firstSource?.health?.lastContentAt, lastUsefulAt: firstSource?.health?.lastUsefulAt }
-    });
+      expect(first).toMatchObject({ insertedCaptureCount: 1, exposureClaimCount: 1 });
+      expect(second).toMatchObject({ duplicateCaptureCount: 1, exposureClaimCount: 0 });
+      expect(exposureParserCalls).toBe(1);
+      expect(observations.map((row: any) => [row.captureCount, row.useful])).toEqual([[1, true], [0, false]]);
+      expect(store.getSource("truthful")).toMatchObject({
+        lastSeenAt: firstSource?.lastSeenAt,
+        health: { lastContentAt: firstSource?.health?.lastContentAt, lastUsefulAt: firstSource?.health?.lastUsefulAt }
+      });
+    } finally {
+      globalThis.fetch = previousFetch;
+      if (previousAiBase === undefined) delete Bun.env.HANASAND_AI_API_BASE;
+      else Bun.env.HANASAND_AI_API_BASE = previousAiBase;
+    }
   });
 
   test("promotes an approved legacy feed only after its second retained useful cycle", async () => {
