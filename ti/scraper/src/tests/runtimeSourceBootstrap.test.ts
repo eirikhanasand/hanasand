@@ -836,6 +836,52 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
+  test("preserves approved Tor qualification identity across seed restart", () => {
+    const previous = Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
+    Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = "true";
+    const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-tor-identity-"));
+    const seedPath = join(dir, "restricted.json");
+    const sourceId = "src_tor_restart_identity";
+    const url = "http://" + "r".repeat(56) + ".onion/";
+    const verifiedAt = "2026-08-09T00:00:00.000Z";
+    const source: any = {
+      id: sourceId, name: "Tor restart identity", type: "tor_metadata", url,
+      accessMethod: "approved_proxy", status: "candidate", risk: "restricted", trustScore: 0.8,
+      crawlFrequencySeconds: 3600, legalNotes: "Metadata-only public victim listing.",
+      governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvalScope: "metadata_only", approvedAt: verifiedAt, approvedBy: "source-review:test" },
+      metadata: {
+        sourceFamily: "dark_web_victim_feed", actorName: "Tor restart identity", attribution: "Independent public authority record", productionCollection: false, restrictedMetadataCandidate: true,
+        sourcePortfolioQualificationState: "pending_sustained_productivity",
+        sourcePortfolioVerification: { verifiedAt, legalBasisVerifiedAt: verifiedAt, outcome: "content_parsed", observedItemCount: 2 },
+        parserShape: "victim_card_title", parserProfile: "victim_card_title", collectionScope: "metadata_only", retainRawContent: false,
+        discoveryAuthorityUrl: "https://authority.example.test/", discoveryAuthorityRecordUrl: "https://authority.example.test/tor-restart-identity",
+        discoveryCheckedAt: verifiedAt, discoveryAvailability: "reported_available", expectedPageRole: "victim_listing",
+        productionCollectionVerifiedAt: verifiedAt, productionCollectionOutcome: "metadata_only_parser_verified",
+        reportedVictimCount: 2, lastReportedVictimAt: verifiedAt, retentionDays: 30,
+      }
+    };
+    writeFileSync(seedPath, JSON.stringify({ version: 1, name: "Tor restart identity", disabledByDefault: true, network: "tor", proxyBoundaryId: "tor-approved-metadata-proxy", approvalScope: "metadata_only", retentionClass: "restricted_metadata", forbiddenOperations: ["credential_bypass", "captcha_solving", "threat_actor_interaction", "stolen_file_download", "stealth_or_evasion", "unapproved_proxy", "non_metadata_capture"], reviewedRejectedCandidates: [], sources: [source] }));
+    try {
+      const store = new InMemoryScraperStore();
+      const first = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: verifiedAt });
+      expect(first).toMatchObject({ importedSourceCount: 1 });
+      for (const [index, checkedAt] of ["2026-08-09T01:00:00.000Z", "2026-08-09T02:00:00.000Z"].entries()) {
+        const runId = `tor-restart-run-${index + 1}`;
+        store.saveSourceHealthObservation({ id: `tor-restart-health-${index + 1}`, sourceId, collectionRunId: runId, checkedAt, status: "healthy", success: true, useful: true, captureCount: 1 } as any);
+        store.saveCapture(fixtureCapture({ id: `tor-restart-capture-${index + 1}`, tenantId: undefined, sourceId, collectedAt: checkedAt, publishedAt: checkedAt, metadata: { runId, safeExcerpt: "Public victim listing metadata." } }));
+      }
+      approveSourceReview(store, sourceId);
+      expect((store.getSource(sourceId)?.metadata?.automaticSourceReview as any)?.selectedEvidenceIds?.length).toBeGreaterThan(0);
+      const restarted = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-09T03:00:00.000Z" });
+      expect(restarted.activeSourceCount).toBe(1);
+      expect(store.getSource(sourceId)).toMatchObject({ status: "active", countsAsCoverage: true, metadata: { productionCollection: true, sourcePortfolioQualificationState: "sustained_productive" } });
+    } finally {
+      if (previous === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
+      else Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = previous;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("does not use static Tor verification expiry as runtime qualification", () => {
     const previous = Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
     Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = "true";

@@ -17,9 +17,7 @@ for (const token of [
     'selectCaseForProductProgress',
     'analystCaseDetailProof',
     '/api/cases/${encodeURIComponent(String(selectedCase.id))}',
-    'syntheticAnalystCaseDetailProof',
     'caseDetail: selectedCaseProof',
-    'webhookDeliveryProofLedger(deliveries)',
     'sourceProxyFromDwmProductFallback',
     'payload?.schemaVersion !== \'dwm.product.v1\'',
     'inventory?.schemaVersion !== \'dwm.source_inventory.v1\'',
@@ -27,6 +25,8 @@ for (const token of [
 ]) {
     assert.ok(productProgressRouteSource.includes(token), `Product-progress route missing analyst case detail proof token: ${token}`)
 }
+assert.ok(!productProgressRouteSource.includes('webhookDeliveryProofLedger'), 'Product progress must not consume a webhook proof ledger fallback.')
+assert.ok(!productProgressRouteSource.includes('product.webhook_delivery_proof_ledger.v1'), 'Product progress must not publish a webhook proof-ledger contract.')
 
 const generatedAt = '2026-06-29T08:00:00.000Z'
 const routes = {
@@ -211,12 +211,6 @@ const partialPayload = buildProductProgressPayload({
         proofTimestamp: generatedAt,
     },
     deliveries: [{ id: 'deliv_acme_1', alertId: 'alert_acme_1', status: 'delivered', attemptedAt: generatedAt }],
-    deliveryProofLedger: {
-        schemaVersion: 'product.webhook_delivery_proof_ledger.v1',
-        generatedAt,
-        source: '/api/dwm/webhooks/deliveries#productWebhookDeliveryProof',
-        ledgerPath: '/tmp/product-webhook-delivery-proof.json',
-    },
 })
 
 assert.equal(partialPayload.schemaVersion, 'product.progress.readiness.v1')
@@ -228,7 +222,7 @@ assert.ok(northStar.rows.every(row => row.ownerLane && row.href && row.backendPr
 assert.ok(northStar.rows.find(row => row.id === 'real_alert_generation')?.backendProofContractVersion.includes('dwm.alert_generation_readiness.v1'), 'Real alert row must include DWM alert-generation readiness proof.')
 assert.ok(northStar.rows.find(row => row.id === 'real_alert_generation')?.expectedDashboardRowId.includes('alert_generation_readiness'), 'Real alert row must expose the alert-generation dashboard proof id.')
 assert.ok(northStar.rows.find(row => row.id === 'webhook_delivery')?.state !== 'unavailable', 'Webhook delivery row should distinguish lifecycle/action work from missing proof.')
-assert.ok(northStar.rows.find(row => row.id === 'webhook_delivery')?.backendProofContractVersion.includes('product.webhook_delivery_proof_ledger.v1'), 'Webhook delivery row must expose delivery proof ledger provenance.')
+assert.ok(northStar.rows.find(row => row.id === 'webhook_delivery')?.backendProofContractVersion.includes('dwm.webhook_health.readiness.v1'), 'Webhook delivery row must expose the persisted webhook health contract.')
 assert.equal(buildProductNorthStarScoreboard(null, { generatedAt }).firstBlocker?.length ? true : false, true)
 assert.equal(partialPayload.sourceProxy?.sourceInventory?.schemaVersion, 'dwm.source_inventory.v1')
 assert.equal(partialPayload.sourceProxy?.contracts?.schemaLookup?.schemaVersion, 'ti.api_contract_schema_lookup.v1')
@@ -259,10 +253,6 @@ assert.equal(partialPayload.helpdeskAudit?.status, 'needs_action')
 assert.equal(partialPayload.entitlement?.status, 'needs_action')
 assert.equal(partialPayload.orgAlertExport?.status, 'needs_action')
 assert.equal(partialPayload.webhookHealth?.status, 'needs_action')
-assert.equal(partialPayload.webhookHealth?.deliveryProofLedgerSchemaVersion, 'product.webhook_delivery_proof_ledger.v1')
-assert.equal(partialPayload.webhookHealth?.deliveryProofLedgerSource, '/api/dwm/webhooks/deliveries#productWebhookDeliveryProof')
-assert.equal(partialPayload.webhookHealth?.deliveryProofLedgerPath, '/tmp/product-webhook-delivery-proof.json')
-assert.ok(partialPayload.webhookHealth?.backendProofContractVersion?.includes('product.webhook_delivery_proof_ledger.v1'), 'Webhook health must preserve delivery proof ledger schema.')
 assert.equal(partialPayload.dwmProduct?.status, 'needs_action')
 
 const dwmProductInventoryFallbackPayload = buildProductProgressPayload({
@@ -319,7 +309,7 @@ const dwmProductInventoryFallbackPayload = buildProductProgressPayload({
 })
 assert.equal(dwmProductInventoryFallbackPayload.sourceProxy?.baseConfigured, false)
 assert.equal(dwmProductInventoryFallbackPayload.sourceProxy?.error?.code, 'source_proxy_fallback_from_dwm_product')
-assert.equal(dwmProductInventoryFallbackPayload.dashboardEvidence?.sourceProxyReady, true)
+assert.equal(dwmProductInventoryFallbackPayload.dashboardEvidence?.sourceProxyReady, false)
 assert.equal(dwmProductInventoryFallbackPayload.deployProbe?.scraperHealthy, true)
 
 for (const dependency of [
@@ -797,12 +787,6 @@ const degradedPayload = {
         sourceProxy: degradedSourceProxy,
         alerts: [],
         deliveries: [],
-        deliveryProofLedger: {
-            schemaVersion: 'product.webhook_delivery_proof_ledger.v1',
-            generatedAt,
-            source: '/api/dwm/webhooks/deliveries',
-            ledgerPath: '/tmp/product-progress-webhook-deliveries.json',
-        },
         deploy: {
             status: 'needs_action',
             latestProbeAt: '2026-06-29T07:00:00.000Z',
@@ -855,9 +839,6 @@ assert.equal(degradedContext.readiness.productReadiness.find(item => item.id ===
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'helpdesk_audit')?.status, 'needs_action')
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'org_alert_export')?.status, 'needs_action')
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.status, 'needs_action')
-assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.deliveryProofLedgerSchemaVersion, 'product.webhook_delivery_proof_ledger.v1')
-assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.deliveryProofLedgerSource, '/api/dwm/webhooks/deliveries')
-assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.deliveryProofLedgerPath, '/tmp/product-progress-webhook-deliveries.json')
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'deploy_probe')?.status, 'needs_action')
 assert.ok(degradedContext.readiness.productReadiness.every(item => item.ownerLane && item.operatorAction))
 assert.ok(degradedContext.readiness.productReadiness.every(item => typeof item.blockerCount === 'number'))
@@ -986,7 +967,6 @@ for (const scopedProgressToken of [
     'sourceProxyFromDwmProductFallback',
     'source_proxy_fallback_from_dwm_product',
     'dwm.source_inventory.v1',
-    'sourceCount < 1000',
     '/api/dwm/watchlists',
     '/api/dwm/product',
     '/api/organizations/:id/webhooks',
@@ -999,7 +979,6 @@ for (const scopedProgressToken of [
 for (const orgReadinessRouteToken of [
     '/organizations/${encodeURIComponent(id)}/alert-readiness',
     'proxyOrganizationApiRequest',
-    'loadProductOrganizationReadinessProofLedger',
     'force-dynamic',
 ]) {
     assert.ok(organizationAlertReadinessRouteSource.includes(orgReadinessRouteToken), `Organization alert-readiness proxy missing token: ${orgReadinessRouteToken}`)

@@ -164,6 +164,7 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
     ...effectiveVerified,
     id: existing.id,
     tenantId: existing.tenantId,
+    createdAt: existing.createdAt ?? effectiveVerified.createdAt,
     metadata: { ...(existing.metadata ?? {}), ...(effectiveVerified.metadata ?? {}) },
     health: existing.health,
     crawlState: existing.crawlState
