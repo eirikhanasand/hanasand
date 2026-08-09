@@ -57,6 +57,18 @@ describe("structured threat-intelligence storage contract", () => {
     expect(result.summary).toMatchObject({ everUsefulSourceCount: 1, usefulSourceCount: 0, latestUsefulSourceCount: 0 });
   });
 
+  test("hydrates exposure queue capture identity from PostgreSQL columns", async () => {
+    const store = Object.create(PostgresScraperStore.prototype) as any;
+    store.sql = {
+      unsafe: async (query: string) => query.includes("SELECT count(*)")
+        ? [{ total: 1, needs_review: 0, metadata_only: 1, latest_claim_at: "2026-08-09T10:00:00.000Z", latest_collected_at: "2026-08-09T10:01:00.000Z" }]
+        : [{ record: { title: "Akira has just published a new victim: Query Company" }, capture_id: "cap_query", tenant_id: null, source_id: "src_query", url: "https://example.test/query", collected_at: "2026-08-09T10:01:00.000Z", published_at: "2026-08-09T10:00:00.000Z", media_type: "text/html", storage_kind: "metadata_only" }]
+    };
+
+    const page = await store.queryExposureQueuePage({ tenantId: "default", limit: 1, offset: 0 });
+    expect(page.captures[0]).toMatchObject({ id: "cap_query", tenantId: null, sourceId: "src_query", collectedAt: "2026-08-09T10:01:00.000Z", publishedAt: "2026-08-09T10:00:00.000Z", storageKind: "metadata_only" });
+  });
+
   test("does not require the optional parser cleanup table during normal startup", async () => {
     const store = Object.create(PostgresScraperStore.prototype) as any;
     store.sql = ((strings: TemplateStringsArray) => strings[0].includes("to_regclass") ? [{ table_name: null }] : []) as any;

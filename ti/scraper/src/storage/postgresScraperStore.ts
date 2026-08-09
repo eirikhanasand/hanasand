@@ -98,7 +98,7 @@ type DatabaseHealth = {
 };
 
 export class PostgresScraperStore extends InMemoryScraperStore {
-  readonly usesPostgresSearchIndex = false;
+  readonly usesPostgresSearchIndex = true;
   private readonly sql: SQL;
   private readonly migrations: Migration[];
   private readonly latestMigrationVersion: string;
@@ -605,14 +605,16 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         count(*) FILTER (WHERE capture.storage_kind = 'metadata_only') AS metadata_only,
         max(capture.published_at) AS latest_claim_at,
         max(capture.collected_at) AS latest_collected_at${filtered}`, values),
-      this.sql.unsafe(`SELECT capture.record${filtered}
+      this.sql.unsafe(`SELECT capture.record,
+        capture.id AS capture_id, capture.tenant_id, capture.source_id, capture.url,
+        capture.collected_at, capture.published_at, capture.media_type, capture.storage_kind${filtered}
         ORDER BY COALESCE(capture.published_at, capture.collected_at) DESC, capture.id DESC
         LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
         [...values, Math.max(1, Math.min(250, Math.floor(input.limit))), Math.max(0, Math.floor(input.offset))])
     ]);
     const first = summaryRows[0] as Record<string, unknown> | undefined;
     return {
-      captures: rows.map((row: Record<string, unknown>) => readRecord(row)),
+      captures: rows.map(readCaptureRecord),
       total: Number(first?.total ?? 0),
       needsReview: Number(first?.needs_review ?? 0),
       metadataOnly: Number(first?.metadata_only ?? 0),
@@ -3110,6 +3112,21 @@ const structuredTables = {
 function readRecord(row: any): any {
   if (typeof row.record === "string") return JSON.parse(row.record);
   return row.record;
+}
+
+function readCaptureRecord(row: any): any {
+  const record = readRecord(row) ?? {};
+  return {
+    ...record,
+    id: record.id ?? row.capture_id ?? row.id,
+    tenantId: record.tenantId ?? row.tenant_id,
+    sourceId: record.sourceId ?? row.source_id,
+    url: record.url ?? row.url,
+    collectedAt: record.collectedAt ?? row.collected_at,
+    publishedAt: record.publishedAt ?? row.published_at,
+    mediaType: record.mediaType ?? row.media_type,
+    storageKind: record.storageKind ?? row.storage_kind,
+  };
 }
 
 function sourceReviewEvidenceMatchesSql(source: string) {
