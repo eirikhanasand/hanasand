@@ -8,13 +8,16 @@ const publicApiBase = (process.env.MONITOR_PUBLIC_API_BASE || 'https://api.hanas
 const webBase = (process.env.MONITOR_WEB_BASE || 'https://hanasand.com').replace(/\/$/, '')
 const scraperBase = (process.env.TI_SCRAPER_API_BASE || 'http://ti-scraper:8097').replace(/\/$/, '')
 const modelClientBase = (process.env.HANASAND_MODEL_CLIENT_HEALTH_BASE || 'http://hanasand_ai_model_client:18182').replace(/\/$/, '')
+const MONITOR_REQUEST_TIMEOUT_MS = 5_000
 type CheckResult = string | void | { status: MonitorStatus, message: string }
+type MonitorRecorder = typeof recordMonitorResult
 
-async function check(
+export async function check(
     service: string,
     checkName: string,
     fn: () => Promise<CheckResult>,
-    latencyThresholds?: { degraded: number, down: number }
+    latencyThresholds?: { degraded: number, down: number },
+    recorder: MonitorRecorder = recordMonitorResult,
 ) {
     const started = performance.now()
     try {
@@ -23,18 +26,18 @@ async function check(
         const explicit = typeof result === 'object' && result ? result : undefined
         const status = explicit?.status || latencyStatus(latency, latencyThresholds)
         const message = explicit?.message || (typeof result === 'string' ? result : '')
-        await recordMonitorResult(service, checkName, status, latency, status === 'up' ? message : message || `Response took ${latency} ms.`)
+        await recorder(service, checkName, status, latency, status === 'up' ? message : message || `Response took ${latency} ms.`)
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        await recordMonitorResult(service, checkName, 'down', Math.round(performance.now() - started), message)
+        await recorder(service, checkName, 'down', Math.round(performance.now() - started), message)
         console.error(`[synthetic-monitor] ${service}/${checkName}: ${message}`)
     }
 }
 
-async function fetchJson(path: string, options: RequestInit = {}, base = apiBase) {
+export async function fetchJson(path: string, options: RequestInit = {}, base = apiBase, timeoutMs = MONITOR_REQUEST_TIMEOUT_MS) {
     const response = await fetch(`${base}${path}`, {
         ...options,
-        signal: options.signal || AbortSignal.timeout(15_000),
+        signal: options.signal || AbortSignal.timeout(timeoutMs),
         headers: {
             ...(options.body ? { 'Content-Type': 'application/json' } : {}),
             ...(options.headers || {}),
@@ -54,7 +57,7 @@ async function fetchJson(path: string, options: RequestInit = {}, base = apiBase
 async function fetchPage(path: string, headers: Record<string, string> = {}) {
     const response = await fetch(`${webBase}${path}`, {
         headers,
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(MONITOR_REQUEST_TIMEOUT_MS),
     })
     return { response, body: await response.text() }
 }
@@ -173,7 +176,7 @@ export default async function runSyntheticMonitor() {
             if (!token) throw new Error('Threat-intelligence source-operations authentication is not configured.')
             const { response, body } = await fetchJson('/v1/intel/source-operations?summary=true', {
                 headers: { 'x-hanasand-service-token': token },
-                signal: AbortSignal.timeout(20_000),
+                signal: AbortSignal.timeout(MONITOR_REQUEST_TIMEOUT_MS),
             }, scraperBase)
             const summary = object(object(body)?.summary)
             if (response.status !== 200 || !summary || !Number.isFinite(Number(summary.sourceCount))) {
