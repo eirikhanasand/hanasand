@@ -12,6 +12,7 @@ import {
 
 const organizationWorkspaceSource = readFileSync(new URL('../src/app/organizations/organizationWorkspaceClient.tsx', import.meta.url), 'utf8')
 const dwmAnalystPortalSource = readFileSync(new URL('../src/app/dashboard/dwm/dwm-analyst-portal.tsx', import.meta.url), 'utf8')
+const organizationWebhookRouteSource = readFileSync(new URL('../src/app/api/organizations/[id]/webhooks/route.ts', import.meta.url), 'utf8')
 
 test('mirrors a customer organization and authenticated owner before watchlist creation', async () => {
     const mirrorPayload = buildDwmOrganizationMirrorPayload({
@@ -43,6 +44,8 @@ test('mirrors a customer organization and authenticated owner before watchlist c
 })
 
 test('organization workspace exposes destination lifecycle controls safely', () => {
+    assert.match(organizationWebhookRouteSource, /proxyOrganizationApiRequest/, 'organization destinations must come from the persisted backend proxy.')
+    assert.doesNotMatch(organizationWebhookRouteSource, /productProgress|proofLedger|PRODUCT_PROGRESS_WEBHOOK/, 'organization destinations must not fall back to a proof ledger.')
     assert.match(organizationWorkspaceSource, /validDestinationUrl\(url\)/, 'destination save should validate URL shape before dry-run.')
     assert.match(organizationWorkspaceSource, /createSavedDestination/, 'organization settings should allow direct destination creation.')
     assert.match(organizationWorkspaceSource, /data-org-destination-create='true'/, 'saved destinations should expose a compact create control.')
