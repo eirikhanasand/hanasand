@@ -28,7 +28,8 @@ describe("api v1", () => {
       });
     }
 
-    const options = { store, frontier };
+    const executed: string[] = [];
+    const options = { store, frontier, runExecutor: (runId: string) => executed.push(runId) };
     const reuseKeys = new Map<string, string>();
     for (const actor of ["Scattered Spider"]) {
       for (let poll = 0; poll < 1; poll += 1) {
@@ -49,5 +50,33 @@ describe("api v1", () => {
         expect(planner.reuseKey).toBe(reuseKeys.get(actor) ?? "");
       }
     }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(store.listRuns()).toEqual([]);
+    expect(executed).toEqual([]);
   }, 15_000);
+
+  test("does not persist live-search work while storage writes are backpressured", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_storage_pressure", type: "rss", tags: ["storage pressure actor"] }));
+    (store as any).databaseHealthSnapshot = () => ({ ok: false, pendingWrites: 2, lastWriteError: "Failed to read data" });
+    const executed: string[] = [];
+
+    const response = await body(await handleApiRequest(api("/v1/intel/search?q=Storage%20Pressure%20Actor&entityType=actor"), {
+      store,
+      frontier: new FocusedFrontier(),
+      runExecutor: (runId: string) => executed.push(runId),
+    })) as Record<string, any>;
+
+    expect(response.planner).toMatchObject({
+      backpressureState: "deferred_by_storage_pressure",
+      backpressureReason: "Failed to read data",
+      queuedTaskCount: 0,
+      retryAfterSeconds: 30,
+    });
+    expect(response.planner.activeRunId).toBeUndefined();
+    expect(store.listPlans()).toEqual([]);
+    expect(store.listRuns()).toEqual([]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(executed).toEqual([]);
+  });
 });

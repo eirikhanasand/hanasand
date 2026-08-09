@@ -363,6 +363,20 @@ function cachedSearchResponse(query: string, entityType: SearchEntityType, ident
 
 function scheduleLiveSearch(liveSearch: any, options: ApiServerOptions, generatedAt: string) {
   if (!options.runExecutor || liveSearch.dto.activeRunId || liveSearch.dto.terminalRunId) return;
+  if (liveSearch.dto.backpressureState !== "accepted") return;
+  const storage = (options.store as any).databaseHealthSnapshot?.();
+  const pendingWrites = Number(storage?.pendingWrites ?? 0);
+  const lastWriteError = typeof storage?.lastWriteError === "string" ? storage.lastWriteError.trim() : "";
+  if (pendingWrites > 0 || lastWriteError) {
+    Object.assign(liveSearch.dto, {
+      backpressureState: "deferred_by_storage_pressure",
+      backpressureReason: lastWriteError || `PostgreSQL write queue has ${pendingWrites} pending records.`,
+      retryAfterSeconds: 30,
+      nextPollSeconds: 30,
+      queuedTaskCount: 0,
+    });
+    return;
+  }
   const tasks = liveSearch.plan.tasks.filter((task: any) => !task.availableAt || !task.deadlineAt || Date.parse(task.availableAt) <= Date.parse(task.deadlineAt));
   if (!tasks.length) return;
   const plan = { ...liveSearch.plan, tasks };
