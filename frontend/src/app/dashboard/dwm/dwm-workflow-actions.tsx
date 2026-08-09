@@ -281,9 +281,15 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             if (!run.ok) throw new Error(run.message)
 
             const rebuild = await postJson('/api/dwm/alerts/rebuild', scope)
+            const rebuildOutcome = normalizeAlertRebuildOutcome(rebuild)
             const captureCount = readNumber(run.canaryRun, 'insertedCaptureCount')
-            const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
-            setResult({ ok: true, message: `Collected ${captureCount} Telegram captures. Rebuilt ${savedAlertCount} alerts.` })
+            const savedAlertCount = typeof rebuildOutcome.savedAlertCount === 'number' ? rebuildOutcome.savedAlertCount : 0
+            setResult({
+                ok: rebuildOutcome.ok,
+                message: rebuildOutcome.ok
+                    ? `Collected ${captureCount} Telegram captures. Rebuilt ${savedAlertCount} alerts.`
+                    : rebuildOutcome.message,
+            })
             setLastRoute({
                 label: 'Collection run',
                 watchTerms: countTerms(workflowTerms(terms)),

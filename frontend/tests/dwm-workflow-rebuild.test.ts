@@ -13,4 +13,5 @@ test('inline alert rebuild reports only durable outcomes as success', () => {
 test('without inline outcome, the helper keeps the scoped rebuild POST path', async () => {
     const source = await readFile('frontend/src/app/dashboard/dwm/dwm-workflow-actions.tsx', 'utf8')
     expect(source).toContain('return postJson(\'/api/dwm/alerts/rebuild\', scope)')
+    expect(source).toContain('const rebuildOutcome = normalizeAlertRebuildOutcome(rebuild)')
 })
