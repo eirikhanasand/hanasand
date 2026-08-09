@@ -227,6 +227,23 @@ describe("restricted metadata collection", () => {
     expect(JSON.stringify(parsed)).not.toMatch(/private|revenue|country|proof/i);
   });
 
+  test("extracts only allowlisted RansomHouse JSON victim headings", async () => {
+    const body = {
+      data: [
+        { header: "Navigation", info: "private response detail" },
+        { header: "Northwind Health", action: "published", actionDate: "08/09/2026", content: "private detail", contactUrl: "secret" },
+        { header: "Contoso Manufacturing", action: "published", actionDate: "08/08/2026", revenue: "private" }
+      ],
+      errors: [],
+      views: "private"
+    };
+    const boundary = new TorMetadataHttpBoundary({ proxyUrl: "http://onion-tor:8118", fetcher: async () => new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } }) });
+    const parsed = await boundary.fetchMetadata({ url: `http://${"r".repeat(56)}.onion/`, actorName: "RansomHouse" });
+
+    expect(parsed).toMatchObject({ victimNames: ["Northwind Health", "Contoso Manufacturing"], parserProfile: "json_data_header", links: [] });
+    expect(JSON.stringify(parsed)).not.toMatch(/private|revenue|contact|navigation/i);
+  });
+
   test("persists allowlisted Genesis section-card names without retaining card details", async () => {
     const store = new InMemoryScraperStore();
     const restrictedHost = `${"z".repeat(56)}.onion`;
@@ -284,7 +301,7 @@ describe("restricted metadata collection", () => {
     const unsupported = new TorMetadataHttpBoundary({ proxyUrl: "http://onion-tor:8118", fetcher: async () => new Response('{"posts":[{"title":"Victim"}]}', { headers: { "content-type": "application/json" } }) });
 
     await expect(malformed.fetchMetadata({ url: `http://${"m".repeat(56)}.onion/`, actorName: "Lamashtu" })).rejects.toThrow("rejected invalid payload");
-    await expect(unsupported.fetchMetadata({ url: `http://${"u".repeat(56)}.onion/`, actorName: "RansomHouse" })).rejects.toThrow("not approved for this actor");
+    await expect(unsupported.fetchMetadata({ url: `http://${"u".repeat(56)}.onion/`, actorName: "Unapproved" })).rejects.toThrow("not approved for this actor");
   });
 
   test("fairly monitors 1,000 hourly Tor sources with the bounded production lane", async () => {
