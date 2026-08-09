@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 
 export const MITRE_ENTERPRISE_ACTOR_CATALOG_URL = "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/enterprise-attack/enterprise-attack.json";
 const MITRE_ENTERPRISE_CATALOG_MANIFESTS: Record<string, { total: number; current: number; deprecated: number; revoked: number }> = {
-  "19.1": { total: 189, current: 174, deprecated: 9, revoked: 6 }
+  "19.1": { total: 189, current: 174, deprecated: 9, revoked: 6 },
+  // Official bundle retrieved 2026-08-09: 191 groups, 176 current, 9 deprecated, 6 revoked.
+  "19.2": { total: 191, current: 176, deprecated: 9, revoked: 6 }
 };
 
 export type MitreActorIdentityStatus = "current" | "deprecated" | "revoked" | "retired";
