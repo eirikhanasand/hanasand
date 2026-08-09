@@ -1252,9 +1252,22 @@ function staleAt(claim: any, generatedAt: string) {
 
 function safeIndicators(indicators: any[]) {
   return unique(indicators
-    .filter((indicator) => !indicator.reviewReasons?.length && !/\.onion\b|\[restricted/i.test(String(indicator.value)))
-    .map((indicator) => indicator.type === "url" ? safePublicSearchUrl(indicator.value) : safeText(indicator.value, 240))
+    .filter((indicator) => !indicator.reviewReasons?.length
+      && !["rejected", "contradicted"].includes(String(indicator.reviewState ?? ""))
+      && indicator.corroborationState !== "contradicted"
+      && !/\.onion\b|\[restricted/i.test(String(indicator.value)))
+    .map((indicator) => safeIndicatorValue(indicator))
     .filter(Boolean));
+}
+
+function safeIndicatorValue(indicator: any) {
+  const value = String(indicator.value ?? "").trim();
+  if (!value) return undefined;
+  if (indicator.type === "url") return safePublicSearchUrl(value);
+  if (["domain", "hostname"].includes(indicator.type) && !/^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(value)) return undefined;
+  if (indicator.type === "ipv4" && !/^(?:\d{1,3}\.){3}\d{1,3}$/.test(value)) return undefined;
+  if (indicator.type === "ipv6" && !/^[0-9a-f:]+$/i.test(value)) return undefined;
+  return safeText(value, 240);
 }
 
 function hasParsedRecord(captureId: string, records: Awaited<ReturnType<typeof searchRecords>>) {
