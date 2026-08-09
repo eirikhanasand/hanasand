@@ -106,6 +106,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   private readonly pendingWrites: PendingWrite[] = [];
   private readonly postgresExposureQueueCaptureIds = new Set<string>();
   private draining?: Promise<void>;
+  private retryTimer?: Timer;
+  private drainFailureCount = 0;
   private lastWriteError?: Error;
   private lastDatabaseHealth?: DatabaseHealth;
   private databaseHealthCheckedAt = 0;
@@ -159,6 +161,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   async flush(): Promise<void> {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = undefined;
+    }
     if (this.draining) await this.draining;
     if (this.pendingWrites.length) {
       this.lastWriteError = undefined;
@@ -2198,6 +2204,16 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     this.draining = this.drain().finally(() => { this.draining = undefined; });
   }
 
+  private scheduleDrainRetry(): void {
+    if (this.retryTimer || !this.pendingWrites.length) return;
+    const delayMs = Math.min(30_000, 1_000 * (2 ** Math.min(this.drainFailureCount - 1, 5)));
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined;
+      this.lastWriteError = undefined;
+      this.startDrain();
+    }, delayMs);
+  }
+
   private async drain(): Promise<void> {
     while (this.pendingWrites.length) {
       const write = this.pendingWrites[0];
@@ -2205,8 +2221,11 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         await write.run();
         this.pendingWrites.shift();
         this.lastWriteError = undefined;
+        this.drainFailureCount = 0;
       } catch (error) {
         this.lastWriteError = error instanceof Error ? error : new Error(String(error));
+        this.drainFailureCount += 1;
+        this.scheduleDrainRetry();
         return;
       }
     }

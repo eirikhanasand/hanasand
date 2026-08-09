@@ -61,6 +61,27 @@ describe("structured threat-intelligence storage contract", () => {
     expect(result.summary).toMatchObject({ everUsefulSourceCount: 1, usefulSourceCount: 0, latestUsefulSourceCount: 0 });
   });
 
+  test("retries a transient write failure without dropping the queued record", async () => {
+    const store = Object.create(PostgresScraperStore.prototype) as any;
+    let attempts = 0;
+    store.pendingWrites = [{ description: "transient-record", run: async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("temporary database read failure");
+    } }];
+    store.draining = undefined;
+    store.retryTimer = undefined;
+    store.drainFailureCount = 0;
+    store.lastWriteError = undefined;
+
+    store.startDrain();
+    await Bun.sleep(1_100);
+
+    expect(attempts).toBe(2);
+    expect(store.pendingWrites).toHaveLength(0);
+    expect(store.lastWriteError).toBeUndefined();
+    expect(store.retryTimer).toBeUndefined();
+  });
+
   test("hydrates exposure queue capture identity from PostgreSQL columns", async () => {
     const store = Object.create(PostgresScraperStore.prototype) as any;
     store.sql = {
