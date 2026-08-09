@@ -574,6 +574,38 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       ]
     });
 
+    const recoveryPlanId = stableId("source-feed-discovery-plan", "portfolio-revalidation:source-recovery");
+    const recoveryClaim = await first.claimSourceFeedDiscoveryPlan({
+      ...claimInput,
+      planId: recoveryPlanId,
+      publisherKey: "portfolio-revalidation:source-recovery",
+      parentSourceId: "source-recovery",
+      activeRunId: "discovery-recovery-first"
+    });
+    await first.finishSourceFeedDiscoveryPlan({
+      planId: recoveryPlanId,
+      activeRunId: recoveryClaim.activeRunId,
+      generatedAt,
+      result: { outcome: "feeds_proven", importedSourceCount: 0, duplicateSourceCount: 0, revalidatedSourceCount: 1 }
+    });
+    expect(await second.claimSourceFeedDiscoveryPlan({
+      ...claimInput,
+      planId: recoveryPlanId,
+      publisherKey: "portfolio-revalidation:source-recovery",
+      parentSourceId: "source-recovery",
+      activeRunId: "discovery-recovery-not-due",
+      generatedAt: "2026-07-24T12:01:00.000Z"
+    })).toBeUndefined();
+    expect(await second.claimSourceFeedDiscoveryPlan({
+      ...claimInput,
+      planId: recoveryPlanId,
+      publisherKey: "portfolio-revalidation:source-recovery",
+      parentSourceId: "source-recovery",
+      activeRunId: "discovery-recovery-retry",
+      recoverCompletedRevalidation: true,
+      generatedAt: "2026-07-24T12:01:00.000Z"
+    })).toMatchObject({ attemptCount: 2, activeRunId: "discovery-recovery-retry" });
+
     const feedEndpointKey = "https://auto.example/security.xml";
     const candidate = source({
       id: stableId("src", feedEndpointKey),

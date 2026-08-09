@@ -224,6 +224,95 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
+  test("preserves newer revalidation and promotes reviewed retained runtime evidence on restart", () => {
+    const store = new InMemoryScraperStore();
+    const dir = mkdtempSync(join(tmpdir(), "hanasand-source-revalidation-restart-"));
+    const seedPath = join(dir, "portfolio.json");
+    const sourceId = "src_portfolio_revalidated";
+    const seedSource = {
+      ...source(sourceId, "https://security.example.test/revalidated.xml"),
+      governance: { approvalRequired: false, approvalState: "approved", approvedAt: "2026-07-23T10:00:00.000Z", approvedBy: "source-review" },
+      metadata: {
+        productionCollection: false,
+        countsAsCoverage: false,
+        sourcePortfolioQualificationState: "pending_sustained_productivity",
+        sourcePortfolioVerification: {
+          verifiedAt: "2026-07-23T10:00:00.000Z",
+          legalBasisVerifiedAt: "2026-07-23T10:00:00.000Z",
+          outcome: "content_parsed",
+          observedItemCount: 2
+        }
+      }
+    };
+    writeFileSync(seedPath, JSON.stringify({
+      schemaVersion: "ti.source_portfolio_batch.v1",
+      family: "clear_web",
+      generatedAt: "2026-07-23T10:00:00.000Z",
+      sources: [seedSource]
+    }));
+
+    try {
+      store.saveSource({
+        ...seedSource,
+        status: "candidate",
+        countsAsCoverage: false,
+        metadata: {
+          ...seedSource.metadata,
+          sourcePortfolioStatus: "verification_expired",
+          sourcePortfolioVerification: {
+            ...seedSource.metadata.sourcePortfolioVerification,
+            verifiedAt: "2026-08-09T04:18:00.000Z",
+            legalBasisVerifiedAt: "2026-08-09T04:18:00.000Z"
+          }
+        }
+      } as any);
+      for (const [index, checkedAt] of ["2026-08-09T04:19:00.000Z", "2026-08-09T04:20:00.000Z"].entries()) {
+        const runId = `run-revalidated-${index + 1}`;
+        store.saveSourceHealthObservation({
+          id: `health-revalidated-${index + 1}`,
+          tenantId: "default",
+          sourceId,
+          collectionRunId: runId,
+          checkedAt,
+          status: "healthy",
+          success: true,
+          useful: true,
+          captureCount: 1
+        } as any);
+        store.saveCapture(fixtureCapture({
+          id: `capture-revalidated-${index + 1}`,
+          tenantId: "default",
+          sourceId,
+          collectedAt: checkedAt,
+          publishedAt: checkedAt,
+          metadata: { runId }
+        }));
+      }
+      approveSourceReview(store, sourceId);
+
+      const result = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-09T04:21:00.000Z" });
+
+      expect(result).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 1, activeSourceCount: 1 });
+      expect(store.getSource(sourceId)).toMatchObject({
+        status: "active",
+        countsAsCoverage: true,
+        metadata: {
+          productionCollection: true,
+          countsAsCoverage: true,
+          sourcePortfolioQualificationState: "sustained_productive",
+          sourcePortfolioProductiveCheckCount: 2,
+          sourcePortfolioVerification: {
+            verifiedAt: "2026-08-09T04:18:00.000Z",
+            legalBasisVerifiedAt: "2026-08-09T04:18:00.000Z"
+          }
+        }
+      });
+      expect(store.getSource(sourceId)?.metadata?.sourcePortfolioStatus).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("discovers packaged portfolio batches with a production-configured seed list", () => {
     const previous = Bun.env.TI_SOURCE_SEED_PATHS;
     const previousRestricted = Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
