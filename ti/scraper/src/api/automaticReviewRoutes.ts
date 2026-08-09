@@ -128,6 +128,7 @@ type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<
 
 type ReviewIndex = {
   tasks: AutomaticReviewTask[];
+  existingTaskIds: Set<string>;
   events: any[];
   claims: any[];
   incidents: any[];
@@ -146,6 +147,7 @@ type ReviewIndex = {
 
 type ReviewIndexCollections = {
   tasksAndEvents: any[];
+  taskIds?: string[];
   claims: any[];
   incidents: any[];
   captures: any[];
@@ -210,7 +212,7 @@ export function syncAutomaticReviewQueue(options: ApiServerOptions, input: { ten
 }
 
 function syncQueueWithIndex(store: any, index: ReviewIndex, input: { tenantId?: string; allTenants?: boolean }, at: string, modelVersion: string) {
-  const existing = new Set(index.tasks.map((task) => task.id));
+  const existing = new Set(index.existingTaskIds);
   let queued = 0;
 
   for (let position = 0; position < index.sources.length; position++) {
@@ -1411,6 +1413,7 @@ function buildReviewIndex(store: any): ReviewIndex {
   const reviews = store.listClaimReviews?.() ?? [];
   return {
     tasks: workflow.filter((item: any) => item.recordKind === TASK_KIND),
+    existingTaskIds: new Set(workflow.filter((item: any) => item.recordKind === TASK_KIND).map((item: any) => item.id)),
     events: workflow.filter((item: any) => item.recordKind === EVENT_KIND),
     claims,
     incidents,
@@ -1488,6 +1491,7 @@ function buildReviewIndexFromCollections(collections: ReviewIndexCollections): R
   const { tasksAndEvents, claims, incidents, captures, sources, health, claimEvidence, evidenceLinks, reviews, actorIdentities } = collections;
   return {
     tasks: tasksAndEvents.filter((item: any) => item.recordKind === TASK_KIND),
+    existingTaskIds: new Set((collections.taskIds ?? tasksAndEvents.filter((item: any) => item.recordKind === TASK_KIND).map((item: any) => item.id)).map(String)),
     events: tasksAndEvents.filter((item: any) => item.recordKind === EVENT_KIND),
     claims,
     incidents,
