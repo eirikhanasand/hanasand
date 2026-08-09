@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from 'bun:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, utimes } from 'node:fs/promises'
 import path from 'node:path'
 
 const stateDir = await mkdtemp(path.join('/tmp', 'hanasand-web-scan-'))
@@ -41,6 +41,23 @@ describe('Hanasand safe web scanner', () => {
                 return 'held'
             }),
             withWebScanLock(async() => 'second'),
+        ])
+        expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(1)
+        expect(outcomes.filter(outcome => outcome.status === 'rejected')).toHaveLength(1)
+        expect((outcomes.find(outcome => outcome.status === 'rejected') as PromiseRejectedResult).reason.message).toContain('already running')
+    })
+
+    test('stale-lock recovery remains exclusive under contention', async() => {
+        const lockPath = `${process.env.WEB_SCAN_STATE_PATH}.lock`
+        await mkdir(lockPath)
+        const stale = new Date(Date.now() - 11 * 60 * 1000)
+        await utimes(lockPath, stale, stale)
+        const outcomes = await Promise.allSettled([
+            withWebScanLock(async() => {
+                await new Promise(resolve => setTimeout(resolve, 20))
+                return 'recovered'
+            }),
+            withWebScanLock(async() => 'contender'),
         ])
         expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(1)
         expect(outcomes.filter(outcome => outcome.status === 'rejected')).toHaveLength(1)
