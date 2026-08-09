@@ -105,6 +105,20 @@ describe("public coverage", () => {
     expect(enumerated).toBe(false);
   });
 
+  test("uses the bounded persisted cadence aggregate instead of enumerating sources", async () => {
+    let enumerated = false;
+    const store: any = {
+      querySourceOperationalSummary: async () => ({ summary: { measurementState: "not_measured", sourceCount: 0, retainedSourceCount: 0, inactiveSourceCount: 0 } }),
+      queryPublicCoverageCadence: async () => ({ status: "observed", sourceCount: 2, minimumSeconds: 60, medianSeconds: 3600, maximumSeconds: 86400 }),
+      listSources: () => { enumerated = true; return []; },
+      listTimelinessRecords: () => []
+    };
+
+    const body = await publicCoverage({ store, frontier: {} as any });
+    expect(body.collectionCadenceSeconds).toEqual({ status: "observed", sourceCount: 2, minimumSeconds: 60, medianSeconds: 3600, maximumSeconds: 86400 });
+    expect(enumerated).toBe(false);
+  });
+
   test("does not publish qualification counts from an unmeasured raw PostgreSQL summary", async () => {
     const store: any = {
       querySourceOperationalSummary: async () => ({ summary: {

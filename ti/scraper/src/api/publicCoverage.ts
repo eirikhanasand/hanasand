@@ -16,6 +16,9 @@ export async function publicCoverage(options: ApiServerOptions) {
   const latency = typeof options.store.queryPublicCoverageLatency === "function"
     ? await options.store.queryPublicCoverageLatency()
     : latencySummary((options.store.listTimelinessRecords?.() ?? []).filter((record: any) => !record.tenantId));
+  const cadence = typeof options.store.queryPublicCoverageCadence === "function"
+    ? await options.store.queryPublicCoverageCadence()
+    : cadenceSummary(typeof options.store?.listSources === "function" ? options.store.listSources() : []);
 
   return {
     schemaVersion: "public.coverage.v2",
@@ -41,7 +44,7 @@ export async function publicCoverage(options: ApiServerOptions) {
       baselineMet: measured ? sourceQualification.baselineMet === true : null,
     },
     observedAlertLatencySeconds: latency,
-    collectionCadenceSeconds: cadenceSummary(typeof options.store?.listSources === "function" ? options.store.listSources() : []),
+    collectionCadenceSeconds: cadence,
     definitions: {
       qualifying: "A feed qualifies only after repeated successful and useful scheduled cycles, retained evidence, current content, legal basis, review approval where required, and duplicate exclusion.",
       useful: "Useful counts come from persisted retained captures linked to successful collection cycles; registration and health checks are insufficient.",

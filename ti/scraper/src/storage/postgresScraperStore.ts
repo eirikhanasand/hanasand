@@ -1341,6 +1341,36 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     };
   }
 
+  async queryPublicCoverageCadence() {
+    const [row] = await this.sql`
+      WITH cadence AS (
+        SELECT CASE
+          WHEN COALESCE(record->>'crawlFrequencySeconds', '') ~ '^[0-9]+(?:\\.[0-9]+)?$'
+            THEN (record->>'crawlFrequencySeconds')::double precision
+          WHEN COALESCE(record->>'crawlFrequencyMinutes', '') ~ '^[0-9]+(?:\\.[0-9]+)?$'
+            THEN (record->>'crawlFrequencyMinutes')::double precision * 60
+          ELSE NULL
+        END AS seconds
+        FROM threat_intel.sources
+        WHERE tenant_id IS NULL
+      )
+      SELECT count(*)::int AS source_count,
+        min(seconds) AS minimum_seconds,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY seconds) AS median_seconds,
+        max(seconds) AS maximum_seconds
+      FROM cadence
+      WHERE seconds IS NOT NULL
+    `;
+    const sourceCount = Number(row?.source_count ?? 0);
+    return {
+      status: sourceCount ? "observed" : "not_measured",
+      sourceCount,
+      minimumSeconds: row?.minimum_seconds == null ? null : Number(row.minimum_seconds),
+      medianSeconds: row?.median_seconds == null ? null : Number(row.median_seconds),
+      maximumSeconds: row?.maximum_seconds == null ? null : Number(row.maximum_seconds)
+    };
+  }
+
   override async listActorProfilesForOwnership(): Promise<any[]> {
     return (await this.sql`SELECT record FROM threat_intel.actor_profiles ORDER BY first_seen_at, id`).map(readRecord);
   }
