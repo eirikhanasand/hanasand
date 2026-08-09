@@ -52,6 +52,33 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(cycle.attempted).toBe(0);
   });
 
+  test("quarantines evidence-free review tasks at enqueue without calling the model", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveIntelligenceClaim({
+      id: "claim_without_governed_evidence",
+      tenantId: "default",
+      claimType: "general_activity",
+      subjectType: "entity",
+      subjectId: "entity_without_evidence",
+      reviewState: "unreviewed",
+      summary: "An ungrounded retained claim",
+      value: { type: "text", value: "An ungrounded retained claim" },
+      extractorVersion: "test"
+    });
+
+    expect(await syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(0);
+    expect(store.listAnalystMetadataReviewTasks()).toContainEqual(expect.objectContaining({
+      state: "quarantined",
+      lastError: "No governed evidence is linked to this subject"
+    }));
+    const cycle = await runAutomaticReviewCycle(options(store), {
+      allTenants: true,
+      now: firstAt,
+      fetcher: async () => { throw new Error("must not call model"); }
+    });
+    expect(cycle.attempted).toBe(0);
+  });
+
   test("pauses when the write queue exceeds the health budget", async () => {
     const store: any = new InMemoryScraperStore();
     store.databaseHealthSnapshot = () => ({ ok: true, pendingWrites: 1_001 });

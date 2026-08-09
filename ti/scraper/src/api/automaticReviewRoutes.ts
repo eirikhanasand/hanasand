@@ -238,36 +238,43 @@ function syncQueueWithIndex(store: any, index: ReviewIndex, input: { tenantId?: 
   for (const claim of index.claims) {
     if ((!input.allTenants && !inTenantScope(claim, input.tenantId)) || !claimEligible(claim, index.reviewsByClaim.get(claim.id) ?? [], modelVersion)) continue;
     const subject = { type: "claim" as const, id: claim.id, claimId: claim.id, incidentId: claim.subjectType === "incident" ? claim.subjectId : undefined };
-    const task = newTask(index, subject, at, modelVersion);
-    if (existing.has(task.id)) continue;
-    store.saveAnalystMetadataReviewTask(task);
-    saveEvent(store, task, "queued", at);
-    index.tasks.push(task);
-    existing.add(task.id);
-    queued++;
+    queued += enqueueReviewTask(store, index, existing, subject, at, modelVersion);
   }
 
   for (const incident of index.incidents) {
     if ((!input.allTenants && !inTenantScope(incident, input.tenantId)) || !incidentEligible(incident, modelVersion)) continue;
-    const task = newTask(index, { type: "incident", id: incident.id, incidentId: incident.id }, at, modelVersion);
-    if (existing.has(task.id)) continue;
-    store.saveAnalystMetadataReviewTask(task);
-    saveEvent(store, task, "queued", at);
-    index.tasks.push(task);
-    existing.add(task.id);
-    queued++;
+    queued += enqueueReviewTask(store, index, existing, { type: "incident", id: incident.id, incidentId: incident.id }, at, modelVersion);
   }
   for (const source of index.sources) {
     if ((!input.allTenants && !inTenantScope(source, input.tenantId)) || !sourceEligible(source, index, modelVersion, at)) continue;
-    const task = newTask(index, { type: "source", id: source.id, sourceId: source.id }, at, modelVersion);
-    if (existing.has(task.id)) continue;
-    store.saveAnalystMetadataReviewTask(task);
-    saveEvent(store, task, "queued", at);
-    index.tasks.push(task);
-    existing.add(task.id);
-    queued++;
+    queued += enqueueReviewTask(store, index, existing, { type: "source", id: source.id, sourceId: source.id }, at, modelVersion);
   }
   return queued;
+}
+
+function enqueueReviewTask(store: any, index: ReviewIndex, existing: Set<string>, subject: AutomaticReviewTask["subject"], at: string, modelVersion: string) {
+  const task = newTask(index, subject, at, modelVersion);
+  if (existing.has(task.id)) return 0;
+  const evidence = governedEvidence(index, subject);
+  if (!evidence.length) {
+    const quarantined = saveTask(store, task, {
+      state: "quarantined",
+      decision: policyQuarantineDecision(task),
+      completedAt: at,
+      updatedAt: at,
+      leaseExpiresAt: undefined,
+      lastError: "No governed evidence is linked to this subject"
+    });
+    saveEvent(store, quarantined, "quarantined", at, quarantined.decision);
+    index.tasks.push(quarantined);
+    existing.add(quarantined.id);
+    return 0;
+  }
+  store.saveAnalystMetadataReviewTask(task);
+  saveEvent(store, task, "queued", at);
+  index.tasks.push(task);
+  existing.add(task.id);
+  return 1;
 }
 
 export async function runAutomaticReviewCycle(options: ApiServerOptions, input: CycleInput = {}) {
