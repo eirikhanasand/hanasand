@@ -508,7 +508,10 @@ function CaseOverview({ tenantId, organizationId, state, alerts }: { tenantId: s
                 {state.status === 'loading' && <div className='flex min-h-56 items-center justify-center px-4 py-16 text-sm text-ui-muted'>Loading cases…</div>}
                 {state.status === 'error' && <div className='flex min-h-56 items-center justify-center px-4 py-16 text-sm text-ui-danger'>{state.error || 'Cases unavailable.'}</div>}
                 {state.status === 'ready' && !state.rows.length && (
-                    <div className='flex min-h-56 items-center justify-center px-4 py-16 text-sm text-ui-muted' data-dwm-cases-empty='true'>No cases.</div>
+                    <div className='flex min-h-56 flex-col items-center justify-center gap-1 px-4 py-16 text-center text-ui-muted' data-dwm-cases-empty='true'>
+                        <p className='font-semibold text-ui-text'>No cases.</p>
+                        <p className='max-w-md text-sm leading-6'>No alert is waiting for review. Cases appear after a scoped alert is retained and opened for investigation.</p>
+                    </div>
                 )}
                 {state.status === 'ready' && state.rows.length > 0 && (
                     <div className='overflow-x-auto' data-dwm-cases-table='true'>
