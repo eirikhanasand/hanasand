@@ -95,9 +95,19 @@ describe("lawful dark-web source portfolio batch", () => {
       expect(Number.isFinite(Date.parse(accepted.metadata.lastReportedVictimAt))).toBe(true);
     }
     expect(new Set(feedKeys).size).toBe(feedKeys.length);
-    expect(rejected).toHaveLength(154);
+    expect(rejected).toHaveLength(161);
     expect(new Set(rejected.map((row) => row.id)).size).toBe(rejected.length);
     expect(rejected.every((row) => row.disposition === "rejected" && row.countsAsCoverage === false)).toBe(true);
+    expect([...new Map(rejected.map((row) => [row.endpointHash, row.probeOutcome])).entries()]).toEqual(expect.arrayContaining([
+      ["a597313cddb8f442", "fetch_failed"],
+      ["bd6fcd259f01b35e", "parser_empty"],
+      ["4c6b1d9466fc12dd", "parser_empty"],
+      ["8c5daa0504bce9ee", "parser_empty"],
+      ["ea13dd5bdced628f", "fetch_failed"],
+      ["a070a78020535edb", "authority_unavailable"],
+      ["4dd6b604ef86590f", "authority_identity_superseded"]
+    ]));
+    expect(rejected.some((row) => ["9957e9b30b3836eb", "edb691bd56d468b3"].includes(String(row.endpointHash)))).toBe(false);
     expect(JSON.stringify(rejected)).not.toMatch(/\.onion\b|https?:\/\/[a-z2-7]{56}\b/i);
   });
 });
