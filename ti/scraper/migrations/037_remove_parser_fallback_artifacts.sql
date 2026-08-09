@@ -26,6 +26,24 @@ CREATE INDEX IF NOT EXISTS threat_intel_captures_parser_warning_fallback_idx
   ON threat_intel.captures USING GIN ((record->'metadata'->'parserWarnings'))
   WHERE record->'metadata'->>'feedItem' = 'false';
 
+-- The cleanup graph joins by capture/subject rather than by the original
+-- write-order indexes. Build the access paths before materializing its temp
+-- tables so a large production history is not repeatedly rescanned.
+CREATE INDEX IF NOT EXISTS threat_intel_entities_capture_cleanup_idx
+  ON threat_intel.entities (capture_id, id);
+CREATE INDEX IF NOT EXISTS threat_intel_indicators_capture_cleanup_idx
+  ON threat_intel.indicators (capture_id, id);
+CREATE INDEX IF NOT EXISTS threat_intel_evidence_links_capture_cleanup_idx
+  ON threat_intel.evidence_links (capture_id, subject_type, subject_id, id);
+CREATE INDEX IF NOT EXISTS threat_intel_claim_evidence_capture_cleanup_idx
+  ON threat_intel.claim_evidence (capture_id, subject_type, subject_id, id, claim_id);
+CREATE INDEX IF NOT EXISTS threat_intel_evaluation_labels_subject_cleanup_idx
+  ON threat_intel.evaluation_labels (capture_id, entity_id, indicator_id, claim_id);
+CREATE INDEX IF NOT EXISTS threat_intel_validation_records_subject_cleanup_idx
+  ON threat_intel.validation_records (capture_id, claim_id);
+CREATE INDEX IF NOT EXISTS threat_intel_source_health_cleanup_idx
+  ON threat_intel.source_health (collection_run_id, source_id, tenant_id, checked_at);
+
 CREATE TEMP TABLE _parser_fallback_capture ON COMMIT DROP AS
 SELECT
   capture.id,
