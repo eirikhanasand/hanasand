@@ -18,6 +18,7 @@ describe("public collection boundary", () => {
   test("fails honestly before planning when PostgreSQL writes are unhealthy", async () => {
     const store = new InMemoryScraperStore();
     (store as any).databaseHealthSnapshot = () => ({ ok: false, pendingWrites: 2, lastWriteError: "Failed to read data" });
+    (store as any).batch = () => { throw new Error("storage batch must not run while storage is failed"); };
     store.saveSource(source({ metadata: { productionCollection: true } }));
     let fetchCount = 0;
 

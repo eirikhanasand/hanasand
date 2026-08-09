@@ -21,7 +21,6 @@ export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanary
 export type * from "./canaryCollectionTypes.ts";
 import type { CanaryCollectionCycleResult, CanaryCollectionLoopHandle, CanaryCollectionOptions } from "./canaryCollectionTypes.ts";
 export async function runCanaryCollectionCycle(options: CanaryCollectionOptions): Promise<CanaryCollectionCycleResult> {
-  if (options.store.batch && !options.batched) return options.store.batch(() => runCanaryCollectionCycle({ ...options, batched: true }));
   const generatedAt = options.now?.() ?? nowIso(), fetcher = options.fetch ?? fetch, mode = options.fetch ? "injected_proof_fetch" : "native_live_http";
   const storageFailure = storageBackpressure(options.store);
   if (storageFailure) {
@@ -50,6 +49,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
       health: health(options.store, generatedAt, counters)
     };
   }
+  if (options.store.batch && !options.batched) return options.store.batch(() => runCanaryCollectionCycle({ ...options, batched: true }));
   const productivity = reconcilePublicSourceProductivity({ ...options, now: generatedAt });
   const activation = options.activateSources ? activatePublicCanarySources({ ...options, now: generatedAt }) : { activated: [], alreadyActive: [], rejected: [] };
   const maxSources = Math.max(1, options.maxSources ?? 10), maxTasks = Math.max(1, options.maxTasks ?? 5), maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
