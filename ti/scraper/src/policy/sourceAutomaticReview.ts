@@ -22,6 +22,11 @@ export function sourceRequiresAutomaticReview(source: any) {
   return Boolean(source?.metadata?.sourcePortfolioVerification || source?.metadata?.sourceFeedDiscovery);
 }
 
+export function sourceAutomaticReviewPromptVersionMatches(source: any, promptVersion: unknown) {
+  return compatibleSourceReviewPromptVersions.has(String(promptVersion))
+    && (source?.metadata?.sourceFamily !== "dark_web_victim_feed" || promptVersion === SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION);
+}
+
 export function automaticSourceReviewIdentity(source: any) {
   const identity = {
     sourceId: String(source?.id ?? ""),
@@ -72,8 +77,7 @@ export function hasGovernedAutomaticSourceReviewLineage(source: any, modelVersio
   if (!sourceRequiresAutomaticReview(source)) return false;
   const review = source?.metadata?.automaticSourceReview;
   return review?.schemaVersion === SOURCE_AUTOMATIC_REVIEW_SCHEMA
-    // ponytail: a prompt upgrade queues a new review, but does not revoke an immutable approved decision by itself.
-    && compatibleSourceReviewPromptVersions.has(review?.promptVersion)
+    && sourceAutomaticReviewPromptVersionMatches(source, review?.promptVersion)
     && review?.configuredModelVersion === modelVersion
     && review?.decision?.subject?.type === "source"
     && review?.decision?.subject?.id === source.id

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { qualifySourcePortfolio } from "../ops/sourcePortfolioQualification.ts";
 import { validateSourcePortfolioBatch } from "../registry/sourcePortfolioBatch.ts";
 import { sourceAutomaticReviewEvidenceBindings } from "../api/automaticReviewRoutes.ts";
-import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
+import { SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS, SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
 import { hashContent } from "../utils.ts";
 
 const generatedAt = "2026-07-23T12:00:00.000Z";
@@ -258,6 +258,21 @@ describe("source portfolio qualification", () => {
     const count = (source: any, rows: any[]) => qualifySourcePortfolio({ sources: [source], observations, captures: rows, generatedAt }).counts.total;
 
     expect(count(reviewed, captures)).toBe(1);
+    const priorReviewed = {
+      ...reviewed,
+      metadata: {
+        ...reviewed.metadata,
+        automaticSourceReview: {
+          ...reviewed.metadata.automaticSourceReview,
+          promptVersion: SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS[1]
+        }
+      }
+    };
+    expect(count(priorReviewed, captures)).toBe(1);
+    expect(count({
+      ...priorReviewed,
+      metadata: { ...priorReviewed.metadata, sourceFamily: "dark_web_victim_feed" }
+    }, captures)).toBe(0);
     expect(count({ ...reviewed, countsAsCoverage: false }, captures)).toBe(0);
     expect(count({ ...reviewed, metadata: { ...reviewed.metadata, productionCollection: false } }, captures)).toBe(0);
     expect(count(reviewed, captures.map((item) => item.id === selectedEvidenceProvenance[0].captureId ? { ...item, contentHash: hashContent("changed") } : item))).toBe(0);
