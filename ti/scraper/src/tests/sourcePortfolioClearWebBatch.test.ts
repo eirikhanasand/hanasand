@@ -20,8 +20,8 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(262);
-    expect(batch.exclusions).toHaveLength(333);
+    expect(batch.sources).toHaveLength(282);
+    expect(batch.exclusions).toHaveLength(337);
 
     const generatedAt = Date.parse(rawBatch.generatedAt);
     const evidenceTimes = [
@@ -654,7 +654,6 @@ describe("clear-web source portfolio batch", () => {
     expect(totals).toEqual({ parsed: 506, dated: 506, current: 185, useful: 124 });
 
     const exclusions = new Map(batch.exclusions.map((entry: any) => [entry.idOrUrlHash, entry.reason]));
-    expect(exclusions.get(hash(canonicalUrl("https://www.imperva.com/blog/feed/")).slice(0, 24))).toBe("parser_zero_items");
     expect(exclusions.get(hash(canonicalUrl("https://www.intel471.com/blog/feed")).slice(0, 24))).toBe("duplicate_publisher_feed_content");
     expect(exclusions.get(hash(canonicalUrl("https://www.intigriti.com/blog/feed")).slice(0, 24))).toBe("broader_mixed_feed_superseded_by_narrow_research_feed");
     expect(exclusions.get(hash(canonicalUrl("https://projectdiscovery.io/blog/category/vulnerability-research/rss.xml")).slice(0, 24))).toBe("response_exceeds_max_bytes");
@@ -753,6 +752,70 @@ describe("clear-web source portfolio batch", () => {
 
     const withSecure = sources.find((source: any) => source.name === "WithSecure Labs Threat Research");
     expect(withSecure.url).toBe("https://www.withsecure.com/en/feed/?post_type=lab_item");
+  });
+
+  test("keeps ledger 023 current, source-tolerant, and candidate-only until productive scheduled cycles exist", () => {
+    const expected = new Map([
+      ["AhnLab ASEC Korean Threat Research", [30, 30, 30, 10, "Thu, 06 Aug 2026 07:38:56 +0000"]],
+      ["Ecuador EcuCERT Cybersecurity Advisories", [10, 10, 1, 0, "Thu, 21 May 2026 19:28:52 +0000"]],
+      ["Dominican Republic CNCS Cybersecurity Updates", [10, 10, 10, 0, "Wed, 29 Jul 2026 16:12:03 +0000"]],
+      ["Invicti Web Security Research", [100, 100, 100, 38, "Fri, 07 Aug 2026 00:00:00 GMT"]],
+      ["Acunetix Web Vulnerability Research", [9, 9, 3, 2, "Thu, 25 Jun 2026 15:29:34 +0000"]],
+      ["OffSec Security Research", [250, 250, 26, 5, "Fri, 07 Aug 2026 15:22:46 GMT"]],
+      ["Sysdig Cloud Threat Research", [100, 100, 85, 28, "Tue, 04 Aug 2026 00:00:00 GMT"]],
+      ["Imperva Application Security Research", [10, 10, 10, 5, "Sun, 09 Aug 2026 09:50:54 +0000"]],
+      ["Mozilla Hacks Security Engineering", [20, 20, 3, 1, "Thu, 07 May 2026 16:01:21 +0000"]],
+      ["SUSE Security Research and Guidance", [9, 9, 1, 1, "Thu, 07 May 2026 21:55:04 +0000"]],
+      ["WPScan WordPress Vulnerability Research", [10, 10, 1, 0, "Wed, 20 May 2026 16:55:25 +0000"]],
+      ["Searchlight Cyber Threat Intelligence Research", [10, 10, 10, 8, "Thu, 06 Aug 2026 16:35:04 +0000"]],
+      ["Flare Cybercrime Threat Research", [10, 10, 10, 6, "Fri, 07 Aug 2026 22:00:03 +0000"]],
+      ["Detectify Labs Web Security Research", [10, 10, 1, 0, "Mon, 04 May 2026 09:45:39 +0000"]],
+      ["TRM Labs Crypto Threat Intelligence", [100, 100, 100, 9, "Fri, 07 Aug 2026 21:36:00 GMT"]],
+      ["AttackIQ Adversary Research", [10, 10, 10, 5, "Tue, 04 Aug 2026 11:54:44 +0000"]],
+      ["SCYTHE Adversary Emulation Research", [10, 10, 9, 2, "Wed, 22 Jul 2026 21:47:20 GMT"]],
+      ["OpenZeppelin Smart Contract Security Research", [10, 10, 10, 0, "Thu, 06 Aug 2026 14:30:00 GMT"]],
+      ["Avira Consumer Threat Research", [10, 10, 10, 0, "Tue, 04 Aug 2026 16:18:46 +0000"]],
+      ["Tenable Cyber Exposure Alerts", [10, 10, 10, 10, "Tue, 28 Jul 2026 23:19:08"]],
+    ] as const);
+    const sourceTolerant = new Set([
+      "Ecuador EcuCERT Cybersecurity Advisories",
+      "Dominican Republic CNCS Cybersecurity Updates",
+      "WPScan WordPress Vulnerability Research",
+      "Detectify Labs Web Security Research",
+      "OpenZeppelin Smart Contract Security Research",
+      "Avira Consumer Threat Research",
+    ]);
+    const sources = batch.sources.filter((source: any) => expected.has(source.name));
+    expect(sources).toHaveLength(expected.size);
+    const totals = { parsed: 0, dated: 0, current: 0, useful: 0 };
+    for (const source of sources) {
+      const [observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt] = expected.get(source.name)!;
+      expect(source.id).toBe(`src_portfolio_cw_${hash(canonicalUrl(source.url)).slice(0, 20)}`);
+      expect(source.metadata.sourcePortfolioVerification).toMatchObject({ observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt });
+      expect(currentItemCount).toBeGreaterThan(0);
+      if (sourceTolerant.has(source.name)) expect(keywordUsefulItemCount).toBe(0);
+      else expect(keywordUsefulItemCount).toBeGreaterThan(0);
+      expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
+      expect(source.metadata).not.toHaveProperty("countsAsCoverage");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
+      totals.parsed += observedItemCount;
+      totals.dated += datedItemCount;
+      totals.current += currentItemCount;
+      totals.useful += keywordUsefulItemCount;
+    }
+    expect(totals).toEqual({ parsed: 738, dated: 738, current: 440, useful: 130 });
+
+    const exclusions = new Map(batch.exclusions.map((entry: any) => [entry.idOrUrlHash, entry.reason]));
+    expect(exclusions.get(hash(canonicalUrl("https://github.blog/security/feed/")).slice(0, 24))).toBe("duplicate_canonical_endpoint");
+    expect(exclusions.get(hash(canonicalUrl("https://www.chainguard.dev/unchained/rss.xml")).slice(0, 24))).toBe("duplicate_publisher_feed_content");
+    expect(exclusions.get(hash(canonicalUrl("https://bishopfox.com/blog/feed")).slice(0, 24))).toBe("redirected_to_duplicate_canonical_endpoint");
+    expect(exclusions.get(hash(canonicalUrl("https://discussion.fedoraproject.org/c/news/security/7.rss")).slice(0, 24))).toBe("redirected_generic_project_news");
+    expect(exclusions.get(hash(canonicalUrl("https://www.synacktiv.com/en/feed/lastblog.xml")).slice(0, 24))).toBe("parser_missing_published_timestamp");
+    expect(exclusions.get(hash(canonicalUrl("https://cert.europa.eu/publications/threat-intelligence-rss")).slice(0, 24))).toBe("parser_invalid_published_timestamp");
+    expect(exclusions.get(hash(canonicalUrl("https://www.freebsd.org/security/feed.xml")).slice(0, 24))).toBe("parser_invalid_published_timestamp");
+    expect(exclusions.get(hash(canonicalUrl("https://www.mitiga.io/blog/rss.xml")).slice(0, 24))).toBe("bulk_restamped_current_items");
+    expect(exclusions.get(hash(canonicalUrl("https://www.domaintools.com/blog/rss.xml")).slice(0, 24))).toBe("bulk_restamped_current_items");
   });
 
   test("deduplicates by normalized endpoint across adapters and every reserved source pack", () => {
