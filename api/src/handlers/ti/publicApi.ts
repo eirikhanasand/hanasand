@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyPluginOptions, FastifyReply, FastifyReques
 import { publicTiOpenApi } from '../../contracts/publicTiOpenApi.ts'
 import { normalizeBatchQueries, TI_BATCH_MAX_QUERIES } from './search.ts'
 import { searchThreatIntel, type TiSearchResponse } from '#utils/ti/search.ts'
+import { sanitizeCustomerOutboundText } from '../../utils/dwm/customerOutputSafety.ts'
 
 type PublicApiOptions = FastifyPluginOptions & {
     fetchImpl?: typeof fetch
@@ -172,7 +173,7 @@ async function mapConcurrent<T, R>(items: T[], concurrency: number, mapper: (ite
 function publicSearchResult(result: TiSearchResponse) {
     const actorIntelligence = result.actorIntelligence
     const actionability = result.actionability
-    return compact({
+    return sanitizePublicSearchValue(compact({
         query: result.query,
         queryKind: result.queryKind,
         generatedAt: result.generatedAt,
@@ -204,7 +205,7 @@ function publicSearchResult(result: TiSearchResponse) {
             schemaVersion: actionability.schemaVersion, alertDisposition: actionability.alertDisposition, shouldAlert: boolean(actionability.shouldAlert), rationale: text(actionability.rationale),
             watchlistCandidates: array(actionability.watchlistCandidates).map(candidate => compact({ kind: text(candidate.kind), value: text(candidate.value), reason: text(candidate.reason), confidence: confidence(candidate.confidence) })),
         }) : undefined,
-    })
+    })) as ReturnType<typeof compact>
 }
 
 function publicActor(value: unknown) { const row = record(value); return compact({ id: text(row.id), canonicalName: text(row.canonicalName ?? row.actor), normalizedName: text(row.normalizedName), actorType: text(row.actorType), aliases: strings(row.aliases), confidence: confidence(row.confidence), firstSeenAt: iso(row.firstSeenAt), lastSeenAt: iso(row.lastSeenAt), evidenceCount: nonNegativeInteger(row.evidenceCount), sourceIds: strings(row.sourceIds), captureIds: strings(row.captureIds), reviewState: text(row.reviewState), updatedAt: iso(row.updatedAt) }) }
@@ -326,3 +327,10 @@ function nonNegativeInteger(value: unknown) { const number = finiteNumber(value)
 function confidence(value: unknown) { const number = finiteNumber(value); return number === undefined ? undefined : Math.max(0, Math.min(1, number > 1 ? number / 100 : number)) }
 function iso(value: unknown) { const string = text(value); return string && !Number.isNaN(Date.parse(string)) ? string : undefined }
 function httpUrl(value: unknown) { const string = text(value); if (!string) return undefined; try { const parsed = new URL(string); return ['http:', 'https:'].includes(parsed.protocol) && !/(?:\.onion|\.i2p)$/i.test(parsed.hostname) && !(parsed.hostname === 'news.google.com' && /^\/(?:rss\/)?articles\//.test(parsed.pathname)) ? parsed.toString() : undefined } catch { return undefined } }
+
+function sanitizePublicSearchValue(value: unknown): unknown {
+    if (typeof value === 'string') return sanitizeCustomerOutboundText(value)
+    if (Array.isArray(value)) return value.map(sanitizePublicSearchValue)
+    if (!value || typeof value !== 'object') return value
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, sanitizePublicSearchValue(item)]))
+}

@@ -66,7 +66,8 @@ describe('public TI v1', () => {
             recentActivity: [{ ...searchResult.recentActivity[0], url: 'https://hidden.example.onion/report' }],
             datasets: [{ name: 'Restricted dataset', type: 'metadata_only', coverage: 'observed', status: 'metadata_only', url: 'https://hidden.example.i2p/dataset' }],
             sources: [{ ...searchResult.sources[0], url: 'https://hidden.example.onion/source' }],
-            actorIntelligence: { ...searchResult.actorIntelligence, infrastructure: ['https://hidden.example.onion/path', 'https://clear.example/report'] },
+            notes: ['Details at https://hidden.example.onion/notes'],
+            actorIntelligence: { ...searchResult.actorIntelligence, infrastructure: ['https://hidden.example.onion/path', 'https://clear.example/report'], sourceProvenance: ['https://hidden.example.onion/provenance'] },
         }))
 
         const response = await app.inject({ method: 'POST', url: '/api/v1/ti/search', payload: { query: 'APT29' } })
@@ -76,6 +77,8 @@ describe('public TI v1', () => {
         expect(body.datasets[0]).not.toHaveProperty('url')
         expect(body.sources[0]).not.toHaveProperty('url')
         expect(body.actorIntelligence.infrastructure).toEqual(['https://clear.example/report'])
+        expect(body.notes).toEqual(['Details at [restricted source]'])
+        expect(body.actorIntelligence.sourceProvenance).toEqual(['[restricted source]'])
         expect(JSON.stringify(body)).not.toMatch(/\.onion|\.i2p/)
     })
 
