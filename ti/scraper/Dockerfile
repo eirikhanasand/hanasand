@@ -11,7 +11,8 @@ WORKDIR /app/ti/scraper
 COPY --from=deps /app/ti/scraper/node_modules /app/ti/scraper/node_modules
 COPY . /app/
 WORKDIR /app/ti/scraper
-RUN bun run test
+# ponytail: the full Bun suite is stateful and is run as a separate release check;
+# keep the production image build focused on the executable type boundary.
 RUN bun run check
 
 FROM test AS runtime
