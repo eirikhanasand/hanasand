@@ -36,6 +36,15 @@ describe("DWM exposure queue pipeline", () => {
     expect(store.listCaptures()).toHaveLength(0);
   });
 
+  test("reports the actual parser service when hosted AI is unavailable", async () => {
+    const response = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue"), testOptions(new InMemoryScraperStore()));
+    expect(response.status).toBe(200);
+    expect((await response.json()).parser).toMatchObject({
+      service: "metadata-safe-ransomware-claim-parser:v1",
+      aiEndpointConfigured: false,
+    });
+  });
+
   test("rejects arbitrary HTTPS intake without the bounded public-advisory source family", async () => {
     const store = new InMemoryScraperStore();
     const response = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {

@@ -20,8 +20,8 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(77);
-    expect(batch.exclusions).toHaveLength(131);
+    expect(batch.sources).toHaveLength(97);
+    expect(batch.exclusions).toHaveLength(150);
 
     const ids = new Set<string>();
     const endpoints = new Set<string>();
@@ -271,6 +271,63 @@ describe("clear-web source portfolio batch", () => {
       totals.useful += keywordUsefulItemCount;
     }
     expect(totals).toEqual({ parsed: 539, dated: 539, current: 482, useful: 216 });
+  });
+
+  test("keeps ledger 015 production-parser-positive and candidate-only until productive scheduled cycles exist", () => {
+    const expected = new Map([
+      ["K7 Computing Malware Research", [1, 1, 1, 1, "2026-08-03T07:13:40.000Z"]],
+      ["Rapid7 Emergent Threat Response", [20, 20, 20, 19, "2026-08-07T14:32:47.000Z"]],
+      ["Rapid7 Security Research", [20, 20, 20, 13, "2026-07-22T13:28:02.000Z"]],
+      ["Aqua Nautilus Threat Research", [10, 10, 1, 1, "2026-08-04T15:02:02.000Z"]],
+      ["Wiz Cloud Security Research", [250, 250, 129, 38, "2026-08-06T14:03:03.000Z"]],
+      ["eSentire Security Advisories", [250, 250, 24, 22, "2026-08-04T04:00:00.000Z"]],
+      ["ABB Product Security Advisories", [88, 88, 21, 21, "2026-07-30T01:35:00.000Z"]],
+      ["Red Hat Security Advisories", [41, 41, 41, 37, "2026-08-07T18:53:06.000Z"]],
+      ["Nozomi Networks Product Security Advisories", [59, 59, 16, 0, "2026-07-07T00:00:00.000Z"]],
+      ["ConnectWise Trust Security Advisories", [21, 21, 1, 0, "2026-03-17T04:00:00.000Z"]],
+      ["ConnectWise Product Security Bulletins", [41, 41, 3, 0, "2026-05-20T04:00:00.000Z"]],
+      ["RaptX Independent Security Research", [30, 30, 17, 6, "2026-03-28T00:00:00.000Z"]],
+      ["Rockwell Automation Product Security Advisories", [60, 60, 21, 9, "2026-07-30T15:21:00.000Z"]],
+      ["Bosch Product Security Advisories", [10, 10, 3, 3, "2026-07-30T00:00:00.000Z"]],
+      ["Fortinet Outbreak Alert Reports", [20, 20, 14, 14, "2026-08-07T07:00:00.000Z"]],
+      ["Fortinet Threat Signal Reports", [10, 10, 10, 10, "2026-07-30T04:33:51.000Z"]],
+      ["Veeam Product Security Advisories", [20, 20, 12, 7, "2026-08-04T00:00:00.000Z"]],
+      ["Datadog Security Labs Research", [30, 30, 30, 19, "2026-08-04T00:00:00.000Z"]],
+      ["Lithuania NCSC Cybersecurity News", [30, 30, 14, 0, "2026-07-13T10:11:16.000Z"]],
+      ["TYPO3 Product Security Advisories", [30, 30, 25, 1, "2026-07-14T10:00:00.000Z"]],
+    ] as const);
+    const sourceTolerant = new Set([
+      "Nozomi Networks Product Security Advisories",
+      "ConnectWise Trust Security Advisories",
+      "ConnectWise Product Security Bulletins",
+      "Lithuania NCSC Cybersecurity News",
+    ]);
+    const sources = batch.sources.filter((source: any) => expected.has(source.name));
+    expect(sources).toHaveLength(expected.size);
+    const totals = { parsed: 0, dated: 0, current: 0, useful: 0 };
+    for (const source of sources) {
+      const [observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt] = expected.get(source.name)!;
+      expect(source.id).toBe(`src_portfolio_cw_${hash(canonicalUrl(source.url)).slice(0, 20)}`);
+      expect(source.metadata.sourcePortfolioVerification).toMatchObject({
+        observedItemCount,
+        datedItemCount,
+        currentItemCount,
+        keywordUsefulItemCount,
+        latestPublishedAt,
+      });
+      expect(currentItemCount).toBeGreaterThan(0);
+      if (sourceTolerant.has(source.name)) expect(keywordUsefulItemCount).toBe(0);
+      else expect(keywordUsefulItemCount).toBeGreaterThan(0);
+      expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
+      expect(source.metadata).not.toHaveProperty("countsAsCoverage");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
+      totals.parsed += observedItemCount;
+      totals.dated += datedItemCount;
+      totals.current += currentItemCount;
+      totals.useful += keywordUsefulItemCount;
+    }
+    expect(totals).toEqual({ parsed: 1041, dated: 1041, current: 423, useful: 221 });
   });
 
   test("deduplicates by normalized endpoint across adapters and every reserved source pack", () => {
