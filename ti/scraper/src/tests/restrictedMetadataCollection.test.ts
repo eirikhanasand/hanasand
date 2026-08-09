@@ -208,6 +208,25 @@ describe("restricted metadata collection", () => {
     expect(store.listSources().every((item) => item.status === "candidate" && item.countsAsCoverage === false && item.metadata.productionCollection === false)).toBe(true);
   });
 
+  test("extracts only allowlisted Inc Ransom JSON company names", async () => {
+    const body = {
+      type: true,
+      message: "private response detail",
+      payload: {
+        length: 2,
+        announcements: [
+          { company: { company_name: "Northwind Health", country: "US", revenue: 42 }, updatedAt: 1_786_246_128_597, description: ["private detail"] },
+          { company: { company_name: "Contoso Manufacturing", country: "NO", revenue: 24 }, updatedAt: 1_786_200_000_000, proof: ["private file"] }
+        ]
+      }
+    };
+    const boundary = new TorMetadataHttpBoundary({ proxyUrl: "http://onion-tor:8118", fetcher: async () => new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } }) });
+    const parsed = await boundary.fetchMetadata({ url: `http://${"i".repeat(56)}.onion/`, actorName: "Inc Ransom" });
+
+    expect(parsed).toMatchObject({ victimNames: ["Northwind Health", "Contoso Manufacturing"], parserProfile: "json_announcements_company_name", sourceTimestamp: new Date(1_786_246_128_597).toISOString(), links: [] });
+    expect(JSON.stringify(parsed)).not.toMatch(/private|revenue|country|proof/i);
+  });
+
   test("persists allowlisted Genesis section-card names without retaining card details", async () => {
     const store = new InMemoryScraperStore();
     const restrictedHost = `${"z".repeat(56)}.onion`;
