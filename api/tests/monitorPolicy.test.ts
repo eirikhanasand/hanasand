@@ -12,7 +12,8 @@ describe('production monitor notification transitions', () => {
         expect(source).toContain('const [result, historyResult, incidentResult] = await Promise.all([')
         expect(source).toContain("WHERE status <> 'up'")
         expect(schema).toContain('idx_service_monitor_results_non_up')
-        expect(source).toContain("res.header('Cache-Control', 'public, max-age=3, stale-while-revalidate=15')")
+        expect(source).toContain("const STATUS_CACHE_MS = 15_000")
+        expect(source).toContain("res.header('Cache-Control', 'public, max-age=15, stale-while-revalidate=30')")
     })
 
     test('processing backlog deduplicates current review tasks by their persisted id', async () => {
