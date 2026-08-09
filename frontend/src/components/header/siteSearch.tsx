@@ -190,13 +190,13 @@ async function loadActors(query: string, signal: AbortSignal): Promise<SearchIte
     return actorItems(payload, query).slice(0, 8)
 }
 
-function caseItem(value: unknown): SearchItem | null {
+export function caseItem(value: unknown): SearchItem | null {
     if (!value || typeof value !== 'object') return null
     const row = value as Record<string, unknown>
     const id = stringValue(row.id) || stringValue(row.caseId)
     if (!id) return null
     const title = stringValue(row.title) || stringValue(row.company) || stringValue(row.organizationName) || id
-    const detail = [stringValue(row.status), stringValue(row.organizationId), stringValue(row.summary)].filter(Boolean).join(' · ')
+    const detail = [stringValue(row.status), stringValue(row.organizationName), stringValue(row.summary)].filter(Boolean).join(' · ')
     const href = stringValue(row.casePath) || `/dashboard/dwm/cases/${encodeURIComponent(id)}`
     return { id: `case:${id}`, title, detail, href }
 }
