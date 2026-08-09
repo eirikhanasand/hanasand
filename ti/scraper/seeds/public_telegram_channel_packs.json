@@ -1,10 +1,10 @@
 {
-  "version": 7,
+  "version": 8,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-08-09T09:22:42.651Z",
+  "generatedAt": "2026-08-09T09:49:15.903Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 17,
+  "sourceCount": 19,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -1954,6 +1954,251 @@
             "вредоносное ПО",
             "уязвимость",
             "угроза"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_ruscadasec_news_telegram",
+      "name": "RUSCADASEC News public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/ruscadasecnews",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.88,
+      "language": "ru",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Russian- and English-language industrial and operational-technology security reporting from the exact channel linked by the independent RUSCADASEC community. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T09:49:15.903Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "ics_ot_research",
+          "vulnerability_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "ruscadasecnews",
+        "verifiedSourceId": "src_ruscadasec_news_telegram",
+        "publisherReference": "https://ruscadasec.com/",
+        "ownershipVerifiedAt": "2026-08-09T09:49:15.903Z",
+        "activityVerifiedAt": "2026-08-09T09:49:15.903Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "industrial control systems",
+          "operational technology",
+          "vulnerabilities",
+          "cyberattacks",
+          "critical infrastructure"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T09:49:15.903Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 19,
+          "observedUsefulItemCount": 7,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://ruscadasec.com/",
+          "legalBasisVerifiedAt": "2026-08-09T09:49:15.903Z",
+          "latestPublishedAt": "2026-08-08T08:11:01+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "community:ru:ruscadasec-news:telegram",
+        "publisher": {
+          "name": "RUSCADASEC",
+          "country": "RU",
+          "homepage": "https://ruscadasec.com/",
+          "trustBasis": "independent non-profit community site links the exact public news channel"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public community communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public community channel used for defensive security research.",
+        "reliability": 0.88,
+        "intelligenceValue": 0.9,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "industrial control systems",
+            "operational technology",
+            "vulnerabilities",
+            "cyberattacks",
+            "critical infrastructure"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "energy",
+            "manufacturing",
+            "critical infrastructure",
+            "technology"
+          ],
+          "regions": [
+            "Russia",
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [
+            "Russia"
+          ],
+          "languages": [
+            "ru",
+            "en"
+          ],
+          "queryPatterns": [
+            "АСУ ТП",
+            "ICS",
+            "OT security",
+            "уязвимость"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_scadax_news_telegram",
+      "name": "ScadaX News public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/ScadaXNews",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.86,
+      "language": "en",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public industrial-control, IIoT, and IoT vulnerability reporting from the ScadaX Security Research Group channel independently linked by RUSCADASEC. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-08-09T09:49:15.903Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "ics_ot_research",
+          "vulnerability_reporting"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "ScadaXNews",
+        "verifiedSourceId": "src_scadax_news_telegram",
+        "publisherReference": "https://ruscadasec.com/",
+        "ownershipVerifiedAt": "2026-08-09T09:49:15.903Z",
+        "activityVerifiedAt": "2026-08-09T09:49:15.903Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "industrial control systems",
+          "operational technology",
+          "IIoT",
+          "IoT",
+          "vulnerabilities"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-08-09T09:49:15.903Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 20,
+          "observedUsefulItemCount": 18,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://ruscadasec.com/",
+          "legalBasisVerifiedAt": "2026-08-09T09:49:15.903Z",
+          "latestPublishedAt": "2026-08-07T19:15:22+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "research:global:scadax:telegram",
+        "publisher": {
+          "name": "ScadaX Security Research Group",
+          "country": "GLOBAL",
+          "homepage": "https://scadax.net/",
+          "trustBasis": "independent industrial-security community page links the exact ScadaX vulnerability channel"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public research communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public research channel used for defensive security research.",
+        "reliability": 0.86,
+        "intelligenceValue": 0.93,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "industrial control systems",
+            "operational technology",
+            "IIoT",
+            "IoT",
+            "vulnerabilities"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "energy",
+            "manufacturing",
+            "critical infrastructure",
+            "technology"
+          ],
+          "regions": [
+            "Global"
+          ],
+          "countries": [],
+          "languages": [
+            "en"
+          ],
+          "queryPatterns": [
+            "ICS",
+            "SCADA",
+            "IIoT",
+            "CVE",
+            "vulnerability"
           ]
         },
         "collection": {
