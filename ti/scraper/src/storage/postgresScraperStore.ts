@@ -410,6 +410,52 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const tenantId = input.tenantId ?? null;
     const sourceId = input.sourceId?.trim() || null;
     const executableOnly = input.executableOnly === true;
+    if (!sourceId && !executableOnly) {
+      const summary = await this.querySourceOperationalSummary(input);
+      const pageRows = await this.sql`
+        WITH page AS (
+          SELECT id, tenant_id, record, collection_executable
+          FROM threat_intel.sources
+          WHERE tenant_id IS NOT DISTINCT FROM ${tenantId}
+          ORDER BY lower(name), id
+          LIMIT ${limit} OFFSET ${offset}
+        )
+        SELECT page.record, page.collection_executable,
+          COALESCE(health.stats, '{}'::jsonb) AS health_stats,
+          COALESCE(captures.stats, '{}'::jsonb) AS capture_stats
+        FROM page
+        LEFT JOIN LATERAL (
+          SELECT jsonb_build_object(
+            'observationCount', count(*),
+            'scheduledCycleCount', count(DISTINCT source_health.collection_run_id),
+            'successCount', count(*) FILTER (WHERE source_health.success),
+            'successfulCycleCount', count(DISTINCT source_health.collection_run_id) FILTER (WHERE source_health.success),
+            'usefulCycleCount', count(DISTINCT source_health.collection_run_id) FILTER (WHERE source_health.success AND source_health.useful AND source_health.capture_count > 0),
+            'parserAttemptCount', count(*) FILTER (WHERE source_health.success),
+            'parserSuccessCount', count(*) FILTER (WHERE source_health.success AND source_health.parser_warning_count = 0),
+            'parserWarningCount', COALESCE(sum(source_health.parser_warning_count), 0),
+            'duplicateCount', COALESCE(sum(source_health.duplicate_count), 0),
+            'lastSuccessAt', max(source_health.checked_at) FILTER (WHERE source_health.success),
+            'lastUsefulAt', max(source_health.checked_at) FILTER (WHERE source_health.success AND source_health.useful AND source_health.capture_count > 0),
+            'latest', (array_agg(source_health.record ORDER BY source_health.checked_at DESC, source_health.id DESC))[1]
+          ) AS stats
+          FROM threat_intel.source_health
+          WHERE source_health.source_id = page.id
+            AND source_health.tenant_id IS NOT DISTINCT FROM page.tenant_id
+        ) health ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT jsonb_build_object(
+            'captureCount', count(*),
+            'lastContentAt', max(captures.collected_at)
+          ) AS stats
+          FROM threat_intel.captures
+          WHERE captures.source_id = page.id
+            AND captures.tenant_id IS NOT DISTINCT FROM page.tenant_id
+        ) captures ON TRUE
+      `;
+      const total = Number(summary.summary?.sourceCount ?? 0);
+      return { rows: pageRows, totals: summary.summary, total, nextCursor: offset + pageRows.length < total ? String(offset + pageRows.length) : undefined };
+    }
     if (!sourceId && !executableOnly && limit === 1) {
       const [pageRows, totalRows] = await Promise.all([
         this.sql`
