@@ -60,11 +60,11 @@ export default function MillWorkspace() {
         try {
             setError('')
             const [findingPayload, eventPayload, memberPayload, rulePayload, usagePayload] = await Promise.all([
-                requestJson<{ findings?: Finding[] }>(`/api/mill/findings?organizationId=${encodeURIComponent(id)}`),
-                requestJson<{ events?: Event[] }>(`/api/mill/events?organizationId=${encodeURIComponent(id)}&limit=80`),
+                requestJson<{ findings?: Finding[] }>(`/api/backend/mill/findings?organizationId=${encodeURIComponent(id)}`),
+                requestJson<{ events?: Event[] }>(`/api/backend/mill/events?organizationId=${encodeURIComponent(id)}&limit=80`),
                 requestJson<{ members?: Member[] }>(`/api/organizations/${encodeURIComponent(id)}/members`),
-                requestJson<{ rules?: MillRule[] }>(`/api/mill/rules?organizationId=${encodeURIComponent(id)}`),
-                requestJson<{ metering?: MillUsage }>(`/api/mill/usage?organizationId=${encodeURIComponent(id)}`),
+                requestJson<{ rules?: MillRule[] }>(`/api/backend/mill/rules?organizationId=${encodeURIComponent(id)}`),
+                requestJson<{ metering?: MillUsage }>(`/api/backend/mill/usage?organizationId=${encodeURIComponent(id)}`),
             ])
             setFindings(findingPayload.findings || [])
             setEvents(eventPayload.events || [])
@@ -77,7 +77,7 @@ export default function MillWorkspace() {
     async function updateFinding(nextStatus: string) {
         if (!selected) return
         try {
-            await requestJson(`/api/mill/findings/${encodeURIComponent(selected.id)}/actions?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ status: nextStatus, note: note || undefined, assigneeId: assigneeId || undefined }) })
+            await requestJson(`/api/backend/mill/findings/${encodeURIComponent(selected.id)}/actions?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ status: nextStatus, note: note || undefined, assigneeId: assigneeId || undefined }) })
             setStatus(`Finding marked ${nextStatus}.`)
             await loadMill(organizationId)
         } catch (cause) { setError(errorMessage(cause)) }
@@ -85,7 +85,7 @@ export default function MillWorkspace() {
 
     async function replayEvent(eventId: string) {
         try {
-            await requestJson(`/api/mill/events/${encodeURIComponent(eventId)}/actions?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ action: 'replay' }) })
+            await requestJson(`/api/backend/mill/events/${encodeURIComponent(eventId)}/actions?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ action: 'replay' }) })
             setStatus('Event replayed through the current Mill rules.')
             await loadMill(organizationId)
         } catch (cause) { setError(errorMessage(cause)) }
@@ -94,7 +94,7 @@ export default function MillWorkspace() {
     async function createRule() {
         if (!organizationId) return
         try {
-            await requestJson(`/api/mill/rules?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ name: ruleName, explanation: ruleExplanation, severity: ruleSeverity, conditions: [{ path: rulePath, operator: ruleOperator, value: ruleValue }] }) })
+            await requestJson(`/api/backend/mill/rules?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ name: ruleName, explanation: ruleExplanation, severity: ruleSeverity, conditions: [{ path: rulePath, operator: ruleOperator, value: ruleValue }] }) })
             setStatus('Custom rule created and enabled for new events.')
             setRuleName(''); setRuleExplanation(''); setRuleValue('')
             await loadMill(organizationId)
@@ -104,7 +104,7 @@ export default function MillWorkspace() {
     async function toggleRule(rule: MillRule) {
         if (!organizationId) return
         try {
-            await requestJson(`/api/mill/rules/${encodeURIComponent(rule.recordId || rule.id)}/actions?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ action: rule.enabled === false ? 'enable' : 'disable' }) })
+            await requestJson(`/api/backend/mill/rules/${encodeURIComponent(rule.recordId || rule.id)}/actions?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ action: rule.enabled === false ? 'enable' : 'disable' }) })
             setStatus(`${rule.name} ${rule.enabled === false ? 'enabled' : 'disabled'}.`)
             await loadMill(organizationId)
         } catch (cause) { setError(errorMessage(cause)) }
@@ -114,7 +114,7 @@ export default function MillWorkspace() {
         if (!organizationId) return
         try {
             const parsed = JSON.parse(packJson) as { rules?: unknown }
-            await requestJson(`/api/mill/rules/packs?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ packName, packVersion, sourceReference: packReference, rules: parsed.rules }) })
+            await requestJson(`/api/backend/mill/rules/packs?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ packName, packVersion, sourceReference: packReference, rules: parsed.rules }) })
             setStatus('Signature pack imported and enabled for new events.')
             setPackName(''); setPackVersion(''); setPackReference('')
             await loadMill(organizationId)
@@ -124,7 +124,7 @@ export default function MillWorkspace() {
     async function importSigmaPack() {
         if (!organizationId) return
         try {
-            await requestJson(`/api/mill/rules/sigma?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ packName: sigmaPackName, packVersion: sigmaPackVersion, sourceReference: sigmaPackReference, yaml: sigmaYaml }) })
+            await requestJson(`/api/backend/mill/rules/sigma?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ packName: sigmaPackName, packVersion: sigmaPackVersion, sourceReference: sigmaPackReference, yaml: sigmaYaml }) })
             setStatus('Sigma rules imported and enabled for new events.')
             setSigmaPackName(''); setSigmaPackVersion(''); setSigmaPackReference('')
             await loadMill(organizationId)
