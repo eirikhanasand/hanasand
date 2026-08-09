@@ -70,12 +70,17 @@ export function reconcilePublicSourceProductivity(input: any) {
 export function currentProductiveSourceCycles(store: any, source: any, generatedAt: string) {
   const now = Date.parse(generatedAt);
   const windowSeconds = sourceMonitoringWindowSeconds(source);
+  const observations = (store.listSourceHealthObservations?.() ?? [])
+    .filter((row: any) => row.sourceId === source.id && row.tenantId === source.tenantId);
+  const latestCheckedAt = Math.max(...observations.map((row: any) => Date.parse(row.checkedAt)).filter(Number.isFinite));
+  const checkWindowSeconds = Math.max(86_400, positiveNumber(source.crawlFrequencySeconds, 86_400) * 3);
+  if (!Number.isFinite(latestCheckedAt) || latestCheckedAt > now || now - latestCheckedAt > checkWindowSeconds * 1_000) return [];
   const retainedRunIds = new Set((store.listCaptures?.() ?? [])
     .filter((capture: any) => capture.sourceId === source.id && capture.tenantId === source.tenantId)
     .map((capture: any) => String(capture.metadata?.runId ?? ""))
     .filter(Boolean));
   const byRun = new Map<string, any>();
-  for (const row of store.listSourceHealthObservations?.() ?? []) {
+  for (const row of observations) {
     const checkedAt = Date.parse(row.checkedAt), runId = String(row.collectionRunId ?? "");
     if (row.sourceId !== source.id || row.tenantId !== source.tenantId || !runId || row.useful !== true
       || Number(row.captureCount ?? 0) < 1 || !retainedRunIds.has(runId)

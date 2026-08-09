@@ -1262,6 +1262,87 @@ describe("scheduled public feed discovery", () => {
     expect(store.getSource(candidate.id)?.updatedAt).toBe(updatedAt);
   });
 
+  test("clears review backoff but waits for a current scheduled check before promotion", () => {
+    const store = new InMemoryScraperStore();
+    const candidate = reviewableCandidate(store, "approved-with-overdue-check");
+    store.saveSourceHealthObservation({
+      id: "health-approved-with-overdue-check-2",
+      sourceId: candidate.id,
+      collectionRunId: "run-approved-with-overdue-check-2",
+      checkedAt: "2026-07-23T12:01:00.000Z",
+      status: "healthy",
+      success: true,
+      useful: true,
+      captureCount: 1
+    });
+    store.saveCapture({
+      id: "capture-approved-with-overdue-check-2",
+      sourceId: candidate.id,
+      url: "https://approved-with-overdue-check.example/report-2",
+      collectedAt: "2026-07-23T12:01:00.000Z",
+      publishedAt: "2026-07-23T12:01:00.000Z",
+      contentHash: hashContent("approved-with-overdue-check-2"),
+      mediaType: "text/plain",
+      storageKind: "inline_text",
+      body: "CVE-2026-9997 is a retained operational advisory.",
+      sensitive: false,
+      metadata: { runId: "run-approved-with-overdue-check-2" }
+    });
+    store.saveSource({
+      ...store.getSource(candidate.id)!,
+      countsAsCoverage: false,
+      governance: { approvalRequired: false, approvalState: "approved", metadataOnly: false }
+    });
+    approveSourceReview(store, candidate.id);
+    const reviewed = store.getSource(candidate.id)!;
+    store.saveSource({
+      ...reviewed,
+      status: "candidate",
+      countsAsCoverage: false,
+      crawlState: {
+        retryCount: 0,
+        lastError: "Automatic source review: needs_review",
+        lastErrorAt: "2026-07-24T12:00:00.000Z",
+        backoffUntil: "2026-07-25T12:00:00.000Z",
+        nextEligibleAt: "2026-07-25T12:00:00.000Z"
+      },
+      metadata: { ...reviewed.metadata, productionCollection: false, countsAsCoverage: false }
+    });
+
+    expect(syncAutomaticReviewQueue({ store } as any, {
+      allTenants: true,
+      now: "2026-07-25T12:00:00.000Z",
+      modelVersion: "hanasand"
+    })).toBe(0);
+    expect(store.getSource(candidate.id)).toMatchObject({
+      status: "candidate",
+      countsAsCoverage: false,
+      crawlState: { backoffUntil: undefined, nextEligibleAt: undefined, lastError: undefined },
+      metadata: { productionCollection: false, sourcePortfolioProductiveCheckCount: 0 }
+    });
+
+    store.saveSourceHealthObservation({
+      id: "health-approved-with-overdue-check-current",
+      sourceId: candidate.id,
+      collectionRunId: "run-approved-with-overdue-check-current",
+      checkedAt: "2026-07-25T12:01:00.000Z",
+      status: "healthy",
+      success: true,
+      useful: false,
+      captureCount: 0
+    });
+    expect(syncAutomaticReviewQueue({ store } as any, {
+      allTenants: true,
+      now: "2026-07-25T12:01:00.000Z",
+      modelVersion: "hanasand"
+    })).toBe(0);
+    expect(store.getSource(candidate.id)).toMatchObject({
+      status: "active",
+      countsAsCoverage: true,
+      metadata: { productionCollection: true, sourcePortfolioProductiveCheckCount: 2 }
+    });
+  });
+
   test("preserves an existing source-v6 nonterminal while binding its current source identity", async () => {
     const store = new InMemoryScraperStore();
     const candidate = reviewableCandidate(store, "source-v6-nonterminal");
