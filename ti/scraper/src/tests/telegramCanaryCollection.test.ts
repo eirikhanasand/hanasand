@@ -376,7 +376,8 @@ describe("public Telegram canary collection", () => {
       "src_usergate_news_telegram",
       "src_ideco_ngfw_telegram",
       "src_ideco_security_news_telegram",
-      "src_infowatch_security_telegram"
+      "src_infowatch_security_telegram",
+      "src_pib_factcheck_telegram"
     ]);
     expect(candidates.every((item: any) => item.countsAsCoverage !== true
       && item.metadata.productionCollection === false
@@ -387,7 +388,7 @@ describe("public Telegram canary collection", () => {
       && item.metadata.sourcePortfolioVerification.observedUsefulItemCount >= 0
       && !evaluateSourceForCollection(item).allowed
       && !isExecutableSource(item))).toBe(true);
-    expect(candidates.filter((item: any) => item.metadata.sourcePortfolioVerification.observedUsefulItemCount === 0)).toHaveLength(18);
+    expect(candidates.filter((item: any) => item.metadata.sourcePortfolioVerification.observedUsefulItemCount === 0)).toHaveLength(19);
     expect(report.accepted.map((item: any) => item.url)).not.toEqual(expect.arrayContaining([
       "https://t.me/FalconFeedsio",
       "https://t.me/noname05716",

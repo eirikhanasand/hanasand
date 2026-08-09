@@ -1,10 +1,10 @@
 {
-  "version": 20,
+  "version": 21,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-08-09T23:05:20.752Z",
+  "generatedAt": "2026-08-10T00:18:00.000Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 54,
+  "sourceCount": 55,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -4777,6 +4777,23 @@
       "governance": { "approvalRequired": true, "approvalState": "approved", "approvalScope": "official_public_web_preview", "metadataOnly": false, "approvedAt": "2026-08-09T23:05:20.752Z", "approvedBy": "source-review:publisher-owned-reference", "policyVersion": "collection-policy:v1" },
       "metadata": { "sourceFamily": "telegram_public", "sourceFamilies": ["vendor_security", "victim_publication_reporting", "incident_response", "regional_language"], "collectionMode": "public_web_preview", "mediaPolicy": "metadata_only_no_download", "productionCollection": false, "countsAsCoverage": false, "sourcePortfolioQualificationState": "pending_sustained_productivity", "channelHandle": "infowatchout", "verifiedSourceId": "src_infowatch_security_telegram", "publisherReference": "https://www.infowatch.ru/company/about", "ownershipVerifiedAt": "2026-08-09T23:05:20.752Z", "activityVerifiedAt": "2026-08-09T23:05:20.752Z", "activityWindowSeconds": 2592000, "topics": ["information security", "data leaks", "incidents", "defensive guidance"], "maxItemsPerFetch": 20, "sourcePortfolioVerification": { "verifiedAt": "2026-08-09T23:05:20.752Z", "outcome": "content_parsed", "observedItemCount": 16, "observedUsefulItemCount": 0, "httpStatus": 200, "contentType": "text/html; charset=utf-8", "adapter": "telegram_public", "parserVersion": "telegram-public-preview:v1", "publisherReference": "https://www.infowatch.ru/company/about", "legalBasisVerifiedAt": "2026-08-09T23:05:20.752Z", "latestPublishedAt": "2026-08-04T09:20:11+00:00" } },
       "catalog": { "canonicalId": "vendor:ru:infowatch-security:telegram", "publisher": { "name": "InfoWatch", "country": "RU", "homepage": "https://www.infowatch.ru/", "trustBasis": "InfoWatch's official materials identify the exact channel as its Telegram publication" }, "tier": "tier_2", "approvalScope": "official_public_web_preview", "license": "Public publisher communications; source attribution retained.", "legalBasis": "Unauthenticated public publisher channel used for defensive security research.", "reliability": 0.85, "intelligenceValue": 0.74, "retentionClass": "standard", "analystOwner": "source-ops", "coverage": { "topics": ["information security", "data leaks", "incidents", "defensive guidance"], "actors": [], "aliases": [], "industries": ["technology", "finance", "government", "critical infrastructure"], "regions": ["Eastern Europe"], "countries": ["Russia"], "languages": ["ru"], "queryPatterns": ["утечка", "инцидент", "атака", "кибербезопасность"] }, "collection": { "freshnessTargetSeconds": 3600, "collectionSlaSeconds": 1800, "budgetClass": "normal", "crawlCadenceSeconds": 1800 }, "adapterCompatibility": ["telegram_public"], "rollback": {} }
+    },
+    {
+      "id": "src_pib_factcheck_telegram",
+      "name": "India PIB Fact Check public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/PIB_FactCheck",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.96,
+      "language": "en",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Government of India fact-check and online-fraud advisories from the Press Information Bureau Fact Check Unit. Collect only unauthenticated public-preview text with attribution; never submit complaints, authenticate, interact, or collect victim submissions, media, files, credentials, or phone numbers.",
+      "governance": { "approvalRequired": true, "approvalState": "approved", "approvalScope": "official_public_web_preview", "metadataOnly": false, "approvedAt": "2026-08-10T00:18:00.000Z", "approvedBy": "source-review:government-reference", "policyVersion": "collection-policy:v1" },
+      "metadata": { "sourceFamily": "telegram_public", "sourceFamilies": ["government_fact_check", "victim_publication_reporting", "cybercrime_reporting", "regional_language"], "collectionMode": "public_web_preview", "mediaPolicy": "metadata_only_no_download", "productionCollection": false, "countsAsCoverage": false, "sourcePortfolioQualificationState": "pending_sustained_productivity", "channelHandle": "PIB_FactCheck", "verifiedSourceId": "src_pib_factcheck_telegram", "publisherReference": "https://www.pib.gov.in/FAQ_fact.aspx?lang=1&reg=22", "ownershipVerifiedAt": "2026-08-10T00:18:00.000Z", "activityVerifiedAt": "2026-08-10T00:18:00.000Z", "activityWindowSeconds": 2592000, "topics": ["fact checking", "online fraud", "phishing", "misinformation"], "maxItemsPerFetch": 20, "sourcePortfolioVerification": { "verifiedAt": "2026-08-10T00:18:00.000Z", "outcome": "content_parsed", "observedItemCount": 20, "observedUsefulItemCount": 0, "httpStatus": 200, "contentType": "text/html; charset=utf-8", "adapter": "telegram_public", "parserVersion": "telegram-public-preview:v1", "publisherReference": "https://www.pib.gov.in/FAQ_fact.aspx?lang=1&reg=22", "legalBasisVerifiedAt": "2026-08-10T00:18:00.000Z", "latestPublishedAt": "2026-08-09T12:56:09+00:00" } },
+      "catalog": { "canonicalId": "government:in:pib-factcheck:telegram", "publisher": { "name": "Press Information Bureau Fact Check Unit", "country": "India", "homepage": "https://www.pib.gov.in/", "trustBasis": "PIB's first-party FAQ names the exact Telegram handle and describes its official fact-check workflow" }, "tier": "tier_1", "approvalScope": "official_public_web_preview", "license": "Public government communications; source attribution retained.", "legalBasis": "Unauthenticated public government communications used for defensive misinformation and cybercrime research.", "reliability": 0.96, "intelligenceValue": 0.7, "retentionClass": "standard", "analystOwner": "source-ops", "coverage": { "topics": ["fact checking", "online fraud", "phishing", "misinformation"], "actors": [], "aliases": [], "industries": ["government", "finance", "consumer"], "regions": ["India", "South Asia"], "countries": ["India"], "languages": ["en", "hi"] }, "collection": { "freshnessTargetSeconds": 3600, "collectionSlaSeconds": 1800, "budgetClass": "normal", "crawlCadenceSeconds": 1800 }, "adapterCompatibility": ["telegram_public"], "rollback": {} }
     }
   ]
 }

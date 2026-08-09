@@ -158,6 +158,13 @@ The 2026-08-09T23:05:20Z vendor-security iteration accepted five parser-positive
 
 All five bounded samples classified zero items as useful under the fixed classifier, so the binding candidate-admission rule retains them for governed review without granting coverage. Each probe used the shipped `telegram-public-preview:v1` parser, had zero sanitizer-idempotence failures, and had zero residual email, bot-token, or credential matches. `https://t.me/idecoutm` was explicitly rejected because the same official Ideco portfolio produced zero parsed preview items.
 
+The 2026-08-10T00:18:00Z India government pass accepted two parser-positive, non-coverage candidates after live unauthenticated preview probes:
+
+- `src_pib_factcheck_telegram` is `https://t.me/PIB_FactCheck`, named by PIB's first-party Fact Check FAQ. The shipped adapter parsed 20 current English/Hindi posts through 2026-08-09T12:56:09Z. The fixed classifier returned 0 useful items; sanitizer-idempotence failures and residual email, bot-token, and credential matches were all zero. It remains candidate-only because the binding rule admits parser-positive first-party security/fraud reporting without granting coverage.
+- `https://t.me/ISEAAwareness` parsed 17 posts through 2026-07-24T08:07:37Z, but the public authority page could not be fetched to verify an exact first-party ownership edge. It is therefore rejected rather than registered on a self-description alone.
+
+`https://t.me/cyberdosti4c` was checked before this pass and is already the global active `src_i4c_cyberdost_telegram`; no duplicate endpoint was added. No production mutation occurred. The current branch still contains candidate-only rows, so production qualifying count remains 17 and the gap remains 83. The observed reason registrations do not appear in production is the deliberate governed qualification contract: candidates need automatic-review approval plus two distinct retained useful run-linked scheduled cycles, then restart/API/DB/UI reconciliation. This candidate batch cannot close that operational gap without the separately serialized production rollout.
+
 ## One iteration
 
 1. Measure registered, executable, qualifying, current-useful, stale, failed, and backoff counts from PostgreSQL and the source-operations API.
