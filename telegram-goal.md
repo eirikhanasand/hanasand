@@ -6,18 +6,17 @@ Maintain at least 100 independently useful, lawful public Telegram feeds in prod
 
 ## Live baseline
 
-Measured on 2026-08-09 after the production qualification repair, a native global scheduler cycle, and a deliberate restart:
+Measured on 2026-08-09 after SecurityLab completed its second native scheduler cycle and survived the next production restart:
 
-- 163 registered `telegram_public` rows;
-- 21 active rows, of which 12 have governed evidence-bound approval and 9 are legacy rows that do not count as coverage;
-- 12 rows satisfying the full qualifying-count contract, leaving 88 to reach the Telegram objective;
-- 10 candidates awaiting review, 7 candidates without review evidence, 2 rejected rows, and 123 retired rows;
-- the first unstarved global cycle used its own `canary-run_*` identity, completed 46/46 due sources, inserted 282 captures, and had zero failed or retried tasks;
-- the first post-restart global cycle completed 10/10 due sources, inserted 52 captures, deduplicated 157, and had zero failed or retried tasks;
-- every qualifying Telegram source had a latest successful HTTP 200 parser result, zero latest parser warnings, and no active retry or backoff; and
-- 374 retained Telegram evidence objects across the 12 qualifying sources had zero residual email, bot-token, named-credential, or phone matches under the production sanitizer patterns.
+- 164 registered `telegram_public` rows: 22 active, 17 candidate, 2 rejected, and 123 retired;
+- 13 rows satisfying the full qualifying-count contract, leaving 87 to reach the Telegram objective; 9 other active legacy rows do not count as coverage;
+- `src_securitylab_ru_telegram` completed two distinct useful HTTP 200 runs (`canary-run_abfe88ccf5b9498d` and `canary-run_6bd31b86c7a0d9c1`) with zero parser warnings and promoted to `active`, `productionCollection=true`, and `countsAsCoverage=true` at 2026-08-09T09:29:19Z;
+- those runs retained 21 immutable captures; all 21 evidence objects and all 42 stored excerpt/title fields were present and produced zero residual changes under the deployed Telegram sanitizer;
+- the post-promotion restart retained one stable SecurityLab source identity, both useful health rows, and the promoted lifecycle fields;
+- the source-operations API reported `publicTelegram=13` and gap 87 at 2026-08-09T09:40:10Z; and
+- production checkout `855df45ebfb20d3b1c0aea87c6ae9fdc3d4537a1` ran scraper image `sha256:dadc046a3cf2c7d3f5c0a58ba1501dc6926b1a44bb9fbf8572bb60ab653250c5`, healthy with restart count 0 since 2026-08-09T09:37:52Z.
 
-The deployed repair preserves compatible governed approvals across prompt revisions, retains the two productive cycles needed for qualification during bounded restart hydration, and prevents the global Telegram canary from adopting scheduled watchlist-discovery runs. The restart retained all 12 qualifying identities with zero source imports and no bootstrap errors.
+The deployed repair preserves compatible governed approvals across prompt revisions, retains productive-cycle history during bounded restart hydration, and prevents the global Telegram canary from adopting scheduled watchlist-discovery runs. Candidate registration still does not reduce the gap: every new endpoint remains non-production and non-coverage until the native scheduler and evidence-bound review satisfy the qualification contract.
 
 Replace this section after every deployment with the current database/API measurement and deployed commit. Never substitute pack size, candidate count, test fixtures, injected fetches, or status labels.
 
