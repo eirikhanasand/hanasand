@@ -189,7 +189,7 @@ describe("public Telegram canary collection", () => {
     });
   });
 
-  test("promotes a verified Telegram candidate only after two useful scheduled cycles and preserves it on restart", async () => {
+  test("promotes an approved Telegram candidate after two useful cycles even when initial verification expires", async () => {
     const seedPath = new URL("../../seeds/public_telegram_channel_packs.json", import.meta.url);
     const bundle = await Bun.file(seedPath).json();
     const store = new InMemoryScraperStore();
@@ -232,8 +232,9 @@ describe("public Telegram canary collection", () => {
       }
     });
 
+    expect(await collect("2026-08-01T17:00:00.000Z")).toMatchObject({ queuedTaskCount: 0, completedTaskCount: 0 });
     approveSourceReview(store, sourceId);
-    expect(await collect("2026-07-23T17:00:00.000Z")).toMatchObject({ completedTaskCount: 1, insertedCaptureCount: 1, failedTaskCount: 0 });
+    expect(await collect("2026-08-01T17:00:01.000Z")).toMatchObject({ completedTaskCount: 1, insertedCaptureCount: 1, failedTaskCount: 0 });
     expect(store.getSource(sourceId)).toMatchObject({
       status: "active",
       countsAsCoverage: true,
@@ -246,8 +247,16 @@ describe("public Telegram canary collection", () => {
     expect(isExecutableSource(store.getSource(sourceId)!)).toBe(true);
     expect(store.listSourceHealthObservations().filter((row: any) => row.sourceId === sourceId)).toHaveLength(2);
 
-    const restart = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: "2026-07-24T09:05:00.000Z" });
-    expect(restart).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 14, activeSourceCount: 8, totalSourceCount: 14, errors: [] });
+    const restart = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: "2026-08-01T17:01:00.000Z" });
+    expect(restart).toMatchObject({ importedSourceCount: 0, activeSourceCount: 8, totalSourceCount: 14, errors: [] });
+    expect(bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: restart.generatedAt })).toMatchObject({
+      importedSourceCount: 0,
+      updatedSourceCount: 0,
+      skippedSourceCount: 14,
+      activeSourceCount: 8,
+      totalSourceCount: 14,
+      errors: []
+    });
     expect(store.listSources().filter((item: any) => item.id === sourceId)).toHaveLength(1);
     expect(store.getSource(sourceId)).toMatchObject({
       status: "active",

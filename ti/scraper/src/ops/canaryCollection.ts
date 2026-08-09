@@ -35,7 +35,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const resumedTasks = resumedRunId ? queuedTasks.filter((task: any) => task.runId === resumedRunId).slice(0, maxTasks) : [];
   const resumedRun = resumedRunId ? options.store.getRun?.(resumedRunId) : undefined;
   const allDue = options.store.listSources()
-    .filter((s: any) => inCollectionScope(s, options.tenantId, options.includeSharedSources) && (!selectedSourceIds.size || selectedSourceIds.has(s.id)) && isProductionCollectionSource(s, generatedAt))
+    .filter((s: any) => inCollectionScope(s, options.tenantId, options.includeSharedSources) && (!selectedSourceIds.size || selectedSourceIds.has(s.id)) && isProductionCollectionSource(s, generatedAt, options.store))
     .sort((left: any, right: any) => sourceScheduleTime(left) - sourceScheduleTime(right) || String(left.id).localeCompare(String(right.id)));
   const due = allDue.slice(0, maxSources);
   const generatedPlanId = stableId("canary-plan", `${options.tenantId ?? "global"}:${generatedAt}`);
@@ -266,7 +266,7 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
     const currentSource = options.store.getSource?.(source.id);
     if (!currentSource || currentSource.tenantId !== source.tenantId) return;
     const lastContentAt = useful ? latestTimestamp(taskMetrics.productivePublishedAt) ?? checkedAt : currentSource.health?.lastContentAt;
-    const portfolioCandidate = governedPortfolioCandidate(currentSource, checkedAt);
+    const portfolioCandidate = governedPortfolioCandidate(currentSource, checkedAt, options.store);
     const productiveCycles = portfolioCandidate ? currentProductiveCycles(options.store, currentSource, checkedAt) : [];
     const sustained = hasApprovedAutomaticSourceReview(currentSource)
       && automaticSourceReviewEvidenceBindingsMatch(currentSource, (id) => options.store.getCapture?.(id))
@@ -395,16 +395,19 @@ function failureCategory(message?: string) { return !message ? undefined : /time
 function itemLimit(source: any, options: any, task?: any) {
   return maxItemsFor(source, task) ?? Math.max(1, Math.min(Number(options.maxItemsPerTask ?? 40), Number(source.metadata?.maxItemsPerProcess ?? Infinity)));
 }
-function isProductionCollectionSource(source: any, generatedAt: string) {
-  if (sourceCollectionLane(source) !== "public" && !governedPortfolioCandidate(source, generatedAt)) return false;
+function isProductionCollectionSource(source: any, generatedAt: string, store: any) {
+  if (sourceCollectionLane(source) !== "public" && !governedPortfolioCandidate(source, generatedAt, store)) return false;
   const nextEligibleAt = source.crawlState?.nextEligibleAt;
   return !nextEligibleAt || Date.parse(nextEligibleAt) <= Date.parse(generatedAt);
 }
-function governedPortfolioCandidate(source: any, generatedAt: string) {
+function governedPortfolioCandidate(source: any, generatedAt: string, store: any) {
   return source.status === "candidate"
     && source.metadata?.productionCollection === false
     && source.metadata?.sourcePortfolioExcluded !== true
-    && isCurrentSourcePortfolioVerification(source, generatedAt)
+    && source.metadata?.sourcePortfolioVerification?.outcome === "content_parsed"
+    && (isCurrentSourcePortfolioVerification(source, generatedAt)
+      || hasApprovedAutomaticSourceReview(source)
+        && automaticSourceReviewEvidenceBindingsMatch(source, (id) => store.getCapture?.(id)))
     && source.accessMethod === "public_http"
     && source.risk === "low"
     && source.governance?.approvalState === "approved"
