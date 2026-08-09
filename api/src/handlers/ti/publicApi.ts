@@ -308,7 +308,6 @@ function statusMessage(status: number) { return status === 400 ? 'The request is
 function compact<T extends Record<string, unknown>>(value: T) { return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) }
 function record(value: unknown): Record<string, any> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {} }
 function records(value: unknown): Record<string, any>[] { return Array.isArray(value) ? value.filter((item): item is Record<string, any> => Boolean(item && typeof item === 'object' && !Array.isArray(item))) : [] }
-function array<T>(value: T[] | undefined): T[] { return Array.isArray(value) ? value : [] }
 function arrayLength(value: unknown) { return Array.isArray(value) ? value.length : undefined }
 function text(value: unknown) { return typeof value === 'string' && value.length ? value : undefined }
 function strings(value: unknown) { return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [] }
