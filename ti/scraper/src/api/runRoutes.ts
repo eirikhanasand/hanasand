@@ -103,6 +103,11 @@ function captureRunId(capture: any): string | undefined {
 
 function capturesForRun(store: ApiServerOptions["store"], run: CollectionRun, tenantId?: string) {
   const captureIds = (run.captureIds ?? []).map((id: unknown) => String(id));
+  if (!captureIds.length) {
+    return store.listCaptures().filter((capture: any) =>
+      (!capture.tenantId || capture.tenantId === tenantId) && captureRunId(capture) === run.id,
+    );
+  }
   return [...new Set<string>(captureIds)].flatMap((captureId: string) => {
     const capture = store.getCapture(captureId);
     return capture && (!capture.tenantId || capture.tenantId === tenantId) ? [capture] : [];
