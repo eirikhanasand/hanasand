@@ -628,8 +628,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         AND (source.tenant_id IS NULL OR source.tenant_id IS NOT DISTINCT FROM capture.tenant_id)
         AND NOT (concat_ws(' ', capture.source_id, source.record->>'name', source.record->'metadata'->>'sourceFamily') ~* '(cisa known exploited|known exploited vulnerabilities|mitre att&ck|attack enterprise|groups dataset|public groups dataset|nvd recent cve|github advisory database)')
         AND ((capture.record->'metadata'->'leakSite'->>'actorName' <> '' AND capture.record->'metadata'->'leakSite'->>'victimName' <> '') OR capture.record->>'title' ~* '(has just published a new victim|claims victim|claimed victim|claims victim|victim\\s*:|added victim|listed victim|published victim)')`;
-      const [pageRows, summaryRows] = await Promise.all([
-        this.sql.unsafe(`
+      const runQueries = async (executor: any) => Promise.all([
+        executor.unsafe(`
           SELECT capture.record,
             capture.id AS capture_id, capture.tenant_id, capture.source_id, capture.url,
             capture.collected_at, capture.published_at, capture.media_type, capture.storage_kind
@@ -637,8 +637,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           LEFT JOIN threat_intel.sources source ON source.id = capture.source_id
           WHERE ${candidateWhere}
           ORDER BY COALESCE(capture.published_at, capture.collected_at) DESC, capture.id DESC
-          LIMIT $2 OFFSET $3`, [values[0], Math.max(1, Math.min(250, Math.floor(input.limit))), Math.max(0, Math.floor(input.offset))]),
-        this.sql.unsafe(`
+          LIMIT $2 OFFSET $3`, [values[0], Math.max(1, Math.min(250, Math.floor(input.limit))), offset]),
+        executor.unsafe(`
           SELECT count(*) AS total,
             count(*) FILTER (WHERE capture.record->'metadata'->'review'->>'state' = 'needs_review' OR capture.published_at IS NULL) AS needs_review,
             count(*) FILTER (WHERE capture.storage_kind = 'metadata_only') AS metadata_only,
@@ -648,6 +648,13 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           LEFT JOIN threat_intel.sources source ON source.id = capture.source_id
           WHERE ${candidateWhere}`, [values[0]]),
       ]);
+      const [pageRows, summaryRows] = typeof this.sql.begin === "function"
+        ? await this.sql.begin(async (transaction: any) => {
+          const timeoutMs = Math.max(500, Math.min(10_000, Number(Bun.env.TI_EXPOSURE_QUEUE_TIMEOUT_MS || 4_000)));
+          await transaction.unsafe(`SET LOCAL statement_timeout = '${timeoutMs}ms'`);
+          return runQueries(transaction);
+        })
+        : await runQueries(this.sql);
       const first = summaryRows[0] as Record<string, unknown> | undefined;
       return {
         captures: pageRows.map(readCaptureRecord),

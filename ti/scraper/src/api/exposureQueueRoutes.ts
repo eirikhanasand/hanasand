@@ -67,9 +67,14 @@ export async function listExposureQueue(request: Request, url: URL, options: Api
   const offset = Math.max(0, Math.floor(numberQuery(url.searchParams.get("offset")) ?? 0));
   const filters = exposureQueueFilters(url);
   const at = nowIso();
-  const postgresPage = typeof (options.store as any).queryExposureQueuePage === "function"
-    ? await (options.store as any).queryExposureQueuePage({ tenantId, filters, limit, offset })
-    : undefined;
+  let postgresPage;
+  try {
+    postgresPage = typeof (options.store as any).queryExposureQueuePage === "function"
+      ? await (options.store as any).queryExposureQueuePage({ tenantId, filters, limit, offset })
+      : undefined;
+  } catch {
+    return error("exposure_queue_unavailable", "The exposure queue is temporarily unavailable.", 503);
+  }
   const allItems = postgresPage
     ? postgresPage.captures.map((capture: any) => exposureClaimFromCapture(capture, options.store.getSource?.(capture.sourceId))).filter(Boolean)
     : exposureClaimsFromStore(options.store, filters, { tenantId });

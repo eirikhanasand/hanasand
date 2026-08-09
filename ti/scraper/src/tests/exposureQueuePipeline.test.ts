@@ -49,6 +49,14 @@ describe("DWM exposure queue pipeline", () => {
     });
   });
 
+  test("returns explicit unavailable instead of empty success when the exposure store times out", async () => {
+    const store = new InMemoryScraperStore();
+    (store as any).queryExposureQueuePage = async () => { throw new Error("statement timeout"); };
+    const response = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?limit=1"), testOptions(store));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: { code: "exposure_queue_unavailable" } });
+  });
+
   test("rejects arbitrary HTTPS intake without the bounded public-advisory source family", async () => {
     const store = new InMemoryScraperStore();
     const response = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
