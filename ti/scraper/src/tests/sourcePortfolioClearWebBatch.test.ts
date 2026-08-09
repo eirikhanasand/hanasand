@@ -20,8 +20,8 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(115);
-    expect(batch.exclusions).toHaveLength(151);
+    expect(batch.sources).toHaveLength(144);
+    expect(batch.exclusions).toHaveLength(163);
 
     const ids = new Set<string>();
     const endpoints = new Set<string>();
@@ -380,6 +380,82 @@ describe("clear-web source portfolio batch", () => {
     const certAgid = sources.find((source: any) => source.name === "Italy CERT-AGID Public Cyber Threat Reports");
     expect(certAgid.legalNotes).toContain("public unauthenticated website RSS feed");
     expect(certAgid.legalNotes).toContain("does not access or redistribute CERT-AGID's restricted tokenized IoC service");
+  });
+
+  test("keeps ledger 017 current, source-tolerant, and candidate-only until productive scheduled cycles exist", () => {
+    const expected = new Map([
+      ["SICK PSIRT Advisories", [68, 68, 9, 9, "2026-07-28T15:00:00+01:00"]],
+      ["Jenkins Security Advisories", [101, 101, 7, 0, "Wed, 5 Aug 2026 12:00:00 +0000"]],
+      ["WordPress Security News", [10, 10, 4, 0, "Thu, 06 Aug 2026 18:55:30 +0000"]],
+      ["Debian Security Advisories", [29, 29, 29, 16, "2026-08-08"]],
+      ["Debian LTS Security Advisories", [30, 30, 30, 23, "2026-08-07"]],
+      ["Grafana Security Advisories", [10, 10, 10, 4, "Wed, 22 Jul 2026 00:00:00 +0000"]],
+      ["F5 Labs Threat Research", [250, 250, 15, 7, "Sat, 08 Aug 2026 00:42:00 GMT"]],
+      ["North Macedonia MKD-CIRT Cybersecurity Alerts", [10, 10, 10, 3, "Fri, 31 Jul 2026 10:15:46 +0000"]],
+      ["Denmark SAMSIK Cybersecurity Advisories", [10, 10, 10, 0, "Wed, 08 Jul 2026 11:05:10 +0000"]],
+      ["Okta Security Research", [85, 85, 4, 2, "Mon, 03 Aug 2026 00:00:00 GMT"]],
+      ["IRONSCALES Threat Intelligence", [50, 50, 50, 37, "Sun, 09 Aug 2026 11:00:00 GMT"]],
+      ["Kubernetes Official CVE Feed", [91, 91, 4, 0, "Fri, 10 Apr 2026 17:54:42 +0000"]],
+      ["PostgreSQL Security News", [10, 10, 7, 4, "Mon, 06 Jul 2026 00:00:00 +0000"]],
+      ["Rocky Linux Errata", [20, 20, 20, 20, "Sat, 08 Aug 2026 00:07:50 +0000"]],
+      ["AlmaLinux Security Announcements", [30, 30, 30, 2, "Fri, 07 Aug 2026 17:00:06 +0000"]],
+      ["SonicWall PSIRT Security Advisories", [215, 215, 7, 7, "Thu, 06 Aug 2026 19:51:21 +0000"]],
+      ["TWCERT/CC Vulnerability Notes", [20, 20, 20, 20, "Fri, 31 Jul 2026 05:46:00 GMT"]],
+      ["KISA KrCERT Security Notices", [10, 10, 10, 0, "2026-08-07"]],
+      ["KISA Vulnerability Information", [10, 10, 2, 2, "2026-02-27"]],
+      ["KISA Reports and Guides", [10, 10, 10, 0, "2026-07-30"]],
+      ["CERT.at Daily Cybersecurity Reports", [50, 50, 50, 47, "Fri, 07 Aug 2026 17:27:30 GMT+0100"]],
+      ["CERT.at Current Cybersecurity Incidents", [50, 50, 11, 5, "Fri, 24 Jul 2026 13:14:46 GMT+0100"]],
+      ["CERT.at Threat Research Blog", [50, 50, 2, 1, "Thu, 18 Jun 2026 12:51:21 GMT+0100"]],
+      ["AusCERT Security Bulletins", [100, 100, 100, 0, "Fri, 07 Aug 2026 01:59:08 +0000"]],
+      ["Estonia RIA/CERT-EE News", [100, 100, 33, 0, "Wed, 05 Aug 2026 10:12:56 +0300"]],
+      ["Romania DNSC Alerts and News", [10, 10, 10, 0, "Thu, 06 Aug 2026 14:58:29 +0300"]],
+      ["Citizen Lab Targeted Threat Research", [10, 10, 10, 4, "Fri, 07 Aug 2026 15:22:13 +0000"]],
+      ["Bitdefender Labs Threat Research", [15, 15, 10, 6, "Mon, 03 Aug 2026 12:51:24 GMT"]],
+      ["MongoDB Security Alerts", [172, 172, 72, 10, "Wed, 22 Jul 2026 19:23:17 GMT"]],
+    ] as const);
+    const sourceTolerant = new Set([
+      "Jenkins Security Advisories",
+      "WordPress Security News",
+      "Denmark SAMSIK Cybersecurity Advisories",
+      "Kubernetes Official CVE Feed",
+      "KISA KrCERT Security Notices",
+      "KISA Reports and Guides",
+      "AusCERT Security Bulletins",
+      "Estonia RIA/CERT-EE News",
+      "Romania DNSC Alerts and News",
+    ]);
+    const sources = batch.sources.filter((source: any) => expected.has(source.name));
+    expect(sources).toHaveLength(expected.size);
+    const totals = { parsed: 0, dated: 0, current: 0, useful: 0 };
+    for (const source of sources) {
+      const [observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt] = expected.get(source.name)!;
+      expect(source.id).toBe(`src_portfolio_cw_${hash(canonicalUrl(source.url)).slice(0, 20)}`);
+      expect(source.metadata.sourcePortfolioVerification).toMatchObject({ observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt });
+      expect(currentItemCount).toBeGreaterThan(0);
+      if (sourceTolerant.has(source.name)) expect(keywordUsefulItemCount).toBe(0);
+      else expect(keywordUsefulItemCount).toBeGreaterThan(0);
+      expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
+      expect(source.metadata).not.toHaveProperty("countsAsCoverage");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
+      totals.parsed += observedItemCount;
+      totals.dated += datedItemCount;
+      totals.current += currentItemCount;
+      totals.useful += keywordUsefulItemCount;
+    }
+    expect(totals).toEqual({ parsed: 1626, dated: 1626, current: 586, useful: 229 });
+
+    const exclusions = new Map(batch.exclusions.map((entry: any) => [entry.idOrUrlHash, entry.reason]));
+    for (const source of sources) expect(exclusions.has(hash(canonicalUrl(source.url)).slice(0, 24))).toBe(false);
+    expect(exclusions.get(hash(canonicalUrl("https://developer.apple.com/news/releases/rss/releases.rss")).slice(0, 24))).toBe("product_release_feed_not_security_intelligence");
+    expect(exclusions.get(hash(canonicalUrl("https://www.cisa.gov/uscert/ncas/all.xml")).slice(0, 24))).toBe("duplicate_publisher_feed_content");
+    expect(exclusions.get(hash(canonicalUrl("https://security.archlinux.org/issues/all.json")).slice(0, 24))).toBe("parser_missing_published_timestamp");
+    expect(exclusions.get(hash(canonicalUrl("https://www.docker.com/blog/tag/security/feed/")).slice(0, 24))).toBe("marketing_or_product_guidance_only_current_items");
+
+    const auscert = sources.find((source: any) => source.name === "AusCERT Security Bulletins");
+    expect(auscert.legalNotes).toContain("public unauthenticated RSS response");
+    expect(auscert.legalNotes).toContain("does not access member-only portal content");
   });
 
   test("deduplicates by normalized endpoint across adapters and every reserved source pack", () => {
