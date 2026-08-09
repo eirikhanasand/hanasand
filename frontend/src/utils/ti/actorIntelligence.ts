@@ -259,7 +259,7 @@ function buildTechniqueCoverage(result: TiSearchResponse, provenanceRows: TiActo
 
 function buildCampaignTimeline(result: TiSearchResponse, provenanceRows: TiActorSourceProvenance[]): TiActorCampaignTimelineItem[] {
     const rows = result.recentActivity.map(item => {
-        const firstReportedAt = item.firstReportedAt || item.date || result.generatedAt
+        const firstReportedAt = item.firstReportedAt || item.date || ''
         const rowSourceIds = unique(item.sourceIds)
         const provenanceRefs = unique(provenanceRows.filter(row => row.sourceId && rowSourceIds.includes(row.sourceId)).map(row => row.provenance)).slice(0, 6)
         const affectedSectors = unique(item.affectedSectors ?? [])

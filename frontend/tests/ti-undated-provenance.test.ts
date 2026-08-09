@@ -51,6 +51,19 @@ const operatorEvidence = actionability.geographyHandoffs.find(row => row.role ==
 assert.equal(actor.sourceCoverage.latestReportDate, undefined)
 assert.equal(operatorEvidence?.reportDate, undefined)
 
+const undatedTimelineActor = buildActorIntelligence({
+    ...result,
+    recentActivity: [{
+        date: '',
+        title: 'Undated activity',
+        detail: 'The source did not publish an observation date.',
+        confidence: 0.4,
+        sourceIds: ['src_seed_mitre_attack_apt29'],
+    }],
+}, [])
+assert.equal(undatedTimelineActor.campaignTimeline[0]?.firstReportedAt, '')
+assert.ok(undatedTimelineActor.campaignTimeline[0]?.missing.includes('firstReportedAt'))
+
 const noEvidenceActor = buildActorIntelligence({ ...result, aliases: [], notes: [], sources: [], actorIntelligence: undefined }, [])
 assert.equal(noEvidenceActor.attribution, 'No attribution evidence')
 assert.equal(noEvidenceActor.motivation.length, 0)
