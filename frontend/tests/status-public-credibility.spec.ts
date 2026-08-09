@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { publicStatusCoverageCheck, toPublicServiceStatus } from '@/utils/status/publicStatus'
+import { toPublicServiceStatus } from '@/utils/status/publicStatus'
+import { unavailableServiceStatus } from '@/utils/status/getStatus'
 import type { ServiceStatus } from '@/utils/status/getStatus'
 
 const root = process.cwd()
@@ -159,12 +160,21 @@ test('public status rejects monitor results older than five minutes', () => {
     expect(status.checks[0]).toMatchObject({ status: 'degraded', uptime_30d: 'unverified' })
 })
 
-test('public status fallback check is reusable by API and page fallbacks', () => {
-    expect(publicStatusCoverageCheck('2026-07-05T00:00:00.000Z')).toMatchObject({
-        service: 'Status coverage',
-        status: 'degraded',
-        checked_at: '2026-07-05T00:00:00.000Z',
+test('status transport failure stays unavailable instead of becoming fresh synthetic status', async () => {
+    expect(unavailableServiceStatus()).toEqual({
+        overall: 'down',
+        generated_at: '',
+        checks: [],
+        history: [],
+        incidents: [],
     })
+
+    for (const route of ['src/app/api/status/route.ts', 'src/app/status/page.tsx', 'src/app/status/incidents/page.tsx', 'src/app/status/incidents/[id]/page.tsx']) {
+        const source = await readFile(path.join(root, route), 'utf8')
+        expect(source).not.toContain('withFallback')
+        expect(source).not.toContain('getFallbackServiceStatus')
+        expect(source).not.toContain('publicStatusCoverageCheck')
+    }
 })
 
 test('public status page renders unverified coverage without fake uptime', async () => {
