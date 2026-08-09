@@ -116,14 +116,10 @@ export default async function runSyntheticMonitor() {
                 method: 'POST',
                 body: JSON.stringify({ query: 'APT29' }),
             }, publicApiBase)
-            let result = await request()
+            const result = await request()
             const valid = (value: typeof result) => {
                 const body = object(value.body)
                 return value.response.status === 200 && body?.mode === 'scraper' && Array.isArray(body.sources) && Array.isArray(body.recentActivity)
-            }
-            for (let attempt = 0; !valid(result) && attempt < 2; attempt += 1) {
-                await new Promise((resolve) => setTimeout(resolve, 1_000))
-                result = await request()
             }
             if (!valid(result)) {
                 throw new Error(`Threat intelligence search is unavailable (${result.response.status})`)
