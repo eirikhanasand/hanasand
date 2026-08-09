@@ -66,6 +66,15 @@ export type GetVulnerabilities = {
     scanStatus: DockerScoutScanStatus
 }
 
+export type WebScanReport = {
+    scanId: string | null
+    startedAt: string | null
+    finishedAt: string | null
+    running: boolean
+    targets: Array<{ target: string, status: string, checks: Array<{ id: string, status: string, title: string, evidence: Record<string, unknown> }>, ports: Array<{ port: number, open: boolean, elapsedMs: number }> }>
+    error: string | null
+}
+
 export type TrafficMetric = {
     key: string
     count: number

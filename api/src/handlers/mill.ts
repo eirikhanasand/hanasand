@@ -18,6 +18,7 @@ export const MILL_RULES: MillRule[] = [
     { id: 'auth.new_country.v1', version: '1', name: 'New country', family: 'Authentication', severity: 'medium', explanation: 'A successful login came from a country not seen in the user’s recent successful login history.', evidence: ['current country', 'previous country', 'related event IDs'] },
     { id: 'auth.new_device.v1', version: '1', name: 'New device', family: 'Authentication', severity: 'medium', explanation: 'A successful login used a device identifier not seen in the user’s recent successful login history.', evidence: ['current device', 'previous device', 'related event IDs'] },
     { id: 'network.signature_alert.v1', version: '1', name: 'Network signature alert', family: 'Network Detection', severity: 'high', explanation: 'A network telemetry record reported a matched signature with protocol and flow context.', evidence: ['signature ID or name', 'source and destination', 'protocol', 'event ID'] },
+    { id: 'scanner.hanasand_validation.v1', version: '1', name: 'Hanasand scanner activity', family: 'Security Validation', severity: 'low', explanation: 'An approved Hanasand validation scanner identified its request so the exercise is visible in the monitoring workflow.', evidence: ['scanner user agent', 'scan ID', 'request path', 'event ID'] },
     { id: 'vulnerability.cve_asset_context.v1', version: '1', name: 'CVE on identified asset', family: 'Vulnerability', severity: 'high', explanation: 'A vulnerability event linked a CVE to an identified asset and version, giving analysts context for prioritization.', evidence: ['CVE', 'asset ID or hostname', 'asset version', 'event ID'] },
 ]
 
@@ -354,6 +355,10 @@ async function createMillFindings(organizationId: string, eventId: string, event
     }
     if (enabled.has('network.signature_alert.v1') && event.eventType === 'network' && (event.action === 'alert' || stringValue(event.normalized.signature_id) || stringValue(event.normalized.signature))) {
         await insertFinding(organizationId, 'network.signature_alert.v1', 'high', `Network signature matched: ${stringValue(event.normalized.signature) || stringValue(event.normalized.signature_id) || 'unlabelled signature'}`, [eventId], { signatureId: stringValue(event.normalized.signature_id), signature: stringValue(event.normalized.signature), protocol: stringValue(object(event.normalized.protocol).name || event.normalized.proto || object(event.normalized.flow).proto), sourceIp: event.sourceIp, destinationIp: stringValue(event.normalized.dest_ip || event.normalized.destip), eventId })
+    }
+    const scannerUserAgent = stringValue(event.normalized.user_agent || event.normalized.userAgent || object(event.normalized.http).user_agent)
+    if (enabled.has('scanner.hanasand_validation.v1') && scannerUserAgent?.startsWith('Hanasand-Security-Scanner/')) {
+        await insertFinding(organizationId, 'scanner.hanasand_validation.v1', 'low', 'Approved Hanasand validation scanner activity', [eventId], { userAgent: scannerUserAgent, scanId: stringValue(event.normalized.scan_id || event.normalized.scanId), path: stringValue(event.normalized.path || event.normalized.url), eventId })
     }
     const vulnerability = object(event.normalized.vulnerability)
     const asset = object(event.normalized.asset)

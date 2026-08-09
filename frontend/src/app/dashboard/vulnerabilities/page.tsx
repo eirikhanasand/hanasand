@@ -1,7 +1,8 @@
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 import PageClient from './pageClient'
-import { refreshVulnerabilityData, runVulnerabilityScanAction } from './actions'
-import { getVulnerabilities } from '@/utils/monitoring/data'
+import { refreshVulnerabilityData, refreshWebScan, runVulnerabilityScanAction, runWebScanAction } from './actions'
+import { getVulnerabilities, getWebScan } from '@/utils/monitoring/data'
+import WebScanPanel from './webScanPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,15 +14,16 @@ export default async function Page({
     const filters = await searchParams
     const search = typeof filters.q === 'string' ? filters.q : ''
     const query = search.toLowerCase()
-    const data = await getVulnerabilities()
+    const [data, webScan] = await Promise.all([getVulnerabilities(), getWebScan()])
 
     return (
         <DashboardPage>
             <DashboardHeader
                 title='Vulnerabilities'
                 eyebrow='Security'
-                description='Operate the continuous image scanner, review hot images, and rerun checks when exposure changes.'
+                description='Operate image vulnerability scanning and the approved Hanasand web validation scanner.'
             />
+            <WebScanPanel initialData={webScan} refreshAction={refreshWebScan} runAction={runWebScanAction} />
             <PageClient
                 initialData={data}
                 initialQuery={query}

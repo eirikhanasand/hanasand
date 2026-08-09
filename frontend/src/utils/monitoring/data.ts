@@ -5,6 +5,7 @@ import type {
     TrafficDomains,
     TrafficMetrics,
     TrafficRecords,
+    WebScanReport,
 } from './types'
 import { requestService } from './serviceApi'
 
@@ -18,6 +19,17 @@ export async function triggerVulnerabilityScan() {
         'vulnerabilities/scan',
         { method: 'POST', body: JSON.stringify({}) }
     )
+}
+
+export async function getWebScan() {
+    const result = await requestService<WebScanReport>('internal', 'vulnerabilities/web-scan')
+    if (typeof result === 'string') throw new Error(result)
+    return result
+}
+export async function triggerWebScan() {
+    const result = await requestService<{ message: string, status: WebScanReport }>('internal', 'vulnerabilities/web-scan', { method: 'POST', body: JSON.stringify({}) })
+    if (typeof result === 'string') throw new Error(result)
+    return result
 }
 
 export async function getTrafficDomains() {

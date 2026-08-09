@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { getVulnerabilityReport, startTrackedVulnerabilityScan } from '#utils/vulnerabilities/scanner.ts'
+import { getWebScanReport, startWebScan } from '#utils/vulnerabilities/webScanner.ts'
 
 async function requireSystemAdmin(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
@@ -32,4 +33,15 @@ export async function postVulnerabilityScan(req: FastifyRequest, res: FastifyRep
         message: 'Vulnerability scan started; refresh status for progress and blockers.',
         status: { ...report.scanStatus, isRunning: true },
     })
+}
+
+export async function getWebScanner(req: FastifyRequest, res: FastifyReply) {
+    if (!await requireSystemAdmin(req, res)) return
+    return res.send(await getWebScanReport())
+}
+
+export async function postWebScanner(req: FastifyRequest, res: FastifyReply) {
+    if (!await requireSystemAdmin(req, res)) return
+    void startWebScan().catch(error => console.error('Failed to run Hanasand web scanner', error))
+    return res.status(202).send({ message: 'Hanasand safe web scan started.', status: await getWebScanReport() })
 }

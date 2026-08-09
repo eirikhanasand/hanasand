@@ -81,7 +81,7 @@ import getDatabaseOverview from './handlers/database/getOverview.ts'
 import { getDatabaseBackupFiles, getDatabaseBackups, postDatabaseBackup, postDatabaseBackupRestore, postDatabaseBackupVerify } from './handlers/database/backups.ts'
 import { getDatabaseHealth, getDatabaseRows, postDatabaseQuery } from './handlers/database/query.ts'
 import getDocker from './handlers/docker/getDocker.ts'
-import { getVulnerabilities, postVulnerabilityScan } from './handlers/vulnerabilities.ts'
+import { getVulnerabilities, getWebScanner, postVulnerabilityScan, postWebScanner } from './handlers/vulnerabilities.ts'
 import vmAction from './handlers/vms/action.ts'
 import getStatus from './handlers/status/get.ts'
 import ingestStatus from './handlers/status/ingest.ts'
@@ -482,6 +482,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/docker', getDocker)
     fastify.get('/vulnerabilities', getVulnerabilities)
     fastify.post('/vulnerabilities/scan', postVulnerabilityScan)
+    fastify.get('/vulnerabilities/web-scan', getWebScanner)
+    fastify.post('/vulnerabilities/web-scan', postWebScanner)
     fastify.get('/system/cron', getSystemCronJobs)
     fastify.put('/system/cron/:id', putSystemCronJob)
     fastify.get('/system/updates', getAptUpdates)
