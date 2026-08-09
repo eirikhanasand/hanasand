@@ -2,7 +2,7 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "lawful_dark_web",
   "version": 1,
-  "generatedAt": "2026-08-09T15:52:16.000Z",
+  "generatedAt": "2026-08-09T16:23:06.000Z",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
@@ -69,27 +69,50 @@
     {
       "id": "restricted_settra_victim_blog",
       "actorName": "Settra",
+      "endpointHash": "ad4d459668ed1329",
       "disposition": "rejected",
-      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
-      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "reason": "The current public root returned only a 785-byte shell with zero production-parser items and zero exact authority-title nodes.",
+      "evidenceCheckedAt": "2026-08-09T16:23:06.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/settra",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_settra_victim_blog_2",
+      "actorName": "Settra",
+      "endpointHash": "e3a9503166b51182",
+      "disposition": "rejected",
+      "reason": "The current leak path returned the same 785-byte shell with zero production-parser items and zero exact authority-title nodes.",
+      "evidenceCheckedAt": "2026-08-09T16:23:06.000Z",
       "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/settra",
       "countsAsCoverage": false
     },
     {
       "id": "restricted_pear_victim_blog",
       "actorName": "Pear",
+      "endpointHash": "6684e97e7e0d2687",
       "disposition": "rejected",
-      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
-      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "reason": "The current page reached the 64 KiB production boundary with zero production-parser items and zero exact authority-title nodes; isolated literal mentions do not form a safe victim-list contract.",
+      "evidenceCheckedAt": "2026-08-09T16:23:06.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/pear",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_pear_victim_blog_2",
+      "actorName": "Pear",
+      "endpointHash": "29f059893b1183f9",
+      "disposition": "rejected",
+      "reason": "The second current root also reached the 64 KiB production boundary with zero production-parser items and zero exact authority-title nodes, so it adds no independently useful feed evidence.",
+      "evidenceCheckedAt": "2026-08-09T16:23:06.000Z",
       "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/pear",
       "countsAsCoverage": false
     },
     {
       "id": "restricted_securotrop_victim_blog",
       "actorName": "Securotrop",
+      "endpointHash": "923acb37278f5ed4",
       "disposition": "rejected",
-      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
-      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "reason": "The current public endpoint returned only a 456-byte shell with zero production-parser items and zero authority-title matches.",
+      "evidenceCheckedAt": "2026-08-09T16:23:06.000Z",
       "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/securotrop",
       "countsAsCoverage": false
     },
@@ -116,9 +139,10 @@
     {
       "id": "restricted_payoutsking_victim_blog",
       "actorName": "PayoutsKing",
+      "endpointHash": "8e578613d4185d66",
       "disposition": "rejected",
-      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
-      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "reason": "The current 4.4 KiB public page produced zero production-parser items and zero authority-title matches in the bounded structural pass.",
+      "evidenceCheckedAt": "2026-08-09T16:23:06.000Z",
       "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/payoutsking",
       "countsAsCoverage": false
     },
@@ -199,9 +223,10 @@
     {
       "id": "restricted_aurora_victim_blog",
       "actorName": "Aurora",
+      "endpointHash": "5805410609a92ebf",
       "disposition": "rejected",
-      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
-      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "reason": "The current public endpoint returned only a 505-byte shell with zero production-parser items and zero authority-title matches.",
+      "evidenceCheckedAt": "2026-08-09T16:23:06.000Z",
       "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/aurora",
       "countsAsCoverage": false
     },
@@ -236,9 +261,20 @@
     {
       "id": "restricted_redact_victim_blog",
       "actorName": "Redact",
+      "endpointHash": "d8d0a51226f6886c",
       "disposition": "rejected",
-      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
-      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "reason": "The current 3.7 KiB root produced zero production-parser items and zero exact authority-title nodes; one literal authority mention was not an independently useful victim-list structure.",
+      "evidenceCheckedAt": "2026-08-09T16:23:06.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/redact",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_redact_victim_blog_2",
+      "actorName": "Redact",
+      "endpointHash": "06f6eb04494257b7",
+      "disposition": "rejected",
+      "reason": "The current companies path produced zero production-parser items and zero exact authority-title nodes; two literal mentions did not form a bounded reusable victim-list contract.",
+      "evidenceCheckedAt": "2026-08-09T16:23:06.000Z",
       "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/redact",
       "countsAsCoverage": false
     },
