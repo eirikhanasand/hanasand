@@ -1475,6 +1475,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   private async hydrate(): Promise<void> {
     const workflowHistoryLimit = Math.max(0, Math.min(100_000, Number(Bun.env.TI_WORKFLOW_HYDRATION_HISTORY_LIMIT ?? "5000") || 5000));
+    const collectionPlanHydrationLimit = Math.max(0, Math.min(20_000, Number(Bun.env.TI_COLLECTION_PLAN_HYDRATION_LIMIT ?? "5000") || 5000));
     {
       const [sources, captures, incidents, entities, actorProfiles, actorIdentityCatalogs, actorIdentities, validations, alerts, evaluationLabels, timeliness, runs, claims, sourceHealth, workflows, reviewTasks, workflowEvents] = await Promise.all([
         this.sql`SELECT record FROM threat_intel.sources ORDER BY created_at`,
@@ -1494,7 +1495,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         // Keep operational workflow records in memory, but do not make startup
         // proportional to the automatic-review history. The full history remains
         // durable in PostgreSQL for retention/export paths.
-        this.sql`SELECT record_type, record FROM threat_intel.workflow_records
+        this.sql`WITH recent_collection_plans AS (
+          SELECT id
+          FROM threat_intel.workflow_records
+          WHERE record_type = 'collection_plan'
+          ORDER BY updated_at DESC, id DESC
+          LIMIT ${collectionPlanHydrationLimit}
+        )
+        SELECT record_type, record FROM threat_intel.workflow_records
           WHERE record_type IN (
             'collection_plan', 'collection_run', 'replay_job', 'discovery_evidence', 'live_search_snapshot',
             'dwm_watchlist', 'dwm_webhook_delivery', 'organization', 'organization_member',
@@ -1502,7 +1510,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             'analyst_source_activation_packet', 'analyst_victim_notification_packet',
             'analyst_claim_ledger_entry', 'analyst_loop_snapshot', 'evaluation_benchmark',
             'evaluation_annotation', 'evaluation_adjudication'
-          ) ORDER BY created_at`,
+          )
+          AND (
+            record_type <> 'collection_plan'
+            OR id IN (SELECT id FROM recent_collection_plans)
+            OR record->>'status' IN ('queued', 'running')
+            OR COALESCE(NULLIF(record->>'nextEligibleAt', '')::timestamptz, '-infinity'::timestamptz) >= now()
+          )
+          ORDER BY created_at`,
         workflowHistoryLimit > 0
           ? this.sql`SELECT record_type, record FROM threat_intel.workflow_records WHERE record_type = 'analyst_metadata_review_task' AND record->>'recordKind' = 'automatic_intelligence_review_task' ORDER BY created_at DESC LIMIT ${workflowHistoryLimit}`
           : Promise.resolve([]),
