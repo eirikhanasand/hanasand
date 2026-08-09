@@ -39,6 +39,7 @@ The production write-path repair recorded in [`telegram-goal.md`](telegram-goal.
 | 2026-08-09T10:59Z | `b7877ca408c50fbbdcf2b4ebb460b107d9363f4a` | 24 | 4,976 |
 | 2026-08-09T13:07Z | `57587954d1ebd455c731acaa5aee0cb0e8af3187` | 28 | 4,972 |
 | 2026-08-09T15:35Z | `15d6120e6e4a84396d72f4928dce3b49f8bf65fa` | 28 | 4,972 |
+| 2026-08-09T16:08Z | `d0286e042c9645a409bf49fff3575a75d889a8a0` | 28 | 4,972 |
 
 Update this file only from deployed live evidence; raw registry or candidate counts do not satisfy the goal.
 
