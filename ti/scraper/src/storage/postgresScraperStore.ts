@@ -1198,25 +1198,24 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           AND scoped.tenant_id IS NOT DISTINCT FROM health.tenant_id
         WHERE health.tenant_id IS NOT DISTINCT FROM $1::text
         ORDER BY health.source_id, health.tenant_id, health.checked_at DESC, health.id DESC
-      ), retained_runs AS MATERIALIZED (
-        SELECT DISTINCT captures.source_id, captures.tenant_id, captures.record->'metadata'->>'runId' AS collection_run_id
-        FROM threat_intel.captures captures
-        JOIN source_scope scoped
-          ON scoped.id = captures.source_id
-          AND scoped.tenant_id IS NOT DISTINCT FROM captures.tenant_id
-        WHERE captures.tenant_id IS NOT DISTINCT FROM $1::text
-          AND captures.record->'metadata'->>'runId' IS NOT NULL
       ), historical_usefulness AS (
         SELECT health.source_id, health.tenant_id, max(health.checked_at) AS last_useful_at
         FROM threat_intel.source_health health
-        JOIN retained_runs retained
-          ON retained.source_id = health.source_id
-          AND retained.tenant_id IS NOT DISTINCT FROM health.tenant_id
-          AND retained.collection_run_id = health.collection_run_id
+        JOIN source_scope scoped
+          ON scoped.id = health.source_id
+          AND scoped.tenant_id IS NOT DISTINCT FROM health.tenant_id
         WHERE health.tenant_id IS NOT DISTINCT FROM $1::text
           AND health.success
           AND health.useful
           AND health.capture_count > 0
+          AND health.collection_run_id IS NOT NULL
+          AND EXISTS (
+            SELECT 1
+            FROM threat_intel.captures retained
+            WHERE retained.source_id = health.source_id
+              AND retained.tenant_id IS NOT DISTINCT FROM health.tenant_id
+              AND retained.record->'metadata'->>'runId' = health.collection_run_id
+          )
         GROUP BY health.source_id, health.tenant_id
       ), ranked_sources AS (
         SELECT sources.*,

@@ -40,7 +40,7 @@ describe("structured threat-intelligence storage contract", () => {
     expect(query).not.toContain("LEFT JOIN LATERAL");
   });
 
-  test("joins retained run evidence once for historical usefulness", async () => {
+  test("uses bounded retained-run existence for historical usefulness", async () => {
     const store = Object.create(PostgresScraperStore.prototype) as any;
     let summaryQuery = "";
     store.sql = {
@@ -54,11 +54,9 @@ describe("structured threat-intelligence storage contract", () => {
     expect(summaryQuery).toContain("source_scope AS MATERIALIZED");
     expect(summaryQuery).toContain("JOIN source_scope scoped");
     expect(summaryQuery).toContain("historical_usefulness");
-    expect(summaryQuery).toContain("retained_runs AS MATERIALIZED");
-    expect(summaryQuery).toContain("SELECT DISTINCT captures.source_id, captures.tenant_id, captures.record->'metadata'->>'runId' AS collection_run_id");
-    expect(summaryQuery).toContain("JOIN retained_runs retained");
-    expect(summaryQuery).toContain("retained.collection_run_id = health.collection_run_id");
-    expect(summaryQuery).not.toContain("AND EXISTS (");
+    expect(summaryQuery).toContain("AND EXISTS (");
+    expect(summaryQuery).toContain("retained.record->'metadata'->>'runId' = health.collection_run_id");
+    expect(summaryQuery).not.toContain("SELECT DISTINCT captures.source_id, captures.tenant_id");
     expect(summaryQuery).toContain("latest_health.useful AND latest_health.capture_count > 0");
     expect(result.summary).toMatchObject({ everUsefulSourceCount: 1, usefulSourceCount: 0, latestUsefulSourceCount: 0 });
   });
