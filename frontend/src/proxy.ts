@@ -8,7 +8,6 @@ export async function proxy(req: NextRequest) {
     const idCookie = req.cookies.get('id')
     const path = req.nextUrl.pathname
     const pathWithSearch = `${path}${req.nextUrl.search}`
-    let validToken = false
     const requestHeaders = new Headers(req.headers)
     const theme = req.cookies.get('theme')?.value || 'dark'
     const impersonationToken = req.cookies.get('impersonation_token')?.value || ''
@@ -51,9 +50,8 @@ export async function proxy(req: NextRequest) {
         if (isLocalDashboardRenderProof(req, token, id)) {
             const rolesCookie = req.cookies.get('roles')?.value
             roles = normalizeRoles(rolesCookie ? JSON.parse(rolesCookie) : [])
-        } else if (!validToken || !id) {
+        } else {
             const auth = await tokenIsValid(token, id)
-            validToken = auth.valid
 
             const outcome = tokenValidationOutcome(auth.state, recentlyValidatedSession(sessionExpiresAt, authCheckedAt))
             if (outcome === 'degraded') {

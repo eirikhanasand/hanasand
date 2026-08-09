@@ -19,7 +19,6 @@ const now = Date.parse('2026-08-09T12:00:00.000Z')
 const runtimeNow = Date.now()
 const sessionExpiresAt = new Date(runtimeNow + 30 * 60 * 1000).toISOString()
 const authCheckedAt = new Date(runtimeNow - 2 * 60 * 1000).toISOString()
-const expiredAuthCheck = new Date(runtimeNow - 6 * 60 * 1000).toISOString()
 
 async function validate(response: Response | Error) {
     fetchResult = response
@@ -55,7 +54,7 @@ assert.equal(unavailable.headers.get('set-cookie'), null)
 fetchResult = new Response('', { status: 401 })
 const unauthorized = await proxy(request(`access_token=token; id=user; session_expires_at=${encodeURIComponent(sessionExpiresAt)}; auth_checked_at=${encodeURIComponent(authCheckedAt)}`))
 assert.equal(unauthorized.status, 307)
-assert.match(unauthorized.headers.get('location') || '', /\/login\?/) 
+assert.match(unauthorized.headers.get('location') || '', /\/login\?/)
 assert.match(unauthorized.headers.get('set-cookie') || '', /access_token=/)
 
 fetchResult = new Response('', { status: 403 })
