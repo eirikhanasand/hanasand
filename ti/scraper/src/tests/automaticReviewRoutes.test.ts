@@ -21,6 +21,36 @@ const sourceReviewV7 = SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS[1];
 const sourceReviewV8 = SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS[2];
 
 describe("automatic Hanasand AI intelligence review", () => {
+  test("async review snapshots do not re-enumerate high-volume collections", async () => {
+    const store: any = new InMemoryScraperStore();
+    const querySources: Record<string, () => any[]> = {
+      claims: store.listIntelligenceClaims.bind(store),
+      incidents: store.listIncidents.bind(store),
+      captures: store.listCaptures.bind(store),
+      sources: store.listSources.bind(store),
+      sourceHealth: store.listSourceHealthObservations.bind(store),
+      claimEvidence: store.listClaimEvidence.bind(store),
+      evidenceLinks: store.listEvidenceLinks.bind(store),
+      claimReviews: store.listClaimReviews.bind(store)
+    };
+    store.queryAllStructuredRecords = async (collection: string) => querySources[collection]();
+    for (const method of Object.values({
+      claims: "listIntelligenceClaims",
+      incidents: "listIncidents",
+      captures: "listCaptures",
+      sources: "listSources",
+      sourceHealth: "listSourceHealthObservations",
+      claimEvidence: "listClaimEvidence",
+      evidenceLinks: "listEvidenceLinks",
+      claimReviews: "listClaimReviews"
+    })) {
+      store[method] = () => { throw new Error(`unexpected high-volume enumeration: ${method}`); };
+    }
+
+    const snapshot = await automaticReviewSnapshot(store, "default");
+    expect(snapshot).toMatchObject({ total: 0, displayedTaskCount: 0, tasks: [] });
+  });
+
   test("treats governed metadata-only victim lists as operational source evidence", async () => {
     const store = new InMemoryScraperStore();
     seedSource(store, "victim-list", "Acme Manufacturing\nNorthwind Logistics\nContoso Energy");
