@@ -20,8 +20,8 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(214);
-    expect(batch.exclusions).toHaveLength(315);
+    expect(batch.sources).toHaveLength(262);
+    expect(batch.exclusions).toHaveLength(333);
 
     const generatedAt = Date.parse(rawBatch.generatedAt);
     const evidenceTimes = [
@@ -660,6 +660,99 @@ describe("clear-web source portfolio batch", () => {
     expect(exclusions.get(hash(canonicalUrl("https://projectdiscovery.io/blog/category/vulnerability-research/rss.xml")).slice(0, 24))).toBe("response_exceeds_max_bytes");
     expect(exclusions.get(hash(canonicalUrl("https://community.hpe.com/hpeb/rss/board?board.id=HPE_Threat_Labs")).slice(0, 24))).toBe("http_403");
     expect(exclusions.get(hash(canonicalUrl("https://www.forescout.com/blog/feed/")).slice(0, 24))).toBe("parser_zero_items");
+  });
+
+  test("keeps ledger 022 current, source-tolerant, and candidate-only until productive scheduled cycles exist", () => {
+    const expected = new Map([
+      ["Ivanti Product Security Advisory Updates", [19, 19, 7, 7, "Tue, 14 Jul 2026 14:15:30 Z"]],
+      ["Juniper Mist Security Alerts", [10, 10, 1, 0, "Fri, 13 Mar 2026 02:34:53 +0000"]],
+      ["Kaspersky ICS CERT Threat Research", [250, 250, 18, 12, "Thu, 06 Aug 2026 09:00:00 +0000"]],
+      ["Expel Threat Research", [10, 10, 10, 5, "Thu, 06 Aug 2026 14:50:00 +0000"]],
+      ["Sygnia Threat Research", [9, 9, 9, 8, "Wed, 05 Aug 2026 19:19:07 +0000"]],
+      ["Lumu Threat Intelligence Research", [15, 15, 15, 8, "Tue, 04 Aug 2026 18:22:45 +0000"]],
+      ["SOC Prime Threat Detection Research", [10, 10, 10, 9, "Fri, 07 Aug 2026 14:36:28 +0000"]],
+      ["Salt Project Security Advisories", [26, 26, 2, 1, "Fri, 10 Jul 2026 00:00:00 +0000"]],
+      ["Zabbix Product Security Advisories", [86, 86, 9, 4, "Wed, 06 May 2026 00:00:00 GMT"]],
+      ["Mattermost Product Security Releases", [10, 10, 10, 6, "Thu, 16 Jul 2026 13:00:00 +0000"]],
+      ["Huawei Product Security Incident Response Advisories", [20, 20, 3, 3, "2026-03-25T20:54:29"]],
+      ["Claroty Team82 Vulnerability Disclosures", [30, 30, 30, 0, "Thu, 12 Mar 2026 13:38:00 +0000"]],
+      ["Darktrace Threat Research", [100, 100, 23, 8, "Tue, 28 Jul 2026 13:30:00 GMT"]],
+      ["Tailscale Product Security Bulletins", [45, 45, 9, 8, "Fri, 24 Jul 2026 00:00:00 GMT"]],
+      ["STAR Labs Security Research", [79, 79, 6, 5, "Mon, 27 Jul 2026 00:00:00 +0000"]],
+      ["Fujitsu Product Security Advisories", [89, 89, 20, 20, "Sat, 1 Aug 2026 23:00:00 +0200"]],
+      ["SolarWinds Product Security Advisories", [229, 227, 28, 28, "Thu, 23 Jul 2026 06:00:00 GMT"]],
+      ["HP Product Security Bulletins", [111, 111, 65, 60, "Thu, 30 Jul 2026 00:00:00 GMT"]],
+      ["Xerox Product Security Bulletins", [10, 10, 10, 0, "Sun, 19 Jul 2026 14:51:30 +0000"]],
+      ["Schneier Security Analysis", [10, 10, 10, 5, "2026-08-07T21:07:09Z"]],
+      ["Orange Cyberdefense World Watch Intelligence", [10, 10, 10, 9, "Tue, 04 Aug 2026 14:33:47 +0000"]],
+      ["WatchGuard Product Security Advisories", [10, 10, 10, 10, "Thu, 02 Jul 2026 23:00:30 +0000"]],
+      ["CISA Cybersecurity Alerts", [30, 30, 30, 30, "Fri, 07 Aug 26 12:00:00 +0000"]],
+      ["Uganda National CERT Cybersecurity Advisories", [10, 10, 10, 7, "Thu, 23 Jul 2026 07:05:18 +0000"]],
+      ["Bhutan BtCIRT Cybersecurity Advisories", [5, 5, 5, 4, "Fri, 07 Aug 2026 11:21:42 +0000"]],
+      ["Cambodia CamCERT Cybersecurity Advisories", [14, 14, 14, 5, "Wed, 29 Jul 2026 06:25:48 +0000"]],
+      ["Amnesty International Security Lab Research", [12, 12, 5, 2, "Thu, 16 Jul 2026 04:32:54 +0000"]],
+      ["Matrix Protocol Security Advisories", [15, 15, 1, 1, "2026-02-18T21:21:47+00:00"]],
+      ["Intrusion Truth Threat Actor Research", [10, 10, 2, 0, "Tue, 28 Jul 2026 11:06:21 +0000"]],
+      ["Sophos Product Security Advisories", [10, 10, 5, 2, "Thu, 06 Aug 2026 00:00:00 GMT"]],
+      ["Benin CSIRT Cybersecurity Advisories", [10, 10, 10, 10, "Fri, 07 Aug 2026 18:59:33 +0000"]],
+      ["Republic of Srpska CERT Cybersecurity Advisories", [10, 10, 10, 2, "Fri, 07 Aug 2026 08:38:39 +0000"]],
+      ["Togo CERT Cybersecurity Advisories", [10, 10, 1, 1, "Mon, 23 Feb 2026 18:46:48 +0000"]],
+      ["Cameroon CIRT Cybersecurity Advisories", [10, 10, 10, 1, "Fri, 17 Jul 2026 08:02:38 +0000"]],
+      ["Valencian Community CSIRT Cybersecurity Advisories", [10, 10, 10, 7, "Tue, 19 May 2026 12:35:13 +0000"]],
+      ["Telconet CSIRT Cybersecurity Advisories", [10, 10, 10, 10, "Thu, 06 Aug 2026 14:32:37 +0000"]],
+      ["Cordoba CSIRT Cybersecurity Advisories", [10, 10, 4, 1, "Fri, 19 Jun 2026 13:49:21 +0000"]],
+      ["Jamaica CIRT Security Alerts", [10, 10, 9, 9, "Wed, 05 Aug 2026 14:36:04 +0000"]],
+      ["CraftedTrust Touchstone Security Advisories", [27, 27, 27, 19, "Sun, 05 Jul 2026 09:00:31 GMT"]],
+      ["JUMPSEC Threat Research", [10, 10, 10, 2, "Fri, 24 Jul 2026 12:54:28 +0000"]],
+      ["ClearSky Cyber Security Research", [9, 9, 1, 1, "Tue, 03 Mar 2026 14:22:39 +0000"]],
+      ["Brandefense Malware Analysis Reports", [10, 10, 6, 5, "Mon, 11 May 2026 13:00:55 +0000"]],
+      ["Brandefense Threat Actor Research", [10, 10, 10, 8, "Thu, 16 Jul 2026 13:00:57 +0000"]],
+      ["Chainalysis Crypto Threat Research", [10, 10, 10, 1, "Thu, 06 Aug 2026 14:22:56 +0000"]],
+      ["Nextron Systems Threat Research", [10, 10, 10, 2, "Tue, 04 Aug 2026 12:09:00 +0000"]],
+      ["runZero Vulnerability Research", [50, 50, 50, 41, "2026-08-05T18:35:00-04:00"]],
+      ["WatchGuard Secplicity Threat Research", [128, 128, 35, 18, "Mon, 27 Jul 2026 12:42:10 -0700"]],
+      ["WithSecure Labs Threat Research", [10, 10, 9, 4, "Thu, 28 May 2026 09:06:11 +0000"]],
+    ] as const);
+    const sourceTolerant = new Set([
+      "Juniper Mist Security Alerts",
+      "Claroty Team82 Vulnerability Disclosures",
+      "Xerox Product Security Bulletins",
+      "Intrusion Truth Threat Actor Research",
+    ]);
+    const sources = batch.sources.filter((source: any) => expected.has(source.name));
+    expect(sources).toHaveLength(expected.size);
+    const totals = { parsed: 0, dated: 0, current: 0, useful: 0 };
+    for (const source of sources) {
+      const [observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt] = expected.get(source.name)!;
+      expect(source.id).toBe(`src_portfolio_cw_${hash(canonicalUrl(source.url)).slice(0, 20)}`);
+      expect(source.metadata.sourcePortfolioVerification).toMatchObject({ observedItemCount, datedItemCount, currentItemCount, keywordUsefulItemCount, latestPublishedAt });
+      expect(currentItemCount).toBeGreaterThan(0);
+      if (sourceTolerant.has(source.name)) expect(keywordUsefulItemCount).toBe(0);
+      else expect(keywordUsefulItemCount).toBeGreaterThan(0);
+      expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
+      expect(source.metadata).not.toHaveProperty("countsAsCoverage");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
+      totals.parsed += observedItemCount;
+      totals.dated += datedItemCount;
+      totals.current += currentItemCount;
+      totals.useful += keywordUsefulItemCount;
+    }
+    expect(totals).toEqual({ parsed: 1648, dated: 1646, current: 619, useful: 409 });
+
+    const exclusions = new Map(batch.exclusions.map((entry: any) => [entry.idOrUrlHash, entry.reason]));
+    expect(exclusions.get(hash(canonicalUrl("https://pcsupport.lenovo.com/us/en/api/v4/search/psrss?language=en&country=us&brand=TPG,EBG")).slice(0, 24))).toBe("http_403");
+    expect(exclusions.get(hash(canonicalUrl("https://www.withsecure.com/en/feed/")).slice(0, 24))).toBe("zero_useful_production_items");
+    expect(exclusions.get(hash(canonicalUrl("https://www.bsp.gov.ph/_layouts/15/listfeed.aspx?List=9b0a2117-49d8-4e96-80ba-8651a0e3e17a&View=be72ff0e-7b72-4309-8c5f-e502d9d324a9")).slice(0, 24))).toBe("mixed_non_operational_current_items");
+    expect(exclusions.get(hash(canonicalUrl("https://gna.moksha.dk/feed.xml")).slice(0, 24))).toBe("bulk_restamped_current_items");
+    expect(exclusions.get(hash(canonicalUrl("https://brandefense.io/feed/")).slice(0, 24))).toBe("broader_mixed_feed_superseded_by_narrow_research_feed");
+    expect(exclusions.get(hash(canonicalUrl("https://blog.virustotal.com/feeds/posts/default?alt=rss")).slice(0, 24))).toBe("marketing_or_product_guidance_only_current_items");
+    expect(exclusions.get(hash(canonicalUrl("https://rss.app/feeds/_22lRQJMKndkBEjVr.xml")).slice(0, 24))).toBe("generated_third_party_feed");
+    expect(exclusions.get(hash(canonicalUrl("https://www.welivesecurity.com/en/rss/feed/")).slice(0, 24))).toBe("duplicate_publisher_feed_content");
+    expect(exclusions.get(hash(canonicalUrl("https://sec.cloudapps.cisco.com/security/center/eventResponses_20.xml")).slice(0, 24))).toBe("legal_terms_commercial_use_restricted");
+
+    const withSecure = sources.find((source: any) => source.name === "WithSecure Labs Threat Research");
+    expect(withSecure.url).toBe("https://www.withsecure.com/en/feed/?post_type=lab_item");
   });
 
   test("deduplicates by normalized endpoint across adapters and every reserved source pack", () => {
