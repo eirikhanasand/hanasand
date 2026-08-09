@@ -299,6 +299,7 @@ function exposureClaimInput(value: unknown): ExposureClaimItem | undefined {
   const sourceFamily = ["darkweb_metadata", "telegram_public", "public_advisory", "public_actor_claims"].includes(item.sourceFamily) ? item.sourceFamily : "manual_metadata";
   const sourceUrl = submittedUrl(item.sourceUrl);
   const url = submittedUrl(item.url);
+  if (sourceFamily === "manual_metadata" && (sourceUrl || url)) return undefined;
   const text = boundedText(item.text, 2000);
   const title = boundedText(item.title, 240);
   if ((item.text !== undefined && !text) || (item.title !== undefined && !title)) return undefined;

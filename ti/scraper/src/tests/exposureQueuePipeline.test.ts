@@ -28,6 +28,19 @@ describe("DWM exposure queue pipeline", () => {
     expect(store.listCaptures()).toHaveLength(0);
   });
 
+  test("rejects arbitrary HTTPS intake without the bounded public-advisory source family", async () => {
+    const store = new InMemoryScraperStore();
+    const response = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ items: [{ actor: "Akira", company: "Contoso", url: "https://example.test/claim" }] })
+    }), testOptions(store));
+
+    expect(await response.json()).toMatchObject({ accepted: 0, rejected: 1 });
+    expect(store.listSources()).toHaveLength(0);
+    expect(store.listCaptures()).toHaveLength(0);
+  });
+
   test("fetches real tenant public-incident evidence without fabricating a dark-web victim claim", async () => {
     const store = new InMemoryScraperStore();
     store.saveOrganization({ id: "org_ntnu_research", tenantId: "org_ntnu_research", name: "NTNU research monitor", status: "active" });
@@ -309,7 +322,8 @@ describe("DWM exposure queue pipeline", () => {
       text: "BlackSuit victim: Contoso Energy. 82 GB claimed from manufacturing systems.",
       country: "Norway",
       publishedAt: new Date().toISOString(),
-      url: "https://news.example.test/contoso-energy"
+      url: "https://news.example.test/contoso-energy",
+      sourceFamily: "darkweb_metadata"
     };
 
     const ingest = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
@@ -379,7 +393,8 @@ describe("DWM exposure queue pipeline", () => {
       title: "Akira has just published a new victim: Northwind Health",
       text: "Akira victim: Northwind Health. 15 GB claimed from shared drives.",
       publishedAt: "2026-07-02T00:10:00.000Z",
-      url: "https://news.example.test/northwind-health"
+      url: "https://news.example.test/northwind-health",
+      sourceFamily: "darkweb_metadata"
     };
 
     await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
@@ -527,7 +542,8 @@ describe("DWM exposure queue pipeline", () => {
       text: "LockBit victim: Alpine Robotics. 22 GB claimed from engineering systems.",
       publishedAt: "2026-01-01T00:00:00.000Z",
       capturedAt: "2026-01-01T00:05:00.000Z",
-      url: "https://news.example.test/alpine-robotics"
+      url: "https://news.example.test/alpine-robotics",
+      sourceFamily: "darkweb_metadata"
     };
 
     await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
@@ -611,7 +627,8 @@ describe("DWM exposure queue pipeline", () => {
             title: `Akira has just published a new victim: Landing Queue ${index}`,
             text: `Akira victim: Landing Queue ${index}. 10 GB claimed from public actor page.`,
             publishedAt: new Date(Date.UTC(2026, 6, 2, 10, index)).toISOString(),
-            url: `https://news.example.test/landing-queue-${index}`
+            url: `https://news.example.test/landing-queue-${index}`,
+            sourceFamily: "darkweb_metadata"
           }]
         })
       }), options);
