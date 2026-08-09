@@ -189,10 +189,10 @@ function publicSearchResult(result: TiSearchResponse) {
         recentActivity: array(result.recentActivity).map(item => {
             const row = record(item)
             return compact({
-            date: text(row.date), title: text(row.title), detail: text(row.detail), confidence: confidence(row.confidence), sourceIds: strings(row.sourceIds),
-            url: httpUrl(row.url), claimType: text(row.claimType), victimName: text(row.victimName), affectedSectors: strings(row.affectedSectors), countries: strings(row.countries),
-            impact: text(row.impact), firstReportedAt: iso(row.firstReportedAt), lastReportedAt: iso(row.lastReportedAt), publisherCount: nonNegativeInteger(row.publisherCount),
-            corroboratingSourceIds: strings(row.corroboratingSourceIds), contradictingSourceIds: strings(row.contradictingSourceIds), assertionKind: text(row.assertionKind), reviewState: text(row.reviewState), corroborationState: text(row.corroborationState), observationSummary: text(row.observationSummary),
+                date: text(row.date), title: text(row.title), detail: text(row.detail), confidence: confidence(row.confidence), sourceIds: strings(row.sourceIds),
+                url: httpUrl(row.url), claimType: text(row.claimType), victimName: text(row.victimName), affectedSectors: strings(row.affectedSectors), countries: strings(row.countries),
+                impact: text(row.impact), firstReportedAt: iso(row.firstReportedAt), lastReportedAt: iso(row.lastReportedAt), publisherCount: nonNegativeInteger(row.publisherCount),
+                corroboratingSourceIds: strings(row.corroboratingSourceIds), contradictingSourceIds: strings(row.contradictingSourceIds), assertionKind: text(row.assertionKind), reviewState: text(row.reviewState), corroborationState: text(row.corroborationState), observationSummary: text(row.observationSummary),
             })
         }),
         targets: array(result.targets).map(item => { const row = record(item); return compact({ sector: text(row.sector), regions: strings(row.regions), rationale: text(row.rationale), confidence: confidence(row.confidence) }) }),
