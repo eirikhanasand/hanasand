@@ -1,12 +1,15 @@
 import { nowIso } from "../utils.ts";
-import { buildSourceOperationsSnapshot } from "./sourceOperations.ts";
+import { SOURCE_PORTFOLIO_BASELINE } from "../ops/sourcePortfolioQualification.ts";
+import { buildSourceOperationsSnapshot, buildSourceOperationsSummary } from "./sourceOperations.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 
 export async function publicCoverage(options: ApiServerOptions) {
   const generatedAt = nowIso();
-  const operations = await buildSourceOperationsSnapshot(options.store, { generatedAt, limit: 1 });
+  const operations = typeof (options.store as any)?.querySourceOperationalSummary === "function"
+    ? await buildSourceOperationsSummary(options.store, { generatedAt })
+    : await buildSourceOperationsSnapshot(options.store, { generatedAt, limit: 1 });
   const summary: any = operations.summary ?? {};
-  const sourceQualification: any = operations.qualification ?? {};
+  const sourceQualification: any = operations.qualification ?? qualificationFromSummary(summary);
   const measured = summary.measurementState !== "source_counts_only" && sourceQualification.measurementState !== "not_measured";
   const latency = latencySummary((options.store.listTimelinessRecords?.() ?? []).filter((record: any) => !record.tenantId));
 
@@ -41,6 +44,31 @@ export async function publicCoverage(options: ApiServerOptions) {
       registry: "Registry totals are inventory only and are not added to qualifying coverage.",
       latency: "Observed report-to-alert timing from records with verified timestamps; it is not a contractual SLA or forecast.",
     },
+  };
+}
+
+function qualificationFromSummary(summary: any) {
+  const counts = {
+    clearWeb: Number(summary.qualifyingClearWebSourceCount ?? 0),
+    lawfulDarkWeb: Number(summary.qualifyingLawfulDarkWebSourceCount ?? 0),
+    publicTelegram: Number(summary.qualifyingPublicTelegramSourceCount ?? 0),
+    total: 0
+  };
+  counts.total = counts.clearWeb + counts.lawfulDarkWeb + counts.publicTelegram;
+  return {
+    measurementState: summary.measurementState === "source_counts_only" ? "not_measured" : "measured",
+    baseline: SOURCE_PORTFOLIO_BASELINE,
+    counts,
+    gaps: {
+      clearWeb: Math.max(0, SOURCE_PORTFOLIO_BASELINE.clearWeb - counts.clearWeb),
+      lawfulDarkWeb: Math.max(0, SOURCE_PORTFOLIO_BASELINE.lawfulDarkWeb - counts.lawfulDarkWeb),
+      publicTelegram: Math.max(0, SOURCE_PORTFOLIO_BASELINE.publicTelegram - counts.publicTelegram),
+      total: Math.max(0, SOURCE_PORTFOLIO_BASELINE.total - counts.total)
+    },
+    baselineMet: counts.clearWeb >= SOURCE_PORTFOLIO_BASELINE.clearWeb
+      && counts.lawfulDarkWeb >= SOURCE_PORTFOLIO_BASELINE.lawfulDarkWeb
+      && counts.publicTelegram >= SOURCE_PORTFOLIO_BASELINE.publicTelegram
+      && counts.total >= SOURCE_PORTFOLIO_BASELINE.total
   };
 }
 
