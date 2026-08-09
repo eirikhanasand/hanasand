@@ -87,7 +87,6 @@ function ransomwareGroupEntities(item: CollectedItem, context: ExtractionContext
   const fields = item.metadata?.ransomwareGroup ?? {}, channels = Array.isArray(fields.channelTypes) ? fields.channelTypes.map(meaningful).filter(Boolean) : [];
   const actor = fieldEntity("ransomware_family", fields.actorName, 0.88, "actorName", item, context, "observed", []);
   if (actor) (actor as any).aliases = Array.isArray(fields.aliases) ? fields.aliases.map(meaningful).filter(Boolean) : [];
-  const has = (type: string) => channels.some((channel: string) => channel.toLowerCase() === type.toLowerCase());
   const description = meaningful(fields.description) ?? "", descriptionOffset = Math.max(0, item.rawText.indexOf(description));
   const businessEvidence = extractActorBusinessEvidence(description).map((finding) => entity(
     finding.type,
@@ -105,8 +104,6 @@ function ransomwareGroupEntities(item: CollectedItem, context: ExtractionContext
   return compact([
     actor,
     ...channels.map((channel: string) => fieldEntity("channel_type", channel, 0.9, "channelTypes", item, context, "observed", [])),
-    fieldEntity("publication_strategy", has("DLS") ? "dedicated leak-site publication" : undefined, 0.9, "channelTypes", item, context, "observed", []),
-    fieldEntity("publicity_tactic", has("DLS") ? "public victim listing infrastructure" : undefined, 0.86, "channelTypes", item, context, "observed", []),
     ...businessEvidence
   ]);
 }

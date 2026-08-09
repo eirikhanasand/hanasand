@@ -89,7 +89,7 @@ describe("canary feed item extraction", () => {
     expect((items[0] as any).evaluationCveSet).toMatchObject({ values: ["CVE-2026-4242"], complete: true });
   });
 
-  test("extracts locator-free ransomware group communication metadata", () => {
+  test("extracts locator-free ransomware group channel metadata without business claims", () => {
     const groups = { ...source, id: "src_seed_ransomwarelive_groups", type: "api", catalog: { canonicalId: "community:ransomwarelive:groups" } };
     const onion = `${"a".repeat(56)}.onion`;
     const items = feedItems(groups, { ...task, targetUrl: "https://data.ransomware.live/groups.json" }, JSON.stringify([{
@@ -104,7 +104,7 @@ describe("canary feed item extraction", () => {
       expect.objectContaining({ type: "ransomware_family", value: "Example Group", aliases: ["Example Alias"], assertionKind: "observed" }),
       expect.objectContaining({ type: "channel_type", value: "Chat", assertionKind: "observed" })
     ]));
-    expect(result.entities.some((entity: any) => ["communication_channel", "buyer_seller_communication", "monetization_path", "profitability_signal", "extortion_type"].includes(entity.type))).toBe(false);
+    expect(result.entities.some((entity: any) => ["communication_channel", "buyer_seller_communication", "monetization_path", "profitability_signal", "extortion_type", "publication_strategy", "publicity_tactic"].includes(entity.type))).toBe(false);
   });
 });
 
