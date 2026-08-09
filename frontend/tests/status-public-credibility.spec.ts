@@ -175,6 +175,8 @@ test('status transport failure stays unavailable instead of becoming fresh synth
         expect(source).not.toContain('withFallback')
         expect(source).not.toContain('getFallbackServiceStatus')
         expect(source).not.toContain('publicStatusCoverageCheck')
+        expect(source).not.toContain('productProgressDeployProof')
+        expect(source).not.toContain('loadProductDeployProofLedger')
     }
 })
 
