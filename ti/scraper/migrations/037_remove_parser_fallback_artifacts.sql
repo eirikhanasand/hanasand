@@ -18,6 +18,14 @@ CREATE TABLE IF NOT EXISTS threat_intel.parser_diagnostic_cleanup_history (
 CREATE INDEX IF NOT EXISTS threat_intel_parser_diagnostic_history_type_idx
   ON threat_intel.parser_diagnostic_cleanup_history (record_type, archived_at DESC);
 
+-- The existing capture GIN index covers the full record, but the fallback
+-- predicate is selective only after feedItem is narrowed. Keep this index
+-- migration-local so the cleanup does not repeatedly expand parserWarnings
+-- across the entire capture table.
+CREATE INDEX IF NOT EXISTS threat_intel_captures_parser_warning_fallback_idx
+  ON threat_intel.captures USING GIN ((record->'metadata'->'parserWarnings'))
+  WHERE record->'metadata'->>'feedItem' = 'false';
+
 CREATE TEMP TABLE _parser_fallback_capture ON COMMIT DROP AS
 SELECT
   capture.id,
@@ -27,17 +35,12 @@ SELECT
   NULLIF(capture.record->'metadata'->>'runId', '') AS run_id
 FROM threat_intel.captures AS capture
 WHERE capture.record->'metadata'->>'feedItem' = 'false'
-  AND EXISTS (
-    SELECT 1
-    FROM jsonb_array_elements_text(
-      CASE WHEN jsonb_typeof(capture.record->'metadata'->'parserWarnings') = 'array'
-        THEN capture.record->'metadata'->'parserWarnings' ELSE '[]'::jsonb END
-    ) AS warning(value)
-    WHERE warning.value IN (
+  AND (
+    (capture.record->'metadata'->'parserWarnings') ?| ARRAY[
       'feed contained no RSS or Atom entries',
       'JSON source contained no supported records',
       'public Telegram preview contained no messages'
-    )
+    ]
   );
 
 CREATE UNIQUE INDEX ON _parser_fallback_capture (id);
