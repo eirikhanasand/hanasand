@@ -51,6 +51,11 @@ const operatorEvidence = actionability.geographyHandoffs.find(row => row.role ==
 assert.equal(actor.sourceCoverage.latestReportDate, undefined)
 assert.equal(operatorEvidence?.reportDate, undefined)
 
+const noEvidenceActor = buildActorIntelligence({ ...result, aliases: [], notes: [], sources: [], actorIntelligence: undefined }, [])
+assert.equal(noEvidenceActor.attribution, 'No attribution evidence')
+assert.equal(noEvidenceActor.motivation.length, 0)
+assert.equal(noEvidenceActor.lastSeen, 'Observation date unavailable')
+
 const datedAttributionResult: TiSearchResponse = {
     ...result,
     sources: [{

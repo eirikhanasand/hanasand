@@ -532,8 +532,8 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
                             <p className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>{actorProfileSummary}</p>
                         </div>
                         <div className='grid gap-3 sm:grid-cols-2'>
-                            <EvidenceMetric label={actorQuery ? 'Attribution' : 'Query type'} value={actorQuery ? actorIntel.attribution || 'Public reporting' : formatLabel(result.queryKind || 'free_text')} />
-                            <EvidenceMetric label={actorQuery ? 'Motivation' : 'Observed records'} value={actorQuery ? actorIntel.motivation.slice(0, 2).join('; ') || 'Reported activity' : `${result.recentActivity.length}`} />
+                            <EvidenceMetric label={actorQuery ? 'Attribution' : 'Query type'} value={actorQuery ? actorIntel.attribution || 'No attribution evidence' : formatLabel(result.queryKind || 'free_text')} />
+                            <EvidenceMetric label={actorQuery ? 'Motivation' : 'Observed records'} value={actorQuery ? actorIntel.motivation.slice(0, 2).join('; ') || 'No motivation evidence' : `${result.recentActivity.length}`} />
                             <EvidenceMetric
                                 label={actorQuery ? 'Aliases' : 'Sources'}
                                 value={actorQuery ? result.aliases.slice(0, 3).join(', ') || humanizeSlug(result.query) : `${result.sources.length}`}
