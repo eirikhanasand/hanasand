@@ -58,7 +58,7 @@ For every counted source:
 
 Source discovery must continue without Codex or manual source lists. The existing scraper and Hanasand AI path should follow bounded safe publisher references, test the real collector/parser, reject unsafe or low-value candidates, schedule accepted candidates, and retire sources that stop producing useful intelligence. Discovery has its own concurrency, queue, backoff, and resource limits so it cannot starve collection, review, alerts, or API traffic.
 
-The deployed source-operations response currently reports only 3 qualifying sources (3 clear-web, 0 lawful Tor/dark-web, 0 public Telegram); this requirement is therefore substantially open. Keep this baseline dated to the latest live measurement rather than inferring it from raw registrations.
+The deployed source-operations response measured on 2026-08-09 reports only 3 qualifying sources (3 clear-web, 0 lawful Tor/dark-web, 0 public Telegram); this requirement is therefore substantially open. Keep this baseline dated to the latest live measurement rather than inferring it from raw registrations.
 
 ## 6. Use automatic review without guessing
 
