@@ -104,6 +104,7 @@ describe("restricted metadata collection", () => {
       ExfilSquad: '<div class="company-header"><div class="company-name">Exfil Victim</div><div>private detail</div></div>',
       Exitium: '<div class="target-grid"><div class="target-card clickable-card"><div class="target-content"><h3 class="target-title">Exitium Victim</h3><p>private detail</p></div></div></div>',
       Insomnia: '<div class="book-card"><div class="card-info"><h3 class="info-title"><a>Insomnia Victim</a></h3><p>private detail</p></div></div>',
+      DragonForce: '<div class="companies-list"><div class="text"><a class="text-pointer-animations link-published">DragonForce Victim</a></div><a class="text-pointer-animations navigation-link">private detail</a></div>',
       "Global Secret Group": '<div class="card-body"><h3 class="card-title">Global Victim</h3><p class="card-description">private detail</p></div>',
       "Triple X": '<div class="post"><h2 class="post-title">Triple Victim</h2><div class="post-content">private detail</div></div>'
     };
@@ -112,6 +113,7 @@ describe("restricted metadata collection", () => {
       ExfilSquad: "company_header_name",
       Exitium: "target_card_title",
       Insomnia: "book_card_info_title",
+      DragonForce: "companies_status_link",
       "Global Secret Group": "card_body_title",
       "Triple X": "post_container_title"
     };
