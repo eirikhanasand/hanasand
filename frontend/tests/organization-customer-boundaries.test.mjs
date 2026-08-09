@@ -139,3 +139,12 @@ test('ordinary customer overview does not present unscoped platform metrics', as
     assert.match(page, /Vulnerability monitoring/)
     assert.match(page, /value='Not configured'/)
 })
+
+test('organization onboarding reads organizations and readiness only from the persisted proxy', async() => {
+    const organizationsRoute = await readFile(new URL('../src/app/api/organizations/route.ts', import.meta.url), 'utf8')
+    const readinessRoute = await readFile(new URL('../src/app/api/organizations/[id]/alert-readiness/route.ts', import.meta.url), 'utf8')
+    for (const source of [organizationsRoute, readinessRoute]) {
+        assert.match(source, /proxyOrganizationApiRequest/)
+        assert.doesNotMatch(source, /ProofLedger|productProgress|PRODUCT_PROGRESS/)
+    }
+})
