@@ -254,7 +254,10 @@ export default async function runSyntheticMonitor() {
             const ageMinutes = activityFreshnessMinutes(freshness ?? {})
             const maxAgeMinutes = Number(freshness?.maxLiveAgeMinutes)
             if (ageMinutes === undefined || !Number.isFinite(ageMinutes) || !Number.isFinite(maxAgeMinutes) || ageMinutes > maxAgeMinutes) {
-                throw new Error(`Latest customer activity is stale (${Number.isFinite(ageMinutes) ? ageMinutes : 'unknown'} minutes).`)
+                return {
+                    status: 'degraded',
+                    message: `Latest customer activity is stale (${Number.isFinite(ageMinutes) ? ageMinutes : 'unknown'} minutes).`,
+                }
             }
             const prior = await run(`
                 SELECT status, message
