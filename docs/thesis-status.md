@@ -4,8 +4,8 @@ This is the single historical status record for the Masters thesis and product. 
 
 ## Current state — 2026-08-10
 
-- Production is deployed from private canonical `main` at `8b573221`. API, frontend, and scraper are healthy after the scraper’s PostgreSQL hydration/startup window.
-- The live exposure queue returns HTTP 200 with retained customer-visible rows (`47` total in the verified probe). The public activity page showed `47/47 loaded` and a current RansomLook item. During scraper startup the same route returned an explicit HTTP 503, not an empty success.
+- Production is deployed from private canonical `main` at `b0003510`. API, frontend, and scraper are healthy after the scraper’s PostgreSQL hydration/startup window.
+- The live exposure queue returns HTTP 200 with retained customer-visible rows (`85` total in the verified probe); the public endpoint completed in about 175 ms and returned real RansomLook items. During scraper startup the same route returned an explicit HTTP 503, not an empty success.
 - The Cases list is now compact: case, severity/status, owner, and updated time. Case detail retains real assignment, status, evidence, timeline, and delivery actions while collapsing secondary report controls. Authenticated browser proof still requires a real customer session; the unauthenticated route correctly redirects to login.
 - A governed dark-web metadata source family is active with three approved sources. One RansomLook RSS scheduled cycle has produced retained output; the family remains incomplete until two useful scheduled cycles are proven.
 
@@ -31,6 +31,8 @@ Record the deployed commit, deployment time, live API result, live browser resul
 - `8b573221`: deployed the default-tenant exposure candidate-index predicate fix. Rollback: `b9202378`.
 - Live evidence after `8b573221`: repeated internal queue calls returned HTTP 200 in 27–40 ms; repeated public queue calls returned HTTP 200 in about 129 ms; the next monitor cycle reported Latest Activity `up` with 47 retained records; public browser activity showed `47/47 loaded`.
 - Bounded governed canary evidence after `8b573221`: two approved RansomLook sources completed with `0` failed tasks and `38` retained exposure outputs; the public queue then showed `85` retained rows, a fresh collection check, and `metadataOnly: true` output. The live activity browser showed the expanded retained feed (`85` total, with the current page loading its first 50 rows).
+- `b0003510`: deployed the public source-status credibility fix; rollback: `81a6dbe6`.
+- Live evidence after `b0003510`: frontend build, tests, TypeScript, and production build passed; the frontend container restarted healthy; `/api/status` reported Source Operations `up` with “Source collection is responding; freshness is being monitored”; Latest Activity reported 85 retained records.
 
 ## Approved production work
 
