@@ -21,7 +21,11 @@ export default async function postTiSearch(req: FastifyRequest<{ Body: SearchBod
     }
 
     const result = await searchThreatIntel({ query, preferCached: req.body?.preferCached === true })
-    return res.send(sanitizeBrowserSearchResult(result))
+    const publicResult = sanitizeBrowserSearchResult(result)
+    if (result.status === 'unavailable' || result.mode === 'unavailable') {
+        return res.status(503).send(publicResult)
+    }
+    return res.send(publicResult)
 }
 
 const internalSearchFields = ['planner', 'graph', 'publicChannel', 'restrictedMetadata', 'darknetMetadata'] as const

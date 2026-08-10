@@ -125,11 +125,12 @@ describe('public TI API boundary', () => {
         expect(normalizeBatchQueries(['x', 'x'.repeat(201)])).toEqual([])
     })
 
-    test('allows one anonymous read-only search', async () => {
+    test('returns a truthful unavailable result for an anonymous search', async () => {
         const single = reply()
         const singleResult = await postTiSearch({ body: { query: 'APT29' } } as FastifyRequest<{ Body: { query: string } }>, single as unknown as FastifyReply) as any
-        expect(singleResult.statusCode).toBe(200)
+        expect(singleResult.statusCode).toBe(503)
         expect(singleResult.payload.query).toBe('APT29')
+        expect(singleResult.payload.status).toBe('unavailable')
         expect(singleResult.headers['cache-control']).toBe('no-store, max-age=0')
         for (const field of ['planner', 'graph', 'publicChannel', 'restrictedMetadata', 'darknetMetadata']) {
             expect(singleResult.payload).not.toHaveProperty(field)
@@ -139,6 +140,19 @@ describe('public TI API boundary', () => {
         const unexpectedResult = await postTiSearch({ body: { query: 'APT29', tenantId: 'other' } } as any, unexpected as unknown as FastifyReply) as any
         expect(unexpectedResult.statusCode).toBe(400)
         expect(unexpectedResult.payload.error).toBe('invalid_request')
+    })
+
+    test('does not present an unavailable search as a successful response', async () => {
+        const previous = process.env.TI_SCRAPER_API_BASE
+        delete process.env.TI_SCRAPER_API_BASE
+        try {
+            const result = await postTiSearch({ body: { query: 'APT29' } } as FastifyRequest<{ Body: { query: string } }>, reply() as unknown as FastifyReply) as any
+            expect(result.statusCode).toBe(503)
+            expect(result.payload.status).toBe('unavailable')
+        } finally {
+            if (previous === undefined) delete process.env.TI_SCRAPER_API_BASE
+            else process.env.TI_SCRAPER_API_BASE = previous
+        }
     })
 
     test('does not expose scraper planning or restricted-operation internals through the browser search', () => {
