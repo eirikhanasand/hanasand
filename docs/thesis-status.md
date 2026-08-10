@@ -30,6 +30,7 @@ Record the deployed commit, deployment time, live API result, live browser resul
 - `b9202378`: deployed the DWM monitor fix to use the authenticated scraper queue as its canonical Latest Activity source. Rollback: `9cf9e596`.
 - `8b573221`: deployed the default-tenant exposure candidate-index predicate fix. Rollback: `b9202378`.
 - Live evidence after `8b573221`: repeated internal queue calls returned HTTP 200 in 27–40 ms; repeated public queue calls returned HTTP 200 in about 129 ms; the next monitor cycle reported Latest Activity `up` with 47 retained records; public browser activity showed `47/47 loaded`.
+- Bounded governed canary evidence after `8b573221`: two approved RansomLook sources completed with `0` failed tasks and `38` retained exposure outputs; the public queue then showed `85` retained rows, a fresh collection check, and `metadataOnly: true` output. The live activity browser showed the expanded retained feed (`85` total, with the current page loading its first 50 rows).
 
 ## Approved production work
 
