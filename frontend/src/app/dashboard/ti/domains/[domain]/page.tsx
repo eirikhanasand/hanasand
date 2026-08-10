@@ -45,7 +45,7 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
                     Entities
                 </Link>
                 <div className='flex flex-wrap gap-2'>
-                    <Link href='/dashboard/ti/workbench' className='inline-flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-text hover:bg-ui-primary'>
+                    <Link href='/dashboard/dwm' className='inline-flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-text hover:bg-ui-primary'>
                         <ShieldAlert className='h-4 w-4' />
                         Open recent attacks
                     </Link>

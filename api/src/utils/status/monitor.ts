@@ -257,6 +257,21 @@ export default async function runSyntheticMonitor() {
             const ageMinutes = activityFreshnessMinutes(freshness ?? {})
             const maxAgeMinutes = Number(freshness?.maxLiveAgeMinutes)
             if (ageMinutes === undefined || !Number.isFinite(ageMinutes) || !Number.isFinite(maxAgeMinutes) || ageMinutes > maxAgeMinutes) {
+                const scheduler = await fetchJson('/v1/ops/collection-scheduler?tenantId=default&limit=1', {
+                    headers: { 'x-hanasand-service-token': serviceToken },
+                }, scraperBase)
+                const schedulerBody = object(scheduler.body)
+                const schedulerState = object(schedulerBody?.scheduler)
+                const sourceHealth = object(schedulerBody?.sourceHealth)
+                const blockers = Array.isArray(schedulerBody?.operationalBlockers) ? schedulerBody.operationalBlockers : []
+                const collectorHealthy = scheduler.response.status === 200
+                    && schedulerState?.enabled === true
+                    && schedulerState?.running === false
+                    && Number(sourceHealth?.healthy ?? 0) > 0
+                    && !blockers.some((blocker: any) => blocker?.severity === 'blocker')
+                if (collectorHealthy) {
+                    return `Collector healthy; no new customer claims within the freshness window (${Number.isFinite(ageMinutes) ? ageMinutes : 'unknown'} minutes).`
+                }
                 return {
                     status: 'degraded',
                     message: `Latest customer activity is stale (${Number.isFinite(ageMinutes) ? ageMinutes : 'unknown'} minutes).`,

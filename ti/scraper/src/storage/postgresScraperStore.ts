@@ -1383,6 +1383,39 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         'usefulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.capture_count > 0 AND latest_health.checked_at >= now() - interval '24 hours'),
         'backoffSourceCount', count(*) FILTER (WHERE collection_executable AND NULLIF(sources.record->'crawlState'->>'backoffUntil', '')::timestamptz > now()),
         'neverObservedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NULL)
+        , 'latestRun', (
+          SELECT jsonb_build_object(
+            'id', run.id,
+            'requestId', run.request_id,
+            'status', run.status,
+            'startedAt', run.started_at,
+            'completedAt', run.completed_at,
+            'updatedAt', run.updated_at,
+            'sourceCount', run.source_count,
+            'captureCount', run.capture_count
+          )
+          FROM threat_intel.collection_runs run
+          WHERE run.tenant_id ${tenantPredicate}
+          ORDER BY run.updated_at DESC, run.id DESC
+          LIMIT 1
+        ),
+        'lastSuccessfulRun', (
+          SELECT jsonb_build_object(
+            'id', run.id,
+            'requestId', run.request_id,
+            'status', run.status,
+            'startedAt', run.started_at,
+            'completedAt', run.completed_at,
+            'updatedAt', run.updated_at,
+            'sourceCount', run.source_count,
+            'captureCount', run.capture_count
+          )
+          FROM threat_intel.collection_runs run
+          WHERE run.tenant_id ${tenantPredicate}
+            AND run.status IN ('completed', 'degraded')
+          ORDER BY run.updated_at DESC, run.id DESC
+          LIMIT 1
+        )
       ) AS summary
       FROM ranked_sources sources
       LEFT JOIN latest_health

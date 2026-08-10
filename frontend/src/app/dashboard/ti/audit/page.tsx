@@ -131,8 +131,8 @@ function auditEventHref(event: { action: string, target: string }) {
     if (action.includes('source') || event.target.startsWith('source:')) return '/dashboard/ti/sources'
     if (action.includes('domain') || event.target.includes('.')) return '/dashboard/ti/domains'
     if (action.includes('actor') || action.includes('profile') || action.includes('enrich')) return '/dashboard/ti/enrichment'
-    if (action.includes('alert') || action.includes('watchlist') || action.includes('webhook')) return '/dashboard/ti/workbench'
-    return '/dashboard/ti/workbench'
+    if (action.includes('alert') || action.includes('watchlist') || action.includes('webhook')) return '/dashboard/dwm/actions'
+    return '/dashboard/dwm'
 }
 
 function toneClass(tone: 'neutral' | 'ok' | 'watch' | 'bad') {
