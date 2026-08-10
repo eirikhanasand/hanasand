@@ -134,7 +134,9 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     }))
   ], (candidate) => `${candidate.kind}:${candidate.value.toLowerCase()}`);
   const missing = missingFields({ query, entityType, actor, victims, sectors, countries, ttps, records, generatedAt });
-  const actorBusinessEvidence = actorQuery ? await actorBusinessEvidenceCatalog(options.store, scope.tenantId, query, generatedAt) : undefined;
+  const actorBusinessEvidence = actorQuery
+    ? await actorBusinessEvidenceCatalog(options.store, scope.tenantId, query, generatedAt, new Set(rows.map((row: any) => row.id)))
+    : undefined;
   const businessModel = actorQuery ? businessModelAssessment(options.store, actorBusinessEvidence?.reviewedFindings ?? [], actorBusinessEvidence?.pendingFindings ?? []) : undefined;
   const actorCaseStudies = actorBusinessEvidence?.catalog;
   const attributionEvidence = actor ? actorAttribution(rows, unique([actor, ...aliases, ...identity.terms])) : undefined;
@@ -617,7 +619,7 @@ function businessObservations(store: any, findings: any[], reviewed: boolean) {
   });
 }
 
-async function actorBusinessEvidenceCatalog(store: any, tenantId: string | undefined, query: string, generatedAt: string) {
+async function actorBusinessEvidenceCatalog(store: any, tenantId: string | undefined, query: string, generatedAt: string, searchCaptureIds: Set<string>) {
   const inScope = (record: any) => Boolean(record) && (!record.tenantId || (record.tenantId || undefined) === tenantId);
   const indexedInScope = (method: string, keys: Iterable<string>) => {
     const values = [...keys];
@@ -629,18 +631,18 @@ async function actorBusinessEvidenceCatalog(store: any, tenantId: string | undef
   const sources = (store.listSources?.() ?? []).filter(inScope);
   const allSourceById = uniqueMap(sources);
   const sourceById = uniqueMap(sources.filter((source: any) => source.status === "active"));
-  const entities = typeof store.listExtractedEntitiesByTypes === "function"
-    ? indexedInScope("listExtractedEntitiesByTypes", SOURCE_BACKED_BUSINESS_TYPES).filter(isSafeBusinessMechanism)
+  const entities = typeof store.listExtractedEntitiesByCaptureIds === "function"
+    ? store.listExtractedEntitiesByCaptureIds(searchCaptureIds, tenantId).filter(isSafeBusinessMechanism).filter(inScope)
     : (store.listExtractedEntities?.() ?? []).filter(inScope).filter(isSafeBusinessMechanism);
   const entityById = uniqueMap(entities);
-  const candidateCaptureIds = new Set(entities.map((entity: any) => entity.captureId));
-  const captureById = new Map([...candidateCaptureIds].flatMap((id) => { const capture = store.getCapture?.(id); return capture && inScope(capture) ? [[id, capture] as const] : []; }));
+  const businessCaptureIds = new Set(entities.map((entity: any) => entity.captureId));
+  const captureById = new Map([...businessCaptureIds].flatMap((id) => { const capture = store.getCapture?.(id); return capture && inScope(capture) ? [[id, capture] as const] : []; }));
   const actorEntitiesByCapture = new Map<string, any[]>();
-  const actorEntities = typeof store.listExtractedEntitiesByTypes === "function"
-    ? indexedInScope("listExtractedEntitiesByTypes", ["actor", "ransomware_family"])
+  const actorEntities = typeof store.listExtractedEntitiesByCaptureIds === "function"
+    ? store.listExtractedEntitiesByCaptureIds(businessCaptureIds, tenantId)
     : (store.listExtractedEntities?.() ?? []).filter(inScope);
   for (const entity of actorEntities) {
-    if (!candidateCaptureIds.has(entity.captureId)) continue;
+    if (!businessCaptureIds.has(entity.captureId)) continue;
     if (!["actor", "ransomware_family"].includes(entity.type) || ["mention", "inferred"].includes(entity.assertionKind)) continue;
     actorEntitiesByCapture.set(entity.captureId, [...(actorEntitiesByCapture.get(entity.captureId) ?? []), entity]);
   }
