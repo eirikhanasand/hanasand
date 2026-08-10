@@ -20,11 +20,9 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
     const output = value(params?.output) || ''
     const matches = value(params?.matches) || ''
     const tenantId = scope === 'default' ? 'default' : null
-    const overview = await getTiAdminOverview(tenantId, { limit: 500, includeSamples: false, includeCandidates: true })
+    const overview = await getTiAdminOverview(tenantId, { cursor, limit: 50, includeSamples: false, includeCandidates: true, query, family, lifecycle, access, health, output, matches, sort, direction })
     const unavailable = overview.availability.failedResources.includes('source-operations')
-    const filteredRows = overview.sources.filter(source => sourceMatchesFilter(source, { query, family, lifecycle, access, health, output, matches }))
-    const sortedRows = [...filteredRows].sort((left, right) => compareSources(left, right, sort, direction))
-    const rows = sortedRows.slice(cursor, cursor + 50)
+    const rows = overview.sources
     const filters = { query, family, lifecycle, access, health, output, matches }
     const executable = rows.filter(source => source.status === 'active')
 
@@ -47,9 +45,9 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                 <form className='flex flex-wrap items-center gap-2 border-b border-ui-border p-3' action='/dashboard/ti/sources'>
                     <input type='hidden' name='scope' value={scope} /><input type='hidden' name='sort' value={sort} /><input type='hidden' name='dir' value={direction} />
                     <input name='q' defaultValue={query} placeholder='Search sources' className='h-8 min-w-48 rounded-md border border-ui-border bg-ui-canvas px-2.5 text-xs text-ui-text outline-none' />
-                    <FilterSelect name='family' value={family} label='Family' options={uniqueValues(overview.sources.map(source => source.family))} />
+                    <FilterSelect name='family' value={family} label='Family' options={['rss', 'web', 'telegram_public', 'darkweb_metadata']} />
                     <FilterSelect name='lifecycle' value={lifecycle} label='Lifecycle' options={['active', 'candidate', 'review', 'paused']} />
-                    <FilterSelect name='access' value={access} label='Access' options={uniqueValues(overview.sources.map(source => source.accessMethod))} />
+                    <FilterSelect name='access' value={access} label='Access' options={['public_http', 'public_rss', 'public_telegram', 'tor_metadata']} />
                     <FilterSelect name='health' value={health} label='Health' options={['healthy', 'stale', 'failed', 'not observed']} />
                     <FilterSelect name='output' value={output} label='Useful output' options={['yes', 'no']} />
                     <FilterSelect name='matches' value={matches} label='Customer matches' options={['yes', 'no']} />
@@ -64,8 +62,8 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                 </div>
             </DashboardPanel>
             <nav className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-panel px-4 py-3 text-sm' aria-label='Source inventory pages'>
-                <span className='text-ui-muted'>{cursor + 1}–{Math.min(cursor + rows.length, filteredRows.length)} of {filteredRows.length}</span>
-                <div className='flex gap-2'>{cursor > 0 ? <Link href={pageHref(scope, sort, direction, Math.max(0, cursor - 50), { query, family, lifecycle, access, health, output, matches })} className={tab}>Previous</Link> : null}{cursor + rows.length < filteredRows.length ? <Link href={pageHref(scope, sort, direction, cursor + 50, { query, family, lifecycle, access, health, output, matches })} className={tab}>Next</Link> : null}</div>
+                <span className='text-ui-muted'>{overview.sourcePage.total ? `${cursor + 1}–${Math.min(cursor + rows.length, overview.sourcePage.total)} of ${overview.sourcePage.total}` : '0 sources'}</span>
+                <div className='flex gap-2'>{cursor > 0 ? <Link href={pageHref(scope, sort, direction, Math.max(0, cursor - 50), { query, family, lifecycle, access, health, output, matches })} className={tab}>Previous</Link> : null}{overview.sourcePage.nextCursor ? <Link href={pageHref(scope, sort, direction, Number(overview.sourcePage.nextCursor), { query, family, lifecycle, access, health, output, matches })} className={tab}>Next</Link> : null}</div>
             </nav>
         </>}
     </DashboardPage>
@@ -104,29 +102,6 @@ function pageHref(scope: string, sort: string, direction: string, cursor: number
 
 function FilterSelect({ name, value, label, options }: { name: string, value: string, label: string, options: string[] }) {
     return <select name={name} defaultValue={value} aria-label={label} className='h-8 rounded-md border border-ui-border bg-ui-canvas px-2 text-xs text-ui-text outline-none'><option value=''>{label}</option>{options.map(option => <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>)}</select>
-}
-
-function uniqueValues(values: string[]) { return [...new Set(values.filter(Boolean))].sort() }
-
-function sourceMatchesFilter(source: TiAdminSource, filters: { query: string, family: string, lifecycle: string, access: string, health: string, output: string, matches: string }) {
-    const haystack = `${source.name} ${source.family} ${source.owner}`.toLowerCase()
-    const sourceHealth = source.healthState.toLowerCase()
-    return (!filters.query || haystack.includes(filters.query.toLowerCase()))
-        && (!filters.family || source.family === filters.family)
-        && (!filters.lifecycle || source.status === filters.lifecycle)
-        && (!filters.access || source.accessMethod === filters.access)
-        && (!filters.health || sourceHealth.includes(filters.health))
-        && (!filters.output || (filters.output === 'yes' ? source.productiveCycleCount > 0 : source.productiveCycleCount === 0))
-        && (!filters.matches || (filters.matches === 'yes' ? source.customerMatchCount > 0 : source.customerMatchCount === 0))
-}
-
-function compareSources(left: TiAdminSource, right: TiAdminSource, field: string, direction: string) {
-    const rank = (source: TiAdminSource) => field === 'status' ? ({ active: 0, candidate: 1, review: 2, paused: 3 }[source.status] ?? 4) : field === 'useful' ? source.lastUsefulAt : field === 'content' ? source.lastContentAt : field === 'matches' ? source.customerMatchCount : field === 'access' ? source.accessMethod : source.name
-    const a = rank(left)
-    const b = rank(right)
-    const dateFields = field === 'useful' || field === 'content'
-    const result = dateFields ? (Date.parse(String(a || '')) || 0) - (Date.parse(String(b || '')) || 0) : typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' })
-    return (direction === 'desc' ? -1 : 1) * (result || left.name.localeCompare(right.name))
 }
 
 function Empty() { return <DashboardPanel className='grid min-h-112 place-items-center border-ui-border bg-ui-panel p-8 text-center'><div className='max-w-md'><div className='mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-ui-border bg-ui-canvas text-ui-primary'><Plus /></div><h2 className='mt-5 text-2xl font-semibold text-ui-text'>Add your first intelligence source</h2><p className='mt-2 text-sm leading-6 text-ui-muted'>Connect a public feed, clearweb source, darkweb metadata source, or Telegram feed to begin collection.</p><div className='mt-5 flex justify-center gap-2'><Link href='/dashboard/ti/sources?available=true' className='rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas'>Add source</Link><Link href='/dashboard/ti/control' className={tab}>Browse available sources</Link></div></div></DashboardPanel> }

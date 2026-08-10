@@ -69,7 +69,16 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
       limit: numberQuery(url.searchParams.get("limit")),
       cursor: numberQuery(url.searchParams.get("cursor")),
       sourceId: url.searchParams.get("sourceId")?.trim() || undefined,
-      executableOnly: url.searchParams.get("includeCandidates") !== "true"
+      executableOnly: url.searchParams.get("includeCandidates") !== "true",
+      query: url.searchParams.get("q")?.trim() || undefined,
+      family: url.searchParams.get("family")?.trim() || undefined,
+      lifecycle: url.searchParams.get("lifecycle")?.trim() || undefined,
+      access: url.searchParams.get("access")?.trim() || undefined,
+      health: url.searchParams.get("health")?.trim() || undefined,
+      output: url.searchParams.get("output")?.trim() || undefined,
+      matches: url.searchParams.get("matches")?.trim() || undefined,
+      sort: url.searchParams.get("sort")?.trim() || undefined,
+      direction: url.searchParams.get("dir")?.trim() || undefined
     };
     return json(url.searchParams.get("summary") === "true"
       ? await buildSourceOperationsSummary(options.store, { tenantId: input.tenantId, executableOnly: input.executableOnly })
