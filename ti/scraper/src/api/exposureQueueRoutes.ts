@@ -445,6 +445,7 @@ export function exposureClaimsFromStore(store: any, filters: string | ExposureQu
     if (!mayContainExposureQueueClaim(capture, source)) continue;
     if (!shouldShowExposureQueueCapture(capture, source)) continue;
     const item = exposureClaimFromCapture(capture, source);
+    if (!item) continue;
     const time = epoch(item.claimTime ?? item.collectedAt);
     if (needle && ![item.actor, item.company, item.claimedData, item.claimedDataSize, item.country, item.sourceName, item.summary].join(" ").toLowerCase().includes(needle)) continue;
     if (company && !item.company.toLowerCase().includes(company)) continue;
@@ -983,6 +984,7 @@ function shouldPromoteExposureClaim(item: any) {
 function shouldShowExposureQueueCapture(capture: any, source?: any) {
   const leak = capture.metadata?.leakSite ?? {};
   const sourceText = `${capture.sourceId ?? ""} ${source?.name ?? ""} ${source?.metadata?.sourceFamily ?? ""}`;
+  if (isTemplatePlaceholder(leak.actorName) || isTemplatePlaceholder(leak.victimName) || (Array.isArray(leak.victimNames) && leak.victimNames.some(isTemplatePlaceholder))) return false;
   if (isGenericReferenceSource(sourceText)) return false;
   if (isTrustedVictimFeedCapture(capture, source)) return true;
   if (!leak.actorName || !leak.victimName) return false;
@@ -1003,8 +1005,13 @@ function isTrustedVictimFeedCapture(capture: any, source?: any) {
   return Boolean(parseVictimClaimTitle(String(capture?.title ?? capture?.metadata?.safeExcerpt ?? "")));
 }
 
+function isTemplatePlaceholder(value: unknown) {
+  return typeof value === "string" && /\$\{[^}]+\}/.test(value);
+}
+
 function exposureClaimFromCapture(capture: any, source?: any) {
   const leak = capture.metadata?.leakSite ?? {};
+  if (isTemplatePlaceholder(leak.actorName) || isTemplatePlaceholder(leak.victimName) || (Array.isArray(leak.victimNames) && leak.victimNames.some(isTemplatePlaceholder))) return undefined;
   const parsedTitle = parseVictimClaimTitle(String(capture.title ?? capture.metadata?.safeExcerpt ?? ""));
   const publishedAt = validTimestamp(capture.publishedAt);
   const collectedAt = validTimestamp(capture.collectedAt);
@@ -1053,6 +1060,7 @@ function exposureCountryBackfillCandidates(store: any, tenantId: string) {
     const leak = capture.metadata?.leakSite ?? {};
     if (!missingCountry(leak.claimedCountry || leak.country || capture.metadata?.country)) continue;
     const item = exposureClaimFromCapture(capture, source);
+    if (!item) continue;
     rows.push({ captureId: capture.id, company: item.company, actor: item.actor, sourceName: item.sourceName });
   }
   return rows.filter((row) => row.company && row.company !== "Unknown company");

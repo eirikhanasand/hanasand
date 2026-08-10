@@ -754,6 +754,20 @@ describe("DWM exposure queue pipeline", () => {
     expect(body.freshness.collectionCheckAgeMinutes).toBeLessThan(1);
   });
 
+  test("does not publish parser template placeholders as customer activity", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "restricted_template_source", name: "Template victim blog", type: "tor_metadata", metadata: { sourceFamily: "darkweb_metadata" } }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_template_victim",
+      sourceId: "restricted_template_source",
+      title: "Nasir Security",
+      storageKind: "metadata_only",
+      metadata: { leakSite: { actorName: "Nasir Security", victimName: "${news.title}", victimNames: ["${news.title}"] } }
+    } as any));
+
+    expect(exposureClaimsFromStore(store)).toEqual([]);
+  });
+
   test("does not claim a future collection when the latest check is overdue", async () => {
     const store = new InMemoryScraperStore();
     const oldAt = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
