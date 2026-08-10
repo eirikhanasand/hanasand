@@ -604,6 +604,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const where = [
       "capture.tenant_id IS NOT DISTINCT FROM $1::text",
       "(source.tenant_id IS NULL OR source.tenant_id IS NOT DISTINCT FROM capture.tenant_id)",
+      "position(chr(36) || '{' in capture.record::text) = 0",
       "NOT (concat_ws(' ', capture.source_id, source.name, source.source_family) ~* '(cisa known exploited|known exploited vulnerabilities|mitre att&ck|attack enterprise|groups dataset|public groups dataset|nvd recent cve|github advisory database)')",
       "((capture.record->'metadata'->'leakSite'->>'actorName' <> '' AND capture.record->'metadata'->'leakSite'->>'victimName' <> '') OR (concat_ws(' ', capture.source_id, source.name, source.source_family) ~* '(victim feed|ransomware\\.live victim|ransomlook|leak site|extortion|darkweb|darknet|actor claim|tor_metadata|i2p_metadata|freenet_metadata)' AND capture.record->>'title' ~* '(has just published a new victim|claims victim|claimed victim|claims victim|victim\\s*:|added victim|listed victim|published victim)'))"
     ];
@@ -626,6 +627,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       const candidateWhere = `
         capture.tenant_id IS NOT DISTINCT FROM $1::text
         AND (source.tenant_id IS NULL OR source.tenant_id IS NOT DISTINCT FROM capture.tenant_id)
+        AND position(chr(36) || '{' in capture.record::text) = 0
         AND NOT (concat_ws(' ', capture.source_id, source.record->>'name', source.record->'metadata'->>'sourceFamily') ~* '(cisa known exploited|known exploited vulnerabilities|mitre att&ck|attack enterprise|groups dataset|public groups dataset|nvd recent cve|github advisory database)')
         AND ((capture.record->'metadata'->'leakSite'->>'actorName' <> '' AND capture.record->'metadata'->'leakSite'->>'victimName' <> '') OR capture.record->>'title' ~* '(has just published a new victim|claims victim|claimed victim|claims victim|victim\\s*:|added victim|listed victim|published victim)')`;
       const runQueries = async (executor: any) => Promise.all([
