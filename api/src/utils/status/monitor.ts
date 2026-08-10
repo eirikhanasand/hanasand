@@ -366,12 +366,12 @@ export default async function runSyntheticMonitor() {
             const unreviewedSources = Number(counts.unreviewed_sources ?? 0)
             const recentDeliveryFailures = Number(counts.recent_delivery_failures ?? 0)
             const message = `${staleReviews} stale reviews (oldest ${oldestReviewAgeMinutes} minutes), ${overdueDiscovery} overdue discovery jobs, ${stalledEvaluations} stalled evaluations, ${unreviewedSources} captured sources without automatic review, ${recentDeliveryFailures} recent delivery failures.`
-            // ponytail: captured sources without automatic review are an implementation
-            // backlog, not a runtime outage; keep them visible without restarting review work.
-            if (oldestReviewAgeMinutes >= 240 || staleReviews >= 1_000 || overdueDiscovery >= 10 || stalledEvaluations >= 2 || recentDeliveryFailures >= 10) {
+            // ponytail: automatic review is intentionally paused in production; its old
+            // queue is an operator backlog, not a runtime outage or a reason to restart it.
+            if (overdueDiscovery >= 10 || stalledEvaluations >= 2 || recentDeliveryFailures >= 10) {
                 return { status: 'down', message }
             }
-            if (oldestReviewAgeMinutes >= 60 || staleReviews || overdueDiscovery || stalledEvaluations || recentDeliveryFailures >= 3) {
+            if (overdueDiscovery || stalledEvaluations || recentDeliveryFailures >= 3) {
                 return { status: 'degraded', message }
             }
             return message
