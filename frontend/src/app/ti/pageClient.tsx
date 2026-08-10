@@ -10,13 +10,12 @@ import { PUBLIC_TI_HANDOFF_ACTIONS, buildActorArtifactHandoffs, buildActorArtifa
 import { countryCentroids } from '@/utils/monitoring/geo'
 import { clampViewBox, getCountryFocusView, INITIAL_VIEWBOX, MAP_HEIGHT, MAP_WIDTH, project, type ViewBox, zoomViewBox } from '@/utils/monitoring/liveTrafficMap'
 import mapData from '@parent/public/world.json'
-import { Activity, BellRing, Bookmark, Building2, CheckCircle2, ClipboardList, Clock3, Copy, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Move, Search, Send, ShieldAlert, ShieldCheck, Trash2, UserPlus, XCircle } from 'lucide-react'
+import { Activity, BellRing, Bookmark, Building2, CheckCircle2, ClipboardList, Clock3, Copy, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Loader2, Move, Search, Send, ShieldAlert, ShieldCheck, Trash2, UserPlus, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getCookie } from '@/utils/cookies/cookies'
 import { SyntheticEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
-import { ActorBusinessModelEvidence } from './businessModelEvidence'
 import {
     actionOwnerLabel,
     activitySourceLabel,
@@ -195,7 +194,6 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
         activeQueryRef.current = cleanKey
         setBusy(true)
         setQuery(clean)
-        setResult(searchingResult(clean))
         searchThreatIntel(clean, { preferCached: true })
             .then((next) => {
                 if (requestSeqRef.current !== requestSeq || activeQueryRef.current !== cleanKey) return
@@ -235,7 +233,6 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
         const cleanKey = clean.toLowerCase()
         activeQueryRef.current = cleanKey
         router.push(`/ti/${encodeURIComponent(clean)}`)
-        setResult(searchingResult(clean))
         try {
             const next = await searchThreatIntel(clean, { preferCached: true })
             if (requestSeqRef.current !== requestSeq || activeQueryRef.current !== cleanKey) return
@@ -373,42 +370,99 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                 {savedSearchError ? <p role='alert' className='text-xs leading-5 text-ui-danger'>{savedSearchError}</p> : null}
             </section> : null}
 
-            {visible ? <Results result={visible} error={error} /> : <EmptyState />}
+            {busy ? <SearchLoading query={query} /> : visible ? <Results result={visible} error={error} /> : <EmptyState />}
         </div>
     )
 }
 
+function SearchLoading({ query }: { query: string }) {
+    return <section data-ti-search-loading='true' className='grid min-h-48 place-items-center rounded-lg border border-ui-border bg-ui-panel p-6 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
+        <div className='inline-flex items-center gap-3 text-sm font-semibold text-ui-muted dark:text-ui-muted' role='status' aria-live='polite'>
+            <Loader2 className='h-5 w-5 animate-spin text-ui-primary' />
+            Searching {query ? `“${query}”` : 'threat intelligence'}…
+        </div>
+    </section>
+}
+
 function Results({ result, error }: { result: TiSearchResponse; error: string }) {
+    if (result.status === 'searching' || result.status === 'queued') return <SearchLoading query={result.query} />
     const catalogIdentity = result.actorIdentity
     if (catalogIdentity?.catalogMatched && !catalogIdentity.activityEvidenceAvailable) {
-        return <CatalogOnlyActorResult result={result} identity={catalogIdentity} error={error} />
+        return <CatalogOnlyActorResult result={result} identity={catalogIdentity} />
     }
     return <EvidenceResults result={result} error={error} />
 }
 
-function CatalogOnlyActorResult({ result, identity, error }: { result: TiSearchResponse; identity: NonNullable<TiSearchResponse['actorIdentity']>; error: string }) {
+function CatalogOnlyActorResult({ result, identity }: { result: TiSearchResponse; identity: NonNullable<TiSearchResponse['actorIdentity']> }) {
     const candidate = !identity.ambiguous && identity.candidates.length === 1 ? identity.candidates[0] : undefined
     const title = candidate?.canonicalName ?? humanizeSlug(result.query)
-    const source = candidate?.catalogId === 'mitre-attack-enterprise' ? 'MITRE Enterprise ATT&CK' : candidate?.catalogId === 'ransomware-live-current-operations' ? 'Ransomware.live' : 'the actor catalog'
+    const victims = victimObservationsFor(result)
+    const actor = buildActorIntelligence(result, victims)
+    const actionability = buildTiActionability(result, actor, victims)
     return (
         <section data-ti-catalog-only='true' className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-            <div>
-                <h1 className='wrap-break-word text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>{title}</h1>
-                <p className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
-                    {identity.ambiguous ? 'This label maps to multiple current catalog identities.' : `Current catalog identity from ${source}${candidate?.catalogVersion ? ` ${candidate.catalogVersion}` : ''}.`}
-                </p>
+            <div className='grid gap-4 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)] xl:items-start'>
+                <ActorProfileHeader result={result} title={title} actor={actor} aliases={result.aliases} />
+                <ThreatActorMap actor={actor} result={result} actionability={actionability} compact />
             </div>
             <ActorIdentityPanel identity={identity} />
-            <ActorBusinessModelEvidence model={result.actorIntelligence?.businessModel} sources={result.sources} caseStudies={result.actorCaseStudies} state={error ? 'error' : 'ready'} error={error} />
+            <ActorProfileSections result={result} actor={actor} victims={victims} />
         </section>
     )
+}
+
+function ActorProfileHeader({ result, title, actor, aliases, summary, actorQuery = true }: {
+    result: TiSearchResponse
+    title: string
+    actor: TiActorIntelligenceProfile
+    aliases: string[]
+    summary?: string
+    actorQuery?: boolean
+}) {
+    const externalId = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0]?.externalId : undefined
+    const description = summary || actor.attribution || `${actor.actorClass}. Public activity and source evidence are shown below.`
+    const facts = [
+        actor.attribution ? { label: 'Attribution', value: actor.attribution } : null,
+        actor.motivation.length ? { label: 'Motivation', value: actor.motivation.slice(0, 2).join('; ') } : null,
+        aliases.length ? { label: 'Also known as', value: aliases.slice(0, 4).join(', ') } : null,
+        actor.lastSeen ? { label: 'Last seen', value: formatDate(actor.lastSeen) } : null,
+    ].filter((fact): fact is { label: string; value: string } => Boolean(fact))
+    return <section data-ti-actor-info='true' className='grid gap-4'>
+        <div>
+            <h1 className='wrap-break-word text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>{title}{actorQuery && externalId ? ` · ${externalId}` : ''}</h1>
+            <p className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>{displayRequirementText(description)}</p>
+        </div>
+        {facts.length ? <div className='grid gap-3 sm:grid-cols-2'>
+            {facts.map(fact => <EvidenceMetric key={fact.label} label={fact.label} value={fact.value} />)}
+        </div> : null}
+    </section>
+}
+
+function ActorProfileSections({ result, actor, victims }: { result: TiSearchResponse; actor: TiActorIntelligenceProfile; victims: ReturnType<typeof victimObservationsFor> }) {
+    const sections = [
+        actor.campaigns.length ? { title: 'Activity and campaigns', items: actor.campaigns } : null,
+        actor.malwareTools.length || actor.techniqueCoverage.length ? { title: 'Capabilities and tradecraft', items: [...actor.malwareTools, ...actor.techniqueCoverage.map(item => item.attackId ? `${item.attackId} · ${item.name}` : item.name)] } : null,
+        actor.targetSectors.length || victims.length ? { title: 'Targeting', items: [...actor.targetSectors, ...victims.slice(0, 4).map(item => `${item.victim}${item.country !== 'Country not stated' ? ` · ${item.country}` : ''}`)] } : null,
+        actor.infrastructure.length || actor.indicators.length ? { title: 'Infrastructure and indicators', items: [...actor.infrastructure, ...actor.indicators] } : null,
+    ].filter((section): section is { title: string; items: string[] } => Boolean(section?.items.length))
+    if (!sections.length) return null
+    return <section data-ti-actor-profile='true' className='grid gap-4 border-y border-ui-border py-4 dark:border-ui-border'>
+        {result.actorIntelligence?.confidenceReasoning?.length ? <p className='text-sm leading-6 text-ui-muted dark:text-ui-muted'>{result.actorIntelligence.confidenceReasoning[0]}</p> : null}
+        <div className='grid gap-4 md:grid-cols-2'>
+            {sections.map(section => <section key={section.title} className='min-w-0'>
+                <h2 className='text-base font-semibold text-ui-text dark:text-ui-text'>{section.title}</h2>
+                <ul className='mt-2 grid gap-2'>
+                    {section.items.slice(0, 8).map(item => <li key={item} className='wrap-break-word rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text dark:border-ui-border dark:bg-ui-raised'>{displayRequirementText(item)}</li>)}
+                </ul>
+            </section>)}
+        </div>
+    </section>
 }
 
 function EvidenceResults({ result, error }: { result: TiSearchResponse; error: string }) {
     const sourceUrlById = useMemo(() => new Map(result.sources.map(source => [source.id, source.url || linkFromText(source.provenance)])), [result.sources])
     const sources = result.sources
     const actorQuery = result.queryKind === 'actor'
-    const catalogIdentity = result.actorIdentity
     const victimObservations = useMemo(() => victimObservationsFor(result), [result])
     const actorIntel = useMemo(() => buildActorIntelligence(result, victimObservations), [result, victimObservations])
     const actionability = useMemo(() => buildTiActionability(result, actorIntel, victimObservations), [result, actorIntel, victimObservations])
@@ -526,39 +580,15 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
         <div className='grid gap-4'>
             <section data-ti-workspace='true' className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
                 <div className={`grid gap-4 ${actorQuery ? 'xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)]' : ''} xl:items-start`}>
-                    <section data-ti-actor-info='true' className='grid gap-4'>
-                        <div>
-                            <h1 className='wrap-break-word text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>{humanizeSlug(result.query)}</h1>
-                            <p className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>{actorProfileSummary}</p>
-                        </div>
-                        <div className='grid gap-3 sm:grid-cols-2'>
-                            <EvidenceMetric label={actorQuery ? 'Attribution' : 'Query type'} value={actorQuery ? actorIntel.attribution || 'No attribution evidence' : formatLabel(result.queryKind || 'free_text')} />
-                            <EvidenceMetric label={actorQuery ? 'Motivation' : 'Observed records'} value={actorQuery ? actorIntel.motivation.slice(0, 2).join('; ') || 'No motivation evidence' : `${result.recentActivity.length}`} />
-                            <EvidenceMetric
-                                label={actorQuery ? 'Aliases' : 'Sources'}
-                                value={actorQuery ? result.aliases.slice(0, 3).join(', ') || humanizeSlug(result.query) : `${result.sources.length}`}
-                            />
-                            <EvidenceMetric label='Last seen' value={result.lastSeen ? formatDate(result.lastSeen) : 'Observation date unavailable'} />
-                        </div>
-                    </section>
+                    <div className='grid gap-4'>
+                        <ActorProfileHeader result={result} title={humanizeSlug(result.query)} actor={actorIntel} aliases={result.aliases} summary={actorProfileSummary} actorQuery={actorQuery} />
+                    </div>
                     {actorQuery ? <section data-ti-map='true' className='min-w-0'>
                         <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                     </section> : null}
                 </div>
 
-                {catalogIdentity?.catalogMatched ? <ActorIdentityPanel identity={catalogIdentity} /> : null}
-
-                <EvidenceBoundaryStrip result={result} />
-
-                {actorQuery ? (
-                    <ActorBusinessModelEvidence
-                        model={result.actorIntelligence?.businessModel}
-                        sources={result.sources}
-                        caseStudies={result.actorCaseStudies}
-                        state={error ? 'error' : result.status === 'searching' || result.status === 'queued' ? 'loading' : 'ready'}
-                        error={error}
-                    />
-                ) : null}
+                {actorQuery ? <ActorProfileSections result={result} actor={actorIntel} victims={victimObservations} /> : <EvidenceBoundaryStrip result={result} />}
 
                 <section id='ti-activity' data-ti-activity='true' className='grid gap-3 border-t border-ui-border pt-4 dark:border-ui-border'>
                     <div className='flex flex-wrap items-end justify-between gap-3'>
@@ -633,14 +663,13 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
 }
 
 function ActorIdentityPanel({ identity }: { identity: NonNullable<TiSearchResponse['actorIdentity']> }) {
-    const exact = !identity.ambiguous && identity.candidates.length === 1 && identity.candidates[0]?.matchKinds.includes('canonical')
     return (
         <section data-ti-actor-identity='true' className='min-w-0 border-y border-ui-border py-3 dark:border-ui-border'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>{exact ? 'Catalog identity' : 'Catalog candidates'}</p>
+                    <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Actor reference</p>
                 </div>
-                {identity.ambiguous ? <span className={sourceHealthChipClass('review')}>ambiguous label</span> : null}
+                {identity.ambiguous ? <span className={sourceHealthChipClass('review')}>multiple matches</span> : null}
             </div>
             <ul className='mt-3 grid min-w-0 gap-2'>
                 {identity.candidates.map(candidate => (
@@ -649,15 +678,8 @@ function ActorIdentityPanel({ identity }: { identity: NonNullable<TiSearchRespon
                             <div className='min-w-0'>
                                 <p className='wrap-break-word text-sm font-semibold text-ui-text dark:text-ui-text'>{candidate.canonicalName} · {candidate.externalId}</p>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                                    {candidate.matchKinds.map(kind => kind === 'canonical' ? 'Canonical name' : 'Associated name').join(' · ')}
-                                    {candidate.associatedNames.length ? ` · Also known as ${candidate.associatedNames.slice(0, 5).join(', ')}` : ''}
+                                    {candidate.associatedNames.length ? `Also known as ${candidate.associatedNames.slice(0, 5).join(', ')}` : 'Public actor reference'}
                                 </p>
-                            </div>
-                            <div className='flex shrink-0 items-center gap-2'>
-                                <span className={sourceHealthChipClass(candidate.status === 'current' ? 'ready' : 'review')}>{formatLabel(candidate.status)}</span>
-                                <a href={candidate.sourceUrl} target='_blank' rel='noopener noreferrer' aria-label={`Open catalog record for ${candidate.canonicalName}`} title='Open catalog record' className='inline-flex h-8 w-8 items-center justify-center rounded-md border border-ui-border text-ui-muted transition hover:bg-ui-raised hover:text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:text-ui-muted dark:hover:bg-ui-raised dark:hover:text-ui-text'>
-                                    <ExternalLink className='h-3.5 w-3.5' />
-                                </a>
                             </div>
                         </div>
                     </li>
@@ -5352,25 +5374,6 @@ function EmptyState() {
     )
 }
 
-function searchingResult(query: string): TiSearchResponse {
-    return {
-        query,
-        generatedAt: '',
-        mode: 'unavailable',
-        status: 'searching',
-        refreshAfterSeconds: 3,
-        summary: 'No cached result is available yet; live evidence search is running.',
-        confidence: 0.2,
-        aliases: [],
-        recentActivity: [],
-        targets: [],
-        ttps: [],
-        datasets: [],
-        sources: [],
-        notes: ['No activity or attribution is inferred until retained evidence returns. Live search will refresh this result.']
-    }
-}
-
 function classifyPublicTiQuery(query: string): NonNullable<TiSearchResponse['queryKind']> {
     const clean = query.trim()
     if (/^cve-\d{4}-\d{4,}$/i.test(clean)) return 'cve'
@@ -5706,8 +5709,10 @@ function MapCoverageFallback({ regions, actor, actionability, compact = false }:
     const sourceRows = compact ? [] : actor.provenanceRows.slice(0, 3)
     return (
         <div data-ti-geo-coverage-fallback='true' className={`${compact ? 'gap-2 p-3' : 'gap-3 p-4'} grid bg-ui-panel dark:bg-ui-canvas`}>
+            <EmptyActorMap compact={compact} />
+            <p className='text-sm leading-6 text-ui-muted dark:text-ui-muted'>No country-specific activity is established in the current sources.</p>
             <div className={`grid gap-2 ${compact ? 'sm:grid-cols-3' : 'md:grid-cols-3'}`}>
-                <CoverageFallbackMetric label='Regions' value={regions.length ? regions.join(', ') : 'No country-level rows'} />
+                <CoverageFallbackMetric label='Regions' value={regions.length ? regions.join(', ') : 'None established'} />
                 <CoverageFallbackMetric label='Source rows' value={`${actor.sourceCoverage.totalRows}`} />
                 <CoverageFallbackMetric label='Newest' value={actor.sourceCoverage.latestReportDate ? formatDate(actor.sourceCoverage.latestReportDate) : formatDate(actor.lastSeen)} />
             </div>
@@ -5756,6 +5761,22 @@ function MapCoverageFallback({ regions, actor, actionability, compact = false }:
             ) : null}
         </div>
     )
+}
+
+function EmptyActorMap({ compact = false }: { compact?: boolean }) {
+    return <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} role='img' aria-label='World map with no country-specific actor activity established' className={`${compact ? 'h-44' : 'h-64'} w-full rounded-lg bg-ui-canvas dark:bg-ui-canvas`}>
+        <rect x='0' y='0' width={MAP_WIDTH} height={MAP_HEIGHT} className='fill-ui-canvas dark:fill-ui-canvas' />
+        {mapData.features.map((feature, index) => {
+            let d = ''
+            const drawRing = (ring: number[][]) => ring.reduce((path, point, pointIndex) => {
+                const [x, y] = project([point[1], point[0]])
+                return `${path}${pointIndex === 0 ? 'M' : 'L'} ${x} ${y} `
+            }, '') + 'Z '
+            if (feature.geometry.type === 'Polygon') (feature.geometry.coordinates as number[][][]).forEach(ring => { d += drawRing(ring) })
+            if (feature.geometry.type === 'MultiPolygon') (feature.geometry.coordinates as number[][][][]).forEach(polygon => polygon.forEach(ring => { d += drawRing(ring) }))
+            return <path key={`${feature.properties?.name || 'country'}-${index}`} d={d} className='fill-ui-raised stroke-ui-border stroke-[0.55]' />
+        })}
+    </svg>
 }
 
 function CoverageFallbackMetric({ label, value }: { label: string; value: string }) {

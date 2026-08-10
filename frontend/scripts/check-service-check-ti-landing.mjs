@@ -47,7 +47,7 @@ assertExcludes(loadTestingClient, 'needs work', 'dashboard command center must n
 
 const emptyState = extractFunction(tiClient, 'function EmptyState()')
 const searchFormStart = tiClient.indexOf('<form onSubmit={submit}')
-const resultsGate = tiClient.indexOf('{visible ? <Results')
+const resultsGate = tiClient.indexOf('{busy ? <SearchLoading')
 assert.ok(searchFormStart >= 0, 'TI page search form was not found')
 assert.ok(resultsGate > searchFormStart, 'TI page result visibility gate was not found after the search form')
 const landingForm = tiClient.slice(searchFormStart, resultsGate)
