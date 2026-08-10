@@ -72,7 +72,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "035_preserve_unknown_delivery_completion", path: fileURLToPath(new URL("../../migrations/035_preserve_unknown_delivery_completion.sql", import.meta.url)) },
   { version: "036_source_operations_runtime_indexes", path: fileURLToPath(new URL("../../migrations/036_source_operations_runtime_indexes.sql", import.meta.url)) },
   { version: "037_remove_parser_fallback_artifacts", path: fileURLToPath(new URL("../../migrations/037_remove_parser_fallback_artifacts.sql", import.meta.url)) },
-  { version: "038_exposure_queue_candidate_index", path: fileURLToPath(new URL("../../migrations/038_exposure_queue_candidate_index.sql", import.meta.url)) }
+  { version: "038_exposure_queue_candidate_index", path: fileURLToPath(new URL("../../migrations/038_exposure_queue_candidate_index.sql", import.meta.url)) },
+  { version: "039_capture_search_text_index", path: fileURLToPath(new URL("../../migrations/039_capture_search_text_index.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 const MAINTENANCE_MIGRATION_VERSIONS = new Set(["037_remove_parser_fallback_artifacts"]);
@@ -579,13 +580,12 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     if (!terms.length) return [];
     const tenantPlaceholder = `$${terms.length + 1}`;
     const limitPlaceholder = `$${terms.length + 2}`;
+    const searchPredicates = terms.map((_, index) => `to_tsvector('simple', capture.record::text) @@ plainto_tsquery('simple', $${index + 1})`).join(" OR ");
     const rows = await this.sql.unsafe(
       `SELECT capture.record
        FROM threat_intel.captures AS capture
-       LEFT JOIN threat_intel.sources AS source ON source.id = capture.source_id
        WHERE capture.tenant_id IS NOT DISTINCT FROM ${tenantPlaceholder}::text
-         AND (position($1 in lower(capture.record::text || ' ' || COALESCE(source.record::text, ''))) > 0
-           ${terms.slice(1).map((_, index) => `OR position($${index + 2} in lower(capture.record::text || ' ' || COALESCE(source.record::text, ''))) > 0`).join(" ")})
+         AND (${searchPredicates})
        ORDER BY capture.collected_at DESC, capture.id
        LIMIT ${limitPlaceholder}`,
       [...terms, tenantId ?? null, Math.max(1, Math.min(500, Math.floor(limit)))]
