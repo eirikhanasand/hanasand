@@ -114,7 +114,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   private lastDatabaseHealth?: DatabaseHealth;
   private databaseHealthCheckedAt = 0;
   private databaseHealthRefresh?: Promise<void>;
-  private readonly sourceOperationalPageCache = new Map<string, { expiresAt: number; value: any }>();
+  private readonly sourceOperationalPageCache = new Map<string, { expiresAt: number; value: any; refreshing?: Promise<void> }>();
   private pipelineDepth = 0;
 
   private constructor(sql: SQL, migrations: Migration[], deferHighVolumeHydration = false) {
@@ -753,16 +753,21 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     };
   }
 
-  async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; sourceId?: string; executableOnly?: boolean; query?: string; family?: string; lifecycle?: string; access?: string; health?: string; output?: string; matches?: string; sort?: string; direction?: string } ) {
+  async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; sourceId?: string; executableOnly?: boolean; query?: string; family?: string; lifecycle?: string; access?: string; health?: string; output?: string; matches?: string; sort?: string; direction?: string; _skipCache?: boolean } ) {
     const limit = Math.max(1, Math.min(100, Number(input.limit ?? 50)));
     const offset = Math.max(0, Number(input.offset ?? 0));
     const tenantId = input.tenantId ?? null;
     const sourceId = input.sourceId?.trim() || null;
     const executableOnly = input.executableOnly === true;
     if (!sourceId && !executableOnly) {
-      const cacheKey = JSON.stringify({ ...input, generatedAt: undefined });
+      const { generatedAt: _generatedAt, _skipCache: _skip, ...cacheInput } = input;
+      const cacheKey = JSON.stringify(cacheInput);
       const cached = this.sourceOperationalPageCache.get(cacheKey);
-      if (cached && cached.expiresAt > Date.now()) return cached.value;
+      if (cached && !_skip) {
+        if (cached.expiresAt > Date.now()) return cached.value;
+        cached.refreshing ||= this.querySourceOperationalPage({ ...input, _skipCache: true }).then(() => undefined).catch(() => undefined);
+        return cached.value;
+      }
       const values: unknown[] = [tenantId, input.generatedAt];
       const bind = (value: unknown) => { values.push(value); return `$${values.length}`; };
       const familySql = `COALESCE(source.record->'metadata'->>'sourceFamily', source.record->'metadata'->>'sourceGrowthFamily', CASE WHEN source.source_type = 'rss' THEN 'rss' WHEN source.source_type = 'telegram_public' THEN 'telegram_public' WHEN source.source_type IN ('tor_metadata', 'i2p_metadata') THEN 'darkweb_metadata' WHEN source.source_type IN ('static_web', 'dynamic_web', 'blog') THEN 'web' ELSE source.source_type END)`;

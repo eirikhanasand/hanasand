@@ -7,7 +7,7 @@ import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts
 import { automaticSourceReviewEvidenceBindingsMatch } from "./automaticReviewRoutes.ts";
 import { hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
 
-export async function buildSourceOperationsSnapshot(store: any, input: { tenantId?: string; generatedAt?: string; limit?: number; cursor?: number; sourceId?: string; executableOnly?: boolean } = {}) {
+export async function buildSourceOperationsSnapshot(store: any, input: { tenantId?: string; generatedAt?: string; limit?: number; cursor?: number; sourceId?: string; executableOnly?: boolean; query?: string; family?: string; lifecycle?: string; access?: string; health?: string; output?: string; matches?: string; sort?: string; direction?: string } = {}) {
   const generatedAt = input.generatedAt ?? nowIso();
   if (typeof store?.querySourceOperationalPage === "function") {
     const result = await store.querySourceOperationalPage({
@@ -16,7 +16,16 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
       limit: input.limit,
       offset: input.cursor,
       sourceId: input.sourceId,
-      executableOnly: input.executableOnly
+      executableOnly: input.executableOnly,
+      query: input.query,
+      family: input.family,
+      lifecycle: input.lifecycle,
+      access: input.access,
+      health: input.health,
+      output: input.output,
+      matches: input.matches,
+      sort: input.sort,
+      direction: input.direction
     });
     return operationalQuerySnapshot(result, input, generatedAt);
   }
