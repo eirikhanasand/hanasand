@@ -34,6 +34,20 @@ describe("structured threat-intelligence storage contract", () => {
     expect(new (PostgresScraperStore as any)({}, []).usesPostgresSearchIndex).toBe(true);
   });
 
+  test("does not retry evidence links whose capture was not retained", async () => {
+    const queries: string[] = [];
+    const store = Object.create(PostgresScraperStore.prototype) as any;
+    const fakeSql = (strings: TemplateStringsArray) => {
+      queries.push(Array.from(strings).join(" "));
+      return Promise.resolve([]);
+    };
+    await store.persistEvidenceLink({
+      id: "evidence-link-orphan", captureId: "capture-not-retained", subjectType: "incident", subjectId: "incident-1",
+      relationship: "supports", confidence: 1, createdAt: collectedAt
+    }, fakeSql);
+    expect(queries[0]).toContain("WHERE EXISTS (SELECT 1 FROM threat_intel.captures");
+  });
+
   test("reads latest source health once per tenant summary instead of once per source", async () => {
     const store = Object.create(PostgresScraperStore.prototype) as any;
     let query = "";

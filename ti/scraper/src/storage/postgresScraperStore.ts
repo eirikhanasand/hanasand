@@ -3009,11 +3009,12 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       INSERT INTO threat_intel.evidence_links (
         id, tenant_id, capture_id, subject_type, subject_id, relationship,
         confidence, extractor_version, created_at, record
-      ) VALUES (
+      )
+      SELECT
         ${linkRecord.id}, ${nullable(linkRecord.tenantId)}, ${linkRecord.captureId}, ${linkRecord.subjectType},
         ${linkRecord.subjectId}, ${linkRecord.relationship}, ${score(linkRecord.confidence)},
         ${nullable(linkRecord.extractorVersion)}, ${linkRecord.createdAt ?? new Date().toISOString()}, ${toJson(linkRecord)}::text::jsonb
-      )
+      WHERE EXISTS (SELECT 1 FROM threat_intel.captures WHERE id = ${linkRecord.captureId})
       ON CONFLICT (capture_id, subject_type, subject_id, relationship) DO UPDATE SET
         confidence = GREATEST(threat_intel.evidence_links.confidence, EXCLUDED.confidence),
         extractor_version = COALESCE(EXCLUDED.extractor_version, threat_intel.evidence_links.extractor_version),
