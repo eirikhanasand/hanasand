@@ -82,7 +82,10 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const resumedTasks = resumedRunId ? queuedTasks.filter((task: any) => task.runId === resumedRunId).slice(0, maxTasks) : [];
   const resumedRun = resumedRunId ? options.store.getRun?.(resumedRunId) : undefined;
   const allDue = options.store.listSources()
-    .filter((s: any) => inCollectionScope(s, options.tenantId, options.includeSharedSources) && (!selectedSourceIds.size || selectedSourceIds.has(s.id)) && isProductionCollectionSource(s, generatedAt, options.store))
+    .filter((s: any) => inCollectionScope(s, options.tenantId, options.includeSharedSources)
+      && (!selectedSourceIds.size || selectedSourceIds.has(s.id))
+      && (!options.sourceFamily || sourceFamily(s) === options.sourceFamily)
+      && isProductionCollectionSource(s, generatedAt, options.store))
     .sort((left: any, right: any) => sourceScheduleTime(left) - sourceScheduleTime(right) || String(left.id).localeCompare(String(right.id)));
   const due = allDue.slice(0, maxSources);
   const generatedPlanId = stableId("canary-plan", `${options.tenantId ?? "global"}:${generatedAt}`);
@@ -128,6 +131,10 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const completedAt = options.now?.() ?? nowIso();
   options.store.saveRun?.({ ...resumedRun, id: runId, tenantId: resumedRun?.tenantId ?? options.tenantId, planId, requestId: "req_public_canary", status: runStatus, createdAt: resumedRun?.createdAt ?? generatedAt, startedAt: resumedRun?.startedAt ?? generatedAt, completedAt: runStatus === "queued" ? undefined : completedAt, updatedAt: completedAt, taskCount: resumedRun?.taskCount ?? tasks.length, sourceCount: resumedRun?.sourceCount ?? scheduledSourceIds.size, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, duplicateCaptureCount: counters.duplicateCaptureCount, leasedTaskCount: counters.leasedTaskCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, retryScheduledCount: counters.retryScheduledCount, retryExhaustedCount: counters.retryExhaustedCount, error: errors[0]?.message });
   return { generatedAt, tenantId: options.tenantId, mode: "production_canary", status: runStatus, runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, retiredSourceCount: productivity.retired.length, supersededTaskCount, activeSourceCount: scheduledSourceIds.size, deferredDueSourceCount: allDue.length - scheduledSourceIds.size, queuedTaskCount: tasks.length, queueLimit, availableQueueSlots, backpressureState, ...counters, remainingQueuedTaskCount, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
+}
+
+function sourceFamily(source: any) {
+  return String(source.metadata?.sourceFamily ?? source.metadata?.sourceGrowthFamily ?? source.type ?? "").trim();
 }
 
 function storageBackpressure(store: any) {
