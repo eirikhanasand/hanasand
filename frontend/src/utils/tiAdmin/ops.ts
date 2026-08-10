@@ -117,7 +117,7 @@ export type TiAdminOverview = {
 type ApiPayload = Record<string, unknown>
 const TI_ADMIN_FETCH_TIMEOUT_MS = 10_000
 type ResourceResult = { resource: string, ok: boolean, records: ApiPayload[], total: number, nextCursor?: string, payload: ApiPayload }
-const sourceInventoryCache = new Map<string, { expiresAt: number, value: ResourceResult }>()
+const sourceInventoryCache = new Map<string, { expiresAt: number, value: ResourceResult, refreshing?: Promise<void> }>()
 
 export async function getTiAdminOverview(tenantId: string | null = 'default', page: { cursor?: number, limit?: number, sourceId?: string, includeSamples?: boolean, includeCandidates?: boolean } = {}): Promise<TiAdminOverview> {
     const base = tiScraperApiBase()
@@ -200,12 +200,18 @@ export function ageDays(since: string) {
     return Number.isFinite(diff) ? Math.max(1, Math.round(diff / 86400000)) : 0
 }
 
-async function fetchResource(base: string, path: string, key: string, tenantId: string | null, page: { cursor?: number, limit?: number, sourceId?: string, query?: string, includeCandidates?: boolean } = {}): Promise<ResourceResult> {
+async function fetchResource(base: string, path: string, key: string, tenantId: string | null, page: { cursor?: number, limit?: number, sourceId?: string, query?: string, includeCandidates?: boolean } = {}, skipCache = false): Promise<ResourceResult> {
     const resource = path.split('/').at(-1) || key
     const cacheKey = resource === 'source-operations' ? JSON.stringify([base, tenantId, page]) : ''
-    if (cacheKey) {
+    if (cacheKey && !skipCache) {
         const cached = sourceInventoryCache.get(cacheKey)
         if (cached && cached.expiresAt > Date.now()) return cached.value
+        if (cached) {
+            cached.refreshing ||= fetchResource(base, path, key, tenantId, page, true).then(value => {
+                sourceInventoryCache.set(cacheKey, { expiresAt: Date.now() + 5_000, value })
+            }).catch(() => undefined)
+            return cached.value
+        }
     }
     try {
         const target = new URL(path, base)
@@ -217,7 +223,8 @@ async function fetchResource(base: string, path: string, key: string, tenantId: 
         if (page.includeCandidates) target.searchParams.set('includeCandidates', 'true')
         const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
         const response = await fetch(target, {
-            cache: 'no-store',
+            cache: resource === 'source-operations' ? 'force-cache' : 'no-store',
+            ...(resource === 'source-operations' ? { next: { revalidate: 5 } } : {}),
             headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined,
             signal: AbortSignal.timeout(TI_ADMIN_FETCH_TIMEOUT_MS),
         })
