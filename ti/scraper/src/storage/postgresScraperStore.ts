@@ -600,9 +600,13 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     offset: number;
   }) {
     const filters = input.filters ?? {};
-    const values: unknown[] = [input.tenantId === "default" ? null : input.tenantId ?? null];
+    const tenantId = input.tenantId === "default" ? null : input.tenantId ?? null;
+    const values: unknown[] = tenantId === null ? [] : [tenantId];
+    const tenantPredicate = (alias: string) => tenantId === null
+      ? `${alias}.tenant_id IS NULL`
+      : `${alias}.tenant_id = $1::text`;
     const where = [
-      "capture.tenant_id IS NOT DISTINCT FROM $1::text",
+      tenantPredicate("capture"),
       "(source.tenant_id IS NULL OR source.tenant_id IS NOT DISTINCT FROM capture.tenant_id)",
       "position(chr(36) || '{' in capture.record::text) = 0",
       "NOT (concat_ws(' ', capture.source_id, source.name, source.source_family) ~* '(cisa known exploited|known exploited vulnerabilities|mitre att&ck|attack enterprise|groups dataset|public groups dataset|nvd recent cve|github advisory database)')",
@@ -625,7 +629,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       // and source projections. The aggregate remains exact, while the page
       // query can use the candidate ordering index to fetch the first row.
       const candidateWhere = `
-        capture.tenant_id IS NOT DISTINCT FROM $1::text
+        ${tenantPredicate("capture")}
         AND (source.tenant_id IS NULL OR source.tenant_id IS NOT DISTINCT FROM capture.tenant_id)
         AND position(chr(36) || '{' in capture.record::text) = 0
         AND NOT (concat_ws(' ', capture.source_id, source.record->>'name', source.record->'metadata'->>'sourceFamily') ~* '(cisa known exploited|known exploited vulnerabilities|mitre att&ck|attack enterprise|groups dataset|public groups dataset|nvd recent cve|github advisory database)')
@@ -639,7 +643,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           LEFT JOIN threat_intel.sources source ON source.id = capture.source_id
           WHERE ${candidateWhere}
           ORDER BY COALESCE(capture.published_at, capture.collected_at) DESC, capture.id DESC
-          LIMIT $2 OFFSET $3`, [values[0], Math.max(1, Math.min(250, Math.floor(input.limit))), offset]),
+          LIMIT $${tenantId === null ? 1 : 2} OFFSET $${tenantId === null ? 2 : 3}`,
+          tenantId === null
+            ? [Math.max(1, Math.min(250, Math.floor(input.limit))), offset]
+            : [tenantId, Math.max(1, Math.min(250, Math.floor(input.limit))), offset]),
         executor.unsafe(`
           SELECT count(*) AS total,
             count(*) FILTER (WHERE capture.record->'metadata'->'review'->>'state' = 'needs_review' OR capture.published_at IS NULL) AS needs_review,
@@ -648,7 +655,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             max(capture.collected_at) AS latest_collected_at
           FROM threat_intel.captures capture
           LEFT JOIN threat_intel.sources source ON source.id = capture.source_id
-          WHERE ${candidateWhere}`, [values[0]]),
+          WHERE ${candidateWhere}`, tenantId === null ? [] : [tenantId]),
       ]);
       const [pageRows, summaryRows] = typeof this.sql.begin === "function"
         ? await this.sql.begin(async (transaction: any) => {
@@ -672,7 +679,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const sourceTerms = `WITH candidate_captures AS MATERIALIZED (
       SELECT *
       FROM threat_intel.captures
-      WHERE tenant_id IS NOT DISTINCT FROM $1::text
+      WHERE ${tenantId === null ? "tenant_id IS NULL" : "tenant_id = $1::text"}
         AND (
           (record->'metadata'->'leakSite'->>'actorName' <> '' AND record->'metadata'->'leakSite'->>'victimName' <> '')
           OR record->>'title' ~* '(has just published a new victim|claims victim|claimed victim|claims victim|victim\\s*:|added victim|listed victim|published victim)'
