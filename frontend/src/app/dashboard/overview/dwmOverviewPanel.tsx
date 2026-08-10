@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { AlertTriangle, BellRing, CheckCircle2, Loader2, Radar } from 'lucide-react'
+import { AlertTriangle, ArrowRight, BellRing, CheckCircle2, Loader2, Radar } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { DwmProductSnapshot } from '@/utils/dwm/product'
 
@@ -36,6 +36,27 @@ export default function DwmOverviewPanel({ organizationId }: { organizationId?: 
     const healthySources = snapshot.sourceCoverage.filter(source => source.health === 'healthy').length
     const hasWatchlist = snapshot.watchlist.length > 0
     const hasAlerts = snapshot.alerts.length > 0
+    if (!hasWatchlist) {
+        const watchlistHref = organizationId
+            ? `/dashboard/dwm/watchlists?organizationId=${encodeURIComponent(organizationId)}`
+            : '/dashboard/dwm/watchlists'
+        return <section className='grid min-h-[26rem] place-items-center rounded-lg border border-ui-border bg-ui-panel p-6 text-center shadow-sm' aria-label={scopeLabel}>
+            <div className='grid max-w-md justify-items-center gap-4'>
+                <span className='grid h-14 w-14 place-items-center rounded-2xl border border-ui-primary/30 bg-ui-primary/10 text-ui-primary shadow-[0_0_28px_rgba(157,180,255,0.14)]'>
+                    <Radar className='h-7 w-7' />
+                </span>
+                <div>
+                    <p className='text-xs font-semibold uppercase tracking-[0.12em] text-ui-primary'>{scopeLabel}</p>
+                    <h2 className='mt-2 text-2xl font-semibold text-ui-text'>Welcome to Hanasand monitoring</h2>
+                    <p className='mt-2 text-sm leading-6 text-ui-muted'>Create your first watchlist and tell Hanasand which companies, domains, vendors, brands, or products matter to you.</p>
+                </div>
+                <Link href={watchlistHref} className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                    Create your first watchlist
+                    <ArrowRight className='h-4 w-4' />
+                </Link>
+            </div>
+        </section>
+    }
     const readiness = snapshot.readiness.decision === 'production_ready_with_live_sources' ? 'Monitoring ready' : hasWatchlist ? 'Monitoring setup needs review' : 'Add a watchlist to start'
     const readinessTone = snapshot.readiness.decision === 'production_ready_with_live_sources' ? 'text-ui-success' : 'text-ui-warning'
 

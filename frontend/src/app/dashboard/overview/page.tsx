@@ -2,9 +2,6 @@ import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { AlertTriangle, Radio } from 'lucide-react'
-import getStatus from '@/utils/status/getStatus'
-import { toPublicServiceStatus } from '@/utils/status/publicStatus'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import DwmOverviewPanel from './dwmOverviewPanel'
 
@@ -26,21 +23,6 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
     const deniedPathValue = params.from
     const deniedPath = typeof deniedPathValue === 'string' && deniedPathValue.startsWith('/') ? deniedPathValue : ''
     const accessDenied = params.notAllowed === 'true'
-
-    const status = await getStatus()
-    const publicStatus = toPublicServiceStatus(status)
-    const serviceIssues = publicStatus.checks.filter(check => check.status !== 'up')
-    const actions = [serviceIssues.length ? {
-        href: '/status',
-        title: 'Check service health',
-        detail: `${serviceIssues.length} public check${serviceIssues.length === 1 ? '' : 's'} degraded or down.`,
-        tone: 'watch' as const,
-    } : !publicStatus.checks.length ? {
-        href: '/status',
-        title: 'Check service health',
-        detail: 'Service checks are still connecting.',
-        tone: 'watch' as const,
-    } : null].filter(Boolean)
 
     return (
         <DashboardPage>
@@ -70,80 +52,10 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
             ) : null}
 
             <DwmOverviewPanel organizationId={firstParam(params.organizationId) || firstParam(params.orgId)} />
-
-            {actions.length ? (
-                <div className='grid gap-3 xl:grid-cols-[1fr_0.9fr]'>
-                    <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                        <div className='flex items-center justify-between border-b border-ui-border px-4 py-3'>
-                            <div>
-                                <h2 className='text-base font-semibold text-ui-text'>Needs attention</h2>
-                                <p className='mt-1 text-sm text-ui-muted'>Only rows with a clear customer action appear here.</p>
-                            </div>
-                            <AlertTriangle className={`h-4 w-4 ${actions.length ? 'text-ui-warning' : 'text-ui-success'}`} />
-                        </div>
-                        <div className='divide-y divide-ui-border'>
-                            {actions.length ? actions.map(action => action && (
-                                <Link key={action.href} href={action.href} className='grid gap-2 px-4 py-3 transition hover:bg-ui-raised md:grid-cols-[1fr_auto] md:items-center'>
-                                    <div>
-                                        <p className='font-semibold text-ui-text'>{action.title}</p>
-                                        <p className='mt-1 text-sm text-ui-muted'>{action.detail}</p>
-                                    </div>
-                                    <span className={`h-2 w-2 rounded-full ${toneDot(action.tone)}`} />
-                                </Link>
-                            )) : (
-                                <div className='px-4 py-6 text-sm text-ui-muted'>No customer action needed right now.</div>
-                            )}
-                        </div>
-                    </DashboardPanel>
-
-                    <ServiceHealth checks={serviceIssues} />
-                </div>
-            ) : (
-                <DashboardPanel className='flex items-center gap-3 border-ui-success/25 bg-ui-success/5 px-4 py-3'>
-                    <Radio className='h-4 w-4 shrink-0 text-ui-success' />
-                    <div>
-                        <p className='text-sm font-semibold text-ui-text'>Everything is operating normally</p>
-                        <p className='text-sm text-ui-muted'>No customer action is needed right now.</p>
-                    </div>
-                </DashboardPanel>
-            )}
         </DashboardPage>
     )
 }
 
-function ServiceHealth({ checks }: { checks: ReturnType<typeof toPublicServiceStatus>['checks'] }) {
-    return <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
-        <div className='flex items-center justify-between gap-3'>
-            <div>
-                <h2 className='text-base font-semibold text-ui-text'>Service health</h2>
-                <p className='mt-1 text-sm text-ui-muted'>{checks.length} check{checks.length === 1 ? '' : 's'} need review.</p>
-            </div>
-            <Radio className='h-4 w-4 text-ui-warning' />
-        </div>
-        <div className='mt-3 space-y-2'>
-            {checks.slice(0, 6).map((check) => (
-                <div key={`${check.service}-${check.check_name}`} className='flex items-center justify-between rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm'>
-                    <div>
-                        <div className='font-medium text-ui-text'>{check.check_name}</div>
-                        <div className='text-ui-muted'>{check.service}</div>
-                    </div>
-                    <div className='text-right'>
-                        <div className='font-semibold text-ui-text'>{check.latency_ms}ms</div>
-                        <div className={`text-xs ${check.status === 'up' ? 'text-ui-success' : check.status === 'degraded' ? 'text-ui-warning' : 'text-ui-danger'}`}>
-                            {check.status}
-                        </div>
-                    </div>
-                </div>
-            ))}
-            {!checks.length && <p className='rounded-lg border border-ui-border bg-ui-canvas px-3 py-3 text-sm text-ui-muted'>Service checks are still connecting.</p>}
-        </div>
-    </DashboardPanel>
-}
-
 function firstParam(value: string | string[] | undefined) {
     return (Array.isArray(value) ? value[0] : value)?.trim() || undefined
-}
-
-function toneDot(tone: 'watch') {
-    return tone === 'watch' ? 'bg-ui-warning shadow-[0_0_14px_rgba(246,180,95,0.45)]' : ''
 }
