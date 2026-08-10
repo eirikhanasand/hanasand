@@ -536,7 +536,6 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                 <div className='grid min-w-0 gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_320px]'>
                     <section className='grid min-w-0 gap-3'>
                         <div className='grid gap-2 sm:grid-cols-3'>
-                            <Metric label='Watch terms' value={`${matchedTerms(state.detail).length}`} detail={matchedTerms(state.detail).slice(0, 2).join(', ') || 'watch term pending'} />
                             <Metric label='Evidence' value={`${evidence.length}`} detail={evidence.some(item => item.contentHash || item.provenance?.contentHash) ? 'hashes linked' : 'hashes pending'} />
                             <Metric label='Last activity' value={caseRecord.updatedAt ? relativeTime(caseRecord.updatedAt) : '—'} detail={`${timeline.length} recorded event${timeline.length === 1 ? '' : 's'}`} />
                             <Metric label='Delivery' value={latestDelivery?.status || 'not sent'} detail={latestDelivery ? relativeTime(latestDelivery.attemptedAt) : 'no attempt'} />
@@ -641,7 +640,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                             {message ? <p className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${message.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'}`}>{message.text}</p> : null}
                         </section>
 
-                        <Panel title='Third-party report delivery' action={state.detail.deliveryContext?.retryable ? 'retryable' : latestDelivery?.status || 'pending'}>
+                        <CollapsiblePanel title='Third-party report delivery' action={state.detail.deliveryContext?.retryable ? 'retryable' : latestDelivery?.status || 'pending'} defaultOpen>
                             {state.deliveryError ? <p className='mb-3 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-xs text-ui-danger'>{state.deliveryError}</p> : null}
                             {state.receiverError ? <p className='mb-3 rounded-lg border border-ui-warning/30 bg-ui-warning/10 p-2 text-xs text-ui-warning'>{state.receiverError}</p> : null}
                             {state.destinationError ? <p className='mb-3 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-xs text-ui-danger'>{state.destinationError}</p> : null}
@@ -687,9 +686,9 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                             {webhookBlockedReason ? (
                                 <p className='mt-2 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-xs leading-5 text-ui-warning' data-dwm-webhook-action-blocker='true'>{webhookBlockedReason}</p>
                             ) : null}
-                        </Panel>
+                        </CollapsiblePanel>
 
-                        <Panel title='Case and evidence report' action={selectedEvidenceIds.length ? `${selectedEvidenceIds.length} selected` : 'selection required'}>
+                        <CollapsiblePanel title='Case and evidence report' action={selectedEvidenceIds.length ? `${selectedEvidenceIds.length} selected` : 'selection required'}>
                             <div className='grid gap-2 text-xs text-ui-muted'>
                                 <KeyValue label='Checksum' value={state.exportPayload?.exportChecksum ? 'export checksum linked' : 'not available'} />
                                 <KeyValue label='Dedupe' value={state.exportPayload?.summary?.dedupeKey || alert?.webhookDelivery?.dedupeKey ? 'dedupe linked' : 'pending'} />
@@ -700,12 +699,8 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                 <button type='button' onClick={() => copyText(state.exportPayload?.copyText || '')} disabled={!state.exportPayload?.copyText} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
                                     <Copy className='h-4 w-4' />Copy summary
                                 </button>
-                                <div className='rounded-lg border border-ui-border bg-ui-canvas p-3 text-[11px] leading-5 text-ui-muted' data-third-party-report-contract='true'>
-                                    <p className='font-semibold text-ui-text'>Authenticated outbound reporting</p>
-                                    <p>Exports and delivery use the selected evidence, preserve provenance, and record a durable receipt; unsafe or cross-organization selections are rejected.</p>
-                                </div>
                             </div>
-                        </Panel>
+                        </CollapsiblePanel>
                     </aside>
                 </div>
             </section>
@@ -906,19 +901,6 @@ function CommandLink({ href, children }: { href: string, children: ReactNode }) 
     )
 }
 
-function Panel({ title, action, children }: { title: string, action?: string, children: ReactNode }) {
-    return (
-        <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
-            <div className='mb-3 flex items-center justify-between gap-3'>
-                <h2 className='text-sm font-semibold text-ui-text'>{title}</h2>
-                {action ? <span className='rounded-full border border-ui-border bg-ui-canvas px-2 py-0.5 text-[10px] font-semibold uppercase text-ui-primary'>{action}</span> : null}
-            </div>
-            {children}
-        </section>
-    )
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function CollapsiblePanel({ title, action, children, defaultOpen = false }: { title: string, action?: string, children: ReactNode, defaultOpen?: boolean }) {
     return (
         <details className='group rounded-lg border border-ui-border bg-ui-panel' open={defaultOpen}>

@@ -373,13 +373,13 @@ export function DwmAnalystPortal({
     }
 
     if (view === 'cases') {
-        return <CaseOverview tenantId={tenantId} organizationId={organizationId} state={casesState} alerts={alerts} />
+        return <CaseOverview organizationId={organizationId} state={casesState} alerts={alerts} />
     }
 
     return null
 }
 
-function CaseOverview({ tenantId, organizationId, state, alerts }: { tenantId: string, organizationId?: string, state: CasesState, alerts: PortalAlert[] }) {
+function CaseOverview({ organizationId, state, alerts }: { organizationId?: string, state: CasesState, alerts: PortalAlert[] }) {
     const alertsById = new Map(alerts.map(alert => [alert.id, alert]))
     const [query, setQuery] = useState('')
     const [status, setStatus] = useState('all')
@@ -420,10 +420,9 @@ function CaseOverview({ tenantId, organizationId, state, alerts }: { tenantId: s
                             <thead className='border-b border-ui-border bg-ui-raised text-xs font-semibold text-ui-muted'>
                                 <tr>
                                     <th className='px-4 py-3'>Title / actor</th>
-                                    <th className='px-4 py-3'>Organization / victim</th>
                                     <th className='px-4 py-3'>Severity / status</th>
-                                    <th className='px-4 py-3'>First seen / updated</th>
-                                    <th className='px-4 py-3'>Review</th>
+                                    <th className='px-4 py-3'>Owner</th>
+                                    <th className='px-4 py-3'>Updated</th>
                                 </tr>
                             </thead>
                             <tbody className='divide-y divide-ui-border'>
@@ -433,8 +432,6 @@ function CaseOverview({ tenantId, organizationId, state, alerts }: { tenantId: s
                                     const severity = alert?.severity || row.severity || row.priority || '—'
                                     const status = row.status || '—'
                                     const reviewState = alert?.reviewState || row.reviewState
-                                    const organization = row.organizationId || organizationId || tenantId
-                                    const victim = alert?.company || row.victimName || row.company
                                     return (
                                         <tr key={caseId} className='align-top text-ui-text' data-dwm-case-row='true'>
                                             <td className='px-4 py-3'>
@@ -444,21 +441,15 @@ function CaseOverview({ tenantId, organizationId, state, alerts }: { tenantId: s
                                                 <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{alert?.actor || row.actor || '—'}</p>
                                             </td>
                                             <td className='px-4 py-3'>
-                                                <p className='wrap-break-word'>{organization}</p>
-                                                <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{victim || '—'}</p>
-                                            </td>
-                                            <td className='px-4 py-3'>
                                                 <div className='flex flex-wrap items-center gap-2'>
                                                     <span className={severity === '—' ? 'text-ui-muted' : severityClass(severity)}>{stateLabel(severity)}</span>
                                                     <span className='wrap-break-word text-xs text-ui-muted'>{stateLabel(status)}</span>
                                                 </div>
                                             </td>
+                                            <td className='px-4 py-3 text-xs text-ui-muted'>{row.assignedOwner || 'Unassigned'}</td>
                                             <td className='px-4 py-3 text-xs text-ui-muted'>
-                                                <p>{caseDateLabel(alert?.firstSeenAt || row.firstSeenAt || row.createdAt)}</p>
-                                                <p className='mt-1'>{caseDateLabel(row.updatedAt)}</p>
-                                            </td>
-                                            <td className='px-4 py-3'>
-                                                {reviewState ? <span className={reviewStateClass(reviewState)}>{stateLabel(reviewState)}</span> : <span className='text-sm text-ui-muted'>—</span>}
+                                                <p>{caseDateLabel(row.updatedAt || alert?.firstSeenAt || row.firstSeenAt || row.createdAt)}</p>
+                                                {reviewState ? <p className='mt-1'><span className={reviewStateClass(reviewState)}>{stateLabel(reviewState)}</span></p> : null}
                                             </td>
                                         </tr>
                                     )

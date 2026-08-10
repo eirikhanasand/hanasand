@@ -768,6 +768,28 @@ describe("DWM exposure queue pipeline", () => {
     expect(exposureClaimsFromStore(store)).toEqual([]);
   });
 
+  test("does not present a future source timestamp as current activity", async () => {
+    const store = new InMemoryScraperStore();
+    const collectedAt = new Date(Date.now() - 10 * 60_000).toISOString();
+    const futurePublishedAt = new Date(Date.now() + 10 * 60_000).toISOString();
+    await saveExposureClaimFromCollectedItem(store, {
+      sourceId: "src_future_source_timestamp",
+      source: { name: "Future timestamp source", url: "https://example.test/feed" },
+      title: "Akira has just published a new victim: Future Company",
+      rawText: "Akira victim: Future Company.",
+      url: "https://example.test/future-company",
+      collectedAt,
+      publishedAt: futurePublishedAt,
+      metadata: { adapter: "rss", sourceFamily: "public_actor_claims" }
+    } as any);
+
+    const response = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=1"), { store, frontier: new FocusedFrontier(), port: 0 } as any);
+    const body = await response.json() as any;
+    expect(response.status).toBe(200);
+    expect(body.items[0].publishedAt).toBeUndefined();
+    expect(body.items[0].collectedAt).toBe(collectedAt);
+  });
+
   test("does not claim a future collection when the latest check is overdue", async () => {
     const store = new InMemoryScraperStore();
     const oldAt = new Date(Date.now() - 2 * 60 * 60_000).toISOString();

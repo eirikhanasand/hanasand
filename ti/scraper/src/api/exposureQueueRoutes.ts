@@ -409,6 +409,12 @@ function validTimestamp(value: unknown): string | undefined {
   return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
 }
 
+function validSourceTimestamp(value: unknown, collectedAt?: string): string | undefined {
+  const timestamp = validTimestamp(value);
+  if (!timestamp || !collectedAt) return timestamp;
+  return Date.parse(timestamp) <= Date.parse(collectedAt) + 5 * 60_000 ? timestamp : undefined;
+}
+
 function exposureQueueFilters(url: URL): ExposureQueueFilters {
   return {
     q: url.searchParams.get("q") ?? "",
@@ -1013,9 +1019,9 @@ function exposureClaimFromCapture(capture: any, source?: any) {
   const leak = capture.metadata?.leakSite ?? {};
   if (isTemplatePlaceholder(leak.actorName) || isTemplatePlaceholder(leak.victimName) || (Array.isArray(leak.victimNames) && leak.victimNames.some(isTemplatePlaceholder))) return undefined;
   const parsedTitle = parseVictimClaimTitle(String(capture.title ?? capture.metadata?.safeExcerpt ?? ""));
-  const publishedAt = validTimestamp(capture.publishedAt);
   const collectedAt = validTimestamp(capture.collectedAt);
-  const leakObservedAt = validTimestamp(leak.firstSeenAt);
+  const publishedAt = validSourceTimestamp(capture.publishedAt, collectedAt);
+  const leakObservedAt = validSourceTimestamp(leak.firstSeenAt, collectedAt);
   const observedAt = publishedAt ?? (leakObservedAt !== collectedAt ? leakObservedAt : undefined);
   const authoritativePublishedAt = publishedAt ?? observedAt;
   const ageMinutes = authoritativePublishedAt
@@ -1044,7 +1050,7 @@ function exposureClaimFromCapture(capture: any, source?: any) {
     status: capture.metadata?.review?.state === "needs_review" || ageMinutes === undefined ? "needs_review" : ageMinutes <= 60 ? "new" : "parsed",
     confidence,
     freshnessMinutes: ageMinutes,
-    metadataOnly: capture.storageKind === "metadata_only",
+    metadataOnly: capture.storageKind === "metadata_only" || leak.metadataOnly === true || source?.metadata?.exposureQueueSource === true,
     url: safeExposureUrl(capture.url),
     summary: capture.metadata?.safeExcerpt || capture.title || "",
     provenanceHash: hashContent(capture.id)
