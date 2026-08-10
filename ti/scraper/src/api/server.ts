@@ -366,6 +366,12 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     }
     return error("not_found", "Route not found", 404);
   } catch (caught) {
+    console.error(JSON.stringify({
+      event: "api.request_failed",
+      method: request.method,
+      path: new URL(request.url).pathname,
+      error: caught instanceof Error ? caught.message : String(caught),
+    }));
     return error("internal_error", caught instanceof Error ? caught.message : String(caught), 500);
   }
 }

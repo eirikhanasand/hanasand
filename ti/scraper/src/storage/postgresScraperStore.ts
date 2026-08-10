@@ -2385,6 +2385,12 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       } catch (error) {
         this.lastWriteError = error instanceof Error ? error : new Error(String(error));
         this.drainFailureCount += 1;
+        console.error(JSON.stringify({
+          event: "postgres.write_failed",
+          description: write.description,
+          failureCount: this.drainFailureCount,
+          error: this.lastWriteError.message,
+        }));
         this.scheduleDrainRetry();
         return;
       }
