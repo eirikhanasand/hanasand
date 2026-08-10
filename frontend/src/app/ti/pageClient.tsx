@@ -5317,11 +5317,8 @@ function EmptyState() {
                     <HelpCircle className='h-4 w-4 text-ui-primary dark:text-ui-primary' />
                     Search help
                 </button>
-                <Link href='/dashboard/dwm' className='inline-flex h-9 items-center gap-2 rounded-full border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-primary transition hover:border-ui-primary/35 hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-primary dark:hover:bg-ui-raised'>
-                    <BellRing className='h-4 w-4' />
-                    Review recent monitoring alerts
-                </Link>
             </div>
+            <p className='text-sm text-ui-muted dark:text-ui-muted'>No new <Link href='/dashboard/dwm' className='font-semibold text-ui-primary underline decoration-ui-primary/60 underline-offset-2 hover:decoration-ui-primary focus:outline-none focus:ring-2 focus:ring-ui-primary/35'>alerts</Link>.</p>
             {showSearchHelp ? (
                 <div className='fixed inset-0 z-1100 grid place-items-center bg-black/45 px-4 py-6' role='dialog' aria-modal='true' aria-labelledby='ti-search-help-title'>
                     <div className='absolute inset-0' onClick={() => setShowSearchHelp(false)} aria-hidden='true' />
