@@ -742,7 +742,7 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
     )
 }
 
-function PublicTiDwmIntake({ handoff, params, tenantId, organizationId, activeSourceCount, sourceCount, caseCount }: {
+function PublicTiDwmIntake({ handoff, tenantId, organizationId, activeSourceCount, sourceCount, caseCount }: {
     handoff: PublicTiHandoffDecodeResult
     params: ReturnType<typeof useSearchParams>
     tenantId: string
@@ -751,10 +751,10 @@ function PublicTiDwmIntake({ handoff, params, tenantId, organizationId, activeSo
     sourceCount: number
     caseCount: number
 }) {
-    const handoffQuery = params.toString()
-    const workbenchHref = handoffQuery ? `/dashboard/ti/workbench?${handoffQuery}` : '/dashboard/ti/workbench'
     const sourceHref = '/dashboard/ti/sources'
     const orgHref = organizationId ? `/organizations?organizationId=${encodeURIComponent(organizationId)}` : `/organizations?tenantId=${encodeURIComponent(tenantId)}`
+    const actionsHref = organizationId ? `/dashboard/dwm/actions?organizationId=${encodeURIComponent(organizationId)}#dwm-alert-review` : '/dashboard/dwm/actions#dwm-alert-review'
+    const casesHref = organizationId ? `/dashboard/dwm/cases?organizationId=${encodeURIComponent(organizationId)}` : '/dashboard/dwm/cases'
 
     if (!handoff.ok) {
         return (
@@ -798,14 +798,14 @@ function PublicTiDwmIntake({ handoff, params, tenantId, organizationId, activeSo
             label: 'Evidence',
             value: captures ? `${captures} capture${captures === 1 ? '' : 's'}` : 'capture needed',
             detail: payload.artifact.provenance.slice(0, 2).join(', ') || payload.artifact.label,
-            href: workbenchHref,
+            href: actionsHref,
             tone: captures ? 'ready' : 'blocked',
         },
         {
             label: 'Cases',
             value: payload.evidenceRefs?.casePaths.length ? `${payload.evidenceRefs.casePaths.length} linked` : caseCount ? `${caseCount} open` : 'review first',
             detail: blockers.length ? blockers.join('; ') : `${payload.query} can move into case review.`,
-            href: workbenchHref,
+            href: casesHref,
             tone: blockers.length ? 'blocked' : caseCount ? 'ready' : 'waiting',
         },
     ] as const
@@ -833,7 +833,7 @@ function PublicTiDwmIntake({ handoff, params, tenantId, organizationId, activeSo
                     ))}
                 </div>
                 <div className='grid min-w-0 grid-cols-2 gap-2 xl:w-40 xl:grid-cols-1'>
-                    <a href={workbenchHref} className='inline-flex h-9 items-center justify-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-canvas transition hover:opacity-90'>
+                    <a href={casesHref} className='inline-flex h-9 items-center justify-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-canvas transition hover:opacity-90'>
                         Review case
                     </a>
                     <a href={orgHref} className='inline-flex h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas'>

@@ -4,10 +4,11 @@ This is the single historical status record for the Masters thesis and product. 
 
 ## Current state — 2026-08-10
 
-- Production is deployed from private canonical `main` at `b0003510`. API, frontend, and scraper are healthy after the scraper’s PostgreSQL hydration/startup window.
+- Production is deployed from private canonical `main` at `fefd8f96`. API, frontend, and scraper are healthy after the scraper’s PostgreSQL hydration/startup window.
 - The live exposure queue returns HTTP 200 with retained customer-visible rows (`85` total in the verified probe); the public endpoint completed in about 175 ms and returned real RansomLook items. During scraper startup the same route returned an explicit HTTP 503, not an empty success.
 - The Cases list is now compact: case, severity/status, owner, and updated time. Case detail retains real assignment, status, evidence, timeline, and delivery actions while collapsing secondary report controls. Authenticated browser proof still requires a real customer session; the unauthenticated route correctly redirects to login.
-- A governed dark-web metadata source family is active with three approved sources. One RansomLook RSS scheduled cycle has produced retained output; the family remains incomplete until two useful scheduled cycles are proven.
+- A governed public-metadata source family is active with three approved sources. The live source-operations snapshot records six successful scheduled checks for each RansomLook source, with RansomLook Recent producing 42 retained captures across three useful checks and RansomLook RSS producing 3 retained captures across two useful checks. The ransomware.live JSON source is healthy but has not produced retained captures.
+- Authenticated customer proof uses organization `f74e8270-a189-4236-ad4b-f4b1320c71b6`: one real watch term matched a live RansomLook alert, handed off two retained evidence rows into case `case_dd24806f79f1e5cc`, and the browser recorded assignment, review, escalation, and a customer note. The compact Cases list search and status filter were verified live.
 
 ## Clean line
 
@@ -33,9 +34,10 @@ Record the deployed commit, deployment time, live API result, live browser resul
 - Bounded governed canary evidence after `8b573221`: two approved RansomLook sources completed with `0` failed tasks and `38` retained exposure outputs; the public queue then showed `85` retained rows, a fresh collection check, and `metadataOnly: true` output. The live activity browser showed the expanded retained feed (`85` total, with the current page loading its first 50 rows).
 - `b0003510`: deployed the public source-status credibility fix; rollback: `81a6dbe6`.
 - Live evidence after `b0003510`: frontend build, tests, TypeScript, and production build passed; the frontend container restarted healthy; `/api/status` reported Source Operations `up` with “Source collection is responding; freshness is being monitored”; Latest Activity reported 85 retained records.
+- `fefd8f96`: deployed retained-capture fallback in the DWM workflow and real matched-alert case handoff/review panel. Rollback: `b0003510`.
+- Live evidence after `fefd8f96`: Actions showed one customer term, `94/1538` sources, `17818` retained captures, one matched alert, and a real Open case action; the case detail showed two RansomLook evidence rows and live assignment/status/note events. Current `/status` reports Source Operations and Latest Activity as normal after scraper recovery.
 
 ## Approved production work
 
-1. Prove two useful scheduled cycles for the implemented dark-web metadata source family.
-2. Verify the compact Cases list/detail flow with an authenticated customer session.
-3. Remove or implement fake customer-facing paths, then complete tenant/permission and performance cleanup.
+1. Finish the backup continuity run and record a successful archive plus isolated restore receipt.
+2. Remove remaining DWM handoff links to the obsolete `/dashboard/ti/workbench` route and keep tenant/permission and performance cleanup scoped to live UI paths.
