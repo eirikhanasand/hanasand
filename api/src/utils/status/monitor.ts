@@ -239,11 +239,14 @@ export default async function runSyntheticMonitor() {
             return 'The authenticated dark-web monitoring workspace rendered successfully.'
         }),
         check('dark-web-monitoring', 'Latest activity', async () => {
-            // A failed activity check is already recorded as down. Retrying
-            // the same slow route here only stretches the public status read
-            // without changing the result; the next scheduled monitor run is
-            // the retry boundary.
-            const { response, body } = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase)
+            // Use the authenticated scraper service as the canonical data
+            // source. The public hostname can race the frontend proxy during
+            // scraper restarts even when retained customer activity is live.
+            const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN
+            if (!serviceToken) throw new Error('Threat-intelligence service authentication is not configured.')
+            const { response, body } = await fetchJson('/v1/dwm/exposure-queue?limit=1', {
+                headers: { 'x-hanasand-service-token': serviceToken },
+            }, scraperBase)
             const queue = object(body)
             const counts = object(queue?.counts)
             const freshness = object(queue?.freshness)
