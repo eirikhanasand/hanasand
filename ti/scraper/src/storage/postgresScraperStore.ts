@@ -849,7 +849,27 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             )
           ) matches ON TRUE
       `, [...values, limit, offset]);
-      const summary = await this.querySourceOperationalSummary(input);
+      const [summaryRow] = await this.sql.unsafe(`
+        SELECT count(*) AS source_count,
+          count(*) FILTER (WHERE collection_executable) AS retained_source_count,
+          count(*) FILTER (WHERE NOT collection_executable) AS inactive_source_count,
+          count(*) FILTER (WHERE collection_executable) AS active_source_count,
+          count(*) FILTER (WHERE status = 'candidate') AS candidate_source_count,
+          count(*) FILTER (WHERE status = 'rejected') AS rejected_source_count,
+          count(*) FILTER (WHERE status = 'retired') AS retired_source_count
+        FROM threat_intel.sources
+        WHERE tenant_id IS NOT DISTINCT FROM $1::text
+      `, [tenantId]);
+      const summary = { summary: {
+        sourceCount: Number((summaryRow as any)?.source_count ?? 0),
+        retainedSourceCount: Number((summaryRow as any)?.retained_source_count ?? 0),
+        inactiveSourceCount: Number((summaryRow as any)?.inactive_source_count ?? 0),
+        activeSourceCount: Number((summaryRow as any)?.active_source_count ?? 0),
+        candidateSourceCount: Number((summaryRow as any)?.candidate_source_count ?? 0),
+        rejectedSourceCount: Number((summaryRow as any)?.rejected_source_count ?? 0),
+        retiredSourceCount: Number((summaryRow as any)?.retired_source_count ?? 0),
+        measurementState: 'source_counts_only'
+      } };
       const total = Number((pageRows[0] as any)?.filtered_total ?? 0);
       return { rows: pageRows, totals: summary.summary, total, nextCursor: offset + pageRows.length < total ? String(offset + pageRows.length) : undefined };
     }
