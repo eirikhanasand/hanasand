@@ -217,7 +217,7 @@ export function DwmAnalystPortal({
     const activeSourceCount = operations?.counts.activeSourceCount ?? 0
     const sourceCount = operations?.counts.sourceCount ?? 0
     const sharedCaptureCount = operations?.counts.captureCount ?? latestCaptures.length
-    const tenantRunCaptureCount = operations?.latestRun?.captureCount ?? 0
+    const tenantRunCaptureCount = operations?.latestRun?.captureCount || operations?.counts.captureCount || 0
     const watchlistMatchCount = operations?.counts.watchlistMatchCount || latestCaptureWatchlistMatchCount(latestCaptures) || alertWatchlistMatchCount(alerts)
     const watchTermCount = snapshot.watchlist.length
     const webhookState = deliverySummaryLabel(localDeliveries)
@@ -321,6 +321,27 @@ export function DwmAnalystPortal({
         }
     }
 
+    async function openCaseFromAlert(alert: PortalAlert, assignedOwner?: string, note?: string) {
+        await runAction(`case:${alert.id}`, async () => {
+            const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(scopeBody({
+                    alertId: alert.id,
+                    assignedOwner: assignedOwner?.trim() || undefined,
+                    note: note?.trim() || 'Case opened from the retained alert.',
+                    idempotencyKey: `dashboard-alert-case:${alert.id}`,
+                }, tenantId, alertOrganizationId(alert, organizationId))),
+            })
+            const payload = await readPayload(response)
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            const caseId = payload.case?.id || payload.alertCaseHandoff?.caseId
+            if (!caseId) throw new Error('The alert was saved, but no case id was returned.')
+            router.push(caseDetailHref(caseId, alert.id, alertOrganizationId(alert, organizationId), 'alert_queue'))
+            return 'Case opened.'
+        })
+    }
+
     if (view === 'watchlists') {
         return (
             <div className='grid gap-4'>
@@ -368,6 +389,7 @@ export function DwmAnalystPortal({
         return (
             <DwmPanelPage title='Actions' meta='Watchlist, source pack, case, and webhook controls'>
                 {workflowActions}
+                <AlertReviewPanel alerts={alerts} busyAction={busyAction} onOpenCase={openCaseFromAlert} organizationId={organizationId} />
             </DwmPanelPage>
         )
     }
@@ -377,6 +399,44 @@ export function DwmAnalystPortal({
     }
 
     return null
+}
+
+function AlertReviewPanel({ alerts, busyAction, onOpenCase, organizationId }: {
+    alerts: PortalAlert[]
+    busyAction: string | null
+    onOpenCase: (alert: PortalAlert) => Promise<void>
+    organizationId?: string
+}) {
+    return (
+        <section id='dwm-alert-review' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
+            <div className='border-b border-ui-border px-4 py-3'>
+                <h2 className='text-base font-semibold text-ui-text'>Matched alerts</h2>
+                <p className='mt-1 text-xs leading-5 text-ui-muted'>Real retained matches for this organization. Open a case only from an alert with persisted source evidence.</p>
+            </div>
+            {!alerts.length ? <p className='px-4 py-8 text-sm text-ui-muted'>No retained alerts in this organization.</p> : (
+                <div className='divide-y divide-ui-border'>
+                    {alerts.map(alert => {
+                        const caseId = alertCaseId(alert)
+                        const evidenceCount = alert.evidenceSummary?.evidenceCount ?? alert.provenance?.captureIds?.length ?? 0
+                        const href = caseId ? caseDetailHref(caseId, alert.id, alertOrganizationId(alert, organizationId), 'alert_queue') : undefined
+                        return (
+                            <div key={alert.id} className='flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
+                                <div className='min-w-0'>
+                                    <p className='wrap-break-word text-sm font-semibold text-ui-text'>{alert.company || alert.matchedTerm?.value || 'Unlabeled match'}</p>
+                                    <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{stateLabel(alert.severity)} · {stateLabel(alert.sourceFamily)} · {evidenceCount} evidence row{evidenceCount === 1 ? '' : 's'}</p>
+                                </div>
+                                {href ? <Link href={href} className='inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text'>Open case</Link> : (
+                                    <button type='button' onClick={() => void onOpenCase(alert)} disabled={busyAction === `case:${alert.id}`} className='inline-flex min-h-9 items-center justify-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-canvas disabled:cursor-wait disabled:opacity-60'>
+                                        {busyAction === `case:${alert.id}` ? 'Opening…' : 'Open case'}
+                                    </button>
+                                )}
+                            </div>
+                        )
+                    })}
+                </div>
+            )}
+        </section>
+    )
 }
 
 function CaseOverview({ organizationId, state, alerts }: { organizationId?: string, state: CasesState, alerts: PortalAlert[] }) {

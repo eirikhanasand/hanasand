@@ -504,8 +504,8 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                                 Org watchlists
                             </Link>
                         ) : null}
-                        <Link href='/dashboard/ti/workbench' className='inline-flex min-h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
-                            Alert review
+                        <Link href='#dwm-alert-review' className='inline-flex min-h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
+                            Matched alerts
                         </Link>
                     </div>
                 </div>

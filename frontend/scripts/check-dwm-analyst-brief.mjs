@@ -115,7 +115,7 @@ assert.ok(pageSource.includes('alerts={[]}'), 'DWM case queue should start empty
 assert.ok(source.includes('fetch(`/api/dwm/alerts?${params.toString()}`'), 'DWM case queue should hydrate from the authenticated alert proxy.')
 assert.ok(!pageSource.includes('mergeDwmAlerts'), 'DWM case queue should not merge derived product matches into persisted alerts.')
 assert.ok(source.includes('const sharedCaptureCount = operations?.counts.captureCount ?? latestCaptures.length'), 'DWM shared source inventory should retain its real capture total.')
-assert.ok(source.includes('const tenantRunCaptureCount = operations?.latestRun?.captureCount ?? 0'), 'DWM workflow counters should use only the persisted tenant run.')
+assert.ok(source.includes('const tenantRunCaptureCount = operations?.latestRun?.captureCount || operations?.counts.captureCount || 0'), 'DWM workflow counters should show retained captures when the latest run has no new rows.')
 assert.ok(source.includes('captureCount: tenantRunCaptureCount'), 'DWM workflow telemetry should not attribute shared captures to a tenant run.')
 assert.ok(!source.includes('captureRunLabel(operations?.latestRun?.captureCount, captureCount'), 'DWM run labels should not fall back to shared inventory.')
 assert.ok(source.includes('alertWatchlistMatchCount(alerts)'), 'DWM workflow counters should derive visible matches from alerts when operations are unavailable.')
@@ -149,7 +149,7 @@ for (const token of [
     'Open case',
     'Test destination',
     'Send queued',
-    'Alert review',
+    'Matched alerts',
     'workflowTerms(terms)',
     'Add at least one customer-owned watchlist term.',
     'No persisted watchlist terms. Add terms owned by this tenant before collecting or rebuilding alerts.',
