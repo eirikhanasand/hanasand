@@ -4,7 +4,7 @@ This is the single historical status record for the Masters thesis and product. 
 
 ## Current state — 2026-08-10
 
-- Production is deployed from private canonical `main` at `aa1b1aaf`. API and scraper are healthy after the scraper’s PostgreSQL hydration/startup window; the frontend/API/scraper build completed its production test, lint, TypeScript, and Next build gates.
+- Production is deployed from private canonical `main` at `b83123df`. The API, frontend, and scraper are healthy after the scraper’s PostgreSQL hydration/startup window; the frontend/API/scraper build completed its production test, lint, TypeScript, and Next build gates.
 - The live exposure queue returns HTTP 200 with retained customer-visible rows (`85` total in the verified probe); the public endpoint completed in about 175 ms and returned real RansomLook items. During scraper startup the same route returned an explicit HTTP 503, not an empty success.
 - The Cases list is now compact: case, severity/status, owner, and updated time. Case detail retains real assignment, status, evidence, timeline, and delivery actions while collapsing secondary report controls. Authenticated browser proof still requires a real customer session; the unauthenticated route correctly redirects to login.
 - A governed public-metadata source family is active with three approved sources. The live source-operations snapshot records six successful scheduled checks for each RansomLook source, with RansomLook Recent producing 42 retained captures across three useful checks and RansomLook RSS producing 3 retained captures across two useful checks. The ransomware.live JSON source is healthy but has not produced retained captures.
@@ -39,8 +39,9 @@ Record the deployed commit, deployment time, live API result, live browser resul
 - Live evidence after `fefd8f96`: Actions showed one customer term, `94/1538` sources, `17818` retained captures, one matched alert, and a real Open case action; the case detail showed two RansomLook evidence rows and live assignment/status/note events. Current `/status` reports Source Operations and Latest Activity as normal after scraper recovery.
 - `aa1b1aaf`: deployed truthful collector/no-new-claims status handling, bounded collection-run reporting, and rerouted live TI audit/domain links away from the obsolete workbench handoff. Rollback: `fefd8f96`.
 - Live evidence after `aa1b1aaf`: production HEAD matched `aa1b1aaf`; API and scraper were healthy, scheduler status was `operational`, and `/api/status` was `up` with Latest Activity explicitly reporting a healthy collector and no new claims rather than falsely reporting service failure.
+- `b83123df`: deployed the restore-verifier fix that skips the already-applied high-volume maintenance migration during isolated validation. Rollback: `aa1b1aaf`.
+- Restore evidence after `b83123df`: receipt `RESTORE-RECEIPT-20260810T054453Z-3401723` reports `status=succeeded`, matching database inventory hashes, `content_hashes=matched`, `evidence_hashes=matched`, `evidence_object_reconciliation=passed`, `application_read=passed`, 100 tables and 7,924,605 rows, with the temporary database and evidence volume removed.
 
 ## Approved production work
 
-1. Finish the isolated restore verifier and record its receipt against archive `20260810T042345Z`.
-2. Continue customer-facing tenant/performance measurement on the live DWM/search/cases paths; do not spend agent time on reviews, handoffs, merge-gating, or portfolio work.
+1. Continue customer-facing tenant/performance measurement on the live DWM/search/cases paths; do not spend agent time on reviews, handoffs, merge-gating, or portfolio work.
