@@ -753,9 +753,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; sourceId?: string; executableOnly?: boolean } ) {
-    // ponytail: row-level evidence joins are bounded to 25 per global page so
-    // the operator endpoint stays responsive; pagination still exposes every row.
-    const limit = Math.max(1, Math.min(25, Number(input.limit ?? 100)));
+    // ponytail: keep the canonical inventory bounded at 500 rows; the UI paginates
+    // the returned inventory and the next upgrade is a database-side sort/filter.
+    const limit = Math.max(1, Math.min(500, Number(input.limit ?? 100)));
     const offset = Math.max(0, Number(input.offset ?? 0));
     const tenantId = input.tenantId ?? null;
     const sourceId = input.sourceId?.trim() || null;
