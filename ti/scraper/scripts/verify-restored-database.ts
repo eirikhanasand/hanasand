@@ -364,7 +364,10 @@ async function main(): Promise<void> {
   }
   const objectLedger = await readFile(objectLedgerPath, "utf8");
 
-  const store = await PostgresScraperStore.create();
+  // The backup already contains the current schema. Re-running the high-volume
+  // parser-artifact maintenance migration makes an isolated restore drill look
+  // hung and adds no validation value.
+  const store = await PostgresScraperStore.create({ runMaintenanceMigrations: false });
   try {
     await store.flush();
     const database = await store.databaseHealth();
