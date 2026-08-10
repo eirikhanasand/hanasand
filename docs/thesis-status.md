@@ -4,11 +4,12 @@ This is the single historical status record for the Masters thesis and product. 
 
 ## Current state — 2026-08-10
 
-- Production is deployed from private canonical `main` at `fefd8f96`. API, frontend, and scraper are healthy after the scraper’s PostgreSQL hydration/startup window.
+- Production is deployed from private canonical `main` at `aa1b1aaf`. API and scraper are healthy after the scraper’s PostgreSQL hydration/startup window; the frontend/API/scraper build completed its production test, lint, TypeScript, and Next build gates.
 - The live exposure queue returns HTTP 200 with retained customer-visible rows (`85` total in the verified probe); the public endpoint completed in about 175 ms and returned real RansomLook items. During scraper startup the same route returned an explicit HTTP 503, not an empty success.
 - The Cases list is now compact: case, severity/status, owner, and updated time. Case detail retains real assignment, status, evidence, timeline, and delivery actions while collapsing secondary report controls. Authenticated browser proof still requires a real customer session; the unauthenticated route correctly redirects to login.
 - A governed public-metadata source family is active with three approved sources. The live source-operations snapshot records six successful scheduled checks for each RansomLook source, with RansomLook Recent producing 42 retained captures across three useful checks and RansomLook RSS producing 3 retained captures across two useful checks. The ransomware.live JSON source is healthy but has not produced retained captures.
 - Authenticated customer proof uses organization `f74e8270-a189-4236-ad4b-f4b1320c71b6`: one real watch term matched a live RansomLook alert, handed off two retained evidence rows into case `case_dd24806f79f1e5cc`, and the browser recorded assignment, review, escalation, and a customer note. The compact Cases list search and status filter were verified live.
+- The live status contract now distinguishes “collector healthy; no new customer claims within the freshness window” from an unavailable collector. On the final post-deploy check, overall status was `up`, Latest Activity was `up` with that explicit no-new-claims message, Source Operations was `up`, and the scheduler reported `operational` with a completed canary run.
 
 ## Clean line
 
@@ -36,8 +37,10 @@ Record the deployed commit, deployment time, live API result, live browser resul
 - Live evidence after `b0003510`: frontend build, tests, TypeScript, and production build passed; the frontend container restarted healthy; `/api/status` reported Source Operations `up` with “Source collection is responding; freshness is being monitored”; Latest Activity reported 85 retained records.
 - `fefd8f96`: deployed retained-capture fallback in the DWM workflow and real matched-alert case handoff/review panel. Rollback: `b0003510`.
 - Live evidence after `fefd8f96`: Actions showed one customer term, `94/1538` sources, `17818` retained captures, one matched alert, and a real Open case action; the case detail showed two RansomLook evidence rows and live assignment/status/note events. Current `/status` reports Source Operations and Latest Activity as normal after scraper recovery.
+- `aa1b1aaf`: deployed truthful collector/no-new-claims status handling, bounded collection-run reporting, and rerouted live TI audit/domain links away from the obsolete workbench handoff. Rollback: `fefd8f96`.
+- Live evidence after `aa1b1aaf`: production HEAD matched `aa1b1aaf`; API and scraper were healthy, scheduler status was `operational`, and `/api/status` was `up` with Latest Activity explicitly reporting a healthy collector and no new claims rather than falsely reporting service failure.
 
 ## Approved production work
 
-1. Finish the backup continuity run and record a successful archive plus isolated restore receipt.
-2. Remove remaining DWM handoff links to the obsolete `/dashboard/ti/workbench` route and keep tenant/permission and performance cleanup scoped to live UI paths.
+1. Finish the isolated restore verifier and record its receipt against archive `20260810T042345Z`.
+2. Continue customer-facing tenant/performance measurement on the live DWM/search/cases paths; do not spend agent time on reviews, handoffs, merge-gating, or portfolio work.
