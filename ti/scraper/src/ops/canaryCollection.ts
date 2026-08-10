@@ -298,6 +298,7 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
     const collectedItems = task.planning?.watchlistDiscovery
       ? await collectWatchlistDiscoveryEvidence({ store: options.store, source, task, discoveryItems: intelligenceItems, fetcher, generatedAt, timeoutMs: options.timeoutMs ?? 12_000, maxBytes: Math.max(maxBytes, 2_000_000), nativeFetch: mode === "native_live_http" })
       : intelligenceItems;
+    normalizeRansomLookTimeliness(source, collectedItems);
     taskMetrics.itemCount = discoveredItems.length;
     taskMetrics.httpStatus = discoveredItems[0]?.metadata?.fetchProvenance?.httpStatus;
     taskMetrics.parserWarningCount = discoveredItems.reduce((total: number, item: any) => total + (Array.isArray(item.metadata?.parserWarnings) ? item.metadata.parserWarnings.length : 0), 0);
@@ -406,6 +407,21 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
         updatedAt: checkedAt
       });
     }
+  }
+}
+
+function normalizeRansomLookTimeliness(source: any, items: any[]): void {
+  if (source.id !== "src_canary_ransomlook_recent") return;
+  for (const item of items) {
+    const publishedAt = Date.parse(String(item.publishedAt ?? ""));
+    const collectedAt = Date.parse(String(item.collectedAt ?? ""));
+    if (!Number.isFinite(publishedAt) || !Number.isFinite(collectedAt) || publishedAt <= collectedAt) continue;
+    item.metadata = {
+      ...(item.metadata ?? {}),
+      timelinessAnomalies: [...new Set([...(item.metadata?.timelinessAnomalies ?? []), "publisher_timestamp_after_collection"])],
+      publisherReportedAt: item.publishedAt,
+    };
+    item.publishedAt = item.collectedAt;
   }
 }
 

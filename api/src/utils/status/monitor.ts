@@ -10,6 +10,7 @@ const scraperBase = (process.env.TI_SCRAPER_API_BASE || 'http://ti-scraper:8097'
 const modelClientBase = (process.env.HANASAND_MODEL_CLIENT_HEALTH_BASE || 'http://hanasand_ai_model_client:18182').replace(/\/$/, '')
 const MONITOR_REQUEST_TIMEOUT_MS = 5_000
 const SCRAPER_PENDING_WRITES_DEGRADED_THRESHOLD = 1_000
+const SOURCE_OPERATIONS_DEGRADED_RATIO = 0.05
 type CheckResult = string | void | { status: MonitorStatus, message: string }
 type MonitorRecorder = typeof recordMonitorResult
 
@@ -196,12 +197,16 @@ export default async function runSyntheticMonitor() {
             }
             const failed = Number(summary.failedSourceCount ?? 0)
             const degraded = Number(summary.degradedSourceCount ?? 0)
-            if (failed > 0 || degraded > 0) {
+            const sourceCount = Number(summary.sourceCount)
+            const impacted = failed + degraded
+            const fleetDegradedThreshold = Math.max(3, Math.ceil(sourceCount * SOURCE_OPERATIONS_DEGRADED_RATIO))
+            if (impacted >= fleetDegradedThreshold) {
                 return {
                     status: 'degraded',
                     message: `Source operations returned ${String(summary.sourceCount)} sources; ${failed} failed and ${degraded} degraded.`,
                 }
             }
+            if (impacted > 0) return `Source operations returned ${String(summary.sourceCount)} sources; ${failed} failed and ${degraded} degraded at source level.`
             return `Source operations returned ${String(summary.sourceCount)} registered sources.`
         }, { degraded: 3_000, down: 15_000 }),
         check('threat-intelligence', 'AI model service', async () => {
