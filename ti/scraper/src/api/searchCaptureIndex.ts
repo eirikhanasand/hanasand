@@ -13,6 +13,10 @@ const norm = (value: unknown) => String(value ?? "").toLowerCase();
 const words = (query: string) => norm(query).split(/[^a-z0-9.-]+/).filter((w) => w.length > 1);
 const unique = (items: string[]) => [...new Set(items.filter(Boolean))];
 export function warmSearchCaptureIndex(store: any) {
+  if (store.usesPostgresSearchIndex === true && typeof store.querySearchCaptures === "function") {
+    ready.set(store, true);
+    return { captureCount: 0, indexedCaptureCount: 0, mode: "postgres_native" };
+  }
   if (store.usesPostgresSearchIndex === false) {
     ready.set(store, true);
     return { captureCount: 0, indexedCaptureCount: 0 };
@@ -24,6 +28,10 @@ export function warmSearchCaptureIndex(store: any) {
   return result;
 }
 export async function warmSearchCaptureIndexAsync(store: any) {
+  if (store.usesPostgresSearchIndex === true && typeof store.querySearchCaptures === "function") {
+    ready.set(store, true);
+    return { captureCount: 0, indexedCaptureCount: 0, mode: "postgres_native" };
+  }
   if (store.usesPostgresSearchIndex === false) {
     ready.set(store, true);
     return { captureCount: 0, indexedCaptureCount: 0 };
@@ -45,7 +53,11 @@ export async function warmSearchCaptureIndexAsync(store: any) {
   ready.set(store, true);
   return result;
 }
-export function isSearchCaptureIndexReady(store: any) { return store.usesPostgresSearchIndex !== true || ready.get(store) === true; }
+export function isSearchCaptureIndexReady(store: any) {
+  return store.usesPostgresSearchIndex === true && typeof store.querySearchCaptures === "function"
+    ? true
+    : store.usesPostgresSearchIndex !== true || ready.get(store) === true;
+}
 export function findSearchCaptures(store: any, query: string, limit: number, tenantId?: string) {
   const index = indexForStore(store);
   const terms = words(query);

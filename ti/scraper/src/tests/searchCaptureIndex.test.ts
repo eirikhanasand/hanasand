@@ -18,6 +18,12 @@ describe("search capture index", () => {
     expect(warmSearchCaptureIndex(store)).toEqual({ captureCount: 0, indexedCaptureCount: 0 });
   });
 
+  test("uses the native PostgreSQL search path without a warmup scan", () => {
+    const store = { usesPostgresSearchIndex: true, querySearchCaptures: async () => [] };
+    expect(isSearchCaptureIndexReady(store)).toBe(true);
+    expect(warmSearchCaptureIndex(store)).toMatchObject({ mode: "postgres_native" });
+  });
+
   test("returns an explicit unavailable response while PostgreSQL search is warming", async () => {
     const response = await searchResponse(
       new Request("http://local/v1/intel/search?q=APT29"),
@@ -28,7 +34,7 @@ describe("search capture index", () => {
     expect(await response.json()).toEqual({ error: { code: "search_unavailable", message: "Search index is still starting" } });
   });
 
-  test("does not run a PostgreSQL evidence scan while its optional index is warming", async () => {
+  test("uses native PostgreSQL search once the store exposes it", async () => {
     let queryCalls = 0;
     const response = await searchResponse(
       new Request("http://local/v1/intel/search?q=APT29"),
@@ -48,8 +54,8 @@ describe("search capture index", () => {
       } as any,
       new URL("http://local/v1/intel/search?q=APT29")
     );
-    expect(response.status).toBe(503);
-    expect(queryCalls).toBe(0);
+    expect(response.status).toBe(200);
+    expect(queryCalls).toBe(1);
   });
 
   test("reports search startup separately from process health", async () => {

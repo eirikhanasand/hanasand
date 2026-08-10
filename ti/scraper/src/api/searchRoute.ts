@@ -1081,6 +1081,11 @@ function searchEntityType(query: string, requested: unknown, store: any, tenantI
 
 async function searchCaptures(store: any, query: string, entityType: SearchEntityType, identity: ReturnType<typeof actorIdentity>, limit: number, tenantId?: string) {
   if (store.usesPostgresSearchIndex === true) {
+    if (typeof store.querySearchCaptures === "function") {
+      const terms = entityType === "actor" ? identity.terms : [query];
+      const rows = await store.querySearchCaptures(terms, tenantId, Math.max(limit, 300));
+      return findSearchCapturesFromRows(rows, store.listSources?.() ?? [], query, limit, tenantId, entityType === "actor" ? identity.terms : undefined, (id) => store.getCapture?.(id));
+    }
     if (entityType !== "actor") return findSearchCaptures(store, query, limit, tenantId);
     return findActorSearchCaptures(store, identity.terms, limit, tenantId)
       .sort((a: any, b: any) => String(b.collectedAt ?? "").localeCompare(String(a.collectedAt ?? "")));
