@@ -414,7 +414,7 @@ function normalizeRansomLookTimeliness(source: any, items: any[]): void {
   if (source.id !== "src_canary_ransomlook_recent") return;
   for (const item of items) {
     const publishedAt = Date.parse(String(item.publishedAt ?? ""));
-    const collectedAt = Date.parse(String(item.collectedAt ?? ""));
+    const collectedAt = Date.parse(String(item.collectedAt ?? nowIso()));
     if (!Number.isFinite(publishedAt) || !Number.isFinite(collectedAt) || publishedAt <= collectedAt) continue;
     item.metadata = {
       ...(item.metadata ?? {}),
