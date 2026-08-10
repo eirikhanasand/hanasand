@@ -69,10 +69,10 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
       limit: numberQuery(url.searchParams.get("limit")),
       cursor: numberQuery(url.searchParams.get("cursor")),
       sourceId: url.searchParams.get("sourceId")?.trim() || undefined,
-      executableOnly: true
+      executableOnly: url.searchParams.get("includeCandidates") !== "true"
     };
     return json(url.searchParams.get("summary") === "true"
-      ? await buildSourceOperationsSummary(options.store, { tenantId: input.tenantId, executableOnly: true })
+      ? await buildSourceOperationsSummary(options.store, { tenantId: input.tenantId, executableOnly: input.executableOnly })
       : await buildSourceOperationsSnapshot(options.store, input));
   }
   if (url.pathname === "/v1/intel/actor-identity-coverage" && request.method === "GET") {

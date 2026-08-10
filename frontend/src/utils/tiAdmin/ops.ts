@@ -116,8 +116,10 @@ export type TiAdminOverview = {
 
 type ApiPayload = Record<string, unknown>
 const TI_ADMIN_FETCH_TIMEOUT_MS = 10_000
+type ResourceResult = { resource: string, ok: boolean, records: ApiPayload[], total: number, nextCursor?: string, payload: ApiPayload }
+const sourceInventoryCache = new Map<string, { expiresAt: number, value: ResourceResult }>()
 
-export async function getTiAdminOverview(tenantId: string | null = 'default', page: { cursor?: number, limit?: number, sourceId?: string, includeSamples?: boolean } = {}): Promise<TiAdminOverview> {
+export async function getTiAdminOverview(tenantId: string | null = 'default', page: { cursor?: number, limit?: number, sourceId?: string, includeSamples?: boolean, includeCandidates?: boolean } = {}): Promise<TiAdminOverview> {
     const base = tiScraperApiBase()
     const sampleFilter = page.sourceId ? { query: page.sourceId } : {}
     const resources = await Promise.all([
@@ -127,6 +129,7 @@ export async function getTiAdminOverview(tenantId: string | null = 'default', pa
             cursor: Math.max(0, page.cursor || 0),
             limit: Math.max(1, Math.min(500, page.limit || 25)),
             sourceId: page.sourceId,
+            includeCandidates: page.includeCandidates === true,
         }),
     ])
     const [captureResult, runResult, operationsResult] = resources
@@ -197,8 +200,13 @@ export function ageDays(since: string) {
     return Number.isFinite(diff) ? Math.max(1, Math.round(diff / 86400000)) : 0
 }
 
-async function fetchResource(base: string, path: string, key: string, tenantId: string | null, page: { cursor?: number, limit?: number, sourceId?: string, query?: string } = {}) {
+async function fetchResource(base: string, path: string, key: string, tenantId: string | null, page: { cursor?: number, limit?: number, sourceId?: string, query?: string, includeCandidates?: boolean } = {}): Promise<ResourceResult> {
     const resource = path.split('/').at(-1) || key
+    const cacheKey = resource === 'source-operations' ? JSON.stringify([base, tenantId, page]) : ''
+    if (cacheKey) {
+        const cached = sourceInventoryCache.get(cacheKey)
+        if (cached && cached.expiresAt > Date.now()) return cached.value
+    }
     try {
         const target = new URL(path, base)
         if (tenantId) target.searchParams.set('tenantId', tenantId)
@@ -206,6 +214,7 @@ async function fetchResource(base: string, path: string, key: string, tenantId: 
         if (page.cursor) target.searchParams.set('cursor', String(page.cursor))
         if (page.sourceId) target.searchParams.set('sourceId', page.sourceId)
         if (page.query) target.searchParams.set('q', page.query)
+        if (page.includeCandidates) target.searchParams.set('includeCandidates', 'true')
         const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
         const response = await fetch(target, {
             cache: 'no-store',
@@ -215,7 +224,7 @@ async function fetchResource(base: string, path: string, key: string, tenantId: 
         if (!response.ok) return { resource, ok: false, records: [] as ApiPayload[], total: 0, nextCursor: undefined, payload: {} as ApiPayload }
         const payload = await response.json() as ApiPayload
         const records = recordArray(payload[key])
-        return {
+        const result = {
             resource,
             ok: true,
             records,
@@ -223,6 +232,8 @@ async function fetchResource(base: string, path: string, key: string, tenantId: 
             nextCursor: stringValue(payload.nextCursor) || undefined,
             payload,
         }
+        if (cacheKey) sourceInventoryCache.set(cacheKey, { expiresAt: Date.now() + 5_000, value: result })
+        return result
     } catch {
         return { resource, ok: false, records: [] as ApiPayload[], total: 0, nextCursor: undefined, payload: {} as ApiPayload }
     }
