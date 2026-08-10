@@ -416,12 +416,16 @@ function normalizeRansomLookTimeliness(source: any, items: any[]): void {
     const publishedAt = Date.parse(String(item.publishedAt ?? ""));
     const collectedAt = Date.parse(String(item.collectedAt ?? nowIso()));
     if (!Number.isFinite(publishedAt) || !Number.isFinite(collectedAt) || publishedAt <= collectedAt) continue;
+    const normalizedPublishedAt = item.collectedAt ?? nowIso();
     item.metadata = {
       ...(item.metadata ?? {}),
       timelinessAnomalies: [...new Set([...(item.metadata?.timelinessAnomalies ?? []), "publisher_timestamp_after_collection"])],
       publisherReportedAt: item.publishedAt,
+      reportTimestamps: (item.metadata?.reportTimestamps ?? []).map((reference: any) => reference.role === "publisher" && reference.timestamp === item.publishedAt
+        ? { ...reference, timestamp: normalizedPublishedAt, originalTimestamp: item.publishedAt }
+        : reference),
     };
-    item.publishedAt = item.collectedAt;
+    item.publishedAt = normalizedPublishedAt;
   }
 }
 
