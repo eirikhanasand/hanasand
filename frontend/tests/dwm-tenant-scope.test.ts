@@ -21,10 +21,10 @@ describe('DWM tenant scope', () => {
         const homepage = readFileSync(new URL('../src/app/page.tsx', import.meta.url), 'utf8')
         const activity = readFileSync(new URL('../src/app/activity/page.tsx', import.meta.url), 'utf8')
 
-        assert.match(sharedQueue, /EXPOSURE_QUEUE_TIMEOUT_MS = 3500/)
+        assert.match(sharedQueue, /EXPOSURE_QUEUE_TIMEOUT_MS = 8000/)
         assert.match(sharedQueue, /AbortSignal\.timeout\(options\.timeoutMs \?\? EXPOSURE_QUEUE_TIMEOUT_MS\)/)
-        assert.match(homepage, /timeoutMs: 3500/)
-        assert.match(activity, /timeoutMs: 3500/)
+        assert.match(homepage, /timeoutMs: 8000/)
+        assert.match(activity, /timeoutMs: 8000/)
     })
 
     test('derives a personal tenant from the authenticated identity', () => {

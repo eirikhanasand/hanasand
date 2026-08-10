@@ -403,7 +403,7 @@ function HomeOperatorPaths() {
 
 async function loadExposureQueue(): Promise<ExposureQueue> {
     try {
-        const response = await fetchSharedExposureQueue(new URLSearchParams({ limit: '10', offset: '0' }), { timeoutMs: 3500 })
+        const response = await fetchSharedExposureQueue(new URLSearchParams({ limit: '10', offset: '0' }), { timeoutMs: 8000 })
         if (!response.ok) return exposureQueueFallback('unavailable', 10)
         return normalizeExposureQueue(await response.json())
     } catch (error) {

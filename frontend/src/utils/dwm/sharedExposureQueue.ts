@@ -1,7 +1,7 @@
 import { tiScraperApiBase } from './scraperApiBase'
 
 const allowedParams = new Set(['limit', 'offset', 'q', 'company', 'actor', 'category', 'size', 'country', 'from', 'to'])
-export const EXPOSURE_QUEUE_TIMEOUT_MS = 3500
+export const EXPOSURE_QUEUE_TIMEOUT_MS = 8000
 
 export async function fetchSharedExposureQueue(
     searchParams: Pick<URLSearchParams, 'entries'>,
