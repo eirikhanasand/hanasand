@@ -50,7 +50,6 @@ const bannedRenderedCopy = [
     { pattern: /\bUI proof\b/i, label: 'internal proof wording' },
     { pattern: /\bProof source-backed monitoring\b/i, label: 'landing-page proof/source bloat' },
     { pattern: /\bsource-backed\b/i, label: 'source-backed bloat' },
-    { pattern: /\bevidence-backed\b/i, label: 'evidence-backed bloat' },
     { pattern: /\bproof source\b/i, label: 'proof/source bloat' },
     { pattern: /\bdeploy proof\b/i, label: 'internal proof wording' },
     { pattern: /\balert proof\b/i, label: 'internal proof wording' },

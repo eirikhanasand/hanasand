@@ -35,6 +35,17 @@ test('public enterprise pages avoid casual competitive and procurement copy', as
     }
 })
 
+test('public trust page leads with verified product value', async () => {
+    const trust = await readFile(path.join(root, 'src/app/trust/page.tsx'), 'utf8')
+
+    expect(trust).toContain('Threat intelligence your team can act on.')
+    expect(trust).toContain('Evidence-backed monitoring')
+    expect(trust).toContain('How trust works in practice')
+    for (const phrase of ['Current assurance state', 'Not certified', 'Not published', 'Scoped deal', 'SOC 2 / ISO', 'DPA / MSA', 'SSO / SCIM']) {
+        expect(trust, `public trust page should not expose ${phrase}`).not.toContain(phrase)
+    }
+})
+
 test('public buyer navigation keeps hash utility discoverable without raw-secret framing', async () => {
     const header = await readFile(path.join(root, 'src/components/header/header.tsx'), 'utf8')
     const footer = await readFile(path.join(root, 'src/components/footer/footer.tsx'), 'utf8')
