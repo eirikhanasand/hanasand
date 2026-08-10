@@ -185,6 +185,12 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
   } : existing;
   const runtimeEvidence = portfolio || restricted ? currentRuntimeEvidence(runtimeEvidenceSource, generatedAt, runtimeEvidenceIndex) : undefined;
   const revalidatedRestricted = restricted && isRevalidatedRestrictedSource(existing, effectiveVerified, generatedAt);
+  const productionEnabled = Bun.env.TI_SOURCE_PORTFOLIO_PRODUCTION === "true"
+    && portfolio
+    && effectiveVerified.metadata?.sourcePortfolioVerification?.outcome === "content_parsed"
+    && Boolean(effectiveVerified.legalNotes?.trim())
+    && effectiveVerified.governance?.approvalState === "approved"
+    && (!restricted || effectiveVerified.type === "tor_metadata" && effectiveVerified.accessMethod === "approved_proxy" && effectiveVerified.governance?.metadataOnly === true);
   if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) || revalidatedRestricted : portfolio ? isSafePortfolioUpgradeTarget(existing) : isVerifiedProductionSource(effectiveVerified, generatedAt) && isSafeUpgradeTarget(existing))) return undefined;
   const sameSource = existing.id === effectiveVerified.id || existing.metadata?.verifiedSourceId === effectiveVerified.id;
   const metadata = {
@@ -214,7 +220,16 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
     reconciled.metadata.sourcePortfolioRevalidatedAt = effectiveVerified.metadata?.sourcePortfolioVerification?.verifiedAt;
     reconciled.crawlState = { ...(existing.crawlState ?? {}), retryCount: 0, nextEligibleAt: generatedAt, backoffUntil: undefined, lastError: undefined, lastErrorAt: undefined };
   }
-  if (runtimeEvidence) {
+  if (productionEnabled) {
+    reconciled.status = "active";
+    reconciled.countsAsCoverage = true;
+    reconciled.metadata.productionCollection = true;
+    reconciled.metadata.countsAsCoverage = true;
+    reconciled.metadata.sourcePortfolioQualificationState = "production_enabled";
+    reconciled.metadata.sourcePortfolioProductionEnabled = true;
+    delete reconciled.metadata.sourcePortfolioStatus;
+    if (restricted) delete reconciled.metadata.restrictedMetadataCandidate;
+  } else if (runtimeEvidence) {
     reconciled.status = "active";
     reconciled.countsAsCoverage = true;
     reconciled.metadata.productionCollection = true;
