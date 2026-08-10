@@ -16,10 +16,17 @@
       "language": "en",
       "crawlFrequencySeconds": 900,
       "legalNotes": "Public ransomware victim metadata feed; retain metadata and bounded safe excerpts only. Never fetch or retain leaked material.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvedAt": "2026-08-10T00:00:00.000Z",
+        "approvedBy": "production-source-operator"
+      },
       "metadata": {
         "canaryPortfolio": true,
         "exposureQueueSource": true,
         "sourceFamily": "darkweb_metadata",
+        "productionCollection": true,
         "maxItemsPerFetch": 120,
         "maxBytesPerFetch": 30000000,
         "retentionClass": "restricted_metadata"
@@ -43,10 +50,17 @@
       "language": "en",
       "crawlFrequencySeconds": 900,
       "legalNotes": "Public ransomware victim metadata feed; retain metadata and bounded safe excerpts only. Never fetch or retain leaked material.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvedAt": "2026-08-10T00:00:00.000Z",
+        "approvedBy": "production-source-operator"
+      },
       "metadata": {
         "canaryPortfolio": true,
         "exposureQueueSource": true,
         "sourceFamily": "darkweb_metadata",
+        "productionCollection": true,
         "maxItemsPerFetch": 120,
         "maxBytesPerFetch": 500000,
         "retentionClass": "restricted_metadata"
