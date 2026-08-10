@@ -1,4 +1,3 @@
-import { syncAutomaticReviewQueue } from "./automaticReviewRoutes.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { hashContent, nowIso, stableId } from "../utils.ts";
 
@@ -155,8 +154,9 @@ export async function upsertServiceMonitorIncident(options: ApiServerOptions, in
       createdAt: capture.collectedAt,
     });
   }
-  const queued = input.status === "up" ? 0 : await syncAutomaticReviewQueue(options, { allTenants: true, now: checkedAt });
-  return { incident, queued };
+  // ponytail: operational health observations are not intelligence-review work;
+  // keep the monitor write bounded and let the explicit review worker handle governed evidence.
+  return { incident, queued: 0 };
 }
 
 function boundedText(value: unknown, maxLength: number) {

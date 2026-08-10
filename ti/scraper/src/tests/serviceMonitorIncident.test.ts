@@ -4,7 +4,7 @@ import { stableId } from "../utils.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { api, body } from "./helpers/apiSourceFixtures.ts";
 
-test("deduplicates sustained public service incidents, queues Hanasand AI once, retains evidence, and resolves on recovery", async () => {
+test("deduplicates sustained public service incidents without launching review work, retains evidence, and resolves on recovery", async () => {
   const store = new InMemoryScraperStore();
   const options = { store, serviceToken: "monitor-secret" } as any;
   const checks = ["Public Search", "Latest Activity"];
@@ -27,7 +27,7 @@ test("deduplicates sustained public service incidents, queues Hanasand AI once, 
       observations: timestamps.map((checkedAt, index) => ({ status: "down", checkedAt, latencyMs: 15_000 + index, message: `${checkName} timed out`, consecutiveFailures: index + 1 })),
     });
     expect(first.status).toBe(201);
-    expect(first.json.queued).toBe(1);
+    expect(first.json.queued).toBe(0);
 
     const repeated = await post(options, {
       service: "threat-intelligence",
@@ -71,7 +71,7 @@ test("deduplicates sustained public service incidents, queues Hanasand AI once, 
   const monitorSources = store.listSources().filter((source: any) => source.type === "service_monitor");
   expect(monitorSources).toHaveLength(1);
   expect(monitorSources[0].id).toBe(stableId("service-monitor-source", "https://hanasand.com/status"));
-  expect(store.listAnalystMetadataReviewTasks().filter((item: any) => item.recordKind === "automatic_intelligence_review_task")).toHaveLength(2);
+  expect(store.listAnalystMetadataReviewTasks().filter((item: any) => item.recordKind === "automatic_intelligence_review_task")).toHaveLength(0);
   for (const incident of incidents) {
     expect(store.listEvidenceLinks().filter((link: any) => link.subjectType === "incident" && link.subjectId === incident.id)).toHaveLength(5);
     expect(store.listCaptures().filter((capture: any) => capture.sourceId === incident.sourceId).map((capture: any) => capture.metadata?.safeExcerpt).join("\n")).toMatch(/consecutive failures/);
