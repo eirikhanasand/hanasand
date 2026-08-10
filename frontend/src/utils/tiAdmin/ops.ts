@@ -16,6 +16,7 @@ export type TiAdminSource = {
     monitoredSince: string
     cadenceMinutes: number
     retainedEvidenceCount: number
+    customerMatchCount: number
     productiveCycleCount: number
     qualifiesForBaseline: boolean
     qualificationReasons: string[]
@@ -297,6 +298,7 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
         monitoredSince,
         cadenceMinutes,
         retainedEvidenceCount,
+        customerMatchCount: numberValue(coverage.customerMatchCount),
         productiveCycleCount: numberValue(qualification.productiveCheckCount, qualification.usefulCheckCount),
         qualifiesForBaseline: qualification.qualifies === true,
         qualificationReasons: listValue(qualification.reasons).map(stringValue).filter(Boolean),

@@ -27,6 +27,7 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
     .filter((source) => !input.executableOnly || isExecutableSource(source));
   const observations = records(store, "listSourceHealthObservations").filter(inTenant);
   const captures = records(store, "listCaptures").filter(inTenant);
+  const customerMatchCounts = sourceCustomerMatchCounts(store, input.tenantId);
   const entities = records(store, "listExtractedEntities").filter(inTenant);
   const labels = records(store, "listEvaluationLabels").filter(inTenant);
   const sourceIdsByLabel = labelSourceIndex(store, captures, input.tenantId);
@@ -121,6 +122,7 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
         observedActorCount: actors.length,
         observedActors: actors.slice(0, 50),
         captureCount: sourceCaptures.length,
+        customerMatchCount: customerMatchCounts.get(source.id) ?? 0,
         lastContentAt: qualification?.lastContentAt,
         usefulCheckCount: qualification?.usefulCheckCount ?? 0,
         sustainedProductive: (qualification?.usefulCheckCount ?? 0) >= 2 && sourceCaptures.length > 0
@@ -299,6 +301,7 @@ export function operationalQueryRow(row: any, generatedAt: string) {
   const source = row.record ?? {};
   const health = row.health_stats ?? {};
   const capture = row.capture_stats ?? {};
+  const matches = row.match_stats ?? {};
   const actors = row.actor_stats ?? {};
   const labels = row.label_stats ?? {};
   const latest = health.latest ?? {};
@@ -410,6 +413,7 @@ export function operationalQueryRow(row: any, generatedAt: string) {
       observedDomains: Array.isArray(capture.observedDomains) ? capture.observedDomains.slice(0, 50) : [],
       resultTypes: Array.isArray(capture.resultTypes) ? capture.resultTypes.slice(0, 50) : [],
       captureCount,
+      customerMatchCount: Number(matches.customerMatchCount ?? 0),
       lastContentAt: qualification.lastContentAt,
       usefulCheckCount,
       sustainedProductive: usefulCheckCount >= 2 && captureCount > 0
@@ -460,6 +464,19 @@ function groupBySource(records: any[]) {
     else grouped.set(record.sourceId, [record]);
   }
   return grouped;
+}
+
+function sourceCustomerMatchCounts(store: any, tenantId?: string) {
+  const counts = new Map<string, number>();
+  for (const alert of records(store, "listDwmAlerts")) {
+    if (!alert?.tenantId || (tenantId && alert.tenantId !== tenantId)) continue;
+    const sourceIds = new Set<string>([
+      ...(Array.isArray(alert.provenance?.sourceIds) ? alert.provenance.sourceIds : []),
+      ...(Array.isArray(alert.evidence) ? alert.evidence.map((item: any) => item?.sourceId) : [])
+    ].filter((value): value is string => typeof value === "string" && value.length > 0));
+    for (const sourceId of sourceIds) counts.set(sourceId, (counts.get(sourceId) ?? 0) + 1);
+  }
+  return counts;
 }
 
 function labelSourceIndex(store: any, captures: any[], tenantId?: string) {

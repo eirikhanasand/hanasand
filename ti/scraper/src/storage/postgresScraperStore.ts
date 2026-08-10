@@ -772,7 +772,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         )
         SELECT page.record, page.collection_executable,
           COALESCE(health.stats, '{}'::jsonb) AS health_stats,
-          COALESCE(captures.stats, '{}'::jsonb) AS capture_stats
+          COALESCE(captures.stats, '{}'::jsonb) AS capture_stats,
+          COALESCE(matches.stats, '{}'::jsonb) AS match_stats
         FROM page
         LEFT JOIN LATERAL (
           SELECT jsonb_build_object(
@@ -802,6 +803,20 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           WHERE captures.source_id = page.id
             AND captures.tenant_id IS NOT DISTINCT FROM page.tenant_id
         ) captures ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT jsonb_build_object('customerMatchCount', count(DISTINCT alert.id)) AS stats
+          FROM threat_intel.alerts alert
+          WHERE alert.tenant_id IS NOT NULL
+            AND (page.tenant_id IS NULL OR alert.tenant_id IS NOT DISTINCT FROM page.tenant_id)
+            AND (
+              COALESCE(alert.record->'provenance'->'sourceIds', '[]'::jsonb) ? page.id
+              OR EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(COALESCE(alert.record->'evidence', '[]'::jsonb)) evidence
+                WHERE evidence->>'sourceId' = page.id
+              )
+            )
+        ) matches ON TRUE
       `;
       const total = Number(summary.summary?.sourceCount ?? 0);
       return { rows: pageRows, totals: summary.summary, total, nextCursor: offset + pageRows.length < total ? String(offset + pageRows.length) : undefined };
@@ -823,6 +838,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           ${sourceReviewEvidenceMatchesSql("page")} AS automatic_review_evidence_matches,
           health.stats AS health_stats,
           captures.stats AS capture_stats,
+          matches.stats AS match_stats,
           actors.stats AS actor_stats,
           labels.stats AS label_stats
         FROM page
@@ -965,6 +981,20 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           FROM threat_intel.captures c
           WHERE c.source_id = page.id AND c.tenant_id IS NOT DISTINCT FROM page.tenant_id
         ) captures ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT jsonb_build_object('customerMatchCount', count(DISTINCT alert.id)) AS stats
+          FROM threat_intel.alerts alert
+          WHERE alert.tenant_id IS NOT NULL
+            AND (page.tenant_id IS NULL OR alert.tenant_id IS NOT DISTINCT FROM page.tenant_id)
+            AND (
+              COALESCE(alert.record->'provenance'->'sourceIds', '[]'::jsonb) ? page.id
+              OR EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(COALESCE(alert.record->'evidence', '[]'::jsonb)) evidence
+                WHERE evidence->>'sourceId' = page.id
+              )
+            )
+        ) matches ON TRUE
         LEFT JOIN LATERAL (
           SELECT jsonb_build_object(
             'count', count(DISTINCT e.normalized_value),
