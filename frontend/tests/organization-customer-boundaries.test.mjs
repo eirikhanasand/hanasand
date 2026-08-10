@@ -145,8 +145,8 @@ test('ordinary customer overview does not present unscoped platform metrics', as
     const page = await readFile(new URL('../src/app/dashboard/overview/page.tsx', import.meta.url), 'utf8')
     assert.doesNotMatch(page, /getMonitoringOverview|Platform traffic|Domains watched|requestsToday|activeDomains/)
     assert.doesNotMatch(page, /criticalVulnerabilities|totalVulnerabilities|imagesScanned|scanRunning/)
-    assert.match(page, /Vulnerability monitoring/)
-    assert.match(page, /value='Not configured'/)
+    assert.doesNotMatch(page, /Vulnerability monitoring|value='Not configured'/)
+    assert.match(page, /A focused view of monitoring, alerts, cases, and service health/)
 })
 
 test('organization onboarding reads organizations and readiness only from the persisted proxy', async() => {
