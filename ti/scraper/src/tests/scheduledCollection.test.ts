@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { executeScheduledCollectionRun, recoverCollectionRuns } from "../ops/scheduledCollection.ts";
-import { automaticEvaluationEnabled, createScheduledRunBoundary, createScraperRuntimeStop } from "../runtime/startup.ts";
+import { automaticEvaluationEnabled, automaticReviewEnabled, createScheduledRunBoundary, createScraperRuntimeStop } from "../runtime/startup.ts";
 import type { MitreActorCatalogSnapshot } from "../pipeline/mitreActorCatalog.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
@@ -12,6 +12,10 @@ describe("scheduled API collection runs", () => {
     expect(automaticEvaluationEnabled({ SCRAPER_ENV: "production", TI_AUTOMATIC_EVALUATION_ENABLED: "true" })).toBe(false);
     expect(automaticEvaluationEnabled({ SCRAPER_ENV: "production", TI_AUTOMATIC_EVALUATION_ENABLED: "true", TI_AUTOMATIC_EVALUATION_ALLOW_PRODUCTION: "true" })).toBe(true);
     expect(automaticEvaluationEnabled({ SCRAPER_ENV: "test", TI_AUTOMATIC_EVALUATION_ENABLED: "true" })).toBe(true);
+    expect(automaticReviewEnabled({ SCRAPER_ENV: "production" })).toBe(false);
+    expect(automaticReviewEnabled({ SCRAPER_ENV: "production", HANASAND_AI_REVIEW_ENABLED: "true" })).toBe(false);
+    expect(automaticReviewEnabled({ SCRAPER_ENV: "production", HANASAND_AI_REVIEW_ENABLED: "true", HANASAND_AI_REVIEW_ALLOW_PRODUCTION: "true" })).toBe(true);
+    expect(automaticReviewEnabled({ SCRAPER_ENV: "test", HANASAND_AI_REVIEW_ENABLED: "true" })).toBe(true);
   });
   test("shutdown drains a deferred run without scheduling a late retry", async () => {
     let release!: () => void;

@@ -72,6 +72,11 @@ export function automaticEvaluationEnabled(env: Record<string, string | undefine
     && (env.SCRAPER_ENV !== "production" || env.TI_AUTOMATIC_EVALUATION_ALLOW_PRODUCTION === "true");
 }
 
+export function automaticReviewEnabled(env: Record<string, string | undefined> = Bun.env) {
+  return env.HANASAND_AI_REVIEW_ENABLED === "true"
+    && (env.SCRAPER_ENV !== "production" || env.HANASAND_AI_REVIEW_ALLOW_PRODUCTION === "true");
+}
+
 export function createScraperRuntimeStop(options: {
   scheduledRuns: { beginStopping: () => void; drain: () => Promise<void> };
   server: Stoppable;
@@ -208,13 +213,15 @@ export async function startScraperRuntime() {
     .then((result) => startupPhase("search_index_built", result))
     .catch((error) => logger.error("search index warm failed", { event: "search_index.warm_failed", error: error instanceof Error ? error.message : String(error) })), 0);
   startupPhase("api_server_started", { port: server.port });
-  const automaticReview = startAutomaticReviewWorker({ store, frontier, config } as any, {
-    intervalMs: Number(Bun.env.HANASAND_AI_REVIEW_INTERVAL_MS ?? "60000"),
-    limit: Number(Bun.env.HANASAND_AI_REVIEW_MAX_TASKS_PER_CYCLE ?? "10"),
-    concurrency: Number(Bun.env.HANASAND_AI_REVIEW_CONCURRENCY ?? "3"),
-    onCycle: (result) => logger.info("automatic intelligence review cycle", { event: "automatic_review.cycle", ...result }),
-    onError: (error: unknown) => logger.warn("automatic intelligence review cycle failed", { event: "automatic_review.error", error: error instanceof Error ? error.message : String(error) })
-  });
+  const automaticReview = automaticReviewEnabled()
+    ? startAutomaticReviewWorker({ store, frontier, config } as any, {
+      intervalMs: Number(Bun.env.HANASAND_AI_REVIEW_INTERVAL_MS ?? "60000"),
+      limit: Number(Bun.env.HANASAND_AI_REVIEW_MAX_TASKS_PER_CYCLE ?? "10"),
+      concurrency: Number(Bun.env.HANASAND_AI_REVIEW_CONCURRENCY ?? "3"),
+      onCycle: (result) => logger.info("automatic intelligence review cycle", { event: "automatic_review.cycle", ...result }),
+      onError: (error: unknown) => logger.warn("automatic intelligence review cycle failed", { event: "automatic_review.error", error: error instanceof Error ? error.message : String(error) })
+    })
+    : { stop: async () => undefined };
   logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0), publicCanaryEnabled: canaryEnabled, defaultCanaryEnabled, collectionConcurrency, publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", automaticEvaluationEnabled: automaticEvaluationEnabled(), recoveredRuns, sourceBootstrap, ...paths });
   return { stop: createScraperRuntimeStop({ scheduledRuns, server, canary, defaultCanary, restrictedMetadata, evaluation, automaticReview, store }) };
 }
