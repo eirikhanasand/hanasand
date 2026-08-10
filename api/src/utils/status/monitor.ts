@@ -206,8 +206,14 @@ export default async function runSyntheticMonitor() {
                     message: `Source operations returned ${String(summary.sourceCount)} sources; ${failed} failed and ${degraded} degraded.`,
                 }
             }
-            if (impacted > 0) return `Source operations returned ${String(summary.sourceCount)} sources; ${failed} failed and ${degraded} degraded at source level.`
-            return `Source operations returned ${String(summary.sourceCount)} registered sources.`
+            if (impacted > 0) return {
+                status: 'up',
+                message: `Source operations returned ${String(summary.sourceCount)} sources; ${failed} failed and ${degraded} degraded at source level, below the fleet threshold.`,
+            }
+            return {
+                status: 'up',
+                message: `Source operations returned ${String(summary.sourceCount)} registered sources.`,
+            }
         }, { degraded: 3_000, down: 15_000 }),
         check('threat-intelligence', 'AI model service', async () => {
             let response: Response
