@@ -51,6 +51,7 @@ const defaultSeedPaths = [
   "restricted_metadata_source_packs.json"
 ].map((name) => join(seedDirectory, name));
 const optionalPortfolioSeedPaths = [
+  "production_clear_web_sources.json",
   "source_portfolio_clear_web.json",
   "source_portfolio_lawful_dark_web.json",
   "source_portfolio_public_telegram.json"

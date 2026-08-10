@@ -7,7 +7,8 @@ const pageSource = readFileSync(new URL('../src/app/dashboard/dwm/cases/[id]/pag
 const deliveryRouteSource = readFileSync(new URL('../src/app/api/dwm/webhooks/deliver/route.ts', import.meta.url), 'utf8')
 
 test('DWM case detail exposes webhook delivery traceability', () => {
-    assert.match(source, /<CollapsiblePanel title='Evidence rows' action=\{`\$\{evidence\.length\} rows`\}/)
+    assert.match(source, /<h2 className='text-sm font-semibold text-ui-text'>Evidence<\/h2>/)
+    assert.match(source, /Select all/)
     assert.match(source, /data-dwm-case-evidence-mobile-list='true'/)
     assert.match(source, /data-dwm-case-evidence-mobile-row='true'/)
     assert.match(source, /data-dwm-case-evidence-desktop-table='true'/)
@@ -16,8 +17,6 @@ test('DWM case detail exposes webhook delivery traceability', () => {
     assert.match(source, /function safeCaseEvidenceExcerpt\(row: EvidenceRow\)/)
     assert.match(source, /safeEvidenceExcerpt\(row\.safeExcerpt \|\| row\.excerpt/)
     assert.doesNotMatch(source, /\{row\.safeExcerpt \|\| row\.excerpt \|\| 'No safe excerpt available\.'\}/)
-    assert.match(source, /<CollapsiblePanel title='Audit timeline' action=\{`\$\{timeline\.length\} events`\}/)
-    assert.match(source, /function CollapsiblePanel/)
     assert.match(source, /sendWebhook/)
     assert.match(source, /data-third-party-report-contract='true'/)
     assert.match(source, /reportFormat: 'stix'/)

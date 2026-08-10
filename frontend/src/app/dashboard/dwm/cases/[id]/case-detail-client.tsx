@@ -702,9 +702,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                 </button>
                                 <div className='rounded-lg border border-ui-border bg-ui-canvas p-3 text-[11px] leading-5 text-ui-muted' data-third-party-report-contract='true'>
                                     <p className='font-semibold text-ui-text'>Authenticated outbound reporting</p>
-                                    <p>Choose 1–25 evidence rows. JSON uses analyst.case_export.v1; STIX is validated as 2.1 before export or delivery.</p>
-                                    <p>Unknown, cross-organization, provenance-mismatched, unsafe, oversized, and duplicate selections fail explicitly. Raw content, restricted locators, and credentials are withheld.</p>
-                                    <p>Webhook delivery stores the exact report and receipt. Transient failures use the bounded retry ledger; delivered duplicates are skipped by report checksum. Inbound public-advisory intake is separate and does not imply receiver adoption or delivery success.</p>
+                                    <p>Exports and delivery use the selected evidence, preserve provenance, and record a durable receipt; unsafe or cross-organization selections are rejected.</p>
                                 </div>
                             </div>
                         </Panel>
@@ -712,48 +710,6 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                 </div>
             </section>
         </main>
-    )
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function RouteHandoffStrip({ routeRun, detail, exportPayload, latestDelivery }: { routeRun: string, detail: CaseDetail, exportPayload?: CaseExport, latestDelivery?: DeliveryRow }) {
-    const terms = matchedTerms(detail)
-    const evidenceCount = detail.evidence?.length ?? exportPayload?.summary?.evidenceCount ?? 0
-    const deliveryCount = detail.deliveries?.length ?? exportPayload?.summary?.deliveryCount ?? 0
-    const label = routeRun === 'metadata_claim'
-        ? 'Metadata intake'
-        : routeRun === 'source_pack'
-            ? 'Source pack review'
-            : routeRun === 'alert_queue'
-                ? 'Alert review'
-                : 'Action handoff'
-    const nextAction = deliveryCount ? 'Record decision' : latestDelivery ? 'Review delivery' : 'Test webhook'
-    const cells = [
-        { label: 'Action', value: label },
-        { label: 'Match', value: terms[0] || detail.alert?.matchedTerm?.value || 'term pending' },
-        { label: 'Evidence', value: `${evidenceCount} rows` },
-        { label: 'Delivery', value: latestDelivery?.status ? stateLabel(latestDelivery.status) : deliveryCount ? `${deliveryCount} attempts` : 'not sent' },
-        { label: 'Next', value: nextAction },
-    ]
-
-    return (
-        <section data-dwm-case-route-handoff className='rounded-lg border border-ui-border bg-ui-panel p-3'>
-            <div className='grid gap-3'>
-                <div className='min-w-0'>
-                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Action handoff</p>
-                    <h2 className='mt-1 text-sm font-semibold text-ui-text'>Case opened from {label.toLowerCase()}</h2>
-                    <p className='mt-1 text-xs leading-5 text-ui-muted'>Review the matched evidence, delivery state, and case decision before customer notification.</p>
-                </div>
-                <div className='grid grid-cols-2 gap-2 md:grid-cols-5'>
-                    {cells.map(cell => (
-                        <div key={cell.label} className='min-w-0 rounded-lg border border-ui-border bg-ui-canvas px-3 py-2'>
-                            <p className='text-[10px] font-semibold uppercase text-ui-muted'>{cell.label}</p>
-                            <p className='mt-1 truncate text-xs font-semibold text-ui-text' title={cell.value}>{cell.value}</p>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </section>
     )
 }
 

@@ -84,7 +84,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const allDue = options.store.listSources()
     .filter((s: any) => inCollectionScope(s, options.tenantId, options.includeSharedSources)
       && (!selectedSourceIds.size || selectedSourceIds.has(s.id))
-      && (!options.sourceFamily || sourceFamily(s) === options.sourceFamily)
+      && sourceFamilyMatches(s, options.sourceFamily)
       && isProductionCollectionSource(s, generatedAt, options.store))
     .sort((left: any, right: any) => sourceScheduleTime(left) - sourceScheduleTime(right) || String(left.id).localeCompare(String(right.id)));
   const due = allDue.slice(0, maxSources);
@@ -135,6 +135,11 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
 
 function sourceFamily(source: any) {
   return String(source.metadata?.sourceFamily ?? source.metadata?.sourceGrowthFamily ?? source.type ?? "").trim();
+}
+
+export function sourceFamilyMatches(source: any, configured: unknown) {
+  const families = String(configured ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+  return !families.length || families.includes(sourceFamily(source));
 }
 
 function storageBackpressure(store: any) {
