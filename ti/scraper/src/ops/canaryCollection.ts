@@ -421,9 +421,7 @@ function normalizeRansomLookTimeliness(source: any, items: any[]): void {
       ...(item.metadata ?? {}),
       timelinessAnomalies: [...new Set([...(item.metadata?.timelinessAnomalies ?? []), "publisher_timestamp_after_collection"])],
       publisherReportedAt: item.publishedAt,
-      reportTimestamps: (item.metadata?.reportTimestamps ?? []).map((reference: any) => reference.role === "publisher" && reference.timestamp === item.publishedAt
-        ? { ...reference, timestamp: normalizedPublishedAt, originalTimestamp: item.publishedAt }
-        : reference),
+      reportTimestamps: [],
     };
     item.publishedAt = normalizedPublishedAt;
   }
