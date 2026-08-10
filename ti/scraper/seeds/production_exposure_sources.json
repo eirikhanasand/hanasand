@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "name": "production-exposure-metadata-sources",
+  "description": "Small governed public metadata family for customer-visible exposure activity.",
+  "generatedAt": "2026-08-10T00:00:00.000Z",
+  "sources": [
+    {
+      "id": "src_canary_ransomwarelive_victims_json",
+      "name": "Ransomware.live Victims JSON",
+      "type": "json_api",
+      "url": "https://data.ransomware.live/victims.json",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.87,
+      "language": "en",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public ransomware victim metadata feed; retain metadata and bounded safe excerpts only. Never fetch or retain leaked material.",
+      "metadata": {
+        "canaryPortfolio": true,
+        "exposureQueueSource": true,
+        "sourceFamily": "darkweb_metadata",
+        "maxItemsPerFetch": 120,
+        "maxBytesPerFetch": 30000000,
+        "retentionClass": "restricted_metadata"
+      },
+      "catalog": {
+        "canonicalId": "public-metadata:ransomware.live:victims",
+        "approvalScope": "safe_public_auto",
+        "adapterCompatibility": ["json_api"],
+        "collection": { "freshnessTargetSeconds": 900 }
+      }
+    },
+    {
+      "id": "src_canary_ransomlook_recent",
+      "name": "RansomLook Recent",
+      "type": "json_api",
+      "url": "https://www.ransomlook.io/api/recent",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.87,
+      "language": "en",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public ransomware victim metadata feed; retain metadata and bounded safe excerpts only. Never fetch or retain leaked material.",
+      "metadata": {
+        "canaryPortfolio": true,
+        "exposureQueueSource": true,
+        "sourceFamily": "darkweb_metadata",
+        "maxItemsPerFetch": 120,
+        "maxBytesPerFetch": 500000,
+        "retentionClass": "restricted_metadata"
+      },
+      "catalog": {
+        "canonicalId": "public-metadata:ransomlook:recent",
+        "approvalScope": "safe_public_auto",
+        "adapterCompatibility": ["json_api"],
+        "collection": { "freshnessTargetSeconds": 900 }
+      }
+    },
+    {
+      "id": "src_canary_ransomlook_rss",
+      "name": "RansomLook RSS",
+      "type": "rss",
+      "url": "https://www.ransomlook.io/rss.xml",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.87,
+      "language": "en",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public ransomware victim metadata feed; retain metadata and bounded safe excerpts only. Never fetch or retain leaked material.",
+      "metadata": {
+        "canaryPortfolio": true,
+        "exposureQueueSource": true,
+        "sourceFamily": "darkweb_metadata",
+        "maxItemsPerFetch": 120,
+        "maxBytesPerFetch": 500000,
+        "retentionClass": "restricted_metadata"
+      },
+      "catalog": {
+        "canonicalId": "public-metadata:ransomlook:rss",
+        "approvalScope": "safe_public_auto",
+        "adapterCompatibility": ["rss"],
+        "collection": { "freshnessTargetSeconds": 900 }
+      }
+    }
+  ]
+}
