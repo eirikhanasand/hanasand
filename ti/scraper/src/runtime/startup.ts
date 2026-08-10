@@ -157,7 +157,7 @@ export async function startScraperRuntime() {
     timeoutMs: Number(Bun.env.TI_CANARY_TIMEOUT_MS ?? Bun.env.SCRAPER_DEFAULT_TIMEOUT_MS ?? "12000"),
     maxItemsPerTask: Number(Bun.env.TI_CANARY_MAX_ITEMS_PER_TASK ?? "4"),
     queueLimit: Number(Bun.env.TI_CANARY_MAX_QUEUE_SIZE ?? "500"),
-    sourceFamily: Bun.env.TI_PRODUCTION_SOURCE_FAMILY ?? (Bun.env.SCRAPER_ENV === "production" ? "rss" : undefined),
+    sourceFamily: Bun.env.TI_PRODUCTION_SOURCE_FAMILY ?? (Bun.env.SCRAPER_ENV === "production" ? "darkweb_metadata" : undefined),
     watchlistDiscoveryMaxJobs: Number(Bun.env.TI_WATCHLIST_DISCOVERY_MAX_JOBS ?? "1"),
     activateSources: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true",
     runExecutor: executeRun
