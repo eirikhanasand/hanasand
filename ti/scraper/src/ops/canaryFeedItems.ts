@@ -32,11 +32,11 @@ export function feedItems(source: any, task: any, fetched: string, at: string, m
       source,
       task,
       entry.link || task.targetUrl,
-      entry.title || source.name,
+      ransomwareVictimTitle(source, entry.title) || entry.title || source.name,
       [source.name, entry.title, entry.description].filter(Boolean).join("\n").slice(0, 24_000),
       at,
       entry.publishedAt,
-      { ...metadata, adapter: "rss", parserVersion: "rss-adapter-v2" },
+      { ...metadata, adapter: "rss", parserVersion: "rss-adapter-v2", ...ransomwareVictimMetadata(source, entry.title, entry.publishedAt) },
       index,
       true
     )).filter((item) => item.rawText.length > 24);
@@ -56,13 +56,38 @@ function jsonItems(source: any, task: any, fetched: string, at: string, metadata
 
 function jsonItem(source: any, task: any, entry: any, at: string, metadata: any, index: number) {
   const ransomwareGroup = extractionProfile(source, task) === "ransomware_group_metadata" ? ransomwareGroupMetadata(entry) : undefined;
-  const title = stringField(entry, ["post_title", "title", "cveID", "id", "name", "group_name", "vendorProject"]) || source.name;
+  const victim = ransomwareVictimMetadata(source, stringField(entry, ["post_title", "title"]), stringField(entry, ["discovered", "published", "updated"]), stringField(entry, ["group_name", "group", "actor"]));
+  const title = victim?.leakSite
+    ? `${victim.leakSite.actorName} has just published a new victim: ${victim.leakSite.victimName}`
+    : stringField(entry, ["post_title", "title", "cveID", "id", "name", "group_name", "vendorProject"]) || source.name;
   const publishedAt = stringField(entry, ["discovered", "dateAdded", "published", "publishedDate", "lastModified", "lastModifiedDate", "updated"]);
   const url = stringField(entry, ["post_url", "link", "url", "source", "reference"]) || task.targetUrl;
   const rawText = ransomwareGroup ? ransomwareGroupSummary(source.name, ransomwareGroup) : [source.name, title, jsonSummary(entry)].filter(Boolean).join("\n").slice(0, 24_000);
-  const collected = row(source, task, /^https?:\/\//i.test(url) ? url : task.targetUrl, title, rawText, at, publishedAt, { ...metadata, jsonApi: true, structuredFields: structuredFields(entry), ransomwareGroup }, index, false);
+  const collected = row(source, task, /^https?:\/\//i.test(url) ? url : task.targetUrl, title, rawText, at, publishedAt, { ...metadata, jsonApi: true, structuredFields: structuredFields(entry), ransomwareGroup, ...victim }, index, false);
   const evaluationCveSet = isNvdCveSource(source) || isCisaKevSource(source) ? completeCveProjection(entry) : undefined;
   return evaluationCveSet ? { ...collected, evaluationCveSet: { ...evaluationCveSet, captureContentHash: collected.contentHash } } : collected;
+}
+
+function ransomwareVictimMetadata(source: any, title: string | undefined, publishedAt: string | undefined, actorValue?: string) {
+  if (!source.metadata?.exposureQueueSource) return {};
+  const match = String(title ?? "").match(/^(.+?)\s+by\s+(.+)$/i);
+  const victimName = cleanGroupValue(match?.[1] ?? title);
+  const actorName = cleanGroupValue(match?.[2] ?? actorValue);
+  if (!victimName || !actorName || victimName.length > 140 || actorName.length > 80) return {};
+  return {
+    leakSite: {
+      actorName,
+      victimName,
+      claimType: "ransomware_victim_publication",
+      firstSeenAt: publishedAt,
+      metadataOnly: true
+    }
+  };
+}
+
+function ransomwareVictimTitle(source: any, title: string | undefined) {
+  const metadata = ransomwareVictimMetadata(source, title, undefined).leakSite;
+  return metadata ? `${metadata.actorName} has just published a new victim: ${metadata.victimName}` : undefined;
 }
 
 export function isNvdCveSource(source: any) {

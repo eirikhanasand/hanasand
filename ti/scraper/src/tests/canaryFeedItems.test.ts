@@ -113,6 +113,16 @@ describe("canary feed item extraction", () => {
     ]));
     expect(result.entities.some((entity: any) => ["communication_channel", "buyer_seller_communication", "monetization_path", "profitability_signal", "extortion_type", "publication_strategy", "publicity_tactic"].includes(entity.type))).toBe(false);
   });
+
+  test("turns approved exposure feed fields into a metadata-only victim claim", () => {
+    const source = { id: "src_exposure", name: "RansomLook Recent", type: "json_api", url: "https://www.ransomlook.io/api/recent", metadata: { exposureQueueSource: true } };
+    const items = feedItems(source, { ...task, targetUrl: source.url }, JSON.stringify([{ post_title: "Example Company", group_name: "Example Group", discovered: "2026-07-20T00:00:00Z", description: "Public metadata only." }]), "2026-07-20T01:00:00Z", metadata);
+    expect(items[0]).toMatchObject({
+      title: "Example Group has just published a new victim: Example Company",
+      publishedAt: "2026-07-20T00:00:00Z",
+      metadata: { leakSite: { actorName: "Example Group", victimName: "Example Company", metadataOnly: true } }
+    });
+  });
 });
 
 function rss() {
