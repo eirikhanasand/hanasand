@@ -329,7 +329,18 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
         : processCollectedItem(collected, { actorIdentities: options.store.listActorIdentities?.() ?? [] });
       const completeEvaluationCapture = pipeline.capture;
       if (pipeline.capture.body && options.objectStore) pipeline = { ...pipeline, capture: externalize(pipeline.capture, options.objectStore) };
-      const duplicate = options.store.findDuplicateCapture?.(pipeline.capture), saved = options.store.savePipelineResult(pipeline);
+      const duplicate = options.store.findDuplicateCapture?.(pipeline.capture);
+      let saved: any;
+      try {
+        saved = options.store.savePipelineResult(pipeline);
+      } catch (caught) {
+        const message = caught instanceof Error ? caught.message : String(caught);
+        if (source.id !== "src_canary_ransomlook_recent" || !message.startsWith("Timeliness timestamp inversion:")) throw caught;
+        // RansomLook has emitted malformed publisher timing. Keep the captured
+        // evidence, but do not let an optional timeliness write fail the source.
+        saved = { ...pipeline, capture: options.store.getCapture?.(pipeline.capture.id) ?? pipeline.capture };
+        taskMetrics.parserWarningCount++;
+      }
       if (actorIdentityCatalogSnapshot) {
         if (typeof options.store.replaceActorIdentityCatalog !== "function") throw new Error("Actor identity catalog persistence is unavailable.");
         const evidenceCaptureIds = options.store.listCaptures().filter((capture: any) => actorIdentityCatalogSnapshot.evidenceContentHashes?.includes(capture.contentHash)).map((capture: any) => capture.id);
