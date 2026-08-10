@@ -4,10 +4,10 @@ This is the single historical status record for the Masters thesis and product. 
 
 ## Current state — 2026-08-10
 
-- Production is now built from canonical `github/main` at `20f23e2d`. Frontend and API are healthy; the scraper image is also from this release but is currently unhealthy during recovery.
-- The scraper is healthy with PostgreSQL storage, native search ready, zero collection errors in the first post-deploy public canary, and the production clear-web family enabled alongside dark-web metadata collection.
-- The Cases UI was shortened and its source/UX checks now describe the actual compact evidence and activity workflow. Authenticated browser proof still requires a real customer session.
-- Source review is not counted as product progress. The five-source clear-web family is implemented and active, but it still needs two useful scheduled cycles before it is considered productive.
+- Production is deployed from private canonical `main` at `882bf552`. API and frontend are healthy; the scraper completed its PostgreSQL hydration/startup window and is healthy.
+- The live exposure queue returns HTTP 200 with retained customer-visible rows (`47` total in the verified probe). The public activity page showed `47/47 loaded` and a current RansomLook item. During scraper startup the same route returned an explicit HTTP 503, not an empty success.
+- The Cases list is now compact: case, severity/status, owner, and updated time. Case detail retains real assignment, status, evidence, timeline, and delivery actions while collapsing secondary report controls. Authenticated browser proof still requires a real customer session; the unauthenticated route correctly redirects to login.
+- A governed dark-web metadata source family is active with three approved sources. One RansomLook RSS scheduled cycle has produced retained output; the family remains incomplete until two useful scheduled cycles are proven.
 
 ## Clean line
 
@@ -24,10 +24,13 @@ Record the deployed commit, deployment time, live API result, live browser resul
 - `20f23e2d`: deployed truthful browser-search status handling and removed obsolete agent/audit documentation. Rollback: `43bdd13f`.
 - Live scraper evidence after `43bdd13f`: `/v1/health` returned 200 with PostgreSQL storage and search ready; `/v1/intel/search?q=ransomware` returned 200 with captured public-intelligence records; selected sources were active and had recent collection timestamps.
 - Live browser search now returns HTTP 503 with an unavailable status when the scraper cannot answer. The remaining production blocker is the scraper write queue retrying orphaned `evidence_links` rows, which currently makes the scraper health check fail.
+- `930af7ca`: deployed governed exposure-source parsing and a live RansomLook RSS collection cycle. Rollback: `f7d90b84`.
+- `882bf552`: deployed compact Cases UI controls and bounded exposure-claim timestamps/metadata-only semantics. Rollback: `930af7ca`.
+- Live evidence after `882bf552`: production checkout matched the deployed SHA; API/frontend/scraper containers reported healthy after startup; `/api/dwm/exposure-queue?limit=3` returned live retained rows with `metadataOnly: true`; the public activity browser showed current retained activity. The public status monitor captured transient startup failures and requires a subsequent scheduled run to clear those current down checks.
 
 ## Approved production work
 
-1. Repair the scraper write queue’s orphaned evidence-link retry path and restore healthy collection/search service.
-2. Prove two useful scheduled cycles for the implemented clear-web source family.
+1. Make the scraper startup/health monitor tolerate the measured PostgreSQL hydration window without leaving current DWM status falsely down.
+2. Prove two useful scheduled cycles for the implemented dark-web metadata source family.
 3. Verify the compact Cases list/detail flow with an authenticated customer session.
 4. Remove or implement fake customer-facing paths, then complete tenant/permission and performance cleanup.
