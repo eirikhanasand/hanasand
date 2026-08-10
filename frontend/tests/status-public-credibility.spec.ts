@@ -87,6 +87,7 @@ test('public status is operational only when every buyer-facing monitor is fresh
     expect(status.overall).toBe('up')
     expect(status.checks).toHaveLength(8)
     expect(status.checks.every(check => check.status === 'up')).toBe(true)
+    expect(status.checks.find(check => check.check_name === 'Source Collection')?.message).toBe('Source collection is responding; freshness is being monitored.')
 })
 
 test('public status cannot hide fresh processing or source-collection failures', () => {

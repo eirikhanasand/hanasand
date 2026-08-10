@@ -87,7 +87,7 @@ function toPublicServiceCheck(check: ServiceCheck): ServiceCheck {
         ...check,
         service: publicStatusLabel(check.service),
         check_name: publicStatusLabel(check.check_name),
-        message: publicStatusMessage(check.message),
+        message: publicStatusMessage(check.message, check.status),
     }
 }
 
@@ -129,7 +129,7 @@ function publicStatusLabel(value: string) {
         .replace(/\bApi\b/g, 'API')
 }
 
-function publicStatusMessage(message: string | null) {
+function publicStatusMessage(message: string | null, status?: ServiceCheck['status']) {
     if (!message) {
         return null
     }
@@ -163,7 +163,9 @@ function publicStatusMessage(message: string | null) {
     }
     const internalSourceMessage = `${['source', 'operations'].join(' ')} returned`
     if (new RegExp(`${internalSourceMessage}|source collection`, 'i').test(message)) {
-        return 'Source collection is degraded; new intelligence may be delayed.'
+        return status === 'up'
+            ? 'Source collection is responding; freshness is being monitored.'
+            : 'Source collection is degraded; new intelligence may be delayed.'
     }
 
     return message
