@@ -114,6 +114,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   private lastDatabaseHealth?: DatabaseHealth;
   private databaseHealthCheckedAt = 0;
   private databaseHealthRefresh?: Promise<void>;
+  private readonly sourceOperationalPageCache = new Map<string, { expiresAt: number; value: any }>();
   private pipelineDepth = 0;
 
   private constructor(sql: SQL, migrations: Migration[], deferHighVolumeHydration = false) {
@@ -759,6 +760,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const sourceId = input.sourceId?.trim() || null;
     const executableOnly = input.executableOnly === true;
     if (!sourceId && !executableOnly) {
+      const cacheKey = JSON.stringify({ ...input, generatedAt: undefined });
+      const cached = this.sourceOperationalPageCache.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) return cached.value;
       const values: unknown[] = [tenantId, input.generatedAt];
       const bind = (value: unknown) => { values.push(value); return `$${values.length}`; };
       const familySql = `COALESCE(source.record->'metadata'->>'sourceFamily', source.record->'metadata'->>'sourceGrowthFamily', CASE WHEN source.source_type = 'rss' THEN 'rss' WHEN source.source_type = 'telegram_public' THEN 'telegram_public' WHEN source.source_type IN ('tor_metadata', 'i2p_metadata') THEN 'darkweb_metadata' WHEN source.source_type IN ('static_web', 'dynamic_web', 'blog') THEN 'web' ELSE source.source_type END)`;
@@ -871,7 +875,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         measurementState: 'source_counts_only'
       } };
       const total = Number((pageRows[0] as any)?.filtered_total ?? 0);
-      return { rows: pageRows, totals: summary.summary, total, nextCursor: offset + pageRows.length < total ? String(offset + pageRows.length) : undefined };
+      const value = { rows: pageRows, totals: summary.summary, total, nextCursor: offset + pageRows.length < total ? String(offset + pageRows.length) : undefined };
+      this.sourceOperationalPageCache.set(cacheKey, { expiresAt: Date.now() + 5_000, value });
+      return value;
     }
     const [rows, totalResult] = await Promise.all([
       this.sql.unsafe(`
