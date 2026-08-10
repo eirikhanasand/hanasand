@@ -37,9 +37,9 @@ import { buildResourceSnapshot, readCgroupResourceSnapshot } from "../ops/resour
 const MAX_HEALTHY_PENDING_WRITES = 1_000;
 import { authenticateOperatorRequest, authorizeOperatorScope } from "./requestAuthentication.ts";
 
-async function queryDwmEvidence(options: ApiServerOptions, tenantId: string) {
+async function queryDwmEvidence(options: ApiServerOptions, tenantId: string, terms?: string[]) {
   const query = (options.store as any).queryDwmEvidence;
-  if (typeof query === "function") return query.call(options.store, tenantId);
+  if (typeof query === "function") return query.call(options.store, tenantId, terms);
   return { sources: options.store.listSources(), captures: options.store.listCaptures() };
 }
 export type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
@@ -215,10 +215,11 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       if (access.error) return access.error;
       const tenantId = scope.tenantId;
       const explicitWatchlist = parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? url.searchParams.get("q") ?? "");
-      const evidence = await queryDwmEvidence(options, tenantId);
+      const watchlist = explicitWatchlist.length ? explicitWatchlist : storedWatchlistTerms(options, tenantId);
+      const evidence = await queryDwmEvidence(options, tenantId, watchlist.map((term) => term.value));
       return json(sanitizeDwmApiPayload(buildDwmProductSnapshot({
         tenantId,
-        watchlist: explicitWatchlist.length ? explicitWatchlist : storedWatchlistTerms(options, tenantId),
+        watchlist,
         sources: evidence.sources,
         captures: evidence.captures
       })));
@@ -230,10 +231,11 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       const access = authorizeDwmWorkflowAccess({ options, scope, request, url, body, mode: "read" });
       if (access.error) return access.error;
       const tenantId = scope.tenantId;
-      const evidence = await queryDwmEvidence(options, tenantId);
+      const watchlist = Array.isArray(body.watchlist) ? body.watchlist : parseWatchlistParam(String(body.watchlist ?? body.terms ?? ""));
+      const evidence = await queryDwmEvidence(options, tenantId, watchlist.map((term) => term.value));
       return json(sanitizeDwmApiPayload(buildDwmProductSnapshot({
         tenantId,
-        watchlist: Array.isArray(body.watchlist) ? body.watchlist : parseWatchlistParam(String(body.watchlist ?? body.terms ?? "")),
+        watchlist,
         sources: evidence.sources,
         captures: evidence.captures
       })));

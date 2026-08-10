@@ -567,11 +567,36 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return this.queryRecordsByIds("claim_reviews", "claim_id", claimIds, tenantId);
   }
 
-  async queryDwmEvidence(tenantId: string) {
-    const [sources, captures] = await Promise.all([
-      this.sql`SELECT record FROM threat_intel.sources WHERE tenant_id IS NULL OR tenant_id IS NOT DISTINCT FROM ${tenantId}`,
-      this.sql`SELECT record FROM threat_intel.captures WHERE tenant_id IS NULL OR tenant_id IS NOT DISTINCT FROM ${tenantId}`
-    ]);
+  async queryDwmEvidence(tenantId: string, terms?: string[]) {
+    const sourcesQuery = this.sql`SELECT record FROM threat_intel.sources WHERE tenant_id IS NULL OR tenant_id IS NOT DISTINCT FROM ${tenantId}`;
+    if (terms !== undefined && !terms.length) {
+      const [sources] = await Promise.all([sourcesQuery]);
+      return { sources: sources.map(readRecord), captures: [] };
+    }
+    if (terms === undefined) {
+      const [sources, captures] = await Promise.all([
+        sourcesQuery,
+        this.sql`SELECT record FROM threat_intel.captures WHERE tenant_id IS NULL OR tenant_id IS NOT DISTINCT FROM ${tenantId}`
+      ]);
+      return { sources: sources.map(readRecord), captures: captures.map(readRecord) };
+    }
+    const normalizedTerms = [...new Set(terms.map((term) => String(term).trim()).filter(Boolean))].slice(0, 20);
+    if (!normalizedTerms.length) {
+      const [sources] = await Promise.all([sourcesQuery]);
+      return { sources: sources.map(readRecord), captures: [] };
+    }
+    const predicates = normalizedTerms
+      .map((_, index) => `to_tsvector('simple', capture.record::text) @@ plainto_tsquery('simple', $${index + 1})`)
+      .join(" OR ");
+    const capturesQuery = this.sql.unsafe(`
+      SELECT capture.record
+      FROM threat_intel.captures AS capture
+      WHERE (capture.tenant_id IS NULL OR capture.tenant_id IS NOT DISTINCT FROM $${normalizedTerms.length + 1}::text)
+        AND (${predicates})
+      ORDER BY capture.collected_at DESC, capture.id DESC
+      LIMIT 500
+    `, [...normalizedTerms, tenantId]);
+    const [sources, captures] = await Promise.all([sourcesQuery, capturesQuery]);
     return { sources: sources.map(readRecord), captures: captures.map(readRecord) };
   }
 
