@@ -4,7 +4,7 @@ This is the single historical status record for the Masters thesis and product. 
 
 ## Current state — 2026-08-10
 
-- Production is deployed from private canonical `main` at `882bf552`. API and frontend are healthy; the scraper completed its PostgreSQL hydration/startup window and is healthy.
+- Production is deployed from private canonical `main` at `8b573221`. API, frontend, and scraper are healthy after the scraper’s PostgreSQL hydration/startup window.
 - The live exposure queue returns HTTP 200 with retained customer-visible rows (`47` total in the verified probe). The public activity page showed `47/47 loaded` and a current RansomLook item. During scraper startup the same route returned an explicit HTTP 503, not an empty success.
 - The Cases list is now compact: case, severity/status, owner, and updated time. Case detail retains real assignment, status, evidence, timeline, and delivery actions while collapsing secondary report controls. Authenticated browser proof still requires a real customer session; the unauthenticated route correctly redirects to login.
 - A governed dark-web metadata source family is active with three approved sources. One RansomLook RSS scheduled cycle has produced retained output; the family remains incomplete until two useful scheduled cycles are proven.
@@ -27,10 +27,12 @@ Record the deployed commit, deployment time, live API result, live browser resul
 - `930af7ca`: deployed governed exposure-source parsing and a live RansomLook RSS collection cycle. Rollback: `f7d90b84`.
 - `882bf552`: deployed compact Cases UI controls and bounded exposure-claim timestamps/metadata-only semantics. Rollback: `930af7ca`.
 - Live evidence after `882bf552`: production checkout matched the deployed SHA; API/frontend/scraper containers reported healthy after startup; `/api/dwm/exposure-queue?limit=3` returned live retained rows with `metadataOnly: true`; the public activity browser showed current retained activity. The public status monitor captured transient startup failures and requires a subsequent scheduled run to clear those current down checks.
+- `b9202378`: deployed the DWM monitor fix to use the authenticated scraper queue as its canonical Latest Activity source. Rollback: `9cf9e596`.
+- `8b573221`: deployed the default-tenant exposure candidate-index predicate fix. Rollback: `b9202378`.
+- Live evidence after `8b573221`: repeated internal queue calls returned HTTP 200 in 27–40 ms; repeated public queue calls returned HTTP 200 in about 129 ms; the next monitor cycle reported Latest Activity `up` with 47 retained records; public browser activity showed `47/47 loaded`.
 
 ## Approved production work
 
-1. Make the scraper startup/health monitor tolerate the measured PostgreSQL hydration window without leaving current DWM status falsely down.
-2. Prove two useful scheduled cycles for the implemented dark-web metadata source family.
-3. Verify the compact Cases list/detail flow with an authenticated customer session.
-4. Remove or implement fake customer-facing paths, then complete tenant/permission and performance cleanup.
+1. Prove two useful scheduled cycles for the implemented dark-web metadata source family.
+2. Verify the compact Cases list/detail flow with an authenticated customer session.
+3. Remove or implement fake customer-facing paths, then complete tenant/permission and performance cleanup.
