@@ -395,7 +395,9 @@ export default async function runSyntheticMonitor() {
             if (overdueDiscovery || stalledEvaluations || recentDeliveryFailures >= 3) {
                 return { status: 'degraded', message }
             }
-            return message
+            return staleReviews === 0
+                ? `Collection processing is current; automatic review is disabled and ${unreviewedSources} captured sources have no optional automatic review.`
+                : message
         }),
         check('content', 'Articles', async () => {
             const { response } = await fetchJson('/articles')
