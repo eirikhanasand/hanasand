@@ -209,10 +209,10 @@ export async function startScraperRuntime() {
     onCycle: (result) => logger.info("automatic evaluation cycle", { event: "automatic_evaluation.cycle", ...result }),
     onError: (error: unknown) => logger.warn("automatic evaluation cycle failed", { event: "automatic_evaluation.error", error: error instanceof Error ? error.message : String(error) })
   });
-  const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, defaultCanaryLoop: defaultCanary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
   // ponytail: warm the common global inventory page once; later reads are served
   // from the bounded five-second backend cache instead of repeating cold joins.
-  setTimeout(() => void store.querySourceOperationalPage?.({ generatedAt: new Date().toISOString(), limit: 50, offset: 0, executableOnly: false, sort: "source", direction: "asc" }), 0);
+  await store.querySourceOperationalPage?.({ generatedAt: new Date().toISOString(), limit: 50, offset: 0, executableOnly: false, sort: "source", direction: "asc" });
+  const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, defaultCanaryLoop: defaultCanary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
   startupPhase("search_index_warm_queued");
   setTimeout(() => void warmSearchCaptureIndexAsync(store)
     .then((result) => startupPhase("search_index_built", result))
