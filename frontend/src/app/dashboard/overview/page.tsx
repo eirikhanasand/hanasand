@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { AlertTriangle, Radio, ShieldAlert } from 'lucide-react'
+import { AlertTriangle, Radio } from 'lucide-react'
 import getStatus from '@/utils/status/getStatus'
 import { toPublicServiceStatus } from '@/utils/status/publicStatus'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
     title: 'Overview',
-    description: 'Customer overview for monitored domains, breach mentions, traffic, vulnerabilities, and service health.',
+    description: 'A focused view of monitoring, alerts, cases, and service health that matter now.',
 }
 
 export default async function Page({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
@@ -30,11 +30,15 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
     const status = await getStatus()
     const publicStatus = toPublicServiceStatus(status)
     const serviceIssues = publicStatus.checks.filter(check => check.status !== 'up')
-    const slowestChecks = [...publicStatus.checks].sort((a, b) => (b.latency_ms || 0) - (a.latency_ms || 0)).slice(0, 5)
     const actions = [serviceIssues.length ? {
         href: '/status',
         title: 'Check service health',
         detail: `${serviceIssues.length} public check${serviceIssues.length === 1 ? '' : 's'} degraded or down.`,
+        tone: 'watch' as const,
+    } : !publicStatus.checks.length ? {
+        href: '/status',
+        title: 'Check service health',
+        detail: 'Service checks are still connecting.',
         tone: 'watch' as const,
     } : null].filter(Boolean)
 
@@ -42,7 +46,7 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
         <DashboardPage>
             <DashboardHeader
                 title='Overview'
-                description='Customer-facing status for the domains, traffic, breach mentions, vulnerabilities, and service checks that matter now.'
+                description='A focused view of monitoring, alerts, cases, and service health that matter now.'
                 eyebrow='Dashboard'
             />
 
@@ -67,102 +71,79 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
 
             <DwmOverviewPanel organizationId={firstParam(params.organizationId) || firstParam(params.orgId)} />
 
-            <div className='grid gap-3 md:grid-cols-2'>
-                <OverviewCard title='Vulnerability monitoring' value='Not configured' detail='no organization-scoped image scanner' icon={<ShieldAlert className='h-4 w-4' />} tone='neutral' />
-            </div>
-
-            <div className='grid gap-3 xl:grid-cols-[1fr_0.9fr]'>
-                <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                    <div className='flex items-center justify-between border-b border-ui-border px-4 py-3'>
-                        <div>
-                            <h2 className='text-base font-semibold text-ui-text'>Needs attention</h2>
-                            <p className='mt-1 text-sm text-ui-muted'>Only rows with a clear customer action appear here.</p>
+            {actions.length ? (
+                <div className='grid gap-3 xl:grid-cols-[1fr_0.9fr]'>
+                    <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
+                        <div className='flex items-center justify-between border-b border-ui-border px-4 py-3'>
+                            <div>
+                                <h2 className='text-base font-semibold text-ui-text'>Needs attention</h2>
+                                <p className='mt-1 text-sm text-ui-muted'>Only rows with a clear customer action appear here.</p>
+                            </div>
+                            <AlertTriangle className={`h-4 w-4 ${actions.length ? 'text-ui-warning' : 'text-ui-success'}`} />
                         </div>
-                        <AlertTriangle className={`h-4 w-4 ${actions.length ? 'text-ui-warning' : 'text-ui-success'}`} />
-                    </div>
-                    <div className='divide-y divide-ui-border'>
-                        {actions.length ? actions.map(action => action && (
-                            <Link key={action.href} href={action.href} className='grid gap-2 px-4 py-3 transition hover:bg-ui-raised md:grid-cols-[1fr_auto] md:items-center'>
-                                <div>
-                                    <p className='font-semibold text-ui-text'>{action.title}</p>
-                                    <p className='mt-1 text-sm text-ui-muted'>{action.detail}</p>
-                                </div>
-                                <span className={`h-2 w-2 rounded-full ${toneDot(action.tone)}`} />
-                            </Link>
-                        )) : (
-                            <div className='px-4 py-6 text-sm text-ui-muted'>No customer action needed right now.</div>
-                        )}
-                    </div>
-                </DashboardPanel>
-
-                <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
-                    <div className='flex items-center justify-between gap-3'>
-                        <div>
-                            <h2 className='text-base font-semibold text-ui-text'>Service health</h2>
-                            <p className='mt-1 text-sm text-ui-muted'>{serviceIssues.length ? `${serviceIssues.length} check${serviceIssues.length === 1 ? '' : 's'} need review.` : 'All public checks are up.'}</p>
-                        </div>
-                        <Radio className={`h-4 w-4 ${serviceIssues.length ? 'text-ui-warning' : 'text-ui-success'}`} />
-                    </div>
-                    <div className='mt-3 space-y-2'>
-                        {(serviceIssues.length ? serviceIssues : slowestChecks).slice(0, 6).map((check) => (
-                            <div key={`${check.service}-${check.check_name}`} className='flex items-center justify-between rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm'>
-                                <div>
-                                    <div className='font-medium text-ui-text'>{check.check_name}</div>
-                                    <div className='text-ui-muted'>{check.service}</div>
-                                </div>
-                                <div className='text-right'>
-                                    <div className='font-semibold text-ui-text'>{check.latency_ms}ms</div>
-                                    <div className={`text-xs ${check.status === 'up' ? 'text-ui-success' : check.status === 'degraded' ? 'text-ui-warning' : 'text-ui-danger'}`}>
-                                        {check.status}
+                        <div className='divide-y divide-ui-border'>
+                            {actions.length ? actions.map(action => action && (
+                                <Link key={action.href} href={action.href} className='grid gap-2 px-4 py-3 transition hover:bg-ui-raised md:grid-cols-[1fr_auto] md:items-center'>
+                                    <div>
+                                        <p className='font-semibold text-ui-text'>{action.title}</p>
+                                        <p className='mt-1 text-sm text-ui-muted'>{action.detail}</p>
                                     </div>
-                                </div>
-                            </div>
-                        ))}
-                        {!publicStatus.checks.length && (
-                            <div className='rounded-lg border border-ui-border bg-ui-canvas px-3 py-3 text-sm text-ui-muted'>
-                                Service checks are connecting.
-                            </div>
-                        )}
+                                    <span className={`h-2 w-2 rounded-full ${toneDot(action.tone)}`} />
+                                </Link>
+                            )) : (
+                                <div className='px-4 py-6 text-sm text-ui-muted'>No customer action needed right now.</div>
+                            )}
+                        </div>
+                    </DashboardPanel>
+
+                    <ServiceHealth checks={serviceIssues} />
+                </div>
+            ) : (
+                <DashboardPanel className='flex items-center gap-3 border-ui-success/25 bg-ui-success/5 px-4 py-3'>
+                    <Radio className='h-4 w-4 shrink-0 text-ui-success' />
+                    <div>
+                        <p className='text-sm font-semibold text-ui-text'>Everything is operating normally</p>
+                        <p className='text-sm text-ui-muted'>No customer action is needed right now.</p>
                     </div>
                 </DashboardPanel>
-            </div>
+            )}
         </DashboardPage>
     )
+}
+
+function ServiceHealth({ checks }: { checks: ReturnType<typeof toPublicServiceStatus>['checks'] }) {
+    return <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
+        <div className='flex items-center justify-between gap-3'>
+            <div>
+                <h2 className='text-base font-semibold text-ui-text'>Service health</h2>
+                <p className='mt-1 text-sm text-ui-muted'>{checks.length} check{checks.length === 1 ? '' : 's'} need review.</p>
+            </div>
+            <Radio className='h-4 w-4 text-ui-warning' />
+        </div>
+        <div className='mt-3 space-y-2'>
+            {checks.slice(0, 6).map((check) => (
+                <div key={`${check.service}-${check.check_name}`} className='flex items-center justify-between rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm'>
+                    <div>
+                        <div className='font-medium text-ui-text'>{check.check_name}</div>
+                        <div className='text-ui-muted'>{check.service}</div>
+                    </div>
+                    <div className='text-right'>
+                        <div className='font-semibold text-ui-text'>{check.latency_ms}ms</div>
+                        <div className={`text-xs ${check.status === 'up' ? 'text-ui-success' : check.status === 'degraded' ? 'text-ui-warning' : 'text-ui-danger'}`}>
+                            {check.status}
+                        </div>
+                    </div>
+                </div>
+            ))}
+            {!checks.length && <p className='rounded-lg border border-ui-border bg-ui-canvas px-3 py-3 text-sm text-ui-muted'>Service checks are still connecting.</p>}
+        </div>
+    </DashboardPanel>
 }
 
 function firstParam(value: string | string[] | undefined) {
     return (Array.isArray(value) ? value[0] : value)?.trim() || undefined
 }
 
-function OverviewCard({ href, title, value, detail, icon, tone }: { href?: string, title: string, value: string, detail: string, icon: React.ReactNode, tone: 'ok' | 'watch' | 'bad' | 'neutral' }) {
-    const content = (
-        <>
-            <div className='flex items-center justify-between text-ui-muted'>
-                <span className='text-sm'>{title}</span>
-                <span className={toneText(tone)}>{icon}</span>
-            </div>
-            <div className='mt-3 flex items-center gap-2 text-2xl font-semibold text-ui-text'>
-                <span className={`h-2 w-2 rounded-full ${toneDot(tone)}`} />
-                {value}
-            </div>
-            <p className='mt-2 text-sm leading-6 text-ui-muted'>{detail}</p>
-        </>
-    )
-
-    if (href) return <Link href={href} className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm transition hover:bg-ui-raised'>{content}</Link>
-    return <DashboardPanel className='border-ui-border bg-ui-panel p-4'>{content}</DashboardPanel>
-}
-
-function toneText(tone: 'ok' | 'watch' | 'bad' | 'neutral') {
-    if (tone === 'ok') return 'text-ui-success'
-    if (tone === 'watch') return 'text-ui-warning'
-    if (tone === 'bad') return 'text-ui-danger'
-    return 'text-ui-primary'
-}
-
-function toneDot(tone: 'ok' | 'watch' | 'bad' | 'neutral') {
-    if (tone === 'ok') return 'bg-ui-success shadow-[0_0_14px_rgba(49,196,141,0.65)]'
-    if (tone === 'watch') return 'bg-ui-warning shadow-[0_0_14px_rgba(246,180,95,0.45)]'
-    if (tone === 'bad') return 'bg-ui-danger shadow-[0_0_14px_rgba(255,122,89,0.45)]'
-    return 'bg-ui-primary shadow-[0_0_14px_rgba(157,180,255,0.45)]'
+function toneDot(tone: 'watch') {
+    return tone === 'watch' ? 'bg-ui-warning shadow-[0_0_14px_rgba(246,180,95,0.45)]' : ''
 }
