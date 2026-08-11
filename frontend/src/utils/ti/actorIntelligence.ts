@@ -159,6 +159,7 @@ function fallbackActorIntelligence(result: TiSearchResponse, victimObservations:
             result.ttps.length ? `${result.ttps.length} tradecraft rows are mapped for analyst review.` : 'No tradecraft rows yet.',
         ],
         sourceProvenance: result.sources.map(source => source.url || source.provenance || source.name).slice(0, 8),
+        updateTimeline: [],
     }
 }
 
