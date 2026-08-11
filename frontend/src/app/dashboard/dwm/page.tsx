@@ -3,6 +3,7 @@ import type { DwmProductSnapshot } from '@/utils/dwm/product'
 import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import parseCookie from '@/utils/cookies/parseCookie'
 import { DwmAnalystPortal, type DwmView } from './dwm-analyst-portal'
 
 export const dynamic = 'force-dynamic'
@@ -19,6 +20,9 @@ export default async function DashboardDwmPage({
 
     const organizationId = firstParam(params?.organizationId)?.trim() || undefined
     const tenantId = organizationId || identityId
+    const roles = parseCookie<Array<Role | string>>(cookieStore.get('roles')?.value, [])
+    const roleIds = roles.map(role => typeof role === 'string' ? role : role.id || '')
+    const isAdmin = roleIds.includes('administrator') || roleIds.includes('admin')
     const initialAlertId = firstParam(params?.alert)
     const publicTiHandoff = firstParam(params?.handoff) === PUBLIC_TI_HANDOFF_SOURCE
         ? decodePublicTiHandoffPayload(firstParam(params?.payload), firstParam(params?.intent))
@@ -37,6 +41,7 @@ export default async function DashboardDwmPage({
                 dataHealth={loadingDataHealth()}
                 initialAlertId={initialAlertId}
                 publicTiHandoff={publicTiHandoff}
+                isAdmin={isAdmin}
                 view={normalizeDwmView(firstParam(params?.panel))}
             />
         </DashboardPage>
@@ -72,7 +77,7 @@ function loadingDataHealth() {
 }
 
 function normalizeDwmView(value: string | undefined): DwmView {
-    return value === 'watchlists' || value === 'sources' || value === 'delivery' || value === 'actors' || value === 'actions' ? value : 'cases'
+    return value === 'watchlists' || value === 'delivery' || value === 'actors' || value === 'actions' ? value : 'cases'
 }
 
 function firstParam(value: string | string[] | undefined) {

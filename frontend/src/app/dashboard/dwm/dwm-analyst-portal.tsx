@@ -161,6 +161,7 @@ type PortalProps = {
     dataHealth: DwmDataHealth
     initialAlertId?: string
     publicTiHandoff?: PublicTiHandoffDecodeResult | null
+    isAdmin?: boolean
     view?: DwmView
 }
 
@@ -194,6 +195,7 @@ export function DwmAnalystPortal({
     deliveries: initialDeliveries,
     dataHealth: initialDataHealth,
     initialAlertId,
+    isAdmin = false,
     view = 'cases',
 }: PortalProps) {
     const router = useRouter()
@@ -260,6 +262,7 @@ export function DwmAnalystPortal({
         const params = dwmScopeSearchParams(tenantId, organizationId)
         if (view === 'cases') {
             void refreshCases(params, controller.signal, setCasesState)
+            void refreshDwmOperations(params, controller.signal, setOperations, setDataHealth)
             void refreshDwmAlerts(params, controller.signal, setAlerts, setDataHealth)
         } else {
             void refreshDwmProduct(params, controller.signal, setSnapshot, setDataHealth)
@@ -395,7 +398,7 @@ export function DwmAnalystPortal({
     }
 
     if (view === 'cases') {
-        return <CaseOverview organizationId={organizationId} state={casesState} alerts={alerts} />
+        return <CaseOverview organizationId={organizationId} state={casesState} alerts={alerts} operations={operations} isAdmin={isAdmin} />
     }
 
     return null
@@ -439,7 +442,7 @@ function AlertReviewPanel({ alerts, busyAction, onOpenCase, organizationId }: {
     )
 }
 
-function CaseOverview({ organizationId, state, alerts }: { organizationId?: string, state: CasesState, alerts: PortalAlert[] }) {
+function CaseOverview({ organizationId, state, alerts, operations, isAdmin }: { organizationId?: string, state: CasesState, alerts: PortalAlert[], operations: OperationsSnapshot | null, isAdmin?: boolean }) {
     const alertsById = new Map(alerts.map(alert => [alert.id, alert]))
     const [query, setQuery] = useState('')
     const [status, setStatus] = useState('all')
@@ -451,6 +454,7 @@ function CaseOverview({ organizationId, state, alerts }: { organizationId?: stri
 
     return (
         <div className='grid gap-4' data-dwm-cases-overview='true'>
+            <DwmSourceCoverageSummary operations={operations} isAdmin={isAdmin} />
             <section className='min-w-0 rounded-lg border border-ui-border bg-ui-panel'>
                 <div className='flex flex-col gap-1 border-b border-ui-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
                     <h1 className='text-lg font-semibold text-ui-text'>Cases</h1>
@@ -519,6 +523,44 @@ function CaseOverview({ organizationId, state, alerts }: { organizationId?: stri
                     </div>
                 )}
             </section>
+        </div>
+    )
+}
+
+function DwmSourceCoverageSummary({ operations, isAdmin }: { operations: OperationsSnapshot | null, isAdmin?: boolean }) {
+    const latestUsefulCapture = operations?.latestCaptures
+        .filter(capture => capture.matchedWatchTerms.length > 0)
+        .sort((first, second) => second.collectedAt.localeCompare(first.collectedAt))[0]
+    const degradedSources = operations?.sourceHealth.filter(source => source.status !== 'active').length ?? 0
+    const activeSources = operations?.counts.activeSourceCount ?? 0
+    const sourceCount = operations?.counts.sourceCount ?? 0
+    const latestCollection = operations?.latestRun?.updatedAt
+    const unavailable = !operations
+
+    return (
+        <section className='rounded-lg border border-ui-border bg-ui-panel px-4 py-3' data-dwm-source-coverage='true'>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+                <div>
+                    <h2 className='text-sm font-semibold text-ui-text'>Source coverage</h2>
+                    <p className='mt-0.5 text-xs text-ui-muted'>Collection status behind your monitoring.</p>
+                </div>
+                {isAdmin && <Link href='/dashboard/ti/sources' className='text-xs font-semibold text-ui-primary underline-offset-2 hover:underline'>Open source inventory</Link>}
+            </div>
+            <div className='mt-3 grid gap-2 sm:grid-cols-4'>
+                <CoverageFact label='Active sources' value={unavailable ? 'Loading' : `${activeSources}/${sourceCount}`} />
+                <CoverageFact label='Last collection' value={unavailable ? 'Loading' : latestCollection ? relativeTimeLabel(latestCollection) : 'Not recorded'} />
+                <CoverageFact label='Latest useful capture' value={unavailable ? 'Loading' : latestUsefulCapture ? `${latestUsefulCapture.sourceName} · ${relativeTimeLabel(latestUsefulCapture.collectedAt)}` : 'Not recorded'} />
+                <CoverageFact label='Degraded sources' value={unavailable ? 'Loading' : String(degradedSources)} tone={degradedSources ? 'warn' : 'normal'} />
+            </div>
+        </section>
+    )
+}
+
+function CoverageFact({ label, value, tone = 'normal' }: { label: string, value: string, tone?: 'normal' | 'warn' }) {
+    return (
+        <div className='min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 py-2'>
+            <p className='text-[10px] font-semibold uppercase tracking-wide text-ui-muted'>{label}</p>
+            <p className={`mt-1 truncate text-sm font-semibold ${tone === 'warn' ? 'text-ui-warning' : 'text-ui-text'}`}>{value}</p>
         </div>
     )
 }

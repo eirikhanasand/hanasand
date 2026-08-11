@@ -33,7 +33,6 @@ const dashboardRouteItems: SearchItem[] = [
     route('Security Scanner', 'Run and schedule approved Hanasand scans', '/dashboard/scanner'),
     route('DWM cases', 'Dark web monitoring case review', '/dashboard/dwm/cases'),
     route('DWM watchlists', 'Watched companies, vendors, domains, and brands', '/dashboard/dwm/watchlists'),
-    route('DWM sources', 'Source health and capture state', '/dashboard/dwm/sources'),
     route('DWM delivery', 'Webhook attempts and customer delivery', '/dashboard/dwm/delivery'),
     route('DWM actors', 'Actor context and coverage', '/dashboard/dwm/actors'),
     route('DWM actions', 'Watchlist, source, case, and webhook controls', '/dashboard/dwm/actions'),
