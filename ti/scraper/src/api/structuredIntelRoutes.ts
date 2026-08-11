@@ -155,6 +155,14 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
     const offset = Math.max(0, numberQuery(url.searchParams.get("cursor")) ?? 0);
     const sortField = "observedAt";
     const direction = "desc";
+    const databaseEvidenceQuery = (options.store as any).queryEvidenceDeltas;
+    if (typeof databaseEvidenceQuery === "function") {
+      const result = await databaseEvidenceQuery.call(options.store, { tenantId: scope.tenantId, query, limit, offset });
+      const rows = result.records;
+      const nextCursor = result.nextCursor;
+      const previousCursor = offset > 0 ? String(Math.max(0, offset - limit)) : undefined;
+      return json({ evidenceDeltas: rows, rows, total: result.total, nextCursor, previousCursor, pagination: { limit, cursor: String(offset), nextCursor, previousCursor, appliedFilters: { q: query ?? "", tenantId: scope.tenantId ?? "" }, sortField: "updatedAt", direction: "desc" } });
+    }
     const records = ((options.store as any).listEvidenceDeltas?.() ?? [])
       .filter((record: any) => inTenantScope(record, scope.tenantId))
       .filter((record: any) => !query || JSON.stringify(record).toLowerCase().includes(query))

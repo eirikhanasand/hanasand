@@ -24,4 +24,17 @@ describe("actor enrichment operations", () => {
     const response = await handleActorEnrichmentRequest(new Request("http://localhost/v1/intel/actor-profiles/actor-1/timeline?tenantId=tenant-a"), options(store) as any);
     expect((await response?.json()).updates.map((item: any) => item.id)).toEqual(["a"]);
   });
+
+  test("returns stable pagination metadata for enrichment history", async () => {
+    const store = new InMemoryScraperStore();
+    for (let index = 0; index < 3; index += 1) {
+      await handleActorEnrichmentRequest(new Request("http://localhost/v1/intel/actor-enrichment/runs", { method: "POST", body: JSON.stringify({ tenantId: "tenant-a" }), headers: { "content-type": "application/json" } }), options(store) as any);
+    }
+    const response = await handleActorEnrichmentRequest(new Request("http://localhost/v1/intel/actor-enrichment/runs?tenantId=tenant-a&limit=2&cursor=0"), options(store) as any);
+    const body = await response?.json();
+    expect(body.rows).toHaveLength(2);
+    expect(body.total).toBe(3);
+    expect(body.nextCursor).toBe("2");
+    expect(body.pagination).toMatchObject({ sortField: "updatedAt", direction: "desc" });
+  });
 });

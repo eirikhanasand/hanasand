@@ -91,13 +91,17 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
   }
 
   if (request.method === "GET") {
-    const runs = await scopedRuns(store, tenantId);
     const limit = Math.max(1, Math.min(100, Number(url.searchParams.get("limit") ?? 25)));
     const offset = Math.max(0, Number(url.searchParams.get("cursor") ?? 0));
-    const rows = runs.slice(offset, offset + limit).map(actorEnrichmentRunSummary);
-    const nextCursor = offset + rows.length < runs.length ? String(offset + rows.length) : undefined;
+    const paged = typeof store.queryActorEnrichmentRuns === "function"
+      ? await store.queryActorEnrichmentRuns({ tenantId, limit, offset })
+      : null;
+    const runs = paged ? paged.records : await scopedRuns(store, tenantId);
+    const rows = (paged ? runs : runs.slice(offset, offset + limit)).map(actorEnrichmentRunSummary);
+    const total = paged?.total ?? runs.length;
+    const nextCursor = paged?.nextCursor ?? (offset + rows.length < total ? String(offset + rows.length) : undefined);
     const previousCursor = offset > 0 ? String(Math.max(0, offset - limit)) : undefined;
-    return json({ runs: rows, rows, total: runs.length, nextCursor, previousCursor, pagination: { limit, cursor: String(offset), nextCursor, previousCursor, appliedFilters: { tenantId: tenantId ?? "" }, sortField: "updatedAt", direction: "desc" } });
+    return json({ runs: rows, rows, total, nextCursor, previousCursor, pagination: { limit, cursor: String(offset), nextCursor, previousCursor, appliedFilters: { tenantId: tenantId ?? "" }, sortField: "updatedAt", direction: "desc" } });
   }
 
   if (request.method !== "POST") return error("method_not_allowed", "Method not allowed", 405);
