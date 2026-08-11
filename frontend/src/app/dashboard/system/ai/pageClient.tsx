@@ -242,8 +242,7 @@ export default function GPT_Page() {
                             <p className='mt-1 text-sm text-ui-muted'>Connected workers, verified output, capacity, and spend.</p>
                         </div>
                         <div className='flex flex-wrap items-center justify-end gap-2'>
-                            <a href='#ai-clients' className='inline-flex h-9 items-center rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition-colors hover:bg-ui-panel'>Open clients</a>
-                            <Link href='/dashboard/system#system-containers' className='inline-flex h-9 items-center rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition-colors hover:bg-ui-panel'>Open containers</Link>
+                            <GPT_Header isConnected={gpt.isConnected} participants={gpt.participants} />
                             <Link
                                 href='/dashboard/system'
                                 className='flex h-9 items-center gap-2 rounded-md bg-ui-raised px-4 text-sm text-ui-text border border-ui-border transition-colors hover:bg-ui-panel'
@@ -253,7 +252,6 @@ export default function GPT_Page() {
                             </Link>
                         </div>
                     </div>
-                    <GPT_Header isConnected={gpt.isConnected} participants={gpt.participants} />
                     <EconomicsPanel economics={economics} error={economicsError} aiContainers={aiContainers} containerError={containerError} />
                     <div id='ai-clients' data-ai-clients>
                         {gpt.clients.length ? <GPT_Content clients={gpt.clients} onTestClient={gpt.openChat} /> : <GPT_EmptyState />}
