@@ -318,130 +318,46 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return rows.map(readRecord);
   }
 
-  async queryAutomaticReviewRecords(input: { tenantId?: string; allTenants?: boolean; taskLimit?: number; modelVersion?: string } = {}) {
+  async queryAutomaticReviewRecords(input: { tenantId?: string; allTenants?: boolean } = {}) {
     const tenantId = input.tenantId ?? null;
     const allTenants = input.allTenants === true;
     const tenantWhere = allTenants ? "TRUE" : "tenant_id IS NOT DISTINCT FROM $1::text";
-    const taskLimit = Number.isFinite(input.taskLimit) ? Math.max(1, Math.min(250, Math.floor(input.taskLimit!))) : undefined;
-    const boundedValues = allTenants ? [] : [tenantId];
-    const limitParameter = `$${boundedValues.length + 1}`;
-    const claimPromptParameter = `$${boundedValues.length + 2}`;
-    const sourcePromptParameter = `$${boundedValues.length + 3}`;
-    const modelParameter = `$${boundedValues.length + 4}`;
-    const taskRowsQuery = taskLimit
-      ? this.sql.unsafe(`
-        WITH ranked AS (
-          SELECT record, updated_at, id,
-            record->'subject'->>'type' AS subject_type,
-            record->>'state' AS task_state,
-            row_number() OVER (
-              PARTITION BY tenant_id, record->'subject'->>'type', record->'subject'->>'id'
-              ORDER BY updated_at DESC, id DESC
-            ) AS subject_rank,
-            row_number() OVER (
-              PARTITION BY tenant_id, record->'subject'->>'type', record->'subject'->>'id', record->>'state'
-              ORDER BY updated_at DESC, id DESC
-            ) AS state_rank,
-            row_number() OVER (
-              PARTITION BY record->'subject'->>'type', record->>'state'
-              ORDER BY COALESCE(NULLIF(record->>'nextAttemptAt', '')::timestamptz, updated_at), updated_at, id
-            ) AS lane_rank
-          FROM threat_intel.workflow_records
-          WHERE record_type = 'analyst_metadata_review_task'
-            AND record->>'recordKind' = 'automatic_intelligence_review_task'
-            AND ${tenantWhere}
-            AND (
-              record->'subject'->>'type' = 'source'
-              OR (
-                record->'subject'->>'type' IN ('claim', 'incident')
-                AND record->>'state' IN ('queued', 'running', 'retrying')
-                AND record->>'promptVersion' = ${claimPromptParameter}
-                AND record->>'requestedModelVersion' = ${modelParameter}
-              )
-            )
-        )
-        SELECT record
-        FROM ranked
-        WHERE (
-            subject_type = 'source'
-            AND (
-              subject_rank = 1
-              OR (
-                task_state IN ('queued', 'running', 'retrying')
-                AND state_rank <= 2
-                AND record->>'promptVersion' = ${sourcePromptParameter}
-                AND record->>'requestedModelVersion' = ${modelParameter}
-              )
-            )
-          )
-          OR (subject_type IN ('claim', 'incident') AND lane_rank <= ${limitParameter})
-        ORDER BY updated_at DESC, id DESC`, [
-          ...boundedValues,
-          taskLimit,
-          AUTOMATIC_REVIEW_PROMPT_VERSION,
-          SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION,
-          input.modelVersion ?? automaticReviewModelVersion()
-        ])
-      : this.sql.unsafe(`
+    const [taskRows, eventRows] = await Promise.all([
+      this.sql.unsafe(`
         SELECT record
         FROM threat_intel.workflow_records
         WHERE record_type = 'analyst_metadata_review_task'
           AND record->>'recordKind' = 'automatic_intelligence_review_task'
           AND ${tenantWhere}
-        ORDER BY updated_at DESC, id DESC`, allTenants ? [] : [tenantId]);
-    const taskIdsQuery = taskLimit
-      ? this.sql.unsafe(`
-        SELECT record->>'id' AS id
-        FROM threat_intel.workflow_records
-        WHERE record_type = 'analyst_metadata_review_task'
-          AND record->>'recordKind' = 'automatic_intelligence_review_task'
-          AND ${tenantWhere}
-      `, allTenants ? [] : [tenantId])
-      : Promise.resolve([] as Array<{ id: string }>);
-    const taskSummaryQuery = taskLimit
-      ? this.sql.unsafe(`
-        SELECT record->>'state' AS state,
-          record->>'outcome' AS outcome,
-          record->'subject'->>'type' AS subject_type,
-          count(*)::int AS count
-        FROM threat_intel.workflow_records
-        WHERE record_type = 'analyst_metadata_review_task'
-          AND record->>'recordKind' = 'automatic_intelligence_review_task'
-          AND ${tenantWhere}
-        GROUP BY record->>'state', record->>'outcome', record->'subject'->>'type'
-      `, allTenants ? [] : [tenantId])
-      : Promise.resolve([] as Array<{ state?: string; outcome?: string; subject_type?: string; count?: number }>);
-    const [taskRows, eventRows, taskIdRows, taskSummaryRows] = await Promise.all([
-      taskRowsQuery,
-      taskLimit ? Promise.resolve([]) : this.sql.unsafe(`
+        ORDER BY updated_at DESC, id DESC`, allTenants ? [] : [tenantId]),
+      this.sql.unsafe(`
         SELECT record
         FROM threat_intel.workflow_records
         WHERE record_type = 'analyst_metadata_review_task'
           AND record->>'recordKind' = 'automatic_intelligence_review_event'
           AND ${tenantWhere}
-        ORDER BY created_at ASC, id ASC`, allTenants ? [] : [tenantId]),
-      taskIdsQuery,
-      taskSummaryQuery
+        ORDER BY created_at ASC, id ASC`, allTenants ? [] : [tenantId])
     ]);
-    const tasksAndEvents = [...taskRows, ...eventRows].map(readRecord).filter(isRecord);
+    const tasksAndEvents = [...taskRows, ...eventRows].map(readRecord);
     const tasks = tasksAndEvents.filter((record: any) => record.recordKind === 'automatic_intelligence_review_task');
     const claimIds = tasks.map((task: any) => task.subject?.claimId).filter(Boolean);
     const incidentIds = tasks.map((task: any) => task.subject?.incidentId).filter(Boolean);
-    const [claims, incidents, claimEvidence, evidenceLinks, reviews, health] = await Promise.all([
+    const [claims, incidents, claimEvidence, evidenceLinks, reviews] = await Promise.all([
       this.queryRecordsByIds('intelligence_claims', 'id', claimIds, input.tenantId, allTenants),
       this.queryRecordsByIds('incidents', 'id', incidentIds, input.tenantId, allTenants),
       this.queryRecordsByIds('claim_evidence', 'subject_id', claimIds, input.tenantId, allTenants),
       this.queryRecordsByIds('evidence_links', 'subject_id', incidentIds, input.tenantId, allTenants),
-      this.queryRecordsByIds('claim_reviews', 'claim_id', claimIds, input.tenantId, allTenants),
-      this.queryAutomaticReviewSourceHealth({ tenantId: input.tenantId, allTenants })
+      this.queryRecordsByIds('claim_reviews', 'claim_id', claimIds, input.tenantId, allTenants)
     ]);
     const sourceIds = [...new Set([
       ...tasks.map((task: any) => task.subject?.sourceId),
       ...claimEvidence.map((record: any) => record.sourceId),
-      ...evidenceLinks.map((record: any) => record.sourceId),
-      ...health.map((record: any) => record.sourceId)
+      ...evidenceLinks.map((record: any) => record.sourceId)
     ].filter(Boolean).map(String))];
-    const sources = await this.queryRecordsByIds('sources', 'id', sourceIds, input.tenantId, allTenants);
+    const [sources, health] = await Promise.all([
+      this.queryRecordsByIds('sources', 'id', sourceIds, input.tenantId, allTenants),
+      sourceIds.length ? this.queryAutomaticReviewSourceHealth({ tenantId: input.tenantId, allTenants, sourceIds }) : Promise.resolve([])
+    ]);
     const captureIds = [...new Set([
       ...claimEvidence.map((record: any) => record.captureId),
       ...evidenceLinks.map((record: any) => record.captureId)
@@ -470,8 +386,6 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       : [];
     return {
       tasksAndEvents,
-      taskIds: taskIdRows.map((row: { id: string }) => row.id).filter(Boolean),
-      taskSummary: taskLimit ? summarizeReviewTaskRows(taskSummaryRows) : undefined,
       claims,
       incidents,
       captures,
@@ -553,12 +467,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                 AND capture.record->'metadata'->>'sourceReviewCandidate' = 'true'
             )
           )
-          ${sourceWhere}
-      )
-      SELECT record
-      FROM eligible
-      WHERE evidence_rank <= 2
-      ORDER BY checked_at DESC, id DESC
+        )
+        ${sourceWhere}
+      ORDER BY health.checked_at DESC
     `, input.allTenants || input.tenantId === undefined ? sourceIds : [input.tenantId, ...sourceIds]);
     return rows.map(readRecord);
   }

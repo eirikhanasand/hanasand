@@ -403,11 +403,7 @@ export function startAutomaticReviewWorker(options: ApiServerOptions, input: { i
 export function automaticReviewSnapshot(store: any, tenantId?: string, requestedLimit = 100): any {
   const limit = Math.max(1, Math.min(250, Math.floor(requestedLimit || 100)));
   if (typeof store.queryAutomaticReviewRecords === "function") {
-    const taskLimit = Math.max(100, Math.min(250, limit * 4));
-    return store.queryAutomaticReviewRecords({ tenantId, taskLimit }).then((collections: ReviewIndexCollections) => {
-      if (!collections.taskSummary) throw new Error("Bounded automatic-review query did not return task totals");
-      return reviewSnapshotFromIndex(buildReviewIndexFromCollections(collections), tenantId, limit);
-    });
+    return store.queryAutomaticReviewRecords({ tenantId }).then((collections: ReviewIndexCollections) => reviewSnapshotFromIndex(buildReviewIndexFromCollections(collections), tenantId, limit));
   }
   if (typeof store.queryAllStructuredRecords === "function") {
     return buildReviewIndexAsync(store, tenantId, false).then((index) => reviewSnapshotFromIndex(index, tenantId, limit));
@@ -1503,6 +1499,10 @@ async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants =
     return buildReviewIndexFromCollections(collections);
   }
   if (typeof store.queryAllStructuredRecords !== "function") return buildReviewIndex(store);
+  if (typeof store.queryAutomaticReviewRecords === "function") {
+    const collections = await store.queryAutomaticReviewRecords({ tenantId, allTenants });
+    return buildReviewIndexFromCollections(collections);
+  }
   await store.flush?.();
   const scope = allTenants ? {} : { tenantId };
   const load = (collection: string, method: string) => store.queryAllStructuredRecords(collection, scope);
