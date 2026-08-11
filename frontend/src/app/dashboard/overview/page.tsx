@@ -2,6 +2,9 @@ import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
+import { AlertTriangle, Radio } from 'lucide-react'
+import getStatus from '@/utils/status/getStatus'
+import { toPublicServiceStatus } from '@/utils/status/publicStatus'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import DwmOverviewPanel from './dwmOverviewPanel'
 
@@ -23,6 +26,16 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
     const deniedPathValue = params.from
     const deniedPath = typeof deniedPathValue === 'string' && deniedPathValue.startsWith('/') ? deniedPathValue : ''
     const accessDenied = params.notAllowed === 'true'
+    const status = await getStatus()
+    const publicStatus = toPublicServiceStatus(status)
+    const serviceIssues = publicStatus.checks.filter(check => check.status !== 'up')
+    const slowestChecks = [...publicStatus.checks].sort((a, b) => (b.latency_ms || 0) - (a.latency_ms || 0)).slice(0, 5)
+    const actions = [serviceIssues.length ? {
+        href: '/status',
+        title: 'Check service health',
+        detail: `${serviceIssues.length} public check${serviceIssues.length === 1 ? '' : 's'} degraded or down.`,
+        tone: 'watch' as const,
+    } : null].filter(Boolean)
 
     return (
         <DashboardPage>
@@ -51,7 +64,7 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
                 </div>
             ) : null}
 
-            <DwmOverviewPanel organizationId={typeof params.organizationId === 'string' ? params.organizationId.trim() : undefined} />
+            <DwmOverviewPanel organizationId={firstParam(params.organizationId) || firstParam(params.orgId)} />
 
             <div className='grid gap-3 xl:grid-cols-[1fr_0.9fr]'>
                 <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
@@ -110,4 +123,15 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
             </div>
         </DashboardPage>
     )
+}
+
+function firstParam(value: string | string[] | undefined) {
+    return (Array.isArray(value) ? value[0] : value)?.trim() || undefined
+}
+
+function toneDot(tone: 'ok' | 'watch' | 'bad' | 'neutral') {
+    if (tone === 'ok') return 'bg-ui-success shadow-[0_0_14px_rgba(49,196,141,0.65)]'
+    if (tone === 'watch') return 'bg-ui-warning shadow-[0_0_14px_rgba(246,180,95,0.45)]'
+    if (tone === 'bad') return 'bg-ui-danger shadow-[0_0_14px_rgba(255,122,89,0.45)]'
+    return 'bg-ui-primary shadow-[0_0_14px_rgba(157,180,255,0.45)]'
 }
