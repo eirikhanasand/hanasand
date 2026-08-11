@@ -228,12 +228,13 @@ async function finishScan(
 ) {
     const finishedAt = new Date().toISOString()
     const isFailure = Boolean(blocker)
+    const failed = images.filter(image => image.scanError).length
     const next = await persistState({
         ...state,
         generatedAt: finishedAt,
         images,
         imageCount: images.length,
-        failureCount: state.failureCount + (isFailure ? 1 : 0),
+        failureCount: failed || (isFailure ? 1 : 0),
         nextRunAt: state.paused ? null : nextScheduledAt(new Date()),
         scanStatus: {
             ...state.scanStatus,
@@ -246,7 +247,7 @@ async function finishScan(
             currentImage: null,
             estimatedCompletionAt: null,
             targetCount: images.length,
-            failureCount: state.failureCount + (isFailure ? 1 : 0),
+            failureCount: failed || (isFailure ? 1 : 0),
             blocker,
             blockerAction,
         },
@@ -280,10 +281,21 @@ async function scanImage(image: string): Promise<ImageVulnerabilityReport> {
 async function discoverTargetImages() {
     const containers = await listRuntimeContainers()
     return [...new Set(containers
-        .filter(container => container.state === 'running')
+        .filter(isScannableContainer)
         .map(container => container.image)
         .filter(image => image && image !== '<none>' && image !== 'unknown'))]
         .sort()
+}
+
+export function isScannableContainer(container: { id: string, name: string, image: string, state: string, health?: string }) {
+    const name = container.name.trim()
+    const image = container.image.trim()
+    return container.state === 'running'
+        && container.health !== 'starting'
+        && container.health !== 'unhealthy'
+        && Boolean(name && image && image !== '<none>' && image !== 'unknown'
+            && !/^(?:sha256:)?[a-f0-9]{12,64}$/i.test(image)
+            && name !== container.id && name !== container.id.slice(0, 12))
 }
 
 function parseTrivy(raw: string): VulnerabilityDetail[] {
@@ -346,6 +358,7 @@ function withDerivedStatus(state: StoredScannerState, targetImages: string[] | n
     const status = state.scanStatus
     const currentImages = filterCurrentImageReports(state.images, targetImages)
     const images = hasOnlyScannerSetupReports(currentImages) ? [] : currentImages
+    const currentFailureCount = images.filter(image => image.scanError).length || (status.blocker ? state.failureCount : 0)
     const lastFinishedAt = status.finishedAt || latestImageScanAt(images)
     const staleReason = computeStaleReason(state, lastFinishedAt)
     const generatedAt = state.generatedAt || lastFinishedAt
@@ -361,7 +374,7 @@ function withDerivedStatus(state: StoredScannerState, targetImages: string[] | n
             schedule: secondsSchedule(VULNERABILITY_SCAN_CADENCE_SECONDS),
             cadenceSeconds: VULNERABILITY_SCAN_CADENCE_SECONDS,
             nextRunAt: state.paused ? null : state.nextRunAt || nextScheduledAt(new Date()),
-            failureCount: state.failureCount,
+            failureCount: currentFailureCount,
             stale: Boolean(staleReason),
             staleReason,
             logs: state.logs,

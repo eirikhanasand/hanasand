@@ -1,210 +1,173 @@
 import type { Metadata } from 'next'
-import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowRight, BadgeCheck, ClipboardCheck, Database, FileText, LockKeyhole, ServerCog, ShieldCheck, Siren, Webhook } from 'lucide-react'
+import { Activity, ArrowRight, BellRing, BookOpenCheck, Database, Eye, FileCheck2, Gauge, LockKeyhole, Radio, Waypoints, Workflow } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { buildRouteMetadata } from '../seo'
-import { trustArtifacts } from './trustArtifacts'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Trust Center',
-    description: 'Security, procurement, data handling, subprocessors, SLA, and enterprise review information for Hanasand.',
+    description: 'See how Hanasand turns public intelligence into evidence-backed alerts and customer-ready security work.',
     path: '/trust',
-    keywords: ['hanasand trust center', 'hanasand security', 'hanasand dpa', 'hanasand subprocessors', 'hanasand sla'],
+    keywords: ['hanasand trust center', 'hanasand security', 'threat intelligence', 'security operations'],
 })
 
-const assuranceCards = [
+const capabilities = [
     {
-        title: 'Intelligence feed coverage',
-        status: 'Measured endpoint',
-        detail: 'Qualifying feed counts require repeated useful retained evidence; registry inventory and observed alert latency remain separate.',
+        title: 'Monitor relevant public intelligence',
+        detail: 'Governed collection across selected public sources gives teams a focused view of activity that matters to them.',
         icon: Database,
         href: '/coverage',
+        link: 'View source coverage',
     },
     {
-        title: 'Security overview',
-        status: 'Published',
-        detail: 'How Hanasand handles watchlists, alert records, webhooks, API access, audit events, and operational logs.',
-        icon: ShieldCheck,
-        href: '/trust/security-overview',
+        title: 'Match activity to customer terms',
+        detail: 'Customer-specific watchlists connect public activity to companies, domains, vendors, brands, and products.',
+        icon: Eye,
+        href: '/dwm',
+        link: 'See monitoring workflow',
     },
     {
-        title: 'DPA and contract pack',
-        status: 'Review copy only',
-        detail: 'Current data-processing facts and contract gaps for procurement. No standard signed DPA or MSA is claimed.',
-        icon: FileText,
-        href: '/trust/dpa-and-data',
+        title: 'Turn findings into evidence-backed work',
+        detail: 'Matches retain source, timestamps, provenance, and evidence context so analysts can review the basis for an alert.',
+        icon: FileCheck2,
+        href: '/ti/apt29',
+        link: 'Inspect intelligence evidence',
     },
     {
-        title: 'Subprocessor register',
-        status: 'Category inventory',
-        detail: 'Infrastructure, database, mail, payment, and customer-selected integration categories are listed; named deployment providers are not.',
-        icon: ServerCog,
-        href: '/trust/subprocessors',
-    },
-    {
-        title: 'SOC 2 / ISO 27001',
-        status: 'Not certified yet',
-        detail: 'No badge is claimed today. The controls below are the current operating model and the gap is visible by design.',
-        icon: BadgeCheck,
-        href: '/trust/security-overview',
+        title: 'Move from alert to action',
+        detail: 'Relevant findings can be reviewed, assigned, linked to cases, and tracked through an operational workflow.',
+        icon: Workflow,
+        href: '/contact?intent=procurement',
+        link: 'Request a workflow review',
     },
 ]
 
-const controlRows = [
-    ['Tenant and role model', 'Available now', 'Organizations, roles, admin-managed members, shared watchlists, and alert scope are represented in the customer console.'],
-    ['Audit trails', 'Available now', 'Admin/support actions, alert workflow events, delivery attempts, and operational status are tracked in product surfaces where the backing API is enabled.'],
-    ['Webhook safety', 'Available now', 'Webhook destinations use scoped endpoints, delivery status, retry state, and customer-owned downstream routing. Signing-key review is part of enterprise setup.'],
-    ['Data handling', 'Available now', 'Monitoring is metadata-first: watch terms, source references, alert fields, hashes, timestamps, notes, and review states. Raw leak material is not the normal buyer workflow.'],
-    ['DPA / MSA / order form', 'Not published', 'The public data-processing review is not an executed DPA or MSA. Use procurement intake to negotiate written terms.'],
-    ['SLA and support terms', 'No standard SLA', 'Measured history is public at /status, but no standard response target, uptime commitment, or credit schedule is claimed.'],
-    ['SSO / SAML / OIDC / SCIM', 'Roadmap / scoped deal', 'Password accounts exist today. Enterprise identity requirements should be raised before purchase so implementation scope is explicit.'],
-    ['SOC 2 / ISO 27001', 'Not certified', 'Security review can inspect current controls, but no independent SOC 2 or ISO certificate is claimed.'],
+const workflowProof = [
+    ['01', 'Watchlist match', 'A customer term is matched against collected public intelligence.'],
+    ['02', 'Evidence record', 'The alert keeps source, collection time, provenance, and context.'],
+    ['03', 'Alert review', 'Analysts assess relevance, confidence, severity, and recommended action.'],
+    ['04', 'Case handoff', 'The finding can move into an assigned customer workflow.'],
 ]
 
-const buyerReviewRows = [
-    ['Live product check', 'Search a company or actor, inspect the current alert list, and review source context before any sales call.', '/ti/apt29'],
-    ['Pilot design', 'Define watched companies, suppliers, domains, delivery route, alert reviewer, and success criteria for the first month.', '/pricing#pilot-path'],
-    ['Procurement review', 'Review DPA notes, subprocessor categories, SLA expectations, security questionnaire inputs, and onboarding timeline before requesting signed docs.', '/trust/dpa-and-data'],
-    ['Current boundary', 'Use Hanasand for direct company exposure alerts. Choose a larger CTI platform when you need certified controls, broad stealer-log claims, or named-enterprise references today.', '/trust/security-overview'],
+const enterpriseFoundations: Array<[string, string, LucideIcon]> = [
+    ['Tenant-scoped data', 'Customer monitoring, alerts, and evidence stay within the selected customer scope.', LockKeyhole],
+    ['Customer-specific monitoring', 'Watchlists define the terms and entities that matter to each customer.', Eye],
+    ['Evidence provenance', 'Source identity, timestamps, hashes, and collection context travel with the finding.', FileCheck2],
+    ['Freshness visibility', 'Collection health and freshness make the state of monitoring visible to operators.', Gauge],
+    ['Operational workflows', 'Alerts, assignments, notes, delivery, and cases support follow-through.', Waypoints],
+    ['Governed source lifecycle', 'Source activation, health, lifecycle, and collection decisions are tracked explicitly.', BookOpenCheck],
 ]
 
-const dataHandling = [
-    {
-        title: 'Customer inputs',
-        detail: 'Organization names, watched companies, domains, vendors, executives, API keys, webhook endpoints, user roles, and support context.',
-    },
-    {
-        title: 'Alert records',
-        detail: 'Matched term, source name, actor/company fields, timestamps, claim summary, status, confidence label, delivery result, and analyst review state.',
-    },
-    {
-        title: 'Operational telemetry',
-        detail: 'Request IDs, route health, delivery attempts, error states, service checks, audit events, and rate-limit events needed to secure and operate the service.',
-    },
-    {
-        title: 'Excluded by default',
-        detail: 'Hanasand does not require customers to upload raw leak dumps, malware, production secrets, or unnecessary personal data to receive company exposure alerts.',
-    },
-]
-
-const subprocessorRows = [
-    ['Hosting and runtime', 'Application, API, worker, processing, and scheduled-job infrastructure used to deliver the service.', 'Named provider, legal entity, region, and transfer mechanism are not published yet and must be supplied before production approval.'],
-    ['Database and storage', 'PostgreSQL-backed application data, alert records, audit events, and operational state.', 'Customer-managed deployments can replace Hanasand-managed storage by agreement.'],
-    ['Account and support mail', 'Account recovery, commercial requests, support, and operational email paths where configured.', 'Only the data required to deliver the message is sent. Monitoring alerts use the product webhook, case, and API paths.'],
-    ['Payment and billing', 'Subscription, invoice, and plan administration if a paid plan uses external billing rails.', 'Not used for customers handled by invoice/order form.'],
-    ['Customer-selected integrations', 'Webhook destinations, ticketing, SIEM, SOAR, or internal tools configured by the customer.', 'Customer controls which downstream systems receive alert payloads through its configured webhook or API consumer.'],
-]
-
-const incidentSteps = [
-    'Acknowledge security reports and route them to the operator responsible for the affected service.',
-    'Triage whether customer data, alert delivery, credentials, webhooks, or source-processing integrity may be affected.',
-    'Contain and rotate credentials or endpoints where needed, then preserve relevant audit records.',
-    'Notify affected customers through the configured support or contract path when notification is required.',
+const trustPractices = [
+    ['Evidence-backed outputs', 'Customer-facing findings are grounded in retained evidence and structured alert records.'],
+    ['Explicit source attribution', 'Reviewers can see where an observation came from and how it entered the monitoring workflow.'],
+    ['Honest freshness indicators', 'Collection and observation timing remain visible so teams can judge how current a finding is.'],
+    ['Collection health visibility', 'Operational status shows whether source collection is working and when it last succeeded.'],
+    ['Governed collection policies', 'Source use, lifecycle, and transport are controlled as operational decisions.'],
+    ['Customer-visible service status', 'Service health is available through a public status path for operational awareness.'],
+    ['Auditable alert workflows', 'Review and delivery events create a clear path from match to customer action.'],
 ]
 
 export default function TrustPage() {
     return (
         <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas text-ui-text'>
             <section className='border-b border-ui-border bg-ui-panel'>
-                <div className='mx-auto grid max-w-7xl gap-8 px-4 py-14 md:px-8 md:py-20 lg:grid-cols-[minmax(0,0.92fr)_minmax(24rem,0.58fr)] lg:items-center'>
+                <div className='mx-auto grid max-w-7xl gap-10 px-4 py-14 md:px-8 md:py-20 lg:grid-cols-[minmax(0,0.9fr)_minmax(25rem,0.72fr)] lg:items-center'>
                     <div className='grid gap-5'>
-                        <p className='text-sm font-semibold uppercase text-ui-primary'>Trust center</p>
-                        <h1 className='max-w-4xl text-4xl font-semibold tracking-normal md:text-6xl'>Enterprise review, stated plainly.</h1>
+                        <p className='text-sm font-semibold uppercase tracking-[0.12em] text-ui-primary'>Trust center</p>
+                        <h1 className='max-w-4xl text-4xl font-semibold tracking-tight md:text-6xl'>Threat intelligence your team can act on.</h1>
                         <p className='max-w-3xl text-lg leading-8 text-ui-muted'>
-                            Security buyers should be able to see what is real today, what is available by contract, and what is not certified yet. This page collects Hanasand security, procurement, data-handling, SLA, and onboarding facts in one place.
+                            Hanasand collects public intelligence, connects it to customer watchlists, and turns relevant activity into evidence-backed alerts and cases.
                         </p>
                         <div className='flex flex-wrap gap-3'>
-                            <Link href='/contact?intent=procurement' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
-                                Request procurement review
+                            <Link href='/dwm' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                                See Hanasand in action
                                 <ArrowRight className='h-4 w-4' />
                             </Link>
-                            <Link href='/status' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
-                                View service status
+                            <Link href='/contact?intent=procurement' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                                Request a security review
                             </Link>
                         </div>
                     </div>
 
-                    <aside className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-4 shadow-sm'>
-                        <div className='rounded-lg border border-ui-border bg-ui-panel p-4'>
-                            <p className='text-xs font-semibold uppercase text-ui-muted'>Current assurance state</p>
-                            <div className='mt-4 grid gap-3'>
-                                <TrustStat label='SOC 2 / ISO' value='Not certified' tone='warning' />
-                                <TrustStat label='DPA / MSA' value='Not published' tone='warning' />
-                                <TrustStat label='Security overview' value='Published' tone='ready' />
-                                <TrustStat label='SSO / SCIM' value='Scoped deal' tone='warning' />
-                            </div>
-                        </div>
-                    </aside>
+                    <WorkflowPreview />
                 </div>
             </section>
 
-            <section id='security-overview' className='scroll-mt-24 border-b border-ui-border bg-ui-canvas'>
-                <div className='mx-auto grid max-w-7xl gap-5 px-4 py-12 md:px-8'>
-                    <div>
-                        <p className='text-sm font-semibold uppercase text-ui-primary'>Diligence review</p>
-                        <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>What enterprise buyers can verify today.</h2>
-                    </div>
+            <section id='operational-today' className='scroll-mt-24 border-b border-ui-border bg-ui-canvas'>
+                <div className='mx-auto grid max-w-7xl gap-7 px-4 py-12 md:px-8'>
+                    <SectionIntro eyebrow='Operational today' title='A direct path from public signal to customer action.' detail='The product is organized around useful outcomes: focused monitoring, understandable evidence, and work that can move through a security team.' />
                     <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
-                        {assuranceCards.map((item) => {
-                            const Icon = item.icon
-                            return (
-                                <Link key={item.title} href={item.href} className='group grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm transition hover:border-ui-primary'>
-                                    <div className='flex items-start justify-between gap-3'>
-                                        <span className='grid h-11 w-11 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
-                                            <Icon className='h-5 w-5' />
-                                        </span>
-                                        <span className='rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-muted'>{item.status}</span>
-                                    </div>
+                        {capabilities.map((item) => <CapabilityCard key={item.title} {...item} />)}
+                    </div>
+                </div>
+            </section>
+
+            <section id='enterprise-workflows' className='scroll-mt-24 border-b border-ui-border bg-ui-panel'>
+                <div className='mx-auto grid max-w-7xl gap-7 px-4 py-12 md:px-8'>
+                    <SectionIntro eyebrow='Built for enterprise workflows' title='Practical foundations for security teams.' detail='Hanasand keeps customer monitoring focused, attributable, and connected to the way analysts already review and act on findings.' />
+                    <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
+                        {enterpriseFoundations.map(([title, detail, Icon]) => (
+                            <div key={title} className='rounded-lg border border-ui-border bg-ui-canvas p-4'>
+                                <Icon className='h-5 w-5 text-ui-primary' />
+                                <h3 className='mt-4 text-base font-semibold'>{title}</h3>
+                                <p className='mt-2 text-sm leading-6 text-ui-muted'>{detail}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            <section id='trust-in-practice' className='scroll-mt-24 border-b border-ui-border bg-ui-canvas'>
+                <div className='mx-auto grid max-w-7xl gap-7 px-4 py-12 md:px-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-start'>
+                    <SectionIntro eyebrow='How trust works in practice' title='Confidence comes from seeing the work.' detail='The operational record is part of the product: teams can inspect what was collected, when it was observed, where it came from, and what happened next.' />
+                    <div className='grid gap-3 sm:grid-cols-2'>
+                        {trustPractices.map(([title, detail]) => (
+                            <div key={title} className='flex gap-3 rounded-lg border border-ui-border bg-ui-panel p-4'>
+                                <span className='mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-ui-success shadow-[0_0_14px_rgba(49,196,141,0.55)]' />
+                                <div>
+                                    <h3 className='text-sm font-semibold'>{title}</h3>
+                                    <p className='mt-1 text-sm leading-6 text-ui-muted'>{detail}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            <section id='product-evidence' className='scroll-mt-24 border-b border-ui-border bg-ui-panel'>
+                <div className='mx-auto grid max-w-7xl gap-7 px-4 py-12 md:px-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-center'>
+                    <div className='grid gap-4'>
+                        <p className='text-sm font-semibold uppercase tracking-[0.12em] text-ui-primary'>Product evidence</p>
+                        <h2 className='text-3xl font-semibold'>Review the workflow before the sales call.</h2>
+                        <p className='max-w-2xl text-sm leading-6 text-ui-muted'>
+                            Use the live product surfaces to inspect source coverage, intelligence evidence, monitoring workflows, and current service operation.
+                        </p>
+                        <div className='flex flex-wrap gap-3'>
+                            <Link href='/coverage' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold transition hover:border-ui-primary'>
+                                Source coverage <ArrowRight className='h-4 w-4' />
+                            </Link>
+                            <Link href='/status' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold transition hover:border-ui-primary'>
+                                Service status <Activity className='h-4 w-4' />
+                            </Link>
+                        </div>
+                    </div>
+                    <div className='rounded-xl border border-ui-border bg-ui-canvas p-4 shadow-sm'>
+                        <div className='flex items-center justify-between border-b border-ui-border pb-3'>
+                            <div>
+                                <p className='text-xs font-semibold uppercase tracking-[0.12em] text-ui-primary'>Workflow evidence</p>
+                                <h3 className='mt-1 text-lg font-semibold'>From match to case</h3>
+                            </div>
+                            <BellRing className='h-5 w-5 text-ui-primary' />
+                        </div>
+                        <div className='divide-y divide-ui-border'>
+                            {workflowProof.map(([number, title, detail]) => (
+                                <div key={number} className='grid grid-cols-[2.25rem_1fr] gap-3 py-4'>
+                                    <span className='grid h-8 w-8 place-items-center rounded-md border border-ui-border bg-ui-raised text-xs font-semibold text-ui-primary'>{number}</span>
                                     <div>
-                                        <h3 className='text-lg font-semibold'>{item.title}</h3>
-                                        <p className='mt-2 text-sm leading-6 text-ui-muted'>{item.detail}</p>
+                                        <h4 className='text-sm font-semibold'>{title}</h4>
+                                        <p className='mt-1 text-sm leading-6 text-ui-muted'>{detail}</p>
                                     </div>
-                                    <span className='inline-flex items-center gap-2 text-sm font-semibold text-ui-primary'>
-                                        Open artifact
-                                        <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
-                                    </span>
-                                </Link>
-                            )
-                        })}
-                    </div>
-                    <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm md:grid-cols-[12rem_1fr] md:items-start'>
-                        <div>
-                            <p className='text-sm font-semibold uppercase text-ui-primary'>Public docs</p>
-                            <p className='mt-2 text-sm leading-6 text-ui-muted'>Stable URLs a reviewer can inspect before opening a vendor portal.</p>
-                        </div>
-                        <div className='grid gap-2 md:grid-cols-2'>
-                            {trustArtifacts.map((artifact) => (
-                                <Link key={artifact.slug} href={`/trust/${artifact.slug}`} className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
-                                    <span>{artifact.label}</span>
-                                    <span className='text-xs text-ui-muted'>{artifact.status}</span>
-                                </Link>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section id='enterprise-controls' className='scroll-mt-24 border-b border-ui-border bg-ui-panel'>
-                <div className='mx-auto grid max-w-7xl gap-6 px-4 py-12 md:px-8 lg:grid-cols-[0.72fr_1.28fr]'>
-                    <div className='grid content-start gap-3'>
-                        <p className='text-sm font-semibold uppercase text-ui-primary'>Enterprise controls</p>
-                        <h2 className='text-3xl font-semibold'>Current controls, clear boundaries.</h2>
-                        <p className='text-sm leading-6 text-ui-muted'>
-                            These rows are intentionally plain. If a procurement team needs a control that is not available now, it should be visible before a pilot starts.
-                        </p>
-                    </div>
-                    <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-canvas shadow-sm'>
-                        <div className='hidden grid-cols-[13rem_10rem_1fr] gap-3 border-b border-ui-border px-4 py-3 text-xs font-semibold uppercase text-ui-muted md:grid'>
-                            <span>Control</span>
-                            <span>Status</span>
-                            <span>Buyer evidence</span>
-                        </div>
-                        <div className='divide-y divide-ui-border'>
-                            {controlRows.map(([control, status, evidence]) => (
-                                <div key={control} className='grid gap-3 px-4 py-4 text-sm md:grid-cols-[13rem_10rem_1fr]'>
-                                    <span className='font-semibold text-ui-text'>{control}</span>
-                                    <span className={`h-fit w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone(status)}`}>{status}</span>
-                                    <span className='leading-6 text-ui-muted'>{evidence}</span>
                                 </div>
                             ))}
                         </div>
@@ -212,114 +175,19 @@ export default function TrustPage() {
                 </div>
             </section>
 
-            <section id='buyer-evaluation' className='scroll-mt-24 border-b border-ui-border bg-ui-canvas'>
-                <div className='mx-auto grid max-w-7xl gap-6 px-4 py-12 md:px-8 lg:grid-cols-[0.78fr_1.22fr]'>
-                    <div className='grid content-start gap-3'>
-                        <p className='text-sm font-semibold uppercase text-ui-primary'>Buyer evaluation path</p>
-                        <h2 className='text-3xl font-semibold'>A faster way to decide whether Hanasand fits.</h2>
-                        <p className='text-sm leading-6 text-ui-muted'>
-                            Established dark-web platforms may offer more certifications, references, and coverage claims. Hanasand is a fit when the buyer wants a direct watchlist-to-alert workflow and can verify the live product quickly.
-                        </p>
-                    </div>
-                    <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
-                        <div className='hidden grid-cols-[12rem_1fr_8rem] gap-3 border-b border-ui-border px-4 py-3 text-xs font-semibold uppercase text-ui-muted md:grid'>
-                            <span>Review step</span>
-                            <span>What to verify</span>
-                            <span className='text-right'>Path</span>
-                        </div>
-                        <div className='divide-y divide-ui-border'>
-                            {buyerReviewRows.map(([step, detail, href]) => (
-                                <div key={step} className='grid gap-3 px-4 py-4 text-sm md:grid-cols-[12rem_1fr_8rem] md:items-center'>
-                                    <span className='font-semibold text-ui-text'>{step}</span>
-                                    <span className='leading-6 text-ui-muted'>{detail}</span>
-                                    <Link href={href} className='inline-flex min-h-9 w-fit items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-text transition hover:border-ui-primary md:justify-self-end'>
-                                        Open
-                                    </Link>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section id='dpa-and-data' className='scroll-mt-24 border-b border-ui-border bg-ui-canvas'>
-                <div className='mx-auto grid max-w-7xl gap-6 px-4 py-12 md:px-8 lg:grid-cols-2'>
-                    <InfoPanel
-                        icon={<LockKeyhole className='h-5 w-5' />}
-                        eyebrow='Security model'
-                        title='Metadata-first monitoring'
-                        body='The core monitoring path is designed around watchlists and alert metadata, not raw leak ingestion into customer dashboards.'
-                    >
-                        <div className='grid gap-3'>
-                            {dataHandling.map((item) => (
-                                <div key={item.title} className='rounded-lg border border-ui-border bg-ui-raised p-3'>
-                                    <h3 className='text-sm font-semibold text-ui-text'>{item.title}</h3>
-                                    <p className='mt-1 text-sm leading-6 text-ui-muted'>{item.detail}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </InfoPanel>
-
-                    <InfoPanel
-                        icon={<Siren className='h-5 w-5' />}
-                        eyebrow='Incident response'
-                        title='Security report and breach-notification path'
-                        body='Security concerns, suspected unauthorized access, webhook exposure, and responsible disclosure reports should be routed through support with enough detail to reproduce and scope the issue.'
-                    >
-                        <ol className='grid gap-3 text-sm leading-6 text-ui-muted'>
-                            {incidentSteps.map((step, index) => (
-                                <li key={step} className='grid grid-cols-[2rem_1fr] gap-3 rounded-lg border border-ui-border bg-ui-raised p-3'>
-                                    <span className='grid h-8 w-8 place-items-center rounded-md bg-ui-panel text-xs font-semibold text-ui-primary'>{index + 1}</span>
-                                    <span>{step}</span>
-                                </li>
-                            ))}
-                        </ol>
-                    </InfoPanel>
-                </div>
-            </section>
-
-            <section id='subprocessors' className='scroll-mt-24 border-b border-ui-border bg-ui-panel'>
-                <div className='mx-auto grid max-w-7xl gap-6 px-4 py-12 md:px-8'>
-                    <div className='flex flex-col gap-3 md:flex-row md:items-end md:justify-between'>
-                        <div>
-                            <p className='text-sm font-semibold uppercase text-ui-primary'>Subprocessors and integrations</p>
-                            <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>Public categories, scoped provider details.</h2>
-                        </div>
-                        <Link href='/privacy' className='inline-flex h-11 w-fit items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
-                            Privacy policy
-                        </Link>
-                    </div>
-                    <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-canvas shadow-sm'>
-                        <div className='divide-y divide-ui-border'>
-                            {subprocessorRows.map(([category, purpose, note]) => (
-                                <div key={category} className='grid gap-2 px-4 py-4 text-sm md:grid-cols-[14rem_1fr_1fr] md:gap-4'>
-                                    <span className='font-semibold text-ui-text'>{category}</span>
-                                    <span className='leading-6 text-ui-muted'>{purpose}</span>
-                                    <span className='leading-6 text-ui-muted'>{note}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section id='sla-onboarding' className='scroll-mt-24 bg-ui-canvas'>
-                <div className='mx-auto grid max-w-7xl gap-5 px-4 py-12 md:px-8 lg:grid-cols-[1fr_auto] lg:items-center'>
+            <section className='bg-ui-canvas'>
+                <div className='mx-auto flex max-w-7xl flex-col gap-5 px-4 py-12 md:px-8 lg:flex-row lg:items-center lg:justify-between'>
                     <div>
-                        <p className='text-sm font-semibold uppercase text-ui-primary'>Security review path</p>
-                        <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>Send the vendor portal, deadline, and required controls.</h2>
-                        <p className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted'>
-                            Hanasand can package the current security overview, DPA request, subprocessor details, SLA notes, onboarding timeline, and questionnaire responses for a pilot or enterprise review.
-                        </p>
+                        <p className='text-sm font-semibold uppercase tracking-[0.12em] text-ui-primary'>Security review</p>
+                        <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>See how Hanasand turns public intelligence into customer-ready security work.</h2>
                     </div>
                     <div className='flex flex-wrap gap-3 lg:justify-end'>
-                        <Link href='/contact?intent=procurement' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
-                            Start security review
-                            <ClipboardCheck className='h-4 w-4' />
+                        <Link href='/dwm' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                            See Hanasand in action
+                            <ArrowRight className='h-4 w-4' />
                         </Link>
-                        <Link href='/developers' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
-                            API and webhooks
-                            <Webhook className='h-4 w-4' />
+                        <Link href='/contact?intent=procurement' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-4 text-sm font-semibold transition hover:border-ui-primary'>
+                            Request a security review
                         </Link>
                     </div>
                 </div>
@@ -328,33 +196,44 @@ export default function TrustPage() {
     )
 }
 
-function TrustStat({ label, value, tone }: { label: string; value: string; tone: 'ready' | 'warning' }) {
-    return (
-        <div className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
-            <span className='text-sm font-semibold text-ui-muted'>{label}</span>
-            <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${tone === 'ready' ? 'border-ui-success bg-ui-success/15 text-ui-success' : 'border-ui-warning bg-ui-warning/15 text-ui-warning'}`}>{value}</span>
-        </div>
-    )
-}
-
-function InfoPanel({ icon, eyebrow, title, body, children }: { icon: ReactNode; eyebrow: string; title: string; body: string; children: ReactNode }) {
-    return (
-        <section className='grid gap-5 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm'>
-            <div className='grid gap-3'>
-                <span className='grid h-11 w-11 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>{icon}</span>
-                <div>
-                    <p className='text-xs font-semibold uppercase text-ui-primary'>{eyebrow}</p>
-                    <h2 className='mt-2 text-2xl font-semibold'>{title}</h2>
-                    <p className='mt-2 text-sm leading-6 text-ui-muted'>{body}</p>
-                </div>
+function WorkflowPreview() {
+    return <aside className='rounded-xl border border-ui-border bg-ui-raised p-4 shadow-sm'>
+        <div className='flex items-center justify-between border-b border-ui-border pb-3'>
+            <div>
+                <p className='text-xs font-semibold uppercase tracking-[0.12em] text-ui-primary'>Customer workflow</p>
+                <p className='mt-1 text-sm font-semibold'>Evidence-backed monitoring</p>
             </div>
-            {children}
-        </section>
-    )
+            <Radio className='h-5 w-5 text-ui-success' />
+        </div>
+        <div className='divide-y divide-ui-border'>
+            {workflowProof.map(([number, title, detail]) => (
+                <div key={number} className='grid grid-cols-[2.25rem_1fr] gap-3 py-4 last:pb-1'>
+                    <span className='grid h-8 w-8 place-items-center rounded-md border border-ui-border bg-ui-panel text-xs font-semibold text-ui-primary'>{number}</span>
+                    <div>
+                        <p className='text-sm font-semibold'>{title}</p>
+                        <p className='mt-1 text-xs leading-5 text-ui-muted'>{detail}</p>
+                    </div>
+                </div>
+            ))}
+        </div>
+    </aside>
 }
 
-function statusTone(status: string) {
-    if (status === 'Available now') return 'border-ui-success bg-ui-success/15 text-ui-success'
-    if (status === 'Not certified') return 'border-ui-danger bg-ui-danger/15 text-ui-danger'
-    return 'border-ui-warning bg-ui-warning/15 text-ui-warning'
+function CapabilityCard({ title, detail, icon: Icon, href, link }: { title: string; detail: string; icon: LucideIcon; href: string; link: string }) {
+    return <Link href={href} className='group grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm transition hover:border-ui-primary'>
+        <span className='grid h-11 w-11 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'><Icon className='h-5 w-5' /></span>
+        <div>
+            <h3 className='text-lg font-semibold'>{title}</h3>
+            <p className='mt-2 text-sm leading-6 text-ui-muted'>{detail}</p>
+        </div>
+        <span className='inline-flex items-center gap-2 text-sm font-semibold text-ui-primary'>{link}<ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' /></span>
+    </Link>
+}
+
+function SectionIntro({ eyebrow, title, detail }: { eyebrow: string; title: string; detail: string }) {
+    return <div className='grid content-start gap-3'>
+        <p className='text-sm font-semibold uppercase tracking-[0.12em] text-ui-primary'>{eyebrow}</p>
+        <h2 className='max-w-3xl text-3xl font-semibold'>{title}</h2>
+        <p className='max-w-3xl text-sm leading-6 text-ui-muted'>{detail}</p>
+    </div>
 }

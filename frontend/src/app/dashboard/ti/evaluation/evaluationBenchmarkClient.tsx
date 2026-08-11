@@ -199,10 +199,13 @@ export default function EvaluationBenchmarkClient() {
 
     const canReplay = selectedTask && ['retry_scheduled', 'dead_letter', 'failed'].includes(selectedTask.status)
     const queueTotals = aggregateQueue(benchmarks)
+    const hasEvaluationTasks = benchmarks.some(item => item.progress.taskCount > 0)
+    const unavailable = !loading && Boolean(error) && !benchmarks.length
 
     return (
         <>
-            <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
+            {(!loading && (!hasEvaluationTasks || unavailable)) ? <EvaluationWelcome error={unavailable ? error : ''} showCreate={showCreate} onCreate={() => setShowCreate(value => !value)} createForm={createForm} onCreateChange={setCreateForm} onSubmit={() => void createBenchmark()} saving={saving} /> : null}
+            {(loading || (hasEvaluationTasks && !unavailable)) ? <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-3 py-2'>
                     <div className='flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2 text-xs text-ui-muted'>
                         <span className='font-semibold uppercase'>Diagnostic runtime queue</span>
@@ -221,9 +224,9 @@ export default function EvaluationBenchmarkClient() {
                 {showCreate ? <CreateForm value={createForm} onChange={setCreateForm} onSubmit={() => void createBenchmark()} saving={saving} /> : null}
                 {error ? <div role='alert' className='flex items-start gap-2 border-t border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-xs text-ui-danger'><AlertTriangle className='mt-0.5 h-4 w-4 shrink-0' />{error}</div> : null}
                 {metrics ? <MetricsSummary metrics={metrics} /> : null}
-            </DashboardPanel>
+            </DashboardPanel> : null}
 
-            <div className='grid min-h-[38rem] gap-3 xl:grid-cols-[22rem_minmax(0,1fr)]'>
+            {(loading || (hasEvaluationTasks && !unavailable)) ? <div className='grid min-h-[38rem] gap-3 xl:grid-cols-[22rem_minmax(0,1fr)]'>
                 <DashboardPanel className='min-h-0 overflow-hidden border-ui-border bg-ui-panel p-0'>
                     <div className='border-b border-ui-border p-2'>
                         <label className='text-[10px] font-semibold uppercase text-ui-muted' htmlFor='benchmark-select'>Benchmark</label>
@@ -249,11 +252,21 @@ export default function EvaluationBenchmarkClient() {
                 <DashboardPanel className='min-h-0 overflow-hidden border-ui-border bg-ui-panel p-0'>
                     {selectedTask ? <TaskWorkbench task={selectedTask} saving={saving} canReplay={Boolean(canReplay)} onReplay={() => void replayTask()} /> : <div className='grid min-h-96 place-items-center p-6 text-center text-sm text-ui-muted'>{loading ? <LoaderCircle className='h-5 w-5 animate-spin' /> : error && !benchmarks.length ? 'Evaluation data is unavailable.' : 'Select a task or choose another queue state.'}</div>}
                 </DashboardPanel>
-            </div>
+            </div> : null}
 
-            {metrics ? <MetricsBreakdowns metrics={metrics} /> : null}
+            {metrics && hasEvaluationTasks && !unavailable ? <MetricsBreakdowns metrics={metrics} /> : null}
         </>
     )
+}
+
+function EvaluationWelcome({ error, showCreate, onCreate, createForm, onCreateChange, onSubmit, saving }: { error: string, showCreate: boolean, onCreate: () => void, createForm: CreateFormState, onCreateChange: (value: CreateFormState) => void, onSubmit: () => void, saving: boolean }) {
+    return <DashboardPanel className='mx-auto w-full max-w-3xl border-ui-border bg-ui-panel p-6 text-center'>
+        <ShieldCheck className='mx-auto h-10 w-10 text-ui-primary' />
+        <h2 className='mt-3 text-lg font-semibold text-ui-text'>{error ? 'Evaluation service unavailable' : 'Set up extraction evaluation'}</h2>
+        <p className='mx-auto mt-2 max-w-xl text-sm leading-6 text-ui-muted'>{error || 'Evaluation compares extracted threat-intelligence fields with independently retained evidence. No evaluation-ready benchmark tasks are available yet.'}</p>
+        {error ? <button type='button' onClick={() => window.location.reload()} className='mt-5 inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text hover:bg-ui-canvas'><RefreshCw className='h-4 w-4' />Retry</button> : <button type='button' onClick={onCreate} className='mt-5 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-xs font-semibold text-ui-canvas hover:opacity-90'><Plus className='h-4 w-4' />Create automatic benchmark</button>}
+        {showCreate && !error ? <div className='mt-5 text-left'><CreateForm value={createForm} onChange={onCreateChange} onSubmit={onSubmit} saving={saving} /></div> : null}
+    </DashboardPanel>
 }
 
 function TaskWorkbench({ task, saving, canReplay, onReplay }: { task: Task, saving: boolean, canReplay: boolean, onReplay: () => void }) {

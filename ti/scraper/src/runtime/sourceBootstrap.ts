@@ -317,21 +317,29 @@ export function prepareRuntimeSource(source: SourceRecord, seedPath: string, gen
   const portfolioCandidate = Boolean(source.metadata?.sourcePortfolioVerification);
   const clearWebPortfolio = portfolioCandidate && ["rss", "api", "json_api", "blog"].includes(source.type);
   const portfolioVerified = !source.metadata?.sourcePortfolioVerification || isCurrentSourcePortfolioVerification(source, generatedAt);
-  const activate = !restricted && !portfolioCandidate && portfolioVerified && Bun.env.TI_SOURCE_SEED_ACTIVATE !== "false" && source.risk !== "medium" && source.risk !== "high" && source.risk !== "restricted";
+  const portfolioProduction = Bun.env.TI_SOURCE_PORTFOLIO_PRODUCTION === "true"
+    && portfolioCandidate
+    && source.metadata?.sourcePortfolioVerification?.outcome === "content_parsed"
+    && Boolean(source.legalNotes?.trim())
+    && source.governance?.approvalState === "approved"
+    && (!restricted || source.type === "tor_metadata" && source.accessMethod === "approved_proxy" && source.governance?.metadataOnly === true);
+  const activate = portfolioProduction
+    || (!restricted && !portfolioCandidate && portfolioVerified && Bun.env.TI_SOURCE_SEED_ACTIVATE !== "false" && source.risk !== "medium" && source.risk !== "high" && source.risk !== "restricted");
   const transportCanary = restricted && source.metadata?.transportCanary === true;
   return {
     ...source,
-    status: transportCanary ? "active" : restricted || portfolioCandidate ? "candidate" : activate ? "active" : source.status ?? "candidate",
-    countsAsCoverage: portfolioCandidate ? false : source.countsAsCoverage,
+    status: transportCanary ? "active" : activate ? "active" : restricted || portfolioCandidate ? "candidate" : source.status ?? "candidate",
+    countsAsCoverage: portfolioProduction ? true : portfolioCandidate ? false : source.countsAsCoverage,
     createdAt: source.createdAt ?? generatedAt,
     updatedAt: generatedAt,
     metadata: {
       ...(source.metadata ?? {}),
       ...(clearWebPortfolio && !source.metadata?.queryClass ? { queryClass: "threat-intel" } : {}),
-      productionCollection: portfolioCandidate ? false : !restricted ? portfolioVerified : transportCanary,
+      productionCollection: portfolioProduction || (!portfolioCandidate && !restricted ? portfolioVerified : transportCanary),
       ...(portfolioCandidate ? {
-        countsAsCoverage: false,
-        sourcePortfolioQualificationState: "pending_sustained_productivity"
+        countsAsCoverage: portfolioProduction,
+        sourcePortfolioQualificationState: portfolioProduction ? "production_enabled" : "pending_sustained_productivity",
+        sourcePortfolioProductionEnabled: portfolioProduction
       } : {}),
       canaryPortfolio: !restricted,
       ...(restricted && !transportCanary ? { restrictedMetadataCandidate: true } : {}),

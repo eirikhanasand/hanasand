@@ -25,7 +25,7 @@ export default async function TiAuditPage() {
                 <Metric title='Events' value={`${stats.auditedEvents || sortedEvents.length}`} icon={<ClipboardList className='h-4 w-4' />} />
                 <Metric title='Failures' value={`${failedEvents.length}`} tone={failedEvents.length ? 'bad' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
                 <Metric title='Refreshes' value={`${stats.totalRefreshes}`} icon={<CheckCircle2 className='h-4 w-4' />} />
-                <Metric title='Worker' value={operationalStateLabel(worker.state)} tone={worker.state === 'running' ? 'ok' : worker.state === 'error' || worker.state === 'unavailable' ? 'bad' : 'watch'} icon={<Radio className='h-4 w-4' />} />
+                <Metric title='Audit service' value={operationalStateLabel(worker.state)} tone={worker.state === 'ready' || worker.state === 'running' ? 'ok' : worker.state === 'error' || worker.state === 'unavailable' ? 'bad' : 'watch'} icon={<Radio className='h-4 w-4' />} />
                 <Metric title='Last action' value={lastEvent ? shortTime(lastEvent.happenedAt) : 'Checking'} icon={<Clock3 className='h-4 w-4' />} />
             </div>
 
@@ -38,7 +38,7 @@ export default async function TiAuditPage() {
                                 <p className='mt-0.5 text-[11px] text-ui-muted'>{sortedEvents.length} events sorted newest first</p>
                             </div>
                             <div className='flex flex-wrap gap-1.5 text-[11px] font-semibold'>
-                                <StatusPill label={`worker ${operationalStateLabel(worker.state)}`} tone={worker.state === 'running' ? 'ok' : 'watch'} />
+                                <StatusPill label={`audit service ${operationalStateLabel(worker.state)}`} tone={worker.state === 'ready' || worker.state === 'running' ? 'ok' : 'watch'} />
                                 <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-ui-muted'>cursor {worker.cursor}</span>
                             </div>
                         </div>
@@ -146,6 +146,7 @@ function operationalStateLabel(value: string) {
     if (value === 'blocked') return 'syncing'
     if (value === 'needs_action') return 'reviewing'
     if (value === 'review') return 'reviewing'
+    if (value === 'ready') return 'ready'
     return value.replaceAll('_', ' ')
 }
 

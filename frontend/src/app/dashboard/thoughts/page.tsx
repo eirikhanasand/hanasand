@@ -26,14 +26,33 @@ export default async function Page() {
                 }
             />
 
-            <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+            {!thoughts.length ? <DashboardPanel className='grid min-h-80 place-items-center border-ui-border bg-ui-panel p-8 text-center'>
+                <div className='max-w-md'>
+                    <div className='mx-auto grid h-12 w-12 place-items-center rounded-full bg-ui-primary/10 text-ui-primary'>
+                        <BrainCircuit className='h-6 w-6' />
+                    </div>
+                    <h2 className='mt-4 text-xl font-semibold text-ui-text'>Start your notebook</h2>
+                    <p className='mt-2 text-sm leading-6 text-ui-muted'>Capture an observation, decision, or research note to start your notebook.</p>
+                    <div className='mt-5 flex justify-center gap-2'>
+                        <Link href='/dashboard/thoughts/create' className='inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>
+                            <Plus className='h-4 w-4' />
+                            Create your first thought
+                        </Link>
+                        <Link href='/dashboard/notes' className='inline-flex h-9 items-center rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text'>
+                            Open notes
+                        </Link>
+                    </div>
+                </div>
+            </DashboardPanel> : null}
+
+            {thoughts.length ? <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
                 <NotebookMetric icon={<BrainCircuit className='h-4 w-4' />} label='Thought rows' value={String(thoughts.length)} detail='real notes returned by the thoughts API' tone={thoughts.length ? 'ok' : 'watch'} />
                 <NotebookMetric icon={<Clock3 className='h-4 w-4' />} label='Latest movement' value={latest ? shortDate(latest.updated_at || latest.created_at) : 'Open'} detail={latest?.title || 'Create the first thought'} tone={latest ? 'ok' : 'neutral'} />
                 <NotebookMetric icon={<UserRound className='h-4 w-4' />} label='Authors' value={String(authors.size)} detail='contributors represented in this notebook' tone={authors.size ? 'ok' : 'neutral'} />
                 <NotebookMetric icon={<Radio className='h-4 w-4' />} label='Notebook' value={thoughts.length ? 'Live' : 'Ready'} detail='new observations stream in immediately' tone={thoughts.length ? 'ok' : 'watch'} />
-            </section>
+            </section> : null}
 
-            <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
+            {thoughts.length ? <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-panel px-4 py-3'>
                     <div>
                         <h2 className='text-base font-semibold text-ui-text'>Notebook queue</h2>
@@ -50,7 +69,7 @@ export default async function Page() {
                         </div>
                     )}
                 </div>
-            </DashboardPanel>
+            </DashboardPanel> : null}
         </DashboardPage>
     )
 }

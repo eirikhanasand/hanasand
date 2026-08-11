@@ -202,13 +202,23 @@ export default async function runSyntheticMonitor() {
             }
             const failed = Number(summary.failedSourceCount ?? 0)
             const degraded = Number(summary.degradedSourceCount ?? 0)
-            if (failed > 0 || degraded > 0) {
+            const sourceCount = Number(summary.sourceCount)
+            const impacted = failed + degraded
+            const fleetDegradedThreshold = Math.max(3, Math.ceil(sourceCount * SOURCE_OPERATIONS_DEGRADED_RATIO))
+            if (impacted >= fleetDegradedThreshold) {
                 return {
                     status: 'degraded',
                     message: `Source operations returned ${String(summary.sourceCount)} sources; ${failed} failed and ${degraded} degraded.`,
                 }
             }
-            return `Source operations returned ${String(summary.sourceCount)} registered sources.`
+            if (impacted > 0) return {
+                status: 'up',
+                message: `Source operations returned ${String(summary.sourceCount)} sources; ${failed} failed and ${degraded} degraded at source level, below the fleet threshold.`,
+            }
+            return {
+                status: 'up',
+                message: `Source operations returned ${String(summary.sourceCount)} registered sources.`,
+            }
         }, { degraded: 3_000, down: 15_000 }),
         check('threat-intelligence', 'AI model service', async () => {
             let response: Response

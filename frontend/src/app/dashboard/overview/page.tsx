@@ -2,9 +2,6 @@ import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { AlertTriangle, Radio, ShieldAlert } from 'lucide-react'
-import getStatus from '@/utils/status/getStatus'
-import { toPublicServiceStatus } from '@/utils/status/publicStatus'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import DwmOverviewPanel from './dwmOverviewPanel'
 
@@ -12,7 +9,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
     title: 'Overview',
-    description: 'Customer overview for monitored domains, breach mentions, traffic, vulnerabilities, and service health.',
+    description: 'A focused view of monitoring, alerts, cases, and service health that matter now.',
 }
 
 export default async function Page({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
@@ -27,22 +24,11 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
     const deniedPath = typeof deniedPathValue === 'string' && deniedPathValue.startsWith('/') ? deniedPathValue : ''
     const accessDenied = params.notAllowed === 'true'
 
-    const status = await getStatus()
-    const publicStatus = toPublicServiceStatus(status)
-    const serviceIssues = publicStatus.checks.filter(check => check.status !== 'up')
-    const slowestChecks = [...publicStatus.checks].sort((a, b) => (b.latency_ms || 0) - (a.latency_ms || 0)).slice(0, 5)
-    const actions = [serviceIssues.length ? {
-        href: '/status',
-        title: 'Check service health',
-        detail: `${serviceIssues.length} public check${serviceIssues.length === 1 ? '' : 's'} degraded or down.`,
-        tone: 'watch' as const,
-    } : null].filter(Boolean)
-
     return (
         <DashboardPage>
             <DashboardHeader
                 title='Overview'
-                description='Customer-facing status for the domains, traffic, breach mentions, vulnerabilities, and service checks that matter now.'
+                description='A focused view of monitoring, alerts, cases, and service health that matter now.'
                 eyebrow='Dashboard'
             />
 
@@ -132,37 +118,4 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
 
 function firstParam(value: string | string[] | undefined) {
     return (Array.isArray(value) ? value[0] : value)?.trim() || undefined
-}
-
-function OverviewCard({ href, title, value, detail, icon, tone }: { href?: string, title: string, value: string, detail: string, icon: React.ReactNode, tone: 'ok' | 'watch' | 'bad' | 'neutral' }) {
-    const content = (
-        <>
-            <div className='flex items-center justify-between text-ui-muted'>
-                <span className='text-sm'>{title}</span>
-                <span className={toneText(tone)}>{icon}</span>
-            </div>
-            <div className='mt-3 flex items-center gap-2 text-2xl font-semibold text-ui-text'>
-                <span className={`h-2 w-2 rounded-full ${toneDot(tone)}`} />
-                {value}
-            </div>
-            <p className='mt-2 text-sm leading-6 text-ui-muted'>{detail}</p>
-        </>
-    )
-
-    if (href) return <Link href={href} className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm transition hover:bg-ui-raised'>{content}</Link>
-    return <DashboardPanel className='border-ui-border bg-ui-panel p-4'>{content}</DashboardPanel>
-}
-
-function toneText(tone: 'ok' | 'watch' | 'bad' | 'neutral') {
-    if (tone === 'ok') return 'text-ui-success'
-    if (tone === 'watch') return 'text-ui-warning'
-    if (tone === 'bad') return 'text-ui-danger'
-    return 'text-ui-primary'
-}
-
-function toneDot(tone: 'ok' | 'watch' | 'bad' | 'neutral') {
-    if (tone === 'ok') return 'bg-ui-success shadow-[0_0_14px_rgba(49,196,141,0.65)]'
-    if (tone === 'watch') return 'bg-ui-warning shadow-[0_0_14px_rgba(246,180,95,0.45)]'
-    if (tone === 'bad') return 'bg-ui-danger shadow-[0_0_14px_rgba(255,122,89,0.45)]'
-    return 'bg-ui-primary shadow-[0_0_14px_rgba(157,180,255,0.45)]'
 }

@@ -25,14 +25,28 @@ export default async function Page() {
                 }
             />
 
-            <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+            {!articles.length ? <DashboardPanel className='grid min-h-80 place-items-center border-ui-border bg-ui-panel p-8 text-center'>
+                <div className='max-w-md'>
+                    <div className='mx-auto grid h-12 w-12 place-items-center rounded-full bg-ui-primary/10 text-ui-primary'>
+                        <FileText className='h-6 w-6' />
+                    </div>
+                    <h2 className='mt-4 text-xl font-semibold text-ui-text'>Publish your first article</h2>
+                    <p className='mt-2 text-sm leading-6 text-ui-muted'>Turn research into a clear public update and start the editorial queue.</p>
+                    <Link href='/dashboard/articles/create' className='mt-5 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>
+                        <Plus className='h-4 w-4' />
+                        Create your first article
+                    </Link>
+                </div>
+            </DashboardPanel> : null}
+
+            {articles.length ? <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
                 <EditorialMetric icon={<FileText className='h-4 w-4' />} label='Published' value={String(articles.length)} detail='articles indexed for the public site' tone={articles.length ? 'ok' : 'watch'} />
                 <EditorialMetric icon={<Clock3 className='h-4 w-4' />} label='Latest edit' value={latest ? shortDate(latest.modified || latest.created) : 'Ready'} detail={latest?.title || 'Create the first article'} tone={latest ? 'ok' : 'neutral'} />
                 <EditorialMetric icon={<Timer className='h-4 w-4' />} label='Reading time' value={totalMinutes ? `${totalMinutes} min` : 'Metering'} detail={`${totalWords.toLocaleString('en-US')} indexed words`} tone='neutral' />
                 <EditorialMetric icon={<Radio className='h-4 w-4' />} label='Publishing' value={articles.length ? 'Live' : 'Open'} detail='new drafts and deletes update this queue' tone={articles.length ? 'ok' : 'watch'} />
-            </section>
+            </section> : null}
 
-            <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
+            {articles.length ? <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-panel px-4 py-3'>
                     <div>
                         <h2 className='text-base font-semibold text-ui-text'>Editorial queue</h2>
@@ -49,7 +63,7 @@ export default async function Page() {
                         </div>
                     )}
                 </div>
-            </DashboardPanel>
+            </DashboardPanel> : null}
         </DashboardPage>
     )
 }

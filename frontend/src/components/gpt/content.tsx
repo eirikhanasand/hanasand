@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Bot, Cpu, Gauge, HardDrive, MemoryStick, Zap } from 'lucide-react'
+import { Cpu, Gauge, HardDrive, MemoryStick, Zap } from 'lucide-react'
 import DisplayClient from './displayClient'
 import Metric from './metric'
 
@@ -43,17 +43,6 @@ export default function GPT_Content({
                 <ThroughputCard tps={totalLoad.tps} />
                 <CapacityCard active={capacity.active} available={capacity.available} max={capacity.max} lanes={lanes.length} />
                 <PowerCard watts={power.watts} monthlyKwh={power.monthlyKwh} />
-                <div className='rounded-lg bg-ui-panel p-4 border border-ui-border'>
-                    <div className='flex items-center justify-between'>
-                        <div>
-                            <p className='text-xs font-medium uppercase tracking-[0.18em] text-ui-muted'>Active clients</p>
-                            <h2 className='mt-2 text-2xl font-semibold text-ui-text'>{clients.length}</h2>
-                        </div>
-                        <div className='rounded-full bg-ui-primary/10 p-3 text-ui-primary border border-ui-primary/25'>
-                            <Bot className='h-5 w-5' />
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <div className='w-full rounded-lg bg-ui-panel p-4 border border-ui-border space-y-4'>

@@ -13,6 +13,7 @@ export default async function getSystemMetrics({ id, token }: SystemMetricsProps
                 'Authorization': `Bearer ${token}`,
                 id
             },
+            next: { revalidate: 5 },
             timeoutMs: config.abortTimeout,
             retries: 2,
         })

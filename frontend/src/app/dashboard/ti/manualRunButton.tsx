@@ -7,6 +7,7 @@ type ManualRunButtonProps = {
     sourceId?: string
     label?: string
     queries?: string[]
+    compact?: boolean
 }
 
 type ControlResponseBody = {
@@ -16,7 +17,7 @@ type ControlResponseBody = {
     error?: { message?: string }
 }
 
-export default function ManualRunButton({ sourceId = 'all_sources', label = 'Start run', queries = [] }: ManualRunButtonProps) {
+export default function ManualRunButton({ sourceId = 'all_sources', label = 'Start run', queries = [], compact = false }: ManualRunButtonProps) {
     const [state, setState] = useState<'idle' | 'running' | 'queued'>('idle')
     const [queuedAt, setQueuedAt] = useState('')
     const [message, setMessage] = useState('')
@@ -59,12 +60,12 @@ export default function ManualRunButton({ sourceId = 'all_sources', label = 'Sta
     }
 
     return (
-        <div className='flex flex-wrap items-center gap-2'>
+        <div className={`flex items-center gap-2 ${compact ? 'shrink-0' : 'flex-wrap'}`}>
             <button
                 type='button'
                 onClick={queueRun}
                 disabled={state === 'running'}
-                className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-wait disabled:opacity-70'
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ui-primary font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-wait disabled:opacity-70 ${compact ? 'h-8 px-2 text-xs' : 'h-10 px-4 text-sm'}`}
             >
                 {state === 'running' || state === 'queued' ? <RefreshCcw className='h-4 w-4' /> : <PlayCircle className='h-4 w-4' />}
                 {state === 'running' ? 'Starting run' : state === 'queued' ? 'Run queued' : label}

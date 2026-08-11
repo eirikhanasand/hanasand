@@ -16,6 +16,7 @@ export default async function getProjects({ id, token }: GetProjectProps): Promi
                 'Authorization': `Bearer ${normalizedToken}`,
                 id
             },
+            next: { revalidate: 5 },
             signal: controller.signal
         })
 

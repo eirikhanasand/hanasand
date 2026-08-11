@@ -235,21 +235,23 @@ export default function GPT_Page() {
         <>
             <div className='h-full w-full overflow-y-auto'>
                 <div className='mx-auto flex w-full max-w-330 flex-col gap-4 px-4 pb-4 pt-6 sm:px-6 md:px-8 md:pt-8'>
-                    <div className='flex items-center justify-between gap-4'>
+                    <div className='flex items-end justify-between gap-4'>
                         <div>
-                            <p className='text-xs uppercase tracking-[0.22em] text-ui-muted'>Model operations</p>
-                            <h1 className='mt-1 text-2xl font-semibold text-ui-text'>AI worker console</h1>
-                            <p className='mt-1 text-sm text-ui-muted'>Live sessions, GPU lanes, verification jobs, and spend pressure.</p>
+                            <p className='text-xs uppercase tracking-[0.22em] text-ui-muted'>System</p>
+                            <h1 className='mt-1 text-2xl font-semibold text-ui-text'>AI operations</h1>
+                            <p className='mt-1 text-sm text-ui-muted'>Connected workers, verified output, capacity, and spend.</p>
                         </div>
-                        <Link
-                            href='/dashboard/system'
-                            className='flex items-center gap-2 rounded-md bg-ui-raised px-4 py-2 text-sm text-ui-text border border-ui-border transition-colors hover:bg-ui-panel'
-                        >
-                            <ArrowLeft className='h-4 w-4' />
-                            Back to system
-                        </Link>
+                        <div className='flex flex-wrap items-center justify-end gap-2'>
+                            <GPT_Header isConnected={gpt.isConnected} participants={gpt.participants} />
+                            <Link
+                                href='/dashboard/system'
+                                className='flex h-9 items-center gap-2 rounded-md bg-ui-raised px-4 text-sm text-ui-text border border-ui-border transition-colors hover:bg-ui-panel'
+                            >
+                                <ArrowLeft className='h-4 w-4' />
+                                Back to system
+                            </Link>
+                        </div>
                     </div>
-                    <GPT_Header isConnected={gpt.isConnected} participants={gpt.participants} />
                     <EconomicsPanel economics={economics} error={economicsError} aiContainers={aiContainers} containerError={containerError} />
                     <div id='ai-clients' data-ai-clients>
                         {gpt.clients.length ? <GPT_Content clients={gpt.clients} onTestClient={gpt.openChat} /> : <GPT_EmptyState />}
@@ -289,63 +291,21 @@ function EconomicsPanel({ economics, error, aiContainers, containerError }: { ec
 
     const summary = economics.summary
     const cacheRate = summary.cacheableEvents ? Math.round((summary.cacheHits / summary.cacheableEvents) * 100) : 0
-    const hasIncident = economics.reliability.incidentStatus.state !== 'operational'
-    const hasOperatorActions = economics.commercialReadiness.internalActionCount > 0
-    const hasQueue = economics.reliability.capacity.totalQueued > 0
-    const primaryHref = hasIncident || hasQueue
-        ? '#ai-reliability'
-        : hasOperatorActions
-            ? '#ai-operations'
-            : '#ai-clients'
-    const primaryTitle = hasIncident
-        ? 'Review worker reliability first'
-        : hasQueue
-            ? 'Clear queued worker jobs'
-            : hasOperatorActions
-                ? 'Review operator actions'
-                : 'Open live worker clients'
-    const primaryDetail = hasIncident
-        ? economics.reliability.incidentStatus.message
-        : hasQueue
-            ? `${economics.reliability.capacity.totalQueued} queued jobs with ${economics.reliability.capacity.totalAvailableSessions} open worker sessions.`
-            : hasOperatorActions
-                ? `${economics.commercialReadiness.internalActionCount} autonomous lane action${economics.commercialReadiness.internalActionCount === 1 ? '' : 's'} need operator review.`
-                : `${economics.reliability.capacity.totalAvailableSessions} worker sessions are available; live clients are ready for inspection.`
-    const primaryActionLabel = hasIncident || hasQueue
-        ? 'Review reliability'
-        : hasOperatorActions
-            ? 'Review lanes'
-            : 'Open clients'
 
     return (
         <section className='space-y-4 rounded-xl bg-ui-panel p-4 border border-ui-border'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
                 <div>
-                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-ui-muted'>Worker output</p>
-                    <h2 className='mt-1 text-xl font-semibold text-ui-text'>Verified work, live capacity, and spend</h2>
+                    <h2 className='text-xl font-semibold text-ui-text'>Worker output</h2>
+                    <p className='mt-1 text-sm text-ui-muted'>Verified work, live capacity, and spend.</p>
                 </div>
-                <span className='w-fit rounded-full bg-ui-primary/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-ui-primary outline outline-ui-primary/20'>
-                    {economics.windowDays} day window
-                </span>
-            </div>
-
-            <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center' data-ai-primary-triage>
-                <div className='min-w-0'>
-                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
-                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>Recommended next</span>
-                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{economics.reliability.capacity.totalAvailableSessions} open sessions</span>
-                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{economics.reliability.capacity.totalQueued} queued</span>
-                    </div>
-                    <h3 className='mt-3 text-lg font-semibold text-ui-text'>{primaryTitle}</h3>
-                    <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{primaryDetail}</p>
+                <div className='flex flex-wrap items-center justify-end gap-2 text-xs font-semibold'>
+                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-ui-muted'>{economics.reliability.capacity.totalAvailableSessions} open sessions</span>
+                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-ui-muted'>{economics.reliability.capacity.totalQueued} queued</span>
+                    <span className='rounded-full bg-ui-primary/10 px-3 py-1 font-medium uppercase tracking-[0.16em] text-ui-primary outline outline-ui-primary/20'>
+                        {economics.windowDays} day window
+                    </span>
                 </div>
-                <a
-                    href={primaryHref}
-                    className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/20 sm:w-auto'
-                    data-ai-primary-action
-                >
-                    {primaryActionLabel}
-                </a>
             </div>
 
             <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-raised' data-ai-economics-disclosure>
@@ -363,7 +323,6 @@ function EconomicsPanel({ economics, error, aiContainers, containerError }: { ec
 
             <AIContainerHealth containers={aiContainers} error={containerError} />
             <ReliabilityPanel reliability={economics.reliability} />
-            <OperationsPanel readiness={economics.commercialReadiness} />
         </section>
     )
 }
@@ -395,9 +354,6 @@ function AIContainerHealth({ containers, error }: { containers: DockerContainer[
                     <p className='mt-2 max-w-3xl text-sm leading-6 text-ui-muted'>{detail}</p>
                 </div>
                 <div className='flex flex-wrap gap-2'>
-                    <Link href='/dashboard/system#system-containers' className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text hover:border-ui-primary/40'>
-                        Open containers
-                    </Link>
                     {primary ? (
                         <Link href={`/dashboard/logs?service=${encodeURIComponent(primary.name)}`} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text hover:border-ui-primary/40'>
                             View logs
@@ -550,116 +506,6 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
             </div>
         </div>
     )
-}
-
-function OperationsPanel({ readiness }: { readiness: AIEconomics['commercialReadiness'] }) {
-    const tone = readiness.overallState === 'commercially_ready'
-        ? 'bg-ui-success/10 text-ui-success outline-ui-success/25'
-        : readiness.overallState === 'evidence_gaps'
-            ? 'bg-ui-primary/10 text-ui-primary outline-ui-primary/25'
-            : 'bg-ui-warning/10 text-ui-warning outline-ui-warning/25'
-    const counts = [
-        ['live', readiness.achievedCount],
-        ['review', readiness.partialCount],
-        ['no signal', readiness.internalActionCount],
-        ['tracked', `${readiness.measurableCount}/${readiness.totalCount}`],
-    ]
-
-    return (
-        <div className='rounded-lg border border-ui-border bg-ui-raised p-4' id='ai-operations' data-ai-operations>
-            <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
-                <div>
-                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-ui-muted'>Operations</p>
-                    <h3 className='mt-1 text-lg font-semibold text-ui-text'>Lane control table</h3>
-                </div>
-                <div className='flex flex-wrap items-center gap-2'>
-                    <span className={`rounded-md px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] outline ${tone}`}>{operationsStateLabel(readiness.overallState)}</span>
-                    {counts.map(([label, value]) => (
-                        <span key={label} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs text-ui-muted'>
-                            <b className='font-semibold text-ui-text'>{value}</b> {label}
-                        </span>
-                    ))}
-                </div>
-            </div>
-
-            <div className='mt-4 overflow-x-auto rounded-lg border border-ui-border' data-ai-lane-table>
-                <table className='min-w-245 w-full text-left text-xs'>
-                    <thead className='bg-ui-panel text-ui-muted'>
-                        <tr>
-                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Lane</th>
-                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>State</th>
-                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Owner</th>
-                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Runner</th>
-                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Last signal</th>
-                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Next command</th>
-                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Controls</th>
-                        </tr>
-                    </thead>
-                    <tbody className='divide-y divide-ui-border'>
-                        {readiness.items.map((item) => (
-                            <tr key={item.id} className='bg-ui-raised align-top'>
-                                <td className='px-3 py-3'>
-                                    <p className='font-semibold text-ui-text'>{item.priority}</p>
-                                    <p className='mt-1 max-w-44 text-ui-muted'>{item.label}</p>
-                                </td>
-                                <td className='px-3 py-3'><ReadinessBadge status={item.status} measurable={item.measurable} /></td>
-                                <td className='px-3 py-3 text-ui-muted'>{item.owner}</td>
-                                <td className='px-3 py-3'>
-                                    <p className='max-w-48 truncate font-mono text-[11px] text-ui-muted' title={item.control}>{operationsCopy(item.control)}</p>
-                                </td>
-                                <td className='px-3 py-3'>
-                                    <p className='max-w-56 truncate text-ui-muted' title={item.lastAttempt}>{item.lastAttempt}</p>
-                                </td>
-                                <td className='px-3 py-3'>
-                                    <p className='max-w-72 truncate text-ui-text' title={item.action}>{operationsCopy(item.action)}</p>
-                                </td>
-                                <td className='px-3 py-3'>
-                                    <div className='flex gap-2'>
-                                        <Link href={`/dashboard/logs?service=${encodeURIComponent(item.control)}`} className='rounded-md border border-ui-border bg-ui-panel px-2.5 py-1.5 font-semibold text-ui-text hover:border-ui-primary/40'>
-                                            Logs
-                                        </Link>
-                                        <a href='#ai-clients' className='rounded-md border border-ui-border bg-ui-panel px-2.5 py-1.5 font-semibold text-ui-text hover:border-ui-primary/40'>
-                                            Clients
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    )
-}
-
-function ReadinessBadge({ status, measurable }: { status: AIEconomics['commercialReadiness']['items'][number]['status'], measurable: boolean }) {
-    const label = status === 'operational' ? 'Live' : status === 'evidence_gap' ? 'Gap' : 'No signal'
-    const tone = status === 'operational'
-        ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
-        : status === 'evidence_gap'
-            ? 'border-ui-primary/30 bg-ui-primary/10 text-ui-primary'
-            : 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
-    return (
-        <div className='flex flex-wrap gap-1.5'>
-            <span className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${tone}`}>{label}</span>
-            <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-ui-muted'>{measurable ? 'tracked' : 'metering'}</span>
-        </div>
-    )
-}
-
-function operationsStateLabel(value: AIEconomics['commercialReadiness']['overallState']) {
-    if (value === 'commercially_ready') return 'Nominal'
-    if (value === 'internal_action_required') return 'Needs signal'
-    return 'Review'
-}
-
-function operationsCopy(value: string) {
-    return value
-        .replace(/\binstrumented\b/gi, 'tracked')
-        .replace(/\binstrumenting\b/gi, 'connecting')
-        .replace(/\bService gates\b/gi, 'Worker operations')
-        .replace(/\bgates\b/gi, 'lanes')
-        .replace(/\bgate\b/gi, 'lane')
 }
 
 function SuccessRate({ row, fallback }: { row?: AIEconomics['reliability']['buildDeploy'][number], fallback: string }) {

@@ -12,7 +12,7 @@ test('builds the operations view from canonical live resources', async () => {
         const payload = pathname.endsWith('/captures')
             ? { captures: [{ id: 'cap_live', sourceId: 'src_live', collectedAt: '2026-07-20T09:05:00.000Z', publishedAt: '2026-07-20T08:55:00.000Z', contentHash: 'hash-live', mediaType: 'text/html', storageKind: 'inline_text', url: 'https://reports.example/acme', metadata: { actor: 'Actor Live', domain: 'acme.example', title: 'Live report', parserVersion: 'parser-live-v1' } }] }
             : pathname.endsWith('/collection-runs')
-                ? { collectionRuns: [{ id: 'run_live', sourceId: 'src_live', status: 'completed', startedAt: '2026-07-20T09:00:00.000Z', finishedAt: '2026-07-20T09:06:00.000Z', captureCount: 1, rowCount: 1 }] }
+                ? { collectionRuns: [{ id: 'run_live', status: 'completed', startedAt: '2026-07-20T09:00:00.000Z', finishedAt: '2026-07-20T09:06:00.000Z', captureCount: 1, rowCount: 1 }] }
                 : {
                     total: 1,
                     summary: { activeSourceCount: 1 },
@@ -27,7 +27,7 @@ test('builds the operations view from canonical live resources', async () => {
         expect(overview.availability.state).toBe('live')
         expect(overview.sources).toHaveLength(1)
         expect(overview.captures[0]).toMatchObject({ id: 'cap_live', sourceId: 'src_live', actor: 'Actor Live', domain: 'acme.example' })
-        expect(overview.runs[0]).toMatchObject({ id: 'run_live', sourceId: 'src_live', captures: 1 })
+        expect(overview.runs[0]).toMatchObject({ id: 'run_live', sourceId: '', sourceName: 'Global source fleet', captures: 1 })
         expect(overview.domains[0]).toMatchObject({ domain: 'acme.example', sourceIds: ['src_live'], resultCount: 1 })
     } finally {
         globalThis.fetch = originalFetch

@@ -13,7 +13,30 @@ export type TokenValidationResult = {
 
 export type TokenValidationOutcome = 'valid' | 'degraded' | 'invalid' | 'unavailable'
 
+const TOKEN_VALIDATION_CACHE_MS = 5_000
+const validationCache = new Map<string, { expiresAt: number; result: TokenValidationResult }>()
+const validationRequests = new Map<string, Promise<TokenValidationResult>>()
+
 export default async function tokenIsValid(token: string, id: string): Promise<TokenValidationResult> {
+    const key = `${id}:${token}`
+    const cached = validationCache.get(key)
+    if (cached && cached.expiresAt > Date.now()) return cached.result
+
+    const pending = validationRequests.get(key)
+    if (pending) return pending
+
+    const request = validateToken(token, id)
+    validationRequests.set(key, request)
+    try {
+        const result = await request
+        validationCache.set(key, { expiresAt: Date.now() + TOKEN_VALIDATION_CACHE_MS, result })
+        return result
+    } finally {
+        validationRequests.delete(key)
+    }
+}
+
+async function validateToken(token: string, id: string): Promise<TokenValidationResult> {
     try {
         const response = await fetchWithRetry(`${authApiUrl()}/auth/token/${id}`, {
             headers: { Authorization: `Bearer ${token}` },

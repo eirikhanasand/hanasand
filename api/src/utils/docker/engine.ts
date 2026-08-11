@@ -171,6 +171,10 @@ function normalizeContainerName(name?: string) {
     return (name || '').replace(/^\/+/, '')
 }
 
+function normalizeHealth(status?: string) {
+    return status?.match(/\(health:\s*([^)]+)\)/i)?.[1]?.trim().toLowerCase()
+}
+
 function normalizePorts(ports?: DockerContainerResponse['Ports']): RuntimeContainerPort[] {
     if (!Array.isArray(ports)) return []
     return ports
@@ -351,6 +355,7 @@ export async function listRuntimeContainers(): Promise<RuntimeContainer[]> {
         image: container.Image || 'unknown',
         state: container.State || 'unknown',
         status: container.Status || 'unknown',
+        health: normalizeHealth(container.Status),
         created_at: new Date((container.Created || 0) * 1000).toISOString(),
         ports: normalizePorts(container.Ports),
     }))

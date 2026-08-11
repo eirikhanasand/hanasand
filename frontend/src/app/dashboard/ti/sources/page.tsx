@@ -1,398 +1,113 @@
 import Link from 'next/link'
-import { AlertTriangle, ArrowRight, Bot, Camera, CheckCircle2, ChevronDown, Clock3, ExternalLink, PauseCircle, ShieldAlert } from 'lucide-react'
+import { ExternalLink, Plus, RefreshCcw } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { formatTiDate, getTiAdminOverview, type TiAdminSource } from '@/utils/tiAdmin/ops'
-import TiDataAvailability from '../ti-data-availability'
 import ManualRunButton from '../manualRunButton'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TiSourcesPage(props: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
     const params = await props.searchParams
-    const cursor = Math.max(0, Number(typeof params?.cursor === 'string' ? params.cursor : 0) || 0)
-    const scope = params?.scope === 'default' ? 'default' : 'global'
+    const cursor = Math.max(0, Number(value(params?.cursor)) || 0)
+    const scope = value(params?.scope) === 'default' ? 'default' : 'global'
+    const sort = value(params?.sort) || 'source'
+    const direction = value(params?.dir) === 'desc' ? 'desc' : 'asc'
+    const query = value(params?.q) || ''
+    const family = value(params?.family) || ''
+    const lifecycle = value(params?.lifecycle) || ''
+    const access = value(params?.access) || ''
+    const health = value(params?.health) || ''
+    const output = value(params?.output) || ''
+    const matches = value(params?.matches) || ''
     const tenantId = scope === 'default' ? 'default' : null
-    const [overview, otherScope] = await Promise.all([
-        getTiAdminOverview(tenantId, { cursor, limit: 25 }),
-        getTiAdminOverview(scope === 'default' ? null : 'default', { limit: 1, includeSamples: false }),
-    ])
-    const scopeTotals = scope === 'global'
-        ? { global: overview.sourceTotals, default: otherScope.sourceTotals }
-        : { global: otherScope.sourceTotals, default: overview.sourceTotals }
-    const scopeAvailability = scope === 'global'
-        ? { global: sourceOperationsAvailable(overview), default: sourceOperationsAvailable(otherScope) }
-        : { global: sourceOperationsAvailable(otherScope), default: sourceOperationsAvailable(overview) }
-    const { sources, captures, runs } = overview
-    const sourceRows = sources.map(source => {
-        const sourceCaptures = captures.filter(capture => capture.sourceId === source.id)
-        const sourceRuns = runs.filter(run => run.sourceId === source.id)
-        const lastRun = [...sourceRuns].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0]
-        const avgRows = sourceRuns.length ? Math.round(sourceRuns.reduce((sum, run) => sum + run.rows, 0) / sourceRuns.length) : 0
-        const avgCaptures = sourceRuns.length ? Math.round(sourceRuns.reduce((sum, run) => sum + run.captures, 0) / sourceRuns.length) : 0
-        const minutesSinceRun = minutesSince(source.lastRunAt)
-        const health = sourceHealth(source, minutesSinceRun)
-        return { source, sourceCaptures, sourceRuns, lastRun, avgRows, avgCaptures, minutesSinceRun, health }
-    }).sort((a, b) => healthWeight(b.health.state) - healthWeight(a.health.state) || new Date(a.source.nextRunAt).getTime() - new Date(b.source.nextRunAt).getTime())
+    const overview = await getTiAdminOverview(tenantId, { cursor, limit: 50, includeSamples: false, includeCandidates: true, query, family, lifecycle, access, health, output, matches, sort, direction })
+    const unavailable = overview.availability.failedResources.includes('source-operations')
+    const rows = overview.sources
+    const filters = { query, family, lifecycle, access, health, output, matches }
+    const executable = rows.filter(source => source.status === 'active')
 
-    const executableCount = overview.sourceTotals.executable
-    const staleCount = sourceRows.filter(row => row.health.state === 'stale').length
-    const reviewCount = sources.filter(source => (source.aiReview?.status && source.aiReview.status !== 'approved') || source.status === 'candidate' || source.status === 'review').length
-    const aiReviewedCount = sources.filter(source => source.aiReview).length
-    const restrictedCount = sources.filter(source => source.risk === 'restricted').length
-    const qualifyingCount = overview.sourceTotals.qualifying
-    const qualifyingClearWeb = overview.sourceTotals.qualifyingClearWeb
-    const qualifyingDarkWeb = overview.sourceTotals.qualifyingLawfulDarkWeb
-    const qualifyingTelegram = overview.sourceTotals.qualifyingPublicTelegram
-    const nextDue = sourceRows.filter(row => Number.isFinite(Date.parse(row.source.nextRunAt)))
-        .sort((a, b) => Date.parse(a.source.nextRunAt) - Date.parse(b.source.nextRunAt))[0]
-
-    return (
-        <DashboardPage>
-            <DashboardHeader
-                eyebrow='Threat intelligence'
-                title='Source inventory'
-                description='Operate collection sources, review findings, and keep stale feeds moving.'
-                actions={<ManualRunButton label='Run all sources' />}
-            />
-            <TiDataAvailability availability={overview.availability} />
-
-            <DashboardPanel className='grid gap-3 border-ui-border bg-ui-panel p-4 lg:grid-cols-[auto_1fr] lg:items-center'>
-                <div className='flex gap-2' aria-label='Source inventory scope'>
-                    <Link href='/dashboard/ti/sources?scope=global' className={scope === 'global' ? 'rounded-md bg-ui-primary px-3 py-2 text-sm font-semibold text-white' : 'rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:bg-ui-raised'}>Global sources</Link>
-                    <Link href='/dashboard/ti/sources?scope=default' className={scope === 'default' ? 'rounded-md bg-ui-primary px-3 py-2 text-sm font-semibold text-white' : 'rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:bg-ui-raised'}>Default tenant</Link>
-                </div>
-                <div className='grid gap-2 text-sm sm:grid-cols-2'>
-                    <ScopeTotal label='Global' totals={scopeTotals.global} available={scopeAvailability.global} />
-                    <ScopeTotal label='Default tenant' totals={scopeTotals.default} available={scopeAvailability.default} />
-                </div>
-            </DashboardPanel>
-
-            <details className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-ti-source-inventory-summary-disclosure>
-                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                    <span className='inline-flex items-center gap-2'>
-                        <Bot className='h-4 w-4 text-ui-primary' />
-                        Source inventory summary
-                    </span>
-                    <span className='inline-flex items-center gap-2 text-xs font-medium text-ui-muted'>
-                        {scope === 'global' ? 'Global' : 'Default tenant'} · {executableCount}/{overview.sourcePage.total} executable · {reviewCount} in review on this page · {staleCount} stale on this page
-                        <ChevronDown className='h-4 w-4 transition group-open:rotate-180' />
-                    </span>
-                </summary>
-                <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-6' data-ti-source-inventory-metrics>
-                    <Metric title='Executable' value={`${executableCount}/${overview.sourcePage.total}`} detail='configured sources with a collector' tone={executableCount ? 'ok' : 'warn'} />
-                    <Metric title='Qualified' value={`${qualifyingCount}/6,100`} detail={`${qualifyingClearWeb}/5,000 web · ${qualifyingDarkWeb}/1,000 Tor · ${qualifyingTelegram}/100 Telegram`} tone={qualifyingCount >= 6100 && qualifyingClearWeb >= 5000 && qualifyingDarkWeb >= 1000 && qualifyingTelegram >= 100 ? 'ok' : 'warn'} />
-                    <Metric title='Reviewed' value={String(aiReviewedCount)} detail={reviewCount ? `${reviewCount} in review` : 'ready for monitoring'} tone={reviewCount ? 'warn' : 'ok'} />
-                    <Metric title='Stale' value={String(staleCount)} detail='late or not collecting' tone={staleCount ? 'warn' : 'ok'} />
-                    <Metric title='Sensitive' value={String(restrictedCount)} detail='safe-field sources' tone='hold' />
-                    <Metric title='Due next' value={nextDue ? shortTime(nextDue.source.nextRunAt) : 'Listening'} detail={nextDue?.source.name || 'waiting for the next source check'} tone='hold' />
-                </div>
-            </details>
-
-            <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                <div className='grid border-b border-ui-border bg-ui-panel px-4 py-3 lg:grid-cols-[1fr_auto] lg:items-center'>
-                    <div>
-                        <h2 className='text-base font-semibold text-ui-text'>Source health</h2>
-                        <p className='mt-1 text-sm text-ui-muted'>Stale and review-heavy sources float to the top.</p>
-                    </div>
-                    <div className='mt-3 flex flex-wrap gap-2 lg:mt-0'>
-                        <QueuePill label='Stale' count={staleCount} />
-                        <QueuePill label='Reviewed' count={aiReviewedCount} />
-                        <QueuePill label='Runs' count={runs.length} />
-                    </div>
-                </div>
-
-                <div className='grid gap-3 p-3 lg:hidden'>
-                    {sourceRows.map(row => (
-                        <Link key={row.source.id} href={`/dashboard/ti/sources/${row.source.id}?scope=${scope}`} className='rounded-md border border-ui-border bg-ui-canvas p-3 text-left shadow-sm'>
-                            <div className='flex items-start justify-between gap-3'>
-                                <div className='min-w-0'>
-                                    <p className='line-clamp-2 text-sm font-semibold leading-5 text-ui-text'>{row.source.name}</p>
-                                    <p className='mt-1 text-xs text-ui-muted'>{row.source.family.replaceAll('_', ' ')}</p>
-                                </div>
-                                <HealthBadge state={row.health.state} label={row.health.label} />
-                            </div>
-                            <div className='mt-3 grid grid-cols-2 gap-2 text-xs'>
-                                <MobileFact label='Last content' value={relativeAge(row.source.lastContentAt)} />
-                                <MobileFact label='Due' value={relativeUntil(row.source.nextRunAt)} />
-                                <MobileFact label='Productive' value={`${row.source.productiveCycleCount} cycles`} />
-                                <MobileFact label='Risk' value={row.source.risk} />
-                            </div>
-                            <div className='mt-3 flex flex-wrap gap-1.5'>
-                                <span className={statusClass(row.source.status, row.source.aiReview)}>{statusLabel(row.source)}</span>
-                                <span className={riskClass(row.source.risk)}>{row.source.risk}</span>
-                                {row.source.aiReview ? <span className='inline-flex items-center gap-1 rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-primary'><Bot className='h-3 w-3' /> {row.source.aiReview.confidencePercent}% AI confidence</span> : null}
-                            </div>
-                            <p className='mt-3 line-clamp-2 text-xs leading-5 text-ui-muted'>{row.source.aiReview?.summary || row.source.buyerValue}</p>
-                        </Link>
-                    ))}
-                </div>
-
-                <div className='hidden overflow-x-auto lg:block'>
-                    <div className='min-w-[86rem]'>
-                        <div className='grid grid-cols-[1.45fr_0.72fr_0.72fr_0.7fr_0.62fr_0.9fr_0.72fr_0.82fr] gap-2 border-b border-ui-border bg-ui-canvas px-4 py-2 text-[11px] font-semibold uppercase text-ui-muted'>
-                            <span>Source</span>
-                            <span>Status</span>
-                            <span>Findings</span>
-                            <span>Last content</span>
-                            <span>Due</span>
-                            <span>Matches</span>
-                            <span>Risk</span>
-                            <span>Actions</span>
-                        </div>
-
-                        {sourceRows.map(row => (
-                            <div key={row.source.id} className='grid grid-cols-[1.45fr_0.72fr_0.72fr_0.7fr_0.62fr_0.9fr_0.72fr_0.82fr] gap-2 border-b border-ui-border px-4 py-2 text-sm last:border-b-0 hover:bg-ui-panel'>
-                                <div className='min-w-0'>
-                                    <Link href={`/dashboard/ti/sources/${row.source.id}?scope=${scope}`} className='line-clamp-1 font-semibold text-ui-text hover:text-ui-primary'>{row.source.name}</Link>
-                                    <div className='mt-1 flex flex-wrap gap-1'>
-                                        <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-primary'>{row.source.family.replaceAll('_', ' ')}</span>
-                                        <span className={statusClass(row.source.status, row.source.aiReview)}>{statusLabel(row.source)}</span>
-                                        {row.source.aiReview ? <span className='inline-flex items-center gap-1 rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-primary'><Bot className='h-3 w-3' /> {row.source.aiReview.confidencePercent}% AI confidence</span> : null}
-                                    </div>
-                                </div>
-                                <div className='min-w-0'>
-                                    <HealthBadge state={row.health.state} label={row.health.label} />
-                                    <p className='mt-1 line-clamp-1 text-xs text-ui-muted'>{row.health.detail}</p>
-                                </div>
-                                <div className='text-ui-text'>
-                                    <p className='font-semibold'>{row.source.productiveCycleCount} productive</p>
-                                    <p className='mt-1 text-xs text-ui-muted'>{row.source.retainedEvidenceCount} retained · {row.source.qualifiesForBaseline ? 'qualifies' : row.source.qualificationReasons[0]?.replaceAll('_', ' ') || 'not qualified'}</p>
-                                </div>
-                                <div>
-                                    <p className='font-semibold text-ui-text'>{relativeAge(row.source.lastContentAt)}</p>
-                                    <p className='mt-1 text-xs text-ui-muted'>{formatTiDate(row.source.lastContentAt)}</p>
-                                </div>
-                                <div>
-                                    <p className='font-semibold text-ui-text'>{relativeUntil(row.source.nextRunAt)}</p>
-                                    <p className='mt-1 text-xs text-ui-muted'>{shortTime(row.source.nextRunAt)}</p>
-                                </div>
-                                <div className='min-w-0'>
-                                    <p className='truncate font-mono text-xs text-ui-text'>{row.source.domains.slice(0, 2).join(', ')}</p>
-                                    <p className='mt-1 text-xs text-ui-muted'>{row.source.resultTypes.length} result types</p>
-                                </div>
-                                <div className='min-w-0'>
-                                    <p className={riskClass(row.source.risk)}>{row.source.risk}</p>
-                                    <p className='mt-1 line-clamp-1 text-xs text-ui-muted'>{riskDetail(row.source)}</p>
-                                </div>
-                                <div className='flex flex-wrap gap-1.5'>
-                                    <ManualRunButton sourceId={row.source.id} label='Run' queries={row.source.domains.filter(domain => !domain.includes('only'))} />
-                                    <Link href={`/dashboard/ti/sources/${row.source.id}?scope=${scope}`} className='inline-flex h-8 items-center gap-1.5 rounded-md border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text hover:bg-ui-raised'>
-                                        Open
-                                        <ArrowRight className='h-3.5 w-3.5' />
-                                    </Link>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </DashboardPanel>
-
-            <nav className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-panel px-4 py-3 text-sm' aria-label='Source inventory pages'>
-                <span className='text-ui-muted'>
-                    {overview.sourcePage.total ? `${cursor + 1}–${Math.min(cursor + sources.length, overview.sourcePage.total)} of ${overview.sourcePage.total}` : 'No sources recorded'}
-                </span>
-                <div className='flex gap-2'>
-                    {cursor > 0 ? <Link href={`/dashboard/ti/sources?scope=${scope}&cursor=${Math.max(0, cursor - overview.sourcePage.limit)}`} className='rounded-md border border-ui-border px-3 py-1.5 font-semibold text-ui-text hover:bg-ui-raised'>Previous</Link> : null}
-                    {overview.sourcePage.nextCursor ? <Link href={`/dashboard/ti/sources?scope=${scope}&cursor=${overview.sourcePage.nextCursor}`} className='rounded-md border border-ui-border px-3 py-1.5 font-semibold text-ui-text hover:bg-ui-raised'>Next</Link> : null}
-                </div>
-            </nav>
-
-            <div className='grid gap-4 xl:grid-cols-[1.05fr_0.95fr]'>
-                <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
-                    <div className='flex items-center justify-between gap-3'>
-                        <div>
-                            <h2 className='text-base font-semibold text-ui-text'>Sources to review</h2>
-                            <p className='mt-1 text-sm text-ui-muted'>Check sensitive or stale sources before adding more collection volume.</p>
-                        </div>
-                        <AlertTriangle className='h-4 w-4 text-ui-warning' />
-                    </div>
-                    <div className='mt-4 grid gap-2'>
-                        {sourceRows.filter(row => row.health.state !== 'healthy' || (row.source.aiReview?.status && row.source.aiReview.status !== 'approved')).map(row => (
-                            <Link key={row.source.id} href={`/dashboard/ti/sources/${row.source.id}?scope=${scope}`} className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3 md:grid-cols-[1fr_auto] md:items-center hover:border-ui-primary/35'>
-                                <div>
-                                    <p className='font-semibold text-ui-text'>{row.source.name}</p>
-                                    <p className='mt-1 text-sm text-ui-muted'>{row.health.label} · {statusLabel(row.source)} · {row.source.owner}</p>
-                                </div>
-                                <span className='inline-flex items-center gap-1 text-sm font-semibold text-ui-primary'>Open <ExternalLink className='h-3.5 w-3.5' /></span>
-                            </Link>
-                        ))}
-                        {!sourceRows.some(row => row.health.state !== 'healthy' || (row.source.aiReview?.status && row.source.aiReview.status !== 'approved')) && (
-                            <div className='rounded-md border border-dashed border-ui-border bg-ui-canvas p-4 text-sm text-ui-muted'>No sources need review right now. Stale, failed, and review-tagged sources appear here.</div>
-                        )}
-                    </div>
-                </DashboardPanel>
-
-                <details className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-ti-source-capture-coverage-disclosure>
-                    <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
-                        <span className='inline-flex items-center gap-2'><Camera className='h-4 w-4 text-ui-primary' /> Capture coverage</span>
-                        <span className='inline-flex items-center gap-2 text-xs font-medium text-ui-muted'>
-                            Bounded recent sample · {overview.sourceTotals.executable} executable sources
-                            <ChevronDown className='h-4 w-4 transition group-open:rotate-180' />
-                        </span>
-                    </summary>
-                    <div className='grid gap-3 border-t border-ui-border p-4' data-ti-source-capture-coverage>
-                        {sourceRows.map(row => (
-                            <div key={row.source.id} className='rounded-md border border-ui-border bg-ui-canvas p-3'>
-                                <div className='flex items-center justify-between gap-3'>
-                                    <p className='truncate text-sm font-semibold text-ui-text'>{row.source.name}</p>
-                                    <span className='text-sm font-semibold text-ui-primary'>{row.source.retainedEvidenceCount}</span>
-                                </div>
-                                <div className='mt-3 h-2 overflow-hidden rounded-full bg-ui-raised'>
-                                    <div className='h-full rounded-full bg-ui-primary' style={{ width: `${Math.min(100, Math.max(row.source.retainedEvidenceCount ? 8 : 0, row.source.retainedEvidenceCount * 18))}%` }} />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </details>
+    return <DashboardPage>
+        <DashboardHeader eyebrow='Threat intelligence' title='Source inventory' description='The feeds Hanasand can collect, their current health, and the customer value they produce.' actions={executable.length ? <ManualRunButton label='Run active sources' /> : undefined} />
+        <DashboardPanel className='flex flex-wrap items-center justify-between gap-3 border-ui-border bg-ui-panel p-4'>
+            <div className='flex gap-2' aria-label='Source inventory scope'>
+                <Link href='/dashboard/ti/sources?scope=global' className={scope === 'global' ? activeTab : tab}>Global sources</Link>
+                <Link href='/dashboard/ti/sources?scope=default' className={scope === 'default' ? activeTab : tab}>Default tenant</Link>
             </div>
-        </DashboardPage>
-    )
-}
-
-function ScopeTotal({ label, totals, available }: { label: string, totals: { configured: number, executable: number, qualifying: number }, available: boolean }) {
-    return (
-        <div className='rounded-md border border-ui-border bg-ui-canvas px-3 py-2'>
-            <span className='font-semibold text-ui-text'>{label}</span>
-            <span className='ml-2 text-ui-muted'>{available ? `${totals.configured} configured · ${totals.executable} executable · ${totals.qualifying} qualifying` : 'source totals unavailable'}</span>
-        </div>
-    )
-}
-
-function sourceOperationsAvailable(overview: Awaited<ReturnType<typeof getTiAdminOverview>>) {
-    return !overview.availability.failedResources.includes('source-operations')
-}
-
-function Metric({ title, value, detail, tone }: { title: string, value: string, detail: string, tone: 'ok' | 'warn' | 'hold' }) {
-    const icon = tone === 'ok' ? <CheckCircle2 className='h-4 w-4' /> : tone === 'warn' ? <AlertTriangle className='h-4 w-4' /> : <Clock3 className='h-4 w-4' />
-    return (
-        <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
-            <div className='flex items-center justify-between text-ui-muted'>
-                <p className='text-xs font-semibold uppercase'>{title}</p>
-                {icon}
-            </div>
-            <p className='mt-3 text-xl font-semibold text-ui-text'>{value}</p>
-            <p className='mt-1 text-sm text-ui-muted'>{detail}</p>
+            <div className='text-sm text-ui-muted'>{overview.sourcePage.total} sources · {overview.sourceTotals.executable} executable</div>
         </DashboardPanel>
-    )
+
+        {unavailable ? <Unavailable /> : !overview.sources.length ? <Empty /> : !rows.length ? <NoMatches /> : <>
+            <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
+                <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
+                    <div><h2 className='text-base font-semibold text-ui-text'>Production and available sources</h2><p className='mt-1 text-sm text-ui-muted'>Candidates are shown separately and are not counted as active collection feeds.</p></div>
+                    <Link href='/dashboard/ti/sources?scope=global&available=true' className='inline-flex items-center gap-2 rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:bg-ui-raised'><Plus className='h-4 w-4' /> Add source</Link>
+                </div>
+                <form className='flex flex-wrap items-center gap-2 border-b border-ui-border p-3' action='/dashboard/ti/sources'>
+                    <input type='hidden' name='scope' value={scope} /><input type='hidden' name='sort' value={sort} /><input type='hidden' name='dir' value={direction} />
+                    <input name='q' defaultValue={query} placeholder='Search sources' className='h-8 min-w-48 rounded-md border border-ui-border bg-ui-canvas px-2.5 text-xs text-ui-text outline-none' />
+                    <FilterSelect name='family' value={family} label='Family' options={['rss', 'web', 'telegram_public', 'darkweb_metadata']} />
+                    <FilterSelect name='lifecycle' value={lifecycle} label='Lifecycle' options={['active', 'candidate', 'review', 'paused']} />
+                    <FilterSelect name='access' value={access} label='Access' options={['public_http', 'public_rss', 'public_telegram', 'tor_metadata']} />
+                    <FilterSelect name='health' value={health} label='Health' options={['healthy', 'stale', 'failed', 'not observed']} />
+                    <FilterSelect name='output' value={output} label='Useful output' options={['yes', 'no']} />
+                    <FilterSelect name='matches' value={matches} label='Customer matches' options={['yes', 'no']} />
+                    <button type='submit' className='h-8 rounded-md bg-ui-primary px-3 text-xs font-semibold text-ui-canvas'>Apply</button>
+                    {query || family || lifecycle || access || health || output || matches ? <Link href={`/dashboard/ti/sources?scope=${scope}`} className='text-xs font-semibold text-ui-primary underline'>Clear</Link> : null}
+                </form>
+                <div className='overflow-x-auto'>
+                    <div className='min-w-[78rem]'>
+                        <div className='grid grid-cols-[1.55fr_0.8fr_0.85fr_0.85fr_0.8fr_0.8fr_1.35fr] gap-3 border-b border-ui-border bg-ui-canvas px-4 py-2 text-[11px] font-semibold uppercase text-ui-muted'><SortHeader label='Source' field='source' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Access' field='access' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Status' field='status' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Last content' field='content' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Useful output' field='useful' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Matches' field='matches' scope={scope} sort={sort} direction={direction} filters={filters} /><span>Actions</span></div>
+                        {rows.map(source => <SourceRow key={source.id} source={source} scope={scope} />)}
+                    </div>
+                </div>
+            </DashboardPanel>
+            <nav className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-panel px-4 py-3 text-sm' aria-label='Source inventory pages'>
+                <span className='text-ui-muted'>{overview.sourcePage.total ? `${cursor + 1}–${Math.min(cursor + rows.length, overview.sourcePage.total)} of ${overview.sourcePage.total}` : '0 sources'}</span>
+                <div className='flex gap-2'>{cursor > 0 ? <Link href={pageHref(scope, sort, direction, Math.max(0, cursor - 50), { query, family, lifecycle, access, health, output, matches })} className={tab}>Previous</Link> : null}{overview.sourcePage.nextCursor ? <Link href={pageHref(scope, sort, direction, Number(overview.sourcePage.nextCursor), { query, family, lifecycle, access, health, output, matches })} className={tab}>Next</Link> : null}</div>
+            </nav>
+        </>}
+    </DashboardPage>
 }
 
-function QueuePill({ label, count }: { label: string, count: number }) {
-    return <span className='rounded-full border border-ui-border bg-ui-panel px-3 py-1 text-xs font-semibold text-ui-text'>{label}: {count}</span>
+function SourceRow({ source, scope }: { source: TiAdminSource, scope: string }) {
+    const candidate = source.status !== 'active'
+    const darkweb = /dark|tor|onion/i.test(`${source.family} ${source.accessMethod} ${source.url}`)
+    return <div className='grid grid-cols-[1.55fr_0.8fr_0.85fr_0.85fr_0.8fr_0.8fr_1.35fr] gap-3 border-b border-ui-border px-4 py-3 text-sm last:border-b-0 hover:bg-ui-panel'>
+        <div className='min-w-0'><Link href={`/dashboard/ti/sources/${source.id}?scope=${scope}`} className='font-semibold text-ui-text hover:text-ui-primary'>{source.name}</Link><p className='mt-1 truncate text-xs text-ui-muted'>{source.family.replaceAll('_', ' ')} · {source.owner}</p>{candidate ? <span className='mt-2 inline-flex rounded-full border border-ui-warning/35 bg-ui-warning/10 px-2 py-0.5 text-[11px] font-semibold text-ui-warning'>Available to activate</span> : null}</div>
+        <div><p className='font-semibold text-ui-text'>{darkweb ? 'Dark web' : source.accessMethod || 'Clearweb'}</p><p className='mt-1 text-xs text-ui-muted'>{source.risk} access</p></div>
+        <Status source={source} />
+        <div><p className='font-semibold text-ui-text'>{relative(source.lastContentAt)}</p><p className='mt-1 text-xs text-ui-muted'>{formatTiDate(source.lastContentAt)}</p></div>
+        <div><p className='font-semibold text-ui-text'>{source.productiveCycleCount} cycles</p><p className='mt-1 text-xs text-ui-muted'>{source.retainedEvidenceCount} captures</p></div>
+        <div><p className='font-semibold text-ui-text'>{source.customerMatchCount}</p><p className='mt-1 text-xs text-ui-muted'>customer matches</p></div>
+        <div className='flex flex-nowrap items-center gap-1.5 whitespace-nowrap'>{!candidate ? <ManualRunButton compact sourceId={source.id} label='Run' queries={source.domains} /> : null}{source.url && !darkweb ? <a href={source.url} target='_blank' rel='noopener noreferrer' className='inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-ui-border px-2 text-xs font-semibold text-ui-text hover:bg-ui-raised'>Open <ExternalLink className='h-3 w-3' /></a> : <Link href='/browser' className='inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-ui-border px-2 text-xs font-semibold text-ui-text hover:bg-ui-raised'>Preview</Link>}<Link href={`/dashboard/ti/sources/${source.id}?scope=${scope}`} className='inline-flex h-8 shrink-0 items-center rounded-md border border-ui-border px-2 text-xs font-semibold text-ui-text hover:bg-ui-raised'>Details</Link></div>
+    </div>
 }
 
-function MobileFact({ label, value }: { label: string, value: string }) {
-    return (
-        <div className='rounded-md border border-ui-border bg-ui-canvas px-2.5 py-2'>
-            <p className='text-[11px] font-semibold uppercase text-ui-muted'>{label}</p>
-            <p className='mt-1 truncate text-sm font-semibold text-ui-text'>{value}</p>
-        </div>
-    )
+function Status({ source }: { source: TiAdminSource }) {
+    const stale = source.status === 'active' && source.lastRunAt && Date.now() - Date.parse(source.lastRunAt) > source.cadenceMinutes * 120_000
+    const label = source.status === 'active' ? stale ? 'Stale' : 'Active' : source.status
+    return <div><span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${stale ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning' : source.status === 'active' ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-border text-ui-muted'}`}>{label}</span><p className='mt-1 text-xs text-ui-muted'>{source.healthState}</p></div>
 }
 
-function HealthBadge({ state, label }: { state: SourceHealth['state'], label: string }) {
-    const Icon = state === 'healthy' ? CheckCircle2 : state === 'stale' ? AlertTriangle : state === 'paused' ? PauseCircle : ShieldAlert
-    const className = state === 'healthy'
-        ? 'border border-ui-success/35 bg-ui-success/10 text-ui-success'
-        : state === 'stale'
-            ? 'border border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
-            : state === 'paused'
-                ? 'border border-ui-border bg-ui-panel text-ui-muted'
-                : 'border border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
-    return (
-        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}>
-            <Icon className='h-3.5 w-3.5' />
-            {label}
-        </span>
-    )
+function SortHeader({ label, field, scope, sort, direction, filters }: { label: string, field: string, scope: string, sort: string, direction: string, filters: Record<string, string> }) {
+    const nextDirection = sort === field && direction === 'asc' ? 'desc' : 'asc'
+    return <Link href={pageHref(scope, field, nextDirection, 0, filters)} className='inline-flex items-center gap-1 whitespace-nowrap hover:text-ui-text' title={`Sort by ${label}`}><span>{label}</span><span className='inline-flex flex-col text-[8px] leading-[7px]'><span className={sort === field && direction === 'asc' ? 'text-ui-primary' : 'text-ui-muted/45'}>▲</span><span className={sort === field && direction === 'desc' ? 'text-ui-primary' : 'text-ui-muted/45'}>▼</span></span></Link>
 }
 
-type SourceHealth = {
-    state: 'healthy' | 'stale' | 'paused' | 'review'
-    label: string
-    detail: string
+function pageHref(scope: string, sort: string, direction: string, cursor: number, filters: Record<string, string> = {}) {
+    const params = new URLSearchParams({ scope, sort, dir: direction, cursor: String(cursor) })
+    for (const [key, item] of Object.entries(filters)) if (item) params.set(key, item)
+    return `/dashboard/ti/sources?${params.toString()}`
 }
 
-function sourceHealth(source: TiAdminSource, minutesSinceRun: number): SourceHealth {
-    if (source.status === 'paused') return { state: 'paused', label: 'Paused', detail: 'Collection disabled.' }
-    if (source.aiReview && source.aiReview.status !== 'approved') return { state: 'review', label: statusLabel(source), detail: source.aiReview.summary }
-    if (source.status === 'candidate' || source.status === 'review') return { state: 'review', label: 'Review', detail: 'Needs approval or access check.' }
-    if (!source.lastRunAt) return { state: 'review', label: 'Not observed', detail: 'No source check has been recorded.' }
-    if (minutesSinceRun > source.cadenceMinutes * 2) return { state: 'stale', label: 'Stale', detail: `${Math.round(minutesSinceRun / 60)} hr since run.` }
-    return { state: 'healthy', label: 'Healthy', detail: 'Running on schedule.' }
+function FilterSelect({ name, value, label, options }: { name: string, value: string, label: string, options: string[] }) {
+    return <select name={name} defaultValue={value} aria-label={label} className='h-8 rounded-md border border-ui-border bg-ui-canvas px-2 text-xs text-ui-text outline-none'><option value=''>{label}</option>{options.map(option => <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>)}</select>
 }
 
-function healthWeight(state: SourceHealth['state']) {
-    if (state === 'stale') return 4
-    if (state === 'review') return 3
-    if (state === 'paused') return 2
-    return 1
-}
-
-function minutesSince(value: string) {
-    const parsed = new Date(value).getTime()
-    if (!Number.isFinite(parsed)) return Number.POSITIVE_INFINITY
-    return Math.max(0, Math.round((Date.now() - parsed) / 60000))
-}
-
-function relativeAge(value: string) {
-    const minutes = minutesSince(value)
-    if (!Number.isFinite(minutes)) return 'not recorded'
-    if (minutes < 60) return `${minutes} min ago`
-    const hours = Math.round(minutes / 60)
-    if (hours < 48) return `${hours} hr ago`
-    return `${Math.round(hours / 24)} d ago`
-}
-
-function relativeUntil(value: string) {
-    const diff = new Date(value).getTime() - Date.now()
-    if (!Number.isFinite(diff)) return 'not recorded'
-    const minutes = Math.round(diff / 60000)
-    if (minutes < -60) return `${Math.abs(Math.round(minutes / 60))} hr overdue`
-    if (minutes < 0) return `${Math.abs(minutes)} min overdue`
-    if (minutes < 60) return `${minutes} min`
-    const hours = Math.round(minutes / 60)
-    if (hours < 48) return `${hours} hr`
-    return `${Math.round(hours / 24)} d`
-}
-
-function shortTime(value: string) {
-    if (!Number.isFinite(Date.parse(value))) return 'not recorded'
-    return new Intl.DateTimeFormat('en', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: 'Europe/Oslo',
-    }).format(new Date(value))
-}
-
-function statusLabel(source: TiAdminSource) {
-    if (source.aiReview?.status === 'approved') return 'AI approved'
-    if (source.aiReview?.status === 'rejected') return 'AI rejected'
-    if (source.aiReview?.status === 'stale') return 'AI review stale'
-    if (source.aiReview?.status === 'pending') return 'AI review pending'
-    if (source.aiReview?.status === 'needs_human') return 'human review'
-    return source.status
-}
-
-function statusClass(status: TiAdminSource['status'], aiReview?: TiAdminSource['aiReview']) {
-    if (aiReview?.status === 'approved') return 'rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-primary'
-    if (aiReview?.status === 'rejected') return 'rounded-full border border-ui-danger/35 bg-ui-danger/10 px-2 py-0.5 text-[10px] font-semibold text-ui-danger'
-    if (aiReview?.status === 'stale' || aiReview?.status === 'needs_human') return 'rounded-full border border-ui-warning/35 bg-ui-warning/10 px-2 py-0.5 text-[10px] font-semibold text-ui-warning'
-    if (aiReview?.status === 'pending') return 'rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-muted'
-    if (status === 'active') return 'rounded-full border border-ui-success/35 bg-ui-success/10 px-2 py-0.5 text-[10px] font-semibold text-ui-success'
-    if (status === 'paused') return 'rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[10px] font-semibold text-ui-muted'
-    return 'rounded-full border border-ui-warning/35 bg-ui-warning/10 px-2 py-0.5 text-[10px] font-semibold text-ui-warning'
-}
-
-function riskClass(risk: TiAdminSource['risk']) {
-    if (risk === 'restricted') return 'w-fit rounded-full border border-ui-danger/35 bg-ui-danger/10 px-2 py-0.5 text-xs font-semibold text-ui-danger'
-    if (risk === 'medium') return 'w-fit rounded-full border border-ui-warning/35 bg-ui-warning/10 px-2 py-0.5 text-xs font-semibold text-ui-warning'
-    return 'w-fit rounded-full border border-ui-success/35 bg-ui-success/10 px-2 py-0.5 text-xs font-semibold text-ui-success'
-}
-
-function riskDetail(source: TiAdminSource) {
-    if (source.risk === 'restricted') return 'safe fields'
-    if (source.risk === 'medium') return 'watch closely'
-    return source.aiReview?.status === 'approved' ? 'approved' : 'normal'
-}
+function Empty() { return <DashboardPanel className='grid min-h-112 place-items-center border-ui-border bg-ui-panel p-8 text-center'><div className='max-w-md'><div className='mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-ui-border bg-ui-canvas text-ui-primary'><Plus /></div><h2 className='mt-5 text-2xl font-semibold text-ui-text'>Add your first intelligence source</h2><p className='mt-2 text-sm leading-6 text-ui-muted'>Connect a public feed, clearweb source, darkweb metadata source, or Telegram feed to begin collection.</p><div className='mt-5 flex justify-center gap-2'><Link href='/dashboard/ti/sources?available=true' className='rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas'>Add source</Link><Link href='/dashboard/ti/control' className={tab}>Browse available sources</Link></div></div></DashboardPanel> }
+function NoMatches() { return <DashboardPanel className='grid min-h-80 place-items-center border-ui-border bg-ui-panel p-8 text-center'><div><h2 className='text-xl font-semibold text-ui-text'>No sources match these filters</h2><p className='mt-2 text-sm text-ui-muted'>Clear a filter to return to the full source inventory.</p><Link href='/dashboard/ti/sources' className='mt-4 inline-flex text-sm font-semibold text-ui-primary underline'>Clear filters</Link></div></DashboardPanel> }
+function Unavailable() { return <DashboardPanel className='grid min-h-80 place-items-center border-ui-warning/40 bg-ui-panel p-8 text-center'><div><RefreshCcw className='mx-auto h-8 w-8 text-ui-warning' /><h2 className='mt-4 text-xl font-semibold text-ui-text'>Source inventory is temporarily unavailable</h2><p className='mt-2 text-sm text-ui-muted'>The source service did not return an inventory. No zero-source result was inferred.</p><Link href='/dashboard/ti/sources' className='mt-5 inline-flex rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas'>Retry</Link></div></DashboardPanel> }
+function value(input: string | string[] | undefined) { return Array.isArray(input) ? input[0] : input }
+function relative(value: string) { const age = Date.now() - Date.parse(value); if (!Number.isFinite(age)) return 'not recorded'; const minutes = Math.max(0, Math.round(age / 60_000)); return minutes < 60 ? `${minutes}m ago` : minutes < 2_880 ? `${Math.round(minutes / 60)}h ago` : `${Math.round(minutes / 1_440)}d ago` }
+const tab = 'rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:bg-ui-raised'
+const activeTab = 'rounded-md bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas'

@@ -21,6 +21,7 @@ export default async function getRoles({ id, token }: FetchRoleProps): Promise<R
                 'id': id,
                 'Authorization': `Bearer ${token}`
             },
+            next: { revalidate: 5 },
             signal: controller.signal
         })
 

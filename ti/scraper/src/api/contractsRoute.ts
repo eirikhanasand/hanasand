@@ -42,6 +42,7 @@ export function contractIndex() {
     route("GET", "/v1/intel/actor-profiles"),
     route("GET", "/v1/intel/actor-aliases"),
     route("GET", "/v1/intel/evidence-links"),
+    route("GET", "/v1/intel/evidence-deltas"),
     route("GET", "/v1/intel/claims"),
     route("GET", "/v1/intel/claim-evidence"),
     route("GET", "/v1/intel/claim-reviews"),

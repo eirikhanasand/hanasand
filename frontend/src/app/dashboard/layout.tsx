@@ -35,8 +35,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     }
 
     return (
-        <div className='min-h-dvh bg-ui-canvas px-2 pb-2 text-ui-text'>
-            <div className='grid min-h-dvh gap-2 lg:grid-cols-[auto_minmax(0,1fr)]'>
+        <div className='h-full min-h-0 bg-ui-canvas px-2 pb-2 text-ui-text'>
+            <div className='grid h-full min-h-0 gap-2 lg:grid-cols-[auto_minmax(0,1fr)]'>
                 <DashboardSidebar
                     id={id}
                     isAdmin={isAdmin}
@@ -44,7 +44,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
                     canManageContent={canManageContent}
                     canReviewIntel={canReviewIntel}
                 />
-                <div className='min-w-0'>
+                <div className='min-h-0 min-w-0 overflow-y-auto'>
                     {impersonatingId && <ImpersonationBanner id={impersonatingId} name={impersonatingName} />}
                     {children}
                 </div>

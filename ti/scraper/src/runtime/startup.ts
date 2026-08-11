@@ -157,7 +157,8 @@ export async function startScraperRuntime() {
     timeoutMs: Number(Bun.env.TI_CANARY_TIMEOUT_MS ?? Bun.env.SCRAPER_DEFAULT_TIMEOUT_MS ?? "12000"),
     maxItemsPerTask: Number(Bun.env.TI_CANARY_MAX_ITEMS_PER_TASK ?? "4"),
     queueLimit: Number(Bun.env.TI_CANARY_MAX_QUEUE_SIZE ?? "500"),
-    sourceFamily: Bun.env.TI_PRODUCTION_SOURCE_FAMILY ?? (Bun.env.SCRAPER_ENV === "production" ? "darkweb_metadata" : undefined),
+    // Cover every eligible public source unless an explicit family is configured.
+    sourceFamily: Bun.env.TI_PRODUCTION_SOURCE_FAMILY || undefined,
     watchlistDiscoveryMaxJobs: Number(Bun.env.TI_WATCHLIST_DISCOVERY_MAX_JOBS ?? "1"),
     activateSources: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true",
     runExecutor: executeRun
@@ -209,6 +210,9 @@ export async function startScraperRuntime() {
     onCycle: (result) => logger.info("automatic evaluation cycle", { event: "automatic_evaluation.cycle", ...result }),
     onError: (error: unknown) => logger.warn("automatic evaluation cycle failed", { event: "automatic_evaluation.error", error: error instanceof Error ? error.message : String(error) })
   });
+  // ponytail: warm the common global inventory page once; later reads are served
+  // from the bounded five-second backend cache instead of repeating cold joins.
+  await store.querySourceOperationalPage?.({ generatedAt: new Date().toISOString(), limit: 50, offset: 0, executableOnly: false, sort: "source", direction: "asc" });
   const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, defaultCanaryLoop: defaultCanary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
   startupPhase("search_index_warm_queued");
   setTimeout(() => void warmSearchCaptureIndexAsync(store)

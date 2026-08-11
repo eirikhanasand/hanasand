@@ -106,6 +106,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   private lastDatabaseHealth?: DatabaseHealth;
   private databaseHealthCheckedAt = 0;
   private databaseHealthRefresh?: Promise<void>;
+  private readonly sourceOperationalPageCache = new Map<string, { expiresAt: number; value: any; refreshing?: Promise<void> }>();
   private pipelineDepth = 0;
 
   private constructor(sql: SQL, migrations: Migration[], deferHighVolumeHydration = false) {
@@ -470,11 +471,36 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return this.queryRecordsByIds("claim_reviews", "claim_id", claimIds, tenantId);
   }
 
-  async queryDwmEvidence(tenantId: string) {
-    const [sources, captures] = await Promise.all([
-      this.sql`SELECT record FROM threat_intel.sources WHERE tenant_id IS NULL OR tenant_id IS NOT DISTINCT FROM ${tenantId}`,
-      this.sql`SELECT record FROM threat_intel.captures WHERE tenant_id IS NULL OR tenant_id IS NOT DISTINCT FROM ${tenantId}`
-    ]);
+  async queryDwmEvidence(tenantId: string, terms?: string[]) {
+    const sourcesQuery = this.sql`SELECT record FROM threat_intel.sources WHERE tenant_id IS NULL OR tenant_id IS NOT DISTINCT FROM ${tenantId}`;
+    if (terms !== undefined && !terms.length) {
+      const [sources] = await Promise.all([sourcesQuery]);
+      return { sources: sources.map(readRecord), captures: [] };
+    }
+    if (terms === undefined) {
+      const [sources, captures] = await Promise.all([
+        sourcesQuery,
+        this.sql`SELECT record FROM threat_intel.captures WHERE tenant_id IS NULL OR tenant_id IS NOT DISTINCT FROM ${tenantId}`
+      ]);
+      return { sources: sources.map(readRecord), captures: captures.map(readRecord) };
+    }
+    const normalizedTerms = [...new Set(terms.map((term) => String(term).trim()).filter(Boolean))].slice(0, 20);
+    if (!normalizedTerms.length) {
+      const [sources] = await Promise.all([sourcesQuery]);
+      return { sources: sources.map(readRecord), captures: [] };
+    }
+    const predicates = normalizedTerms
+      .map((_, index) => `to_tsvector('simple', capture.record::text) @@ plainto_tsquery('simple', $${index + 1})`)
+      .join(" OR ");
+    const capturesQuery = this.sql.unsafe(`
+      SELECT capture.record
+      FROM threat_intel.captures AS capture
+      WHERE (capture.tenant_id IS NULL OR capture.tenant_id IS NOT DISTINCT FROM $${normalizedTerms.length + 1}::text)
+        AND (${predicates})
+      ORDER BY capture.collected_at DESC, capture.id DESC
+      LIMIT 500
+    `, [...normalizedTerms, tenantId]);
+    const [sources, captures] = await Promise.all([sourcesQuery, capturesQuery]);
     return { sources: sources.map(readRecord), captures: captures.map(readRecord) };
   }
 
@@ -575,27 +601,67 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     };
   }
 
-  async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; sourceId?: string; executableOnly?: boolean } ) {
-    // ponytail: row-level evidence joins are bounded to 25 per global page so
-    // the operator endpoint stays responsive; pagination still exposes every row.
-    const limit = Math.max(1, Math.min(25, Number(input.limit ?? 100)));
+  async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; sourceId?: string; executableOnly?: boolean; query?: string; family?: string; lifecycle?: string; access?: string; health?: string; output?: string; matches?: string; sort?: string; direction?: string; _skipCache?: boolean } ) {
+    const limit = Math.max(1, Math.min(100, Number(input.limit ?? 50)));
     const offset = Math.max(0, Number(input.offset ?? 0));
     const tenantId = input.tenantId ?? null;
     const sourceId = input.sourceId?.trim() || null;
     const executableOnly = input.executableOnly === true;
     if (!sourceId && !executableOnly) {
-      const summary = await this.querySourceOperationalSummary(input);
-      const pageRows = await this.sql`
-        WITH page AS (
-          SELECT id, tenant_id, record, collection_executable
-          FROM threat_intel.sources
-          WHERE tenant_id IS NOT DISTINCT FROM ${tenantId}
-          ORDER BY lower(name), id
-          LIMIT ${limit} OFFSET ${offset}
+      const { generatedAt: _generatedAt, _skipCache: _skip, ...cacheInput } = input;
+      const cacheKey = JSON.stringify(cacheInput);
+      const cached = this.sourceOperationalPageCache.get(cacheKey);
+      if (cached && !_skip) {
+        if (cached.expiresAt > Date.now()) return cached.value;
+        cached.refreshing ||= this.querySourceOperationalPage({ ...input, _skipCache: true }).then(() => undefined).catch(() => undefined);
+        return cached.value;
+      }
+      const values: unknown[] = [tenantId, input.generatedAt];
+      const bind = (value: unknown) => { values.push(value); return `$${values.length}`; };
+      const familySql = `COALESCE(source.record->'metadata'->>'sourceFamily', source.record->'metadata'->>'sourceGrowthFamily', CASE WHEN source.source_type = 'rss' THEN 'rss' WHEN source.source_type = 'telegram_public' THEN 'telegram_public' WHEN source.source_type IN ('tor_metadata', 'i2p_metadata') THEN 'darkweb_metadata' WHEN source.source_type IN ('static_web', 'dynamic_web', 'blog') THEN 'web' ELSE source.source_type END)`;
+      const query = input.query?.trim();
+      const filters = [`source.tenant_id IS NOT DISTINCT FROM $1::text`];
+      if (query) { const parameter = bind(`%${query}%`); filters.push(`(source.name ILIKE ${parameter} OR source.record::text ILIKE ${parameter})`); }
+      if (input.family) filters.push(`${familySql} = ${bind(input.family)}`);
+      if (input.lifecycle) filters.push(`source.status = ${bind(input.lifecycle)}`);
+      if (input.access) filters.push(`source.access_method = ${bind(input.access)}`);
+      if (input.output === 'yes') filters.push('scored.useful_count > 0');
+      if (input.output === 'no') filters.push('scored.useful_count = 0');
+      if (input.matches === 'yes') filters.push('scored.match_count > 0');
+      if (input.matches === 'no') filters.push('scored.match_count = 0');
+      if (input.health) filters.push(`scored.health_state = ${bind(input.health)}`);
+      const sortSql = ({ access: 'lower(source.access_method)', status: `CASE source.status WHEN 'active' THEN 0 WHEN 'candidate' THEN 1 WHEN 'review' THEN 2 WHEN 'paused' THEN 3 ELSE 4 END`, content: 'scored.last_content_at', useful: 'scored.last_useful_at', matches: 'scored.match_count', source: 'lower(source.name)' } as Record<string, string>)[input.sort ?? 'source'] ?? 'lower(source.name)';
+      const orderSql = sortSql.replaceAll('source.', '').replaceAll('scored.', '');
+      const direction = input.direction === 'desc' ? 'DESC' : 'ASC';
+      const pageRows = await this.sql.unsafe(`
+        WITH scored AS (
+          SELECT source.*,
+            ${familySql} AS source_family,
+            (SELECT max(c.collected_at) FROM threat_intel.captures c WHERE c.source_id = source.id AND c.tenant_id IS NOT DISTINCT FROM source.tenant_id) AS last_content_at,
+            (SELECT max(h.checked_at) FILTER (WHERE h.success) FROM threat_intel.source_health h WHERE h.source_id = source.id AND h.tenant_id IS NOT DISTINCT FROM source.tenant_id) AS last_success_at,
+            (SELECT max(h.checked_at) FILTER (WHERE h.success AND h.useful AND h.capture_count > 0) FROM threat_intel.source_health h WHERE h.source_id = source.id AND h.tenant_id IS NOT DISTINCT FROM source.tenant_id) AS last_useful_at,
+            (SELECT (array_agg(h.success ORDER BY h.checked_at DESC, h.id DESC))[1] FROM threat_intel.source_health h WHERE h.source_id = source.id AND h.tenant_id IS NOT DISTINCT FROM source.tenant_id) AS latest_success,
+            (SELECT count(DISTINCT alert.id) FROM threat_intel.alerts alert WHERE alert.tenant_id IS NOT NULL AND (source.tenant_id IS NULL OR alert.tenant_id IS NOT DISTINCT FROM source.tenant_id) AND (COALESCE(alert.record->'provenance'->'sourceIds', '[]'::jsonb) ? source.id OR EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(alert.record->'evidence', '[]'::jsonb)) evidence WHERE evidence->>'sourceId' = source.id))) AS match_count,
+            (SELECT count(DISTINCT h.collection_run_id) FROM threat_intel.source_health h WHERE h.source_id = source.id AND h.tenant_id IS NOT DISTINCT FROM source.tenant_id AND h.success AND h.useful AND h.capture_count > 0) AS useful_count
+          FROM threat_intel.sources source
+          WHERE source.tenant_id IS NOT DISTINCT FROM $1::text
+        ), classified AS (
+          SELECT scored.*, CASE WHEN scored.latest_success IS NULL THEN 'not observed' WHEN scored.latest_success = FALSE THEN 'failed' WHEN scored.last_success_at < $2::timestamptz - make_interval(secs => GREATEST(900, scored.crawl_frequency_seconds * 3)) THEN 'stale' ELSE 'healthy' END AS health_state
+          FROM scored
+        ), filtered AS (
+          SELECT * FROM classified
+            WHERE ${filters.map((filter) => filter.replaceAll('source.', 'classified.').replaceAll('scored.', 'classified.')).join(' AND ')}
+        ), page AS (
+          SELECT filtered.*, count(*) OVER() AS filtered_total
+          FROM filtered
+          ORDER BY ${orderSql} ${direction}, id
+          LIMIT $${values.length + 1} OFFSET $${values.length + 2}
         )
         SELECT page.record, page.collection_executable,
+          page.filtered_total,
           COALESCE(health.stats, '{}'::jsonb) AS health_stats,
-          COALESCE(captures.stats, '{}'::jsonb) AS capture_stats
+          COALESCE(captures.stats, '{}'::jsonb) AS capture_stats,
+          COALESCE(matches.stats, '{}'::jsonb) AS match_stats
         FROM page
         LEFT JOIN LATERAL (
           SELECT jsonb_build_object(
@@ -632,9 +698,46 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           WHERE captures.source_id = page.id
             AND captures.tenant_id IS NOT DISTINCT FROM page.tenant_id
         ) captures ON TRUE
-      `;
-      const total = Number(summary.summary?.sourceCount ?? 0);
-      return { rows: pageRows, totals: summary.summary, total, nextCursor: offset + pageRows.length < total ? String(offset + pageRows.length) : undefined };
+        LEFT JOIN LATERAL (
+          SELECT jsonb_build_object('customerMatchCount', count(DISTINCT alert.id)) AS stats
+          FROM threat_intel.alerts alert
+          WHERE alert.tenant_id IS NOT NULL
+            AND (page.tenant_id IS NULL OR alert.tenant_id IS NOT DISTINCT FROM page.tenant_id)
+            AND (
+              COALESCE(alert.record->'provenance'->'sourceIds', '[]'::jsonb) ? page.id
+              OR EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(COALESCE(alert.record->'evidence', '[]'::jsonb)) evidence
+                WHERE evidence->>'sourceId' = page.id
+              )
+            )
+          ) matches ON TRUE
+      `, [...values, limit, offset]);
+      const [summaryRow] = await this.sql.unsafe(`
+        SELECT count(*) AS source_count,
+          count(*) FILTER (WHERE collection_executable) AS retained_source_count,
+          count(*) FILTER (WHERE NOT collection_executable) AS inactive_source_count,
+          count(*) FILTER (WHERE collection_executable) AS active_source_count,
+          count(*) FILTER (WHERE status = 'candidate') AS candidate_source_count,
+          count(*) FILTER (WHERE status = 'rejected') AS rejected_source_count,
+          count(*) FILTER (WHERE status = 'retired') AS retired_source_count
+        FROM threat_intel.sources
+        WHERE tenant_id IS NOT DISTINCT FROM $1::text
+      `, [tenantId]);
+      const summary = { summary: {
+        sourceCount: Number((summaryRow as any)?.source_count ?? 0),
+        retainedSourceCount: Number((summaryRow as any)?.retained_source_count ?? 0),
+        inactiveSourceCount: Number((summaryRow as any)?.inactive_source_count ?? 0),
+        activeSourceCount: Number((summaryRow as any)?.active_source_count ?? 0),
+        candidateSourceCount: Number((summaryRow as any)?.candidate_source_count ?? 0),
+        rejectedSourceCount: Number((summaryRow as any)?.rejected_source_count ?? 0),
+        retiredSourceCount: Number((summaryRow as any)?.retired_source_count ?? 0),
+        measurementState: 'source_counts_only'
+      } };
+      const total = Number((pageRows[0] as any)?.filtered_total ?? 0);
+      const value = { rows: pageRows, totals: summary.summary, total, nextCursor: offset + pageRows.length < total ? String(offset + pageRows.length) : undefined };
+      this.sourceOperationalPageCache.set(cacheKey, { expiresAt: Date.now() + 5_000, value });
+      return value;
     }
     if (!sourceId && !executableOnly && limit === 1) {
       const [pageRows, totalRows] = await Promise.all([
@@ -733,6 +836,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           ${sourceReviewEvidenceMatchesSql("page")} AS automatic_review_evidence_matches,
           health.stats AS health_stats,
           captures.stats AS capture_stats,
+          matches.stats AS match_stats,
           actors.stats AS actor_stats,
           labels.stats AS label_stats
         FROM page
@@ -875,6 +979,20 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           FROM threat_intel.captures c
           WHERE c.source_id = page.id AND c.tenant_id IS NOT DISTINCT FROM page.tenant_id
         ) captures ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT jsonb_build_object('customerMatchCount', count(DISTINCT alert.id)) AS stats
+          FROM threat_intel.alerts alert
+          WHERE alert.tenant_id IS NOT NULL
+            AND (page.tenant_id IS NULL OR alert.tenant_id IS NOT DISTINCT FROM page.tenant_id)
+            AND (
+              COALESCE(alert.record->'provenance'->'sourceIds', '[]'::jsonb) ? page.id
+              OR EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(COALESCE(alert.record->'evidence', '[]'::jsonb)) evidence
+                WHERE evidence->>'sourceId' = page.id
+              )
+            )
+        ) matches ON TRUE
         LEFT JOIN LATERAL (
           SELECT jsonb_build_object(
             'count', count(DISTINCT e.normalized_value),

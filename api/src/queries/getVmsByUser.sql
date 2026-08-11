@@ -23,5 +23,7 @@ SELECT
     d.last_checked
 FROM vms v
 LEFT JOIN vm_details d ON LOWER(d.name) = LOWER(v.name)
-WHERE v.owner = $1
+WHERE (v.owner = $1
+    OR v.created_by = $1
+    OR v.access_users ? $1)
   AND d.name IS NOT NULL

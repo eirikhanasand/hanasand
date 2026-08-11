@@ -16,6 +16,7 @@ export type TiAdminSource = {
     monitoredSince: string
     cadenceMinutes: number
     retainedEvidenceCount: number
+    customerMatchCount: number
     productiveCycleCount: number
     qualifiesForBaseline: boolean
     qualificationReasons: string[]
@@ -86,6 +87,7 @@ export type TiAdminRun = {
     captures: number
     screenshots: number
     message: string
+    trigger: 'automated' | 'manual' | 'unknown'
 }
 
 export type TiAdminOverview = {
@@ -115,18 +117,33 @@ export type TiAdminOverview = {
 }
 
 type ApiPayload = Record<string, unknown>
-const TI_ADMIN_FETCH_TIMEOUT_MS = 10_000
+// Keep the dashboard responsive when a secondary history query is unhealthy.
+// Cached data is still served while the next request refreshes it.
+const TI_ADMIN_FETCH_TIMEOUT_MS = 2_000
+const useProcessCache = process.env.NODE_ENV === 'production'
+type ResourceResult = { resource: string, ok: boolean, records: ApiPayload[], total: number, nextCursor?: string, payload: ApiPayload }
+const sourceInventoryCache = new Map<string, { expiresAt: number, value: ResourceResult, refreshing?: Promise<void> }>()
 
-export async function getTiAdminOverview(tenantId: string | null = 'default', page: { cursor?: number, limit?: number, sourceId?: string, includeSamples?: boolean } = {}): Promise<TiAdminOverview> {
+export async function getTiAdminOverview(tenantId: string | null = 'default', page: { cursor?: number, limit?: number, sourceId?: string, includeSamples?: boolean, includeCandidates?: boolean, query?: string, family?: string, lifecycle?: string, access?: string, health?: string, output?: string, matches?: string, sort?: string, direction?: string } = {}): Promise<TiAdminOverview> {
     const base = tiScraperApiBase()
     const sampleFilter = page.sourceId ? { query: page.sourceId } : {}
     const resources = await Promise.all([
-        page.includeSamples === false ? emptyResource('captures') : fetchResource(base, '/v1/intel/captures', 'captures', tenantId, sampleFilter),
-        page.includeSamples === false ? emptyResource('collection-runs') : fetchResource(base, '/v1/intel/collection-runs', 'collectionRuns', tenantId, sampleFilter),
+        page.includeSamples === false ? emptyResource('captures') : fetchResource(base, '/v1/intel/captures', 'captures', tenantId, { ...sampleFilter, limit: Math.min(page.limit || 50, 50) }),
+        page.includeSamples === false ? emptyResource('collection-runs') : fetchResource(base, '/v1/intel/collection-runs', 'collectionRuns', tenantId, { ...sampleFilter, limit: Math.min(page.limit || 50, 50) }),
         fetchResource(base, '/v1/intel/source-operations', 'sources', tenantId, {
             cursor: Math.max(0, page.cursor || 0),
             limit: Math.max(1, Math.min(500, page.limit || 25)),
             sourceId: page.sourceId,
+            includeCandidates: page.includeCandidates === true,
+            query: page.query,
+            family: page.family,
+            lifecycle: page.lifecycle,
+            access: page.access,
+            health: page.health,
+            output: page.output,
+            matches: page.matches,
+            sort: page.sort,
+            direction: page.direction,
         }),
     ])
     const [captureResult, runResult, operationsResult] = resources
@@ -197,8 +214,19 @@ export function ageDays(since: string) {
     return Number.isFinite(diff) ? Math.max(1, Math.round(diff / 86400000)) : 0
 }
 
-async function fetchResource(base: string, path: string, key: string, tenantId: string | null, page: { cursor?: number, limit?: number, sourceId?: string, query?: string } = {}) {
+async function fetchResource(base: string, path: string, key: string, tenantId: string | null, page: { cursor?: number, limit?: number, sourceId?: string, query?: string, family?: string, lifecycle?: string, access?: string, health?: string, output?: string, matches?: string, sort?: string, direction?: string, includeCandidates?: boolean } = {}, skipCache = false): Promise<ResourceResult> {
     const resource = path.split('/').at(-1) || key
+    const cacheKey = JSON.stringify([resource, base, tenantId, page])
+    if (cacheKey && useProcessCache && !skipCache) {
+        const cached = sourceInventoryCache.get(cacheKey)
+        if (cached && cached.expiresAt > Date.now()) return cached.value
+        if (cached) {
+            cached.refreshing ||= fetchResource(base, path, key, tenantId, page, true).then(value => {
+                sourceInventoryCache.set(cacheKey, { expiresAt: Date.now() + 5_000, value })
+            }).catch(() => undefined)
+            return cached.value
+        }
+    }
     try {
         const target = new URL(path, base)
         if (tenantId) target.searchParams.set('tenantId', tenantId)
@@ -206,16 +234,19 @@ async function fetchResource(base: string, path: string, key: string, tenantId: 
         if (page.cursor) target.searchParams.set('cursor', String(page.cursor))
         if (page.sourceId) target.searchParams.set('sourceId', page.sourceId)
         if (page.query) target.searchParams.set('q', page.query)
+        for (const key of ['family', 'lifecycle', 'access', 'health', 'output', 'matches', 'sort', 'direction'] as const) if (page[key]) target.searchParams.set(key, page[key] as string)
+        if (page.includeCandidates) target.searchParams.set('includeCandidates', 'true')
         const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
         const response = await fetch(target, {
-            cache: 'no-store',
+            cache: 'force-cache',
+            next: { revalidate: 5 },
             headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined,
             signal: AbortSignal.timeout(TI_ADMIN_FETCH_TIMEOUT_MS),
         })
         if (!response.ok) return { resource, ok: false, records: [] as ApiPayload[], total: 0, nextCursor: undefined, payload: {} as ApiPayload }
         const payload = await response.json() as ApiPayload
         const records = recordArray(payload[key])
-        return {
+        const result = {
             resource,
             ok: true,
             records,
@@ -223,6 +254,8 @@ async function fetchResource(base: string, path: string, key: string, tenantId: 
             nextCursor: stringValue(payload.nextCursor) || undefined,
             payload,
         }
+        if (cacheKey) sourceInventoryCache.set(cacheKey, { expiresAt: Date.now() + 5_000, value: result })
+        return result
     } catch {
         return { resource, ok: false, records: [] as ApiPayload[], total: 0, nextCursor: undefined, payload: {} as ApiPayload }
     }
@@ -279,6 +312,7 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
         monitoredSince,
         cadenceMinutes,
         retainedEvidenceCount,
+        customerMatchCount: numberValue(coverage.customerMatchCount),
         productiveCycleCount: numberValue(qualification.productiveCheckCount, qualification.usefulCheckCount),
         qualifiesForBaseline: qualification.qualifies === true,
         qualificationReasons: listValue(qualification.reasons).map(stringValue).filter(Boolean),
@@ -338,15 +372,16 @@ function toCapture(record: ApiPayload): TiAdminCapture | undefined {
     const publicUrl = stringValue(record.url)
     const domain = captureDomain(metadata, publicUrl)
     const screenshotId = textValue(metadata.screenshotId, metadata.screenshotHash)
-    const actor = textValue(metadata.actor, metadata.group, metadata.threatActor, 'Not extracted')
-    const title = textValue(metadata.title, metadata.headline, metadata.claimTitle, `${actor === 'Not extracted' ? 'Evidence' : actor} capture`)
+    const sourceName = textValue(record.sourceName, sourceId)
+    const actor = textValue(metadata.actor, metadata.group, metadata.threatActor, metadata.entity, domain, 'Source observation')
+    const title = textValue(metadata.title, metadata.headline, metadata.claimTitle, `${actor} capture`)
     const publishedAt = isoValue(record.publishedAt, capturedAt)
     const pageType = textValue(metadata.pageType, metadata.kind, metadata.adapter, record.mediaType, record.storageKind, 'capture')
 
     return {
         id,
         sourceId,
-        sourceName: textValue(record.sourceName, sourceId),
+        sourceName,
         sourceFamily: textValue(record.sourceFamily, 'source'),
         domain,
         actor,
@@ -359,30 +394,43 @@ function toCapture(record: ApiPayload): TiAdminCapture | undefined {
         pageType,
         screenshotLabel: screenshotId || 'not captured',
         screenshotTakenAt: isoValue(metadata.screenshotTakenAt, capturedAt),
-        resultSummary: textValue(metadata.summary, metadata.safeExcerpt, record.redactionReason, 'Captured evidence metadata is available for review.'),
+        resultSummary: captureSummary(sourceName, pageType, metadata, record),
         metadata: captureMetadata(record, metadata),
     }
+}
+
+function captureSummary(sourceName: string, pageType: string, metadata: ApiPayload, record: ApiPayload) {
+    const summary = textValue(metadata.summary, metadata.headline, record.redactionReason)
+    if (summary && !noisyCaptureText(summary)) return summary
+    const excerpt = textValue(metadata.safeExcerpt, metadata.excerpt)
+    if (excerpt && !noisyCaptureText(excerpt)) return excerpt
+    return `Captured ${pageType} content from ${sourceName}; no structured actor or entity was identified.`
+}
+
+function noisyCaptureText(value: string) {
+    return value.length > 240 || /(?:window\.|WIZ_global_data|__NEXT_DATA__|\{\\?"|\[\\?"|<html|<script)/i.test(value)
 }
 
 function toRun(record: ApiPayload, sources: Map<string, TiAdminSource>): TiAdminRun | undefined {
     const id = stringValue(record.id)
     const sourceId = stringValue(record.sourceId) || listValue(record.sourceIds).map(item => stringValue(item)).find(Boolean) || ''
     const startedAt = isoValue(record.startedAt, record.createdAt)
-    if (!id || !sourceId || !startedAt) return undefined
+    if (!id || !startedAt) return undefined
     const source = sources.get(sourceId)
     return {
         id,
         sourceId,
-        sourceName: textValue(record.sourceName, source?.name, sourceId),
-        sourceFamily: textValue(record.sourceFamily, source?.family, 'source'),
+        sourceName: textValue(record.sourceName, source?.name, sourceId ? sourceId : 'Global source fleet'),
+        sourceFamily: textValue(record.sourceFamily, source?.family, sourceId ? 'source' : 'collection'),
         status: runStatus(record.status),
         startedAt,
         finishedAt: optionalIso(record.finishedAt, record.completedAt, record.updatedAt),
-        nextRunAt: isoValue(record.nextRunAt, source?.nextRunAt, startedAt),
+        nextRunAt: isoValue(record.nextRunAt, source?.nextRunAt),
         rows: numberValue(record.rows, record.rowCount, record.processedCount, record.itemCount),
         captures: numberValue(record.captures, record.captureCount),
         screenshots: numberValue(record.screenshots, record.screenshotCount),
         message: textValue(record.message, record.error, `Collection run ${textValue(record.status, 'recorded')}.`),
+        trigger: textValue(record.trigger, objectValue(record.metadata).trigger, '') === 'automated' ? 'automated' : textValue(record.trigger, objectValue(record.metadata).trigger, '') === 'manual' ? 'manual' : 'unknown',
     }
 }
 

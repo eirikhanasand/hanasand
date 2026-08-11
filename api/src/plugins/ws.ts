@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { registerClient } from '#utils/ws/registerClient.ts'
 import { removeClient } from '#utils/ws/removeClient.ts'
-import { gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
+import { countGptViewers, gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import run from '#db'
 import { currentBrowserAdmissionStatus, handleOnionSessionSocket, requestBrowserAdmission } from '../handlers/onionSession/ws.ts'
@@ -185,7 +185,7 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
     fastify.get<{ Params: { id: string } }>('/api/client/ws/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
         const id = (req.params as { id: string}).id
 
-        registerClient(id, connection, gpt)
+        registerClient(id, connection, gpt, countGptViewers)
         sendGptSnapshot(id, connection)
         connection.on('message', (message) => {
             handleGptMessage(id, connection, message)

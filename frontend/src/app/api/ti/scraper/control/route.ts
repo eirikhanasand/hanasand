@@ -28,7 +28,10 @@ export async function GET(request: NextRequest) {
     const identity = session.identity
     const base = scraperBase()
     const query = request.nextUrl.searchParams.get('q')?.trim() || 'APT29'
+    // The scheduler is the global operator fleet. Customer resources below
+    // remain scoped to the selected tenant.
     const tenantId = request.headers.get('x-tenant-id') || 'default'
+    const schedulerTenantId = request.headers.get('x-tenant-id') || ''
     if (!base) return unavailable('TI_SCRAPER_API_BASE is not configured.')
 
     const [
@@ -54,7 +57,7 @@ export async function GET(request: NextRequest) {
         fetchJson(base, '/v1/frontier'),
         fetchJson(base, '/v1/ops/resource-snapshot'),
         fetchJson(base, '/v1/ops/product-slo'),
-        fetchJson(base, `/v1/ops/collection-scheduler?tenantId=${encodeURIComponent(tenantId)}`, authenticated(identity)),
+        fetchJson(base, `/v1/ops/collection-scheduler${schedulerTenantId ? `?tenantId=${encodeURIComponent(schedulerTenantId)}` : ''}`, authenticated(identity)),
         fetchJson(base, '/v1/dwm/exposure-parser/health'),
         fetchJson(base, `/v1/quality/evaluate?q=${encodeURIComponent(query)}`),
         fetchJson(base, `/v1/public-channels/status?query=${encodeURIComponent(query)}&tenantId=${encodeURIComponent(tenantId)}`),
@@ -149,7 +152,7 @@ export async function POST(request: NextRequest) {
     if (body.action === 'scheduler_run_now' || body.action === 'scheduler_pause' || body.action === 'scheduler_resume') {
         return forward(base, '/v1/ops/collection-scheduler', {
             action: body.action === 'scheduler_run_now' ? 'run_now' : body.action === 'scheduler_pause' ? 'pause' : 'resume',
-            tenantId: 'default',
+            // Operator collection control targets the global source fleet.
             approvedBy: 'dashboard/ti/control',
             reason: 'operator source scheduler control',
         }, identity)

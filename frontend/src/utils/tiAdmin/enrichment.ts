@@ -1,4 +1,4 @@
-import config from '@/config'
+import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
 
 export type TiEnrichmentStatus = 'ready' | 'running' | 'queued' | 'review'
 
@@ -28,6 +28,17 @@ export type TiActivityEvent = {
     tone: 'ok' | 'watch' | 'bad'
 }
 
+export type TiProfileUpdate = {
+    id: string
+    actorId: string
+    observedAt: string
+    sourceId: string
+    captureIds: string[]
+    kind: string
+    changedFields: string[]
+    summary: string
+}
+
 export type TiManagementAuditEvent = {
     id: string
     happenedAt: string
@@ -41,7 +52,7 @@ export type TiManagementAuditEvent = {
 export type TiEnrichmentOverview = {
     generatedAt: string
     worker: {
-        state: 'warming' | 'running' | 'idle' | 'error' | 'unavailable'
+        state: 'warming' | 'running' | 'idle' | 'ready' | 'error' | 'unavailable'
         mode: string
         intervalSeconds: number
         batchSize: number
@@ -53,6 +64,7 @@ export type TiEnrichmentOverview = {
     updatedActors: TiEnrichedActor[]
     queuedActors: TiEnrichedActor[]
     activity: TiActivityEvent[]
+    updates: TiProfileUpdate[]
     auditLog: TiManagementAuditEvent[]
     stats: {
         updatedLastHour: number
@@ -121,141 +133,182 @@ export type TiPipelineOverview = {
     }>
 }
 
-type ApiWarmActor = {
-    actor: string
-    status?: TiEnrichmentStatus
-    confidence?: number
-    aliases?: string[]
-    changedFields?: string[]
-    sourceLinks?: Array<{ name: string, url: string }>
-    automationEvidence?: string[]
-    plannedWork?: string[]
-    refreshedAt?: string
-    nextRefreshAt?: string
-    refreshCount?: number
-}
-
-type ApiQueuedActor = Omit<ApiWarmActor, 'actor' | 'refreshedAt'> & {
-    id?: string
-    name?: string
-    lastUpdatedAt?: string
-}
-
-type ApiOverview = Omit<TiEnrichmentOverview, 'updatedActors' | 'queuedActors'> & {
-    updatedActors?: ApiWarmActor[]
-    queuedActors?: ApiQueuedActor[]
-    pipeline?: TiPipelineOverview
-}
-
-const TI_ENRICHMENT_FETCH_TIMEOUT_MS = 800
-
 export async function getTiEnrichmentOverview(): Promise<TiEnrichmentOverview> {
-    try {
-        const response = await fetch(`${config.url.api}/ti/enrichment`, {
-            cache: 'no-store',
-            next: { revalidate: 0 },
-            signal: AbortSignal.timeout(TI_ENRICHMENT_FETCH_TIMEOUT_MS),
-        })
-        if (!response.ok) {
-            return unavailableOverview(`API returned ${response.status}`)
-        }
+    const [profiles, updates] = await Promise.all([
+        getPersistedActorProfiles(),
+        getPersistedProfileUpdates(),
+    ])
+    return passiveOverview(profiles, updates)
+}
 
-        const overview = await response.json() as ApiOverview
-        return {
-            generatedAt: overview.generatedAt || new Date().toISOString(),
-            worker: overview.worker || unavailableOverview('Missing worker state').worker,
-            updatedActors: (overview.updatedActors || []).map(mapUpdatedActor),
-            queuedActors: (overview.queuedActors || []).map(mapQueuedActor),
-            activity: overview.activity || [],
-            auditLog: overview.auditLog || [],
-            stats: {
-                updatedLastHour: overview.stats?.updatedLastHour ?? 0,
-                queued: overview.stats?.queued ?? 0,
-                auditedEvents: overview.stats?.auditedEvents ?? 0,
-                automaticCoverage: overview.stats?.automaticCoverage ?? 0,
-                totalRefreshes: overview.stats?.totalRefreshes ?? 0,
-            },
-            pipeline: overview.pipeline,
-        }
-    } catch (error) {
-        return unavailableOverview(error instanceof Error ? error.message : String(error))
+type PersistedActorProfile = {
+    id: string
+    canonicalName: string
+    aliases: string[]
+    confidence: number
+    firstSeenAt: string
+    lastSeenAt: string
+    updatedAt: string
+    sourceIds: string[]
+    captureIds: string[]
+    evidenceCount: number
+    actorType: string
+}
+
+async function getPersistedActorProfiles(): Promise<PersistedActorProfile[]> {
+    try {
+        const base = tiScraperApiBase()
+        const target = new URL('/v1/intel/actor-profiles', base)
+        target.searchParams.set('tenantId', 'default')
+        target.searchParams.set('limit', '100')
+        const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
+        const response = await fetch(target, {
+            cache: 'force-cache',
+            next: { revalidate: 5 },
+            headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined,
+            signal: AbortSignal.timeout(5_000),
+        })
+        if (!response.ok) return []
+        const payload = await response.json() as { actorProfiles?: unknown[] }
+        return (payload.actorProfiles || []).map(profile => persistedProfile(profile)).filter((profile): profile is PersistedActorProfile => Boolean(profile))
+    } catch {
+        return []
     }
+}
+
+async function getPersistedProfileUpdates(): Promise<TiProfileUpdate[]> {
+    try {
+        const target = new URL('/v1/intel/evidence-deltas', tiScraperApiBase())
+        target.searchParams.set('tenantId', 'default')
+        target.searchParams.set('q', 'actor_profile')
+        target.searchParams.set('limit', '100')
+        const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
+        const response = await fetch(target, { cache: 'force-cache', next: { revalidate: 5 }, headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined, signal: AbortSignal.timeout(5_000) })
+        if (!response.ok) return []
+        const payload = await response.json() as { evidenceDeltas?: unknown[] }
+        return (payload.evidenceDeltas || []).map(profileUpdate).filter((update): update is TiProfileUpdate => Boolean(update))
+    } catch {
+        return []
+    }
+}
+
+function profileUpdate(value: unknown): TiProfileUpdate | undefined {
+    if (!value || typeof value !== 'object') return undefined
+    const record = value as Record<string, unknown>
+    const id = stringValue(record.id)
+    const actorId = stringValue(record.subjectId)
+    const observedAt = stringValue(record.observedAt)
+    if (!id || !actorId || !observedAt || record.subjectType !== 'actor_profile') return undefined
+    const metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata as Record<string, unknown> : {}
+    const aliases = listValue(metadata.aliasesAdded).map(stringValue).filter(Boolean)
+    const fields = Object.keys(metadata.characterization && typeof metadata.characterization === 'object' ? metadata.characterization as object : {})
+    const changedFields = [...new Set([...aliases.map(alias => `alias: ${alias}`), ...fields])]
+    return { id, actorId, observedAt, sourceId: stringValue(record.sourceId), captureIds: listValue(record.captureIds).map(stringValue).filter(Boolean), kind: stringValue(record.kind, 'updated'), changedFields, summary: changedFields.length ? changedFields.join(' · ') : 'New retained evidence linked to this profile.' }
+}
+
+function persistedProfile(value: unknown): PersistedActorProfile | undefined {
+    if (!value || typeof value !== 'object') return undefined
+    const profile = value as Record<string, unknown>
+    const id = stringValue(profile.id)
+    const canonicalName = stringValue(profile.canonicalName, profile.name)
+    if (!id || !canonicalName) return undefined
+    return {
+        id,
+        canonicalName,
+        aliases: listValue(profile.aliases).map(stringValue).filter(Boolean),
+        confidence: numberValue(profile.confidence),
+        firstSeenAt: stringValue(profile.firstSeenAt),
+        lastSeenAt: stringValue(profile.lastSeenAt, profile.updatedAt),
+        updatedAt: stringValue(profile.updatedAt, profile.lastSeenAt),
+        sourceIds: listValue(profile.sourceIds).map(stringValue).filter(Boolean),
+        captureIds: listValue(profile.captureIds).map(stringValue).filter(Boolean),
+        evidenceCount: numberValue(profile.evidenceCount),
+        actorType: stringValue(profile.actorType, 'actor'),
+    }
+}
+
+function passiveOverview(profiles: PersistedActorProfile[], updates: TiProfileUpdate[]): TiEnrichmentOverview {
+    const actors = new Map<string, TiEnrichedActor>()
+    for (const profile of profiles) {
+        const links = profile.sourceIds.map(sourceId => ({ name: sourceId, url: '' }))
+        actors.set(profile.id, {
+            id: profile.id,
+            name: profile.canonicalName,
+            aliases: profile.aliases,
+            status: 'ready',
+            confidence: profile.confidence,
+            lastUpdatedAt: profile.updatedAt || profile.lastSeenAt,
+            nextRefreshAt: profile.lastSeenAt,
+            changedFields: [],
+            sourceLinks: uniqueSources(links),
+            automationEvidence: profile.captureIds,
+            plannedWork: [],
+            refreshCount: profile.evidenceCount,
+        })
+    }
+    const activity = updates.map((update) => {
+        const actor = actors.get(update.actorId)
+        const source = update.sourceId || 'retained evidence'
+        return {
+            id: update.id,
+            actorId: update.actorId,
+            actorName: actor?.name || update.actorId,
+            happenedAt: update.observedAt,
+            title: update.summary,
+            detail: update.changedFields.join(' · ') || 'Profile evidence updated.',
+            source,
+            tone: 'ok' as const,
+        }
+    })
+    const updatedLastHour = activity.filter((event) => Date.now() - Date.parse(event.happenedAt) <= 3_600_000).length
+    return {
+        generatedAt: new Date().toISOString(),
+        worker: {
+            state: 'ready',
+            mode: 'automated monitoring',
+            intervalSeconds: 300,
+            batchSize: profiles.length,
+            lastSweepStartedAt: updates[0]?.observedAt || null,
+            lastSweepFinishedAt: updates[0]?.observedAt || null,
+            lastError: null,
+            cursor: 0,
+        },
+        updatedActors: [...actors.values()],
+        queuedActors: [],
+        activity,
+        updates,
+        auditLog: [],
+        stats: {
+            updatedLastHour,
+            queued: 0,
+            auditedEvents: 0,
+            automaticCoverage: profiles.length,
+            totalRefreshes: activity.length,
+        },
+    }
+}
+
+function uniqueSources(sources: Array<{ name: string, url: string }>) {
+    return [...new Map(sources.map(source => [`${source.name}:${source.url}`, source])).values()]
+}
+
+function stringValue(...values: unknown[]) {
+    return values.map(value => typeof value === 'string' ? value.trim() : '').find(Boolean) || ''
+}
+
+function listValue(value: unknown) {
+    return Array.isArray(value) ? value : []
+}
+
+function numberValue(...values: unknown[]) {
+    for (const value of values) {
+        const number = Number(value)
+        if (Number.isFinite(number) && number >= 0) return number
+    }
+    return 0
 }
 
 export async function getTiActorById(id: string) {
     const overview = await getTiEnrichmentOverview()
     return [...overview.updatedActors, ...overview.queuedActors].find(actor => actor.id === id) || null
-}
-
-function mapUpdatedActor(actor: ApiWarmActor): TiEnrichedActor {
-    const id = actor.actor.toLowerCase().replace(/\s+/g, '-')
-    return {
-        id,
-        name: titleCaseWords(actor.actor),
-        aliases: actor.aliases || [],
-        status: actor.status === 'queued' ? 'queued' : 'ready',
-        confidence: actor.confidence ?? 0,
-        lastUpdatedAt: actor.refreshedAt || new Date(0).toISOString(),
-        nextRefreshAt: actor.nextRefreshAt || new Date().toISOString(),
-        changedFields: actor.changedFields || [],
-        sourceLinks: actor.sourceLinks || [],
-        automationEvidence: actor.automationEvidence || [],
-        plannedWork: actor.plannedWork || [],
-        refreshCount: actor.refreshCount,
-    }
-}
-
-function mapQueuedActor(actor: ApiQueuedActor): TiEnrichedActor {
-    const rawName = actor.name || actor.id || 'Queued actor'
-    const id = (actor.id || rawName).toLowerCase().replace(/\s+/g, '-')
-    return {
-        id,
-        name: rawName,
-        aliases: actor.aliases || [],
-        status: 'queued',
-        confidence: actor.confidence ?? 0,
-        lastUpdatedAt: actor.lastUpdatedAt || new Date().toISOString(),
-        nextRefreshAt: actor.nextRefreshAt || new Date().toISOString(),
-        changedFields: actor.changedFields || [],
-        sourceLinks: actor.sourceLinks || [],
-        automationEvidence: actor.automationEvidence || [],
-        plannedWork: actor.plannedWork || [],
-        refreshCount: actor.refreshCount,
-    }
-}
-
-function unavailableOverview(reason: string): TiEnrichmentOverview {
-    return {
-        generatedAt: '',
-        worker: {
-            state: 'unavailable',
-            mode: 'API actor refresh worker unavailable',
-            intervalSeconds: 60,
-            batchSize: 0,
-            lastSweepStartedAt: null,
-            lastSweepFinishedAt: null,
-            lastError: reason,
-            cursor: 0,
-        },
-        updatedActors: [],
-        queuedActors: [],
-        activity: [],
-        auditLog: [],
-        stats: {
-            updatedLastHour: 0,
-            queued: 0,
-            auditedEvents: 1,
-            automaticCoverage: 0,
-            totalRefreshes: 0,
-        },
-        pipeline: undefined,
-    }
-}
-
-function titleCaseWords(value: string) {
-    return value
-        .split(/[\s-]+/)
-        .filter(Boolean)
-        .map(word => word.toUpperCase().startsWith('APT') ? word.toUpperCase() : `${word.slice(0, 1).toUpperCase()}${word.slice(1)}`)
-        .join(' ')
 }

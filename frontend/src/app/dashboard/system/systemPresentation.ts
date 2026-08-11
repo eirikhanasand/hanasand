@@ -5,6 +5,28 @@ export type MetricState = {
     reason?: string
 }
 
+const CONTAINER_LABELS: Record<string, string> = {
+    hanasand: 'Hanasand web app',
+    hanasand_api: 'Hanasand API',
+    hanasand_database: 'Hanasand database',
+    hanasand_mail: 'Hanasand mail',
+    hanasand_ti_scraper: 'Threat intelligence collector',
+    hanasand_ai_parser_bridge: 'AI parser bridge',
+    hanasand_ai_model_client: 'AI model client',
+    hanasand_browser_worker: 'Browser worker',
+    hanasand_browser_turn: 'Browser networking',
+    hanasand_onion_tor: 'Onion/Tor gateway',
+    'hanasand-deploy-path-guard-1': 'Deployment path guard',
+}
+
+export function containerDisplayName(name: string): string {
+    const normalized = name.replace(/^\//, '')
+    return CONTAINER_LABELS[normalized] || normalized
+        .replace(/[-_](\d+)$/, '')
+        .replace(/[-_]+/g, ' ')
+        .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
 export function formatBytes(bytes: number | null | undefined): string {
     if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes < 0) return 'Metering'
     const units = ['B', 'KB', 'MB', 'GB', 'TB']

@@ -28,9 +28,9 @@ type DwmWatchlist = {
   orgMembershipContext?: RuntimeDwmWatchlist["orgMembershipContext"];
 };
 
-async function queryDwmEvidence(options: ApiServerOptions, tenantId: string): Promise<{ sources: SourceRecord[]; captures: RawCapture[] }> {
+async function queryDwmEvidence(options: ApiServerOptions, tenantId: string, terms?: string[]): Promise<{ sources: SourceRecord[]; captures: RawCapture[] }> {
   const query = (options.store as any).queryDwmEvidence;
-  if (typeof query === "function") return query.call(options.store, tenantId);
+  if (typeof query === "function") return query.call(options.store, tenantId, terms);
   return { sources: options.store.listSources(), captures: options.store.listCaptures() };
 }
 

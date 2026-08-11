@@ -13,6 +13,7 @@ export default async function getDockerContainers({ id, token }: DockerContainer
                 'Authorization': `Bearer ${token}`,
                 id
             },
+            next: { revalidate: 5 },
             timeoutMs: config.abortTimeout,
             retries: 2,
         })

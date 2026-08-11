@@ -3,6 +3,12 @@ const OPENAI_BASE = process.env.HANASAND_AI_OPENAI_BASE ?? "http://127.0.0.1:180
 const MODEL = process.env.HANASAND_AI_MODEL ?? "hanasand";
 const CLIENT_NAME = process.env.HANASAND_AI_CLIENT_NAME ?? "hanasand-inspur";
 const HEALTH_PORT = Number(process.env.HANASAND_AI_CLIENT_HEALTH_PORT ?? "18182");
+const MODEL_LANE_PORTS = (process.env.HANASAND_AI_MODEL_LANE_PORTS ?? "18081,18082,18083,18084,18085,18086,18087,18088")
+  .split(",")
+  .map((value) => Number(value.trim()))
+  .filter((value) => Number.isInteger(value) && value > 0);
+const MAX_REQUESTS = Math.max(1, Number(process.env.HANASAND_AI_MODEL_MAX_REQUESTS ?? "4"));
+const CONTEXT_MAX_TOKENS = Math.max(0, Number(process.env.HANASAND_AI_MODEL_CONTEXT_MAX_TOKENS ?? "32768"));
 
 let socket;
 let connected = false;
@@ -13,6 +19,7 @@ let lastModelCheck = null;
 let heartbeat;
 let modelCheckInFlight = false;
 let modelHealth = { ready: false, blocker: "not_checked", checkedAt: null };
+let modelLanes = [];
 let reconnectTimer;
 let reconnectDelayMs = 2_000;
 
@@ -172,6 +179,12 @@ function sendClientUpdate(status, overrides = {}) {
       ram: [],
       cpu: [],
       gpu: [],
+      lanes: modelLanes,
+      power: {
+        totalWatts: 0,
+        monthlyKwh: 0,
+        sampledAt: new Date().toISOString()
+      },
       model: {
         conversationId: overrides.conversationId ?? null,
         status,
@@ -197,19 +210,54 @@ function send(payload) {
 
 async function checkModel() {
   try {
-    const response = await fetch(new URL("/v1/models", OPENAI_BASE), {
-      cache: "no-store",
-      signal: AbortSignal.timeout(3000)
-    });
-    const body = await response.json().catch(() => undefined);
-    const models = Array.isArray(body?.data) ? body.data.map((item) => item.id).filter(Boolean) : [];
-    const modelAvailable = models.includes(MODEL) || models.length === 0;
+    const endpoints = MODEL_LANE_PORTS.length
+      ? MODEL_LANE_PORTS.map((port) => `http://127.0.0.1:${port}`)
+      : [OPENAI_BASE];
+    const results = await Promise.all(endpoints.map(async (baseUrl, index) => {
+      try {
+        const response = await fetch(new URL("/v1/models", baseUrl), {
+          cache: "no-store",
+          signal: AbortSignal.timeout(1500)
+        });
+        const body = await response.json().catch(() => undefined);
+        const models = Array.isArray(body?.data) ? body.data.map((item) => item.id).filter(Boolean) : [];
+        return { baseUrl, index, ok: response.ok, models };
+      } catch {
+        return { baseUrl, index, ok: false, models: [] };
+      }
+    }));
+    const live = results.filter((result) => result.ok && (result.models.includes(MODEL) || result.models.length === 0));
+    const models = live[0]?.models ?? [];
+    const modelAvailable = live.length > 0;
+    modelLanes = live.map((lane) => ({
+      id: `lane-${lane.index}`,
+      index: lane.index,
+      url: lane.baseUrl,
+      model: MODEL,
+      label: `GPU lane ${lane.index + 1}`,
+      tier: "fast",
+      gpuIndex: lane.index,
+      gpuIndices: [lane.index],
+      gpuName: `GPU ${lane.index + 1}`,
+      gpuLoad: 0,
+      activeRequests: 0,
+      maxRequests: MAX_REQUESTS,
+      queuedRequests: 0,
+      availableRequests: MAX_REQUESTS,
+      contextMaxTokens: CONTEXT_MAX_TOKENS,
+      memoryUsedMb: 0,
+      memoryTotalMb: 0,
+      powerDrawWatts: 0,
+      powerLimitWatts: 0,
+      temperatureC: 0
+    }));
     lastModelCheck = new Date().toISOString();
     return {
-      ready: response.ok && modelAvailable,
-      httpStatus: response.status,
+      ready: modelAvailable,
+      httpStatus: live.length ? 200 : 503,
       models,
       modelAvailable,
+      liveLanes: modelLanes.length,
       checkedAt: lastModelCheck
     };
   } catch (error) {
@@ -227,6 +275,7 @@ function refreshModelHealth() {
   void checkModel()
     .then((health) => {
       modelHealth = health;
+      sendClientUpdate(health.ready ? "idle" : "error", health.ready ? {} : { lastError: health.blocker ?? "No model lane is responding." });
     })
     .finally(() => {
       modelCheckInFlight = false;

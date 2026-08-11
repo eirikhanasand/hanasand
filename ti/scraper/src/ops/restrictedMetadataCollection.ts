@@ -62,7 +62,8 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
         ? productiveContentTimes.sort().at(-1) ?? checkedAt
         : currentSource.health?.lastContentAt;
       const transportCanary = currentSource.metadata?.transportCanary === true;
-      const managedCandidate = currentSource.metadata?.restrictedMetadataCandidate === true;
+      const managedCandidate = currentSource.metadata?.restrictedMetadataCandidate === true
+        && currentSource.metadata?.sourcePortfolioProductionEnabled !== true;
       const productiveCycles = transportCanary ? [] : currentProductiveSourceCycles(options.store, currentSource, checkedAt);
       const sustained = hasApprovedAutomaticSourceReview(currentSource)
         && automaticSourceReviewEvidenceBindingsMatch(currentSource, (id) => options.store.getCapture?.(id))

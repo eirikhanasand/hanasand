@@ -16,15 +16,16 @@ test('pricing and subscription use one truthful commercial access contract', asy
 
     expect(pricing).toContain('import { commercialAccessPlans } from \'@/utils/commercialAccess\'')
     expect(subscription).toContain('import { commercialAccessPlans } from \'@/utils/commercialAccess\'')
-    expect(contract).toContain('priceLabel: \'No card required\'')
-    expect(contract).toContain('priceLabel: \'Sales scoped\'')
-    expect(contract).toContain('Coverage and limits recorded in the order form')
-    expect(pricing).toContain('Console evaluation is self-serve.')
-    expect(contract).toContain('Organization-scoped 90-day API key')
-    expect(contract).toContain('/register?path=%2Fdevelopers%23api-access')
-    expect(subscription).toContain('Not a paid subscription')
+    expect(contract).toContain('priceNok: 299')
+    expect(contract).toContain('priceNok: 999')
+    expect(contract).toContain('100 searches per day')
+    expect(contract).toContain('25 watch terms')
+    expect(subscription).toContain('Buy now')
+    expect(subscription).toContain('/api/billing/checkout?plan=')
+    expect(subscription).not.toContain('Sales scoped')
+    expect(subscription).not.toContain('Scope monitoring')
 
-    for (const unsupported of ['$49', '$149', '$399', '$499', '5 evaluation watch terms', '250 watched names', '1,500 watched names', 'Priority analyst review']) {
+    for (const unsupported of ['$49', '$149', '$399', '$499', '5 evaluation watch terms', '250 watched names', '1,500 watched names', 'Priority analyst review', 'Sales scoped', 'order form']) {
         expect(pricing).not.toContain(unsupported)
         expect(subscription).not.toContain(unsupported)
         expect(contract).not.toContain(unsupported)

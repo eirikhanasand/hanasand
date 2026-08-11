@@ -18,13 +18,13 @@ export default async function TiActivityPage() {
         <DashboardPage>
             <DashboardHeader
                 eyebrow='Threat intelligence'
-                title='Recent activity'
-                description='Actor changes, linked-source updates, and context checks ready for review.'
+                title='Latest activity'
+                description='Automated collection and profile updates observed by Hanasand.'
             />
 
             <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
                 <Metric title='Events' value={`${sortedActivity.length}`} icon={<Activity className='h-4 w-4' />} />
-                <Metric title='Events to review' value={`${badEvents.length + watchEvents.length}`} tone={badEvents.length ? 'bad' : watchEvents.length ? 'watch' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
+                <Metric title='Monitoring signals' value={`${badEvents.length + watchEvents.length}`} tone={badEvents.length ? 'bad' : watchEvents.length ? 'watch' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
                 <Metric title='Actors updated' value={`${updatedActors.length}`} icon={<CheckCircle2 className='h-4 w-4' />} />
                 <Metric title='Updated last hour' value={`${stats.updatedLastHour}`} icon={<Radio className='h-4 w-4' />} />
                 <Metric title='Last event' value={lastEvent ? shortTime(lastEvent.happenedAt) : 'Checking'} icon={<Clock3 className='h-4 w-4' />} />
@@ -34,8 +34,8 @@ export default async function TiActivityPage() {
                 <div className='border-b border-ui-border bg-ui-raised px-4 py-3'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
                         <div>
-                            <h2 className='text-base font-semibold text-ui-text'>Recent changes</h2>
-                            <p className='mt-1 text-sm text-ui-muted'>Newest actor changes with linked sources first.</p>
+                            <h2 className='text-base font-semibold text-ui-text'>Latest observations</h2>
+                            <p className='mt-1 text-sm text-ui-muted'>Newest automated observations with linked sources first.</p>
                         </div>
                         <div className='flex flex-wrap gap-2 text-xs font-semibold'>
                             <StatusPill label={operationalStateLabel(worker.state)} tone={worker.state === 'error' || worker.state === 'unavailable' ? 'bad' : worker.state === 'running' ? 'ok' : 'watch'} />
@@ -53,7 +53,7 @@ export default async function TiActivityPage() {
                                 <th className='px-4 py-2'>Actor</th>
                                 <th className='px-4 py-2'>Change</th>
                                 <th className='px-4 py-2'>Source</th>
-                                <th className='px-4 py-2'>Review</th>
+                                <th className='px-4 py-2'>State</th>
                                 <th className='px-4 py-2 text-right'>Action</th>
                             </tr>
                         </thead>
@@ -72,7 +72,7 @@ export default async function TiActivityPage() {
                                         </div>
                                     </td>
                                     <td className='px-4 py-2.5 text-ui-muted'>{event.source}</td>
-                                    <td className='px-4 py-2.5'><StatusPill label={event.tone === 'bad' ? 'review' : event.tone === 'watch' ? 'watch' : 'ok'} tone={event.tone} /></td>
+                                    <td className='px-4 py-2.5'><StatusPill label={event.tone === 'bad' ? 'attention' : event.tone === 'watch' ? 'watching' : 'observed'} tone={event.tone} /></td>
                                     <td className='px-4 py-2.5 text-right'>
                                         <Link href={`/ti/${encodeURIComponent(event.actorId)}`} className='inline-flex h-8 items-center gap-1 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text hover:border-ui-primary'>
                                             Open
@@ -83,7 +83,7 @@ export default async function TiActivityPage() {
                             ))}
                             {!sortedActivity.length ? (
                                 <tr>
-                                    <td colSpan={6} className='px-4 py-8 text-center text-sm text-ui-muted'>Worker events, source decisions, and profile-cache writes stream here.</td>
+                                    <td colSpan={6} className='px-4 py-8 text-center text-sm text-ui-muted'>Automated collection is running; new observations are recorded automatically.</td>
                                 </tr>
                             ) : null}
                         </tbody>
@@ -93,15 +93,15 @@ export default async function TiActivityPage() {
 
             <div className='grid gap-3 xl:grid-cols-[0.9fr_1.1fr]'>
                 <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
-                    <h2 className='text-base font-semibold text-ui-text'>Needs attention</h2>
+                    <h2 className='text-base font-semibold text-ui-text'>Monitoring status</h2>
                     <div className='mt-3 grid gap-2'>
                         {[...badEvents, ...watchEvents].slice(0, 6).map(event => <AttentionRow key={event.id} event={event} />)}
-                        {!badEvents.length && !watchEvents.length ? <p className='rounded-md border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>Review stream is clear.</p> : null}
+                        {!badEvents.length && !watchEvents.length ? <p className='rounded-md border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>No active monitoring issues.</p> : null}
                     </div>
                 </DashboardPanel>
 
                 <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
-                    <h2 className='text-base font-semibold text-ui-text'>Recently updated actors</h2>
+                    <h2 className='text-base font-semibold text-ui-text'>Recently observed actors</h2>
                     <div className='mt-3 grid gap-2 md:grid-cols-2'>
                         {updatedActors.slice(0, 8).map(actor => (
                             <Link key={actor.id} href={`/ti/${encodeURIComponent(actor.id)}`} className='rounded-md border border-ui-border bg-ui-raised p-3 hover:border-ui-primary'>
@@ -144,7 +144,7 @@ function AttentionRow({ event }: { event: TiActivityEvent }) {
                     <p className='text-xs font-semibold uppercase text-ui-muted'>{event.actorName}</p>
                     <p className='mt-1 font-semibold text-ui-text'>{event.title}</p>
                 </div>
-                <StatusPill label={event.tone === 'bad' ? 'review' : 'watch'} tone={event.tone} />
+                <StatusPill label={event.tone === 'bad' ? 'attention' : 'watching'} tone={event.tone} />
             </div>
             <p className='mt-2 text-sm text-ui-muted'>{event.detail}</p>
             <div className='mt-2 grid gap-1.5 text-xs text-ui-muted sm:grid-cols-2'>
