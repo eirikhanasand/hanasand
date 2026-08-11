@@ -42,7 +42,9 @@ export default function DisplayClient({
                     <div>
                         <h3 className='text-lg font-semibold text-ui-text/90'>{client.name}</h3>
                         <p className='text-sm text-ui-text/50'>
-                            {sensorCount ? `${client.ram.length} RAM, ${client.cpu.length} CPU, ${client.gpu.length} GPU sensors` : 'telemetry offline'}
+                            {sensorCount
+                                ? `${client.ram.length} RAM, ${client.cpu.length} CPU, ${client.gpu.length} GPU sensors`
+                                : lanes.length ? `${lanes.length} model lanes connected` : 'telemetry offline'}
                         </p>
                     </div>
                     <div className='flex flex-wrap items-center gap-2'>
@@ -167,6 +169,7 @@ function ModelStat({ title, value, highlight }: { title: string, value: string, 
 
 function operationalState(client: GPT_Client, laneMax: number, sensorCount: number) {
     if (!sensorCount && !laneMax) return { label: 'no telemetry', tone: 'preparing' }
+    if (!sensorCount && laneMax) return { label: 'connected', tone: 'idle' }
     if (client.model.status === 'error' && laneMax > 0) return { label: 'ready', tone: 'idle' }
     return { label: operationalStateLabel(client.model.status), tone: client.model.status }
 }

@@ -325,7 +325,6 @@ function EconomicsPanel({ economics, error, aiContainers, containerError }: { ec
 
             <AIContainerHealth containers={aiContainers} error={containerError} />
             <ReliabilityPanel reliability={economics.reliability} />
-            <OperationsPanel readiness={economics.commercialReadiness} />
         </section>
     )
 }
@@ -509,116 +508,6 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
             </div>
         </div>
     )
-}
-
-function OperationsPanel({ readiness }: { readiness: AIEconomics['commercialReadiness'] }) {
-    const tone = readiness.overallState === 'commercially_ready'
-        ? 'bg-ui-success/10 text-ui-success outline-ui-success/25'
-        : readiness.overallState === 'evidence_gaps'
-            ? 'bg-ui-primary/10 text-ui-primary outline-ui-primary/25'
-            : 'bg-ui-warning/10 text-ui-warning outline-ui-warning/25'
-    const counts = [
-        ['live', readiness.achievedCount],
-        ['review', readiness.partialCount],
-        ['no signal', readiness.internalActionCount],
-        ['tracked', `${readiness.measurableCount}/${readiness.totalCount}`],
-    ]
-
-    return (
-        <div className='rounded-lg border border-ui-border bg-ui-raised p-4' id='ai-operations' data-ai-operations>
-            <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
-                <div>
-                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-ui-muted'>Operations</p>
-                    <h3 className='mt-1 text-lg font-semibold text-ui-text'>Lane control table</h3>
-                </div>
-                <div className='flex flex-wrap items-center gap-2'>
-                    <span className={`rounded-md px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] outline ${tone}`}>{operationsStateLabel(readiness.overallState)}</span>
-                    {counts.map(([label, value]) => (
-                        <span key={label} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs text-ui-muted'>
-                            <b className='font-semibold text-ui-text'>{value}</b> {label}
-                        </span>
-                    ))}
-                </div>
-            </div>
-
-            <div className='mt-4 overflow-x-auto rounded-lg border border-ui-border' data-ai-lane-table>
-                <table className='min-w-245 w-full text-left text-xs'>
-                    <thead className='bg-ui-panel text-ui-muted'>
-                        <tr>
-                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Lane</th>
-                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>State</th>
-                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Owner</th>
-                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Runner</th>
-                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Last signal</th>
-                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Next command</th>
-                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Controls</th>
-                        </tr>
-                    </thead>
-                    <tbody className='divide-y divide-ui-border'>
-                        {readiness.items.map((item) => (
-                            <tr key={item.id} className='bg-ui-raised align-top'>
-                                <td className='px-3 py-3'>
-                                    <p className='font-semibold text-ui-text'>{item.priority}</p>
-                                    <p className='mt-1 max-w-44 text-ui-muted'>{item.label}</p>
-                                </td>
-                                <td className='px-3 py-3'><ReadinessBadge status={item.status} measurable={item.measurable} /></td>
-                                <td className='px-3 py-3 text-ui-muted'>{item.owner}</td>
-                                <td className='px-3 py-3'>
-                                    <p className='max-w-48 truncate font-mono text-[11px] text-ui-muted' title={item.control}>{operationsCopy(item.control)}</p>
-                                </td>
-                                <td className='px-3 py-3'>
-                                    <p className='max-w-56 truncate text-ui-muted' title={item.lastAttempt}>{item.lastAttempt}</p>
-                                </td>
-                                <td className='px-3 py-3'>
-                                    <p className='max-w-72 truncate text-ui-text' title={item.action}>{operationsCopy(item.action)}</p>
-                                </td>
-                                <td className='px-3 py-3'>
-                                    <div className='flex gap-2'>
-                                        <Link href={`/dashboard/logs?service=${encodeURIComponent(item.control)}`} className='rounded-md border border-ui-border bg-ui-panel px-2.5 py-1.5 font-semibold text-ui-text hover:border-ui-primary/40'>
-                                            Logs
-                                        </Link>
-                                        <a href='#ai-clients' className='rounded-md border border-ui-border bg-ui-panel px-2.5 py-1.5 font-semibold text-ui-text hover:border-ui-primary/40'>
-                                            Clients
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    )
-}
-
-function ReadinessBadge({ status, measurable }: { status: AIEconomics['commercialReadiness']['items'][number]['status'], measurable: boolean }) {
-    const label = status === 'operational' ? 'Live' : status === 'evidence_gap' ? 'Gap' : 'No signal'
-    const tone = status === 'operational'
-        ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
-        : status === 'evidence_gap'
-            ? 'border-ui-primary/30 bg-ui-primary/10 text-ui-primary'
-            : 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
-    return (
-        <div className='flex flex-wrap gap-1.5'>
-            <span className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${tone}`}>{label}</span>
-            <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-ui-muted'>{measurable ? 'tracked' : 'metering'}</span>
-        </div>
-    )
-}
-
-function operationsStateLabel(value: AIEconomics['commercialReadiness']['overallState']) {
-    if (value === 'commercially_ready') return 'Nominal'
-    if (value === 'internal_action_required') return 'Needs signal'
-    return 'Review'
-}
-
-function operationsCopy(value: string) {
-    return value
-        .replace(/\binstrumented\b/gi, 'tracked')
-        .replace(/\binstrumenting\b/gi, 'connecting')
-        .replace(/\bService gates\b/gi, 'Worker operations')
-        .replace(/\bgates\b/gi, 'lanes')
-        .replace(/\bgate\b/gi, 'lane')
 }
 
 function SuccessRate({ row, fallback }: { row?: AIEconomics['reliability']['buildDeploy'][number], fallback: string }) {
