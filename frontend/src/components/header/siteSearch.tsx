@@ -50,7 +50,7 @@ export default function SiteSearch({ token }: { token: boolean }) {
     const cleanQuery = query.trim().toLowerCase()
     const routes = useMemo(() => [...(token ? dashboardRouteItems : []), ...publicRouteItems], [token])
     const routeResults = useMemo(() => filterItems(routes, cleanQuery).slice(0, 8), [routes, cleanQuery])
-    const directThreatResult = useMemo(() => directThreatItem(cleanQuery), [cleanQuery])
+    const directThreatResult = useMemo(() => directThreatItem(cleanQuery, actors), [actors, cleanQuery])
 
     useEffect(() => {
         function onKeyDown(event: KeyboardEvent) {
@@ -149,7 +149,7 @@ function ResultGroup({ title, items, icon, onSelect }: { title: string, items: S
                 {items.map(item => (
                     <Link key={item.id} href={item.href} onClick={onSelect} className='grid grid-cols-[2.25rem_1fr] gap-3 rounded-lg px-2 py-2 transition hover:bg-ui-raised'>
                         <span className='grid h-9 w-9 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
-                            {icon === 'case' ? <ShieldCheck className='h-4 w-4' /> : icon === 'actor' ? <Search className='h-4 w-4' /> : <FileText className='h-4 w-4' />}
+                            {icon === 'case' ? <ShieldCheck className='h-4 w-4' /> : icon === 'actor' ? <ActorAvatar title={item.title} /> : <FileText className='h-4 w-4' />}
                         </span>
                         <span className='min-w-0'>
                             <span className='block truncate text-sm font-semibold text-ui-text'>{item.title}</span>
@@ -171,15 +171,27 @@ function filterItems(items: SearchItem[], query: string) {
     return items.filter(item => `${item.title} ${item.detail} ${item.href}`.toLowerCase().includes(query))
 }
 
-export function directThreatItem(query: string): SearchItem | null {
+export function directThreatItem(query: string, actorResults: SearchItem[] = []): SearchItem | null {
     const value = query.trim()
     if (value.length < 2) return null
+    const href = `/ti/${encodeURIComponent(value)}`
+    const matchedActor = actorResults.find(item => item.href.toLowerCase() === href.toLowerCase())
+    if (matchedActor) return matchedActor
     return {
         id: `threat:${value}`,
-        title: `Open ${value}`,
-        detail: 'Open the threat intelligence profile',
-        href: `/ti/${encodeURIComponent(value)}`,
+        title: actorDisplayName(value),
+        detail: 'Threat actor profile',
+        href,
     }
+}
+
+function actorDisplayName(value: string) {
+    return /^apt\d+$/i.test(value) ? value.toUpperCase() : value
+}
+
+function ActorAvatar({ title }: { title: string }) {
+    const initials = title.replace(/[^a-z0-9]/gi, '').slice(0, 2).toUpperCase()
+    return <span className='grid h-full w-full place-items-center rounded-md bg-ui-primary/15 text-[10px] font-bold tracking-wide text-ui-primary'>{initials || 'TI'}</span>
 }
 
 async function loadCases(query: string, signal: AbortSignal): Promise<SearchItem[]> {
@@ -199,7 +211,20 @@ async function loadActors(query: string, signal: AbortSignal): Promise<SearchIte
     const response = await fetch(`/api/ti/search?${params.toString()}`, { cache: 'no-store', signal })
     if (!response.ok) return []
     const payload = await response.json()
-    return actorItems(payload).slice(0, 8)
+    const preview = actorPreviewItem(payload, query)
+    return uniqueByHref([...(preview ? [preview] : []), ...actorItems(payload)]).slice(0, 8)
+}
+
+function actorPreviewItem(payload: unknown, query: string): SearchItem | null {
+    if (!payload || typeof payload !== 'object') return null
+    const row = payload as Record<string, unknown>
+    const intelligence = row.actorIntelligence && typeof row.actorIntelligence === 'object' ? row.actorIntelligence as Record<string, unknown> : null
+    if (row.queryKind !== 'actor' && !intelligence) return null
+    const title = actorDisplayName(stringValue(row.query) || query)
+    const detail = stringValue(row.summary)
+        || [stringValue(intelligence?.actorClass), stringValue(intelligence?.attribution)].filter(Boolean).join(' · ')
+        || 'Threat actor profile'
+    return { id: `actor-preview:${title}`, title, detail, href: `/ti/${encodeURIComponent(stringValue(row.query) || query)}` }
 }
 
 export function caseItem(value: unknown): SearchItem | null {

@@ -17,8 +17,8 @@ test('header search may link an explicit actor only from a ready response', () =
     }])
     assert.deepEqual(directThreatItem('apt42'), {
         id: 'threat:apt42',
-        title: 'Open apt42',
-        detail: 'Open the threat intelligence profile',
+        title: 'APT42',
+        detail: 'Threat actor profile',
         href: '/ti/apt42',
     })
     assert.equal(directThreatItem(''), null)
