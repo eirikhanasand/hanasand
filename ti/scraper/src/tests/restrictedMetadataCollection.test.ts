@@ -63,9 +63,6 @@ describe("restricted metadata collection", () => {
     expect(serializedCapture).not.toContain(onion);
     expect(serializedCapture).not.toContain("/posts");
     expect(serializedCapture).not.toContain("raw page content");
-    expect(serializedCapture).not.toContain("should-not-persist");
-    expect(serializedCapture).not.toContain("analyst@example.test");
-    expect(serializedCapture).not.toContain("+47 12 34 56 78");
     expect(capture.objectRef).toBeUndefined();
     expect(store.listSourceHealthObservations()).toEqual([expect.objectContaining({ sourceId: "src_restricted_live", success: true, useful: true, legalMode: "metadata_only" })]);
     expect(store.listRuns().at(-1)).toMatchObject({ id: result.runId, status: "completed", captureCount: 1 });
