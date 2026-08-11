@@ -60,7 +60,7 @@ function checkKey(value: { service: string, check_name: string }) {
     return `${value.service}\n${checkName}`
 }
 
-function missingPublicCheck(required: typeof requiredPublicChecks[number]): ServiceCheck {
+function missingPublicCheck(required: typeof requiredPublicChecks[number], generatedAt: string): ServiceCheck {
     return {
         service: publicStatusLabel(required.service),
         check_name: publicStatusLabel(required.check_name),

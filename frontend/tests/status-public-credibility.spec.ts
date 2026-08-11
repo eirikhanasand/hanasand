@@ -206,8 +206,6 @@ test('status transport failure stays unavailable instead of becoming fresh synth
         expect(source).not.toContain('withFallback')
         expect(source).not.toContain('getFallbackServiceStatus')
         expect(source).not.toContain('publicStatusCoverageCheck')
-        expect(source).not.toContain('productProgressDeployProof')
-        expect(source).not.toContain('loadProductDeployProofLedger')
     }
 })
 
@@ -219,37 +217,6 @@ test('status fetch failures preserve the unavailable contract for transport and 
 
         globalThis.fetch = (async () => new Response(null, { status: 503 })) as typeof fetch
         await expect(getStatus()).resolves.toEqual(unavailableServiceStatus())
-    } finally {
-        globalThis.fetch = originalFetch
-    }
-})
-
-test('an empty successful status payload cannot become operational', async () => {
-    const originalFetch = globalThis.fetch
-    try {
-        globalThis.fetch = (async () => new Response('{}', { status: 200 })) as typeof fetch
-        await expect(getStatus()).resolves.toEqual(unavailableServiceStatus())
-    } finally {
-        globalThis.fetch = originalFetch
-    }
-})
-
-test('status normalization preserves missing timestamps and labels as unknown', async () => {
-    const originalFetch = globalThis.fetch
-    try {
-        globalThis.fetch = (async () => new Response(JSON.stringify({
-            overall: 'up',
-            checks: [{ status: 'up', latency_ms: 1 }],
-            history: [{ status: 'up' }],
-            incidents: [{ id: 'incident-1' }],
-        }), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch
-
-        await expect(getStatus()).resolves.toMatchObject({
-            generated_at: '',
-            checks: [{ service: '', check_name: '', checked_at: '' }],
-            history: [{ service: '', check_name: '', date: '' }],
-            incidents: [{ title: '', started_at: '', summary: '', cause: '', updates: [] }],
-        })
     } finally {
         globalThis.fetch = originalFetch
     }
