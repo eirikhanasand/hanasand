@@ -1,7 +1,4 @@
-import { getTiAdminOverview } from '@/utils/tiAdmin/ops'
 import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
-import config from '@/config'
-import { cookies } from 'next/headers'
 
 export type TiEnrichmentStatus = 'ready' | 'running' | 'queued' | 'review'
 
@@ -137,51 +134,11 @@ export type TiPipelineOverview = {
 }
 
 export async function getTiEnrichmentOverview(): Promise<TiEnrichmentOverview> {
-    const [overview, profiles, updates, audit] = await Promise.all([
-        getTiAdminOverview(null, { limit: 50, includeCandidates: true }),
+    const [profiles, updates] = await Promise.all([
         getPersistedActorProfiles(),
         getPersistedProfileUpdates(),
-        getPersistedAuditLog(),
     ])
-    return passiveOverview(overview, profiles, updates, audit.events, audit.available)
-}
-
-async function getPersistedAuditLog(): Promise<{ events: TiManagementAuditEvent[], available: boolean }> {
-    try {
-        const cookieStore = await cookies()
-        const token = cookieStore.get('access_token')?.value
-        const id = cookieStore.get('id')?.value
-        if (!token || !id) return { events: [], available: false }
-        const response = await fetch(`${config.url.api}/admin/audit-events?limit=200`, {
-            headers: { Authorization: `Bearer ${decodeURIComponent(token)}`, id },
-            cache: 'no-store',
-            signal: AbortSignal.timeout(5_000),
-        })
-        if (!response.ok) return { events: [], available: false }
-        const payload = await response.json() as { events?: unknown[] }
-        return { events: (payload.events || []).map(auditEvent).filter((event): event is TiManagementAuditEvent => Boolean(event)), available: true }
-    } catch {
-        return { events: [], available: false }
-    }
-}
-
-function auditEvent(value: unknown): TiManagementAuditEvent | undefined {
-    if (!value || typeof value !== 'object') return undefined
-    const event = value as Record<string, unknown>
-    const detail = event.detail && typeof event.detail === 'object' ? event.detail as Record<string, unknown> : {}
-    const action = stringValue(event.action_type, detail.actionType, 'audit event')
-    const target = stringValue(event.target_name, event.target_id, event.target_type, event.organization_name, 'system')
-    const happenedAt = stringValue(event.created_at)
-    if (!happenedAt) return undefined
-    return {
-        id: stringValue(event.id, `${happenedAt}:${action}:${target}`),
-        happenedAt,
-        actor: stringValue(event.actor_name, event.actor_id, 'system'),
-        action,
-        target,
-        result: stringValue(event.outcome, 'unknown'),
-        detail: stringValue(event.reason, event.source, detail.source, detail.service, 'Recorded management event.'),
-    }
+    return passiveOverview(profiles, updates)
 }
 
 type PersistedActorProfile = {
@@ -270,15 +227,10 @@ function persistedProfile(value: unknown): PersistedActorProfile | undefined {
     }
 }
 
-function passiveOverview(overview: Awaited<ReturnType<typeof getTiAdminOverview>>, profiles: PersistedActorProfile[], updates: TiProfileUpdate[], auditLog: TiManagementAuditEvent[], auditAvailable: boolean): TiEnrichmentOverview {
+function passiveOverview(profiles: PersistedActorProfile[], updates: TiProfileUpdate[]): TiEnrichmentOverview {
     const actors = new Map<string, TiEnrichedActor>()
-    const capturesById = new Map(overview.captures.map(capture => [capture.id, capture]))
-    const profileByCaptureId = new Map(profiles.flatMap(profile => profile.captureIds.map(captureId => [captureId, profile] as const)))
     for (const profile of profiles) {
-        const links = profile.sourceIds.map(sourceId => {
-            const capture = profile.captureIds.map(captureId => capturesById.get(captureId)).find(capture => capture?.sourceId === sourceId)
-            return capture ? { name: capture.sourceName, url: capture.pageUrl } : undefined
-        }).filter((source): source is { name: string, url: string } => Boolean(source))
+        const links = profile.sourceIds.map(sourceId => ({ name: sourceId, url: '' }))
         actors.set(profile.id, {
             id: profile.id,
             name: profile.canonicalName,
@@ -294,67 +246,43 @@ function passiveOverview(overview: Awaited<ReturnType<typeof getTiAdminOverview>
             refreshCount: profile.evidenceCount,
         })
     }
-    const activity = overview.captures.map((capture) => {
-        const profile = profileByCaptureId.get(capture.id)
-        const actorName = profile?.canonicalName || (capture.actor && capture.actor !== 'Not extracted' ? capture.actor : capture.sourceName)
-        const actorId = profile?.id || actorName.toLowerCase().replace(/\s+/g, '-')
-        const existing = [...actors.values()].find(actor => actor.name.toLowerCase() === actorName.toLowerCase()) || actors.get(actorId)
-        if (existing) {
-            existing.lastUpdatedAt = [existing.lastUpdatedAt, capture.capturedAt].sort().at(-1) || existing.lastUpdatedAt
-            existing.refreshCount = (existing.refreshCount || 0) + 1
-            existing.automationEvidence.push(capture.resultSummary || 'Captured by automated source collection.')
-            if (capture.pageUrl && !existing.sourceLinks.some(source => source.name === capture.sourceName && source.url === capture.pageUrl)) existing.sourceLinks.push({ name: capture.sourceName, url: capture.pageUrl })
-        } else {
-            actors.set(actorId, {
-                id: actorId,
-                name: actorName,
-                aliases: [],
-                status: 'ready',
-                confidence: 1,
-                lastUpdatedAt: capture.capturedAt,
-                nextRefreshAt: capture.capturedAt,
-                changedFields: [],
-                sourceLinks: capture.pageUrl ? [{ name: capture.sourceName, url: capture.pageUrl }] : [],
-                automationEvidence: [capture.resultSummary || 'Captured by automated source collection.'],
-                plannedWork: [],
-                refreshCount: 1,
-            })
-        }
+    const activity = updates.map((update) => {
+        const actor = actors.get(update.actorId)
+        const source = update.sourceId || 'retained evidence'
         return {
-            id: capture.id,
-            actorId,
-            actorName,
-            happenedAt: capture.capturedAt,
-            title: capture.title || 'New intelligence captured',
-            detail: capture.resultSummary || `${capture.sourceName} produced a retained capture.`,
-            source: capture.sourceName,
+            id: update.id,
+            actorId: update.actorId,
+            actorName: actor?.name || update.actorId,
+            happenedAt: update.observedAt,
+            title: update.summary,
+            detail: update.changedFields.join(' · ') || 'Profile evidence updated.',
+            source,
             tone: 'ok' as const,
         }
     })
-    const latest = overview.runs[0]
     const updatedLastHour = activity.filter((event) => Date.now() - Date.parse(event.happenedAt) <= 3_600_000).length
     return {
         generatedAt: new Date().toISOString(),
         worker: {
-            state: auditAvailable ? 'ready' : 'unavailable',
+            state: 'ready',
             mode: 'automated monitoring',
             intervalSeconds: 300,
-            batchSize: overview.sources.length,
-            lastSweepStartedAt: latest?.startedAt || null,
-            lastSweepFinishedAt: latest?.finishedAt || latest?.startedAt || null,
-            lastError: auditAvailable ? null : 'Audit API unavailable',
+            batchSize: profiles.length,
+            lastSweepStartedAt: updates[0]?.observedAt || null,
+            lastSweepFinishedAt: updates[0]?.observedAt || null,
+            lastError: null,
             cursor: 0,
         },
         updatedActors: [...actors.values()],
         queuedActors: [],
         activity,
         updates,
-        auditLog,
+        auditLog: [],
         stats: {
             updatedLastHour,
             queued: 0,
-            auditedEvents: auditLog.length,
-            automaticCoverage: overview.sources.length,
+            auditedEvents: 0,
+            automaticCoverage: profiles.length,
             totalRefreshes: activity.length,
         },
     }
