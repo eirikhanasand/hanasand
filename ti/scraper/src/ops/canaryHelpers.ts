@@ -3,6 +3,7 @@ import type { CanaryFetch, CanaryLoopState } from "./canaryCollectionTypes.ts";
 import { feedItems } from "./canaryFeedItems.ts";
 import { parseMitreActorCatalog } from "../pipeline/mitreActorCatalog.ts";
 import { parseCurrentRansomwareOperations } from "../pipeline/ransomwareOperationCatalog.ts";
+import { torMetadataCandidates } from "./torMetadataDiscovery.ts";
 
 export function taskFor(source: any, at: string, runId: string, maxBytes: number, job?: any) {
   const extractionProfile = job?.extractionProfile ?? source.metadata?.extractionProfile;
@@ -122,7 +123,13 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
       collectedAt: at,
       contentHash: groupContentHash,
       links: [],
-      metadata: { ...metadata, extractionProfile: "ransomware_operation_catalog", ransomwareOperationCatalogSnapshot, parserVersion: "ransomware-live-current-operations:v1" },
+      metadata: {
+        ...metadata,
+        extractionProfile: "ransomware_operation_catalog",
+        ransomwareOperationCatalogSnapshot,
+        restrictedMetadataCandidates: torMetadataCandidates(fetched, at, source.id),
+        parserVersion: "ransomware-live-current-operations:v1"
+      },
       sensitive: true
     }, ...groupMetadataItems];
   }

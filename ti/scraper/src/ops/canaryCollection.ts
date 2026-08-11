@@ -115,7 +115,8 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
     exposureClaimCount: Number(resumedRun?.exposureClaimCount ?? 0),
     skippedLowValueCount: Number(resumedRun?.skippedLowValueCount ?? 0),
     retryScheduledCount: Number(resumedRun?.retryScheduledCount ?? 0),
-    retryExhaustedCount: Number(resumedRun?.retryExhaustedCount ?? 0)
+    retryExhaustedCount: Number(resumedRun?.retryExhaustedCount ?? 0),
+    discoveredRestrictedSourceCount: Number(resumedRun?.discoveredRestrictedSourceCount ?? 0)
   };
   const latestCaptureIds: string[] = [], completeEvaluationCaptures: any[] = [], errors: any[] = [];
   const concurrency = Math.max(1, Math.min(tasks.length || 1, Number(options.maxConcurrentTasks ?? 5)));

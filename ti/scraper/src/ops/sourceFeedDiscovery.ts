@@ -9,6 +9,7 @@ import { prepareRuntimeSource } from "../runtime/sourceBootstrap.ts";
 import { publicSourceReferenceUrl } from "../pipeline/sourceFieldReportTimestamp.ts";
 import type { CaptureMetadataStore } from "../storage/evidenceStore.ts";
 import { nowIso, stableId } from "../utils.ts";
+import { isSellableIntelText } from "../value/sellableIntel.ts";
 import type { CanaryFetch } from "./canaryCollectionTypes.ts";
 import { feedItems } from "./canaryFeedItems.ts";
 import { randomUUID } from "node:crypto";
@@ -98,7 +99,14 @@ type PublisherReference = {
   capturedAt?: string;
   revalidationSourceId?: string;
 };
-type FeedProof = { url: string; feedEndpointKey: string; observedItemCount: number; parserVersion: string };
+type FeedProof = {
+  url: string;
+  feedEndpointKey: string;
+  observedItemCount: number;
+  parserVersion: string;
+  sourceType?: "rss" | "telegram_public";
+  family?: "clear_web" | "public_telegram";
+};
 type Admission = { outcome: "imported" | "duplicate" | "revalidated"; sourceId: string; feedEndpointKey: string };
 type AttemptResult = {
   outcome: "feeds_proven" | "no_feed" | "fetch_failed";
@@ -431,19 +439,23 @@ async function admitFeed(store: DiscoveryStore, reference: PublisherReference, p
   };
   const source: DiscoverySource = {
     id: stableId("src", proof.feedEndpointKey),
-    name: `${new URL(proof.url).hostname} public intelligence feed`,
-    type: "rss",
+    name: sourceType === "telegram_public"
+      ? `${new URL(proof.url).pathname.slice(1)} public Telegram intelligence channel`
+      : `${new URL(proof.url).hostname} public intelligence feed`,
+    type: sourceType,
     url: proof.url,
     accessMethod: "public_http",
     status: "candidate",
     risk: "low",
     trustScore: 0.7,
-    crawlFrequencySeconds: DAY_SECONDS,
-    legalNotes: "Public RSS or Atom feed advertised by a retained useful public publisher reference and fetched without credentials.",
+    crawlFrequencySeconds: sourceType === "telegram_public" ? 21_600 : DAY_SECONDS,
+    legalNotes: sourceType === "telegram_public"
+      ? "Public Telegram channel linked by retained useful public intelligence and verified through the unauthenticated public web preview."
+      : "Public RSS or Atom feed advertised by a retained useful public publisher reference and fetched without credentials.",
     catalog: {
       approvalScope: "safe_public_auto",
-      adapterCompatibility: ["rss"],
-      collection: { freshnessTargetSeconds: DAY_SECONDS }
+      adapterCompatibility: [sourceType],
+      collection: { freshnessTargetSeconds: sourceType === "telegram_public" ? 21_600 : DAY_SECONDS }
     },
     governance: {
       approvalRequired: false,
@@ -454,9 +466,10 @@ async function admitFeed(store: DiscoveryStore, reference: PublisherReference, p
       policyVersion: "public-feed-discovery:v1"
     },
     metadata: {
-      sourceFamily: "clear_web",
+      sourceFamily: family,
       queryClass: "threat-intel",
       activityWindowSeconds: 365 * DAY_SECONDS,
+      ...(sourceType === "telegram_public" ? { collectionMode: "public_web_preview", publicTelegramCandidate: true } : {}),
       sourcePortfolioVerification: verification,
       sourceFeedDiscovery: {
         workflow: REQUEST_ID,
@@ -466,7 +479,7 @@ async function admitFeed(store: DiscoveryStore, reference: PublisherReference, p
       }
     }
   };
-  const bundle = { schemaVersion: "ti.source_portfolio_batch.v1", family: "clear_web", generatedAt, sources: [source] };
+  const bundle = { schemaVersion: "ti.source_portfolio_batch.v1", family, generatedAt, sources: [source] };
   const validation = validateSourcePortfolioBatch(bundle, generatedAt);
   if (!validation.valid) throw new Error(validation.errors[0]?.message ?? "Discovered feed failed source portfolio validation.");
   const report = importSeedBundle(bundle, { importedAt: generatedAt, existingSources: [] });
@@ -666,9 +679,12 @@ async function boundedResponseText(response: Response, maxBytes: number) {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      bytes += value.byteLength;
-      if (bytes > maxBytes) throw new Error(`Public feed discovery exceeds maxBytes ${maxBytes}.`);
-      text += decoder.decode(value, { stream: true });
+      const remaining = maxBytes - bytes;
+      if (remaining <= 0) { await reader.cancel(); break; }
+      const accepted = value.byteLength > remaining ? value.subarray(0, remaining) : value;
+      bytes += accepted.byteLength;
+      text += decoder.decode(accepted, { stream: true });
+      if (accepted.byteLength < value.byteLength) { await reader.cancel(); break; }
     }
     return text + decoder.decode();
   } catch (error) {

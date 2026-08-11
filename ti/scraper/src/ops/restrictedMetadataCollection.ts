@@ -82,6 +82,13 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
         metadata.sourcePortfolioQualificationState = sustained ? "sustained_productive" : "pending_sustained_productivity";
         metadata.sourcePortfolioProductiveCheckCount = productiveCycles.length;
         metadata.sourcePortfolioLastProductiveAt = productiveCycles.at(-1)?.checkedAt;
+        if (!metadata.sourcePortfolioVerification) metadata.sourcePortfolioVerification = {
+          outcome: "content_parsed",
+          observedItemCount: result.items.length,
+          parserVersion: "darknet-metadata-v2",
+          verifiedAt: checkedAt,
+          legalBasisVerifiedAt: checkedAt
+        };
       }
       if (!transportCanary && sustained) {
         metadata.productionCollection = true;
