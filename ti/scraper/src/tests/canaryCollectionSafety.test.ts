@@ -603,6 +603,69 @@ describe("public collection boundary", () => {
     });
   });
 
+  test("promotes an approved legacy feed only after its second retained useful cycle", async () => {
+    const store = new InMemoryScraperStore();
+    const sourceId = "legacy_reviewed_feed";
+    const firstRunId = "run_legacy_reviewed_first";
+    const firstAt = "2026-07-22T12:00:00.000Z";
+    const current = {
+      ...source({
+        id: sourceId,
+        tenantId: undefined,
+        url: "https://publisher.example/legacy.xml",
+        governance: { approvalRequired: true, approvalState: "approved" },
+        metadata: { productionCollection: true, sourceFamily: "government" }
+      }),
+      countsAsCoverage: false
+    } as any;
+    store.saveSource(current);
+    store.saveCapture(fixtureCapture({
+      id: "capture_legacy_reviewed_first",
+      tenantId: undefined,
+      sourceId,
+      collectedAt: firstAt,
+      publishedAt: firstAt,
+      body: "CVE-2026-7001 critical remote code execution advisory.",
+      metadata: { runId: firstRunId, safeExcerpt: "CVE-2026-7001 critical remote code execution advisory." }
+    }));
+    store.saveSourceHealthObservation({ id: "health_legacy_reviewed_first", tenantId: undefined, sourceId, collectionRunId: firstRunId, checkedAt: firstAt, success: true, useful: true, captureCount: 1 });
+    const selectedEvidenceProvenance = sourceAutomaticReviewEvidenceBindings(current, store.listCaptures());
+    store.saveSource({
+      ...current,
+      metadata: {
+        ...current.metadata,
+        automaticSourceReview: {
+          schemaVersion: SOURCE_AUTOMATIC_REVIEW_SCHEMA,
+          state: "approved",
+          promptVersion: SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION,
+          configuredModelVersion: "hanasand",
+          sourceIdentity: automaticSourceReviewIdentity(current),
+          requestSha256: "a".repeat(64),
+          selectedEvidenceIds: selectedEvidenceProvenance.map((item) => item.evidenceId),
+          selectedEvidenceProvenance,
+          runtimeIdentity: { status: "completed", conversationId: "legacy-source-review" },
+          decision: { subject: { type: "source", id: sourceId }, action: "confirm", claimValidity: "supported" }
+        }
+      }
+    });
+
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => "2026-07-23T12:00:00.000Z",
+      fetch: async () => new Response("<rss><channel><item><title>CVE-2026-7002 critical vulnerability</title><link>https://publisher.example/7002</link><description>Remote code execution is actively exploited; apply the vendor patch.</description><pubDate>Thu, 23 Jul 2026 11:00:00 GMT</pubDate></item></channel></rss>", { headers: { "content-type": "application/rss+xml" } })
+    });
+
+    expect(cycle).toMatchObject({ insertedCaptureCount: 1, failedTaskCount: 0 });
+    expect(store.getSource(sourceId)).toMatchObject({
+      status: "active",
+      countsAsCoverage: true,
+      metadata: { productionCollection: true, countsAsCoverage: true, sourcePortfolioQualificationState: "sustained_productive", sourcePortfolioProductiveCheckCount: 2 }
+    });
+  });
+
   test("uses each feed's declared publishing activity window for relevance", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "slow-feed", url: "https://security.example.org/feed.xml", metadata: { productionCollection: true, activityWindowSeconds: 365 * 86_400 } }));
