@@ -49,16 +49,15 @@ sub vcl_hash {
 }
 
 sub vcl_backend_response {
-    if (beresp.http.Set-Cookie) {
-        set beresp.uncacheable = true;
-        set beresp.ttl = 0s;
-        return (deliver);
-    }
-
     if (bereq.url ~ "^/dashboard(?:/|$)" && beresp.status == 200) {
         # Next marks cookie-aware dynamic pages private. They are still safe
         # here because vcl_hash includes the complete authenticated cookie.
+        # Set-Cookie is safe to replay only for that same session key.
         set beresp.ttl = 5s;
+    } else if (beresp.http.Set-Cookie) {
+        set beresp.uncacheable = true;
+        set beresp.ttl = 0s;
+        return (deliver);
     } else if (beresp.http.Cache-Control ~ "(?i)(no-cache|no-store|private)") {
         set beresp.uncacheable = true;
         set beresp.ttl = 0s;
