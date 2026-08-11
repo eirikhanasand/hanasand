@@ -331,7 +331,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           AND ${tenantWhere}
         ORDER BY created_at ASC, id ASC`, allTenants ? [] : [tenantId])
     ]);
-    const tasksAndEvents = [...taskRows, ...eventRows].map(readRecord);
+    const tasksAndEvents = [...taskRows, ...eventRows].map(readRecord).filter(isRecord);
     const tasks = tasksAndEvents.filter((record: any) => record.recordKind === 'automatic_intelligence_review_task');
     const claimIds = tasks.map((task: any) => task.subject?.claimId).filter(Boolean);
     const incidentIds = tasks.map((task: any) => task.subject?.incidentId).filter(Boolean);

@@ -147,7 +147,7 @@ describe("automatic Hanasand AI intelligence review", () => {
     const foreignTask = { ...task, id: "review_foreign", tenantId: "foreign" };
     const store: any = {
       queryAutomaticReviewRecords: async () => ({
-        tasksAndEvents: [task, sourceTask, foreignTask],
+        tasksAndEvents: [undefined, null, task, sourceTask, foreignTask],
         claims: [{ id: "claim_bounded", tenantId: "default", value: "bounded claim", summary: "retained claim" }],
         incidents: [],
         captures: [
