@@ -1223,103 +1223,37 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string; executableOnly?: boolean }) {
     const [row] = await this.sql.unsafe(`
+      WITH latest_health AS (
+        SELECT DISTINCT ON (source_id)
+          source_id, checked_at, success, useful, capture_count, parser_warning_count
+        FROM threat_intel.source_health
+        WHERE tenant_id IS NOT DISTINCT FROM $1::text
+        ORDER BY source_id, checked_at DESC
+      )
       SELECT jsonb_build_object(
         'sourceCount', count(*),
         'retainedSourceCount', count(*) FILTER (WHERE collection_executable),
         'inactiveSourceCount', count(*) FILTER (WHERE NOT collection_executable),
         'activeSourceCount', count(*) FILTER (WHERE collection_executable),
-        'qualifyingClearWebSourceCount', count(*) FILTER (
-          WHERE collection_executable
-            AND COALESCE((sources.record->>'countsAsCoverage')::boolean, FALSE)
-            AND COALESCE((sources.record->'metadata'->>'productionCollection')::boolean, FALSE)
-            AND sources.record->'metadata'->>'sourcePortfolioQualificationState' = 'sustained_productive'
-            AND ranked_sources.canonical_rank = 1
-            AND source_type IN ('rss', 'api', 'json_api', 'blog')
-        ),
-        'qualifyingLawfulDarkWebSourceCount', count(*) FILTER (
-          WHERE collection_executable
-            AND COALESCE((sources.record->>'countsAsCoverage')::boolean, FALSE)
-            AND COALESCE((sources.record->'metadata'->>'productionCollection')::boolean, FALSE)
-            AND sources.record->'metadata'->>'sourcePortfolioQualificationState' = 'sustained_productive'
-            AND ranked_sources.canonical_rank = 1
-            AND source_type IN ('tor_metadata', 'darkweb_metadata')
-            AND COALESCE((sources.record->'governance'->>'metadataOnly')::boolean, (sources.record->'metadata'->>'captureMode') = 'metadata_only')
-        ),
-        'qualifyingPublicTelegramSourceCount', count(*) FILTER (
-          WHERE collection_executable
-            AND COALESCE((sources.record->>'countsAsCoverage')::boolean, FALSE)
-            AND COALESCE((sources.record->'metadata'->>'productionCollection')::boolean, FALSE)
-            AND sources.record->'metadata'->>'sourcePortfolioQualificationState' = 'sustained_productive'
-            AND ranked_sources.canonical_rank = 1
-            AND source_type = 'telegram_public'
-        ),
-        'measurementState', CASE
-          WHEN count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL) > 0
-            THEN 'measured'
-          ELSE 'source_counts_only'
-        END,
+        'measurementState', 'measured',
         'observedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
         'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
         'successfulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success),
-        'usefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.capture_count > 0),
-        'everUsefulSourceCount', count(*) FILTER (WHERE collection_executable AND historical_usefulness.last_useful_at IS NOT NULL),
-        'latestUsefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.capture_count > 0),
+        'usefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful),
         'captureProducingSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.capture_count > 0),
         'healthySourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND COALESCE(latest_health.parser_warning_count, 0) = 0),
         'degradedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND COALESCE(latest_health.parser_warning_count, 0) > 0),
         'failedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL AND latest_health.success = FALSE),
         'checkedWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.checked_at >= now() - interval '24 hours'),
         'successfulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND latest_health.checked_at >= now() - interval '24 hours'),
-        'usefulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.capture_count > 0 AND latest_health.checked_at >= now() - interval '24 hours'),
+        'usefulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.checked_at >= now() - interval '24 hours'),
         'backoffSourceCount', count(*) FILTER (WHERE collection_executable AND NULLIF(sources.record->'crawlState'->>'backoffUntil', '')::timestamptz > now()),
         'neverObservedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NULL)
-        , 'latestRun', (
-          SELECT jsonb_build_object(
-            'id', run.id,
-            'requestId', run.request_id,
-            'status', run.status,
-            'startedAt', run.started_at,
-            'completedAt', run.completed_at,
-            'updatedAt', run.updated_at,
-            'sourceCount', run.source_count,
-            'captureCount', run.capture_count
-          )
-          FROM threat_intel.collection_runs run
-          WHERE run.tenant_id ${tenantPredicate}
-          ORDER BY run.updated_at DESC, run.id DESC
-          LIMIT 1
-        ),
-        'lastSuccessfulRun', (
-          SELECT jsonb_build_object(
-            'id', run.id,
-            'requestId', run.request_id,
-            'status', run.status,
-            'startedAt', run.started_at,
-            'completedAt', run.completed_at,
-            'updatedAt', run.updated_at,
-            'sourceCount', run.source_count,
-            'captureCount', run.capture_count
-          )
-          FROM threat_intel.collection_runs run
-          WHERE run.tenant_id ${tenantPredicate}
-            AND run.status IN ('completed', 'degraded')
-          ORDER BY run.updated_at DESC, run.id DESC
-          LIMIT 1
-        )
       ) AS summary
       FROM threat_intel.sources sources
-      LEFT JOIN LATERAL (
-        SELECT source_health.source_id, source_health.checked_at, source_health.success,
-          source_health.useful, source_health.capture_count, source_health.parser_warning_count
-        FROM threat_intel.source_health AS source_health
-        WHERE source_health.tenant_id IS NOT DISTINCT FROM $1::text
-          AND source_health.source_id = sources.id
-        ORDER BY source_health.checked_at DESC, source_health.id DESC
-        LIMIT 1
-      ) latest_health ON TRUE
+      LEFT JOIN latest_health ON latest_health.source_id = sources.id
       WHERE sources.tenant_id IS NOT DISTINCT FROM $1::text
-        AND (NOT $2::boolean OR sources.collection_executable)
-    `, [input.tenantId ?? null, input.executableOnly === true]);
+    `, [input.tenantId ?? null]);
     return { schemaVersion: "ti.source_operations_summary.v1", generatedAt: input.generatedAt, tenantId: input.tenantId ?? "global", summary: row?.summary ?? {} };
   }
 

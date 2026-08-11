@@ -204,7 +204,7 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
 export async function buildSourceOperationsSummary(store: any, input: { tenantId?: string; generatedAt?: string; executableOnly?: boolean } = {}) {
   const generatedAt = input.generatedAt ?? nowIso();
   if (typeof store?.querySourceOperationalSummary === "function") {
-    return await store.querySourceOperationalSummary({ tenantId: input.tenantId, generatedAt, executableOnly: input.executableOnly });
+    return await store.querySourceOperationalSummary({ tenantId: input.tenantId, generatedAt });
   }
   const result = typeof store?.querySourceOperationalPage === "function"
     ? await store.querySourceOperationalPage({ tenantId: input.tenantId, generatedAt, limit: 1, executableOnly: input.executableOnly })
