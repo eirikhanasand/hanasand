@@ -7,4 +7,16 @@ describe("sellable intelligence freshness", () => {
     expect(isSellableIntelText(evidence)).toBe(false);
     expect(isSellableIntelText({ ...evidence, maxAgeDays: 365 })).toBe(true);
   });
+
+  test("accepts current European CERT vulnerability language without accepting generic updates", () => {
+    const current = { sourceId: "src_public_cert", publishedAt: "2026-07-22T00:00:00.000Z", now: "2026-07-23T00:00:00.000Z" };
+    for (const text of [
+      "CERT-Bund meldet mehrere Schwachstellen, die ein Angreifer im Linux Kernel ausnutzen kann.",
+      "NCSC heeft meerdere kwetsbaarheden verholpen in Oracle MySQL Server en MySQL Cluster.",
+      "CERT Polska wykrył podatność umożliwiającą zdalne wykonanie kodu bez uwierzytelniania.",
+      "SI-CERT opozarja na kritično ranljivost, ki napadalcu omogoči prevzem spletnega mesta.",
+      "CERT-AGID segnala vulnerabilità critiche sfruttate da un attaccante non autenticato."
+    ]) expect(isSellableIntelText({ ...current, text })).toBe(true);
+    expect(isSellableIntelText({ ...current, text: "CERT objavlja mesečni pregled dogodkov in organizacijskih novic za obiskovalce." })).toBe(false);
+  });
 });

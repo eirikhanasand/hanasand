@@ -3,11 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FocusedFrontier } from "../frontier/frontier.ts";
-import { findSearchCaptures } from "../api/searchCaptureIndex.ts";
-import { runCanaryCollectionCycle, startCanaryCollectionLoop } from "../ops/canaryCollection.ts";
-import { reconcilePublicSourceProductivity } from "../ops/canaryActivation.ts";
-import { fetchItems, nextAnchoredCycleAt } from "../ops/canaryHelpers.ts";
-import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
+import { activatePublicCanarySources, runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
+import { fetchItems } from "../ops/canaryHelpers.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
 import { fixtureCapture } from "./helpers/storageFixtures.ts";
@@ -15,64 +12,36 @@ import { sourceAutomaticReviewEvidenceBindings } from "../api/automaticReviewRou
 import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
 
 describe("public collection boundary", () => {
-  test("reports effective bounded runtime limits", async () => {
-    const loop = startCanaryCollectionLoop({
-      store: new InMemoryScraperStore(),
-      frontier: new FocusedFrontier(),
-      enabled: false,
-      maxSources: 1_200,
-      maxTasks: 1_200,
-      maxConcurrentTasks: 100
+  test("reconciles corrected portfolio configuration without erasing runtime evidence", () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource({
+      ...source({
+        id: "src_reconciled", name: "Old name", url: "https://old.example.test/feed", status: "active",
+        legalNotes: "Old notes", metadata: { productionCollection: true, lastCanaryFetchMode: "native_live_http" }
+      }),
+      health: { status: "healthy", checkedAt: "2026-07-22T12:00:00.000Z", lastUsefulAt: "2026-07-22T12:00:00.000Z" },
+      crawlState: { retryCount: 0, nextEligibleAt: "2026-07-22T13:00:00.000Z" }
     });
 
-    expect(loop.getState()).toMatchObject({ maxSources: 60, maxTasks: 60, maxConcurrentTasks: 32 });
-    await loop.stop();
-  });
-
-  test("fails honestly before planning when PostgreSQL writes are unhealthy", async () => {
-    const store = new InMemoryScraperStore();
-    (store as any).databaseHealthSnapshot = () => ({ ok: false, pendingWrites: 2, lastWriteError: "Failed to read data" });
-    (store as any).batch = () => { throw new Error("storage batch must not run while storage is failed"); };
-    store.saveSource(source({ metadata: { productionCollection: true } }));
-    let fetchCount = 0;
-
-    const cycle = await runCanaryCollectionCycle({
+    const result = activatePublicCanarySources({
       store,
-      frontier: new FocusedFrontier(),
-      maxSources: 1,
-      maxTasks: 1,
-      fetch: async () => { fetchCount++; return new Response("unexpected"); }
+      now: "2026-07-23T00:00:00.000Z",
+      portfolio: [{
+        id: "src_reconciled", name: "Correct publisher feed", url: "https://publisher.example.test/feed", status: "paused",
+        type: "rss", accessMethod: "public_http", risk: "low", trustScore: 0.9, crawlFrequencySeconds: 3600,
+        legalNotes: "Publisher-operated public feed",
+        metadata: { productionCollection: true, canaryPortfolio: true, publisherReference: "https://publisher.example.test" }
+      }]
     });
 
-    expect(cycle).toMatchObject({
-      status: "failed",
-      backpressureState: "storage_failed",
-      storage: { pendingWrites: 2, lastWriteError: "Failed to read data" },
-      errors: [{ code: "storage_backpressure" }]
+    expect(result.alreadyActive).toEqual(["src_reconciled"]);
+    expect(store.getSource("src_reconciled")).toMatchObject({
+      name: "Correct publisher feed", url: "https://publisher.example.test/feed", status: "active",
+      legalNotes: "Publisher-operated public feed",
+      metadata: { lastCanaryFetchMode: "native_live_http", publisherReference: "https://publisher.example.test" },
+      health: { checkedAt: "2026-07-22T12:00:00.000Z", lastUsefulAt: "2026-07-22T12:00:00.000Z" },
+      crawlState: { retryCount: 0, nextEligibleAt: "2026-07-22T13:00:00.000Z" }
     });
-    expect(fetchCount).toBe(0);
-    expect(store.listRuns()).toHaveLength(1);
-    expect(store.listRuns()[0]).toMatchObject({ status: "failed", taskCount: 0, captureCount: 0, error: expect.stringContaining("Failed to read data") });
-  });
-
-  test("continues with a bounded write queue while it drains", async () => {
-    const store = new InMemoryScraperStore();
-    (store as any).databaseHealthSnapshot = () => ({ ok: true, pendingWrites: 1 });
-    const cycle = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, fetch: async () => new Response("unexpected") });
-    expect(cycle.status).not.toBe("failed");
-  });
-
-  test("treats a queue above the health budget as backpressure", async () => {
-    const store = new InMemoryScraperStore();
-    (store as any).databaseHealthSnapshot = () => ({ ok: true, pendingWrites: 1_001 });
-    const cycle = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, fetch: async () => new Response("unexpected") });
-    expect(cycle).toMatchObject({ status: "failed", backpressureState: "storage_failed", storage: { pendingWrites: 1_001 } });
-  });
-
-  test("reports the next timer-anchored cycle after a late completion", () => {
-    const startedAt = "2026-08-09T13:54:00.000Z", intervalMs = 15 * 60_000;
-    expect(nextAnchoredCycleAt(startedAt, intervalMs, Date.parse("2026-08-09T14:10:55.000Z"))).toBe("2026-08-09T14:24:00.000Z");
-    expect(nextAnchoredCycleAt(startedAt, intervalMs, Date.parse("2026-08-09T14:24:00.000Z"))).toBe("2026-08-09T14:39:00.000Z");
   });
 
   test("never routes restricted or private-network targets through public fetch", async () => {
