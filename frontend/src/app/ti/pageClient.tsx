@@ -404,7 +404,7 @@ function CatalogOnlyActorResult({ result, identity }: { result: TiSearchResponse
     return (
         <section data-ti-catalog-only='true' className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <div className='grid gap-4 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)] xl:items-start'>
-                <ActorProfileHeader result={result} title={title} actor={actor} aliases={result.aliases} />
+                <ActorProfileHeader result={result} title={title} actor={actor} aliases={result.aliases} summary={candidate?.description} />
                 <ThreatActorMap actor={actor} result={result} actionability={actionability} compact />
             </div>
             <ActorProfileSections result={result} actor={actor} victims={victims} />
@@ -424,6 +424,7 @@ function ActorProfileHeader({ result, title, actor, aliases, summary, actorQuery
     const catalogDescription = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0]?.description : undefined
     const description = usefulActorSummary(summary) || usefulActorSummary(catalogDescription) || actorSummary({
         name: title,
+        aliases,
         actorClass: actor.actorClass,
         attribution: actor.attribution,
         targetSectors: actor.targetSectors,

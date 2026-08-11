@@ -336,14 +336,17 @@ function cachedSearchResponse(query: string, entityType: SearchEntityType, ident
   })), (source) => source.id);
   const canonical = candidates.length === 1 ? candidates[0].canonicalName : undefined;
   const summary = candidates.length
-    ? `${canonical ?? query} is matched to the retained actor catalog. Live evidence search is continuing; no activity is inferred from the catalog record.`
+    ? (candidates.length === 1 && typeof candidates[0].description === "string" && candidates[0].description.trim()
+      ? candidates[0].description.trim()
+      : `${canonical ?? query} is a threat actor identified in the ATT&CK catalog. Live activity is shown separately when retained sources provide it.`)
     : `No cached actor identity is available for ${query}. Live evidence search is continuing.`;
   return {
     query,
     queryKind: entityType,
     generatedAt,
     mode: "seeded",
-    status: "searching",
+    // Known catalog identities are useful results immediately; live evidence can refresh in the background.
+    status: candidates.length ? "partial" : "searching",
     runId: planner.activeRunId ?? planner.terminalRunId,
     refreshAfterSeconds: planner.nextPollSeconds ?? 3,
     summary,

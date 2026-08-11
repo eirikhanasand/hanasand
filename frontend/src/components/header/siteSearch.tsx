@@ -47,12 +47,17 @@ export default function SiteSearch({ token }: { token: boolean }) {
     const [query, setQuery] = useState('')
     const [cases, setCases] = useState<SearchItem[]>([])
     const [actors, setActors] = useState<SearchItem[]>([])
+    const [savedSearches, setSavedSearches] = useState<SearchItem[]>([])
+    const [watchTerms, setWatchTerms] = useState<SearchItem[]>([])
     const [loading, setLoading] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
     const cleanQuery = query.trim().toLowerCase()
     const routes = useMemo(() => [...(token ? dashboardRouteItems : []), ...publicRouteItems], [token])
     const routeResults = useMemo(() => filterItems(routes, cleanQuery).slice(0, 8), [routes, cleanQuery])
     const directThreatResult = useMemo(() => directThreatItem(cleanQuery, actors), [actors, cleanQuery])
+    const savedResults = useMemo(() => filterItems(savedSearches, cleanQuery).slice(0, 4), [savedSearches, cleanQuery])
+    const watchResults = useMemo(() => filterItems(watchTerms, cleanQuery).slice(0, 4), [watchTerms, cleanQuery])
+    const fallbackSearch = useMemo(() => cleanQuery && !directThreatResult ? manualSearchItem(cleanQuery) : null, [cleanQuery, directThreatResult])
 
     useEffect(() => {
         function onKeyDown(event: KeyboardEvent) {
@@ -65,6 +70,21 @@ export default function SiteSearch({ token }: { token: boolean }) {
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [])
+
+    useEffect(() => {
+        if (!open) return
+        try {
+            const stored = JSON.parse(window.localStorage.getItem('hanasand:ti:saved-searches') || '[]')
+            setSavedSearches(Array.isArray(stored) ? stored.filter((item): item is { query: string } => Boolean(item && typeof item.query === 'string')).map(item => ({ id: `saved:${item.query}`, title: item.query, detail: 'Saved search', href: `/ti/${encodeURIComponent(item.query)}` })) : [])
+        } catch {
+            setSavedSearches([])
+        }
+        if (!token) return
+        fetch('/api/dwm/watchlists', { cache: 'no-store' })
+            .then(response => response.ok ? response.json() : null)
+            .then(payload => setWatchTerms(arrayFrom(payload, ['watchlists', 'items', 'rows']).flatMap(watchlistTerms).slice(0, 20)))
+            .catch(() => setWatchTerms([]))
+    }, [open, token])
 
     useEffect(() => {
         if (!open) return
@@ -125,11 +145,14 @@ export default function SiteSearch({ token }: { token: boolean }) {
                             </button>
                         </div>
                         <div className='max-h-[60vh] overflow-auto p-3'>
-                            <ResultGroup title='ROUTES' items={routeResults} icon='route' onSelect={() => setOpen(false)} />
                             <ResultGroup title='THREAT INTELLIGENCE' items={directThreatResult ? [directThreatResult] : []} icon='actor' onSelect={() => setOpen(false)} />
+                            <ResultGroup title='SAVED SEARCHES' items={savedResults} icon='route' onSelect={() => setOpen(false)} />
+                            <ResultGroup title='WATCHLISTS' items={watchResults} icon='actor' onSelect={() => setOpen(false)} />
+                            <ResultGroup title='RECENT EVIDENCE' items={actors.filter(item => item.href !== directThreatResult?.href).slice(0, 6)} icon='route' onSelect={() => setOpen(false)} />
                             {token ? <ResultGroup title='CASES' items={cases.slice(0, 6)} icon='case' onSelect={() => setOpen(false)} /> : null}
-                            <ResultGroup title='THREAT ACTORS' items={actors.filter(item => item.href !== directThreatResult?.href).slice(0, 6)} icon='actor' onSelect={() => setOpen(false)} />
-                            {!routeResults.length && !directThreatResult && !cases.length && !actors.length ? (
+                            <ResultGroup title='ROUTES' items={routeResults} icon='route' onSelect={() => setOpen(false)} />
+                            <ResultGroup title='SEARCH' items={fallbackSearch ? [fallbackSearch] : []} icon='route' onSelect={() => setOpen(false)} />
+                            {!routeResults.length && !directThreatResult && !cases.length && !actors.length && !savedResults.length && !watchResults.length ? (
                                 <div className='grid min-h-40 place-items-center text-sm font-medium text-ui-muted'>
                                     {cleanQuery ? 'No results' : 'Start typing to search everything'}
                                 </div>
@@ -178,13 +201,11 @@ export function directThreatItem(query: string, actorResults: SearchItem[] = [])
     if (value.length < 2) return null
     const href = `/ti/${encodeURIComponent(value)}`
     const matchedActor = actorResults.find(item => item.href.toLowerCase() === href.toLowerCase())
-    if (matchedActor) return matchedActor
-    return {
-        id: `threat:${value}`,
-        title: actorDisplayName(value),
-        detail: 'Threat actor profile',
-        href,
-    }
+    return matchedActor ? { ...matchedActor, detail: matchedActor.detail.startsWith('Threat actor profile') ? matchedActor.detail : `Threat actor profile · ${matchedActor.detail}` } : null
+}
+
+function manualSearchItem(query: string): SearchItem {
+    return { id: `search:${query}`, title: `Search “${query}”`, detail: 'Full-text retained evidence search', href: `/ti/${encodeURIComponent(query)}` }
 }
 
 function actorDisplayName(value: string) {
@@ -204,29 +225,37 @@ async function loadCases(query: string, signal: AbortSignal): Promise<SearchItem
 
 async function loadActors(query: string, signal: AbortSignal): Promise<SearchItem[]> {
     if (!query) return []
-    const params = new URLSearchParams({ q: query, limit: '8' })
+    const params = new URLSearchParams({ q: query, limit: '8', entityType: exactEntityType(query), cached: 'true' })
     const response = await fetch(`/api/ti/search?${params.toString()}`, { cache: 'no-store', signal })
     if (!response.ok) return []
     const payload = await response.json()
     const preview = actorPreviewItem(payload, query)
-    return uniqueByHref([...(preview ? [preview] : []), ...actorItems(payload)]).slice(0, 8)
+    return uniqueByHref([...(preview ? [preview] : []), ...actorItems(payload), ...evidenceItems(payload)]).slice(0, 8)
+}
+
+function exactEntityType(query: string) {
+    return /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(query) ? 'domain' : 'actor'
 }
 
 function actorPreviewItem(payload: unknown, query: string): SearchItem | null {
     if (!payload || typeof payload !== 'object') return null
     const row = payload as Record<string, unknown>
     const intelligence = row.actorIntelligence && typeof row.actorIntelligence === 'object' ? row.actorIntelligence as Record<string, unknown> : null
+    const identity = row.actorIdentity && typeof row.actorIdentity === 'object' ? row.actorIdentity as Record<string, unknown> : null
+    const candidates = arrayFrom(identity, ['candidates'])
+    const candidate = candidates.length === 1 && candidates[0] && typeof candidates[0] === 'object' ? candidates[0] as Record<string, unknown> : null
     if (row.queryKind !== 'actor' && !intelligence) return null
     const title = actorDisplayName(stringValue(row.query) || query)
-    const detail = usefulActorSummary(stringValue(row.summary)) || actorSummary({
+    const detail = usefulActorSummary(stringValue(candidate?.description)) || usefulActorSummary(stringValue(row.summary)) || actorSummary({
         name: title,
+        aliases: stringArray(candidate?.associatedNames),
         actorClass: stringValue(intelligence?.actorClass),
         attribution: stringValue(intelligence?.attribution),
         targetSectors: stringArray(intelligence?.targetSectors),
         geographies: stringArray(intelligence?.geographies),
         malwareTools: stringArray(intelligence?.malwareTools),
     }) || `${title} threat actor profile`
-    return { id: `actor-preview:${title}`, title, detail, href: `/ti/${encodeURIComponent(stringValue(row.query) || query)}` }
+    return { id: `actor-preview:${title}`, title, detail: `Threat actor profile · ${detail}`, href: `/ti/${encodeURIComponent(stringValue(row.query) || query)}` }
 }
 
 export function caseItem(value: unknown): SearchItem | null {
@@ -241,13 +270,25 @@ export function caseItem(value: unknown): SearchItem | null {
 }
 
 export function actorItems(payload: unknown): SearchItem[] {
-    const rows = arrayFrom(payload, ['actors', 'actorOverviews', 'results', 'rows'])
+    const rows = arrayFrom(payload, ['actors', 'actorOverviews'])
     const fromRows = rows.map(actorItem).filter(isSearchItem)
     if (fromRows.length) return uniqueByHref(fromRows)
     if (!payload || typeof payload !== 'object' || stringValue((payload as Record<string, unknown>).status).toLowerCase() !== 'ready') return []
     const fallbackTitle = stringValue((payload as Record<string, unknown> | null)?.actor)
     if (!fallbackTitle) return []
-    return [{ id: `actor:${fallbackTitle}`, title: fallbackTitle, detail: 'Open threat intelligence result', href: `/ti/${encodeURIComponent(fallbackTitle)}` }]
+    return [{ id: `actor:${fallbackTitle}`, title: fallbackTitle, detail: 'Threat actor profile', href: `/ti/${encodeURIComponent(fallbackTitle)}` }]
+}
+
+function evidenceItems(payload: unknown): SearchItem[] {
+    return arrayFrom(payload, ['results', 'rows']).map(value => {
+        if (!value || typeof value !== 'object') return null
+        const row = value as Record<string, unknown>
+        const id = stringValue(row.id) || stringValue(row.captureId)
+        const title = stringValue(row.title) || stringValue(row.sourceName) || stringValue(row.url)
+        if (!id || !title) return null
+        const detail = stringValue(row.summary) || stringValue(row.excerpt) || stringValue(row.body)
+        return { id: `evidence:${id}`, title, detail: `Recent evidence${detail ? ` · ${detail}` : ''}`, href: `/ti/${encodeURIComponent(stringValue(row.query) || title)}` }
+    }).filter(isSearchItem)
 }
 
 function actorItem(value: unknown): SearchItem | null {
@@ -256,7 +297,18 @@ function actorItem(value: unknown): SearchItem | null {
     const title = stringValue(row.actor) || stringValue(row.name) || stringValue(row.title) || stringValue(row.query)
     if (!title) return null
     const detail = [stringValue(row.confidence), stringValue(row.latestSeenAt), stringValue(row.summary)].filter(Boolean).join(' · ')
-    return { id: `actor:${title}`, title, detail: detail || 'Open threat intelligence result', href: `/ti/${encodeURIComponent(title)}` }
+    return { id: `actor:${title}`, title, detail: `Threat actor profile${detail ? ` · ${detail}` : ''}`, href: `/ti/${encodeURIComponent(title)}` }
+}
+
+function watchlistTerms(value: unknown): SearchItem[] {
+    if (!value || typeof value !== 'object') return []
+    const row = value as Record<string, unknown>
+    const terms = Array.isArray(row.terms) ? row.terms : Array.isArray(row.items) ? row.items : []
+    return terms.flatMap(term => {
+        const item = term && typeof term === 'object' ? term as Record<string, unknown> : null
+        const value = typeof term === 'string' ? term : stringValue(item?.value || item?.term)
+        return value ? [{ id: `watch:${value}`, title: value, detail: 'Monitored entity', href: '/dashboard/dwm/watchlists' }] : []
+    })
 }
 
 function arrayFrom(payload: unknown, keys: string[]) {

@@ -17,3 +17,9 @@ test('actor summaries provide a useful identity description when the feed has on
 test('actor summaries reject internal evidence-state copy', () => {
     assert.equal(usefulActorSummary('3 captured public-intelligence records match apt29; reviewed evidence is available.'), '')
 })
+
+test('sparse catalog actors use aliases instead of internal actor classes', () => {
+    const summary = actorSummary({ name: 'APT1', aliases: ['Comment Crew', 'Comment Group'], actorClass: 'cataloged_threat_group' })
+    assert.equal(summary, 'APT1 is a threat actor also known as Comment Crew and Comment Group.')
+    assert.doesNotMatch(summary, /cataloged|tracked|reviewed/i)
+})
