@@ -293,33 +293,6 @@ function EconomicsPanel({ economics, error, aiContainers, containerError }: { ec
 
     const summary = economics.summary
     const cacheRate = summary.cacheableEvents ? Math.round((summary.cacheHits / summary.cacheableEvents) * 100) : 0
-    const hasIncident = economics.reliability.incidentStatus.state !== 'operational'
-    const hasOperatorActions = economics.commercialReadiness.internalActionCount > 0
-    const hasQueue = economics.reliability.capacity.totalQueued > 0
-    const primaryHref = hasIncident || hasQueue
-        ? '#ai-reliability'
-        : hasOperatorActions
-            ? '#ai-operations'
-            : '#ai-clients'
-    const primaryTitle = hasIncident
-        ? 'Review worker reliability first'
-        : hasQueue
-            ? 'Clear queued worker jobs'
-            : hasOperatorActions
-                ? 'Review operator actions'
-                : 'Open live worker clients'
-    const primaryDetail = hasIncident
-        ? economics.reliability.incidentStatus.message
-        : hasQueue
-            ? `${economics.reliability.capacity.totalQueued} queued jobs with ${economics.reliability.capacity.totalAvailableSessions} open worker sessions.`
-            : hasOperatorActions
-                ? `${economics.commercialReadiness.internalActionCount} autonomous lane action${economics.commercialReadiness.internalActionCount === 1 ? '' : 's'} need operator review.`
-                : `${economics.reliability.capacity.totalAvailableSessions} worker sessions are available; live clients are ready for inspection.`
-    const primaryActionLabel = hasIncident || hasQueue
-        ? 'Review reliability'
-        : hasOperatorActions
-            ? 'Review lanes'
-            : 'Open clients'
 
     return (
         <section className='space-y-4 rounded-xl bg-ui-panel p-4 border border-ui-border'>
@@ -328,28 +301,13 @@ function EconomicsPanel({ economics, error, aiContainers, containerError }: { ec
                     <h2 className='text-xl font-semibold text-ui-text'>Worker output</h2>
                     <p className='mt-1 text-sm text-ui-muted'>Verified work, live capacity, and spend.</p>
                 </div>
-                <span className='w-fit rounded-full bg-ui-primary/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-ui-primary outline outline-ui-primary/20'>
-                    {economics.windowDays} day window
-                </span>
-            </div>
-
-            <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center' data-ai-primary-triage>
-                <div className='min-w-0'>
-                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
-                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>Recommended next</span>
-                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{economics.reliability.capacity.totalAvailableSessions} open sessions</span>
-                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{economics.reliability.capacity.totalQueued} queued</span>
-                    </div>
-                    <h3 className='mt-3 text-lg font-semibold text-ui-text'>{primaryTitle}</h3>
-                    <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{primaryDetail}</p>
+                <div className='flex flex-wrap items-center justify-end gap-2 text-xs font-semibold'>
+                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-ui-muted'>{economics.reliability.capacity.totalAvailableSessions} open sessions</span>
+                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-ui-muted'>{economics.reliability.capacity.totalQueued} queued</span>
+                    <span className='rounded-full bg-ui-primary/10 px-3 py-1 font-medium uppercase tracking-[0.16em] text-ui-primary outline outline-ui-primary/20'>
+                        {economics.windowDays} day window
+                    </span>
                 </div>
-                <a
-                    href={primaryHref}
-                    className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/20 sm:w-auto'
-                    data-ai-primary-action
-                >
-                    {primaryActionLabel}
-                </a>
             </div>
 
             <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-raised' data-ai-economics-disclosure>
