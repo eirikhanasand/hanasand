@@ -1,17 +1,22 @@
 import Link from 'next/link'
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, Clock3, PlayCircle, Rows3 } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
-import { getTiAdminOverview, type TiAdminOverview } from '@/utils/tiAdmin/ops'
+import { getTiAdminOverview, getTiCollectionRunsPage, type TiAdminOverview } from '@/utils/tiAdmin/ops'
 import TiDataAvailability from '../ti-data-availability'
 import ManualRunButton from '../manualRunButton'
 
 export const dynamic = 'force-dynamic'
 
-export default async function TiRunsPage() {
+export default async function TiRunsPage(props: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
     // Collection runs are global collector operations, not a customer tenant's
     // watchlist data. The default tenant lane is intentionally empty here.
-    const overview = await getTiAdminOverview(null, { limit: 50, includeCandidates: true })
-    const { runs, sources } = overview
+    const params = await props.searchParams
+    const cursor = Math.max(0, Number(value(params?.cursor)) || 0)
+    const [{ runs, total: runTotal, nextCursor, previousCursor, available }, overview] = await Promise.all([
+        getTiCollectionRunsPage(null, { cursor, limit: 50 }),
+        getTiAdminOverview(null, { limit: 50, includeSamples: false, includeCandidates: true }),
+    ])
+    const { sources } = overview
     const runQueries = [...new Set(sources.flatMap(source => source.domains).filter(domain => !domain.includes('only')))]
     const orderedRuns = [...runs].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
     const running = runs.filter(run => run.status === 'running' || run.status === 'queued').length
@@ -23,7 +28,7 @@ export default async function TiRunsPage() {
     const nextRun = [...runs].filter(run => run.nextRunAt).sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
     const nextSource = [...sources].filter(source => Number.isFinite(new Date(source.nextRunAt).getTime())).sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
     const attentionRuns = orderedRuns.filter(run => run.status !== 'completed' || Boolean(run.nextRunAt && isOverdue(run.nextRunAt)))
-    const runUnavailable = overview.availability.failedResources.includes('collection-runs')
+    const runUnavailable = !available
 
     return (
         <DashboardPage>
@@ -120,6 +125,13 @@ export default async function TiRunsPage() {
                         })}
                     </div>
                 </div>
+                <nav className='flex items-center justify-between gap-3 border-t border-ui-border bg-ui-panel px-4 py-3 text-sm' aria-label='Collection run pages'>
+                    <span className='text-ui-muted'>{runTotal ? `${cursor + 1}–${Math.min(cursor + runs.length, runTotal)} of ${runTotal}` : '0 runs'}</span>
+                    <div className='flex gap-2'>
+                        {previousCursor ? <Link href={`/dashboard/ti/runs?cursor=${previousCursor}`} className='rounded-md border border-ui-border px-3 py-1.5 font-semibold text-ui-text hover:bg-ui-raised'>Previous</Link> : null}
+                        {nextCursor ? <Link href={`/dashboard/ti/runs?cursor=${nextCursor}`} className='rounded-md border border-ui-border px-3 py-1.5 font-semibold text-ui-text hover:bg-ui-raised'>Next</Link> : null}
+                    </div>
+                </nav>
             </DashboardPanel> : <DashboardPanel className='border-ui-border bg-ui-panel p-6'><div className='mx-auto max-w-xl text-center'><div className='mx-auto grid h-12 w-12 place-items-center rounded-full bg-ui-primary/10 text-ui-primary'><PlayCircle className='h-6 w-6' /></div><h2 className='mt-4 text-lg font-semibold text-ui-text'>{runUnavailable ? 'Run history is unavailable' : 'No collection history yet'}</h2><p className='mt-2 text-sm leading-6 text-ui-muted'>{runUnavailable ? 'Retry when the collection service is available.' : sources.length ? 'The collector is configured, but no completed or active run has been recorded for the global source fleet yet.' : 'Add an executable source first. Collection history starts after the first source run.'}</p><div className='mt-4 flex justify-center gap-2'><Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>Open source inventory <ArrowRight className='h-4 w-4' /></Link></div></div></DashboardPanel>}
 
             <div className='grid gap-4 xl:grid-cols-[1fr_0.9fr]'>
@@ -187,6 +199,8 @@ export default async function TiRunsPage() {
         </DashboardPage>
     )
 }
+
+function value(input: string | string[] | undefined) { return Array.isArray(input) ? input[0] : input }
 
 function Metric({ title, value, detail, tone }: { title: string, value: string, detail: string, tone: 'ok' | 'warn' | 'hold' }) {
     const icon = tone === 'ok' ? <CheckCircle2 className='h-4 w-4' /> : tone === 'warn' ? <AlertTriangle className='h-4 w-4' /> : <Clock3 className='h-4 w-4' />
