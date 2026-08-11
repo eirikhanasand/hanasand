@@ -51,6 +51,7 @@ export default function SiteSearch({ token }: { token: boolean }) {
     const cleanQuery = query.trim().toLowerCase()
     const routes = useMemo(() => [...(token ? dashboardRouteItems : []), ...publicRouteItems], [token])
     const routeResults = useMemo(() => filterItems(routes, cleanQuery).slice(0, 8), [routes, cleanQuery])
+    const directThreatResult = useMemo(() => directThreatItem(cleanQuery), [cleanQuery])
 
     useEffect(() => {
         function onKeyDown(event: KeyboardEvent) {
@@ -124,9 +125,10 @@ export default function SiteSearch({ token }: { token: boolean }) {
                         </div>
                         <div className='max-h-[60vh] overflow-auto p-3'>
                             <ResultGroup title='ROUTES' items={routeResults} icon='route' onSelect={() => setOpen(false)} />
+                            <ResultGroup title='THREAT INTELLIGENCE' items={directThreatResult ? [directThreatResult] : []} icon='actor' onSelect={() => setOpen(false)} />
                             {token ? <ResultGroup title='CASES' items={cases.slice(0, 6)} icon='case' onSelect={() => setOpen(false)} /> : null}
-                            <ResultGroup title='THREAT ACTORS' items={actors.slice(0, 6)} icon='actor' onSelect={() => setOpen(false)} />
-                            {!routeResults.length && !cases.length && !actors.length ? (
+                            <ResultGroup title='THREAT ACTORS' items={actors.filter(item => item.href !== directThreatResult?.href).slice(0, 6)} icon='actor' onSelect={() => setOpen(false)} />
+                            {!routeResults.length && !directThreatResult && !cases.length && !actors.length ? (
                                 <div className='grid min-h-40 place-items-center text-sm font-medium text-ui-muted'>
                                     {cleanQuery ? 'No results' : 'Start typing to search everything'}
                                 </div>
@@ -168,6 +170,17 @@ function route(title: string, detail: string, href: string): SearchItem {
 function filterItems(items: SearchItem[], query: string) {
     if (!query) return items
     return items.filter(item => `${item.title} ${item.detail} ${item.href}`.toLowerCase().includes(query))
+}
+
+export function directThreatItem(query: string): SearchItem | null {
+    const value = query.trim()
+    if (value.length < 2) return null
+    return {
+        id: `threat:${value}`,
+        title: `Open ${value}`,
+        detail: 'Open the threat intelligence profile',
+        href: `/ti/${encodeURIComponent(value)}`,
+    }
 }
 
 async function loadCases(query: string, signal: AbortSignal): Promise<SearchItem[]> {

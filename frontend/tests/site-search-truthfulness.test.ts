@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { actorItems, caseItem } from '../src/components/header/siteSearch'
+import { actorItems, caseItem, directThreatItem } from '../src/components/header/siteSearch'
 
 test('header search does not invent an actor result for unavailable or empty TI responses', () => {
     assert.deepEqual(actorItems({ query: 'APT29', status: 'unavailable', mode: 'unavailable' }), [])
@@ -9,12 +9,19 @@ test('header search does not invent an actor result for unavailable or empty TI 
 })
 
 test('header search may link an explicit actor only from a ready response', () => {
-    assert.deepEqual(actorItems({ query: 'APT29', actor: 'APT29', status: 'ready' }), [{
+assert.deepEqual(actorItems({ query: 'APT29', actor: 'APT29', status: 'ready' }), [{
         id: 'actor:APT29',
         title: 'APT29',
         detail: 'Open threat intelligence result',
         href: '/ti/APT29',
-    }])
+}])
+assert.deepEqual(directThreatItem('apt42'), {
+    id: 'threat:apt42',
+    title: 'Open apt42',
+    detail: 'Open the threat intelligence profile',
+    href: '/ti/apt42',
+})
+assert.equal(directThreatItem(''), null)
 })
 
 test('header case results never display a raw organization identifier', () => {
