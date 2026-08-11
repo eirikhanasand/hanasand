@@ -97,7 +97,6 @@ export function buildEvaluationMetrics(store: CaptureMetadataStore, input: { ten
   const benchmarkTasks = new Map<string, EvaluationTaskRecord>(completedBenchmarks.flatMap((benchmark) => (benchmark.manifest ?? []).map((task) => [`${benchmark.id}\u0000${task.id}`, task] as [string, EvaluationTaskRecord])));
   const groupedAdjudications = recordsByTask(adjudications.filter((adjudication) => adjudication.benchmarkId && completedBenchmarkIds.has(adjudication.benchmarkId)));
   const groupedLabels = recordsByTask(allLabelEvents.filter((label) => label.benchmarkId && completedBenchmarkIds.has(label.benchmarkId)));
-  const evaluationLookup = createEvaluationLookup();
   const independentLabels = [...benchmarkTasks].flatMap(([key, task]) => {
     const benchmark = completedBenchmarkById.get(key.slice(0, key.indexOf("\u0000")));
     const taskLabels = groupedLabels.get(key) ?? [];

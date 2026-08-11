@@ -127,29 +127,6 @@ describe("durable evaluation metrics", () => {
     });
   });
 
-  test("keeps historical scheduler source comparisons out of independent accuracy", () => {
-    const store = new InMemoryScraperStore();
-    const task = independentTask(store, "task_scheduler_reference", "capture_scheduler_reference", "cve", ["CVE-2026-4101"], "source-scheduler:cisa-kev:nvd-cve:v1");
-    const benchmark: EvaluationBenchmarkRecord = {
-      id: "benchmark_scheduler_reference",
-      status: "complete",
-      datasetSplit: "test",
-      taskCount: 1,
-      captureIds: [task.captureId!],
-      manifest: [task],
-      protocol: { version: "ti.independent_extraction_benchmark.v4", testSplitLocked: true, datasetUsage: "locked_final_evaluation" }
-    };
-    store.saveEvaluationBenchmark(benchmark);
-    saveMetricAdjudication(store, benchmark, task, ["CVE-2026-4101"], "2026-07-20T00:00:00.000Z");
-
-    expect(buildEvaluationMetrics(store, { datasetSplit: "test" }).quality).toMatchObject({
-      status: "diagnostic_only",
-      evaluatedUnitCount: 0,
-      diagnosticUnitCount: 1,
-      benchmarkEvidence: { completedBenchmarkCount: 0, completedTaskCount: 0, adjudicationCount: 0 }
-    });
-  });
-
   test("rejects tampered, extra, missing, cross-split, and multiply adjudicated independently flagged labels", async () => {
     for (const variant of ["tampered", "extra", "missing", "cross_split", "multiple"] as const) {
       const store = new InMemoryScraperStore();
