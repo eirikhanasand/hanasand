@@ -28,7 +28,7 @@ export async function requestService<T>(service: ServiceName, path: string, init
                 ...(id ? { id } : {}),
                 ...(init?.headers || {}),
             },
-            cache: 'no-store',
+            ...(init?.method && init.method !== 'GET' ? { cache: 'no-store' as const } : { next: { revalidate: 5 } }),
             signal: init?.signal || controller.signal,
         })
 

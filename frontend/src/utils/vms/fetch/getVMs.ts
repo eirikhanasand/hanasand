@@ -15,7 +15,7 @@ export default async function getVMs(id: string, tokenOverride?: string, userIdO
                     ...(impersonationToken ? { 'x-impersonation-token': impersonationToken } : {}),
                 }),
             },
-            cache: 'no-store',
+            next: { revalidate: 5 },
             timeoutMs: config.abortTimeout,
             retries: 2,
         })

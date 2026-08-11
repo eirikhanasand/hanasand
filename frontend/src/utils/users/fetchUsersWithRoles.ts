@@ -15,6 +15,7 @@ export default async function fetchUsersWithRoles({ id, token }: { id?: string, 
                 'id': id,
                 'Authorization': `Bearer ${token}`
             },
+            next: { revalidate: 5 },
             signal: controller.signal
         })
 

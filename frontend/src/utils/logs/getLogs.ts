@@ -79,7 +79,7 @@ export async function getLogs({ token, id, service, level = 'error' }: { token?:
     if (service) params.set('service', service)
     try {
         const response = await fetch(`${config.url.api}/logs?${params.toString()}`, {
-            cache: 'no-store',
+            next: { revalidate: 5 },
             headers: { id, Authorization: `Bearer ${token}` },
         })
         if (!response.ok) return []
@@ -94,7 +94,7 @@ export async function getErrorEvents({ token, id }: { token?: string, id?: strin
     if (!token || !id) return emptyErrorEvents()
     try {
         const response = await fetch(`${config.url.api}/logs/errors?limit=150`, {
-            cache: 'no-store',
+            next: { revalidate: 5 },
             headers: { id, Authorization: `Bearer ${token}` },
         })
         if (!response.ok) return emptyErrorEvents()
@@ -113,7 +113,7 @@ export async function getLogServices({ token, id }: { token?: string, id?: strin
     if (!token || !id) return []
     try {
         const response = await fetch(`${config.url.api}/logs/services`, {
-            cache: 'no-store',
+            next: { revalidate: 5 },
             headers: { id, Authorization: `Bearer ${token}` },
         })
         if (!response.ok) return []
@@ -176,7 +176,7 @@ export async function getRealtimeLogs({ token, id, service }: { token?: string, 
     if (service) params.set('service', service)
     try {
         const response = await fetch(`${config.url.api}/logs/realtime?${params.toString()}`, {
-            cache: 'no-store',
+            next: { revalidate: 5 },
             headers: { id, Authorization: `Bearer ${token}` },
         })
 

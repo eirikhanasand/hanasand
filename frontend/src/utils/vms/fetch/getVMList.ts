@@ -9,7 +9,7 @@ export default async function getVMList(id: string, token: string): Promise<VM[]
                 'Authorization': `Bearer ${token}`,
                 id
             },
-            cache: 'no-store',
+            next: { revalidate: 5 },
             signal: controller.signal
         })
 

@@ -187,7 +187,7 @@ export default async function ImpersonationAuditPage({
             Authorization: `Bearer ${decodeURIComponent(token)}`,
             id,
         },
-        cache: 'no-store',
+        next: { revalidate: 5 },
     }).catch(() => null)
     const payload = response?.ok ? await response.json().catch(() => null) : null
     const events = Array.isArray(payload?.events) ? payload.events as AdminAuditEvent[] : []
