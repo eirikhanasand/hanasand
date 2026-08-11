@@ -309,7 +309,7 @@ export default async function ensureSchema() {
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_service_monitor_results_checked_at ON service_monitor_results(checked_at)')
     await run('CREATE INDEX IF NOT EXISTS idx_service_monitor_results_service_check ON service_monitor_results(service, check_name, checked_at DESC)')
-    await run("CREATE INDEX IF NOT EXISTS idx_service_monitor_results_non_up ON service_monitor_results(service, check_name, checked_at) WHERE status <> 'up'")
+    await run(`CREATE INDEX IF NOT EXISTS idx_service_monitor_results_non_up ON service_monitor_results(service, check_name, checked_at) WHERE status <> 'up'`)
     await run(`
         CREATE TABLE IF NOT EXISTS service_logs (
             id BIGSERIAL PRIMARY KEY,
