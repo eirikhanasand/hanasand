@@ -6,7 +6,7 @@ export const commercialAccessPlans = [
         priceLabel: '299 NOK / month',
         quota: '100 searches per day',
         summary: 'Search actors, domains, companies, and current public intelligence.',
-        features: ['Threat actor profiles', 'Source-backed search results', 'API access', 'Saved searches'],
+        features: ['Threat actor profiles', 'Current intelligence results', 'API access', 'Saved searches'],
     },
     {
         id: 'monitoring',
