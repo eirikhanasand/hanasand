@@ -832,7 +832,7 @@ function persistClaimDecision(store: any, task: AutomaticReviewTask, decision: A
     requestSha256: task.requestSha256,
     automaticDecision: decision,
     calibrationContext: decision.calibrationContext
-  });
+  };
 }
 
 function persistSubjectDecision(store: any, index: ReviewIndex, task: AutomaticReviewTask, decision: AutomaticReviewDecision, at: string, actor?: ActorIdentityRecord, reviewer?: string, idKind?: string) {
@@ -1535,7 +1535,7 @@ function buildReviewIndex(store: any): ReviewIndex {
     healthBySource: grouped(health, "sourceId"),
     reviewsByClaim: grouped(reviews, "claimId"),
     actorIdentities: store.listActorIdentities?.() ?? []
-  });
+  };
 }
 
 async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants = false, query?: { taskLimit?: number; modelVersion?: string }): Promise<ReviewIndex> {
