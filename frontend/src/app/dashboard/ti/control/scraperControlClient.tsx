@@ -171,8 +171,8 @@ export default function TiScraperControlClient() {
     const sourceCount = scheduler.totalSources || sources.length
     const serviceReady = Boolean(snapshot?.ok && snapshot.baseConfigured !== false && !error)
     const hasFailures = endpointRows.some(([, state]) => !state.ok)
-    const statusTitle = loading && !snapshot ? 'Connecting' : error || !serviceReady ? 'Unavailable' : hasFailures ? 'Needs attention' : queueCount ? 'Work queued' : 'Running normally'
-    const statusBody = statusTitle === 'Running normally' ? 'The scheduler is collecting sources automatically.' : statusTitle === 'Work queued' ? `${queueCount} collection item(s) need attention.` : statusTitle === 'Needs attention' ? 'One or more collection checks need attention.' : 'The collection service did not return a usable status.'
+    const statusTitle = loading && !snapshot ? 'Connecting' : error || !serviceReady ? 'Unavailable' : hasFailures ? 'Checks degraded' : queueCount ? 'Work queued' : 'Running normally'
+    const statusBody = statusTitle === 'Running normally' ? 'The scheduler is collecting sources automatically.' : statusTitle === 'Work queued' ? `${queueCount} collection item(s) are queued.` : statusTitle === 'Checks degraded' ? 'One or more collection checks are degraded.' : 'The collection service did not return a usable status.'
 
     return (
         <div className='source-ops-workbench grid gap-3'>
@@ -216,7 +216,7 @@ export default function TiScraperControlClient() {
                         <div className='flex flex-wrap items-center justify-between gap-2'>
                             <div>
                                 <p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Step 2 · Next actions</p>
-                                <h2 className='mt-1 text-lg font-semibold text-ui-text'>{workItems.length ? `${workItems.length} item${workItems.length === 1 ? '' : 's'} queued` : 'No action required'}</h2>
+                                <h2 className='mt-1 text-lg font-semibold text-ui-text'>{workItems.length ? `${workItems.length} item${workItems.length === 1 ? '' : 's'} queued` : 'Collection clear'}</h2>
                             </div>
                             <form onSubmit={submit} className='flex min-w-0 gap-1.5'>
                                 <label className='relative min-w-0'>
