@@ -293,7 +293,9 @@ export function isScannableContainer(container: { id: string, name: string, imag
     return container.state === 'running'
         && container.health !== 'starting'
         && container.health !== 'unhealthy'
-        && Boolean(name && image && image !== '<none>' && image !== 'unknown' && name !== container.id && name !== container.id.slice(0, 12))
+        && Boolean(name && image && image !== '<none>' && image !== 'unknown'
+            && !/^(?:sha256:)?[a-f0-9]{12,64}$/i.test(image)
+            && name !== container.id && name !== container.id.slice(0, 12))
 }
 
 function parseTrivy(raw: string): VulnerabilityDetail[] {
