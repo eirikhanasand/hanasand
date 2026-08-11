@@ -234,7 +234,7 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
   const state = detachedState(options.now?.() ?? nowIso(), options.queueLimit ?? 500), intervalMs = Math.max(5, options.intervalSeconds ?? 300) * 1000; let timer: Timer | undefined, startupTimer: Timer | undefined, active: Promise<void> | undefined;
   const cycle = (trigger: "automated" | "manual" = "automated") => {
     if (!state.enabled || active) return active ?? Promise.resolve();
-    state.running = true; state.lastCycleAt = nowIso();
+    state.running = true; state.lastCycleAt = nowIso(); let catchUp = false;
     active = (async () => {
       try {
         const sourceFeedDiscovery = await runSourceFeedDiscoveryCycle(options, options.now?.() ?? nowIso());
@@ -245,6 +245,7 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
           : await scheduleWatchlistDiscoveryRuns({ ...options, awaitWatchlistDiscoveryExecution: false }, options.now?.() ?? nowIso());
         result.sourceFeedDiscovery = sourceFeedDiscovery;
         result.watchlistDiscovery = watchlistDiscovery;
+        catchUp = result.status === "completed" && Number(result.deferredDueSourceCount ?? 0) > 0;
         state.latestResult = result;
         if (["completed", "degraded"].includes(result.status)) {
           state.successCount++; state.consecutiveErrorCount = 0; state.lastSuccessAt = result.generatedAt;
@@ -256,7 +257,7 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
         options.onCycle?.(result);
       }
       catch (e) { state.errorCount++; state.consecutiveErrorCount++; state.lastError = e instanceof Error ? e.message : String(e); state.lastErrorAt = nowIso(); options.onError?.(e); }
-      finally { state.running = false; state.cycleCount++; state.nextCycleAt = state.enabled ? nextAnchoredCycleAt(state.startedAt, intervalMs) : undefined; active = undefined; }
+      finally { state.running = false; state.cycleCount++; state.nextCycleAt = state.enabled ? nextAnchoredCycleAt(state.startedAt, intervalMs) : undefined; active = undefined; if (catchUp && state.enabled) setTimeout(() => cycle("automated"), 1_000); }
     })();
     return active;
   };
