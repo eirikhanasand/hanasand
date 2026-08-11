@@ -2,6 +2,7 @@ import { actorEnrichmentRun, actorEnrichmentRunSummary, actorProfileTimeline, ty
 import { error, json, readJson } from "./http.ts";
 import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
+import { decodeKeysetCursor, legacyOffset } from "./pagination.ts";
 
 async function records(store: any, method: string): Promise<any[]> {
   const value = typeof store[method] === "function" ? store[method]() : [];
@@ -53,7 +54,9 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
       .filter((delta) => delta.subjectType === "actor_profile" && delta.subjectId === actorId && inTenantScope(delta, tenantId))
       .sort((left, right) => String(right.observedAt ?? "").localeCompare(String(left.observedAt ?? "")));
     const limit = Math.max(1, Math.min(100, Number(url.searchParams.get("limit") ?? 25)));
-    const offset = Math.max(0, Number(url.searchParams.get("cursor") ?? 0));
+    const rawCursor = url.searchParams.get("cursor");
+    const offset = legacyOffset(rawCursor);
+    const cursor = decodeKeysetCursor(rawCursor);
     const rows = deltas.slice(offset, offset + limit).map(actorProfileTimeline);
     const nextCursor = offset + rows.length < deltas.length ? String(offset + rows.length) : undefined;
     const previousCursor = offset > 0 ? String(Math.max(0, offset - limit)) : undefined;
@@ -92,9 +95,11 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
 
   if (request.method === "GET") {
     const limit = Math.max(1, Math.min(100, Number(url.searchParams.get("limit") ?? 25)));
-    const offset = Math.max(0, Number(url.searchParams.get("cursor") ?? 0));
+    const rawCursor = url.searchParams.get("cursor");
+    const offset = legacyOffset(rawCursor);
+    const cursor = decodeKeysetCursor(rawCursor);
     const paged = typeof store.queryActorEnrichmentRuns === "function"
-      ? await store.queryActorEnrichmentRuns({ tenantId, limit, offset })
+      ? await store.queryActorEnrichmentRuns({ tenantId, limit, offset, cursor: cursor ? rawCursor : undefined })
       : null;
     const runs = paged ? paged.records : await scopedRuns(store, tenantId);
     const rows = (paged ? runs : runs.slice(offset, offset + limit)).map(actorEnrichmentRunSummary);

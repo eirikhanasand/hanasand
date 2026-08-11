@@ -17,6 +17,7 @@ import { handleActorEnrichmentRequest } from "./actorEnrichmentRoutes.ts";
 import { buildSourceQualityReport } from "../pipeline/sourceQuality.ts";
 import { buildActorCoverageReport } from "../pipeline/actorCoverage.ts";
 import { buildQueryCoverageReport } from "../pipeline/queryCoverage.ts";
+import { decodeKeysetCursor, legacyOffset } from "./pagination.ts";
 
 const listRoutes = {
   "/v1/intel/sources": ["sources", "listSources"],
@@ -74,7 +75,7 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
     const input = {
       tenantId: scope.tenantId,
       limit: numberQuery(url.searchParams.get("limit")),
-      cursor: numberQuery(url.searchParams.get("cursor")),
+      cursor: url.searchParams.get("cursor") ?? undefined,
       sourceId: url.searchParams.get("sourceId")?.trim() || undefined,
       executableOnly: url.searchParams.get("includeCandidates") !== "true",
       query: url.searchParams.get("q")?.trim() || undefined,
@@ -174,16 +175,18 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
     if (scope.error) return scope.error;
     const query = url.searchParams.get("q")?.trim().toLowerCase();
     const limit = Math.max(1, Math.min(500, numberQuery(url.searchParams.get("limit")) ?? 100));
-    const offset = Math.max(0, numberQuery(url.searchParams.get("cursor")) ?? 0);
+    const rawCursor = url.searchParams.get("cursor");
+    const offset = legacyOffset(rawCursor);
+    const cursor = decodeKeysetCursor(rawCursor);
     const sortField = "observedAt";
     const direction = "desc";
     const databaseEvidenceQuery = (options.store as any).queryEvidenceDeltas;
     if (typeof databaseEvidenceQuery === "function") {
-      const result = await databaseEvidenceQuery.call(options.store, { tenantId: scope.tenantId, query, limit, offset });
+      const result = await databaseEvidenceQuery.call(options.store, { tenantId: scope.tenantId, query, limit, offset, cursor: cursor ? rawCursor : undefined });
       const rows = result.records;
       const nextCursor = result.nextCursor;
-      const previousCursor = offset > 0 ? String(Math.max(0, offset - limit)) : undefined;
-      return json({ evidenceDeltas: rows, rows, total: result.total, nextCursor, previousCursor, pagination: { limit, cursor: String(offset), nextCursor, previousCursor, appliedFilters: { q: query ?? "", tenantId: scope.tenantId ?? "" }, sortField: "updatedAt", direction: "desc" } });
+      const previousCursor = cursor ? undefined : offset > 0 ? String(Math.max(0, offset - limit)) : undefined;
+      return json({ evidenceDeltas: rows, rows, total: result.total, nextCursor, previousCursor, pagination: { limit, cursor: rawCursor ?? "", nextCursor, previousCursor, appliedFilters: { q: query ?? "", tenantId: scope.tenantId ?? "" }, sortField: "updatedAt", direction: "desc" } });
     }
     const records = ((options.store as any).listEvidenceDeltas?.() ?? [])
       .filter((record: any) => inTenantScope(record, scope.tenantId))
@@ -198,17 +201,19 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
 
   const [responseKey, memoryMethod] = route;
   const limit = Math.max(1, Math.min(500, numberQuery(url.searchParams.get("limit")) ?? 50));
-  const offset = Math.max(0, numberQuery(url.searchParams.get("cursor")) ?? 0);
+  const rawCursor = url.searchParams.get("cursor");
+  const offset = legacyOffset(rawCursor);
+  const cursor = decodeKeysetCursor(rawCursor);
   const query = url.searchParams.get("q")?.trim().toLowerCase();
   const tenantId = scope.tenantId;
   const sortField = ({ captures: "collectedAt", collectionRuns: "startedAt", actorProfiles: "lastSeenAt", actorAliases: "lastSeenAt", evidenceLinks: "createdAt", alerts: "updatedAt", evaluationLabels: "labeledAt" } as Record<string, string>)[responseKey] ?? "updatedAt";
   const databaseQuery = (options.store as any).queryStructuredRecords;
     if (typeof databaseQuery === "function") {
-    const result = await databaseQuery.call(options.store, responseKey, { tenantId, query, limit, offset });
+    const result = await databaseQuery.call(options.store, responseKey, { tenantId, query, limit, offset, cursor: cursor ? rawCursor : undefined });
     const rows = result.records.map((record: any) => apiRecord(responseKey, record, url, tenantId, options.store));
     const nextCursor = result.nextCursor;
-    const previousCursor = offset > 0 ? String(Math.max(0, offset - limit)) : undefined;
-    const pagination = { limit, cursor: String(offset), nextCursor, previousCursor, appliedFilters: { q: query ?? "", tenantId: tenantId ?? "" }, sortField, direction: "desc" };
+    const previousCursor = cursor ? undefined : offset > 0 ? String(Math.max(0, offset - limit)) : undefined;
+    const pagination = { limit, cursor: rawCursor ?? "", nextCursor, previousCursor, appliedFilters: { q: query ?? "", tenantId: tenantId ?? "" }, sortField, direction: "desc" };
     return json({ [responseKey]: rows, rows, total: result.total, nextCursor, previousCursor, pagination });
   }
 

@@ -3,18 +3,20 @@ import { isExecutableSource } from "../policy/collectionPolicy.ts";
 import { automaticSourceReviewQualifies, qualifySourcePortfolio, SOURCE_PORTFOLIO_BASELINE } from "../ops/sourcePortfolioQualification.ts";
 import { toSafeSourceDto } from "./sourceRoutes.ts";
 import { inTenantScope } from "./tenantScope.ts";
+import { decodeKeysetCursor, encodeKeysetCursor, legacyOffset } from "./pagination.ts";
 import { sourceMonitoringWindowSeconds } from "../policy/sourceActivityWindow.ts";
 import { automaticSourceReviewEvidenceBindingsMatch } from "./automaticReviewRoutes.ts";
 import { hasApprovedAutomaticSourceReview } from "../policy/sourceAutomaticReview.ts";
 
-export async function buildSourceOperationsSnapshot(store: any, input: { tenantId?: string; generatedAt?: string; limit?: number; cursor?: number; sourceId?: string; executableOnly?: boolean; query?: string; family?: string; lifecycle?: string; access?: string; health?: string; output?: string; matches?: string; sort?: string; direction?: string } = {}) {
+export async function buildSourceOperationsSnapshot(store: any, input: { tenantId?: string; generatedAt?: string; limit?: number; cursor?: string; sourceId?: string; executableOnly?: boolean; query?: string; family?: string; lifecycle?: string; access?: string; health?: string; output?: string; matches?: string; sort?: string; direction?: string } = {}) {
   const generatedAt = input.generatedAt ?? nowIso();
   if (typeof store?.querySourceOperationalPage === "function") {
     const result = await store.querySourceOperationalPage({
       tenantId: input.tenantId,
       generatedAt,
       limit: input.limit,
-      offset: input.cursor,
+      offset: legacyOffset(input.cursor),
+      cursor: input.cursor,
       sourceId: input.sourceId,
       executableOnly: input.executableOnly,
       query: input.query,
@@ -157,7 +159,7 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
     total: qualifyingRows.length
   };
   const limit = Math.max(1, Math.min(500, Number(input.limit ?? 100) || 100));
-  const cursor = Math.max(0, Number(input.cursor ?? 0) || 0);
+  const cursor = legacyOffset(input.cursor);
   const page = rows.slice(cursor, cursor + limit);
 
   return {

@@ -11,6 +11,7 @@ import { json, readJson } from "./http.ts";
 import { resolveOrganizationScope } from "./organizationRoutes.ts";
 import type { OrganizationMember } from "./organizationRoutes.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
+import { decodeKeysetCursor } from "./pagination.ts";
 
 type CaseStatus = "open" | "escalated" | "suppressed" | "false_positive" | "closed";
 type CasePriority = "critical" | "high" | "medium" | "low";
@@ -109,13 +110,17 @@ type AnalystCase = {
   deliveryState?: string;
 };
 
-export function listCases(url: URL, options: ApiServerOptions, request?: Request): Response {
+export async function listCases(url: URL, options: ApiServerOptions, request?: Request): Promise<Response> {
   const scope = resolveOrganizationScope({ url, request }, options);
   if (scope.error) return scope.error;
   const access = authorizeCaseAccess({ options, scope, request, url, mode: "read" });
   if (access.error) return access.error;
   const filters = caseFiltersFromUrl(url);
-  const cases = ((options.store as any).listCases?.() ?? [])
+  const rawCursor = url.searchParams.get("cursor") ?? undefined;
+  const page = typeof (options.store as any).queryWorkflowRecordsPage === "function"
+    ? await (options.store as any).queryWorkflowRecordsPage({ recordType: "case", tenantId: scope.tenantId, limit: url.searchParams.get("limit") ?? 50, cursor: decodeKeysetCursor(rawCursor) ? rawCursor : undefined })
+    : undefined;
+  const cases = (page?.records ?? (options.store as any).listCases?.() ?? [])
     .filter((row: AnalystCase) => row.tenantId === scope.tenantId)
     .filter((row: AnalystCase) => caseMatchesOrganizationScope(row, scope.organizationId))
     .filter((row: AnalystCase) => caseMatchesFilters(row, filters, options))
@@ -127,7 +132,9 @@ export function listCases(url: URL, options: ApiServerOptions, request?: Request
     organization: scope.organization,
     access: caseAccessSummary(access),
     filters,
-    total: cases.length,
+    total: page?.total ?? cases.length,
+    nextCursor: page?.nextCursor,
+    pagination: { limit: page ? Math.min(200, Number(url.searchParams.get("limit") ?? 50)) : cases.length, cursor: rawCursor ?? "", nextCursor: page?.nextCursor, appliedFilters: filters, sortField: "updatedAt", direction: "desc" },
     cases,
     items
   });

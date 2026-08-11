@@ -11,7 +11,7 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
     // Collection runs are global collector operations, not a customer tenant's
     // watchlist data. The default tenant lane is intentionally empty here.
     const params = await props.searchParams
-    const cursor = Math.max(0, Number(value(params?.cursor)) || 0)
+    const cursor = value(params?.cursor) || ''
     const [{ runs, total: runTotal, nextCursor, previousCursor, available }, overview] = await Promise.all([
         getTiCollectionRunsPage(null, { cursor, limit: 50 }),
         getTiAdminOverview(null, { limit: 50, includeSamples: false, includeCandidates: true }),
@@ -126,9 +126,8 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
                     </div>
                 </div>
                 <nav className='flex items-center justify-between gap-3 border-t border-ui-border bg-ui-panel px-4 py-3 text-sm' aria-label='Collection run pages'>
-                    <span className='text-ui-muted'>{runTotal ? `${cursor + 1}–${Math.min(cursor + runs.length, runTotal)} of ${runTotal}` : '0 runs'}</span>
+                    <span className='text-ui-muted'>{runTotal ? `${runs.length} shown · ${runTotal} total` : '0 runs'}</span>
                     <div className='flex gap-2'>
-                        {previousCursor ? <Link href={`/dashboard/ti/runs?cursor=${previousCursor}`} className='rounded-md border border-ui-border px-3 py-1.5 font-semibold text-ui-text hover:bg-ui-raised'>Previous</Link> : null}
                         {nextCursor ? <Link href={`/dashboard/ti/runs?cursor=${nextCursor}`} className='rounded-md border border-ui-border px-3 py-1.5 font-semibold text-ui-text hover:bg-ui-raised'>Next</Link> : null}
                     </div>
                 </nav>

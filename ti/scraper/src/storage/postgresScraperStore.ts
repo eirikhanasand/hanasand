@@ -38,6 +38,7 @@ import { privateTarget } from "../registry/sourceRegistry.ts";
 import { AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS, SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticReviewModelVersion } from "../policy/sourceAutomaticReview.ts";
 import { orgWatchlistContractToRuntimeDwmWatchlists } from "./dwmOrgWatchlistBridge.ts";
 import { mayContainExposureQueueClaim } from "../product/exposureQueueCandidate.ts";
+import { decodeKeysetCursor, encodeKeysetCursor, legacyOffset } from "../api/pagination.ts";
 
 const DEFAULT_MIGRATIONS = [
   { version: "006_threat_intelligence_store", path: fileURLToPath(new URL("../../migrations/006_threat_intelligence_store.sql", import.meta.url)) },
@@ -278,11 +279,12 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     };
   }
 
-  async queryStructuredRecords(collection: keyof typeof structuredTables, input: { tenantId?: string; query?: string; limit?: number; offset?: number } = {}) {
+  async queryStructuredRecords(collection: keyof typeof structuredTables, input: { tenantId?: string; query?: string; limit?: number; offset?: number; cursor?: string } = {}) {
     const table = structuredTables[collection];
     if (!table) throw new Error(`Unsupported threat-intelligence collection: ${collection}`);
     const limit = Math.max(1, Math.min(500, Number(input.limit ?? 50)));
     const offset = Math.max(0, Number(input.offset ?? 0));
+    const cursor = decodeKeysetCursor(input.cursor);
     const parameters = [input.tenantId ?? null, input.query?.trim().toLowerCase() || null];
     const searchBy = "searchBy" in table ? table.searchBy : "record::text";
     const tenantWhere = "includeGlobal" in table && table.includeGlobal
@@ -290,13 +292,22 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       : `(tenant_id IS NOT DISTINCT FROM $1::text)`;
     const collectionWhere = "where" in table ? table.where : "TRUE";
     const where = `${tenantWhere} AND (${collectionWhere}) AND ($2::text IS NULL OR position($2 in lower(${searchBy})) > 0)`;
+    const cursorWhere = cursor ? ` AND (${table.orderBy}, id) < ($3::timestamptz, $4::text)` : "";
+    const pageParameters = cursor ? [...parameters, cursor.at, cursor.id, limit + 1] : [...parameters, limit, offset];
+    const pageLimit = cursor ? "$5" : "$3";
+    const pageOffset = cursor ? "0" : "$4";
     const [rows, countRows] = await Promise.all([
-      this.sql.unsafe(`SELECT record FROM threat_intel.${table.name} WHERE ${where} ORDER BY ${table.orderBy} DESC LIMIT $3 OFFSET $4`, [...parameters, limit, offset]),
+      this.sql.unsafe(`SELECT record, id, ${table.orderBy} FROM threat_intel.${table.name} WHERE ${where}${cursorWhere} ORDER BY ${table.orderBy} DESC, id DESC LIMIT ${pageLimit} OFFSET ${pageOffset}`, pageParameters),
       this.sql.unsafe(`SELECT count(*)::int AS total FROM threat_intel.${table.name} WHERE ${where}`, parameters)
     ]);
     const total = Number(countRows[0]?.total ?? 0);
-    const records = rows.map(readRecord);
-    return { records, total, nextCursor: offset + records.length < total ? String(offset + records.length) : undefined };
+    const hasNext = cursor && rows.length > limit;
+    const pageRows = hasNext ? rows.slice(0, limit) : rows;
+    const records = pageRows.map(readRecord);
+    const last = pageRows.at(-1) as { record?: unknown, [key: string]: unknown } | undefined;
+    const lastId = last?.id ? String(last.id) : undefined;
+    const lastAt = last?.[table.orderBy] ? new Date(String(last[table.orderBy])).toISOString() : undefined;
+    return { records, total, nextCursor: hasNext ? encodeKeysetCursor(lastAt, lastId) : undefined };
   }
 
   async queryAllStructuredRecords(collection: keyof typeof structuredTables, input: { tenantId?: string } = {}) {
@@ -605,9 +616,11 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     };
   }
 
-  async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; sourceId?: string; executableOnly?: boolean; query?: string; family?: string; lifecycle?: string; access?: string; health?: string; output?: string; matches?: string; sort?: string; direction?: string; _skipCache?: boolean } ) {
+  async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; cursor?: string; sourceId?: string; executableOnly?: boolean; query?: string; family?: string; lifecycle?: string; access?: string; health?: string; output?: string; matches?: string; sort?: string; direction?: string; _skipCache?: boolean } ) {
     const limit = Math.max(1, Math.min(100, Number(input.limit ?? 50)));
     const offset = Math.max(0, Number(input.offset ?? 0));
+    const cursor = decodeKeysetCursor(input.cursor);
+    const keysetSourceSort = cursor && (!input.sort || input.sort === 'source');
     const tenantId = input.tenantId ?? null;
     const sourceId = input.sourceId?.trim() || null;
     const executableOnly = input.executableOnly === true;
@@ -634,6 +647,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       if (input.matches === 'yes') filters.push('scored.match_count > 0');
       if (input.matches === 'no') filters.push('scored.match_count = 0');
       if (input.health) filters.push(`scored.health_state = ${bind(input.health)}`);
+      if (keysetSourceSort) filters.push(`(lower(source.name), source.id) < (${bind(cursor.at)}, ${bind(cursor.id)})`);
       const sortSql = ({ access: 'lower(source.access_method)', status: `CASE source.status WHEN 'active' THEN 0 WHEN 'candidate' THEN 1 WHEN 'review' THEN 2 WHEN 'paused' THEN 3 ELSE 4 END`, content: 'scored.last_content_at', useful: 'scored.last_useful_at', matches: 'scored.match_count', source: 'lower(source.name)' } as Record<string, string>)[input.sort ?? 'source'] ?? 'lower(source.name)';
       const orderSql = sortSql.replaceAll('source.', '').replaceAll('scored.', '');
       const direction = input.direction === 'desc' ? 'DESC' : 'ASC';
@@ -661,7 +675,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           ORDER BY ${orderSql} ${direction}, id
           LIMIT $${values.length + 1} OFFSET $${values.length + 2}
         )
-        SELECT page.record, page.collection_executable,
+        SELECT page.record, page.id, page.collection_executable,
           page.filtered_total,
           COALESCE(health.stats, '{}'::jsonb) AS health_stats,
           COALESCE(captures.stats, '{}'::jsonb) AS capture_stats,
@@ -716,7 +730,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
               )
             )
           ) matches ON TRUE
-      `, [...values, limit, offset]);
+      `, [...values, keysetSourceSort ? limit + 1 : limit, offset]);
       const [summaryRow] = await this.sql.unsafe(`
         SELECT count(*) AS source_count,
           count(*) FILTER (WHERE collection_executable) AS retained_source_count,
@@ -738,8 +752,13 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         retiredSourceCount: Number((summaryRow as any)?.retired_source_count ?? 0),
         measurementState: 'source_counts_only'
       } };
+      const hasNext = Boolean(keysetSourceSort && pageRows.length > limit);
+      const returnedRows = hasNext ? pageRows.slice(0, limit) : pageRows;
       const total = Number((pageRows[0] as any)?.filtered_total ?? 0);
-      const value = { rows: pageRows, totals: summary.summary, total, nextCursor: offset + pageRows.length < total ? String(offset + pageRows.length) : undefined };
+      const last = returnedRows.at(-1) as any;
+      const lastRecord = last?.record && typeof last.record === 'object' ? last.record : {};
+      const nextCursor = hasNext ? encodeKeysetCursor(String(lastRecord.name ?? '').toLowerCase(), last?.id) : (keysetSourceSort ? undefined : offset + returnedRows.length < total ? String(offset + returnedRows.length) : undefined);
+      const value = { rows: returnedRows, totals: summary.summary, total, nextCursor };
       this.sourceOperationalPageCache.set(cacheKey, { expiresAt: Date.now() + 5_000, value });
       return value;
     }
@@ -2093,16 +2112,43 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const rows = await this.sql`SELECT record FROM threat_intel.workflow_records WHERE record_type = 'actor_enrichment_run' ORDER BY updated_at DESC, id DESC`;
     return rows.map(readRecord);
   }
-  async queryActorEnrichmentRuns(input: { tenantId?: string; limit?: number; offset?: number } = {}) {
+  async queryActorEnrichmentRuns(input: { tenantId?: string; limit?: number; offset?: number; cursor?: string } = {}) {
     const limit = Math.max(1, Math.min(100, Number(input.limit ?? 25)));
     const offset = Math.max(0, Number(input.offset ?? 0));
+    const cursor = decodeKeysetCursor(input.cursor);
     const tenantWhere = input.tenantId === undefined ? 'TRUE' : 'tenant_id IS NOT DISTINCT FROM $1::text';
-    const params = input.tenantId === undefined ? [limit, offset] : [input.tenantId, limit, offset];
-    const rows = await this.sql.unsafe(`SELECT record FROM threat_intel.workflow_records WHERE record_type = 'actor_enrichment_run' AND ${tenantWhere} ORDER BY updated_at DESC, id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    const params = input.tenantId === undefined ? (cursor ? [cursor.at, cursor.id, limit + 1] : [limit, offset]) : (cursor ? [input.tenantId, cursor.at, cursor.id, limit + 1] : [input.tenantId, limit, offset]);
+    const cursorWhere = cursor ? ` AND (updated_at, id) < (${input.tenantId === undefined ? "$1" : "$2"}::timestamptz, ${input.tenantId === undefined ? "$2" : "$3"}::text)` : "";
+    const limitParam = cursor ? (input.tenantId === undefined ? "$3" : "$4") : (input.tenantId === undefined ? "$1" : "$2");
+    const offsetParam = cursor ? "0" : (input.tenantId === undefined ? "$2" : "$3");
+    const rows = await this.sql.unsafe(`SELECT record, id, updated_at FROM threat_intel.workflow_records WHERE record_type = 'actor_enrichment_run' AND ${tenantWhere}${cursorWhere} ORDER BY updated_at DESC, id DESC LIMIT ${limitParam} OFFSET ${offsetParam}`, params);
     const countRows = await this.sql.unsafe(`SELECT count(*)::int AS total FROM threat_intel.workflow_records WHERE record_type = 'actor_enrichment_run' AND ${tenantWhere}`, input.tenantId === undefined ? [] : [input.tenantId]);
-    const records = rows.map(readRecord);
+    const hasNext = cursor && rows.length > limit;
+    const pageRows = hasNext ? rows.slice(0, limit) : rows;
+    const records = pageRows.map(readRecord);
     const total = Number(countRows[0]?.total ?? 0);
-    return { records, total, nextCursor: offset + records.length < total ? String(offset + records.length) : undefined };
+    const last = rows.at(-1) as { id?: string, updated_at?: string } | undefined;
+    return { records, total, nextCursor: hasNext ? encodeKeysetCursor(last?.updated_at, last?.id) : undefined };
+  }
+  async queryWorkflowRecordsPage(input: { recordType: string; tenantId?: string; limit?: number; cursor?: string } ) {
+    const limit = Math.max(1, Math.min(200, Number(input.limit ?? 50)));
+    const cursor = decodeKeysetCursor(input.cursor);
+    const tenantWhere = input.tenantId === undefined ? "TRUE" : "tenant_id IS NOT DISTINCT FROM $1::text";
+    const values = input.tenantId === undefined
+      ? (cursor ? [input.recordType, cursor.at, cursor.id, limit + 1] : [input.recordType, limit])
+      : (cursor ? [input.tenantId, input.recordType, cursor.at, cursor.id, limit + 1] : [input.tenantId, input.recordType, limit]);
+    const typeParam = input.tenantId === undefined ? "$1" : "$2";
+    const cursorParams = input.tenantId === undefined ? ["$2", "$3"] : ["$3", "$4"];
+    const limitParam = input.tenantId === undefined ? (cursor ? "$4" : "$2") : (cursor ? "$5" : "$3");
+    const cursorWhere = cursor ? ` AND (updated_at, id) < (${cursorParams[0]}::timestamptz, ${cursorParams[1]}::text)` : "";
+    const rows = await this.sql.unsafe(`SELECT record, id, updated_at FROM threat_intel.workflow_records WHERE ${tenantWhere} AND record_type = ${typeParam}${cursorWhere} ORDER BY updated_at DESC, id DESC LIMIT ${limitParam}`, values);
+    const countValues = input.tenantId === undefined ? [input.recordType] : [input.tenantId, input.recordType];
+    const countTypeParam = input.tenantId === undefined ? "$1" : "$2";
+    const countRows = await this.sql.unsafe(`SELECT count(*)::int AS total FROM threat_intel.workflow_records WHERE ${tenantWhere} AND record_type = ${countTypeParam}`, countValues);
+    const hasNext = cursor && rows.length > limit;
+    const pageRows = hasNext ? rows.slice(0, limit) : rows;
+    const last = pageRows.at(-1) as { id?: string, updated_at?: string } | undefined;
+    return { records: pageRows.map(readRecord), total: Number(countRows[0]?.total ?? 0), nextCursor: hasNext ? encodeKeysetCursor(last?.updated_at, last?.id) : undefined };
   }
   async queryEvidenceDeltas(input: { tenantId?: string; query?: string; limit?: number; offset?: number } = {}) {
     const limit = Math.max(1, Math.min(100, Number(input.limit ?? 25)));

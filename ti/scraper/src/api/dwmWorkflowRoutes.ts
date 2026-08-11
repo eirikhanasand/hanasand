@@ -11,6 +11,7 @@ import { json, readJson } from "./http.ts";
 import { assertPublicWebhookTarget, buildWebhookRequestBody, findWebhookDestination, inferWebhookKind, normalizeWebhookUrl, organizationWebhookDestinations, resolveOrganizationScope, webhookHeaders, type WebhookDestination } from "./organizationRoutes.ts";
 import type { OrganizationMember } from "./organizationRoutes.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
+import { decodeKeysetCursor } from "./pagination.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 
 type DwmWatchlist = {
@@ -205,7 +206,11 @@ export async function listDwmAlerts(url: URL, options: ApiServerOptions, request
   if (access.error) return access.error;
   const tenantId = scope.tenantId;
   await ensureExposureQueueDwmAlerts(options, { tenantId, organizationId: scope.organizationId });
-  const alerts = (options.store as any).listDwmAlerts?.() ?? [];
+  const rawCursor = url.searchParams.get("cursor") ?? undefined;
+  const page = typeof (options.store as any).queryWorkflowRecordsPage === "function"
+    ? await (options.store as any).queryWorkflowRecordsPage({ recordType: "alert", tenantId, limit: url.searchParams.get("limit") ?? 50, cursor: decodeKeysetCursor(rawCursor) ? rawCursor : undefined })
+    : undefined;
+  const alerts = page?.records ?? (options.store as any).listDwmAlerts?.() ?? [];
   const visibleAlerts = alerts
     .filter((row: any) => row.tenantId === tenantId)
     .filter((row: any) => !scope.organizationId || row.organizationId === scope.organizationId)
@@ -225,7 +230,10 @@ export async function listDwmAlerts(url: URL, options: ApiServerOptions, request
       options,
       url
     }),
-    alerts: visibleAlertItems
+    alerts: visibleAlertItems,
+    total: page?.total ?? visibleAlertItems.length,
+    nextCursor: page?.nextCursor,
+    pagination: { limit: page ? Math.min(200, Number(url.searchParams.get("limit") ?? 50)) : visibleAlertItems.length, cursor: rawCursor ?? "", nextCursor: page?.nextCursor, appliedFilters: { tenantId, organizationId: scope.organizationId ?? "" }, sortField: "updatedAt", direction: "desc" }
   });
 }
 
@@ -445,19 +453,25 @@ export async function replayDwmAlert(request: Request, options: ApiServerOptions
   return json({ ...buildDwmAlertDetail(alert, options, access), workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: scope.organizationId, action: "replay" }), downstreamHandoff: buildDwmAlertDownstreamHandoff({ alert, deliveries: existingDeliveries, organizationId: scope.organizationId, currentReplayAttempt: true, ...downstreamLifecycleForAlert(options, alert, scope), generatedAt }), entitlement: entitlement.adapter, entitlementUsageEvent: usageEvent });
 }
 
-export function listDwmWebhookDeliveries(url: URL, options: ApiServerOptions, request?: Request): Response {
+export async function listDwmWebhookDeliveries(url: URL, options: ApiServerOptions, request?: Request): Promise<Response> {
   const scope = resolveOrganizationScope({ url, request }, options);
   if (scope.error) return scope.error;
   const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
   if (access.error) return access.error;
   const tenantId = scope.tenantId;
-  const deliveries = (options.store as any).listDwmWebhookDeliveries?.() ?? [];
+  const rawCursor = url.searchParams.get("cursor") ?? undefined;
+  const page = typeof (options.store as any).queryWorkflowRecordsPage === "function"
+    ? await (options.store as any).queryWorkflowRecordsPage({ recordType: "dwm_webhook_delivery", tenantId, limit: url.searchParams.get("limit") ?? 50, cursor: decodeKeysetCursor(rawCursor) ? rawCursor : undefined })
+    : undefined;
+  const deliveries = page?.records ?? (options.store as any).listDwmWebhookDeliveries?.() ?? [];
   return json({
     organization: scope.organization,
     visibilityDecision: access.visibilityDecision,
     deliveries: deliveries
       .filter((row: any) => row.tenantId === tenantId)
       .map((row: any) => withDwmWebhookOperatorDeliveryTrace(row))
+    , total: page?.total ?? deliveries.length, nextCursor: page?.nextCursor,
+    pagination: { limit: page ? Math.min(200, Number(url.searchParams.get("limit") ?? 50)) : deliveries.length, cursor: rawCursor ?? "", nextCursor: page?.nextCursor, appliedFilters: { tenantId }, sortField: "updatedAt", direction: "desc" }
   });
 }
 

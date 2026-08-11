@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function TiSourcesPage(props: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
     const params = await props.searchParams
-    const cursor = Math.max(0, Number(value(params?.cursor)) || 0)
+    const cursor = value(params?.cursor) || ''
     const scope = value(params?.scope) === 'default' ? 'default' : 'global'
     const sort = value(params?.sort) || 'source'
     const direction = value(params?.dir) === 'desc' ? 'desc' : 'asc'
@@ -62,8 +62,8 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                 </div>
             </DashboardPanel>
             <nav className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-panel px-4 py-3 text-sm' aria-label='Source inventory pages'>
-                <span className='text-ui-muted'>{overview.sourcePage.total ? `${cursor + 1}–${Math.min(cursor + rows.length, overview.sourcePage.total)} of ${overview.sourcePage.total}` : '0 sources'}</span>
-                <div className='flex gap-2'>{cursor > 0 ? <Link href={pageHref(scope, sort, direction, Math.max(0, cursor - 50), { query, family, lifecycle, access, health, output, matches })} className={tab}>Previous</Link> : null}{overview.sourcePage.nextCursor ? <Link href={pageHref(scope, sort, direction, Number(overview.sourcePage.nextCursor), { query, family, lifecycle, access, health, output, matches })} className={tab}>Next</Link> : null}</div>
+                <span className='text-ui-muted'>{overview.sourcePage.total ? `${rows.length} shown · ${overview.sourcePage.total} total` : '0 sources'}</span>
+                <div className='flex gap-2'>{overview.sourcePage.nextCursor ? <Link href={pageHref(scope, sort, direction, overview.sourcePage.nextCursor, { query, family, lifecycle, access, health, output, matches })} className={tab}>Next</Link> : null}</div>
             </nav>
         </>}
     </DashboardPage>
@@ -91,10 +91,10 @@ function Status({ source }: { source: TiAdminSource }) {
 
 function SortHeader({ label, field, scope, sort, direction, filters }: { label: string, field: string, scope: string, sort: string, direction: string, filters: Record<string, string> }) {
     const nextDirection = sort === field && direction === 'asc' ? 'desc' : 'asc'
-    return <Link href={pageHref(scope, field, nextDirection, 0, filters)} className='inline-flex items-center gap-1 whitespace-nowrap hover:text-ui-text' title={`Sort by ${label}`}><span>{label}</span><span className='inline-flex flex-col text-[8px] leading-[7px]'><span className={sort === field && direction === 'asc' ? 'text-ui-primary' : 'text-ui-muted/45'}>▲</span><span className={sort === field && direction === 'desc' ? 'text-ui-primary' : 'text-ui-muted/45'}>▼</span></span></Link>
+    return <Link href={pageHref(scope, field, nextDirection, '', filters)} className='inline-flex items-center gap-1 whitespace-nowrap hover:text-ui-text' title={`Sort by ${label}`}><span>{label}</span><span className='inline-flex flex-col text-[8px] leading-[7px]'><span className={sort === field && direction === 'asc' ? 'text-ui-primary' : 'text-ui-muted/45'}>▲</span><span className={sort === field && direction === 'desc' ? 'text-ui-primary' : 'text-ui-muted/45'}>▼</span></span></Link>
 }
 
-function pageHref(scope: string, sort: string, direction: string, cursor: number, filters: Record<string, string> = {}) {
+function pageHref(scope: string, sort: string, direction: string, cursor: string, filters: Record<string, string> = {}) {
     const params = new URLSearchParams({ scope, sort, dir: direction, cursor: String(cursor) })
     for (const [key, item] of Object.entries(filters)) if (item) params.set(key, item)
     return `/dashboard/ti/sources?${params.toString()}`
