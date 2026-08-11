@@ -86,6 +86,28 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_browser_runs_owner_created ON browser_runs(owner_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_browser_runs_quota_created ON browser_runs(quota_identity, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_browser_runs_client_created ON browser_runs(client_id_hash, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_browser_runs_created_at ON browser_runs(created_at DESC)')
+    await run(`
+        CREATE TABLE IF NOT EXISTS support_tickets (
+            id UUID PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            subject TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_support_tickets_updated ON support_tickets(updated_at DESC)')
+    await run(`
+        CREATE TABLE IF NOT EXISTS support_messages (
+            id UUID PRIMARY KEY,
+            ticket_id UUID NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+            sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            body TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_support_messages_ticket_created ON support_messages(ticket_id, created_at ASC)')
     await run(`
         CREATE TABLE IF NOT EXISTS commercial_contact_requests (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -146,6 +168,8 @@ export default async function ensureSchema() {
         reservedUsernames.map(username => `${username} reserved account`),
     ])
     await run('UPDATE users SET reserved = TRUE WHERE lower(id) = ANY($1::text[])', [reservedUsernames])
+    await run('INSERT INTO roles (id, name, description, created_by) VALUES (\'support\', \'Support\', \'Answer customer support chats.\', $1) ON CONFLICT (id) DO NOTHING', [ownerUserIds[0] || 'eirikhanasand'])
+    await run('INSERT INTO user_roles (user_id, role_id, assigned_by) SELECT id, \'support\', $1 FROM users WHERE lower(id) = ANY($2::text[]) ON CONFLICT DO NOTHING', [ownerUserIds[0] || 'eirikhanasand', ownerUserIds])
     await run(`
         UPDATE users
         SET active = TRUE,

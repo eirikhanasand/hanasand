@@ -208,7 +208,8 @@ import {
     putDwmWebhookDestination,
 } from './handlers/dwm/webhooks.ts'
 import { getBrowserSandboxProfiles, putBrowserSandboxProfiles } from './handlers/browserSandboxProfiles.ts'
-import { getBrowserRunReport, getBrowserRuns, postBrowserRunReport } from './handlers/browserSandboxRuns.ts'
+import { getBrowserRunReport, getBrowserRuns, getBrowserRunStats, postBrowserRunReport } from './handlers/browserSandboxRuns.ts'
+import { getSupportMessages, getSupportTickets, postSupportMessage, postSupportTicket } from './handlers/supportChat.ts'
 import { getCommercialContactRequests, postCommercialContactRequest } from './handlers/commercialContactRequests.ts'
 import { getOrganizationPrivacy, postOrganizationPrivacy } from './handlers/organizationPrivacy.ts'
 import { deleteSavedSearch, getSavedSearches, postSavedSearch } from './handlers/ti/savedSearches.ts'
@@ -326,9 +327,14 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.put('/browser/profiles', putBrowserSandboxProfiles)
     fastify.get('/browser-sandbox/profiles', getBrowserSandboxProfiles)
     fastify.put('/browser-sandbox/profiles', putBrowserSandboxProfiles)
+    fastify.get('/browser/stats', getBrowserRunStats)
     fastify.get('/browser/runs', getBrowserRuns)
     fastify.get('/browser/runs/:id/report', getBrowserRunReport)
     fastify.post('/browser/runs/:id/report', postBrowserRunReport)
+    fastify.get('/support/tickets', getSupportTickets)
+    fastify.post('/support/tickets', postSupportTicket)
+    fastify.get('/support/tickets/:id/messages', getSupportMessages)
+    fastify.post('/support/tickets/:id/messages', postSupportMessage)
 
     // Article handlers
     fastify.get('/articles', getArticles)

@@ -29,7 +29,7 @@ async function handler(req: NextRequest, context: Context) {
 
     const params = await context.params
     const pathSegments = params.path || []
-    const anonymousAllowed = pathSegments[0] === 'browser' && pathSegments[1] === 'runs'
+    const anonymousAllowed = pathSegments[0] === 'browser' && (pathSegments[1] === 'runs' || pathSegments[1] === 'stats')
     if ((!token || !id) && !anonymousAllowed) {
         return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
     }

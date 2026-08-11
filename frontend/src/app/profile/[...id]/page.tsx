@@ -1,6 +1,7 @@
 import Certificates from '@/components/profile/certificates'
 import AccountActions from '@/components/profile/accountActions'
 import SessionsPanel from '@/components/profile/sessions'
+import SupportTickets from '@/components/profile/supportTickets'
 import DashboardSidebar from '@/components/dashboard/dashboardSidebar'
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 import getCertificates from '@/utils/certificates/getCertificates'
@@ -82,6 +83,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                             <div className='grid gap-3'>
                                 <SessionsPanel isSelf={isSelf} />
                                 <Certificates certificates={certificates} />
+                                {isSelf ? <SupportTickets /> : null}
                             </div>
                             <div className='grid content-start gap-3'>
                                 <AccountActions isSelf={isSelf} />
