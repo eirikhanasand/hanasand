@@ -555,8 +555,6 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       WHERE ${where.join(" AND ")}`;
     const pageRows = await this.sql.unsafe(`${sourceTerms}
       SELECT capture.record,
-        capture.id AS capture_id, capture.tenant_id, capture.source_id, capture.url,
-        capture.collected_at, capture.published_at, capture.media_type, capture.storage_kind,
         count(*) OVER () AS total,
         count(*) FILTER (WHERE capture.record->'metadata'->'review'->>'state' = 'needs_review' OR capture.published_at IS NULL) OVER () AS needs_review,
         count(*) FILTER (WHERE capture.storage_kind = 'metadata_only') OVER () AS metadata_only,
@@ -576,7 +574,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       first = summaryRows[0] as Record<string, unknown> | undefined;
     }
     return {
-      captures: pageRows.map(readCaptureRecord),
+      captures: pageRows.map((row: Record<string, unknown>) => readRecord(row)),
       total: Number(first?.total ?? 0),
       needsReview: Number(first?.needs_review ?? 0),
       metadataOnly: Number(first?.metadata_only ?? 0),
