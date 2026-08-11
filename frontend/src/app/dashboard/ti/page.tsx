@@ -57,7 +57,7 @@ export default async function TiAdminPage() {
                     href='/dashboard/ti/enrichment'
                     icon={<Radar className='h-4 w-4' />}
                     state={operationalStateLabel(enrichment.worker.state)}
-                    stateTone={enrichment.worker.state === 'running' ? 'ok' : enrichment.worker.state === 'error' || enrichment.worker.state === 'unavailable' ? 'bad' : 'watch'}
+                    stateTone={enrichment.worker.state === 'active' ? 'ok' : enrichment.worker.state === 'unavailable' ? 'bad' : 'watch'}
                     primary={currentActor?.name || activeActorRun?.actor_name || 'Selecting actor'}
                     secondary={latestDiscovery ? latestDiscovery.title : `${enrichment.stats.updatedLastHour} profile updates in the last hour`}
                     footer={activeActorRun ? `Run ${operationalStateLabel(activeActorRun.status)}` : `${enrichment.stats.queued} actors queued`}
@@ -79,7 +79,7 @@ export default async function TiAdminPage() {
                 <Metric title='Monitoring signals' value={`${reviewDomains.length + candidateSources.length + failedRuns.length}`} tone={reviewDomains.length || candidateSources.length || failedRuns.length ? 'watch' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
                 <Metric title='Stale sources' value={`${staleSources.length}`} tone={staleSources.length ? 'bad' : 'ok'} icon={<Clock3 className='h-4 w-4' />} />
                 <Metric title='Recent capture sample' value={`${captures.length}`} icon={<Camera className='h-4 w-4' />} />
-                <Metric title='Actor worker' value={operationalStateLabel(enrichment.worker.state)} tone={enrichment.worker.state === 'running' ? 'ok' : enrichment.worker.state === 'error' || enrichment.worker.state === 'unavailable' ? 'bad' : 'watch'} icon={<Radar className='h-4 w-4' />} />
+                <Metric title='Actor worker' value={operationalStateLabel(enrichment.worker.state)} tone={enrichment.worker.state === 'active' ? 'ok' : enrichment.worker.state === 'unavailable' ? 'bad' : 'watch'} icon={<Radar className='h-4 w-4' />} />
                 <Metric title='Next run' value={nextRun ? shortTime(nextRun.nextRunAt) : 'Selecting'} icon={<PlayCircle className='h-4 w-4' />} />
             </div>
 
