@@ -2092,6 +2092,32 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const rows = await this.sql`SELECT record FROM threat_intel.workflow_records WHERE record_type = 'actor_enrichment_run' ORDER BY updated_at DESC, id DESC`;
     return rows.map(readRecord);
   }
+  async queryActorEnrichmentRuns(input: { tenantId?: string; limit?: number; offset?: number } = {}) {
+    const limit = Math.max(1, Math.min(100, Number(input.limit ?? 25)));
+    const offset = Math.max(0, Number(input.offset ?? 0));
+    const tenantWhere = input.tenantId === undefined ? 'TRUE' : 'tenant_id IS NOT DISTINCT FROM $1::text';
+    const params = input.tenantId === undefined ? [limit, offset] : [input.tenantId, limit, offset];
+    const rows = await this.sql.unsafe(`SELECT record FROM threat_intel.workflow_records WHERE record_type = 'actor_enrichment_run' AND ${tenantWhere} ORDER BY updated_at DESC, id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    const countRows = await this.sql.unsafe(`SELECT count(*)::int AS total FROM threat_intel.workflow_records WHERE record_type = 'actor_enrichment_run' AND ${tenantWhere}`, input.tenantId === undefined ? [] : [input.tenantId]);
+    const records = rows.map(readRecord);
+    const total = Number(countRows[0]?.total ?? 0);
+    return { records, total, nextCursor: offset + records.length < total ? String(offset + records.length) : undefined };
+  }
+  async queryEvidenceDeltas(input: { tenantId?: string; query?: string; limit?: number; offset?: number } = {}) {
+    const limit = Math.max(1, Math.min(100, Number(input.limit ?? 25)));
+    const offset = Math.max(0, Number(input.offset ?? 0));
+    const params: unknown[] = input.tenantId === undefined ? [input.query?.trim().toLowerCase() || null, limit, offset] : [input.tenantId, input.query?.trim().toLowerCase() || null, limit, offset];
+    const tenantWhere = input.tenantId === undefined ? 'TRUE' : 'tenant_id IS NOT DISTINCT FROM $1::text';
+    const queryParam = input.tenantId === undefined ? '$1' : '$2';
+    const limitParam = input.tenantId === undefined ? '$2' : '$3';
+    const offsetParam = input.tenantId === undefined ? '$3' : '$4';
+    const rows = await this.sql.unsafe(`SELECT record FROM threat_intel.workflow_records WHERE record_type = 'evidence_delta' AND ${tenantWhere} AND (${queryParam}::text IS NULL OR position(${queryParam} in lower(record::text)) > 0) ORDER BY updated_at DESC, id DESC LIMIT ${limitParam} OFFSET ${offsetParam}`, params);
+    const countParams = input.tenantId === undefined ? [input.query?.trim().toLowerCase() || null] : [input.tenantId, input.query?.trim().toLowerCase() || null];
+    const countRows = await this.sql.unsafe(`SELECT count(*)::int AS total FROM threat_intel.workflow_records WHERE record_type = 'evidence_delta' AND ${tenantWhere} AND (${queryParam}::text IS NULL OR position(${queryParam} in lower(record::text)) > 0)`, countParams);
+    const records = rows.map(readRecord);
+    const total = Number(countRows[0]?.total ?? 0);
+    return { records, total, nextCursor: offset + records.length < total ? String(offset + records.length) : undefined };
+  }
 
   private async migrate(): Promise<void> {
     await this.sql.unsafe(`
