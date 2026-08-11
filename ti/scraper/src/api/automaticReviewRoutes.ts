@@ -184,6 +184,19 @@ type ReviewIndexCollections = {
   actorIdentities: ActorIdentityRecord[];
 };
 
+type ReviewIndexCollections = {
+  tasksAndEvents: any[];
+  claims: any[];
+  incidents: any[];
+  captures: any[];
+  sources: any[];
+  health: any[];
+  claimEvidence: any[];
+  evidenceLinks: any[];
+  reviews: any[];
+  actorIdentities: ActorIdentityRecord[];
+};
+
 const MAX_STALE_TASKS_SUPERSEDED_PER_CYCLE = 250;
 
 export async function handleAutomaticReviewRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
@@ -1504,7 +1517,7 @@ function buildReviewIndex(store: any): ReviewIndex {
     healthBySource: grouped(health, "sourceId"),
     reviewsByClaim: grouped(reviews, "claimId"),
     actorIdentities: store.listActorIdentities?.() ?? []
-  };
+  });
 }
 
 async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants = false, query?: { taskLimit?: number; modelVersion?: string }): Promise<ReviewIndex> {
