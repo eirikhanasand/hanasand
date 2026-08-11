@@ -1,5 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { searchThreatIntel } from '#utils/ti/search.ts'
+import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import { consumeBillingQuota, getBillingQuota } from '../billing.ts'
 
 interface SearchBody {
     query?: string
@@ -11,6 +13,9 @@ export const TI_BATCH_MAX_QUERIES = 25
 
 export default async function postTiSearch(req: FastifyRequest<{ Body: SearchBody }>, res: FastifyReply) {
     setNoStore(res)
+    const presentedCredentials = Boolean(req.headers?.authorization || req.headers?.cookie)
+    const auth = presentedCredentials ? await tokenWrapper(req, res) : null
+    if (presentedCredentials && (!auth?.valid || !auth.id)) return res.status(401).send({ error: 'Unauthorized.' })
     if (hasUnexpectedFields(req.body, ['query', 'preferCached'])) {
         return res.status(400).send({ error: 'invalid_request', message: 'search accepts only the query and preferCached fields' })
     }
@@ -20,10 +25,19 @@ export default async function postTiSearch(req: FastifyRequest<{ Body: SearchBod
         return res.status(400).send({ error: 'invalid_query', message: `query must contain 2-${TI_QUERY_MAX_LENGTH} characters` })
     }
 
+    if (auth?.id) {
+        const quota = await getBillingQuota(auth.id, 'searchesPerDay')
+        if (quota.limit === null || quota.remaining === 0) return res.status(quota.limit === null ? 402 : 429).send({ error: quota.limit === null ? 'subscription_required' : 'quota_exhausted', message: quota.limit === null ? 'A Threat Intelligence plan is required to search.' : 'Your daily Threat Intelligence search quota has been reached.', quota })
+    }
+
     const result = await searchThreatIntel({ query, preferCached: req.body?.preferCached === true })
     const publicResult = sanitizeBrowserSearchResult(result)
     if (result.status === 'unavailable' || result.mode === 'unavailable') {
         return res.status(503).send(publicResult)
+    }
+    if (auth?.id) {
+        const quota = await consumeBillingQuota(auth.id, 'searchesPerDay')
+        if (!quota.allowed) return res.status(429).send({ error: 'quota_exhausted', message: 'Your daily Threat Intelligence search quota has been reached.', quota })
     }
     return res.send(publicResult)
 }

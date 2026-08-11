@@ -4,6 +4,7 @@ import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
+import { checkBillingCapacity } from './billing.ts'
 import {
     createApiKey,
     findEnabledOrganizationApiKey,
@@ -2876,6 +2877,22 @@ export async function postOrganizationWatchlist(req: FastifyRequest<{ Params: Or
           AND status <> 'archived'
         LIMIT 1
     `, [req.params.id, input.kind, input.value])
+
+    if (!existing.rows[0]) {
+        const usage = await run(`
+            SELECT COUNT(*)::int AS used
+            FROM organization_watchlist_items
+            WHERE organization_id IN (
+                SELECT organization_id
+                FROM organization_members
+                WHERE user_id = $1 AND status = 'active'
+            )
+              AND archived_at IS NULL
+              AND status <> 'archived'
+        `, [userId])
+        const quota = await checkBillingCapacity(userId, 'watchTerms', Number(usage.rows[0]?.used || 0))
+        if (!quota.allowed) return res.status(quota.subscriptionRequired ? 402 : 409).send({ error: quota.subscriptionRequired ? 'subscription_required' : 'quota_exhausted', message: quota.subscriptionRequired ? 'A Dark Web Monitoring plan is required to create watch terms.' : 'Your watch-term quota has been reached.', quota })
+    }
 
     const result = existing.rows[0]
         ? await run(`

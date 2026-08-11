@@ -295,6 +295,16 @@ CREATE TABLE IF NOT EXISTS billing_entitlements (
 );
 CREATE INDEX IF NOT EXISTS idx_billing_entitlements_user_active ON billing_entitlements(user_id, active, updated_at DESC);
 
+CREATE TABLE IF NOT EXISTS billing_usage (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    quota_key TEXT NOT NULL,
+    period_start TIMESTAMPTZ,
+    used INTEGER NOT NULL DEFAULT 0 CHECK (used >= 0),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, quota_key, period_start)
+);
+CREATE INDEX IF NOT EXISTS idx_billing_usage_user_key_period ON billing_usage(user_id, quota_key, period_start DESC);
+
 CREATE TABLE IF NOT EXISTS stripe_webhook_events (
     event_id TEXT PRIMARY KEY,
     event_type TEXT NOT NULL,

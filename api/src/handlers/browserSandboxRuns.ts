@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { validateSession } from '#utils/auth/session.ts'
+import { consumeBillingQuota, getBillingQuota } from './billing.ts'
 
 export type BrowserNetwork = 'regular' | 'tor'
 
@@ -45,6 +46,7 @@ type BrowserRunIdentity = {
     periodStart: Date | null
     resetsAt: Date | null
     limit: number
+    billingQuotaKey?: 'browserRunsPerMonth'
 }
 
 type PrepareBrowserRunInput = {
@@ -203,9 +205,14 @@ export async function prepareBrowserRun(input: PrepareBrowserRunInput): Promise<
     const identity = await browserRunIdentityForSocket(input)
     if (!identity) return { allowed: true, run: null, quota: null }
 
-    const quota = await loadBrowserQuota(identity)
-    if (quota.remaining <= 0) {
-        return { allowed: false, quota, reason: 'quota_exhausted' }
+    let quota: BrowserQuota
+    if (identity.billingQuotaKey) {
+        const billingQuota = await consumeBillingQuota(identity.ownerId!, identity.billingQuotaKey)
+        quota = billingBrowserQuota(billingQuota)
+        if (!billingQuota.allowed) return { allowed: false, quota, reason: 'quota_exhausted' }
+    } else {
+        quota = await loadBrowserQuota(identity)
+        if (quota.remaining <= 0) return { allowed: false, quota, reason: 'quota_exhausted' }
     }
 
     const result = await run(`
@@ -230,7 +237,9 @@ export async function prepareBrowserRun(input: PrepareBrowserRunInput): Promise<
         JSON.stringify({ identityKind: identity.identityKind }),
     ])
 
-    const nextQuota = await loadBrowserQuota(identity)
+    const nextQuota = identity.billingQuotaKey
+        ? billingBrowserQuota(await getBillingQuota(identity.ownerId!, identity.billingQuotaKey))
+        : await loadBrowserQuota(identity)
     return {
         allowed: true,
         run: rowToRunRecord(result.rows[0]),
@@ -289,6 +298,22 @@ async function browserRunIdentityForSocket(input: { clientId?: string; userId?: 
 }
 
 async function browserRunIdentityForUser(userId: string, clientId?: string): Promise<BrowserRunIdentity> {
+    const billingQuota = await getBillingQuota(userId, 'browserRunsPerMonth')
+    if (billingQuota.limit !== null) {
+        const now = new Date()
+        const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+        return {
+            identityKind: 'user',
+            quotaIdentity: `browser:user:${userId}`,
+            quotaPlan: 'browser',
+            ownerId: userId,
+            clientIdHash: clientId ? hashValue(clientId) : null,
+            periodStart,
+            resetsAt: billingQuota.resetsAt,
+            limit: billingQuota.limit,
+            billingQuotaKey: 'browserRunsPerMonth',
+        }
+    }
     const planResult = await run(`
         SELECT plan
         FROM browser_subscriptions
@@ -367,6 +392,17 @@ function rowToRunRecord(row: Record<string, any>): BrowserRunRecord {
         title: String(row.title || ''),
         providerResults: providerResultsValue(row.metadata?.providerResults),
         reportUrl: reportToken ? browserReportViewerUrl(String(row.id || ''), String(reportToken)) : undefined,
+    }
+}
+
+function billingBrowserQuota(quota: Awaited<ReturnType<typeof consumeBillingQuota>> | Awaited<ReturnType<typeof getBillingQuota>>): BrowserQuota {
+    return {
+        plan: 'browser',
+        limit: quota.limit || 0,
+        used: quota.used,
+        remaining: quota.remaining || 0,
+        resetsAt: quota.resetsAt?.toISOString() || null,
+        identityKind: 'user',
     }
 }
 
