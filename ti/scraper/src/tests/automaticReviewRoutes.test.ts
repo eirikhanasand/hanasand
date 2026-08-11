@@ -348,7 +348,7 @@ describe("automatic Hanasand AI intelligence review", () => {
         status: "active",
         type: "rss",
         url: `https://publisher.example/${id}.xml`,
-        governance: { approvalRequired: true, approvalState: "approved" },
+        governance: { approvalRequired: false, approvalState: "not_required" },
         metadata: { productionCollection: true, sourceFamily: "government", ...metadata }
       }),
       countsAsCoverage: false
@@ -445,15 +445,16 @@ describe("automatic Hanasand AI intelligence review", () => {
       store.saveSourceHealthObservation({ id: `health_${sourceId}`, tenantId, sourceId, collectionRunId: runId, checkedAt: firstAt, success: true, useful: true, captureCount: 1 });
     };
 
-    const eligible = saveLegacy("legacy_preproduction");
-    saveLegacy("legacy_without_evidence");
+    const eligible = saveLegacy("legacy_preproduction", { governance: { approvalRequired: false, approvalState: "not_required" } });
+    const older = saveLegacy("legacy_older_missing_governance", { governance: { approvalRequired: false } });
+    saveLegacy("legacy_without_evidence", { governance: { approvalRequired: false, approvalState: "not_required" } });
     const catalog = saveLegacy("legacy_catalog", { metadata: { extractionProfile: "mitre_actor_catalog" } });
     const tenant = saveLegacy("legacy_tenant", { tenantId: "tenant-a" });
     const ungoverned = saveLegacy("legacy_ungoverned", { governance: { approvalRequired: true, approvalState: "pending" } });
-    for (const candidate of [eligible, catalog, tenant, ungoverned]) saveEvidence(candidate.id, candidate.tenantId);
+    for (const candidate of [eligible, older, catalog, tenant, ungoverned]) saveEvidence(candidate.id, candidate.tenantId);
 
-    expect(syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(1);
-    expect(store.listAnalystMetadataReviewTasks().filter((task: any) => task.recordKind === "automatic_intelligence_review_task").map((task: any) => task.subject.sourceId)).toEqual([eligible.id]);
+    expect(syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(2);
+    expect(store.listAnalystMetadataReviewTasks().filter((task: any) => task.recordKind === "automatic_intelligence_review_task").map((task: any) => task.subject.sourceId).sort()).toEqual([eligible.id, older.id].sort());
   });
 
   test("supersedes a queued upgrade when a valid prior clear-web approval arrives before the model call", async () => {
