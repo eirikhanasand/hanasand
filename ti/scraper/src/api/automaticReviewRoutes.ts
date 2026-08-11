@@ -171,6 +171,19 @@ type ReviewIndexCollections = {
   taskSummary?: ReviewTaskSummary;
 };
 
+type ReviewIndexCollections = {
+  tasksAndEvents: any[];
+  claims: any[];
+  incidents: any[];
+  captures: any[];
+  sources: any[];
+  health: any[];
+  claimEvidence: any[];
+  evidenceLinks: any[];
+  reviews: any[];
+  actorIdentities: ActorIdentityRecord[];
+};
+
 const MAX_STALE_TASKS_SUPERSEDED_PER_CYCLE = 250;
 
 export async function handleAutomaticReviewRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
