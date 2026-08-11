@@ -1223,32 +1223,6 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string; executableOnly?: boolean }) {
     const [row] = await this.sql.unsafe(`
-      WITH capture_counts AS (
-        SELECT source_id, tenant_id, count(*) AS capture_count
-        FROM threat_intel.captures
-        WHERE tenant_id IS NOT DISTINCT FROM $1::text
-        GROUP BY source_id, tenant_id
-      ), ranked_sources AS (
-        SELECT sources.*,
-          row_number() OVER (
-            PARTITION BY COALESCE(sources.canonical_feed_key, 'source:' || sources.id)
-            ORDER BY sources.collection_executable DESC,
-              COALESCE(capture_counts.capture_count, 0) DESC,
-              COALESCE(sources.record->>'createdAt', ''),
-              sources.id
-          ) AS canonical_rank
-        FROM threat_intel.sources sources
-        LEFT JOIN capture_counts
-          ON capture_counts.source_id = sources.id
-          AND capture_counts.tenant_id IS NOT DISTINCT FROM sources.tenant_id
-        WHERE sources.tenant_id IS NOT DISTINCT FROM $1::text
-      ), latest_health AS (
-        SELECT DISTINCT ON (source_id)
-          source_id, checked_at, success, useful, capture_count, parser_warning_count
-        FROM threat_intel.source_health
-        WHERE tenant_id IS NOT DISTINCT FROM $1::text
-        ORDER BY source_id, checked_at DESC
-      )
       SELECT jsonb_build_object(
         'sourceCount', count(*),
         'retainedSourceCount', count(*) FILTER (WHERE collection_executable),
@@ -1333,9 +1307,18 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           LIMIT 1
         )
       ) AS summary
-      FROM ranked_sources sources
-      LEFT JOIN latest_health ON latest_health.source_id = ranked_sources.id
-      WHERE NOT $2::boolean OR ranked_sources.collection_executable
+      FROM threat_intel.sources sources
+      LEFT JOIN LATERAL (
+        SELECT source_health.source_id, source_health.checked_at, source_health.success,
+          source_health.useful, source_health.capture_count, source_health.parser_warning_count
+        FROM threat_intel.source_health AS source_health
+        WHERE source_health.tenant_id IS NOT DISTINCT FROM $1::text
+          AND source_health.source_id = sources.id
+        ORDER BY source_health.checked_at DESC, source_health.id DESC
+        LIMIT 1
+      ) latest_health ON TRUE
+      WHERE sources.tenant_id IS NOT DISTINCT FROM $1::text
+        AND (NOT $2::boolean OR sources.collection_executable)
     `, [input.tenantId ?? null, input.executableOnly === true]);
     return { schemaVersion: "ti.source_operations_summary.v1", generatedAt: input.generatedAt, tenantId: input.tenantId ?? "global", summary: row?.summary ?? {} };
   }

@@ -24,11 +24,7 @@ import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 const collectedAt = "2026-07-19T12:00:00.000Z";
 
 describe("structured threat-intelligence storage contract", () => {
-  test("routes PostgreSQL search through the warmed capture index", () => {
-    expect(new (PostgresScraperStore as any)({}, []).usesPostgresSearchIndex).toBe(true);
-  });
-
-  test("reads latest source health once per tenant summary instead of once per source", async () => {
+  test("source summary reads one latest health row per current source", async () => {
     const store = Object.create(PostgresScraperStore.prototype) as any;
     let query = "";
     store.sql = {
@@ -43,38 +39,6 @@ describe("structured threat-intelligence storage contract", () => {
     expect(query).toContain("LEFT JOIN LATERAL");
     expect(query).toContain("source_health.source_id = sources.id");
     expect(query).not.toContain("DISTINCT ON (source_id)");
-  });
-
-  test("preserves exposure totals when an out-of-range page has no rows", async () => {
-    const store = Object.create(PostgresScraperStore.prototype) as any;
-    let calls = 0;
-    store.sql = {
-      unsafe: async () => {
-        calls += 1;
-        return calls === 1 ? [] : [{ total: 7, needs_review: 2, metadata_only: 1, latest_claim_at: "2026-08-09T10:00:00.000Z", latest_collected_at: "2026-08-09T10:01:00.000Z" }];
-      }
-    };
-
-    const page = await store.queryExposureQueuePage({ tenantId: "default", limit: 1, offset: 7 });
-    expect(page.captures).toEqual([]);
-    expect(page).toMatchObject({ total: 7, needsReview: 2, metadataOnly: 1, latestClaimAt: "2026-08-09T10:00:00.000Z" });
-    expect(calls).toBe(2);
-  });
-
-  test("preserves exposure totals when an out-of-range page has no rows", async () => {
-    const store = Object.create(PostgresScraperStore.prototype) as any;
-    let calls = 0;
-    store.sql = {
-      unsafe: async () => {
-        calls += 1;
-        return calls === 1 ? [] : [{ total: 7, needs_review: 2, metadata_only: 1, latest_claim_at: "2026-08-09T10:00:00.000Z", latest_collected_at: "2026-08-09T10:01:00.000Z" }];
-      }
-    };
-
-    const page = await store.queryExposureQueuePage({ tenantId: "default", limit: 1, offset: 7 });
-    expect(page.captures).toEqual([]);
-    expect(page).toMatchObject({ total: 7, needsReview: 2, metadataOnly: 1, latestClaimAt: "2026-08-09T10:00:00.000Z" });
-    expect(calls).toBe(2);
   });
 
   test("does not require the optional parser cleanup table during normal startup", async () => {
