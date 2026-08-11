@@ -1,5 +1,7 @@
 import { getTiAdminOverview } from '@/utils/tiAdmin/ops'
 import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
+import config from '@/config'
+import { cookies } from 'next/headers'
 
 export type TiEnrichmentStatus = 'ready' | 'running' | 'queued' | 'review'
 
@@ -53,7 +55,7 @@ export type TiManagementAuditEvent = {
 export type TiEnrichmentOverview = {
     generatedAt: string
     worker: {
-        state: 'warming' | 'running' | 'idle' | 'error' | 'unavailable'
+        state: 'warming' | 'running' | 'idle' | 'ready' | 'error' | 'unavailable'
         mode: string
         intervalSeconds: number
         batchSize: number
@@ -135,12 +137,51 @@ export type TiPipelineOverview = {
 }
 
 export async function getTiEnrichmentOverview(): Promise<TiEnrichmentOverview> {
-    const [overview, profiles, updates] = await Promise.all([
+    const [overview, profiles, updates, audit] = await Promise.all([
         getTiAdminOverview(null, { limit: 50, includeCandidates: true }),
         getPersistedActorProfiles(),
         getPersistedProfileUpdates(),
+        getPersistedAuditLog(),
     ])
-    return passiveOverview(overview, profiles, updates)
+    return passiveOverview(overview, profiles, updates, audit.events, audit.available)
+}
+
+async function getPersistedAuditLog(): Promise<{ events: TiManagementAuditEvent[], available: boolean }> {
+    try {
+        const cookieStore = await cookies()
+        const token = cookieStore.get('access_token')?.value
+        const id = cookieStore.get('id')?.value
+        if (!token || !id) return { events: [], available: false }
+        const response = await fetch(`${config.url.api}/admin/audit-events?limit=200`, {
+            headers: { Authorization: `Bearer ${decodeURIComponent(token)}`, id },
+            cache: 'no-store',
+            signal: AbortSignal.timeout(5_000),
+        })
+        if (!response.ok) return { events: [], available: false }
+        const payload = await response.json() as { events?: unknown[] }
+        return { events: (payload.events || []).map(auditEvent).filter((event): event is TiManagementAuditEvent => Boolean(event)), available: true }
+    } catch {
+        return { events: [], available: false }
+    }
+}
+
+function auditEvent(value: unknown): TiManagementAuditEvent | undefined {
+    if (!value || typeof value !== 'object') return undefined
+    const event = value as Record<string, unknown>
+    const detail = event.detail && typeof event.detail === 'object' ? event.detail as Record<string, unknown> : {}
+    const action = stringValue(event.action_type, detail.actionType, 'audit event')
+    const target = stringValue(event.target_name, event.target_id, event.target_type, event.organization_name, 'system')
+    const happenedAt = stringValue(event.created_at)
+    if (!happenedAt) return undefined
+    return {
+        id: stringValue(event.id, `${happenedAt}:${action}:${target}`),
+        happenedAt,
+        actor: stringValue(event.actor_name, event.actor_id, 'system'),
+        action,
+        target,
+        result: stringValue(event.outcome, 'unknown'),
+        detail: stringValue(event.reason, event.source, detail.source, detail.service, 'Recorded management event.'),
+    }
 }
 
 type PersistedActorProfile = {
@@ -229,7 +270,7 @@ function persistedProfile(value: unknown): PersistedActorProfile | undefined {
     }
 }
 
-function passiveOverview(overview: Awaited<ReturnType<typeof getTiAdminOverview>>, profiles: PersistedActorProfile[], updates: TiProfileUpdate[]): TiEnrichmentOverview {
+function passiveOverview(overview: Awaited<ReturnType<typeof getTiAdminOverview>>, profiles: PersistedActorProfile[], updates: TiProfileUpdate[], auditLog: TiManagementAuditEvent[], auditAvailable: boolean): TiEnrichmentOverview {
     const actors = new Map<string, TiEnrichedActor>()
     const capturesById = new Map(overview.captures.map(capture => [capture.id, capture]))
     const profileByCaptureId = new Map(profiles.flatMap(profile => profile.captureIds.map(captureId => [captureId, profile] as const)))
@@ -295,24 +336,24 @@ function passiveOverview(overview: Awaited<ReturnType<typeof getTiAdminOverview>
     return {
         generatedAt: new Date().toISOString(),
         worker: {
-            state: 'idle',
+            state: auditAvailable ? 'ready' : 'unavailable',
             mode: 'automated monitoring',
             intervalSeconds: 300,
             batchSize: overview.sources.length,
             lastSweepStartedAt: latest?.startedAt || null,
             lastSweepFinishedAt: latest?.finishedAt || latest?.startedAt || null,
-            lastError: null,
+            lastError: auditAvailable ? null : 'Audit API unavailable',
             cursor: 0,
         },
         updatedActors: [...actors.values()],
         queuedActors: [],
         activity,
         updates,
-        auditLog: [],
+        auditLog,
         stats: {
             updatedLastHour,
             queued: 0,
-            auditedEvents: 0,
+            auditedEvents: auditLog.length,
             automaticCoverage: overview.sources.length,
             totalRefreshes: activity.length,
         },
