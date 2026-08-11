@@ -1498,7 +1498,7 @@ function virustotalRunLabel(label?: string) {
 
 function urlqueryRunLabel(label?: string) {
     if (!label) return 'urlquery'
-    if (/^\d+$/.test(label.trim())) return `${label.trim()} alerts`
+    if (/^\d+$/.test(label.trim())) return `urlquery: ${label.trim()} alerts`
     return /urlquery/i.test(label) ? label : `urlquery ${label}`
 }
 
