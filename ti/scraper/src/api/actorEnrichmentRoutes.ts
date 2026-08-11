@@ -52,13 +52,23 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
     const deltas = (await records(store, "listEvidenceDeltas"))
       .filter((delta) => delta.subjectType === "actor_profile" && delta.subjectId === actorId && inTenantScope(delta, tenantId))
       .sort((left, right) => String(right.observedAt ?? "").localeCompare(String(left.observedAt ?? "")));
-    return json({ schemaVersion: "ti.actor_profile_timeline.v1", actorId, updates: deltas.map(actorProfileTimeline), total: deltas.length });
+    const limit = Math.max(1, Math.min(100, Number(url.searchParams.get("limit") ?? 25)));
+    const offset = Math.max(0, Number(url.searchParams.get("cursor") ?? 0));
+    const rows = deltas.slice(offset, offset + limit).map(actorProfileTimeline);
+    const nextCursor = offset + rows.length < deltas.length ? String(offset + rows.length) : undefined;
+    const previousCursor = offset > 0 ? String(Math.max(0, offset - limit)) : undefined;
+    return json({ schemaVersion: "ti.actor_profile_timeline.v1", actorId, updates: rows, rows, total: deltas.length, nextCursor, previousCursor, pagination: { limit, cursor: String(offset), nextCursor, previousCursor, appliedFilters: { actorId }, sortField: "observedAt", direction: "desc" } });
   }
 
   if (isStatus) {
     const runs = await scopedRuns(store, tenantId);
     const latest = runs[0];
     const running = runs.find((run) => run.status === "running");
+    const limit = Math.max(1, Math.min(100, Number(url.searchParams.get("limit") ?? 20)));
+    const offset = Math.max(0, Number(url.searchParams.get("cursor") ?? 0));
+    const pageRuns = runs.slice(offset, offset + limit);
+    const nextCursor = offset + pageRuns.length < runs.length ? String(offset + pageRuns.length) : undefined;
+    const previousCursor = offset > 0 ? String(Math.max(0, offset - limit)) : undefined;
     return json({
       schemaVersion: "ti.actor_enrichment_status.v1",
       generatedAt: new Date().toISOString(),
@@ -70,14 +80,24 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
         snapshotFresh: Boolean(latest && Date.now() - Date.parse(latest.updatedAt) <= 300_000),
       },
       latestRun: actorEnrichmentRunSummary(latest),
-      runs: runs.slice(0, 20).map(actorEnrichmentRunSummary),
+      runs: pageRuns.map(actorEnrichmentRunSummary),
+      rows: pageRuns.map(actorEnrichmentRunSummary),
+      total: runs.length,
+      nextCursor,
+      previousCursor,
+      pagination: { limit, cursor: String(offset), nextCursor, previousCursor, appliedFilters: {}, sortField: "updatedAt", direction: "desc" },
       queued: 0,
     });
   }
 
   if (request.method === "GET") {
     const runs = await scopedRuns(store, tenantId);
-    return json({ runs: runs.slice(0, 100).map(actorEnrichmentRunSummary), total: runs.length });
+    const limit = Math.max(1, Math.min(100, Number(url.searchParams.get("limit") ?? 25)));
+    const offset = Math.max(0, Number(url.searchParams.get("cursor") ?? 0));
+    const rows = runs.slice(offset, offset + limit).map(actorEnrichmentRunSummary);
+    const nextCursor = offset + rows.length < runs.length ? String(offset + rows.length) : undefined;
+    const previousCursor = offset > 0 ? String(Math.max(0, offset - limit)) : undefined;
+    return json({ runs: rows, rows, total: runs.length, nextCursor, previousCursor, pagination: { limit, cursor: String(offset), nextCursor, previousCursor, appliedFilters: { tenantId: tenantId ?? "" }, sortField: "updatedAt", direction: "desc" } });
   }
 
   if (request.method !== "POST") return error("method_not_allowed", "Method not allowed", 405);

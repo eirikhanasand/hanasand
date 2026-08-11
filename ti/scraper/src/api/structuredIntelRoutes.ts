@@ -153,11 +153,14 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
     const query = url.searchParams.get("q")?.trim().toLowerCase();
     const limit = Math.max(1, Math.min(500, numberQuery(url.searchParams.get("limit")) ?? 100));
     const offset = Math.max(0, numberQuery(url.searchParams.get("cursor")) ?? 0);
+    const sortField = "observedAt";
+    const direction = "desc";
     const records = ((options.store as any).listEvidenceDeltas?.() ?? [])
       .filter((record: any) => inTenantScope(record, scope.tenantId))
       .filter((record: any) => !query || JSON.stringify(record).toLowerCase().includes(query))
       .sort((left: any, right: any) => String(right.observedAt ?? "").localeCompare(String(left.observedAt ?? "")));
-    return json({ evidenceDeltas: records.slice(offset, offset + limit), total: records.length, nextCursor: offset + limit < records.length ? String(offset + limit) : undefined });
+    const rows = records.slice(offset, offset + limit);
+    return json({ evidenceDeltas: rows, rows, total: records.length, nextCursor: offset + rows.length < records.length ? String(offset + rows.length) : undefined, previousCursor: offset > 0 ? String(Math.max(0, offset - limit)) : undefined, pagination: { limit, cursor: String(offset), nextCursor: offset + rows.length < records.length ? String(offset + rows.length) : undefined, previousCursor: offset > 0 ? String(Math.max(0, offset - limit)) : undefined, appliedFilters: { q: query ?? "" }, sortField, direction } });
   }
   if (!route || request.method !== "GET") return undefined;
   const scope = resolveTenantScope(request, url);
@@ -169,9 +172,13 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
   const query = url.searchParams.get("q")?.trim().toLowerCase();
   const tenantId = scope.tenantId;
   const databaseQuery = (options.store as any).queryStructuredRecords;
-  if (typeof databaseQuery === "function") {
+    if (typeof databaseQuery === "function") {
     const result = await databaseQuery.call(options.store, responseKey, { tenantId, query, limit, offset });
-    return json({ [responseKey]: result.records.map((record: any) => apiRecord(responseKey, record, url, tenantId, options.store)), total: result.total, nextCursor: result.nextCursor });
+    const rows = result.records.map((record: any) => apiRecord(responseKey, record, url, tenantId, options.store));
+    const nextCursor = result.nextCursor;
+    const previousCursor = offset > 0 ? String(Math.max(0, offset - limit)) : undefined;
+    const pagination = { limit, cursor: String(offset), nextCursor, previousCursor, appliedFilters: { q: query ?? "", tenantId: tenantId ?? "" }, sortField: "updatedAt", direction: "desc" };
+    return json({ [responseKey]: rows, rows, total: result.total, nextCursor, previousCursor, pagination });
   }
 
   const records = typeof (options.store as any)[memoryMethod] === "function" ? (options.store as any)[memoryMethod]() : [];
@@ -179,7 +186,10 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
     .filter((record: any) => globalCatalogCollection(responseKey) ? !record.tenantId || inTenantScope(record, tenantId) : inTenantScope(record, tenantId))
     .map((record: any) => apiRecord(responseKey, record, url, tenantId, options.store))
     .filter((record: any) => !query || JSON.stringify(record).toLowerCase().includes(query));
-  return json({ [responseKey]: filtered.slice(offset, offset + limit), total: filtered.length, nextCursor: offset + limit < filtered.length ? String(offset + limit) : undefined });
+  const rows = filtered.slice(offset, offset + limit);
+  const nextCursor = offset + rows.length < filtered.length ? String(offset + rows.length) : undefined;
+  const previousCursor = offset > 0 ? String(Math.max(0, offset - limit)) : undefined;
+  return json({ [responseKey]: rows, rows, total: filtered.length, nextCursor, previousCursor, pagination: { limit, cursor: String(offset), nextCursor, previousCursor, appliedFilters: { q: query ?? "", tenantId: tenantId ?? "" }, sortField: "updatedAt", direction: "desc" } });
 }
 
 function globalCatalogCollection(collection: string): boolean {

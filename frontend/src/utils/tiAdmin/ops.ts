@@ -116,6 +116,7 @@ export type TiAdminOverview = {
         cursor: number
         limit: number
         nextCursor?: string
+        previousCursor?: string
     }
     sourceTotals: {
         configured: number
@@ -133,7 +134,7 @@ type ApiPayload = Record<string, unknown>
 // Cached data is still served while the next request refreshes it.
 const TI_ADMIN_FETCH_TIMEOUT_MS = 2_000
 const useProcessCache = process.env.NODE_ENV === 'production'
-type ResourceResult = { resource: string, ok: boolean, records: ApiPayload[], total: number, nextCursor?: string, payload: ApiPayload }
+type ResourceResult = { resource: string, ok: boolean, records: ApiPayload[], total: number, nextCursor?: string, previousCursor?: string, payload: ApiPayload }
 const sourceInventoryCache = new Map<string, { expiresAt: number, value: ResourceResult, refreshing?: Promise<void> }>()
 
 export async function getTiAdminOverview(tenantId: string | null = 'default', page: { cursor?: number, limit?: number, sourceId?: string, includeSamples?: boolean, includeCandidates?: boolean, query?: string, family?: string, lifecycle?: string, access?: string, health?: string, output?: string, matches?: string, sort?: string, direction?: string } = {}): Promise<TiAdminOverview> {
@@ -181,6 +182,7 @@ export async function getTiAdminOverview(tenantId: string | null = 'default', pa
             cursor: Math.max(0, page.cursor || 0),
             limit: Math.max(1, Math.min(500, page.limit || 25)),
             nextCursor: operationsResult.nextCursor,
+            previousCursor: operationsResult.previousCursor,
         },
         sourceTotals: sourceTotals(operationsResult.payload),
     }
@@ -188,6 +190,12 @@ export async function getTiAdminOverview(tenantId: string | null = 'default', pa
 
 export async function getTiAdminSource(id: string, tenantId: string | null = 'default') {
     return (await getTiAdminOverview(tenantId, { sourceId: id })).sources[0] || null
+}
+
+export async function getTiCollectionRunsPage(tenantId: string | null = null, page: { cursor?: number, limit?: number } = {}) {
+    const result = await fetchResource(tiScraperApiBase(), '/v1/intel/collection-runs', 'collectionRuns', tenantId, { cursor: page.cursor, limit: Math.max(1, Math.min(100, page.limit || 50)) })
+    const runs = result.records.map(row => toRun(row, new Map())).filter((row): row is TiAdminRun => Boolean(row))
+    return { runs, total: result.total, nextCursor: result.nextCursor, previousCursor: result.previousCursor, available: result.ok }
 }
 
 export async function getTiAdminDomain(domain: string) {
@@ -255,7 +263,7 @@ async function fetchResource(base: string, path: string, key: string, tenantId: 
             headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined,
             signal: AbortSignal.timeout(TI_ADMIN_FETCH_TIMEOUT_MS),
         })
-        if (!response.ok) return { resource, ok: false, records: [] as ApiPayload[], total: 0, nextCursor: undefined, payload: {} as ApiPayload }
+        if (!response.ok) return { resource, ok: false, records: [] as ApiPayload[], total: 0, nextCursor: undefined, previousCursor: undefined, payload: {} as ApiPayload }
         const payload = await response.json() as ApiPayload
         const records = recordArray(payload[key])
         const result = {
@@ -264,17 +272,18 @@ async function fetchResource(base: string, path: string, key: string, tenantId: 
             records,
             total: numberValue(payload.total, records.length),
             nextCursor: stringValue(payload.nextCursor) || undefined,
+            previousCursor: stringValue(payload.previousCursor) || undefined,
             payload,
         }
         if (cacheKey) sourceInventoryCache.set(cacheKey, { expiresAt: Date.now() + 5_000, value: result })
         return result
     } catch {
-        return { resource, ok: false, records: [] as ApiPayload[], total: 0, nextCursor: undefined, payload: {} as ApiPayload }
+        return { resource, ok: false, records: [] as ApiPayload[], total: 0, nextCursor: undefined, previousCursor: undefined, payload: {} as ApiPayload }
     }
 }
 
 function emptyResource(resource: string) {
-    return { resource, ok: true, records: [] as ApiPayload[], total: 0, nextCursor: undefined, payload: {} as ApiPayload }
+    return { resource, ok: true, records: [] as ApiPayload[], total: 0, nextCursor: undefined, previousCursor: undefined, payload: {} as ApiPayload }
 }
 
 function sourceTotals(payload: ApiPayload): TiAdminOverview['sourceTotals'] {
