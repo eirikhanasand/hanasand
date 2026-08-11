@@ -158,6 +158,21 @@ export async function actorHasAdminSupportAccess(actorId: string) {
     })
 }
 
+export async function userHasAdministrativeRole(userId: string) {
+    const result = await run(`
+        SELECT 1
+        FROM user_roles ur
+        JOIN roles r ON r.id = ur.role_id
+        WHERE ur.user_id = $1
+          AND (
+              lower(ur.role_id) IN ('administrator', 'system_admin', 'user_admin')
+              OR lower(coalesce(r.name, '')) LIKE '%admin%'
+          )
+        LIMIT 1
+    `, [userId])
+    return result.rows.length > 0
+}
+
 export async function recordAdminAuditEvent(req: FastifyRequest, input: AdminAuditEventInput) {
     const requestId = input.requestId || requestIdFrom(req)
     await run(`

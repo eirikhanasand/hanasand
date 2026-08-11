@@ -3,6 +3,7 @@ import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { revokeAllTokens } from '#utils/auth/session.ts'
+import { recordAdminAuditEvent, userHasAdministrativeRole } from '#utils/adminAudit.ts'
 
 export default async function deleteUser(req: FastifyRequest, res: FastifyReply) {
     const { valid, id: actorId } = await tokenWrapper(req, res)
@@ -17,6 +18,7 @@ export default async function deleteUser(req: FastifyRequest, res: FastifyReply)
     }
 
     try {
+        const wasAdmin = await userHasAdministrativeRole(id)
         const userResult = await run(`
             UPDATE users
             SET deletion_requested_at = NOW(),
@@ -31,6 +33,26 @@ export default async function deleteUser(req: FastifyRequest, res: FastifyReply)
         }
 
         await revokeAllTokens({ userId: id, revokedBy: actorId })
+        await recordAdminAuditEvent(req, {
+            actionType: 'user.account.deleted',
+            actorId,
+            source: 'admin',
+            targetType: 'user',
+            targetId: id,
+            severity: wasAdmin ? 'critical' : 'warning',
+            context: { deletionMode: 'scheduled', administrativeAccount: wasAdmin },
+        })
+        if (wasAdmin) {
+            await recordAdminAuditEvent(req, {
+                actionType: 'admin.account.deleted',
+                actorId,
+                source: 'admin',
+                targetType: 'user',
+                targetId: id,
+                severity: 'critical',
+                context: { deletionMode: 'scheduled' },
+            })
+        }
         const user: User = userResult.rows[0]
         return res.send({ message: 'User scheduled for deletion.', pending_deletion: true, user })
     } catch (error) {

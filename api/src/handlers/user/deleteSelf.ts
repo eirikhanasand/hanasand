@@ -3,6 +3,7 @@ import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { revokeAllTokens } from '#utils/auth/session.ts'
 import { createAccountRestoreToken } from '#utils/auth/accountDeletion.ts'
+import { recordAdminAuditEvent, userHasAdministrativeRole } from '#utils/adminAudit.ts'
 
 type PendingDeletionUser = User & { deletion_scheduled_at: string }
 
@@ -64,6 +65,28 @@ export default async function deleteSelf(req: FastifyRequest, res: FastifyReply)
         }
         if (!outcome.user) {
             return res.status(404).send({ error: `There is no user with id ${id}` })
+        }
+
+        const wasAdmin = await userHasAdministrativeRole(id)
+        await recordAdminAuditEvent(req, {
+            actionType: 'user.account.deleted',
+            actorId: id,
+            source: 'auth',
+            targetType: 'user',
+            targetId: id,
+            severity: wasAdmin ? 'critical' : 'warning',
+            context: { deletionMode: 'scheduled', administrativeAccount: wasAdmin },
+        })
+        if (wasAdmin) {
+            await recordAdminAuditEvent(req, {
+                actionType: 'admin.account.deleted',
+                actorId: id,
+                source: 'auth',
+                targetType: 'user',
+                targetId: id,
+                severity: 'critical',
+                context: { deletionMode: 'scheduled' },
+            })
         }
 
         return res.send({

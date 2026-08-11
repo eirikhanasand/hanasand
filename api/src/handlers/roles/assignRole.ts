@@ -4,6 +4,7 @@ import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { loadSQL } from '#utils/loadSQL.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import hasPermissionToModifyRole from '#utils/auth/hasPermissionToModifyRole.ts'
+import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
 
 /**
  * POST /role/assign
@@ -39,9 +40,26 @@ export default async function assignRole(req: FastifyRequest, res: FastifyReply)
             return res.status(404).send({ status: false, error: 'No roles found.' })
         }
 
+        if (isAdministrativeRole(role_id)) {
+            await recordAdminAuditEvent(req, {
+                actionType: 'admin.account.created',
+                actorId: assignedBy,
+                source: 'admin',
+                targetType: 'user',
+                targetId: id,
+                severity: 'warning',
+                context: { creationPath: 'role_assignment', roleId: role_id },
+            })
+        }
+
         return res.send({ status: true, data: result.rows[0] })
     } catch (error) {
         console.error(error)
         return res.status(500).send({ error: 'Internal Server Error.' })
     }
+}
+
+function isAdministrativeRole(roleId: string) {
+    const normalized = roleId.trim().toLowerCase()
+    return normalized === 'administrator' || normalized === 'system_admin' || normalized === 'user_admin' || normalized.includes('admin')
 }
