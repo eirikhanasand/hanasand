@@ -1189,7 +1189,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 </header>
                 <div className='mx-auto grid w-full max-w-[96rem] gap-4 px-4 py-4'>
                     <div className='grid min-w-0 items-start gap-4'>
-                        {!runIsActive ? <RunOutcomeCard summary={summary} captures={captures} sessionState={sessionState} /> : null}
+                        {!runIsActive ? <RunOutcomeCard summary={summary} captures={captures} sessionState={sessionState} hasTools={selectedProfile.tools.length > 0} /> : null}
                         <section className='grid overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
                             {selectedProfile.tools.length ? <SandboxTabStrip
                                 activeTab={activeSandboxTab}
@@ -1247,7 +1247,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                 )}
                             </div>
                         </section>
-                        {runIsActive ? <RunOutcomeCard summary={summary} captures={captures} sessionState={sessionState} /> : null}
+                        {runIsActive ? <RunOutcomeCard summary={summary} captures={captures} sessionState={sessionState} hasTools={selectedProfile.tools.length > 0} /> : null}
                         <QuickTriageStrip summary={summary} toolCaptures={toolCaptures} toolCount={selectedProfile.tools.length} />
                         <aside className='grid gap-4 xl:grid-cols-3'>
                             <CapacityPanel capacity={capacity} sessionState={sessionState} />
@@ -1902,7 +1902,7 @@ function QuickTriageStrip({ summary, toolCaptures, toolCount }: { summary: Retur
     )
 }
 
-function RunOutcomeCard({ summary, captures, sessionState }: { summary: ReturnType<typeof buildAnalystSummary>; captures: Capture[]; sessionState: SessionState }) {
+function RunOutcomeCard({ summary, captures, sessionState, hasTools }: { summary: ReturnType<typeof buildAnalystSummary>; captures: Capture[]; sessionState: SessionState; hasTools: boolean }) {
     if (!captures.length && sessionState !== 'failed' && sessionState !== 'unreachable') return null
     const pageCaptures = captures.filter(capture => capture.kind === 'page').length
     const vt = summary.rows.find(row => row.label === 'VirusTotal vendors')?.value || 'unknown'
@@ -1917,8 +1917,8 @@ function RunOutcomeCard({ summary, captures, sessionState }: { summary: ReturnTy
                 <p className='mt-1 text-sm leading-6 text-ui-muted'>{sessionState === 'unreachable' && !pageCaptures ? 'The sandbox ran, but the submitted target did not return browser evidence.' : sessionState === 'failed' && !pageCaptures ? 'No browser frame, provider verdict, or network evidence was available for this run.' : summary.brief.impact}</p>
             </div>
             <div className='grid grid-cols-2 gap-2 text-xs text-ui-muted sm:grid-cols-4 md:min-w-[26rem]'>
-                <EvidenceFact label='VT' value={vt} />
-                <EvidenceFact label='urlquery' value={urlquery} />
+                {hasTools ? <EvidenceFact label='VT' value={vt} /> : null}
+                {hasTools ? <EvidenceFact label='urlquery' value={urlquery} /> : null}
                 <EvidenceFact label='Domains' value={String(domains)} />
                 <EvidenceFact label='Requests' value={String(requests)} />
             </div>
