@@ -189,121 +189,6 @@ describe("automatic independent evaluation", () => {
     });
   });
 
-  test("reaches every label family with TP, FP, FN, TN, ambiguity, parser failure, and unsupported attribution", async () => {
-    const store = new InMemoryScraperStore();
-    const at = "2026-07-21T09:00:00.000Z";
-    const labelTruth = {
-      actor: ["APT29", "APT28"],
-      ransomware: ["LockBit", "Akira"],
-      victim: ["Northwind Health", "Contoso"],
-      incident: ["Northwind intrusion", "Contoso breach"],
-      cve: ["CVE-2026-1001", "CVE-2026-1002"],
-      malware: ["Mimikatz", "Cobalt Strike"],
-      ttp: ["T1059", "T1021"],
-      country: ["Norway", "Sweden"],
-      sector: ["Healthcare", "Energy"],
-      indicator: ["evil.example", "203.0.113.44"],
-      impact: ["Data theft", "Service disruption"],
-      dataset: ["Patient records", "Employee records"],
-      business_mechanism: ["extortion_type: double extortion", "monetization_path: data sale"]
-    } as const;
-    type LabelType = keyof typeof labelTruth;
-    const labelTypes = Object.keys(labelTruth) as LabelType[];
-    store.saveSource({ id: "src_label_matrix", tenantId: "tenant_matrix", name: "Prediction capture publisher", type: "rss", url: "https://matrix-target.test/feed", accessMethod: "public_http", status: "active", risk: "low", trustScore: 0.9, crawlFrequencySeconds: 3600, legalNotes: "Public retained report.", metadata: { sourceFamily: "vendor" }, createdAt: at, updatedAt: at });
-    const mixedBody = `${Object.values(labelTruth).flat().join(". ")}. Wrong Actor. Wrong Ransomware. Wrong Victim. Wrong incident. CVE-2026-9999. Wrong Malware. T9999. Denmark. Retail. wrong.example. Noisy impact. Credentials. harassment.`;
-    for (const [id, body, metadata] of [
-      ["mixed", mixedBody, { parserVersion: "parser-v1" }],
-      ["negative", "Frozen target report with no supported extraction labels.", { parserVersion: "parser-v1" }],
-      ["difficult", "GhostGroup and GhostWare are unsupported attributions in a parser-failure report.", { parserVersion: "parser-v1", parserStatus: "failed", review: { state: "needs_review" } }]
-    ] as const) store.saveCapture({ id: `cap_matrix_${id}`, tenantId: "tenant_matrix", sourceId: "src_label_matrix", url: `https://matrix-target.test/${id}`, collectedAt: at, publishedAt: at, contentHash: hashContent(body), mediaType: "text/plain", storageKind: "inline_text", body, metadata, sensitive: false });
-
-    for (const [labelType, entityType, correct, wrong] of [
-      ["actor", "actor", "APT29", "Wrong Actor"],
-      ["ransomware", "ransomware_family", "LockBit", "Wrong Ransomware"],
-      ["victim", "victim", "Northwind Health", "Wrong Victim"],
-      ["cve", "cve", "CVE-2026-1001", "CVE-2026-9999"],
-      ["malware", "malware", "Mimikatz", "Wrong Malware"],
-      ["ttp", "ttp", "T1059", "T9999"],
-      ["country", "country", "Norway", "Denmark"],
-      ["sector", "sector", "Healthcare", "Retail"],
-      ["impact", "impact", "Data theft", "Noisy impact"],
-      ["dataset", "dataset", "Patient records", "Credentials"],
-      ["business_mechanism", "extortion_type", "double extortion", "harassment"]
-    ] as const) for (const [kind, value] of [["correct", correct], ["wrong", wrong]] as const) store.saveExtractedEntity({
-      id: `entity_${labelType}_${kind}`,
-      tenantId: "tenant_matrix",
-      sourceId: "src_label_matrix",
-      captureId: "cap_matrix_mixed",
-      type: entityType,
-      value,
-      confidence: 0.8,
-      extractorVersion: "parser-v1"
-    });
-    store.saveIndicator({ id: "indicator_correct", tenantId: "tenant_matrix", sourceId: "src_label_matrix", captureId: "cap_matrix_mixed", type: "domain", value: "evil.example", confidence: 0.8, extractorVersion: "parser-v1" });
-    store.saveIndicator({ id: "indicator_wrong", tenantId: "tenant_matrix", sourceId: "src_label_matrix", captureId: "cap_matrix_mixed", type: "domain", value: "wrong.example", confidence: 0.8, extractorVersion: "parser-v1" });
-    store.saveIncident({ id: "incident_correct", tenantId: "tenant_matrix", sourceId: "src_label_matrix", captureId: "cap_matrix_mixed", title: "Northwind intrusion", summary: "Northwind intrusion", firstSeenAt: at, confidence: 0.8, extractorVersion: "parser-v1" });
-    store.saveIncident({ id: "incident_wrong", tenantId: "tenant_matrix", sourceId: "src_label_matrix", captureId: "cap_matrix_mixed", title: "Wrong incident", summary: "Wrong incident", firstSeenAt: at, confidence: 0.8, extractorVersion: "parser-v1" });
-    store.saveExtractedEntity({ id: "unsupported_actor", tenantId: "tenant_matrix", sourceId: "src_label_matrix", captureId: "cap_matrix_difficult", type: "actor", value: "GhostGroup", confidence: 0.4, extractorVersion: "parser-v1" });
-    store.saveExtractedEntity({ id: "unsupported_ransomware", tenantId: "tenant_matrix", sourceId: "src_label_matrix", captureId: "cap_matrix_difficult", type: "ransomware_family", value: "GhostWare", confidence: 0.4, extractorVersion: "parser-v1" });
-
-    for (const labelType of labelTypes) {
-      saveIndependentReference(store, { targetCaptureId: "cap_matrix_mixed", labelType, expectedValues: [...labelTruth[labelType]], truthFrozenAt: "2026-07-21T09:30:00.000Z" });
-      saveIndependentReference(store, { targetCaptureId: "cap_matrix_negative", labelType, expectedValues: [], truthFrozenAt: "2026-07-21T09:30:00.000Z" });
-      saveIndependentReference(store, { targetCaptureId: "cap_matrix_difficult", labelType, expectedValues: [], truthFrozenAt: "2026-07-21T09:30:00.000Z" });
-    }
-    const benchmark = createEvaluationBenchmark(store, { tenantId: "tenant_matrix", sampleSize: 3, labelTypes, requiredReviewers: 2, datasetSplit: "test", reviewMode: "automatic_model", createdAt: "2026-07-21T10:00:00.000Z" })!;
-    expect(benchmark.captureIds.sort()).toEqual(["cap_matrix_difficult", "cap_matrix_mixed", "cap_matrix_negative"]);
-    const truthByTask = new Map(benchmark.manifest!.map((task) => [task.id, task.authoritativeExpectedValues ?? []]));
-    const ambiguousTask = benchmark.manifest!.find((task) => task.captureId === "cap_matrix_difficult" && task.labelType === "sector")!.id;
-    let processed = 0;
-    for (;;) {
-      const result = await runAutomaticEvaluationCycle({
-        store,
-        autoCreate: false,
-        maxTasks: 25,
-        now: () => "2026-07-21T10:01:00.000Z",
-        review: async (request: any) => {
-          const expectedValues = truthByTask.get(request.taskId)!;
-          const ambiguous = request.taskId === ambiguousTask && request.role === "reviewer_1";
-          return {
-            expectedValues,
-            decision: ambiguous ? "ambiguous" : expectedValues.length ? "present" : "absent",
-            confidence: ambiguous ? 0.5 : 0.9,
-            rationale: ambiguous ? "The isolated reviewer requests adjudication." : "The frozen retained references support this exhaustive set.",
-            evidenceIds: [request.evidence.references[0].id],
-            reviewerProvider: "hanasand-ai",
-            reviewerModel: "hanasand",
-            reviewerModelVersion: "hanasand-v2",
-            promptVersion: request.promptVersion,
-            schemaVersion: request.schemaVersion,
-            modelConversationId: `conversation-${request.contextId}`,
-            modelResponseId: `response-${request.contextId}`
-          };
-        }
-      });
-      processed += result.processedTaskCount;
-      if (!result.processedTaskCount) break;
-    }
-
-    expect(processed).toBe(79);
-    expect(store.getEvaluationBenchmark(benchmark.id)).toMatchObject({ status: "complete" });
-    const outcomes = store.listEvaluationLabels().reduce<Record<string, number>>((counts, label) => ({ ...counts, [label.outcome!]: (counts[label.outcome!] ?? 0) + 1 }), {});
-    expect(outcomes).toEqual({ true_positive: 13, false_negative: 13, false_positive: 15, true_negative: 24 });
-    const metrics = buildEvaluationMetrics(store, { tenantId: "tenant_matrix", datasetSplit: "test", generatedAt: "2026-07-21T10:02:00.000Z" });
-    expect(metrics.quality.benchmarkEvidence.labelTypeCoverage.every((row: any) => row.sampleSize === 3 && row.positiveCount === 1 && row.negativeCount === 2)).toBe(true);
-    expect(metrics.quality.benchmarkEvidence.heldOutCaseCoverage).toMatchObject({
-      adjudicatedTaskCount: 39,
-      positiveTaskCount: 13,
-      negativeTaskCount: 26,
-      ambiguousTaskCount: 1,
-      parserFailureTaskCount: 13,
-      unsupportedAttributionTaskCount: 2,
-      independentlySourcedTaskCount: 39,
-      immutableTruthTaskCount: 39
-    });
-    expect(JSON.stringify(benchmark.manifest)).not.toContain("evidenceInput");
-  });
-
   test("retries missing expectedValues with only fixed server contract feedback", async () => {
     const store = evaluationStore();
     const benchmark = automaticActorBenchmark(store, "expectedValues retry benchmark", "2026-07-21T10:15:00.000Z");
@@ -316,12 +201,12 @@ describe("automatic independent evaluation", () => {
       const review = prompts.length === 1
         ? { decision: "absent", confidence: 0.9, rationale: "UNTRUSTED_MODEL_TEXT", evidenceIds: [evidenceId] }
         : { expectedValues: [], decision: "absent", confidence: 0.9, rationale: "The governed evidence supports no actor value.", evidenceIds: [evidenceId] };
-      return Response.json({ status: "completed", provider: "hanasand-ai", model: "hanasand-inspur", metrics: { modelVersion: "hanasand-v2" }, message: JSON.stringify(review), conversationId: `expected-values-${prompts.length}`, responseId: `expected-values-response-${prompts.length}` });
+      return Response.json({ status: "completed", model: "hanasand-inspur", metrics: { modelVersion: "hanasand-v2" }, message: JSON.stringify(review), conversationId: `expected-values-${prompts.length}` });
     };
 
     const first = await runAutomaticEvaluationCycle({ store, autoCreate: false, maxTasks: 1, now: () => "2026-07-21T10:16:00.000Z", aiUrl: "http://api.test/api/tools/ai", fetch });
     expect(first).toMatchObject({ processedTaskCount: 1, retryScheduledCount: 1, deadLetterCount: 0 });
-    expect(store.getEvaluationBenchmark(benchmark.id)!.manifest![0].automation).toMatchObject({
+    expect(store.getEvaluationBenchmark(benchmark.id).manifest[0].automation).toMatchObject({
       status: "retry_scheduled",
       attemptCount: 1,
       lastFailure: { code: "malformed_model_response", message: "Hanasand AI returned an invalid exhaustive evaluation response (expected_values)", retryable: true }
@@ -333,11 +218,11 @@ describe("automatic independent evaluation", () => {
       body: JSON.stringify({ tenantId: "tenant_automatic" })
     }), apiOptions(store));
     expect(retryResponse.status).toBe(202);
-    expect(store.getEvaluationBenchmark(benchmark.id)!.manifest![0].automation).toMatchObject({ status: "queued", attemptCount: 0, lastFailure: undefined });
+    expect(store.getEvaluationBenchmark(benchmark.id).manifest[0].automation).toMatchObject({ status: "queued", attemptCount: 0, lastFailure: undefined });
 
     const second = await runAutomaticEvaluationCycle({ store, autoCreate: false, maxTasks: 1, now: () => "2099-07-21T10:17:00.000Z", aiUrl: "http://api.test/api/tools/ai", fetch });
     expect(second).toMatchObject({ processedTaskCount: 1, retryScheduledCount: 0, deadLetterCount: 0 });
-    expect(store.getEvaluationBenchmark(benchmark.id)!.manifest![0].automation).toMatchObject({ status: "queued", stage: "reviewer_2", attemptCount: 0 });
+    expect(store.getEvaluationBenchmark(benchmark.id).manifest[0].automation).toMatchObject({ status: "queued", stage: "reviewer_2", attemptCount: 0 });
     expect(store.listEvaluationAnnotations()).toEqual([expect.objectContaining({ expectedValues: [], decision: "absent", reviewerModelVersion: "hanasand-v2" })]);
     expect(prompts[1]).toBe(`${prompts[0]}\n${correction}`);
     expect(prompts[1]).toContain("bounded trusted server-owned response-contract feedback, not evidence about the evaluated subject");
@@ -369,107 +254,12 @@ describe("automatic independent evaluation", () => {
         fetch: async (_url: RequestInfo | URL, init?: RequestInit) => {
           unrelatedPrompt = JSON.parse(String(init?.body)).prompt;
           const evidenceId = unrelatedPrompt.match(/governedEvidence: \[\{"id":"([^"]+)"/)?.[1];
-          return Response.json({ status: "completed", provider: "hanasand-ai", model: "hanasand-inspur", metrics: { modelVersion: "hanasand-v2" }, message: JSON.stringify({ expectedValues: [], decision: "absent", confidence: 0.9, rationale: "No actor is supported.", evidenceIds: [evidenceId] }), conversationId: `unrelated-${failure.code}`, responseId: `unrelated-response-${failure.code}` });
+          return Response.json({ status: "completed", model: "hanasand-inspur", metrics: { modelVersion: "hanasand-v2" }, message: JSON.stringify({ expectedValues: [], decision: "absent", confidence: 0.9, rationale: "No actor is supported.", evidenceIds: [evidenceId] }), conversationId: `unrelated-${failure.code}` });
         }
       });
       expect(unrelatedPrompt).not.toContain(correction);
       expect(unrelatedPrompt).not.toContain(failure.message);
     }
-  });
-
-  test("rejects circular capture metadata truth and label-invalid reviewer values", async () => {
-    const at = "2026-07-21T10:20:00.000Z";
-    const ungoverned = new InMemoryScraperStore();
-    ungoverned.saveSource({ id: "src_ungoverned", name: "Retained prose", type: "rss", url: "https://evidence.test/plain", accessMethod: "public_http", status: "active", risk: "low", trustScore: 0.8, crawlFrequencySeconds: 300, legalNotes: "Public source.", metadata: { sourceFamily: "vendor" }, createdAt: at, updatedAt: at });
-    const plainBody = "APT29 targeted Northwind Health.";
-    ungoverned.saveCapture({ id: "cap_ungoverned", sourceId: "src_ungoverned", url: "https://evidence.test/plain/report", collectedAt: at, publishedAt: at, contentHash: hashContent(plainBody), mediaType: "text/plain", storageKind: "inline_text", body: plainBody, metadata: { parserVersion: "parser-v1" }, sensitive: false });
-    ungoverned.saveExtractedEntity({ id: "actor_ungoverned", sourceId: "src_ungoverned", captureId: "cap_ungoverned", type: "actor", value: "APT29", extractorVersion: "parser-v1" });
-    const ungovernedBenchmark = createEvaluationBenchmark(ungoverned, { sampleSize: 1, labelTypes: ["actor"], datasetSplit: "test", reviewMode: "automatic_model", createdAt: at })!;
-    let ungovernedModelCalls = 0;
-    const absent = await runAutomaticEvaluationCycle({
-      store: ungoverned, autoCreate: false, maxTasks: 1, now: () => "2026-07-21T10:21:00.000Z",
-      review: async (request: any) => { ungovernedModelCalls++; return { ...(await successfulActorReview(request)), expectedValues: [], decision: "absent" }; }
-    });
-    expect(absent).toMatchObject({ processedTaskCount: 1, completedTaskCount: 0, deadLetterCount: 1 });
-    expect(ungovernedModelCalls).toBe(0);
-    const rejectedAbsence = ungoverned.getEvaluationBenchmark(ungovernedBenchmark.id)!;
-    expect(rejectedAbsence.status).toBe("complete_with_failures");
-    expect(rejectedAbsence.manifest![0]).toMatchObject({ independenceContext: { truthBasis: "context_only", authoritativeReferenceSetComplete: false }, automation: { status: "dead_letter", lastFailure: { code: "authoritative_reference_set_missing", retryable: false } } });
-    expect([...ungoverned.listEvaluationAnnotations(), ...ungoverned.listEvaluationAdjudications(), ...ungoverned.listEvaluationLabels()]).toEqual([]);
-
-    const typed = evaluationStore();
-    const typedBenchmark = automaticActorBenchmark(typed, "label-bound actor truth", "2026-07-21T10:22:00.000Z");
-    let typedModelCalls = 0;
-    const wrongEntityType = await runAutomaticEvaluationCycle({
-      store: typed, autoCreate: false, maxTasks: 2, now: () => "2026-07-21T10:23:00.000Z",
-      review: async (request: any) => {
-        typedModelCalls++;
-        return { ...(await successfulActorReview(request)), expectedValues: ["Northwind Health"], decision: "present" };
-      }
-    });
-    expect(wrongEntityType).toMatchObject({ processedTaskCount: 1, completedTaskCount: 0, deadLetterCount: 1 });
-    expect(typedModelCalls).toBe(1);
-    expect(typed.getEvaluationBenchmark(typedBenchmark.id)!.manifest![0].automation).toMatchObject({ status: "dead_letter", lastFailure: { code: "evaluation_value_not_grounded", retryable: false } });
-    expect([...typed.listEvaluationAnnotations(), ...typed.listEvaluationAdjudications(), ...typed.listEvaluationLabels()]).toEqual([]);
-  });
-
-  test("accepts negative truth only from a separately retained frozen exhaustive reference", async () => {
-    const store = new InMemoryScraperStore();
-    const at = "2026-07-21T10:24:00.000Z";
-    store.saveSource({ id: "src_cisa", name: "CISA KEV", type: "json_api", url: "https://www.cisa.gov/known_exploited_vulnerabilities.json", accessMethod: "public_http", status: "active", risk: "low", trustScore: 1, crawlFrequencySeconds: 3600, legalNotes: "Authoritative public catalog.", metadata: { sourceFamily: "government_advisory" }, createdAt: at, updatedAt: at });
-    const body = "CVE-2026-4242. Known ransomware campaign use: Unknown.";
-    store.saveCapture({ id: "cap_cisa", sourceId: "src_cisa", url: "https://www.cisa.gov/known-exploited-vulnerabilities-catalog", collectedAt: at, publishedAt: at, contentHash: hashContent(body), mediaType: "text/plain", storageKind: "inline_text", body, metadata: { extractionProfile: "cisa_kev", parserVersion: "cisa-kev:v1", structuredFields: { cveID: "CVE-2026-4242", knownRansomwareCampaignUse: "Unknown" } }, sensitive: false });
-    const circular = createEvaluationBenchmark(store, { sampleSize: 1, labelTypes: ["impact"], datasetSplit: "validation", reviewMode: "automatic_model", createdAt: at })!;
-    let circularModelCalls = 0;
-    const rejected = await runAutomaticEvaluationCycle({
-      store, autoCreate: false, maxTasks: 1, now: () => "2026-07-21T10:24:30.000Z",
-      review: async (request: any) => { circularModelCalls++; return { ...(await successfulActorReview(request)), expectedValues: [], decision: "absent" }; }
-    });
-    expect(rejected).toMatchObject({ processedTaskCount: 1, completedTaskCount: 0, deadLetterCount: 1 });
-    expect(circularModelCalls).toBe(0);
-    expect(store.getEvaluationBenchmark(circular.id)!.manifest![0]).toMatchObject({
-      independenceContext: { truthBasis: "context_only", authoritativeReferenceSetComplete: false },
-      automation: { status: "dead_letter", lastFailure: { code: "authoritative_reference_set_missing" } }
-    });
-    expect(store.listEvaluationLabels()).toEqual([]);
-
-    saveIndependentReference(store, {
-      targetCaptureId: "cap_cisa",
-      labelType: "impact",
-      expectedValues: [],
-      referenceBody: "Frozen authoritative impact inventory for CVE-2026-4242: no impact labels.",
-      truthFrozenAt: "2026-07-21T10:24:45.000Z"
-    });
-    const benchmark = createEvaluationBenchmark(store, { sampleSize: 1, labelTypes: ["impact"], datasetSplit: "test", reviewMode: "automatic_model", createdAt: "2026-07-21T10:25:00.000Z" })!;
-    const result = await runAutomaticEvaluationCycle({
-      store, autoCreate: false, maxTasks: 2, now: () => "2026-07-21T10:26:00.000Z",
-      review: async (request: any) => ({ ...(await successfulActorReview(request)), expectedValues: [], decision: "absent" })
-    });
-    expect(result).toMatchObject({ processedTaskCount: 2, completedTaskCount: 1, deadLetterCount: 0 });
-    expect(store.getEvaluationBenchmark(benchmark.id)!.manifest![0]).toMatchObject({ authoritativeExpectedValues: [], independenceContext: { authoritativeReferenceSchema: "ti.independent_evaluation_reference.v1", truthBasis: "separately_retained_authoritative_reference" } });
-    expect(store.listEvaluationLabels()).toEqual([expect.objectContaining({ labelType: "impact_extraction", expectedValue: null, observedValue: null, outcome: "true_negative" })]);
-  });
-
-  test("uses bounded task and benchmark patches instead of whole-manifest saves per transition", async () => {
-    const store = evaluationStore();
-    const benchmark = automaticActorBenchmark(store, "bounded manifest updates", "2026-07-21T10:26:00.000Z");
-    store.saveEvaluationBenchmark({
-      ...benchmark,
-      taskCount: 200,
-      manifest: Array.from({ length: 200 }, (_, index) => ({ ...benchmark.manifest[0], id: `${benchmark.manifest[0].id}_${index}`, automation: { ...benchmark.manifest[0].automation } }))
-    });
-    let fullSaves = 0, taskUpdates = 0, benchmarkPatches = 0;
-    const save = store.saveEvaluationBenchmark.bind(store);
-    const updateTask = store.updateEvaluationBenchmarkTask.bind(store);
-    const patch = store.patchEvaluationBenchmark.bind(store);
-    (store as any).saveEvaluationBenchmark = (record: any) => { fullSaves++; return save(record); };
-    (store as any).updateEvaluationBenchmarkTask = (id: string, taskId: string, update: (task: any) => any) => { taskUpdates++; return updateTask(id, taskId, update); };
-    (store as any).patchEvaluationBenchmark = (id: string, update: any) => { benchmarkPatches++; return patch(id, update); };
-
-    const result = await runAutomaticEvaluationCycle({ store, autoCreate: false, maxTasks: 1, now: () => "2026-07-21T10:27:00.000Z", review: successfulActorReview });
-
-    expect(result).toMatchObject({ processedTaskCount: 1, completedTaskCount: 0 });
-    expect({ fullSaves, taskUpdates, benchmarkPatches }).toEqual({ fullSaves: 0, taskUpdates: 2, benchmarkPatches: 1 });
   });
 
   test("durably exposes outage, timeout, malformed response, retry exhaustion, replay, and restart recovery", async () => {

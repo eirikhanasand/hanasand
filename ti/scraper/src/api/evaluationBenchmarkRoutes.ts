@@ -33,16 +33,6 @@ const REVIEW_PROMPT_VERSION = "ti.automatic_evaluation_review.v2";
 const REVIEW_SCHEMA_VERSION = "ti.automatic_evaluation_response.v1";
 const EXPECTED_VALUES_FAILURE = "Hanasand AI returned an invalid exhaustive evaluation response (expected_values)";
 const EXPECTED_VALUES_RETRY_CORRECTION = "Server contract feedback: The prior response failed the required expectedValues field. Return expectedValues as an exhaustive JSON array of plain strings, using [] when the governed evidence supports no values.";
-const BENCHMARK_PROTOCOL_VERSION = "ti.independent_extraction_benchmark.v4";
-const REFERENCE_CURATION_PROTOCOL_VERSION = "ti.independent_reference_curation.v1";
-const REFERENCE_CURATION_PROMPT_VERSION = "ti.automatic_reference_curation.v1";
-const REFERENCE_CURATION_SCHEMA_VERSION = "ti.automatic_reference_curation_response.v1";
-const REFERENCE_TRUTH_SCHEMA_VERSION = "ti.independent_evaluation_reference.v1";
-const REFERENCE_VALIDATION_TYPE = "independent_evaluation_reference";
-const TERMINAL_TASK_STATUSES = new Set(["adjudicated", "dead_letter", "failed"]);
-const TERMINAL_BENCHMARK_STATUSES = new Set(["complete", "complete_with_failures", "retired"]);
-const EXTRACTION_PROVIDER = "hanasand-ti";
-const EXTRACTION_MODEL = "extraction-pipeline";
 // ponytail: keep one complete model context per capture; add chunked review only when reports over 24 KB must enter the benchmark.
 const MAX_REVIEW_EVIDENCE_BYTES = 24_000;
 const BUSINESS_MECHANISM_TYPES = new Set(["extortion_type", "monetization_path", "victim_pressure_tactic", "buyer_seller_communication", "intermediary_communication", "publication_strategy", "publicity_tactic", "channel_type", "profitability_signal"]);
@@ -1511,16 +1501,6 @@ function automaticReviewRequest(
   const context = task.reviewContexts?.find((row) => row.role === stage);
   if (!context?.contextId) throw evaluationFailure("review_context_missing", `Independent ${stage} context is missing`, false);
   const retryCorrection = retryCorrectionFeedback(task);
-  const references = (task.referenceEvidence ?? []).map((reference) => {
-    if (reference.kind === "retained_capture") return { ...reference, excerpt: evidence };
-    if (!["independent_authoritative_reference", "independent_reference_candidate"].includes(reference.kind) || !reference.referenceCaptureId) return reference;
-    const referenceCapture = store.getCapture(reference.referenceCaptureId);
-    const excerpt = exhaustiveEvidenceText(referenceCapture);
-    if (!referenceCapture || !excerpt || reference.referenceContentHash !== referenceCapture.contentHash || reference.excerptHash !== evaluationHash(excerpt)) {
-      throw evaluationFailure(referenceCuration ? "reference_candidate_changed" : "authoritative_reference_changed", "The separately retained reference evidence is missing or changed", false);
-    }
-    return { ...reference, excerpt };
-  });
   return {
     mode: referenceCuration ? "reference_curation" : "evaluation",
     role: stage,
@@ -1541,19 +1521,9 @@ function automaticReviewRequest(
       references
     },
     independenceContext: task.independenceContext,
-    labelInstructions: labelInstructions(task.labelType ?? ""),
+    labelInstructions: labelInstructions(task.labelType),
     ...(retryCorrection ? { retryCorrection } : {}),
-    ...(stage === "adjudicator" ? { reviewerDecisions: annotations.map((row) => ({
-      annotationId: row.id,
-      decision: cleanText(row.decision, 40),
-      expectedValues: row.expectedValues ?? [],
-      confidence: row.confidence,
-      rationale: cleanText(row.rationale, 2_000),
-      evidenceIds: row.evidenceIds,
-      reviewerModelVersion: row.reviewerModelVersion,
-      referenceAligned: row.referenceAligned,
-      referenceExhaustive: row.referenceExhaustive
-    })) } : {})
+    ...(stage === "adjudicator" ? { reviewerDecisions: annotations.map((row) => ({ annotationId: row.id, decision: row.decision, expectedValues: row.expectedValues, confidence: row.confidence, rationale: row.rationale, evidenceIds: row.evidenceIds, reviewerModelVersion: row.reviewerModelVersion })) } : {})
   };
 }
 
@@ -1660,17 +1630,13 @@ function parseEvaluationResponse(value: unknown) {
   catch { throw evaluationFailure("malformed_model_response", "Hanasand AI did not return strict evaluation JSON", true); }
 }
 
-function validateAutomaticReview(value: unknown, request: AutomaticReviewRequest, task: EvaluationTaskRecord): AutomaticReviewResult {
-  const response = isRecord(value) ? value : {};
-  const expectedValues = modelValues(response.expectedValues);
-  const decision = String(response.decision ?? "");
-  const confidence = normalizedConfidence(response.confidence);
-  const rationale = safeModelRationale(response.rationale);
-  // Evidence IDs are server-issued opaque values and are safe only by exact membership below.
-  const evidenceIds = modelEvidenceIds(response.evidenceIds);
-  const referenceAligned = typeof response.referenceAligned === "boolean" ? response.referenceAligned : undefined;
-  const referenceExhaustive = typeof response.referenceExhaustive === "boolean" ? response.referenceExhaustive : undefined;
-  const allowedEvidenceIds = new Set(request.evidence.references.map((reference) => reference.id));
+function validateAutomaticReview(value: any, request: any) {
+  const expectedValues = modelValues(value?.expectedValues);
+  const decision = String(value?.decision ?? "");
+  const confidence = normalizedConfidence(value?.confidence);
+  const rationale = safeModelRationale(value?.rationale);
+  const evidenceIds = modelValues(value?.evidenceIds);
+  const allowedEvidenceIds = new Set(request.evidence.references.map((reference: any) => reference.id));
   if (!expectedValues) throw evaluationFailure("malformed_model_response", EXPECTED_VALUES_FAILURE, true);
   const inconsistentDecision = (decision === "present" && !expectedValues.length) || (decision === "absent" && Boolean(expectedValues.length));
   if (request.role === "adjudicator" && decision === "ambiguous") throw evaluationFailure("ambiguous_adjudication", "The independent adjudicator did not resolve the evaluation decision", false);
@@ -1790,9 +1756,9 @@ function automaticFailure(caught: unknown): AutomaticFailure {
   return { code: cleanText(record.code, 100) ?? "evaluation_failed", message: safeFailureMessage(caught), retryable: record.retryable !== false };
 }
 function safeFailureMessage(caught: unknown) { return (caught instanceof Error ? caught.message : String(caught)).replace(/\bhttps?:\/\/\S+/gi, "[redacted-url]").slice(0, 500); }
-function retryCorrectionFeedback(task: EvaluationTaskRecord) {
+function retryCorrectionFeedback(task: any) {
   const history = Array.isArray(task.automation?.history) ? task.automation.history : [];
-  return history.some((event) => isRecord(event.failure) && event.failure.code === "malformed_model_response" && event.failure.message === EXPECTED_VALUES_FAILURE) ? EXPECTED_VALUES_RETRY_CORRECTION : undefined;
+  return history.some((event: any) => event?.failure?.code === "malformed_model_response" && event.failure.message === EXPECTED_VALUES_FAILURE) ? EXPECTED_VALUES_RETRY_CORRECTION : undefined;
 }
 
 function balancedSample(captures: RawCapture[], sourceById: Map<string, SourceRecord>, size: number, seed: string, subjectsByCapture = new Map<string, EvaluationSubjects>(), generatedAt = nowIso(), labelTypes: readonly string[] = LABEL_TYPES) {
