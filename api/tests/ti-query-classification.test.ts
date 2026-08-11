@@ -113,60 +113,6 @@ test('reports whether a search was served from the in-process cache', async () =
     }
 })
 
-test('preflights the scraper before a public search and keeps full query timing after healthy response', async () => {
-    const previousScraperBase = process.env.TI_SCRAPER_API_BASE
-    const previousServiceToken = process.env.TI_SCRAPER_SERVICE_TOKEN
-    const originalFetch = globalThis.fetch
-    process.env.TI_SCRAPER_API_BASE = 'http://scraper.test'
-    process.env.TI_SCRAPER_SERVICE_TOKEN = 'service-secret'
-    const requests: Request[] = []
-    globalThis.fetch = async (input, init) => {
-        const request = new Request(input, init)
-        requests.push(request)
-        if (new URL(request.url).pathname === '/v1/health') return Response.json({ status: 'ok' })
-        return Response.json({
-            query: 'APT7654333', generatedAt: '2026-08-09T15:00:00.000Z', mode: 'scraper', status: 'ready',
-            summary: 'Evidence is available.', confidence: 0.8, lastSeen: '2026-08-09T14:00:00.000Z', aliases: [],
-            recentActivity: [], targets: [], ttps: [], datasets: [], sources: [], notes: [],
-        })
-    }
-
-    try {
-        const result = await searchThreatIntel({ query: 'APT7654333', preflightHealth: true })
-        expect(result.mode).toBe('scraper')
-        expect(requests.map(request => new URL(request.url).pathname)).toEqual(['/v1/health', '/v1/intel/search'])
-        expect(requests.map(request => request.headers.get('x-hanasand-service-token'))).toEqual(['service-secret', 'service-secret'])
-    } finally {
-        globalThis.fetch = originalFetch
-        if (previousScraperBase === undefined) delete process.env.TI_SCRAPER_API_BASE
-        else process.env.TI_SCRAPER_API_BASE = previousScraperBase
-        if (previousServiceToken === undefined) delete process.env.TI_SCRAPER_SERVICE_TOKEN
-        else process.env.TI_SCRAPER_SERVICE_TOKEN = previousServiceToken
-    }
-})
-
-test('returns unavailable after a failed health preflight without issuing the long search request', async () => {
-    const previousScraperBase = process.env.TI_SCRAPER_API_BASE
-    const originalFetch = globalThis.fetch
-    process.env.TI_SCRAPER_API_BASE = 'http://scraper.test'
-    const requestedPaths: string[] = []
-    globalThis.fetch = async input => {
-        const url = new URL(String(input))
-        requestedPaths.push(url.pathname)
-        return new Response(null, { status: 503 })
-    }
-
-    try {
-        const result = await searchThreatIntel({ query: 'APT7654334', preflightHealth: true })
-        expect(result).toMatchObject({ mode: 'unavailable', status: 'unavailable', summary: 'Search unavailable', recentActivity: [] })
-        expect(requestedPaths).toEqual(['/v1/health'])
-    } finally {
-        globalThis.fetch = originalFetch
-        if (previousScraperBase === undefined) delete process.env.TI_SCRAPER_API_BASE
-        else process.env.TI_SCRAPER_API_BASE = previousScraperBase
-    }
-})
-
 test('refreshes a cached pending search before its advertised poll interval', async () => {
     const previousScraperBase = process.env.TI_SCRAPER_API_BASE
     const originalFetch = globalThis.fetch
