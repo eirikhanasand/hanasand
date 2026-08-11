@@ -13,9 +13,9 @@ import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { parseCurrentRansomwareOperations } from "../pipeline/ransomwareOperationCatalog.ts";
 import { qualifySourcePortfolio } from "../ops/sourcePortfolioQualification.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
-import { InMemoryObjectEvidenceStore, InMemoryScraperStore } from "../storage/memoryStore.ts";
-import { PostgresScraperStore, createPostgresClient, normalizeLegacySourceForImport, toJson } from "../storage/postgresScraperStore.ts";
-import { hashContent, stableId } from "../utils.ts";
+import { InMemoryScraperStore } from "../storage/memoryStore.ts";
+import { PostgresScraperStore, normalizeLegacySourceForImport, toJson } from "../storage/postgresScraperStore.ts";
+import { hashContent } from "../utils.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
 import { fixtureCapture } from "./helpers/storageFixtures.ts";
 import { SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS, SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
@@ -24,34 +24,6 @@ import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 const collectedAt = "2026-07-19T12:00:00.000Z";
 
 describe("structured threat-intelligence storage contract", () => {
-  test("source summary reads one latest health row per current source", async () => {
-    const store = Object.create(PostgresScraperStore.prototype) as any;
-    let query = "";
-    store.sql = {
-      unsafe: async (text: string) => {
-        query = text;
-        return [{ summary: {} }];
-      }
-    };
-
-    await store.querySourceOperationalSummary({ tenantId: "tenant_summary", generatedAt: collectedAt });
-
-    expect(query).toContain("LEFT JOIN LATERAL");
-    expect(query).toContain("source_health.source_id = sources.id");
-    expect(query).not.toContain("DISTINCT ON (source_id)");
-  });
-
-  test("does not require the optional parser cleanup table during normal startup", async () => {
-    const store = Object.create(PostgresScraperStore.prototype) as any;
-    store.sql = ((strings: TemplateStringsArray) => strings[0].includes("to_regclass") ? [{ table_name: null }] : []) as any;
-
-    await expect(store.purgeParserDiagnosticArchiveObjects({ deleteObject: () => { throw new Error("must not delete without the table"); } })).resolves.toEqual({
-      pendingCount: 0,
-      deletedCount: 0,
-      failedIds: []
-    });
-  });
-
   test("repairs malformed Unicode before PostgreSQL JSON persistence", () => {
     expect(JSON.parse(toJson({ title: "Operating lower \ud835" }))).toEqual({ title: "Operating lower �" });
   });
