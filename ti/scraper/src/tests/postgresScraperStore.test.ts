@@ -24,7 +24,17 @@ import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 const collectedAt = "2026-07-19T12:00:00.000Z";
 
 describe("structured threat-intelligence storage contract", () => {
-  test("source summary reads one latest health row per current source", async () => {
+  test("disables prepared-query pipelining for durable FIFO writes", async () => {
+    const sql = createPostgresClient("postgres://test:test@127.0.0.1:1/test");
+    expect(sql.options.prepare).toBe(false);
+    await sql.close({ timeout: 0 });
+  });
+
+  test("routes PostgreSQL search through the warmed capture index", () => {
+    expect(new (PostgresScraperStore as any)({}, []).usesPostgresSearchIndex).toBe(true);
+  });
+
+  test("reads latest source health once per tenant summary instead of once per source", async () => {
     const store = Object.create(PostgresScraperStore.prototype) as any;
     let query = "";
     store.sql = {
