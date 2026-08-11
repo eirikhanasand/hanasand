@@ -81,7 +81,7 @@ type LocalControl = {
     decisions: Record<string, { status: string; reason: string; at: string }>
 }
 
-const defaultQuery = 'watchlist terms'
+const defaultQuery = ''
 
 export default function TiScraperControlClient() {
     const [query, setQuery] = useState(defaultQuery)
@@ -214,10 +214,10 @@ export default function TiScraperControlClient() {
             <section className='overflow-hidden rounded-md border border-ui-border bg-ui-panel shadow-sm'>
                 <div className='grid gap-2 border-b border-ui-border bg-ui-panel p-2 text-ui-text xl:grid-cols-[auto_minmax(0,1fr)_auto] xl:items-center'>
                     <div className='flex flex-wrap items-center gap-2'>
-                        <MiniMetric label='Queue' value={String(queueCount)} />
-                        <MiniMetric label='Daily' value={`${scheduler.dailyCovered}/${scheduler.dailySources}`} />
+                        <MiniMetric label='Pending work' value={String(queueCount)} />
+                        <MiniMetric label="Today's coverage" value={coverageLabel(scheduler.dailyCovered, scheduler.dailySources)} />
                         <MiniMetric label='Sources' value={String(scheduler.totalSources || sources.length)} />
-                        <MiniMetric label='Qualified' value={`${scheduler.qualifyingSources}/6,100`} />
+                        <MiniMetric label='Qualified sources' value={String(scheduler.qualifyingSources)} />
                         <MiniMetric label='Alerts' value={String(sourceGrowth.alertsGenerated)} />
                     </div>
                     <form onSubmit={submit} className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]'>
@@ -227,7 +227,7 @@ export default function TiScraperControlClient() {
                                 value={query}
                                 onChange={event => setQuery(event.target.value)}
                                 className='h-10 w-full rounded-lg border border-ui-border bg-ui-panel pl-9 pr-3 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/30'
-                                placeholder='Actor, company, domain, CVE...'
+                                placeholder='Search sources or collection work'
                             />
                         </label>
                         <button type='submit' className='inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel'>
@@ -244,8 +244,8 @@ export default function TiScraperControlClient() {
                     <aside className='border-b border-ui-border bg-ui-canvas xl:border-b-0 xl:border-r'>
                         <details className='border-b border-ui-border bg-ui-panel' data-ti-control-secondary-actions>
                             <summary className='flex cursor-pointer list-none items-center justify-between gap-2 px-2 py-2 text-xs font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/35 [&::-webkit-details-marker]:hidden'>
-                                <span>Advanced source controls</span>
-                                <span className='text-[11px] font-medium text-ui-muted'>daily, enrich, plan</span>
+                                <span>Collection actions</span>
+                                <span className='text-[11px] font-medium text-ui-muted'>scheduler and alerts</span>
                             </summary>
                             <div className='grid grid-cols-2 gap-1.5 border-t border-ui-border p-2'>
                                 <ActionButton compact busy={busyAction === 'scheduler_run_now'} icon={<Activity className='h-4 w-4' />} onClick={() => runAction('scheduler_run_now')}>Run due</ActionButton>
@@ -270,7 +270,7 @@ export default function TiScraperControlClient() {
                                     >
                                         <div className='flex items-center justify-between gap-2'>
                                             <span className={severityClass(item.severity)}>{item.severity}</span>
-                                            <span className='text-[11px] font-semibold text-ui-muted'>{item.queue}</span>
+                                            <span className='text-[11px] font-semibold text-ui-muted'>{displayQueue(item.queue)}</span>
                                         </div>
                                         <span className='truncate text-xs font-semibold text-ui-text'>{item.title}</span>
                                         <span className='line-clamp-1 text-[11px] leading-4 text-ui-muted'>{item.subtitle}</span>
@@ -396,11 +396,11 @@ export default function TiScraperControlClient() {
                                     <Info label='Useful now' value={String(scheduler.usefulSources)} />
                                     <Info label='Capture-producing' value={String(scheduler.captureProducingSources)} />
                                     <Info label='Recently seen' value={String(scheduler.recentlySeenSources)} />
-                                    <Info label='Daily covered' value={`${scheduler.dailyCovered}/${scheduler.dailySources}`} />
-                                    <Info label='Qualified' value={`${scheduler.qualifyingSources}/6,100`} />
-                                    <Info label='Clear web' value={`${scheduler.qualifyingClearWeb}/5,000`} />
-                                    <Info label='Lawful Tor' value={`${scheduler.qualifyingDarkWeb}/1,000`} />
-                                    <Info label='Public Telegram' value={`${scheduler.qualifyingTelegram}/100`} />
+                                    <Info label="Today's coverage" value={coverageLabel(scheduler.dailyCovered, scheduler.dailySources)} />
+                                    <Info label='Qualified sources' value={String(scheduler.qualifyingSources)} />
+                                    <Info label='Qualified clear web' value={String(scheduler.qualifyingClearWeb)} />
+                                    <Info label='Qualified lawful Tor' value={String(scheduler.qualifyingDarkWeb)} />
+                                    <Info label='Qualified public Telegram' value={String(scheduler.qualifyingTelegram)} />
                                     <Info label='AI parser' value={scheduler.aiStatus} />
                                     <Info label='Active Telegram' value={String(sourceGrowth.activeTelegram)} />
                                     <Info label='Darkweb/onion' value={String(sourceGrowth.activeDarkweb)} />
@@ -459,15 +459,15 @@ export default function TiScraperControlClient() {
                         Operations telemetry
                     </span>
                     <span className='inline-flex items-center gap-2 text-xs font-medium text-ui-muted'>
-                        {healthyEndpoints}/{Math.max(endpointRows.length, 1)} checks healthy · {scheduler.dailyCovered}/{scheduler.dailySources} daily · {sourceGrowth.alertsGenerated} alerts
+                        {healthyEndpoints}/{Math.max(endpointRows.length, 1)} checks healthy · {coverageLabel(scheduler.dailyCovered, scheduler.dailySources)} covered today · {sourceGrowth.alertsGenerated} alerts
                         <ChevronDown className='h-4 w-4 transition group-open:rotate-180' />
                     </span>
                 </summary>
                 <div className='grid gap-2 border-t border-ui-border p-2' data-ti-control-telemetry-panels>
                     <section className='grid gap-2 sm:grid-cols-2 xl:grid-cols-5'>
                         <Metric title='Scraper' value={snapshot?.health ? 'Reachable' : loading ? 'Loading' : 'Connecting'} detail={`${healthyEndpoints}/${Math.max(endpointRows.length, 1)} checks healthy`} icon={<Gauge className='h-4 w-4' />} tone={snapshot?.health ? 'ok' : 'bad'} />
-                        <Metric title='Queue' value={String(queueCount)} detail='frontier tasks visible to workers' icon={<Workflow className='h-4 w-4' />} tone={queueCount > 200 ? 'warn' : 'ok'} />
-                        <Metric title='Daily coverage' value={`${scheduler.dailyCovered}/${scheduler.dailySources}`} detail={`${scheduler.dailyAttempted} attempted across retained executable sources`} icon={<UserRound className='h-4 w-4' />} tone={scheduler.dailySources && scheduler.dailyCovered < scheduler.dailySources ? 'warn' : 'ok'} />
+                        <Metric title='Pending work' value={String(queueCount)} detail='Collection tasks waiting to run' icon={<Workflow className='h-4 w-4' />} tone={queueCount > 200 ? 'warn' : 'ok'} />
+                        <Metric title="Today's coverage" value={coverageLabel(scheduler.dailyCovered, scheduler.dailySources)} detail={`${scheduler.dailyAttempted} source checks attempted today`} icon={<UserRound className='h-4 w-4' />} tone={scheduler.dailySources && scheduler.dailyCovered < scheduler.dailySources ? 'warn' : 'ok'} />
                         <Metric title='AI parser' value={scheduler.aiStatus} detail={scheduler.aiDetail} icon={<DatabaseZap className='h-4 w-4' />} tone={scheduler.aiReady ? 'ok' : 'warn'} />
                         <Metric title='Alerts' value={String(sourceGrowth.alertsGenerated)} detail={`${sourceGrowth.watchlistMatches} matches, ${sourceGrowth.webhookDeliveries} deliveries`} icon={<Clock3 className='h-4 w-4' />} tone={sourceGrowth.alertsGenerated ? 'ok' : 'hold'} />
                     </section>
@@ -487,7 +487,7 @@ export default function TiScraperControlClient() {
                         <Panel title='Output feed' icon={<FileSearch className='h-4 w-4' />}>
                             <div className='grid gap-2 md:grid-cols-2'>
                                 <Info label='Runs' value={scheduler.lastRunStatus || 'collection feed'} />
-                                <Info label='Queue' value={`${queueCount} frontier tasks`} />
+                                <Info label='Pending work' value={`${queueCount} collection tasks`} />
                                 <Info label='Quality' value={qualitySummary(snapshot)} />
                                 <Info label='Next run' value={scheduler.nextRunAt ? formatTime(scheduler.nextRunAt) : 'checking'} />
                             </div>
@@ -585,7 +585,7 @@ function workItemsFor(snapshot: ControlSnapshot | null, sources: SourceRow[], ta
             kind: 'frontier_task',
             title: task.anchorText || `Frontier task ${task.id}`,
             subtitle: task.url || `Queued for ${source?.name || task.sourceId || 'source'}.`,
-            queue: 'Queue',
+            queue: 'Collection queue',
             severity: task.score > 0.8 ? 'high' : 'medium',
             status: 'queued',
             timestamp: formatTime(task.discoveredAt),
@@ -610,7 +610,7 @@ function workItemsFor(snapshot: ControlSnapshot | null, sources: SourceRow[], ta
             sourceId: source.id,
             title: `Review ${source.name}`,
             subtitle: `${source.status} source with ${source.risk} risk. Preview changes before promotion, quarantine, or legal-note refresh.`,
-            queue: 'Source governance',
+            queue: 'Source review',
             severity: source.risk === 'restricted' ? 'high' : 'medium',
             status: source.status,
             timestamp: generatedAt,
@@ -632,7 +632,7 @@ function workItemsFor(snapshot: ControlSnapshot | null, sources: SourceRow[], ta
             id: 'frontier-queue',
             kind: 'run',
             title: `${queued} queued frontier tasks`,
-            subtitle: 'Queue pressure is building; worker rows stream in as work starts.',
+            subtitle: 'Collection tasks are waiting; they will be processed by the scheduler.',
             queue: 'Scheduler',
             severity: queued > 200 ? 'high' : 'medium',
             status: 'queued',
@@ -721,7 +721,7 @@ function workItemsFor(snapshot: ControlSnapshot | null, sources: SourceRow[], ta
             id: 'steady-state',
             kind: 'quality',
             title: 'Operations steady',
-            subtitle: 'Queue, source review, restricted review, and worker checks are clear.',
+            subtitle: 'Collection queue, source review, restricted review, and service checks are clear.',
             queue: 'Monitoring',
             severity: 'low',
             status: 'steady',
@@ -822,6 +822,14 @@ function schedulerKpis(snapshot: ControlSnapshot | null) {
         nextRunAt: stringValue(scheduler.nextRunAt),
         lastRunStatus: stringValue(lastRun.status),
     }
+}
+
+function coverageLabel(covered: number, total: number) {
+    return total > 0 ? `${covered}/${total}` : '—'
+}
+
+function displayQueue(value: string) {
+    return value === 'Source governance' ? 'Source review' : value
 }
 
 function sourceGrowthKpis(snapshot: ControlSnapshot | null, sources: SourceRow[]) {
