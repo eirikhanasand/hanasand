@@ -7,7 +7,7 @@ import TiDataAvailability from '../ti-data-availability'
 export const dynamic = 'force-dynamic'
 
 export default async function TiDomainsPage() {
-    const overview = await getTiAdminOverview()
+    const overview = await getTiAdminOverview(null, { limit: 25, includeCandidates: true })
     const { domains } = overview
     const rows = domains.map(domain => ({
         domain,
@@ -177,9 +177,9 @@ function QueuePill({ label, count }: { label: string, count: number }) {
 }
 
 function statusClass(status: string) {
-    if (status === 'review') return 'w-fit rounded-full border border-ui-warning bg-ui-raised px-2 py-0.5 text-xs font-semibold capitalize text-ui-warning'
-    if (status === 'watching') return 'w-fit rounded-full border border-ui-success bg-ui-raised px-2 py-0.5 text-xs font-semibold capitalize text-ui-success'
-    return 'w-fit rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold capitalize text-ui-muted'
+    if (status === 'review') return 'inline-flex w-fit self-center items-center justify-center rounded-full border border-ui-warning bg-ui-raised px-2 py-0.5 text-xs font-semibold capitalize text-ui-warning'
+    if (status === 'watching') return 'inline-flex w-fit self-center items-center justify-center rounded-full border border-ui-success bg-ui-raised px-2 py-0.5 text-xs font-semibold capitalize text-ui-success'
+    return 'inline-flex w-fit self-center items-center justify-center rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold capitalize text-ui-muted'
 }
 
 function statusWeight(status: string) {

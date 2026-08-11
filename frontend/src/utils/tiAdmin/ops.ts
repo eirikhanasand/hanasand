@@ -212,7 +212,7 @@ export function ageDays(since: string) {
 
 async function fetchResource(base: string, path: string, key: string, tenantId: string | null, page: { cursor?: number, limit?: number, sourceId?: string, query?: string, family?: string, lifecycle?: string, access?: string, health?: string, output?: string, matches?: string, sort?: string, direction?: string, includeCandidates?: boolean } = {}, skipCache = false): Promise<ResourceResult> {
     const resource = path.split('/').at(-1) || key
-    const cacheKey = resource === 'source-operations' ? JSON.stringify([base, tenantId, page]) : ''
+    const cacheKey = JSON.stringify([resource, base, tenantId, page])
     if (cacheKey && !skipCache) {
         const cached = sourceInventoryCache.get(cacheKey)
         if (cached && cached.expiresAt > Date.now()) return cached.value
@@ -234,8 +234,8 @@ async function fetchResource(base: string, path: string, key: string, tenantId: 
         if (page.includeCandidates) target.searchParams.set('includeCandidates', 'true')
         const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
         const response = await fetch(target, {
-            cache: resource === 'source-operations' ? 'force-cache' : 'no-store',
-            ...(resource === 'source-operations' ? { next: { revalidate: 5 } } : {}),
+            cache: 'force-cache',
+            next: { revalidate: 5 },
             headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined,
             signal: AbortSignal.timeout(TI_ADMIN_FETCH_TIMEOUT_MS),
         })
@@ -368,8 +368,8 @@ function toCapture(record: ApiPayload): TiAdminCapture | undefined {
     const publicUrl = stringValue(record.url)
     const domain = captureDomain(metadata, publicUrl)
     const screenshotId = textValue(metadata.screenshotId, metadata.screenshotHash)
-    const actor = textValue(metadata.actor, metadata.group, metadata.threatActor, 'Not extracted')
-    const title = textValue(metadata.title, metadata.headline, metadata.claimTitle, `${actor === 'Not extracted' ? 'Evidence' : actor} capture`)
+    const actor = textValue(metadata.actor, metadata.group, metadata.threatActor, metadata.entity, domain, 'Source observation')
+    const title = textValue(metadata.title, metadata.headline, metadata.claimTitle, `${actor} capture`)
     const publishedAt = isoValue(record.publishedAt, capturedAt)
     const pageType = textValue(metadata.pageType, metadata.kind, metadata.adapter, record.mediaType, record.storageKind, 'capture')
 

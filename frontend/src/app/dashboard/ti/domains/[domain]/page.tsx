@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function TiDomainDetailPage(props: { params: Promise<{ domain: string }> }) {
     const params = await props.params
-    const overview = await getTiAdminOverview()
+    const overview = await getTiAdminOverview(null, { limit: 25, includeCandidates: true })
     const domain = overview.domains.find(item => item.domain === decodeURIComponent(params.domain))
 
     if (!domain && overview.availability.state === 'live') return notFound()
@@ -22,7 +22,10 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
     )
 
     const captures = domainCaptures(overview, domain.domain).sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime())
-    const sources = domain.sourceIds.map(id => sourceById(overview, id)).filter(source => Boolean(source))
+    const missingSourceIds = domain.sourceIds.filter(id => !sourceById(overview, id))
+    const sourceLookups = await Promise.all(missingSourceIds.map(id => getTiAdminOverview(null, { sourceId: id, limit: 1, includeSamples: false, includeCandidates: true })))
+    const sourceOverview = { ...overview, sources: [...overview.sources, ...sourceLookups.flatMap(item => item.sources)] }
+    const sources = domain.sourceIds.map(id => sourceById(sourceOverview, id)).filter(source => Boolean(source))
     const staleSources = sources.filter(source => new Date(source!.nextRunAt).getTime() < Date.now())
     const latestCapture = captures[0]
     const statusTone = domain.status === 'review' ? 'watch' : domain.status === 'watching' ? 'ok' : 'neutral'
@@ -101,7 +104,7 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
                     icon={<DatabaseZap className='h-4 w-4' />}
                     title='Evidence stream'
                     value={latestCapture ? latestCapture.title : 'checking'}
-                    detail={latestCapture ? `${latestCapture.actor} via ${sourceById(overview, latestCapture.sourceId)?.name || latestCapture.sourceId}` : 'collectors are checking this entity for new mentions'}
+                    detail={latestCapture ? `${latestCapture.actor} via ${sourceById(sourceOverview, latestCapture.sourceId)?.name || latestCapture.sourceId}` : 'collectors are checking this entity for new mentions'}
                     tone={captures.length ? 'ok' : 'neutral'}
                 />
             </div>
@@ -125,7 +128,7 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
                             </thead>
                             <tbody className='divide-y divide-ui-border bg-ui-canvas'>
                                 {captures.map(capture => {
-                                    const source = sourceById(overview, capture.sourceId)
+                                    const source = sourceById(sourceOverview, capture.sourceId)
                                     return (
                                         <tr key={capture.id} className='align-top hover:bg-ui-panel'>
                                             <td className='px-4 py-3'>
