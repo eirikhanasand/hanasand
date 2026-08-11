@@ -54,7 +54,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const scope = organizationId ? { tenantId, organizationId } : { tenantId }
 
     function refreshWorkspace() {
-        onChanged?.()
         router.refresh()
     }
 
