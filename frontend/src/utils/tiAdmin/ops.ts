@@ -411,17 +411,17 @@ function toRun(record: ApiPayload, sources: Map<string, TiAdminSource>): TiAdmin
     const id = stringValue(record.id)
     const sourceId = stringValue(record.sourceId) || listValue(record.sourceIds).map(item => stringValue(item)).find(Boolean) || ''
     const startedAt = isoValue(record.startedAt, record.createdAt)
-    if (!id || !sourceId || !startedAt) return undefined
+    if (!id || !startedAt) return undefined
     const source = sources.get(sourceId)
     return {
         id,
         sourceId,
-        sourceName: textValue(record.sourceName, source?.name, sourceId),
-        sourceFamily: textValue(record.sourceFamily, source?.family, 'source'),
+        sourceName: textValue(record.sourceName, source?.name, sourceId ? sourceId : 'Global source fleet'),
+        sourceFamily: textValue(record.sourceFamily, source?.family, sourceId ? 'source' : 'collection'),
         status: runStatus(record.status),
         startedAt,
         finishedAt: optionalIso(record.finishedAt, record.completedAt, record.updatedAt),
-        nextRunAt: isoValue(record.nextRunAt, source?.nextRunAt, startedAt),
+        nextRunAt: isoValue(record.nextRunAt, source?.nextRunAt),
         rows: numberValue(record.rows, record.rowCount, record.processedCount, record.itemCount),
         captures: numberValue(record.captures, record.captureCount),
         screenshots: numberValue(record.screenshots, record.screenshotCount),

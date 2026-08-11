@@ -20,9 +20,9 @@ export default async function TiRunsPage() {
     const captureTotal = runs.reduce((sum, run) => sum + run.captures, 0)
     const screenshotTotal = runs.reduce((sum, run) => sum + run.screenshots, 0)
     const rowTotal = runs.reduce((sum, run) => sum + run.rows, 0)
-    const nextRun = [...runs].sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
+    const nextRun = [...runs].filter(run => run.nextRunAt).sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
     const nextSource = [...sources].filter(source => Number.isFinite(new Date(source.nextRunAt).getTime())).sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
-    const attentionRuns = orderedRuns.filter(run => run.status !== 'completed' || isOverdue(run.nextRunAt))
+    const attentionRuns = orderedRuns.filter(run => run.status !== 'completed' || Boolean(run.nextRunAt && isOverdue(run.nextRunAt)))
     const runUnavailable = overview.availability.failedResources.includes('collection-runs')
 
     return (
@@ -99,19 +99,22 @@ export default async function TiRunsPage() {
                                         <p className='truncate font-mono text-xs font-semibold text-ui-text'>{run.id}</p>
                                         <p className='mt-1 line-clamp-1 text-xs text-ui-muted'>{run.message}</p>
                                     </div>
-                                    <Link href={`/dashboard/ti/sources/${run.sourceId}`} className='min-w-0 font-semibold text-ui-text hover:text-ui-primary'>
+                                    {run.sourceId ? <Link href={`/dashboard/ti/sources/${run.sourceId}`} className='min-w-0 font-semibold text-ui-text hover:text-ui-primary'>
                                         <span className='block truncate'>{run.sourceName}</span>
                                         <span className='mt-1 block truncate text-xs font-normal text-ui-muted'>{run.sourceFamily.replaceAll('_', ' ')}</span>
-                                    </Link>
+                                    </Link> : <div className='min-w-0'>
+                                        <span className='block truncate font-semibold text-ui-text'>{run.sourceName}</span>
+                                        <span className='mt-1 block truncate text-xs text-ui-muted'>{run.sourceFamily.replaceAll('_', ' ')}</span>
+                                    </div>}
                                     <span className={statusClass(run.status)}>{run.status}</span>
                                     <span className='text-ui-muted'>{shortDate(run.startedAt)}</span>
                                     <span className='font-semibold text-ui-text'>{durationLabel(run.startedAt, run.finishedAt)}</span>
                                     <span className='text-ui-primary'>{run.captures} cap · {run.screenshots} shots · {run.rows} rows</span>
-                                    <span className='text-ui-muted'>{relativeUntil(run.nextRunAt)}</span>
-                                    <Link href={`/dashboard/ti/sources/${run.sourceId}`} className='inline-flex h-8 w-fit items-center gap-1.5 rounded-md border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text hover:bg-ui-raised'>
+                                    <span className='text-ui-muted'>{run.nextRunAt ? relativeUntil(run.nextRunAt) : 'not scheduled'}</span>
+                                    {run.sourceId ? <Link href={`/dashboard/ti/sources/${run.sourceId}`} className='inline-flex h-8 w-fit items-center gap-1.5 rounded-md border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text hover:bg-ui-raised'>
                                         Source
                                         <ArrowRight className='h-3.5 w-3.5' />
-                                    </Link>
+                                    </Link> : <span className='text-xs text-ui-muted'>Fleet run</span>}
                                 </div>
                             )
                         })}
@@ -137,10 +140,10 @@ export default async function TiRunsPage() {
                     {attentionRuns.length ? (
                         <div className='mt-4 grid gap-2'>
                             {attentionRuns.map(run => (
-                                <Link key={run.id} href={`/dashboard/ti/sources/${run.sourceId}`} className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3 md:grid-cols-[1fr_auto] md:items-center hover:border-ui-primary/35'>
+                                <Link key={run.id} href={run.sourceId ? `/dashboard/ti/sources/${run.sourceId}` : '/dashboard/ti/sources'} className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3 md:grid-cols-[1fr_auto] md:items-center hover:border-ui-primary/35'>
                                     <div>
                                         <p className='font-mono text-xs font-semibold text-ui-text'>{run.id}</p>
-                                        <p className='mt-1 text-sm text-ui-muted'>{run.sourceName} · {run.status} · next {relativeUntil(run.nextRunAt)}</p>
+                                        <p className='mt-1 text-sm text-ui-muted'>{run.sourceName} · {run.status}{run.nextRunAt ? ` · next ${relativeUntil(run.nextRunAt)}` : ''}</p>
                                     </div>
                                     <span className='inline-flex items-center gap-1 text-sm font-semibold text-ui-primary'>Open source <ArrowRight className='h-3.5 w-3.5' /></span>
                                 </Link>
