@@ -235,19 +235,23 @@ export default function GPT_Page() {
         <>
             <div className='h-full w-full overflow-y-auto'>
                 <div className='mx-auto flex w-full max-w-330 flex-col gap-4 px-4 pb-4 pt-6 sm:px-6 md:px-8 md:pt-8'>
-                    <div className='flex items-center justify-between gap-4'>
+                    <div className='flex items-end justify-between gap-4'>
                         <div>
                             <p className='text-xs uppercase tracking-[0.22em] text-ui-muted'>System</p>
                             <h1 className='mt-1 text-2xl font-semibold text-ui-text'>AI operations</h1>
                             <p className='mt-1 text-sm text-ui-muted'>Connected workers, verified output, capacity, and spend.</p>
                         </div>
-                        <Link
-                            href='/dashboard/system'
-                            className='flex items-center gap-2 rounded-md bg-ui-raised px-4 py-2 text-sm text-ui-text border border-ui-border transition-colors hover:bg-ui-panel'
-                        >
-                            <ArrowLeft className='h-4 w-4' />
-                            Back to system
-                        </Link>
+                        <div className='flex flex-wrap items-center justify-end gap-2'>
+                            <a href='#ai-clients' className='inline-flex h-9 items-center rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition-colors hover:bg-ui-panel'>Open clients</a>
+                            <Link href='/dashboard/system#system-containers' className='inline-flex h-9 items-center rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition-colors hover:bg-ui-panel'>Open containers</Link>
+                            <Link
+                                href='/dashboard/system'
+                                className='flex h-9 items-center gap-2 rounded-md bg-ui-raised px-4 text-sm text-ui-text border border-ui-border transition-colors hover:bg-ui-panel'
+                            >
+                                <ArrowLeft className='h-4 w-4' />
+                                Back to system
+                            </Link>
+                        </div>
                     </div>
                     <GPT_Header isConnected={gpt.isConnected} participants={gpt.participants} />
                     <EconomicsPanel economics={economics} error={economicsError} aiContainers={aiContainers} containerError={containerError} />
@@ -395,9 +399,6 @@ function AIContainerHealth({ containers, error }: { containers: DockerContainer[
                     <p className='mt-2 max-w-3xl text-sm leading-6 text-ui-muted'>{detail}</p>
                 </div>
                 <div className='flex flex-wrap gap-2'>
-                    <Link href='/dashboard/system#system-containers' className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text hover:border-ui-primary/40'>
-                        Open containers
-                    </Link>
                     {primary ? (
                         <Link href={`/dashboard/logs?service=${encodeURIComponent(primary.name)}`} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text hover:border-ui-primary/40'>
                             View logs
