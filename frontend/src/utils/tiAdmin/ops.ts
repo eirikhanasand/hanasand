@@ -368,6 +368,7 @@ function toCapture(record: ApiPayload): TiAdminCapture | undefined {
     const publicUrl = stringValue(record.url)
     const domain = captureDomain(metadata, publicUrl)
     const screenshotId = textValue(metadata.screenshotId, metadata.screenshotHash)
+    const sourceName = textValue(record.sourceName, sourceId)
     const actor = textValue(metadata.actor, metadata.group, metadata.threatActor, metadata.entity, domain, 'Source observation')
     const title = textValue(metadata.title, metadata.headline, metadata.claimTitle, `${actor} capture`)
     const publishedAt = isoValue(record.publishedAt, capturedAt)
@@ -376,7 +377,7 @@ function toCapture(record: ApiPayload): TiAdminCapture | undefined {
     return {
         id,
         sourceId,
-        sourceName: textValue(record.sourceName, sourceId),
+        sourceName,
         sourceFamily: textValue(record.sourceFamily, 'source'),
         domain,
         actor,
@@ -389,9 +390,21 @@ function toCapture(record: ApiPayload): TiAdminCapture | undefined {
         pageType,
         screenshotLabel: screenshotId || 'not captured',
         screenshotTakenAt: isoValue(metadata.screenshotTakenAt, capturedAt),
-        resultSummary: textValue(metadata.summary, metadata.safeExcerpt, record.redactionReason, 'Captured evidence metadata is available for review.'),
+        resultSummary: captureSummary(sourceName, pageType, metadata, record),
         metadata: captureMetadata(record, metadata),
     }
+}
+
+function captureSummary(sourceName: string, pageType: string, metadata: ApiPayload, record: ApiPayload) {
+    const summary = textValue(metadata.summary, metadata.headline, record.redactionReason)
+    if (summary && !noisyCaptureText(summary)) return summary
+    const excerpt = textValue(metadata.safeExcerpt, metadata.excerpt)
+    if (excerpt && !noisyCaptureText(excerpt)) return excerpt
+    return `Captured ${pageType} content from ${sourceName}; no structured actor or entity was identified.`
+}
+
+function noisyCaptureText(value: string) {
+    return value.length > 240 || /(?:window\.|WIZ_global_data|__NEXT_DATA__|\{\\?"|\[\\?"|<html|<script)/i.test(value)
 }
 
 function toRun(record: ApiPayload, sources: Map<string, TiAdminSource>): TiAdminRun | undefined {

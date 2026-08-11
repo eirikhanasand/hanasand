@@ -133,7 +133,7 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
                                         <tr key={capture.id} className='align-top hover:bg-ui-panel'>
                                             <td className='px-4 py-3'>
                                                 <p className='font-semibold text-ui-text'>{capture.title}</p>
-                                                <p className='mt-1 max-w-xl text-ui-muted'>{capture.resultSummary}</p>
+                                                <p className='mt-1 line-clamp-2 max-w-xl text-ui-muted'>{capture.resultSummary}</p>
                                             </td>
                                             <td className='px-4 py-3 font-semibold text-ui-text'>{capture.actor}</td>
                                             <td className='px-4 py-3'>
