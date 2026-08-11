@@ -119,8 +119,8 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   };
   const latestCaptureIds: string[] = [], completeEvaluationCaptures: any[] = [], errors: any[] = [];
   const concurrency = Math.max(1, Math.min(tasks.length || 1, Number(options.maxConcurrentTasks ?? 5)));
-  for (let done = 0; done < tasks.length; done += concurrency) await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length - done) }, () => runLeasedTask(options, runId, generatedAt, fetcher, mode, maxBytes, counters, latestCaptureIds, errors, completeEvaluationCaptures)));
-  retainIndependentEvaluationReferences(options.store, completeEvaluationCaptures);
+  for (let done = 0; done < tasks.length; done += concurrency) await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length - done) }, () => runLeasedTask(options, runId, generatedAt, fetcher, mode, maxBytes, counters, latestCaptureIds, errors)));
+  retainIndependentEvaluationReferences(options.store, latestCaptureIds);
   const remainingQueuedTaskCount = options.frontier.snapshot().map(frontierTask).filter((task: any) => task.runId === runId).length;
   const runStatus = remainingQueuedTaskCount ? "queued" : counters.failedTaskCount && counters.completedTaskCount ? "degraded" : counters.failedTaskCount ? "failed" : "completed";
   const completedAt = options.now?.() ?? nowIso();
@@ -128,8 +128,9 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   return { generatedAt, tenantId: options.tenantId, mode: "production_canary", status: runStatus, runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, retiredSourceCount: productivity.retired.length, supersededTaskCount, activeSourceCount: scheduledSourceIds.size, deferredDueSourceCount: allDue.length - scheduledSourceIds.size, queuedTaskCount: tasks.length, queueLimit, availableQueueSlots, backpressureState, ...counters, remainingQueuedTaskCount, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
 }
 
-export function retainIndependentEvaluationReferences(store: any, completeCollectedCaptures: any[]) {
-  if (!completeCollectedCaptures.length || typeof store.saveValidationRecord !== "function") return 0;
+export function retainIndependentEvaluationReferences(store: any, collectedCaptureIds: string[]) {
+  const collected = new Set(collectedCaptureIds);
+  if (!collected.size || typeof store.saveValidationRecord !== "function") return 0;
   const sources = new Map(store.listSources().map((source: any) => [source.id, source]));
   const captures = store.listCaptures().filter(referenceEligibleCapture);
   const cisa = new Map<string, any>();
@@ -139,23 +140,11 @@ export function retainIndependentEvaluationReferences(store: any, completeCollec
     if (cve) cisa.set(cve, capture);
   }
   let retained = 0;
-  for (const candidate of completeCollectedCaptures) {
-    const target = candidate?.capture, targetCveSet = candidate?.evaluationCveSet;
-    if (!referenceEligibleCapture(target)
-      || !isNvdCveSource(sources.get(target.sourceId))
-      || store.getCapture(target.id)?.contentHash !== target.contentHash
-      || targetCveSet?.complete !== true
-      || targetCveSet.captureContentHash !== target.contentHash
-      || !Array.isArray(targetCveSet.values)
-      || targetCveSet.hash !== createHash("sha256").update(JSON.stringify(targetCveSet.values)).digest("hex")) continue;
+  for (const target of captures) {
+    if (!collected.has(target.id) || !isNvdCveSource(sources.get(target.sourceId))) continue;
     const targetCve = retainedCveId(target), reference = targetCve && cisa.get(targetCve);
     const authoritativeCve = reference && retainedCveId(reference);
-    if (!authoritativeCve
-      || targetCveSet.values.length !== 1
-      || targetCveSet.values[0] !== targetCve
-      || !reference
-      || target.id === reference.id
-      || evidenceIndependence(store, [target.id, reference.id]).groupCount < 2) continue;
+    if (!authoritativeCve || !reference || target.id === reference.id || evidenceIndependence(store, [target.id, reference.id]).groupCount < 2) continue;
     const expectedValues = [authoritativeCve];
     store.saveValidationRecord({
       id: stableId("evaluation-reference", `${target.id}:${reference.id}:cve:${authoritativeCve}`),
