@@ -1191,7 +1191,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                     <div className='grid min-w-0 items-start gap-4'>
                         {!runIsActive ? <RunOutcomeCard summary={summary} captures={captures} sessionState={sessionState} /> : null}
                         <section className='grid overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
-                            <SandboxTabStrip
+                            {selectedProfile.tools.length ? <SandboxTabStrip
                                 activeTab={activeSandboxTab}
                                 sessionState={sessionState}
                                 tools={selectedProfile.tools}
@@ -1199,7 +1199,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                 target={normalizedTarget}
                                 browserCaptured={Boolean(activeImage || latestPageImage)}
                                 onSelect={selectSandboxTab}
-                            />
+                            /> : null}
                             <div className='flex items-start gap-2 border-b border-ui-border bg-ui-raised px-3 py-2'>
                                 <span className='mt-3 h-3 w-3 rounded-full bg-ui-danger' />
                                 <span className='mt-3 h-3 w-3 rounded-full bg-ui-warning' />
@@ -1292,7 +1292,7 @@ function SandboxTabStrip({
             <SandboxTabButton
                 active={activeTab === 'browser'}
                 label='Browser'
-                status={sessionState === 'live' ? 'live' : sessionState === 'ended' ? (browserCaptured ? 'captured frame' : 'no frame') : sessionState === 'unreachable' || (sessionState === 'failed' && browserCaptured) ? 'unreachable' : sessionStateLabel(sessionState)}
+                status={sessionState === 'live' ? 'live' : sessionState === 'ended' ? (browserCaptured ? '' : 'no frame') : sessionState === 'unreachable' || (sessionState === 'failed' && browserCaptured) ? 'unreachable' : sessionStateLabel(sessionState)}
                 onClick={() => onSelect('browser')}
             />
             {tools.map(tool => {
@@ -1319,7 +1319,7 @@ function SandboxTabButton({ active, label, status, onClick }: { active: boolean;
             className={`grid min-w-0 gap-1 rounded-md border px-1 py-2 text-left transition sm:px-2 md:min-w-[9rem] md:shrink-0 md:px-3 ${active ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary/60'}`}
         >
             <span className='truncate text-[11px] font-semibold sm:text-xs md:text-sm'>{label}</span>
-            <span className='truncate text-[11px] text-ui-muted'>{status}</span>
+            {status ? <span className='truncate text-[11px] text-ui-muted'>{status}</span> : null}
         </button>
     )
 }
