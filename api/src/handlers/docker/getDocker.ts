@@ -1,5 +1,5 @@
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import { isRuntimeLogSourceAvailable, listRuntimeContainersWithStats } from '#utils/docker/engine.ts'
+import { isRuntimeLogSourceAvailable } from '#utils/docker/engine.ts'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 export default async function getDocker(this: FastifyInstance, req: FastifyRequest, res: FastifyReply) {
@@ -16,24 +16,23 @@ export default async function getDocker(this: FastifyInstance, req: FastifyReque
             return res.status(cached.status).send(payload)
         }
 
-        try {
-            const containers = await listRuntimeContainersWithStats()
+        const cachedContainers = normalizeCachedContainers(payload)
+        if (cachedContainers.length) {
             return res.type('application/json').send({
-                containers,
-                source: 'docker_engine',
+                ...payload,
+                containers: cachedContainers,
+                source: 'cached_docker_engine',
                 docker_socket_available: true,
-                generated_at: new Date().toISOString(),
-            })
-        } catch (error: any) {
-            const containers = normalizeCachedContainers(payload)
-            return res.type('application/json').send({
-                containers,
-                source: containers.length ? 'cached_internal_api' : 'unavailable',
-                docker_socket_available: isRuntimeLogSourceAvailable(),
-                unavailable_reason: error?.message || 'Docker runtime telemetry is unavailable.',
-                generated_at: new Date().toISOString(),
             })
         }
+
+        return res.type('application/json').send({
+            containers: [],
+            source: 'unavailable',
+            docker_socket_available: isRuntimeLogSourceAvailable(),
+            unavailable_reason: 'Docker telemetry cache is warming up.',
+            generated_at: new Date().toISOString(),
+        })
     } catch (error: any) {
         console.error('Error calling docker endpoint:', error)
         return res.status(500).send({ error: error.message })

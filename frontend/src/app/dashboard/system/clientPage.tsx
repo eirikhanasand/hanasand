@@ -42,6 +42,7 @@ import {
     formatDuration,
     formatPercent,
     isFresh,
+    containerDisplayName,
     normalizeDockerTelemetry,
     normalizeSystemTelemetry,
     type MetricState,
@@ -562,7 +563,8 @@ function ContainerRow({
         <tr className={`align-top text-ui-text ${selected ? 'bg-ui-primary/10' : ''}`}>
             <td className='py-3 pr-3'>
                 <button type='button' onClick={onSelect} className='text-left'>
-                    <span className='block font-semibold text-ui-text'>{container.name}</span>
+                    <span className='block font-semibold text-ui-text'>{containerDisplayName(container.name)}</span>
+                    <span className='block truncate text-[10px] text-ui-muted'>{container.name}</span>
                     <span className='mt-1 block max-w-72 truncate text-xs text-ui-muted'>{container.image || container.id}</span>
                 </button>
             </td>
@@ -572,9 +574,9 @@ function ContainerRow({
             <td className='px-3 py-3'>{portLabel(container.ports)}</td>
             <td className='py-3 pl-3'>
                 <div className='flex justify-end gap-1'>
-                    <IconButton label={`Inspect ${container.name}`} onClick={onSelect}><ExternalLink className='h-4 w-4' /></IconButton>
-                    <IconButton label={`Copy ${container.name}`} onClick={onCopy}><Copy className='h-4 w-4' /></IconButton>
-                    <IconButton label={`Restart ${container.name}`} onClick={onRestart}><RefreshCcw className='h-4 w-4' /></IconButton>
+                    <IconButton label={`Inspect ${containerDisplayName(container.name)}`} onClick={onSelect}><ExternalLink className='h-4 w-4' /></IconButton>
+                    <IconButton label={`Copy ${containerDisplayName(container.name)}`} onClick={onCopy}><Copy className='h-4 w-4' /></IconButton>
+                    <IconButton label={`Restart ${containerDisplayName(container.name)}`} onClick={onRestart}><RefreshCcw className='h-4 w-4' /></IconButton>
                 </div>
             </td>
         </tr>
@@ -616,7 +618,8 @@ function ContainerDetails({
         <DashboardPanel className='p-4' id='system-container-details'>
             <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <h2 className='truncate text-base font-semibold text-ui-text'>{container.name}</h2>
+                    <h2 className='truncate text-base font-semibold text-ui-text'>{containerDisplayName(container.name)}</h2>
+                    <p className='mt-1 truncate text-xs text-ui-muted'>{container.name}</p>
                     <p className='mt-1 truncate text-sm text-ui-muted'>{container.image || 'image pending'}</p>
                 </div>
                 <HealthPill health={health} />
