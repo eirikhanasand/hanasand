@@ -68,6 +68,11 @@ export function sourceAutomaticReviewPromptVersionMatches(source: any, promptVer
     && (source?.metadata?.sourceFamily !== "dark_web_victim_feed" || promptVersion === SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION);
 }
 
+export function sourceAutomaticReviewPromptVersionMatches(source: any, promptVersion: unknown) {
+  return compatibleSourceReviewPromptVersions.has(String(promptVersion))
+    && (source?.metadata?.sourceFamily !== "dark_web_victim_feed" || promptVersion === SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION);
+}
+
 export function automaticSourceReviewIdentity(source: any) {
   const identity = {
     sourceId: String(source?.id ?? ""),
