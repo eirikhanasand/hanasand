@@ -108,9 +108,6 @@ async function loadStatusPayload() {
         LEFT JOIN uptime USING (service, check_name)
         ORDER BY latest.service ASC, latest.check_name ASC
     `),
-        // The public timeline treats an absent day as an ordinary day. Keep
-        // this query incident-only so status reads do not sort the full
-        // monitor ledger just to return green days.
         run(`
         SELECT
             service,

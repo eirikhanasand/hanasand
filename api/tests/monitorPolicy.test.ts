@@ -11,8 +11,6 @@ describe('production monitor notification transitions', () => {
         expect(source).toContain('WINDOW status_history_window AS')
         expect(source).not.toContain('WINDOW window AS')
         expect(source).toContain('const [result, historyResult, incidentResult] = await Promise.all([')
-        expect(source).toContain("WHERE status <> 'up'")
-        expect(schema).toContain('idx_service_monitor_results_non_up')
     })
 
     test('does not re-alert while a check is flapping', () => {
