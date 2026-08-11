@@ -46,7 +46,9 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const [terms, setTerms] = useState(initialTerms.join('\n'))
     const [webhookUrl, setWebhookUrl] = useState('')
     const [sourceTarget, setSourceTarget] = useState('')
+    const [claimActor, setClaimActor] = useState('')
     const [claimCompany, setClaimCompany] = useState('')
+    const [claimData, setClaimData] = useState('')
     const [claimUrl, setClaimUrl] = useState('')
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [result, setResult] = useState<WorkflowResult | null>(null)
@@ -105,6 +107,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         setBusyAction('claim')
         setResult(null)
 
+        const actor = claimActor.trim()
         const company = claimCompany.trim()
         const claimedData = claimData.trim()
         const url = claimUrl.trim()
@@ -148,6 +151,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         setBusyAction('claim-case')
         setResult(null)
 
+        const actor = claimActor.trim()
         const company = claimCompany.trim()
         const claimedData = claimData.trim()
         const url = claimUrl.trim()
@@ -789,12 +793,26 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     </div>
                     <div className='mt-4'>
                         <input
+                            value={claimActor}
+                            onChange={event => setClaimActor(event.target.value)}
+                            placeholder='Publisher or reporting actor'
+                            className='h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                        />
+                    </div>
+                    <div className='mt-3'>
+                        <input
                             value={claimCompany}
                             onChange={event => setClaimCompany(event.target.value)}
                             placeholder='Affected organization or domain'
                             className='h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                         />
                     </div>
+                    <textarea
+                        value={claimData}
+                        onChange={event => setClaimData(event.target.value)}
+                        placeholder='What happened?'
+                        className='mt-3 min-h-20 w-full resize-y rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                    />
                     <input
                         value={claimUrl}
                         onChange={event => setClaimUrl(event.target.value)}
