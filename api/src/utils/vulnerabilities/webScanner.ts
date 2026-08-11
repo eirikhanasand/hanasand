@@ -24,7 +24,7 @@ let active: Promise<WebScanRun> | null = null
 
 const emptyReport = (): WebScanReport => ({ current: null, history: [], schedule: { enabled: true, intervalMinutes: DEFAULT_INTERVAL_MINUTES, nextRunAt: new Date().toISOString(), lastRunAt: null, target: TARGET, scope: 'global' }, error: null })
 
-export async function getWebScanReport() { return readState() }
+export async function getWebScanReport() { return hydrateReport(await readState()) }
 
 export function startWebScan() {
     if (active) return active
@@ -213,6 +213,11 @@ export function fallbackExplanation(check: WebScanCheck): string {
     if (check.id === 'header.nosniff') return present ? 'The response included X-Content-Type-Options, telling browsers to respect declared content types instead of guessing.' : 'The response did not include X-Content-Type-Options: nosniff, so browsers may interpret content using MIME sniffing.'
     if (check.id === 'header.server') return present ? `The response included a Server header (${String(check.evidence.value)}), which reveals an implementation detail useful for fingerprinting.` : 'The response did not expose a Server header, so this scan found no server implementation detail to fingerprint.'
     return check.status === 'pass' ? `The scan observed the condition described by “${check.title}”; no immediate change is indicated by this result.` : `The scan observed “${check.title}” as needing attention; inspect the retained evidence for the next action.`
+}
+
+function hydrateReport(report: WebScanReport): WebScanReport {
+    const hydrateRun = (run: WebScanRun | null) => run ? { ...run, targets: run.targets.map(target => ({ ...target, checks: target.checks.map(check => ({ ...check, explanation: isUsefulExplanation(check.explanation) ? check.explanation : fallbackExplanation(check) })) })) } : null
+    return { ...report, current: hydrateRun(report.current), history: report.history.map(hydrateRun).filter((run): run is WebScanRun => Boolean(run)) }
 }
 
 export function countSeverities(targets: WebScanTargetResult[]) {
