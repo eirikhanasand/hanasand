@@ -56,8 +56,7 @@ export function toPublicServiceStatus(status: ServiceStatus, nowMs = Date.now())
 }
 
 function checkKey(value: { service: string, check_name: string }) {
-    const checkName = value.check_name.toLowerCase() === ['source', 'operations'].join(' ') ? 'Source collection' : value.check_name
-    return `${value.service}\n${checkName}`
+    return `${value.service}\n${value.check_name}`
 }
 
 function missingPublicCheck(required: typeof requiredPublicChecks[number], generatedAt: string): ServiceCheck {

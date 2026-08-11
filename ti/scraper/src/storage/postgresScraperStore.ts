@@ -1179,7 +1179,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             AND COALESCE((sources.record->>'countsAsCoverage')::boolean, FALSE)
             AND COALESCE((sources.record->'metadata'->>'productionCollection')::boolean, FALSE)
             AND sources.record->'metadata'->>'sourcePortfolioQualificationState' = 'sustained_productive'
-            AND sources.canonical_rank = 1
+            AND ranked_sources.canonical_rank = 1
             AND source_type IN ('rss', 'api', 'json_api', 'blog')
         ),
         'qualifyingLawfulDarkWebSourceCount', count(*) FILTER (
@@ -1187,7 +1187,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             AND COALESCE((sources.record->>'countsAsCoverage')::boolean, FALSE)
             AND COALESCE((sources.record->'metadata'->>'productionCollection')::boolean, FALSE)
             AND sources.record->'metadata'->>'sourcePortfolioQualificationState' = 'sustained_productive'
-            AND sources.canonical_rank = 1
+            AND ranked_sources.canonical_rank = 1
             AND source_type IN ('tor_metadata', 'darkweb_metadata')
             AND COALESCE((sources.record->'governance'->>'metadataOnly')::boolean, (sources.record->'metadata'->>'captureMode') = 'metadata_only')
         ),
@@ -1196,7 +1196,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             AND COALESCE((sources.record->>'countsAsCoverage')::boolean, FALSE)
             AND COALESCE((sources.record->'metadata'->>'productionCollection')::boolean, FALSE)
             AND sources.record->'metadata'->>'sourcePortfolioQualificationState' = 'sustained_productive'
-            AND sources.canonical_rank = 1
+            AND ranked_sources.canonical_rank = 1
             AND source_type = 'telegram_public'
         ),
         'measurementState', CASE
@@ -1254,8 +1254,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         )
       ) AS summary
       FROM ranked_sources sources
-      LEFT JOIN latest_health ON latest_health.source_id = sources.id
-      WHERE NOT $2::boolean OR sources.collection_executable
+      LEFT JOIN latest_health ON latest_health.source_id = ranked_sources.id
+      WHERE NOT $2::boolean OR ranked_sources.collection_executable
     `, [input.tenantId ?? null, input.executableOnly === true]);
     return { schemaVersion: "ti.source_operations_summary.v1", generatedAt: input.generatedAt, tenantId: input.tenantId ?? "global", summary: row?.summary ?? {} };
   }
