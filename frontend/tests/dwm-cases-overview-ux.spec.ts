@@ -4,8 +4,8 @@ async function authenticate(context: BrowserContext, baseURL: string | undefined
     const origin = baseURL || 'http://127.0.0.1:3000'
     await context.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
     await context.addCookies([
-        { name: 'id', value: 'cases-overview-user', url: origin },
-        { name: 'access_token', value: 'cases-overview-token', url: origin },
+        { name: 'id', value: 'dashboard-render-proof-user', url: origin },
+        { name: 'access_token', value: 'local-dashboard-render-proof-token', url: origin },
     ])
 }
 
@@ -25,7 +25,7 @@ test('Cases keeps the empty state modest and workflow-free', async ({ context, p
     const overview = page.locator('[data-dwm-cases-overview="true"]')
     await expect(overview.getByRole('heading', { name: 'Cases' })).toBeVisible()
     await expect(overview.locator('[data-dwm-cases-empty="true"]').getByText('No cases.', { exact: true })).toBeVisible()
-    await expect(overview.getByText('No alert is waiting for review. Cases appear after a scoped alert is retained and opened for investigation.')).toBeVisible()
+    await expect(overview.getByText('No alert is waiting for review. Cases appear after a scoped alert is retained and opened for investigation.')).toHaveCount(0)
     await expect(overview.getByText('Recent attacks', { exact: true })).toHaveCount(0)
     await expect(overview.getByText('Watchlists', { exact: true })).toHaveCount(0)
     await expect(overview.getByText('Sources', { exact: true })).toHaveCount(0)
@@ -76,13 +76,15 @@ test('Cases renders persisted incidents with their available context', async ({ 
     await expect(overview.locator('[data-dwm-case-row="true"]')).toHaveCount(1)
     await expect(overview.getByRole('link', { name: 'Critical credential exposure' })).toBeVisible()
     await expect(overview.getByText('Lumma', { exact: true })).toBeVisible()
-    await expect(overview.getByText('Unavailable', { exact: true })).toBeVisible()
+    await expect(overview.getByText('org_acme', { exact: true })).toBeVisible()
     await expect(overview.getByText('acme.com', { exact: true })).toBeVisible()
     await expect(overview.getByText('critical', { exact: true })).toBeVisible()
     await expect(overview.getByText('open', { exact: true })).toBeVisible()
     await expect(overview.getByText('2026-07-04 09:20 UTC', { exact: true })).toBeVisible()
     await expect(overview.getByText('2026-07-04 10:30 UTC', { exact: true })).toBeVisible()
     await expect(overview.getByText('reviewing', { exact: true })).toBeVisible()
-    await expect(overview.getByText('Recent attacks', { exact: true })).toHaveCount(0)
+    for (const section of ['Recent attacks', 'Watchlists', 'Sources', 'Delivery']) {
+        await expect(overview.getByText(section, { exact: true })).toHaveCount(0)
+    }
     await expect(overview.locator('[data-dwm-workflow-snapshot="true"]')).toHaveCount(0)
 })

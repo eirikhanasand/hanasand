@@ -22,6 +22,7 @@ test('renders a real cases overview without workflow sections', async () => {
     assert.match(portal, /Severity \/ status/)
     assert.match(portal, /First seen \/ updated/)
     assert.match(portal, /Review/)
+    assert.doesNotMatch(portal, /No alert is waiting for review/)
     assert.match(portal, /view === 'cases' \? null/)
     assert.match(portal, /fetch\(`\/api\/cases\?\$\{params\.toString\(\)\}`/)
 
@@ -29,5 +30,6 @@ test('renders a real cases overview without workflow sections', async () => {
     const casesComponent = portal.slice(portal.indexOf('function CaseOverview'), portal.indexOf('function DwmPanelPage'))
     assert.match(casesBranch, /CaseOverview/)
     assert.doesNotMatch(casesComponent, /DwmWorkflowActions|watchlist|webhook|collection/i)
+    assert.doesNotMatch(casesComponent, /overflow-hidden/)
     assert.match(route, /proxyTiRequest\(request, '\/v1\/cases'/)
 })

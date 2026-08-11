@@ -217,8 +217,8 @@ export function DwmAnalystPortal({
     const activeSourceCount = operations?.counts.activeSourceCount ?? 0
     const sourceCount = operations?.counts.sourceCount ?? 0
     const sharedCaptureCount = operations?.counts.captureCount ?? latestCaptures.length
-    const tenantRunCaptureCount = operations?.latestRun?.captureCount || operations?.counts.captureCount || 0
-    const watchlistMatchCount = operations?.counts.watchlistMatchCount || latestCaptureWatchlistMatchCount(latestCaptures) || alertWatchlistMatchCount(alerts)
+    const tenantRunCaptureCount = operations?.latestRun?.captureCount ?? 0
+    const watchlistMatchCount = view === 'cases' ? 0 : operations?.counts.watchlistMatchCount || latestCaptureWatchlistMatchCount(latestCaptures) || alertWatchlistMatchCount(alerts)
     const watchTermCount = snapshot.watchlist.length
     const webhookState = deliverySummaryLabel(localDeliveries)
     const workflowTelemetry = {
@@ -468,9 +468,8 @@ function CaseOverview({ organizationId, state, alerts }: { organizationId?: stri
                 {state.status === 'loading' && <div className='flex min-h-56 items-center justify-center px-4 py-16 text-sm text-ui-muted'>Loading cases…</div>}
                 {state.status === 'error' && <div className='flex min-h-56 items-center justify-center px-4 py-16 text-sm text-ui-danger'>{state.error || 'Cases unavailable.'}</div>}
                 {state.status === 'ready' && !state.rows.length && (
-                    <div className='flex min-h-56 flex-col items-center justify-center gap-1 px-4 py-16 text-center text-ui-muted' data-dwm-cases-empty='true'>
+                    <div className='flex min-h-40 items-center justify-center px-4 py-12 text-center text-ui-muted' data-dwm-cases-empty='true'>
                         <p className='font-semibold text-ui-text'>No cases.</p>
-                        <p className='max-w-md text-sm leading-6'>No alert is waiting for review. Cases appear after a scoped alert is retained and opened for investigation.</p>
                     </div>
                 )}
                 {state.status === 'ready' && state.rows.length > 0 && filteredRows.length === 0 && <div className='px-4 py-10 text-center text-sm text-ui-muted'>No cases match the current filters.</div>}
