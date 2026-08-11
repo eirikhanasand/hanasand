@@ -871,6 +871,11 @@ async function ingestPublicEvidence(input: { actor: string, company: string, cla
     })
 }
 
+function durableDeliveryRows(payload: Record<string, unknown>) {
+    const deliveries = Array.isArray(payload.deliveries) ? payload.deliveries : []
+    return deliveries.filter((row): row is { status?: string, dryRun?: boolean, error?: unknown } => Boolean(row && typeof row === 'object'))
+}
+
 function selectRebuiltAlert(payload: Record<string, unknown>, company: string, terms: string) {
     const alerts = Array.isArray(payload.alerts) ? payload.alerts.filter(isRecord) : []
     const needles = [company, ...terms.split(/[\n,]/)].map(item => item.trim().toLowerCase()).filter(Boolean)
