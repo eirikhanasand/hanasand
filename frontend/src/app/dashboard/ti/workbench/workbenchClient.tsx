@@ -921,6 +921,8 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
         }
     }
 
+    if (!initialCases.length) return <AttackWelcome />
+
     const workbenchStatsGrid = (
         <div className='grid grid-cols-2 gap-2 border-b border-ui-border bg-ui-canvas p-2 sm:p-3 xl:grid-cols-5' data-workbench-stats>
             <WorkbenchStat icon={<Inbox className='h-4 w-4' />} label='Open cases' value={String(workbenchStats.total)} detail={`${workbenchStats.review} awaiting analyst`} tone='neutral' />
@@ -2341,6 +2343,22 @@ function EmptyWorkspace() {
                 </div>
             </div>
         </div>
+    )
+}
+
+function AttackWelcome() {
+    return (
+        <section className='grid min-h-[28rem] place-items-center rounded-lg border border-ui-border bg-ui-panel p-6'>
+            <div className='max-w-xl text-center'>
+                <div className='mx-auto grid h-14 w-14 place-items-center rounded-full bg-ui-primary/10 text-ui-primary'><Inbox className='h-7 w-7' /></div>
+                <h2 className='mt-5 text-2xl font-semibold text-ui-text'>Attack monitoring is ready</h2>
+                <p className='mt-3 text-sm leading-6 text-ui-muted'>Actionable cases are created when monitored sources produce a relevant exposure. Start with the source inventory or open the dark web case workspace to configure monitoring.</p>
+                <div className='mt-5 flex flex-wrap justify-center gap-2'>
+                    <Link href='/dashboard/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas'>Open dark web cases</Link>
+                    <Link href='/dashboard/ti/sources' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:bg-ui-panel'>Browse sources</Link>
+                </div>
+            </div>
+        </section>
     )
 }
 
