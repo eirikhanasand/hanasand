@@ -644,6 +644,86 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       const total = Number(summary.summary?.sourceCount ?? 0);
       return { rows: pageRows, totals: summary.summary, total, nextCursor: offset + pageRows.length < total ? String(offset + pageRows.length) : undefined };
     }
+    if (!sourceId && !executableOnly && limit === 1) {
+      const [pageRows, totalRows] = await Promise.all([
+        this.sql`
+          SELECT record, collection_executable
+          FROM threat_intel.sources
+          WHERE tenant_id IS NOT DISTINCT FROM ${tenantId}
+          ORDER BY lower(name), id
+          LIMIT 1 OFFSET ${offset}
+        `,
+        this.sql`
+          WITH latest_health AS (
+            SELECT DISTINCT ON (source_id)
+              source_id, checked_at, success, useful, capture_count, parser_warning_count
+            FROM threat_intel.source_health
+            WHERE tenant_id IS NOT DISTINCT FROM ${tenantId}
+            ORDER BY source_id, checked_at DESC
+          )
+          SELECT jsonb_build_object(
+            'operationalMetricsMeasured', TRUE,
+            'sourceCount', count(*),
+            'retainedSourceCount', count(*) FILTER (WHERE collection_executable),
+            'inactiveSourceCount', count(*) FILTER (WHERE NOT collection_executable),
+            'activeSourceCount', count(*) FILTER (WHERE collection_executable),
+            'qualifyingClearWebSourceCount', count(*) FILTER (
+              WHERE collection_executable
+                AND COALESCE((record->>'countsAsCoverage')::boolean, FALSE)
+                AND COALESCE((record->'metadata'->>'productionCollection')::boolean, FALSE)
+                AND source_type IN ('rss', 'api', 'json_api', 'blog')
+            ),
+            'qualifyingLawfulDarkWebSourceCount', count(*) FILTER (
+              WHERE collection_executable
+                AND COALESCE((record->>'countsAsCoverage')::boolean, FALSE)
+                AND COALESCE((record->'metadata'->>'productionCollection')::boolean, FALSE)
+                AND source_type IN ('tor_metadata', 'darkweb_metadata')
+            ),
+            'qualifyingPublicTelegramSourceCount', count(*) FILTER (
+              WHERE collection_executable
+                AND COALESCE((record->>'countsAsCoverage')::boolean, FALSE)
+                AND COALESCE((record->'metadata'->>'productionCollection')::boolean, FALSE)
+                AND source_type = 'telegram_public'
+            ),
+            'observedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
+            'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
+            'successfulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success),
+            'usefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful),
+            'everUsefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful),
+            'latestUsefulSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful),
+            'checkedWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.checked_at >= now() - interval '24 hours'),
+            'successfulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND latest_health.checked_at >= now() - interval '24 hours'),
+            'usefulWithin24hSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.checked_at >= now() - interval '24 hours'),
+            'captureProducingSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.capture_count > 0),
+            'recentlySeenSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.useful AND latest_health.checked_at >= now() - interval '24 hours'),
+            'backoffSourceCount', count(*) FILTER (WHERE collection_executable AND NULLIF(record->'crawlState'->>'backoffUntil', '')::timestamptz > now()),
+            'neverObservedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NULL),
+            'healthySourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND COALESCE(latest_health.parser_warning_count, 0) = 0),
+            'degradedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.success AND COALESCE(latest_health.parser_warning_count, 0) > 0),
+            'failedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL AND latest_health.success = FALSE),
+            'dailySourceCount', count(*) FILTER (WHERE collection_executable AND COALESCE((record->>'crawlFrequencySeconds')::int, 86400) <= 86400),
+            'dailyAttemptedCount', count(*) FILTER (WHERE collection_executable AND COALESCE((record->>'crawlFrequencySeconds')::int, 86400) <= 86400 AND latest_health.checked_at >= now() - interval '24 hours'),
+            'dailyCoveredCount', count(*) FILTER (WHERE collection_executable AND COALESCE((record->>'crawlFrequencySeconds')::int, 86400) <= 86400 AND latest_health.success AND latest_health.checked_at >= now() - interval '24 hours'),
+            'requiredChecksPerDay', COALESCE(sum(CASE WHEN collection_executable THEN GREATEST(1, ceil(86400.0 / GREATEST(300, COALESCE((record->>'crawlFrequencySeconds')::int, 86400)))) ELSE 0 END), 0),
+            'nextEligibleAt', min(NULLIF(record->'crawlState'->>'nextEligibleAt', '')::timestamptz) FILTER (WHERE collection_executable)
+          ) AS totals
+          FROM threat_intel.sources
+          LEFT JOIN latest_health ON latest_health.source_id = sources.id
+          WHERE sources.tenant_id IS NOT DISTINCT FROM ${tenantId}
+        `
+      ]);
+      const totals = totalRows[0]?.totals ?? {};
+      const rows = pageRows.map((row: any) => operationalQueryRow({
+        record: readRecord(row),
+        collection_executable: row.collection_executable,
+        health_stats: {},
+        capture_stats: {},
+        actor_stats: {},
+        label_stats: {}
+      }, input.generatedAt));
+      const total = Number(totals.sourceCount ?? 0);
+      return { rows, totals, total, nextCursor: offset + rows.length < total ? String(offset + rows.length) : undefined };
+    }
     const [rows, totalResult] = await Promise.all([
       this.sql.unsafe(`
         WITH page AS (
