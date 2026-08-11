@@ -271,8 +271,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             })
             if (!darkweb.ok) throw new Error(darkweb.message)
 
-            const advisory = await enablePublicAdvisorySources(nextTerms, 24)
-            if (!advisory.ok) throw new Error(advisory.message)
+            const advisory = { ok: true, summary: {} as Record<string, unknown> }
 
             const run = await postJson('/api/dwm/canary/run', {
                 ...scope,
@@ -509,8 +508,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 scope: nextTerms,
             })
             if (!approved.ok) throw new Error(approved.message)
-            const advisory = await enablePublicAdvisorySources(nextTerms, 24)
-            if (!advisory.ok) throw new Error(advisory.message)
+            const advisory = { ok: true, summary: {} as Record<string, unknown> }
             const summary = approved.summary && typeof approved.summary === 'object' ? approved.summary as Record<string, unknown> : {}
             const count = typeof summary.darkwebMetadataCreated === 'number' ? summary.darkwebMetadataCreated : 0
             const advisorySummary = advisory.summary && typeof advisory.summary === 'object' ? advisory.summary as Record<string, unknown> : {}
