@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Clock3, FileCode2, LockKeyhole, Plus, Radio, Text } from 'lucide-react'
+import { Clock3, FileCode2, LockKeyhole, Plus, Radio, Share2, Text } from 'lucide-react'
 import DashboardShare from './dashboardShare'
 import { getUserShares } from '@/utils/share/getUserShares'
 import { cookies } from 'next/headers'
@@ -52,7 +52,19 @@ export default async function Shares() {
                         ? <ErrorNotice compact message={shares} />
                         : shareRows.length
                             ? shareRows.map((share) => <DashboardShare key={share.id} share={share} />)
-                            : <p className='rounded-lg border border-dashed border-ui-border bg-ui-canvas p-4 text-sm text-ui-muted'>No shares.</p>}
+                            : <div className='grid min-h-64 place-items-center rounded-lg border border-dashed border-ui-border bg-ui-canvas p-8 text-center'>
+                                <div className='max-w-sm'>
+                                    <div className='mx-auto grid h-11 w-11 place-items-center rounded-full bg-ui-primary/10 text-ui-primary'>
+                                        <Share2 className='h-5 w-5' />
+                                    </div>
+                                    <h3 className='mt-3 text-lg font-semibold text-ui-text'>Create your first share</h3>
+                                    <p className='mt-2 text-sm leading-6 text-ui-muted'>Share a note, article, or workspace with a controlled link.</p>
+                                    <Link prefetch={false} href='/s' className='mt-4 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>
+                                        <Plus className='h-4 w-4' />
+                                        Create share
+                                    </Link>
+                                </div>
+                            </div>}
                 </div>
             </DashboardPanel>
         </div>
