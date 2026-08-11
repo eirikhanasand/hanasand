@@ -216,7 +216,7 @@ export default function TiScraperControlClient() {
                         <div className='flex flex-wrap items-center justify-between gap-2'>
                             <div>
                                 <p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Step 2 · Next actions</p>
-                                <h2 className='mt-1 text-lg font-semibold text-ui-text'>{workItems.length ? `${workItems.length} item${workItems.length === 1 ? '' : 's'} need attention` : 'No action required'}</h2>
+                                <h2 className='mt-1 text-lg font-semibold text-ui-text'>{workItems.length ? `${workItems.length} item${workItems.length === 1 ? '' : 's'} queued` : 'No action required'}</h2>
                             </div>
                             <form onSubmit={submit} className='flex min-w-0 gap-1.5'>
                                 <label className='relative min-w-0'>
