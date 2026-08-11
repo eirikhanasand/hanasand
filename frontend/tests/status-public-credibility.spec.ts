@@ -145,7 +145,7 @@ test('public status cannot hide fresh processing or source-collection failures',
         message: 'Threat-intelligence processing is behind its current review target.',
     })
     expect(status.checks.find(check => check.check_name === 'Processing Backlog')?.message).not.toContain('5263')
-    expect(status.checks.find(check => check.check_name === 'Source Operations')).toMatchObject({ status: 'degraded' })
+    expect(status.checks.find(check => check.check_name === 'Source Collection')).toMatchObject({ status: 'degraded' })
 })
 
 test('public status exposes stale latest activity as a service failure', () => {

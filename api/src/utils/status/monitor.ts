@@ -9,6 +9,7 @@ const webBase = (process.env.MONITOR_WEB_BASE || 'https://hanasand.com').replace
 const scraperBase = (process.env.TI_SCRAPER_API_BASE || 'http://ti-scraper:8097').replace(/\/$/, '')
 const modelClientBase = (process.env.HANASAND_MODEL_CLIENT_HEALTH_BASE || 'http://hanasand_ai_model_client:18182').replace(/\/$/, '')
 const MONITOR_REQUEST_TIMEOUT_MS = 5_000
+const SCRAPER_PENDING_WRITES_DEGRADED_THRESHOLD = 1_000
 type CheckResult = string | void | { status: MonitorStatus, message: string }
 type MonitorRecorder = typeof recordMonitorResult
 
@@ -26,7 +27,10 @@ export async function check(
         const explicit = typeof result === 'object' && result ? result : undefined
         const status = explicit?.status || latencyStatus(latency, latencyThresholds)
         const message = explicit?.message || (typeof result === 'string' ? result : '')
-        await recorder(service, checkName, status, latency, status === 'up' ? message : message || `Response took ${latency} ms.`)
+        const recordedMessage = status !== 'up' && !explicit && typeof result === 'string'
+            ? `Response took ${latency} ms.`
+            : message
+        await recorder(service, checkName, status, latency, status === 'up' ? recordedMessage : recordedMessage || `Response took ${latency} ms.`)
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         await recorder(service, checkName, 'down', Math.round(performance.now() - started), message)
@@ -120,16 +124,11 @@ export default async function runSyntheticMonitor() {
             const request = () => fetchJson('/ti/search', {
                 method: 'POST',
                 body: JSON.stringify({ query: 'APT29' }),
-            }, publicApiBase, remainingMonitorTimeout(deadline))
-            let result = await request()
+            }, publicApiBase)
+            const result = await request()
             const valid = (value: typeof result) => {
                 const body = object(value.body)
                 return value.response.status === 200 && body?.mode === 'scraper' && Array.isArray(body.sources) && Array.isArray(body.recentActivity)
-            }
-            for (let attempt = 0; !valid(result) && attempt < 2 && Date.now() < deadline; attempt += 1) {
-                await new Promise((resolve) => setTimeout(resolve, Math.min(1_000, remainingMonitorTimeout(deadline))))
-                if (Date.now() >= deadline) break
-                result = await request()
             }
             if (!valid(result)) {
                 throw new Error(`Threat intelligence search is unavailable (${result.response.status})`)
