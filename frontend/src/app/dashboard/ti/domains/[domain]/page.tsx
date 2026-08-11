@@ -192,7 +192,7 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
             <DashboardPanel className='p-5'>
                 <h2 className='text-base font-semibold text-ui-text'>Captured evidence</h2>
                 <div className='mt-4 grid gap-4 xl:grid-cols-2'>
-                                {captures.map(capture => (
+                    {captures.map(capture => (
                         <article key={capture.id} className='grid gap-4 rounded-lg border border-ui-border bg-ui-raised p-3 md:grid-cols-[15rem_1fr]'>
                             <div className='grid min-h-44 content-between rounded-lg bg-ui-canvas p-4 text-ui-text'>
                                 <span className='w-fit rounded-full bg-ui-panel px-2 py-1 text-xs'>{capture.actor}</span>
