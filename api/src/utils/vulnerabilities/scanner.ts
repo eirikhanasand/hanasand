@@ -234,7 +234,7 @@ async function finishScan(
         generatedAt: finishedAt,
         images,
         imageCount: images.length,
-        failureCount: failed || (isFailure && !images.length ? 1 : 0),
+        failureCount: failed || (isFailure ? 1 : 0),
         nextRunAt: state.paused ? null : nextScheduledAt(new Date()),
         scanStatus: {
             ...state.scanStatus,
@@ -247,7 +247,7 @@ async function finishScan(
             currentImage: null,
             estimatedCompletionAt: null,
             targetCount: images.length,
-            failureCount: failed || (isFailure && !images.length ? 1 : 0),
+            failureCount: failed || (isFailure ? 1 : 0),
             blocker,
             blockerAction,
         },
@@ -356,7 +356,7 @@ function withDerivedStatus(state: StoredScannerState, targetImages: string[] | n
     const status = state.scanStatus
     const currentImages = filterCurrentImageReports(state.images, targetImages)
     const images = hasOnlyScannerSetupReports(currentImages) ? [] : currentImages
-    const currentFailureCount = images.filter(image => image.scanError).length
+    const currentFailureCount = images.filter(image => image.scanError).length || (status.blocker ? state.failureCount : 0)
     const lastFinishedAt = status.finishedAt || latestImageScanAt(images)
     const staleReason = computeStaleReason(state, lastFinishedAt)
     const generatedAt = state.generatedAt || lastFinishedAt
