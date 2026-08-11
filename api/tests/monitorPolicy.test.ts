@@ -105,6 +105,39 @@ describe('production monitor notification transitions', () => {
         expect(recorded[0]?.message).not.toContain('completed successfully')
     })
 
+    test('status monitor bounds unavailable dependency requests', async () => {
+        const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
+        expect(source).toContain('const MONITOR_REQUEST_TIMEOUT_MS = 5_000')
+        expect(source).toContain('signal: options.signal || AbortSignal.timeout(timeoutMs)')
+        expect(source).toContain('signal: AbortSignal.timeout(MONITOR_REQUEST_TIMEOUT_MS)')
+        expect(source).toContain('const deadline = Date.now() + MONITOR_REQUEST_TIMEOUT_MS')
+        expect(source).toContain('Date.now() < deadline')
+    })
+
+    test('unavailable dependency records down promptly without substituting success', async () => {
+        const originalFetch = globalThis.fetch
+        const recorded: Array<{ status: string, message: string }> = []
+        globalThis.fetch = ((_, init) => new Promise<Response>((_resolve, reject) => {
+            const fail = () => reject(new Error('backend unavailable'))
+            if (init?.signal?.aborted) fail()
+            else init?.signal?.addEventListener('abort', fail, { once: true })
+        })) as typeof fetch
+        const started = performance.now()
+        try {
+            await check(
+                'threat-intelligence',
+                'Source operations',
+                () => fetchJson('/v1/intel/source-operations', {}, 'http://unavailable.test', 5),
+                undefined,
+                async (_service, _checkName, status, _latency, message) => { recorded.push({ status, message }) },
+            )
+        } finally {
+            globalThis.fetch = originalFetch
+        }
+        expect(performance.now() - started).toBeLessThan(1_000)
+        expect(recorded).toEqual([{ status: 'down', message: 'backend unavailable' }])
+    })
+
     test('does not re-alert while a check is flapping', () => {
         expect(notificationEvent('degraded', [])).toBe('alert')
         expect(notificationEvent('degraded', ['up'])).toBe('alert')
