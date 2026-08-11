@@ -82,7 +82,7 @@ function ActorRow({ actor }: { actor: TiEnrichedActor }) {
             </div>
             <div className='flex items-center gap-4 text-right'>
                 <div>
-                    <p className='text-[10px] font-semibold uppercase text-ui-muted'>Last seen</p>
+                    <p className='text-[10px] font-semibold uppercase text-ui-muted'>Last update</p>
                     <p className='mt-1 text-xs font-semibold text-ui-text'>{formatTiDate(actor.lastUpdatedAt)}</p>
                 </div>
                 <Link href={`/ti/${encodeURIComponent(actor.id)}`} aria-label={`Open ${actor.name} profile`} className='inline-flex h-8 items-center gap-1 rounded-md border border-ui-border px-2.5 text-xs font-semibold text-ui-text hover:bg-ui-raised'>
