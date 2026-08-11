@@ -1469,6 +1469,24 @@ function literalIdentifierGrounded(assertion: Record<string, unknown>, evidence:
   });
 }
 
+function propositionLinked(assertion: string, evidence: string, identifierPattern: RegExp) {
+  const ignored = new Set([
+    "address", "advisory", "cve", "domain", "evidence", "hash", "identifier", "identifies",
+    "incident", "issue", "report", "reported", "security", "source", "threat", "vulnerability",
+    "about", "after", "against", "before", "from", "have", "into", "that", "their", "there",
+    "these", "this", "those", "while", "with"
+  ]);
+  const tokens = (text: string) =>
+    (text.normalize("NFKC").replace(identifierPattern, " ").toLocaleLowerCase("en-US").match(/[\p{L}\p{N}]{4,}/gu) ?? [])
+      .filter((token) => !ignored.has(token));
+  const asserted = tokens(assertion);
+  const retained = tokens(evidence);
+  return asserted.some((token, index) => index > 0
+    && retained.some((candidate, retainedIndex) => retainedIndex > 0
+      && candidate === token
+      && retained[retainedIndex - 1] === asserted[index - 1]));
+}
+
 function literalIdentifierPattern(claimType: string, value: string, inferDomain: boolean) {
   if (/\bCVE-\d{4}-\d{4,}\b/i.test(value)) return /\bCVE-\d{4}-\d{4,}\b/gi;
   if (/\b(?:\d{1,3}\.){3}\d{1,3}\b/.test(value)) return /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;

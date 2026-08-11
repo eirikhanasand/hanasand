@@ -129,6 +129,16 @@ export function sourceAutomaticReviewIdentityMatches(source: any, review = sourc
     && review.sourceIdentity.sha256 === identity.sha256;
 }
 
+export function automaticSourceReviewIdentity(source: any) {
+  const identity = {
+    sourceId: String(source?.id ?? ""),
+    tenantKey: String(source?.tenantId ?? "global"),
+    canonicalFeedKey: canonicalFeedKey(String(source?.url ?? "")),
+    createdAt: String(source?.createdAt ?? "")
+  };
+  return { ...identity, sha256: createHash("sha256").update(JSON.stringify(identity)).digest("hex") };
+}
+
 export function hasApprovedAutomaticSourceReview(source: any, modelVersion = automaticReviewModelVersion()) {
   if (!sourceRequiresAutomaticReview(source)) return true;
   const review = source?.metadata?.automaticSourceReview;
