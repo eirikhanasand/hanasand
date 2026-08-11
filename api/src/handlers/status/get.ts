@@ -138,34 +138,12 @@ async function loadStatusPayload() {
                 LEAD(status) OVER status_history_window AS next_status,
                 LEAD(checked_at) OVER status_history_window AS next_checked_at
             FROM service_monitor_results
-            WHERE status <> 'up'
-              AND checked_at >= NOW() - INTERVAL '90 days'
+            WHERE checked_at >= NOW() - INTERVAL '90 days'
               AND NOT (service = 'core' AND check_name = 'API index')
             WINDOW status_history_window AS (PARTITION BY service, check_name ORDER BY checked_at)
-        ), boundaries AS (
-            SELECT sequenced.*,
-                EXISTS (
-                    SELECT 1
-                    FROM service_monitor_results recovered
-                    WHERE recovered.service = sequenced.service
-                      AND recovered.check_name = sequenced.check_name
-                      AND recovered.status = 'up'
-                      AND recovered.checked_at > sequenced.previous_checked_at
-                      AND recovered.checked_at < sequenced.checked_at
-                ) AS recovered_before,
-                EXISTS (
-                    SELECT 1
-                    FROM service_monitor_results recovered
-                    WHERE recovered.service = sequenced.service
-                      AND recovered.check_name = sequenced.check_name
-                      AND recovered.status = 'up'
-                      AND recovered.checked_at > sequenced.checked_at
-                      AND recovered.checked_at < sequenced.next_checked_at
-                ) AS recovered_after
-            FROM sequenced
         )
         SELECT service, check_name, status, message, checked_at
-        FROM boundaries
+        FROM sequenced
         WHERE status <> 'up'
           AND (
             previous_status IS NULL
@@ -173,13 +151,11 @@ async function loadStatusPayload() {
             OR previous_status <> status
             OR previous_checked_at IS NULL
             OR checked_at - previous_checked_at > INTERVAL '15 minutes'
-            OR recovered_before
             OR next_status IS NULL
             OR next_status = 'up'
             OR next_status <> status
             OR next_checked_at IS NULL
             OR next_checked_at - checked_at > INTERVAL '15 minutes'
-            OR recovered_after
           )
         ORDER BY service ASC, check_name ASC, checked_at ASC
     `),
