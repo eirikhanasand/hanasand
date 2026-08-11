@@ -143,6 +143,11 @@ type BrowserRunStats = {
     runs24h: number
     darkwebRuns24h: number
 }
+export type BrowserInitialData = {
+    history: BrowserRunHistory[]
+    quota: BrowserQuota | null
+    stats: BrowserRunStats
+}
 type SandboxEvidence = {
     url?: string
     textExcerpt?: string
@@ -189,7 +194,6 @@ const historyStorageKey = 'hanasand:browser:history:v1'
 const clientIdStorageKey = 'hanasand:browser:client-id:v1'
 const profileApiPath = '/api/backend/browser/profiles'
 const historyApiPath = '/api/backend/browser/runs'
-const statsApiPath = '/api/backend/browser/stats'
 const brokerBaseUrl = process.env.NEXT_PUBLIC_BROWSER_WS || `${config.url.api_client_wss}/ws/browser`
 const defaultTools: SandboxTool[] = [
     { id: 'virustotal', name: 'VirusTotal', url: 'https://www.virustotal.com/gui/search/{url}' },
@@ -302,7 +306,7 @@ function resolveToolUrl(template: string, target: string) {
     return template.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
 }
 
-export default function BrowserPageClient() {
+export default function BrowserPageClient({ initialData }: { initialData: BrowserInitialData }) {
     const [formReady, setFormReady] = useState(false)
     const [target, setTarget] = useState('')
     const [sessionState, setSessionState] = useState<SessionState>('prompt')
@@ -337,9 +341,9 @@ export default function BrowserPageClient() {
     const [profileSyncEnabled, setProfileSyncEnabled] = useState(false)
     const [profileSyncState, setProfileSyncState] = useState<'local' | 'loading' | 'synced' | 'saving' | 'error'>('loading')
     const [capacity, setCapacity] = useState<SandboxCapacity | null>(null)
-    const [history, setHistory] = useState<BrowserRunHistory[]>([])
-    const [quota, setQuota] = useState<BrowserQuota | null>(null)
-    const [runStats, setRunStats] = useState<BrowserRunStats | null>(null)
+    const [history, setHistory] = useState<BrowserRunHistory[]>(() => sanitizeHistory(initialData.history))
+    const [quota, setQuota] = useState<BrowserQuota | null>(() => quotaValue(initialData.quota))
+    const [runStats] = useState<BrowserRunStats>(() => initialData.stats)
     const [expandedRun, setExpandedRun] = useState<BrowserRunHistory | null>(null)
     const [currentRunId, setCurrentRunId] = useState('')
     const [shareStatus, setShareStatus] = useState('')
@@ -383,16 +387,6 @@ export default function BrowserPageClient() {
         const timer = window.setInterval(() => setClockNow(Date.now()), 1_000)
         return () => window.clearInterval(timer)
     }, [waitingForFrame])
-
-    useEffect(() => {
-        fetch(statsApiPath, { cache: 'no-store' })
-            .then(async response => {
-                if (!response.ok) throw new Error('stats unavailable')
-                const payload = await response.json() as Partial<BrowserRunStats>
-                if (Number.isFinite(payload.runs24h) && Number.isFinite(payload.darkwebRuns24h)) setRunStats({ runs24h: Number(payload.runs24h), darkwebRuns24h: Number(payload.darkwebRuns24h) })
-            })
-            .catch(() => undefined)
-    }, [])
 
     useEffect(() => {
         if (!runTiming || sessionState !== 'live') return
@@ -540,26 +534,14 @@ export default function BrowserPageClient() {
     }, [activeSandboxTab, selectedProfile.tools])
 
     useEffect(() => {
+        getOrCreateBrowserClientId()
         try {
             const stored = JSON.parse(window.localStorage.getItem(historyStorageKey) || '[]')
-            if (Array.isArray(stored)) setHistory(sanitizeHistory(stored))
+            if (Array.isArray(stored) && !history.length) setHistory(sanitizeHistory(stored))
         } catch {
-            setHistory([])
+            // Server-prefetched history remains authoritative.
         }
-        fetch(`${historyApiPath}?clientId=${encodeURIComponent(getOrCreateBrowserClientId())}`, { credentials: 'include', cache: 'no-store' })
-            .then(async response => {
-                if (!response.ok) throw new Error('history unavailable')
-                const payload = await response.json() as { runs?: unknown; quota?: unknown }
-                const runs = sanitizeHistory(payload.runs)
-                if (runs.length) {
-                    setHistory(runs)
-                    window.localStorage.setItem(historyStorageKey, JSON.stringify(runs.slice(0, 12)))
-                }
-                const nextQuota = quotaValue(payload.quota)
-                if (nextQuota) setQuota(nextQuota)
-            })
-            .catch(() => undefined)
-    }, [])
+    }, [history.length])
 
     useEffect(() => () => {
         socketRef.current?.close()
@@ -2944,13 +2926,21 @@ function historyDomainKey(target: string) {
 function getOrCreateBrowserClientId() {
     try {
         const existing = window.localStorage.getItem(clientIdStorageKey)
-        if (existing) return existing
+        if (existing) {
+            persistBrowserClientCookie(existing)
+            return existing
+        }
         const next = crypto.randomUUID()
         window.localStorage.setItem(clientIdStorageKey, next)
+        persistBrowserClientCookie(next)
         return next
     } catch {
         return 'browser-storage-unavailable'
     }
+}
+
+function persistBrowserClientCookie(value: string) {
+    document.cookie = `hanasand:browser:client-id:v1=${encodeURIComponent(value)}; Max-Age=31536000; Path=/; SameSite=Lax${window.location.protocol === 'https:' ? '; Secure' : ''}`
 }
 
 function inferNetwork(target: string): BrowserNetwork {
