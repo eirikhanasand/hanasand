@@ -15,6 +15,11 @@ export type BrowserQuota = {
     identityKind: 'anonymous' | 'user'
 }
 
+type BrowserRunStats = {
+    runs24h: number
+    darkwebRuns24h: number
+}
+
 export type BrowserRunRecord = {
     id: string
     target: string
@@ -57,6 +62,7 @@ type BrowserReportBody = { clientId?: string; report?: unknown }
 
 const anonymousRunLimit = Math.max(3, Number(process.env.BROWSER_SANDBOX_ANONYMOUS_DAILY_LIMIT || 20) || 20)
 const maxReportBytes = 2_000_000
+let browserRunStatsCache: { expiresAt: number; value: BrowserRunStats } | null = null
 const dailyPlanLimits: Record<string, number> = {
     free: 5,
     starter: 20,
@@ -125,6 +131,30 @@ export async function getBrowserRuns(req: FastifyRequest<{ Querystring: { client
     } catch (error) {
         req.log.error(error)
         return res.status(500).send({ error: 'Failed to load browser runs.' })
+    }
+}
+
+export async function getBrowserRunStats(_req: FastifyRequest, res: FastifyReply) {
+    const now = Date.now()
+    if (browserRunStatsCache && browserRunStatsCache.expiresAt > now) return res.header('cache-control', 'public, max-age=5').send(browserRunStatsCache.value)
+
+    try {
+        const result = await run(`
+            SELECT
+                COUNT(*)::int AS runs_24h,
+                COUNT(*) FILTER (WHERE network = 'tor')::int AS darkweb_runs_24h
+            FROM browser_runs
+            WHERE created_at >= NOW() - INTERVAL '24 hours'
+        `)
+        const value = {
+            runs24h: Number(result.rows[0]?.runs_24h || 0),
+            darkwebRuns24h: Number(result.rows[0]?.darkweb_runs_24h || 0),
+        } satisfies BrowserRunStats
+        browserRunStatsCache = { expiresAt: now + 5_000, value }
+        return res.header('cache-control', 'public, max-age=5').send(value)
+    } catch (error) {
+        _req.log.error(error)
+        return res.status(500).send({ error: 'Failed to load browser run stats.' })
     }
 }
 

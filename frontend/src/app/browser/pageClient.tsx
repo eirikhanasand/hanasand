@@ -139,6 +139,10 @@ type BrowserQuota = {
     resetsAt?: string | null
     identityKind?: string
 }
+type BrowserRunStats = {
+    runs24h: number
+    darkwebRuns24h: number
+}
 type SandboxEvidence = {
     url?: string
     textExcerpt?: string
@@ -185,6 +189,7 @@ const historyStorageKey = 'hanasand:browser:history:v1'
 const clientIdStorageKey = 'hanasand:browser:client-id:v1'
 const profileApiPath = '/api/backend/browser/profiles'
 const historyApiPath = '/api/backend/browser/runs'
+const statsApiPath = '/api/backend/browser/stats'
 const brokerBaseUrl = process.env.NEXT_PUBLIC_BROWSER_WS || `${config.url.api_client_wss}/ws/browser`
 const defaultTools: SandboxTool[] = [
     { id: 'virustotal', name: 'VirusTotal', url: 'https://www.virustotal.com/gui/search/{url}' },
@@ -317,6 +322,7 @@ export default function BrowserPageClient() {
     const [streamStats, setStreamStats] = useState<StreamStats>({})
     const [runTiming, setRunTiming] = useState<RunTiming | null>(null)
     const [clockNow, setClockNow] = useState(Date.now())
+    const [runStartedAt, setRunStartedAt] = useState<number | null>(null)
     const [activeFrame, setActiveFrame] = useState<{ width: number; height: number }>({ width: 1280, height: 720 })
     const [activeUrl, setActiveUrl] = useState('')
     const [remoteTabUrls, setRemoteTabUrls] = useState<Record<string, string>>({})
@@ -333,6 +339,7 @@ export default function BrowserPageClient() {
     const [capacity, setCapacity] = useState<SandboxCapacity | null>(null)
     const [history, setHistory] = useState<BrowserRunHistory[]>([])
     const [quota, setQuota] = useState<BrowserQuota | null>(null)
+    const [runStats, setRunStats] = useState<BrowserRunStats | null>(null)
     const [expandedRun, setExpandedRun] = useState<BrowserRunHistory | null>(null)
     const [currentRunId, setCurrentRunId] = useState('')
     const [shareStatus, setShareStatus] = useState('')
@@ -364,9 +371,27 @@ export default function BrowserPageClient() {
     const runRemainingSeconds = runTiming ? Math.max(0, Math.ceil((new Date(runTiming.expiresAt).getTime() - clockNow) / 1000)) : 0
     const paidBrowserPlan = Boolean(quota && quota.plan !== 'anonymous' && quota.plan !== 'free')
     const runIsActive = sessionState === 'queued' || sessionState === 'connecting' || sessionState === 'live'
+    const waitingForFrame = runIsActive && !activeImage && !streamUrl && !activeTool
+    const waitingSeconds = runStartedAt && waitingForFrame ? Math.floor((clockNow - runStartedAt) / 1000) : 0
 
     useEffect(() => {
         setFormReady(true)
+    }, [])
+
+    useEffect(() => {
+        if (!waitingForFrame) return
+        const timer = window.setInterval(() => setClockNow(Date.now()), 1_000)
+        return () => window.clearInterval(timer)
+    }, [waitingForFrame])
+
+    useEffect(() => {
+        fetch(statsApiPath, { cache: 'no-store' })
+            .then(async response => {
+                if (!response.ok) throw new Error('stats unavailable')
+                const payload = await response.json() as Partial<BrowserRunStats>
+                if (Number.isFinite(payload.runs24h) && Number.isFinite(payload.darkwebRuns24h)) setRunStats({ runs24h: Number(payload.runs24h), darkwebRuns24h: Number(payload.darkwebRuns24h) })
+            })
+            .catch(() => undefined)
     }, [])
 
     useEffect(() => {
@@ -571,6 +596,7 @@ export default function BrowserPageClient() {
         setStreamUrl('')
         setStreamStats({})
         setRunTiming(null)
+        setRunStartedAt(Date.now())
         setActiveUrl(url)
         setRemoteTabUrls({ browser: url })
         setActiveSandboxTab('browser')
@@ -798,6 +824,7 @@ export default function BrowserPageClient() {
         setStreamUrl('')
         setStreamStats({})
         setRunTiming(null)
+        setRunStartedAt(null)
         setActiveUrl('')
         setCapacity(null)
         pushEvent('Sandbox reset.')
@@ -994,8 +1021,8 @@ export default function BrowserPageClient() {
                         </p>
                         <div className='grid max-w-xl gap-2 text-sm text-ui-muted sm:grid-cols-3'>
                             <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'><strong className='text-ui-text'>{capacity?.activeSessions ?? 0}/{capacity?.maxSessions ?? 100}</strong> browsers active</span>
-                            <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>Queues when full</span>
-                            <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>Onion supported</span>
+                            <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>{runStats?.runs24h ?? 0} runs today</span>
+                            <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>{runStats?.darkwebRuns24h ?? 0} darkweb runs today</span>
                         </div>
                     </div>
                     <div className='grid min-w-0 gap-3'>
@@ -1066,12 +1093,12 @@ export default function BrowserPageClient() {
                                     </div>
                                 </details>
                             </div>
-                            <details className='grid gap-3 rounded-md border border-ui-border bg-ui-raised p-3'>
+                            <details className='grid gap-3'>
                                 <summary className='flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden'>
                                     <ProfilePicker profiles={profiles} selectedProfileId={selectedProfileId} onSelect={setSelectedProfileId} onDelete={deleteProfile} />
                                     <span className='ml-auto shrink-0 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-primary'>Edit</span>
                                 </summary>
-                                <div className='mt-3 grid gap-3'>
+                                <div className='grid gap-3'>
                                     <p className='text-sm text-ui-muted'>Profiles run the selected URL through external triage surfaces in the remote sandbox context.</p>
                                     <p className='text-xs text-ui-muted'>{profileSyncLabel(profileSyncState)}</p>
                                     <div className='flex gap-2'>
@@ -1203,8 +1230,9 @@ export default function BrowserPageClient() {
                                     <div className='grid h-full place-items-center'>
                                         <div className='grid max-w-md gap-2 text-center'>
                                             <ShieldCheck className='mx-auto h-8 w-8 text-ui-primary' />
-                                            <p className='text-lg font-semibold text-ui-text'>{activeTool ? `${activeTool.name} tab loading` : runBlocker ? 'Browser run blocked' : sessionState === 'queued' ? 'Queued for sandbox capacity' : sessionState === 'connecting' ? 'Waiting for first browser frame' : 'No browser frame captured yet'}</p>
-                                            <p className='text-sm leading-6 text-ui-muted'>{activeTool ? providerDetail(activeToolCapture?.toolAnalysis, activeToolCapture) : runBlocker || (sessionState === 'queued' ? queueCopy(capacity) : 'The remote browser has not sent a screenshot yet. If this persists, rerun the URL or check the broker and provider status below.')}</p>
+                                            <p className='text-lg font-semibold text-ui-text'>{activeTool ? `${activeTool.name} tab loading` : runBlocker ? 'Browser run blocked' : sessionState === 'queued' ? 'Queued for sandbox capacity' : sessionState === 'connecting' && waitingSeconds >= 5 ? 'Taking longer than expected...' : sessionState === 'connecting' ? 'Waiting for first browser frame' : 'No browser frame captured yet'}</p>
+                                            <p className='text-sm leading-6 text-ui-muted'>{activeTool ? providerDetail(activeToolCapture?.toolAnalysis, activeToolCapture) : runBlocker || (sessionState === 'queued' ? queueCopy(capacity) : waitingSeconds >= 5 ? 'The remote browser is still starting.' : 'The remote browser has not sent a screenshot yet. If this persists, rerun the URL or check the broker and provider status below.')}</p>
+                                            {waitingForFrame && waitingSeconds >= 10 ? <div className='mt-2 flex flex-wrap justify-center gap-2'><button type='button' onClick={() => undefined} className='rounded-md border border-ui-border px-3 py-2 text-xs font-semibold text-ui-text'>Keep waiting</button><button type='button' onClick={() => { stopRun(); startRun({ target: normalizedTarget }) }} className='rounded-md border border-ui-primary bg-ui-primary/10 px-3 py-2 text-xs font-semibold text-ui-primary'>Try again</button><button type='button' onClick={() => window.dispatchEvent(new CustomEvent('hanasand:open-support'))} className='rounded-md border border-ui-border px-3 py-2 text-xs font-semibold text-ui-text'>Contact us</button></div> : null}
                                         </div>
                                     </div>
                                 )}
@@ -1477,13 +1505,18 @@ function ProviderRunBadges({ run }: { run: BrowserRunHistory }) {
 function ProviderRunBadge({ provider, label, result }: { provider: 'virustotal' | 'urlquery'; label: string; result?: ProviderRunResult }) {
     const clean = !result || result.status === 'clean'
     const icon = provider === 'urlquery' && !clean ? '!' : clean ? '✓' : '!'
-    const text = provider === 'virustotal' ? virustotalRunLabel(result?.label || label) : (result?.label || label)
+    const text = provider === 'virustotal' ? virustotalRunLabel(result?.label || label) : urlqueryRunLabel(result?.label || label)
     return <span className={`inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] font-semibold ${clean ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning'}`}>{provider === 'urlquery' ? <span>{icon}</span> : null}<span>{text}</span></span>
 }
 
 function virustotalRunLabel(label?: string) {
     if (!label) return 'VT'
     return /\bVT\b/i.test(label) ? label : `${label} VT`
+}
+
+function urlqueryRunLabel(label?: string) {
+    if (!label) return 'urlquery'
+    return /urlquery/i.test(label) ? label : `urlquery ${label}`
 }
 
 function virusTotalVendorLabel(analysis: Pick<SandboxToolAnalysis, 'vendorFlagged' | 'vendorTotal'>) {
