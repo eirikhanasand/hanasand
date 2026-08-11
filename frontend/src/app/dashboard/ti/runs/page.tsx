@@ -8,7 +8,9 @@ import ManualRunButton from '../manualRunButton'
 export const dynamic = 'force-dynamic'
 
 export default async function TiRunsPage() {
-    const overview = await getTiAdminOverview()
+    // Collection runs are global collector operations, not a customer tenant's
+    // watchlist data. The default tenant lane is intentionally empty here.
+    const overview = await getTiAdminOverview(null, { limit: 500, includeCandidates: true })
     const { runs, sources } = overview
     const runQueries = [...new Set(sources.flatMap(source => source.domains).filter(domain => !domain.includes('only')))]
     const orderedRuns = [...runs].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
@@ -19,7 +21,9 @@ export default async function TiRunsPage() {
     const screenshotTotal = runs.reduce((sum, run) => sum + run.screenshots, 0)
     const rowTotal = runs.reduce((sum, run) => sum + run.rows, 0)
     const nextRun = [...runs].sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
+    const nextSource = [...sources].filter(source => Number.isFinite(new Date(source.nextRunAt).getTime())).sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
     const attentionRuns = orderedRuns.filter(run => run.status !== 'completed' || isOverdue(run.nextRunAt))
+    const runUnavailable = overview.availability.failedResources.includes('collection-runs')
 
     return (
         <DashboardPage>
@@ -35,13 +39,15 @@ export default async function TiRunsPage() {
                 <LiveRunCard
                     title='Collector now'
                     run={orderedRuns.find(run => run.status === 'running' || run.status === 'queued') || orderedRuns[0]}
-                    sourceName={orderedRuns[0]?.sourceName || 'Selecting source'}
+                    sourceName={orderedRuns[0]?.sourceName}
                 />
                 <LiveFact title='Evidence produced' value={`${captureTotal} captures`} detail={`${screenshotTotal} screenshots, ${rowTotal} parsed rows`} tone={captureTotal ? 'ok' : 'neutral'} />
-                <LiveFact title='Next source due' value={nextRun ? relativeUntil(nextRun.nextRunAt) : 'Selecting'} detail={nextRun?.sourceName || 'Scheduler is choosing the next source'} tone={nextRun && isOverdue(nextRun.nextRunAt) ? 'watch' : 'neutral'} />
+                <LiveFact title='Next source due' value={nextRun ? relativeUntil(nextRun.nextRunAt) : nextSource ? relativeUntil(nextSource.nextRunAt) : 'No upcoming source'} detail={nextRun?.sourceName || nextSource?.name || 'No active source is queued'} tone={(nextRun || nextSource) && isOverdue((nextRun || nextSource)!.nextRunAt) ? 'watch' : 'neutral'} />
             </section>
 
-            <details data-ti-runs-summary-disclosure className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
+            {runUnavailable ? <DashboardPanel className='border-ui-danger/35 bg-ui-danger/5 p-4'><p className='font-semibold text-ui-danger'>Collection history unavailable</p><p className='mt-1 text-sm text-ui-muted'>The collector status is available, but its run history could not be read. This is not the same as zero runs.</p></DashboardPanel> : null}
+
+            {runs.length ? <details data-ti-runs-summary-disclosure className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
                 <summary className='flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 [&::-webkit-details-marker]:hidden'>
                     <span className='inline-flex items-center gap-2'>
                         <Rows3 className='h-4 w-4 text-ui-primary' />
@@ -57,11 +63,11 @@ export default async function TiRunsPage() {
                     <Metric title='Completed' value={String(completed)} detail='successful jobs' tone='ok' />
                     <Metric title='Failed' value={String(failed)} detail='needs retry' tone={failed ? 'warn' : 'ok'} />
                     <Metric title='Evidence' value={`${captureTotal} captures`} detail={`${screenshotTotal} screenshots · ${rowTotal} parsed rows`} tone='hold' />
-                    <Metric title='Next run' value={nextRun ? relativeUntil(nextRun.nextRunAt) : 'Selecting'} detail={nextRun?.sourceName || 'Scheduler is choosing the next source'} tone='hold' />
+                    <Metric title='Next run' value={nextRun ? relativeUntil(nextRun.nextRunAt) : nextSource ? relativeUntil(nextSource.nextRunAt) : 'No upcoming source'} detail={nextRun?.sourceName || nextSource?.name || 'No active source is queued'} tone='hold' />
                 </div>
-            </details>
+            </details> : null}
 
-            <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
+            {runs.length ? <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-panel px-4 py-3'>
                     <div>
                         <h2 className='text-base font-semibold text-ui-text'>Collector activity</h2>
@@ -111,14 +117,14 @@ export default async function TiRunsPage() {
                         })}
                     </div>
                 </div>
-            </DashboardPanel>
+            </DashboardPanel> : <DashboardPanel className='border-ui-border bg-ui-panel p-6'><div className='mx-auto max-w-xl text-center'><div className='mx-auto grid h-12 w-12 place-items-center rounded-full bg-ui-primary/10 text-ui-primary'><PlayCircle className='h-6 w-6' /></div><h2 className='mt-4 text-lg font-semibold text-ui-text'>{runUnavailable ? 'Run history is unavailable' : 'No collection history yet'}</h2><p className='mt-2 text-sm leading-6 text-ui-muted'>{runUnavailable ? 'Retry when the collection service is available.' : sources.length ? 'The collector is configured, but no completed or active run has been recorded for the global source fleet yet.' : 'Add an executable source first. Collection history starts after the first source run.'}</p><div className='mt-4 flex justify-center gap-2'><Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>Open source inventory <ArrowRight className='h-4 w-4' /></Link></div></div></DashboardPanel>}
 
             <div className='grid gap-4 xl:grid-cols-[1fr_0.9fr]'>
                 <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
                     <div className='flex items-center justify-between gap-3'>
                         <div>
-                            <h2 className='text-base font-semibold text-ui-text'>{attentionRuns.length ? 'Runs needing attention' : 'No runs need attention'}</h2>
-                            <p className='mt-1 text-sm text-ui-muted'>{attentionRuns.length ? 'Failures, long-running jobs, and overdue next checks stay in the live attention stream.' : 'All systems are operational'}</p>
+                            <h2 className='text-base font-semibold text-ui-text'>{attentionRuns.length ? 'Runs needing attention' : runs.length ? 'No runs need attention' : 'No run history to assess'}</h2>
+                            <p className='mt-1 text-sm text-ui-muted'>{attentionRuns.length ? 'Failures, long-running jobs, and overdue next checks stay in the live attention stream.' : runs.length ? 'Recorded runs are completing without a failure or overdue check.' : 'A missing run record is not evidence that all systems are operational.'}</p>
                         </div>
                         {attentionRuns.length ? (
                             <AlertTriangle className='h-4 w-4 text-ui-warning' />
@@ -193,7 +199,7 @@ function Metric({ title, value, detail, tone }: { title: string, value: string, 
     )
 }
 
-function LiveRunCard({ title, run, sourceName }: { title: string, run?: TiAdminOverview['runs'][number], sourceName: string }) {
+function LiveRunCard({ title, run, sourceName }: { title: string, run?: TiAdminOverview['runs'][number], sourceName?: string }) {
     return (
         <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
             <div className='flex items-center justify-between gap-3 border-b border-ui-border bg-ui-panel px-4 py-3'>
@@ -204,8 +210,8 @@ function LiveRunCard({ title, run, sourceName }: { title: string, run?: TiAdminO
                 {run ? <span className={statusClass(run.status)}>{run.status}</span> : null}
             </div>
             <div className='p-4'>
-                <p className='line-clamp-1 text-lg font-semibold text-ui-text'>{sourceName}</p>
-                <p className='mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-ui-muted'>{run?.message || 'Collector is choosing the next source.'}</p>
+                <p className='line-clamp-1 text-lg font-semibold text-ui-text'>{sourceName || (run ? 'Unknown source' : 'No active collection')}</p>
+                <p className='mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-ui-muted'>{run?.message || 'No collector run is currently recorded.'}</p>
                 <div className='mt-3 grid grid-cols-3 gap-2'>
                     <Mini label='Rows' value={String(run?.rows ?? 0)} />
                     <Mini label='Captures' value={String(run?.captures ?? 0)} />
