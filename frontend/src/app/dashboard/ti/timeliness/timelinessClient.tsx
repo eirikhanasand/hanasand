@@ -5,17 +5,8 @@ import type { FormEvent, ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, Clock3, ExternalLink, LoaderCircle, RefreshCw, Search, Send } from 'lucide-react'
 import { DashboardPanel } from '@/components/dashboard/ui'
 
-type QueueStatus = 'unresolved_reference' | 'anomaly' | 'incomplete_timeline' | 'awaiting_alert' | 'awaiting_delivery' | 'complete'
-type Metric = {
-    populationSize: number
-    sampleSize: number
-    missingCount: number
-    excludedCount: number
-    exclusions: Array<{ name: string, count: number }>
-    medianSeconds: number | null
-    p95Seconds: number | null
-    p99Seconds: number | null
-}
+type QueueStatus = 'unresolved_reference' | 'anomaly' | 'awaiting_alert' | 'awaiting_delivery' | 'complete'
+type Metric = { sampleSize: number, medianSeconds: number | null, p95Seconds: number | null, p99Seconds: number | null }
 type Item = {
     id: string
     incidentId: string
@@ -43,7 +34,6 @@ type Snapshot = {
         recordCount: number
         unresolvedReferenceCount: number
         anomalyCount: number
-        incompleteTimelineCount: number
         awaitingAlertCount: number
         awaitingDeliveryCount: number
         completeCount: number
@@ -55,7 +45,7 @@ type Snapshot = {
     }
     metrics: { overall: Record<string, Metric>, bySourceFamily: GroupMetric[], byActor: GroupMetric[], byStage: Array<{ name: string } & Metric> }
     quality: {
-        fields: Array<{ name: string, presentCount: number, provenanceCount: number, missingCount: number, unprovenCount: number, coverage: number }>
+        fields: Array<{ name: string, presentCount: number, missingCount: number, coverage: number }>
         issues: Array<{ name: string, count: number }>
         bySourceClass: QualityGroup[]
     }
@@ -67,21 +57,17 @@ const statuses: Array<{ value: '' | QueueStatus, label: string }> = [
     { value: '', label: 'All records' },
     { value: 'unresolved_reference', label: 'Needs first report' },
     { value: 'anomaly', label: 'Timestamp anomalies' },
-    { value: 'incomplete_timeline', label: 'Incomplete timeline' },
     { value: 'awaiting_alert', label: 'Awaiting alert' },
     { value: 'awaiting_delivery', label: 'Awaiting delivery' },
     { value: 'complete', label: 'Complete' },
 ]
 const stageOrder = ['observed', 'first_report', 'publication', 'collection', 'processing', 'first_visible', 'reviewed', 'alert_created', 'delivery_attempt', 'delivered']
 
-type Organization = { id: string, tenantId?: string, role?: string }
-
-export default function TimelinessClient({ initialOrganizationId = '' }: { initialOrganizationId?: string }) {
+export default function TimelinessClient() {
     const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
     const [selectedId, setSelectedId] = useState('')
-    const [scope, setScope] = useState<'tenant' | 'global'>('tenant')
+    const [scope, setScope] = useState<'tenant' | 'global'>('global')
     const [tenantId, setTenantId] = useState('')
-    const [organizationId, setOrganizationId] = useState(initialOrganizationId)
     const [status, setStatus] = useState<'' | QueueStatus>('')
     const [search, setSearch] = useState('')
     const [query, setQuery] = useState('')
@@ -101,7 +87,6 @@ export default function TimelinessClient({ initialOrganizationId = '' }: { initi
         try {
             const params = new URLSearchParams({ scope, limit: '200' })
             if (scope === 'tenant') params.set('tenantId', tenantId.trim())
-            if (scope === 'tenant' && organizationId.trim()) params.set('organizationId', organizationId.trim())
             if (status) params.set('status', status)
             if (query) params.set('q', query)
             const next = await api<Snapshot>(`/api/ti/timeliness?${params}`)
@@ -112,31 +97,7 @@ export default function TimelinessClient({ initialOrganizationId = '' }: { initi
         } finally {
             setLoading(false)
         }
-    }, [organizationId, query, scope, status, tenantId])
-
-    useEffect(() => {
-        if (initialOrganizationId.trim()) {
-            setOrganizationId(initialOrganizationId.trim())
-            setTenantId(initialOrganizationId.trim())
-            return
-        }
-        let cancelled = false
-        void fetch('/api/organizations', { cache: 'no-store' })
-            .then(response => response.ok ? response.json() as Promise<{ organizations?: Organization[] }> : Promise.reject(new Error('Organizations could not be loaded.')))
-            .then(payload => {
-                if (cancelled) return
-                const organization = (payload.organizations || [])[0]
-                if (organization) {
-                    setOrganizationId(organization.id)
-                    setTenantId(organization.tenantId || organization.id)
-                } else {
-                    setLoading(false)
-                    setError('Select an organization before loading timeliness evidence.')
-                }
-            })
-            .catch(cause => { if (!cancelled) { setLoading(false); setError(message(cause)) } })
-        return () => { cancelled = true }
-    }, [initialOrganizationId])
+    }, [query, scope, status, tenantId])
 
     useEffect(() => { void load() }, [load])
     const selected = snapshot?.items.find(item => item.id === selectedId)
@@ -151,7 +112,6 @@ export default function TimelinessClient({ initialOrganizationId = '' }: { initi
         try {
             const params = new URLSearchParams({ scope })
             if (scope === 'tenant') params.set('tenantId', tenantId.trim())
-            if (scope === 'tenant' && organizationId.trim()) params.set('organizationId', organizationId.trim())
             const response = await api<{ item: Item }>('/api/ti/timeliness?' + params, {
                 method: 'POST',
                 body: JSON.stringify({ recordId: selected.id, ...form, referenceTitle: form.referenceTitle || undefined }),
@@ -201,7 +161,6 @@ export default function TimelinessClient({ initialOrganizationId = '' }: { initi
                     <Summary label='Retained' value={coverage?.recordCount ?? 0} />
                     <Summary label='Needs report' value={coverage?.unresolvedReferenceCount ?? 0} attention />
                     <Summary label='Anomalies' value={coverage?.anomalyCount ?? 0} attention />
-                    <Summary label='Incomplete path' value={coverage?.incompleteTimelineCount ?? 0} attention />
                     <Summary label='Awaiting alert' value={coverage?.awaitingAlertCount ?? 0} />
                     <Summary label='Awaiting delivery' value={coverage?.awaitingDeliveryCount ?? 0} />
                     <Summary label='Complete' value={coverage?.completeCount ?? 0} />
@@ -216,12 +175,12 @@ export default function TimelinessClient({ initialOrganizationId = '' }: { initi
             <div className='grid min-h-[42rem] gap-3 xl:grid-cols-[22rem_minmax(0,1fr)]'>
                 <DashboardPanel className='min-h-0 overflow-hidden border-ui-border bg-ui-panel p-0'>
                     <div className='flex items-center justify-between border-b border-ui-border bg-ui-raised px-3 py-2 text-xs'>
-                        <span className='font-semibold text-ui-text'>Retained evidence</span>
+                        <span className='font-semibold text-ui-text'>Evidence queue</span>
                         <span className='text-ui-muted'>{snapshot?.page.total ?? 0} matching</span>
                     </div>
                     <div className='max-h-[calc(100vh-13rem)] min-h-72 overflow-auto'>
                         {snapshot?.items.map(item => <QueueRow key={item.id} item={item} active={selected?.id === item.id} onClick={() => setSelectedId(item.id)} />)}
-                        {!snapshot?.items.length ? <div className='grid min-h-56 place-items-center p-6 text-center text-xs text-ui-muted'>{loading ? <LoaderCircle className='h-5 w-5 animate-spin' /> : scope === 'tenant' && !tenantId ? 'Select an organization before loading timeliness evidence.' : 'No retained timeliness records match this scope and queue.'}</div> : null}
+                        {!snapshot?.items.length ? <div className='grid min-h-56 place-items-center p-6 text-center text-xs text-ui-muted'>{loading ? <LoaderCircle className='h-5 w-5 animate-spin' /> : 'No retained timeliness records match this scope and queue.'}</div> : null}
                     </div>
                 </DashboardPanel>
 
@@ -278,10 +237,9 @@ function RecordDetail({ item, form, setForm, saving, onSubmit }: { item: Item, f
 
 function StageRow({ stage, timestamp, provenance }: { stage: string, timestamp?: string, provenance?: Record<string, unknown> }) {
     const url = typeof provenance?.referenceUrl === 'string' ? provenance.referenceUrl : undefined
-    const verified = Boolean(timestamp && provenance)
     return <div className='grid grid-cols-[7.5rem_minmax(0,1fr)] gap-2 rounded-md border border-ui-border px-2.5 py-2 text-xs'>
-        <span className='flex items-center gap-1.5 font-medium text-ui-muted'>{verified ? <CheckCircle2 className='h-3.5 w-3.5 text-ui-success' /> : timestamp ? <AlertTriangle className='h-3.5 w-3.5 text-ui-danger' /> : <Clock3 className='h-3.5 w-3.5' />}{label(stage)}</span>
-        <span className='min-w-0'><span className='block font-mono text-[11px] text-ui-text'>{timestamp ? date(timestamp) : 'Unknown'}</span>{provenance ? <span className='mt-0.5 block truncate text-[10px] text-ui-muted'>{String(provenance.evidencePath || provenance.event || 'stored provenance')}{url ? <> · <a href={url} target='_blank' rel='noopener noreferrer' className='inline-flex items-center gap-0.5 text-ui-primary hover:underline'>reference<ExternalLink className='h-2.5 w-2.5' /></a></> : null}</span> : timestamp ? <span className='mt-0.5 block text-[10px] text-ui-danger'>Timestamp retained; provenance missing, excluded from affected metrics</span> : null}</span>
+        <span className='flex items-center gap-1.5 font-medium text-ui-muted'>{timestamp ? <CheckCircle2 className='h-3.5 w-3.5 text-ui-success' /> : <Clock3 className='h-3.5 w-3.5' />}{label(stage)}</span>
+        <span className='min-w-0'><span className='block font-mono text-[11px] text-ui-text'>{timestamp ? date(timestamp) : 'Unknown'}</span>{provenance ? <span className='mt-0.5 block truncate text-[10px] text-ui-muted'>{String(provenance.evidencePath || provenance.event || 'stored provenance')}{url ? <> · <a href={url} target='_blank' rel='noreferrer' className='inline-flex items-center gap-0.5 text-ui-primary hover:underline'>reference<ExternalLink className='h-2.5 w-2.5' /></a></> : null}</span> : null}</span>
     </div>
 }
 
@@ -293,7 +251,7 @@ function QualityPanel({ quality }: { quality?: Snapshot['quality'] }) {
             <section className='border-b border-ui-border p-3 lg:border-b-0 lg:border-r'>
                 <h3 className='text-[10px] font-semibold uppercase text-ui-muted'>Coverage and exclusions</h3>
                 <dl className='mt-2 grid grid-cols-2 gap-2'>
-                    {importantFields.map(field => <div key={field.name} className='rounded-md border border-ui-border bg-ui-raised p-2'><dt className='truncate text-[10px] text-ui-muted'>{label(field.name)}</dt><dd className='mt-1 text-xs font-semibold text-ui-text'>{percent(field.coverage)} <span className='font-normal text-ui-muted'>({field.missingCount} missing · {field.unprovenCount} unproven)</span></dd></div>)}
+                    {importantFields.map(field => <div key={field.name} className='rounded-md border border-ui-border bg-ui-raised p-2'><dt className='truncate text-[10px] text-ui-muted'>{label(field.name)}</dt><dd className='mt-1 text-xs font-semibold text-ui-text'>{percent(field.coverage)} <span className='font-normal text-ui-muted'>({field.missingCount} missing)</span></dd></div>)}
                 </dl>
                 <div className='mt-2 space-y-1'>{quality?.issues.map(issue => <p key={issue.name} className='flex justify-between gap-2 text-[10px] text-ui-danger'><span className='truncate'>{issue.name}</span><strong>{issue.count}</strong></p>)}{!quality?.issues.length ? <p className='text-[10px] text-ui-muted'>No excluded timestamp anomalies in this scope.</p> : null}</div>
             </section>
@@ -307,20 +265,14 @@ function MetricsPanel({ stages, sources, actors }: { stages: Array<{ name: strin
         <div className='border-b border-ui-border bg-ui-raised px-3 py-2'><h2 className='text-xs font-semibold text-ui-text'>Reproducible median / p95 / p99</h2></div>
         <div className='grid lg:grid-cols-3'>
             <MetricTable title='Stage' rows={stages.map(row => ({ ...row, name: label(row.name) }))} />
-            <MetricTable title='Source family · first public report → outcome' rows={sources.flatMap(row => [
-                { name: `${row.name} · alert`, ...row.metrics.reportToAlertSeconds },
-                { name: `${row.name} · delivered`, ...row.metrics.reportToDeliveredSeconds },
-            ])} />
-            <MetricTable title='Actor · first public report → outcome' rows={actors.flatMap(row => [
-                { name: `${row.name} · alert`, ...row.metrics.reportToAlertSeconds },
-                { name: `${row.name} · delivered`, ...row.metrics.reportToDeliveredSeconds },
-            ])} />
+            <MetricTable title='Source family · report → delivered' rows={sources.map(row => ({ name: row.name, ...row.metrics.reportToDeliveredSeconds }))} />
+            <MetricTable title='Actor · report → delivered' rows={actors.map(row => ({ name: row.name, ...row.metrics.reportToDeliveredSeconds }))} />
         </div>
     </DashboardPanel>
 }
 
 function MetricTable({ title, rows }: { title: string, rows: Array<{ name: string } & Metric> }) {
-    return <section className='min-w-0 border-b border-ui-border p-3 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0'><h3 className='text-[10px] font-semibold uppercase text-ui-muted'>{title}</h3><div className='mt-2 overflow-x-auto'><table className='w-full text-left text-[11px]'><thead className='text-ui-muted'><tr><th className='pb-1 font-medium'>Group</th><th className='pb-1 text-right font-medium'>n</th><th className='pb-1 text-right font-medium'>missing</th><th className='pb-1 text-right font-medium'>excluded</th><th className='pb-1 text-right font-medium'>median</th><th className='pb-1 text-right font-medium'>p95</th><th className='pb-1 text-right font-medium'>p99</th></tr></thead><tbody>{rows.map(row => <tr key={row.name} className='border-t border-ui-border'><td className='max-w-40 py-1.5 text-ui-text'><span className='block truncate'>{row.name}</span>{row.exclusions.length ? <span className='block truncate text-[9px] text-ui-danger'>{row.exclusions.map(reason => `${reason.name} (${reason.count})`).join(', ')}</span> : null}</td><td className='py-1.5 text-right text-ui-muted'>{row.sampleSize}/{row.populationSize}</td><td className='py-1.5 text-right text-ui-muted'>{row.missingCount}</td><td className='py-1.5 text-right text-ui-danger'>{row.excludedCount}</td><td className='py-1.5 text-right text-ui-text'>{duration(row.medianSeconds ?? undefined)}</td><td className='py-1.5 text-right text-ui-text'>{duration(row.p95Seconds ?? undefined)}</td><td className='py-1.5 text-right text-ui-text'>{duration(row.p99Seconds ?? undefined)}</td></tr>)}</tbody></table>{!rows.length ? <p className='py-4 text-center text-ui-muted'>No retained groups.</p> : null}</div></section>
+    return <section className='min-w-0 border-b border-ui-border p-3 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0'><h3 className='text-[10px] font-semibold uppercase text-ui-muted'>{title}</h3><div className='mt-2 overflow-x-auto'><table className='w-full text-left text-[11px]'><thead className='text-ui-muted'><tr><th className='pb-1 font-medium'>Group</th><th className='pb-1 text-right font-medium'>n</th><th className='pb-1 text-right font-medium'>median</th><th className='pb-1 text-right font-medium'>p95</th><th className='pb-1 text-right font-medium'>p99</th></tr></thead><tbody>{rows.map(row => <tr key={row.name} className='border-t border-ui-border'><td className='max-w-32 truncate py-1.5 text-ui-text'>{row.name}</td><td className='py-1.5 text-right text-ui-muted'>{row.sampleSize}</td><td className='py-1.5 text-right text-ui-text'>{duration(row.medianSeconds ?? undefined)}</td><td className='py-1.5 text-right text-ui-text'>{duration(row.p95Seconds ?? undefined)}</td><td className='py-1.5 text-right text-ui-text'>{duration(row.p99Seconds ?? undefined)}</td></tr>)}</tbody></table>{!rows.length ? <p className='py-4 text-center text-ui-muted'>No eligible measurements.</p> : null}</div></section>
 }
 
 function Status({ status }: { status: QueueStatus }) {
