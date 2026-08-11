@@ -38,7 +38,7 @@ export default async function TiActivityPage() {
                             <p className='mt-1 text-sm text-ui-muted'>Newest automated observations with linked sources first.</p>
                         </div>
                         <div className='flex flex-wrap gap-2 text-xs font-semibold'>
-                            <StatusPill label={operationalStateLabel(worker.state)} tone={worker.state === 'error' || worker.state === 'unavailable' ? 'bad' : worker.state === 'running' ? 'ok' : 'watch'} />
+                            <StatusPill label={operationalStateLabel(worker.state)} tone={worker.state === 'unavailable' ? 'bad' : worker.state === 'active' ? 'ok' : 'watch'} />
                             <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-1 text-ui-muted'>last sweep {worker.lastSweepFinishedAt ? shortTime(worker.lastSweepFinishedAt) : 'checking'}</span>
                             <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-1 text-ui-muted'>{worker.batchSize || 0} actors/pass</span>
                         </div>

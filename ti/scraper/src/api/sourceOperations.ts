@@ -165,7 +165,9 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
     generatedAt,
     tenantId: input.tenantId ?? "global",
     total: rows.length,
+    previousCursor: cursor > 0 ? String(Math.max(0, cursor - limit)) : undefined,
     nextCursor: cursor + page.length < rows.length ? String(cursor + page.length) : undefined,
+    rows: page,
     summary: {
       sourceCount: rows.length,
       retainedSourceCount: executableRows.length,
@@ -241,7 +243,9 @@ function operationalQuerySnapshot(result: any, input: any, generatedAt: string) 
     generatedAt,
     tenantId: input.tenantId ?? "global",
     total: Number(result.total ?? 0),
+    previousCursor: Number(input.cursor ?? 0) > 0 ? String(Math.max(0, Number(input.cursor ?? 0) - Number(input.limit ?? 100))) : undefined,
     nextCursor: result.nextCursor,
+    rows: sources,
     summary: {
       measurementState: operationalMetricsMeasured ? "measured" : "source_counts_only",
       sourceCount: Number(totals.sourceCount ?? 0),

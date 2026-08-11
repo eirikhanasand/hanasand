@@ -179,13 +179,14 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
   const offset = Math.max(0, numberQuery(url.searchParams.get("cursor")) ?? 0);
   const query = url.searchParams.get("q")?.trim().toLowerCase();
   const tenantId = scope.tenantId;
+  const sortField = ({ captures: "collectedAt", collectionRuns: "startedAt", actorProfiles: "lastSeenAt", actorAliases: "lastSeenAt", evidenceLinks: "createdAt", alerts: "updatedAt", evaluationLabels: "labeledAt" } as Record<string, string>)[responseKey] ?? "updatedAt";
   const databaseQuery = (options.store as any).queryStructuredRecords;
     if (typeof databaseQuery === "function") {
     const result = await databaseQuery.call(options.store, responseKey, { tenantId, query, limit, offset });
     const rows = result.records.map((record: any) => apiRecord(responseKey, record, url, tenantId, options.store));
     const nextCursor = result.nextCursor;
     const previousCursor = offset > 0 ? String(Math.max(0, offset - limit)) : undefined;
-    const pagination = { limit, cursor: String(offset), nextCursor, previousCursor, appliedFilters: { q: query ?? "", tenantId: tenantId ?? "" }, sortField: "updatedAt", direction: "desc" };
+    const pagination = { limit, cursor: String(offset), nextCursor, previousCursor, appliedFilters: { q: query ?? "", tenantId: tenantId ?? "" }, sortField, direction: "desc" };
     return json({ [responseKey]: rows, rows, total: result.total, nextCursor, previousCursor, pagination });
   }
 
@@ -197,7 +198,7 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
   const rows = filtered.slice(offset, offset + limit);
   const nextCursor = offset + rows.length < filtered.length ? String(offset + rows.length) : undefined;
   const previousCursor = offset > 0 ? String(Math.max(0, offset - limit)) : undefined;
-  return json({ [responseKey]: rows, rows, total: filtered.length, nextCursor, previousCursor, pagination: { limit, cursor: String(offset), nextCursor, previousCursor, appliedFilters: { q: query ?? "", tenantId: tenantId ?? "" }, sortField: "updatedAt", direction: "desc" } });
+  return json({ [responseKey]: rows, rows, total: filtered.length, nextCursor, previousCursor, pagination: { limit, cursor: String(offset), nextCursor, previousCursor, appliedFilters: { q: query ?? "", tenantId: tenantId ?? "" }, sortField, direction: "desc" } });
 }
 
 function globalCatalogCollection(collection: string): boolean {
