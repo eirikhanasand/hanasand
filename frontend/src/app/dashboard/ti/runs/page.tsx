@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 export default async function TiRunsPage() {
     // Collection runs are global collector operations, not a customer tenant's
     // watchlist data. The default tenant lane is intentionally empty here.
-    const overview = await getTiAdminOverview(null, { limit: 500, includeCandidates: true })
+    const overview = await getTiAdminOverview(null, { limit: 50, includeCandidates: true })
     const { runs, sources } = overview
     const runQueries = [...new Set(sources.flatMap(source => source.domains).filter(domain => !domain.includes('only')))]
     const orderedRuns = [...runs].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())

@@ -116,7 +116,10 @@ export type TiAdminOverview = {
 }
 
 type ApiPayload = Record<string, unknown>
-const TI_ADMIN_FETCH_TIMEOUT_MS = 10_000
+// Keep the dashboard responsive when a secondary history query is unhealthy.
+// Cached data is still served while the next request refreshes it.
+const TI_ADMIN_FETCH_TIMEOUT_MS = 2_000
+const useProcessCache = process.env.NODE_ENV === 'production'
 type ResourceResult = { resource: string, ok: boolean, records: ApiPayload[], total: number, nextCursor?: string, payload: ApiPayload }
 const sourceInventoryCache = new Map<string, { expiresAt: number, value: ResourceResult, refreshing?: Promise<void> }>()
 
@@ -124,8 +127,8 @@ export async function getTiAdminOverview(tenantId: string | null = 'default', pa
     const base = tiScraperApiBase()
     const sampleFilter = page.sourceId ? { query: page.sourceId } : {}
     const resources = await Promise.all([
-        page.includeSamples === false ? emptyResource('captures') : fetchResource(base, '/v1/intel/captures', 'captures', tenantId, sampleFilter),
-        page.includeSamples === false ? emptyResource('collection-runs') : fetchResource(base, '/v1/intel/collection-runs', 'collectionRuns', tenantId, sampleFilter),
+        page.includeSamples === false ? emptyResource('captures') : fetchResource(base, '/v1/intel/captures', 'captures', tenantId, { ...sampleFilter, limit: Math.min(page.limit || 50, 50) }),
+        page.includeSamples === false ? emptyResource('collection-runs') : fetchResource(base, '/v1/intel/collection-runs', 'collectionRuns', tenantId, { ...sampleFilter, limit: Math.min(page.limit || 50, 50) }),
         fetchResource(base, '/v1/intel/source-operations', 'sources', tenantId, {
             cursor: Math.max(0, page.cursor || 0),
             limit: Math.max(1, Math.min(500, page.limit || 25)),
@@ -213,7 +216,7 @@ export function ageDays(since: string) {
 async function fetchResource(base: string, path: string, key: string, tenantId: string | null, page: { cursor?: number, limit?: number, sourceId?: string, query?: string, family?: string, lifecycle?: string, access?: string, health?: string, output?: string, matches?: string, sort?: string, direction?: string, includeCandidates?: boolean } = {}, skipCache = false): Promise<ResourceResult> {
     const resource = path.split('/').at(-1) || key
     const cacheKey = JSON.stringify([resource, base, tenantId, page])
-    if (cacheKey && !skipCache) {
+    if (cacheKey && useProcessCache && !skipCache) {
         const cached = sourceInventoryCache.get(cacheKey)
         if (cached && cached.expiresAt > Date.now()) return cached.value
         if (cached) {
