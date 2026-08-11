@@ -129,23 +129,30 @@ export async function getTiEnrichmentOverview(): Promise<TiEnrichmentOverview> {
 function passiveOverview(overview: Awaited<ReturnType<typeof getTiAdminOverview>>): TiEnrichmentOverview {
     const actors = new Map<string, TiEnrichedActor>()
     const activity = overview.captures.map((capture) => {
-        const actorName = capture.actor || capture.sourceName
+        const actorName = capture.actor && capture.actor !== 'Not extracted' ? capture.actor : capture.sourceName
         const actorId = actorName.toLowerCase().replace(/\s+/g, '-')
         const existing = actors.get(actorId)
-        actors.set(actorId, existing || {
-            id: actorId,
-            name: actorName,
-            aliases: [],
-            status: 'ready',
-            confidence: 1,
-            lastUpdatedAt: capture.capturedAt,
-            nextRefreshAt: capture.capturedAt,
-            changedFields: [],
-            sourceLinks: capture.pageUrl ? [{ name: capture.sourceName, url: capture.pageUrl }] : [],
-            automationEvidence: [capture.resultSummary || 'Captured by automated source collection.'],
-            plannedWork: [],
-            refreshCount: 1,
-        })
+        if (existing) {
+            existing.lastUpdatedAt = [existing.lastUpdatedAt, capture.capturedAt].sort().at(-1) || existing.lastUpdatedAt
+            existing.refreshCount = (existing.refreshCount || 0) + 1
+            existing.automationEvidence.push(capture.resultSummary || 'Captured by automated source collection.')
+            if (capture.pageUrl && !existing.sourceLinks.some(source => source.name === capture.sourceName && source.url === capture.pageUrl)) existing.sourceLinks.push({ name: capture.sourceName, url: capture.pageUrl })
+        } else {
+            actors.set(actorId, {
+                id: actorId,
+                name: actorName,
+                aliases: [],
+                status: 'ready',
+                confidence: 1,
+                lastUpdatedAt: capture.capturedAt,
+                nextRefreshAt: capture.capturedAt,
+                changedFields: [],
+                sourceLinks: capture.pageUrl ? [{ name: capture.sourceName, url: capture.pageUrl }] : [],
+                automationEvidence: [capture.resultSummary || 'Captured by automated source collection.'],
+                plannedWork: [],
+                refreshCount: 1,
+            })
+        }
         return {
             id: capture.id,
             actorId,
