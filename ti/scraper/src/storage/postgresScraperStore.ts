@@ -534,7 +534,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const tenantId = input.tenantId === "default" ? null : input.tenantId ?? null;
     const values: unknown[] = tenantId === null ? [] : [tenantId];
     const tenantPredicate = (alias: string) => tenantId === null
-      ? `${alias}.tenant_id IS NULL`
+      ? `(${alias}.tenant_id IS NULL OR ${alias}.tenant_id = 'default')`
       : `${alias}.tenant_id = $1::text`;
     const where = [
       tenantPredicate("capture"),
@@ -557,7 +557,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const sourceTerms = `WITH candidate_captures AS MATERIALIZED (
       SELECT *
       FROM threat_intel.captures
-      WHERE tenant_id IS NOT DISTINCT FROM $1::text
+      WHERE ${tenantId === null ? "(tenant_id IS NULL OR tenant_id = 'default')" : "tenant_id IS NOT DISTINCT FROM $1::text"}
         AND (
           (record->'metadata'->'leakSite'->>'actorName' <> '' AND record->'metadata'->'leakSite'->>'victimName' <> '')
           OR record->>'title' ~* '(has just published a new victim|claims victim|claimed victim|claims victim|victim\\s*:|added victim|listed victim|published victim)'
