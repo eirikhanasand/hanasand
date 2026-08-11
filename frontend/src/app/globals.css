@@ -331,6 +331,7 @@ button:not(:disabled),
 
 @media (min-width: 1024px) {
   .dashboard-sidebar-sticky {
+    top: 0;
     height: 100%;
     max-height: 100%;
   }
