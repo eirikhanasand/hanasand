@@ -1,6 +1,6 @@
 import { nowIso } from "../utils.ts";
-import { SOURCE_PORTFOLIO_BASELINE } from "../ops/sourcePortfolioQualification.ts";
-import { buildSourceOperationsSnapshot, buildSourceOperationsSummary } from "./sourceOperations.ts";
+import { isExecutableSource } from "../policy/collectionPolicy.ts";
+import { buildSourceOperationsSnapshot } from "./sourceOperations.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 
 export async function publicCoverage(options: ApiServerOptions) {
@@ -89,7 +89,7 @@ function latencySummary(records: any[]) {
 
 function cadenceSummary(sources: any[]) {
   const values = sources
-    .filter((source) => !source?.tenantId)
+    .filter((source) => !source?.tenantId && isExecutableSource(source))
     .map((source) => number(source.crawlFrequencySeconds ?? (number(source.crawlFrequencyMinutes) * 60)))
     .filter(valid)
     .sort((a, b) => a - b);
