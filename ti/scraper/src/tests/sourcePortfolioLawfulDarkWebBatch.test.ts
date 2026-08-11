@@ -1,119 +1,136 @@
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { describe, expect, test } from "bun:test";
+import { TorMetadataHttpBoundary } from "../adapters/torMetadataBoundary.ts";
 import { importRestrictedMetadataSeedBundle } from "../registry/restrictedSourceSeeds.ts";
-import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
-import { validateSourcePortfolioBatch } from "../registry/sourcePortfolioBatch.ts";
 
-describe("lawful dark-web source portfolio batch", () => {
-  test("admits only parser-verified feeds and keeps failed probes out of coverage", () => {
-    const batch = JSON.parse(readFileSync(
-      new URL("../../seeds/source_portfolio_lawful_dark_web.json", import.meta.url),
-      "utf8"
-    ));
-    const existing = JSON.parse(readFileSync(
-      new URL("../../seeds/restricted_metadata_source_packs.json", import.meta.url),
-      "utf8"
-    ));
-    const report = importRestrictedMetadataSeedBundle(batch, "2026-08-09T10:00:00.000Z");
-    const portfolioReport = validateSourcePortfolioBatch(batch, batch.generatedAt);
-    const rejected = batch.reviewedRejectedCandidates as Array<Record<string, unknown>>;
-    const source = batch.sources.find((row: any) => row.id === "restricted_ms13089_victim_blog");
-    const revalidated = batch.sources.find((row: any) => row.id === "restricted_deadlock_victim_blog");
-    const feedKeys = [...existing.sources, ...batch.sources].map((row) => canonicalFeedKey(row.url));
-    const expectedProfiles = new Map([
-      ["restricted_ms13089_victim_blog", ["post_title_victim_listing", 3]],
-      ["restricted_deadlock_victim_blog", ["news_item_headline", 10]],
-      ["restricted_cmdorganization_victim_blog", ["item_header_link", 3]],
-      ["restricted_exfilsquad_victim_blog", ["company_header_name", 13]],
-      ["restricted_global_secret_group_victim_blog", ["card_body_title", 24]],
-      ["restricted_triple_x_victim_blog", ["post_container_title", 4]],
-      ["restricted_exitium_victim_blog", ["target_card_title", 4]],
-      ["restricted_insomnia_victim_blog", ["book_card_info_title", 24]],
-      ["restricted_dragonforce_victim_blog", ["companies_status_link", 24]],
-      ["restricted_incransom_victim_api", ["json_announcements_company_name", 15]],
-      ["restricted_ransomhouse_victim_blog", ["json_data_header", 22]],
-      ["restricted_barracuda_victim_blog", ["article_body_h3", 4]],
-      ["restricted_abyss_data_victim_js", ["js_data_title", 48]],
-      ["restricted_crpx0_victim_blog", ["victim_card_h3", 10]],
-      ["restricted_nasir_security_victim_blog", ["news_content_title", 1]],
-      ["restricted_atomsilo_victim_js", ["js_companies_name", 4]],
-      ["restricted_booba_team_victim_api", ["json_items_leak_title", 9]]
-    ]);
+const portfolioPath = "seeds/source_portfolio_lawful_dark_web.json";
 
-    expect(batch).toMatchObject({
+describe("independently verified lawful dark-web source portfolio", () => {
+  test("imports only endpoint-unique parser-verified metadata sources", async () => {
+    const bundle = await Bun.file(portfolioPath).json();
+    const report = importRestrictedMetadataSeedBundle(bundle, bundle.generatedAt);
+    const portfolioKeys = bundle.sources.map((source: any) => canonicalFeedKey(source.url));
+    const reservedKeys = await existingRestrictedKeys();
+
+    expect(bundle).toMatchObject({
       schemaVersion: "ti.source_portfolio_batch.v1",
       family: "lawful_dark_web",
+      version: 1,
       disabledByDefault: true,
       network: "tor",
+      proxyBoundaryId: "tor-approved-metadata-proxy",
       approvalScope: "metadata_only",
       retentionClass: "restricted_metadata"
     });
-    expect(report).toMatchObject({ valid: true, errors: [] });
-    expect(portfolioReport).toMatchObject({ valid: true, errors: [] });
-    expect(report.accepted).toHaveLength(17);
-    expect(report.accepted.find((row) => row.id === "restricted_ms13089_victim_blog")).toMatchObject({
+    expect(report).toMatchObject({ valid: true, errors: [], duplicates: [] });
+    expect(bundle.sources).toHaveLength(1);
+    expect(new Set(portfolioKeys).size).toBe(portfolioKeys.length);
+    expect(portfolioKeys.filter((key: string) => reservedKeys.has(key))).toEqual([]);
+
+    const source = bundle.sources[0];
+    expect(source).toMatchObject({
       id: "restricted_ms13089_victim_blog",
+      type: "tor_metadata",
+      accessMethod: "approved_proxy",
       status: "candidate",
+      risk: "restricted",
+      crawlFrequencySeconds: 86400,
+      governance: {
+        approvalRequired: true,
+        approvalState: "approved",
+        metadataOnly: true,
+        approvalScope: "metadata_only"
+      },
       metadata: {
-        parserProfile: "post_title_victim_listing",
+        sourceFamily: "dark_web_victim_feed",
+        actorName: "MS13089",
         productionCollectionOutcome: "metadata_only_parser_verified",
-        reportedVictimCount: 4
-      }
-    });
-    expect(source.metadata.sourcePortfolioVerification).toMatchObject({
-      outcome: "content_parsed",
-      observedItemCount: 3,
-      httpStatus: 200,
-      adapter: "tor_metadata"
-    });
-    expect(revalidated).toMatchObject({
-      metadata: {
-        observedParsedItemCount: 10,
-        qualificationState: "pending_import_and_two_productive_scheduled_cycles",
-        sourcePortfolioVerification: { outcome: "content_parsed", observedItemCount: 10, httpStatus: 200 }
-      }
-    });
-    for (const accepted of report.accepted) {
-      const expected = expectedProfiles.get(accepted.id);
-      expect(expected).toBeDefined();
-      expect(accepted).toMatchObject({
-        status: "candidate",
-        type: "tor_metadata",
-        accessMethod: "approved_proxy",
-        metadata: {
-          parserProfile: expected![0],
-          productionCollectionOutcome: "metadata_only_parser_verified",
-          sourcePortfolioVerification: {
-            outcome: "content_parsed",
-            observedItemCount: expected![1],
-            httpStatus: 200,
-            adapter: "tor_metadata"
-          }
+        parserProfile: "generic_news_item_or_post_title",
+        reportedVictimCount: 4,
+        collectionScope: "metadata_only",
+        retainRawContent: false,
+        sourcePortfolioVerification: {
+          outcome: "content_parsed",
+          observedItemCount: 3,
+          httpStatus: 200,
+          adapter: "tor_metadata",
+          parserVersion: "darknet-metadata-v2"
         }
-      });
-      expect(accepted.metadata.reportedVictimCount).toBeGreaterThan(0);
-      expect(Number.isFinite(Date.parse(accepted.metadata.lastReportedVictimAt))).toBe(true);
-    }
-    expect(new Set(feedKeys).size).toBe(feedKeys.length);
-    expect(rejected).toHaveLength(167);
-    expect(new Set(rejected.map((row) => row.id)).size).toBe(rejected.length);
-    expect(rejected.every((row) => row.disposition === "rejected" && row.countsAsCoverage === false)).toBe(true);
-    expect([...new Map(rejected.map((row) => [row.endpointHash, row.probeOutcome])).entries()]).toEqual(expect.arrayContaining([
-      ["a597313cddb8f442", "fetch_failed"],
-      ["bd6fcd259f01b35e", "parser_empty"],
-      ["4c6b1d9466fc12dd", "parser_empty"],
-      ["8c5daa0504bce9ee", "parser_empty"],
-      ["ea13dd5bdced628f", "fetch_failed"],
-      ["a070a78020535edb", "authority_unavailable"],
-      ["4dd6b604ef86590f", "authority_identity_superseded"],
-      ["ecfff1e2d3cacd92", "authority_identity_changed"],
-      ["699098fcac03c64c", "http_403"],
-      ["3071c8296f2d6e4d", "authority_unavailable"],
-      ["478fa2c1b6fe3f42", "duplicate_not_fetched"],
-      ["d60cfd5167a4a40b", "authority_missing"],
-      ["c7269c4f458a9559", "parser_empty"]
-    ]));
-    expect(rejected.some((row) => ["9957e9b30b3836eb", "edb691bd56d468b3"].includes(String(row.endpointHash)))).toBe(false);
-    expect(JSON.stringify(rejected)).not.toMatch(/\.onion\b|https?:\/\/[a-z2-7]{56}\b/i);
+      }
+    });
+    expect(source.metadata.sourcePortfolioVerification.verifiedAt).toBe(bundle.generatedAt);
+    expect(source.metadata.sourcePortfolioVerification.legalBasisVerifiedAt).toBe(bundle.generatedAt);
+    expect(Date.parse(bundle.generatedAt) - Date.parse(source.metadata.lastReportedVictimAt)).toBeLessThan(90 * 86_400_000);
+    expect(report.accepted[0]).toMatchObject({
+      id: source.id,
+      status: "candidate",
+      governance: { approvalState: "approved", metadataOnly: true },
+      metadata: {
+        actorName: "MS13089",
+        parserProfile: "generic_news_item_or_post_title",
+        productionCollectionOutcome: "metadata_only_parser_verified"
+      }
+    });
+
+    const boundary = new TorMetadataHttpBoundary({
+      proxyUrl: "http://onion-tor:8118",
+      fetcher: async () => new Response(
+        '<title>MS13089 disclosures</title><div class="post-title">Northwind Health</div><div class="post-title">Contoso Manufacturing</div><div class="post-title">Fabrikam Services</div>',
+        { headers: { "content-type": "text/html" } }
+      )
+    });
+    const metadata = await boundary.fetchMetadata({ url: source.url, actorName: "MS13089" });
+    expect(metadata.victimNames).toEqual(["Northwind Health", "Contoso Manufacturing", "Fabrikam Services"]);
+    expect(metadata.links).toEqual([]);
+
+    expect(bundle.reviewedRejectedCandidates).toHaveLength(59);
+    expect(bundle.reviewedRejectedCandidates.every((item: any) =>
+      item.disposition === "rejected"
+      && item.countsAsCoverage === false
+      && /^[a-z0-9_]+$/.test(item.id)
+      && /^https:\/\//.test(item.discoveryAuthorityRecordUrl)
+      && !JSON.stringify(item).includes(".onion")
+    )).toBe(true);
+
+    const serialized = JSON.stringify(bundle);
+    expect(serialized).not.toMatch(/"(?:rawText|body|messageText|scrapedContent|health|lastSeen|last_seen|lastSuccessful|lastUseful|crawlState)"/);
+    expect(serialized).not.toMatch(/"(?:generatedPublicSourcePack|generatedSourcePack|paddedSourcePack|paddedSource)"\s*:\s*true/);
+    expect(source.metadata.sourcePortfolioVerification.endpointHash).toBeUndefined();
+    expect(createHash("sha256").update(canonicalFeedKey(source.url)).digest("hex")).toMatch(/^[a-f0-9]{64}$/);
   });
 });
+
+function canonicalFeedKey(value: string) {
+  const url = new URL(value);
+  url.hash = "";
+  url.hostname = url.hostname.toLowerCase();
+  url.pathname = url.pathname.replace(/\/$/, "");
+  url.searchParams.sort();
+  return url.toString();
+}
+
+async function existingRestrictedKeys() {
+  const keys = new Set<string>();
+  for await (const path of new Bun.Glob("seeds/*.json").scan(".")) {
+    if (path === portfolioPath) continue;
+    collectUrls(await Bun.file(path).json(), keys);
+  }
+  return keys;
+}
+
+function collectUrls(value: unknown, keys: Set<string>) {
+  if (Array.isArray(value)) {
+    for (const item of value) collectUrls(item, keys);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const [key, item] of Object.entries(value)) {
+    if (key === "url" && typeof item === "string") {
+      try {
+        if (new URL(item).hostname.toLowerCase().endsWith(".onion")) keys.add(canonicalFeedKey(item));
+      } catch {}
+    } else {
+      collectUrls(item, keys);
+    }
+  }
+}
