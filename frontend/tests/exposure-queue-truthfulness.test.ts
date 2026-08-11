@@ -19,8 +19,8 @@ test('exposure failures never mint timestamps or empty-success state', async () 
         readFile(new URL('../src/app/page.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../src/app/activity/page.tsx', import.meta.url), 'utf8'),
     ])
-    expect(home).toContain("exposureQueueFallback('unavailable', 10)")
-    expect(activity).toContain("exposureQueueFallback('unavailable', 50)")
-    expect(home).not.toContain("exposureQueueFallback(isTimeoutError(error)")
-    expect(activity).not.toContain("exposureQueueFallback(isTimeoutError(error)")
+    expect(home).toContain('exposureQueueFallback(\'unavailable\', 10)')
+    expect(activity).toContain('exposureQueueFallback(\'unavailable\', 50)')
+    expect(home).not.toContain('exposureQueueFallback(isTimeoutError(error)')
+    expect(activity).not.toContain('exposureQueueFallback(isTimeoutError(error)')
 })

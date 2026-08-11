@@ -406,7 +406,7 @@ async function loadExposureQueue(): Promise<ExposureQueue> {
         const response = await fetchSharedExposureQueue(new URLSearchParams({ limit: '10', offset: '0' }), { timeoutMs: 8000 })
         if (!response.ok) return exposureQueueFallback('unavailable', 10)
         return normalizeExposureQueue(await response.json())
-    } catch (error) {
+    } catch {
         return exposureQueueFallback('unavailable', 10)
     }
 }

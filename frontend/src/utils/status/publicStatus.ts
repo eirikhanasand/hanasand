@@ -59,7 +59,7 @@ function checkKey(value: { service: string, check_name: string }) {
     return `${value.service}\n${value.check_name}`
 }
 
-function missingPublicCheck(required: typeof requiredPublicChecks[number], generatedAt: string): ServiceCheck {
+function missingPublicCheck(required: typeof requiredPublicChecks[number]): ServiceCheck {
     return {
         service: publicStatusLabel(required.service),
         check_name: publicStatusLabel(required.check_name),
@@ -86,7 +86,7 @@ function toPublicServiceCheck(check: ServiceCheck): ServiceCheck {
         ...check,
         service: publicStatusLabel(check.service),
         check_name: publicStatusLabel(check.check_name),
-        message: publicStatusMessage(check.message, check.status),
+        message: publicStatusMessage(check.message),
     }
 }
 
@@ -128,7 +128,7 @@ function publicStatusLabel(value: string) {
         .replace(/\bApi\b/g, 'API')
 }
 
-function publicStatusMessage(message: string | null, status?: ServiceCheck['status']) {
+function publicStatusMessage(message: string | null) {
     if (!message) {
         return null
     }

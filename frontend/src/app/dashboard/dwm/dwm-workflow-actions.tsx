@@ -238,6 +238,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async function runSourcePackToCase() {
         setBusyAction('source-case')
         setResult(null)
@@ -434,6 +435,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async function expandTelegramCoverage() {
         setBusyAction('telegram-pack')
         setResult(null)
@@ -484,6 +486,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async function approveDarkwebMetadata() {
         setBusyAction('darkweb')
         setResult(null)
