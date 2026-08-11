@@ -156,7 +156,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                         <Link href='/status/incidents' className='inline-flex h-9 items-center rounded-md bg-white/15 px-3 text-sm font-semibold text-white transition hover:bg-white/25'>
                             Incident history
                         </Link>
-                        <span className='text-sm font-medium'>{refreshError ? 'Live refresh unavailable · showing last received status' : `Data refreshed ${relativeTime(lastRefreshAt, now)}`}</span>
+                        <span className='text-sm font-medium'>{refreshError ? 'Live refresh unavailable · showing last received status' : lastRefreshAt ? `Data refreshed ${relativeTime(lastRefreshAt, now)}` : 'Live status unavailable'}</span>
                     </div>
                 </div>
             </section>
@@ -271,7 +271,10 @@ function IncidentTag({ label, tone }: { label: string, tone: 'ok' | 'warn' }) {
 function relativeTime(value: string, now: number | null) {
     if (!now) return 'recently'
 
-    const seconds = Math.max(0, Math.round((now - new Date(value).getTime()) / 1000))
+    const timestamp = new Date(value).getTime()
+    if (!Number.isFinite(timestamp)) return 'unavailable'
+
+    const seconds = Math.max(0, Math.round((now - timestamp) / 1000))
     if (seconds < 60) return `${seconds}s ago`
 
     const minutes = Math.floor(seconds / 60)
