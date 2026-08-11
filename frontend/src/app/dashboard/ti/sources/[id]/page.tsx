@@ -225,7 +225,17 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                                         </div>
                                         <div className='min-w-0'>
                                             <h3 className='text-base font-semibold text-ui-text'>{capture.title}</h3>
-                                            <p className='mt-2 text-sm leading-6 text-ui-muted'>{capture.resultSummary}</p>
+                                            <p className='mt-2 text-sm leading-6 text-ui-muted'>{capture.normalizedEvidence?.excerpt || capture.resultSummary}</p>
+                                            <details className='mt-3 rounded-md border border-ui-border bg-ui-panel p-3 text-sm'>
+                                                <summary className='cursor-pointer font-semibold text-ui-text'>Evidence details</summary>
+                                                <div className='mt-3 grid gap-2 text-ui-muted'>
+                                                    <p><span className='font-semibold text-ui-text'>Presentation:</span> {capture.normalizedEvidence?.status === 'normalized' ? 'Readable normalized text' : capture.normalizedEvidence?.status === 'metadata_only' ? 'Safe metadata excerpt' : 'Not parsed'}</p>
+                                                    {capture.normalizedEvidence?.failureReason ? <p><span className='font-semibold text-ui-text'>Why:</span> {capture.normalizedEvidence.failureReason}</p> : null}
+                                                    {capture.normalizedEvidence?.author ? <p><span className='font-semibold text-ui-text'>Author:</span> {capture.normalizedEvidence.author}</p> : null}
+                                                    {capture.normalizedEvidence?.headings.length ? <p><span className='font-semibold text-ui-text'>Headings:</span> {capture.normalizedEvidence.headings.join(' · ')}</p> : null}
+                                                    {capture.normalizedEvidence?.namedEntities.length ? <p><span className='font-semibold text-ui-text'>Named entities:</span> {capture.normalizedEvidence.namedEntities.join(' · ')}</p> : null}
+                                                </div>
+                                            </details>
                                             <div className='mt-4 grid gap-2 sm:grid-cols-2'>
                                                 <Info label='Published' value={formatTiDate(capture.publishedAt)} />
                                                 <Info label='Captured' value={formatTiDate(capture.capturedAt)} />

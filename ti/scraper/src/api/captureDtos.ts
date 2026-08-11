@@ -1,6 +1,7 @@
 import type { RawCapture, SafeCaptureDto } from "../types.ts";
 import { sanitizeDwmApiPayload } from "../product/dwmCustomerDisplay.ts";
 import { hashContent } from "../utils.ts";
+import { normalizeCapturedContent } from "../pipeline/captureNormalization.ts";
 
 export interface CaptureDtoOptions {
   includeBody?: boolean;
@@ -23,6 +24,7 @@ export function toSafeCaptureDto(capture: RawCapture, options: CaptureDtoOptions
       keyRedacted: true as const
     }
     : undefined;
+  const normalizedEvidence = capture.metadata?.normalizedEvidence ?? normalizeCapturedContent(capture);
 
   return {
     id: capture.id,
@@ -47,6 +49,7 @@ export function toSafeCaptureDto(capture: RawCapture, options: CaptureDtoOptions
     provenance: sanitizeDwmApiPayload({ ...capture.provenance, url: url ?? undefined }),
     objectRef,
     body: canIncludeBody ? capture.body : undefined,
+    normalizedEvidence,
     bodyRedacted: !canIncludeBody,
     redactionReason: canIncludeBody
       ? undefined

@@ -133,7 +133,7 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
                                         <tr key={capture.id} className='align-top hover:bg-ui-panel'>
                                             <td className='px-4 py-3'>
                                                 <p className='font-semibold text-ui-text'>{capture.title}</p>
-                                                <p className='mt-1 line-clamp-2 max-w-xl text-ui-muted'>{capture.resultSummary}</p>
+                                                <p className='mt-1 line-clamp-2 max-w-xl text-ui-muted'>{capture.normalizedEvidence?.excerpt || capture.resultSummary}</p>
                                             </td>
                                             <td className='px-4 py-3 font-semibold text-ui-text'>{capture.actor}</td>
                                             <td className='px-4 py-3'>
@@ -192,7 +192,7 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
             <DashboardPanel className='p-5'>
                 <h2 className='text-base font-semibold text-ui-text'>Captured evidence</h2>
                 <div className='mt-4 grid gap-4 xl:grid-cols-2'>
-                    {captures.map(capture => (
+                                {captures.map(capture => (
                         <article key={capture.id} className='grid gap-4 rounded-lg border border-ui-border bg-ui-raised p-3 md:grid-cols-[15rem_1fr]'>
                             <div className='grid min-h-44 content-between rounded-lg bg-ui-canvas p-4 text-ui-text'>
                                 <span className='w-fit rounded-full bg-ui-panel px-2 py-1 text-xs'>{capture.actor}</span>
@@ -203,8 +203,18 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
                             </div>
                             <div>
                                 <h3 className='text-base font-semibold text-ui-text'>{capture.title}</h3>
+                                <p className='mt-2 text-sm leading-6 text-ui-muted'>{capture.normalizedEvidence?.excerpt || capture.resultSummary}</p>
+                                <details className='mt-3 rounded-md border border-ui-border bg-ui-panel p-3 text-sm'>
+                                    <summary className='cursor-pointer font-semibold text-ui-text'>Evidence details</summary>
+                                    <div className='mt-3 grid gap-2 text-ui-muted'>
+                                        <p><span className='font-semibold text-ui-text'>Presentation:</span> {capture.normalizedEvidence?.status === 'normalized' ? 'Readable normalized text' : capture.normalizedEvidence?.status === 'metadata_only' ? 'Safe metadata excerpt' : 'Not parsed'}</p>
+                                        {capture.normalizedEvidence?.failureReason ? <p><span className='font-semibold text-ui-text'>Why:</span> {capture.normalizedEvidence.failureReason}</p> : null}
+                                        {capture.normalizedEvidence?.author ? <p><span className='font-semibold text-ui-text'>Author:</span> {capture.normalizedEvidence.author}</p> : null}
+                                    </div>
+                                </details>
                                 <div className='mt-3 grid gap-2'>
                                     {capture.metadata.map(item => <Inline key={`${capture.id}-${item.label}`} label={item.label} value={item.value} />)}
+                                    {capture.normalizedEvidence?.failureReason ? <Inline label='Why this is not parsed' value={capture.normalizedEvidence.failureReason} /> : null}
                                 </div>
                             </div>
                         </article>

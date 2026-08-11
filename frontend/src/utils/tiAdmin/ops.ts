@@ -72,6 +72,18 @@ export type TiAdminCapture = {
     screenshotTakenAt: string
     resultSummary: string
     metadata: Array<{ label: string, value: string }>
+    normalizedEvidence?: {
+        status: string
+        failureReason?: string
+        title?: string
+        author?: string
+        publishedAt?: string
+        headings: string[]
+        namedEntities: string[]
+        incidentLanguage: string[]
+        text: string
+        excerpt: string
+    }
 }
 
 export type TiAdminRun = {
@@ -368,6 +380,7 @@ function toCapture(record: ApiPayload): TiAdminCapture | undefined {
     const capturedAt = isoValue(record.collectedAt)
     if (!id || !sourceId || !capturedAt) return undefined
     const metadata = objectValue(record.metadata)
+    const normalizedEvidence = objectValue(record.normalizedEvidence ?? metadata.normalizedEvidence)
     const provenance = objectValue(record.provenance)
     const publicUrl = stringValue(record.url)
     const domain = captureDomain(metadata, publicUrl)
@@ -396,15 +409,29 @@ function toCapture(record: ApiPayload): TiAdminCapture | undefined {
         screenshotTakenAt: isoValue(metadata.screenshotTakenAt, capturedAt),
         resultSummary: captureSummary(sourceName, pageType, metadata, record),
         metadata: captureMetadata(record, metadata),
+        normalizedEvidence: {
+            status: textValue(normalizedEvidence.status, 'unparsed'),
+            failureReason: textValue(normalizedEvidence.failureReason) || undefined,
+            title: textValue(normalizedEvidence.title) || undefined,
+            author: textValue(normalizedEvidence.author) || undefined,
+            publishedAt: textValue(normalizedEvidence.publishedAt) || undefined,
+            headings: listValue(normalizedEvidence.headings).map(stringValue).filter(Boolean),
+            namedEntities: listValue(normalizedEvidence.namedEntities).map(stringValue).filter(Boolean),
+            incidentLanguage: listValue(normalizedEvidence.incidentLanguage).map(stringValue).filter(Boolean),
+            text: textValue(normalizedEvidence.text),
+            excerpt: textValue(normalizedEvidence.excerpt),
+        },
     }
 }
 
 function captureSummary(sourceName: string, pageType: string, metadata: ApiPayload, record: ApiPayload) {
-    const summary = textValue(metadata.summary, metadata.headline, record.redactionReason)
+    const normalized = objectValue(record.normalizedEvidence ?? metadata.normalizedEvidence)
+    const summary = textValue(normalized.excerpt, normalized.text, metadata.summary, metadata.headline, record.redactionReason)
     if (summary && !noisyCaptureText(summary)) return summary
-    const excerpt = textValue(metadata.safeExcerpt, metadata.excerpt)
+    const excerpt = textValue(normalized.excerpt, normalized.text, metadata.safeExcerpt, metadata.excerpt)
     if (excerpt && !noisyCaptureText(excerpt)) return excerpt
-    return `Captured ${pageType} content from ${sourceName}; no structured actor or entity was identified.`
+    const failureReason = textValue(normalized.failureReason, record.redactionReason)
+    return failureReason || `Captured ${pageType} content from ${sourceName}; no readable excerpt was available.`
 }
 
 function noisyCaptureText(value: string) {

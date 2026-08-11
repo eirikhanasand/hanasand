@@ -2,6 +2,7 @@ import type { CollectedItem, RawCapture } from "../types.ts";
 import { hashContent, normalizeWhitespace, stableId } from "../utils.ts";
 import { defaultRetentionClassForCapture } from "../storage/retention.ts";
 import { detectLanguageHooks, EXTRACTOR_VERSION } from "./extractors.ts";
+import { normalizeCapturedContent } from "./captureNormalization.ts";
 
 export function buildRawCapture(item: CollectedItem): RawCapture {
   const contentHash = item.contentHash || hashContent(item.rawText);
@@ -11,6 +12,7 @@ export function buildRawCapture(item: CollectedItem): RawCapture {
     : `${item.sourceId}:${item.url}:${item.contentHash}`);
   const sourceType = item.metadata?.sourceType ?? item.metadata?.adapter;
   const retentionClass = item.sensitive ? "restricted_metadata" : defaultRetentionClassForCapture({ sourceType, mediaType: item.html ? "text/html" : "text/plain" });
+  const normalizedEvidence = normalizeCapturedContent({ html: item.html, rawText: item.rawText, metadata: item.metadata, url: item.url, publishedAt: item.publishedAt, sensitive: item.sensitive, storageKind: item.sensitive ? "metadata_only" : undefined });
 
   return {
     id: captureId,
@@ -27,6 +29,7 @@ export function buildRawCapture(item: CollectedItem): RawCapture {
     body: item.sensitive ? undefined : item.html ?? item.rawText,
     metadata: {
       ...item.metadata,
+      normalizedEvidence,
       ...(item.title ? { title: item.title } : {}),
       extractorVersion: EXTRACTOR_VERSION,
       languageHooks: detectLanguageHooks(item.rawText, item.language),

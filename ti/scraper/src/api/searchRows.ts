@@ -3,10 +3,12 @@ import { sanitizeDwmCustomerText } from "../product/dwmCustomerDisplay.ts";
 import { minimizeTelegramPii } from "../adapters/telegramPublicHelpers.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
 import { tagsFor } from "./searchTags.ts";
+import { normalizeCapturedContent } from "../pipeline/captureNormalization.ts";
 
 export function rowFromCapture(capture: any, source?: any) {
   const metadataOnly = isMetadataOnlyCapture(capture);
-  const rawSummary = cleanSearchText(metadataOnly ? safeMetadataText(capture.metadata) : capture.body ?? capture.rawText ?? capture.metadata?.safeExcerpt ?? "");
+  const normalized = capture.metadata?.normalizedEvidence ?? normalizeCapturedContent(capture);
+  const rawSummary = cleanSearchText(metadataOnly ? safeMetadataText(capture.metadata) : normalized.excerpt || normalized.text || capture.body ?? capture.rawText ?? capture.metadata?.safeExcerpt ?? "");
   const title = cleanTitle(capture.title, rawSummary, source?.name);
   const summary = cleanActivitySummary(rawSummary, title, source?.name);
   const url = safePublicSearchUrl(capture.url, capture.metadata);
