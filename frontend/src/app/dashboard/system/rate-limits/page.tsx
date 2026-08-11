@@ -13,23 +13,18 @@ export default async function RateLimitsPage() {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard/system/rate-limits%26expired=true')
     }
 
-    const response = await fetch(`${config.url.api}/rate-limit/settings`, {
-        headers: {
-            Authorization: `Bearer ${decodeURIComponent(token)}`,
-            id,
-        },
-        cache: 'no-store',
-    }).catch(() => null)
-
-    const payload = response?.ok ? await response.json().catch(() => null) : null
-    const apiKeysResponse = await fetch(`${config.url.api}/rate-limit/keys`, {
-        headers: {
-            Authorization: `Bearer ${decodeURIComponent(token)}`,
-            id,
-        },
-        cache: 'no-store',
-    }).catch(() => null)
-    const apiKeysPayload = apiKeysResponse?.ok ? await apiKeysResponse.json().catch(() => null) : null
+    const headers = {
+        Authorization: `Bearer ${decodeURIComponent(token)}`,
+        id,
+    }
+    const [response, apiKeysResponse] = await Promise.all([
+        fetch(`${config.url.api}/rate-limit/settings`, { headers, cache: 'no-store' }).catch(() => null),
+        fetch(`${config.url.api}/rate-limit/keys`, { headers, cache: 'no-store' }).catch(() => null),
+    ])
+    const [payload, apiKeysPayload] = await Promise.all([
+        response?.ok ? response.json().catch(() => null) : null,
+        apiKeysResponse?.ok ? apiKeysResponse.json().catch(() => null) : null,
+    ])
 
     return (
         <DashboardPage className='h-full'>
