@@ -69,14 +69,14 @@ export default async function TiAdminPage() {
                     state={latestCapture ? 'captured' : 'watching'}
                     stateTone={latestCapture ? 'ok' : 'neutral'}
                     primary={latestCapture?.title || 'Checking evidence sources'}
-                    secondary={latestCapture?.resultSummary || `${captures.length} stored captures ready for review`}
+                    secondary={latestCapture?.resultSummary || `${captures.length} stored captures from automated monitoring`}
                     footer={latestCapture ? `${latestCapture.actor} · ${shortTime(latestCapture.capturedAt)}` : 'Collectors are checking sources'}
                 />
             </section>
 
             <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-6'>
                 <Metric title='Executable sources' value={`${overview.sourceTotals.executable}/${overview.sourcePage.total}`} icon={<DatabaseZap className='h-4 w-4' />} />
-                <Metric title='Items to review' value={`${reviewDomains.length + candidateSources.length + failedRuns.length}`} tone={reviewDomains.length || candidateSources.length || failedRuns.length ? 'watch' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
+                <Metric title='Monitoring signals' value={`${reviewDomains.length + candidateSources.length + failedRuns.length}`} tone={reviewDomains.length || candidateSources.length || failedRuns.length ? 'watch' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
                 <Metric title='Stale sources' value={`${staleSources.length}`} tone={staleSources.length ? 'bad' : 'ok'} icon={<Clock3 className='h-4 w-4' />} />
                 <Metric title='Recent capture sample' value={`${captures.length}`} icon={<Camera className='h-4 w-4' />} />
                 <Metric title='Actor worker' value={operationalStateLabel(enrichment.worker.state)} tone={enrichment.worker.state === 'running' ? 'ok' : enrichment.worker.state === 'error' || enrichment.worker.state === 'unavailable' ? 'bad' : 'watch'} icon={<Radar className='h-4 w-4' />} />
@@ -88,7 +88,7 @@ export default async function TiAdminPage() {
                     <div className='flex flex-wrap items-center justify-between gap-3'>
                         <div>
                             <h2 className='text-base font-semibold'>Next actions</h2>
-                            <p className='mt-1 text-sm text-ui-muted'>{actionItems.length} items sorted by operator impact.</p>
+                            <p className='mt-1 text-sm text-ui-muted'>{actionItems.length} signals from automated monitoring.</p>
                         </div>
                         <div className='flex flex-wrap gap-2 text-xs font-semibold'>
                             <StatusPill label={`${queuedRuns.length} running/queued`} tone={queuedRuns.length ? 'watch' : 'neutral'} />
@@ -101,9 +101,9 @@ export default async function TiAdminPage() {
                     <table className='min-w-full divide-y divide-ui-border text-sm'>
                         <thead className='bg-ui-canvas text-left text-xs font-semibold uppercase text-ui-muted'>
                             <tr>
-                                <th className='px-4 py-3'>Priority</th>
+                                <th className='px-4 py-3'>Signal</th>
                                 <th className='px-4 py-3'>Item</th>
-                                <th className='px-4 py-3'>Reason</th>
+                                <th className='px-4 py-3'>Details</th>
                                 <th className='px-4 py-3'>State</th>
                                 <th className='px-4 py-3 text-right'>Open</th>
                             </tr>
@@ -125,7 +125,7 @@ export default async function TiAdminPage() {
                             ))}
                             {!actionItems.length ? (
                                 <tr>
-                                    <td colSpan={5} className='px-4 py-8 text-center text-sm text-ui-muted'>No items need review right now. Retry and approval rows appear here.</td>
+                                    <td colSpan={5} className='px-4 py-8 text-center text-sm text-ui-muted'>Automated monitoring is clear; new signals are recorded automatically.</td>
                                 </tr>
                             ) : null}
                         </tbody>
@@ -175,7 +175,7 @@ export default async function TiAdminPage() {
                 <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                     <PanelTitle title='Delivery state' actionHref='/dashboard/dwm' actionLabel='Dark web cases' />
                     <div className='grid gap-3 p-4'>
-                        <DeliveryRow icon={<ShieldCheck className='h-4 w-4' />} title='Matches to review' value={`${reviewDomains.length} entity matches`} tone={reviewDomains.length ? 'watch' : 'ok'} />
+                        <DeliveryRow icon={<ShieldCheck className='h-4 w-4' />} title='Matches detected' value={`${reviewDomains.length} entity matches`} tone={reviewDomains.length ? 'watch' : 'ok'} />
                         <DeliveryRow icon={<Webhook className='h-4 w-4' />} title='Webhook delivery' value='Delivery records are linked to dark web alerts' tone='neutral' />
                         <DeliveryRow icon={<Send className='h-4 w-4' />} title='Customer routing' value={`${domains.length} monitored entities`} tone='neutral' />
                         <DeliveryRow icon={<Activity className='h-4 w-4' />} title='Latest collection' value={latestRun ? `${operationalStateLabel(latestRun.status)} · ${formatTiDate(latestRun.startedAt)}` : 'Selecting source'} tone={latestRun?.status === 'failed' ? 'bad' : latestRun ? 'ok' : 'neutral'} />

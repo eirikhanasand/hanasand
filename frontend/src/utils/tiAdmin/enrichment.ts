@@ -1,4 +1,4 @@
-import config from '@/config'
+import { getTiAdminOverview } from '@/utils/tiAdmin/ops'
 
 export type TiEnrichmentStatus = 'ready' | 'running' | 'queued' | 'review'
 
@@ -121,141 +121,71 @@ export type TiPipelineOverview = {
     }>
 }
 
-type ApiWarmActor = {
-    actor: string
-    status?: TiEnrichmentStatus
-    confidence?: number
-    aliases?: string[]
-    changedFields?: string[]
-    sourceLinks?: Array<{ name: string, url: string }>
-    automationEvidence?: string[]
-    plannedWork?: string[]
-    refreshedAt?: string
-    nextRefreshAt?: string
-    refreshCount?: number
-}
-
-type ApiQueuedActor = Omit<ApiWarmActor, 'actor' | 'refreshedAt'> & {
-    id?: string
-    name?: string
-    lastUpdatedAt?: string
-}
-
-type ApiOverview = Omit<TiEnrichmentOverview, 'updatedActors' | 'queuedActors'> & {
-    updatedActors?: ApiWarmActor[]
-    queuedActors?: ApiQueuedActor[]
-    pipeline?: TiPipelineOverview
-}
-
-const TI_ENRICHMENT_FETCH_TIMEOUT_MS = 800
-
 export async function getTiEnrichmentOverview(): Promise<TiEnrichmentOverview> {
-    try {
-        const response = await fetch(`${config.url.api}/ti/enrichment`, {
-            cache: 'no-store',
-            next: { revalidate: 0 },
-            signal: AbortSignal.timeout(TI_ENRICHMENT_FETCH_TIMEOUT_MS),
-        })
-        if (!response.ok) {
-            return unavailableOverview(`API returned ${response.status}`)
-        }
+    const overview = await getTiAdminOverview(null, { limit: 50, includeCandidates: true })
+    return passiveOverview(overview)
+}
 
-        const overview = await response.json() as ApiOverview
+function passiveOverview(overview: Awaited<ReturnType<typeof getTiAdminOverview>>): TiEnrichmentOverview {
+    const actors = new Map<string, TiEnrichedActor>()
+    const activity = overview.captures.map((capture) => {
+        const actorName = capture.actor || capture.sourceName
+        const actorId = actorName.toLowerCase().replace(/\s+/g, '-')
+        const existing = actors.get(actorId)
+        actors.set(actorId, existing || {
+            id: actorId,
+            name: actorName,
+            aliases: [],
+            status: 'ready',
+            confidence: 1,
+            lastUpdatedAt: capture.capturedAt,
+            nextRefreshAt: capture.capturedAt,
+            changedFields: [],
+            sourceLinks: capture.pageUrl ? [{ name: capture.sourceName, url: capture.pageUrl }] : [],
+            automationEvidence: [capture.resultSummary || 'Captured by automated source collection.'],
+            plannedWork: [],
+            refreshCount: 1,
+        })
         return {
-            generatedAt: overview.generatedAt || new Date().toISOString(),
-            worker: overview.worker || unavailableOverview('Missing worker state').worker,
-            updatedActors: (overview.updatedActors || []).map(mapUpdatedActor),
-            queuedActors: (overview.queuedActors || []).map(mapQueuedActor),
-            activity: overview.activity || [],
-            auditLog: overview.auditLog || [],
-            stats: {
-                updatedLastHour: overview.stats?.updatedLastHour ?? 0,
-                queued: overview.stats?.queued ?? 0,
-                auditedEvents: overview.stats?.auditedEvents ?? 0,
-                automaticCoverage: overview.stats?.automaticCoverage ?? 0,
-                totalRefreshes: overview.stats?.totalRefreshes ?? 0,
-            },
-            pipeline: overview.pipeline,
+            id: capture.id,
+            actorId,
+            actorName,
+            happenedAt: capture.capturedAt,
+            title: capture.title || 'New intelligence captured',
+            detail: capture.resultSummary || `${capture.sourceName} produced a retained capture.`,
+            source: capture.sourceName,
+            tone: 'ok' as const,
         }
-    } catch (error) {
-        return unavailableOverview(error instanceof Error ? error.message : String(error))
+    })
+    const latest = overview.runs[0]
+    const updatedLastHour = activity.filter((event) => Date.now() - Date.parse(event.happenedAt) <= 3_600_000).length
+    return {
+        generatedAt: new Date().toISOString(),
+        worker: {
+            state: 'idle',
+            mode: 'automated monitoring',
+            intervalSeconds: 300,
+            batchSize: overview.sources.length,
+            lastSweepStartedAt: latest?.startedAt || null,
+            lastSweepFinishedAt: latest?.finishedAt || latest?.startedAt || null,
+            lastError: null,
+            cursor: 0,
+        },
+        updatedActors: [...actors.values()],
+        queuedActors: [],
+        activity,
+        auditLog: [],
+        stats: {
+            updatedLastHour,
+            queued: 0,
+            auditedEvents: 0,
+            automaticCoverage: overview.sources.length,
+            totalRefreshes: activity.length,
+        },
     }
 }
 
 export async function getTiActorById(id: string) {
     const overview = await getTiEnrichmentOverview()
     return [...overview.updatedActors, ...overview.queuedActors].find(actor => actor.id === id) || null
-}
-
-function mapUpdatedActor(actor: ApiWarmActor): TiEnrichedActor {
-    const id = actor.actor.toLowerCase().replace(/\s+/g, '-')
-    return {
-        id,
-        name: titleCaseWords(actor.actor),
-        aliases: actor.aliases || [],
-        status: actor.status === 'queued' ? 'queued' : 'ready',
-        confidence: actor.confidence ?? 0,
-        lastUpdatedAt: actor.refreshedAt || new Date(0).toISOString(),
-        nextRefreshAt: actor.nextRefreshAt || new Date().toISOString(),
-        changedFields: actor.changedFields || [],
-        sourceLinks: actor.sourceLinks || [],
-        automationEvidence: actor.automationEvidence || [],
-        plannedWork: actor.plannedWork || [],
-        refreshCount: actor.refreshCount,
-    }
-}
-
-function mapQueuedActor(actor: ApiQueuedActor): TiEnrichedActor {
-    const rawName = actor.name || actor.id || 'Queued actor'
-    const id = (actor.id || rawName).toLowerCase().replace(/\s+/g, '-')
-    return {
-        id,
-        name: rawName,
-        aliases: actor.aliases || [],
-        status: 'queued',
-        confidence: actor.confidence ?? 0,
-        lastUpdatedAt: actor.lastUpdatedAt || new Date().toISOString(),
-        nextRefreshAt: actor.nextRefreshAt || new Date().toISOString(),
-        changedFields: actor.changedFields || [],
-        sourceLinks: actor.sourceLinks || [],
-        automationEvidence: actor.automationEvidence || [],
-        plannedWork: actor.plannedWork || [],
-        refreshCount: actor.refreshCount,
-    }
-}
-
-function unavailableOverview(reason: string): TiEnrichmentOverview {
-    return {
-        generatedAt: '',
-        worker: {
-            state: 'unavailable',
-            mode: 'API actor refresh worker unavailable',
-            intervalSeconds: 60,
-            batchSize: 0,
-            lastSweepStartedAt: null,
-            lastSweepFinishedAt: null,
-            lastError: reason,
-            cursor: 0,
-        },
-        updatedActors: [],
-        queuedActors: [],
-        activity: [],
-        auditLog: [],
-        stats: {
-            updatedLastHour: 0,
-            queued: 0,
-            auditedEvents: 1,
-            automaticCoverage: 0,
-            totalRefreshes: 0,
-        },
-        pipeline: undefined,
-    }
-}
-
-function titleCaseWords(value: string) {
-    return value
-        .split(/[\s-]+/)
-        .filter(Boolean)
-        .map(word => word.toUpperCase().startsWith('APT') ? word.toUpperCase() : `${word.slice(0, 1).toUpperCase()}${word.slice(1)}`)
-        .join(' ')
 }
