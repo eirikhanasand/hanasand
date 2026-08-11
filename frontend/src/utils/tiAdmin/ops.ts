@@ -87,6 +87,7 @@ export type TiAdminRun = {
     captures: number
     screenshots: number
     message: string
+    trigger: 'automated' | 'manual' | 'unknown'
 }
 
 export type TiAdminOverview = {
@@ -429,6 +430,7 @@ function toRun(record: ApiPayload, sources: Map<string, TiAdminSource>): TiAdmin
         captures: numberValue(record.captures, record.captureCount),
         screenshots: numberValue(record.screenshots, record.screenshotCount),
         message: textValue(record.message, record.error, `Collection run ${textValue(record.status, 'recorded')}.`),
+        trigger: textValue(record.trigger, objectValue(record.metadata).trigger, '') === 'automated' ? 'automated' : textValue(record.trigger, objectValue(record.metadata).trigger, '') === 'manual' ? 'manual' : 'unknown',
     }
 }
 

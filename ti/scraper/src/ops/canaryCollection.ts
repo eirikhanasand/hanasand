@@ -36,7 +36,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
     const runError = { code: "storage_backpressure", message: storageFailure.message };
     try {
       options.store.savePlan?.({ id: planId, tenantId: options.tenantId, requestId: "req_public_canary", createdAt: generatedAt, tasks: [], request: { query: canaryQueries }, reviewRequired: [], rejected: [], audit: [] });
-      options.store.saveRun?.({ id: runId, tenantId: options.tenantId, planId, requestId: "req_public_canary", status: "failed", createdAt: generatedAt, startedAt: generatedAt, completedAt: generatedAt, updatedAt: generatedAt, taskCount: 0, sourceCount: 0, captureCount: 0, incidentCount: 0, failedTaskCount: 0, error: runError.message });
+      options.store.saveRun?.({ id: runId, tenantId: options.tenantId, planId, requestId: "req_public_canary", trigger: options.trigger ?? "automated", status: "failed", createdAt: generatedAt, startedAt: generatedAt, completedAt: generatedAt, updatedAt: generatedAt, taskCount: 0, sourceCount: 0, captureCount: 0, incidentCount: 0, failedTaskCount: 0, error: runError.message });
     } catch {
       // Preserve the original storage error; the existing write queue will retry queued records.
     }
@@ -102,10 +102,10 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const backpressureState = availableQueueSlots >= maxTasks ? "accepting" : "throttled";
   if (!resumedTasks.length) {
     options.store.savePlan?.({ id: planId, tenantId: options.tenantId, requestId: "req_public_canary", createdAt: generatedAt, tasks, request: { query: canaryQueries }, reviewRequired: [], rejected: activation.rejected, audit: [] });
-    options.store.saveRun?.({ id: runId, tenantId: options.tenantId, planId, requestId: "req_public_canary", status: "running", createdAt: generatedAt, startedAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, reviewTaskCount: 0, rejectedSourceCount: activation.rejected.length, captureCount: 0, incidentCount: 0 });
+    options.store.saveRun?.({ id: runId, tenantId: options.tenantId, planId, requestId: "req_public_canary", trigger: options.trigger ?? "automated", status: "running", createdAt: generatedAt, startedAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, reviewTaskCount: 0, rejectedSourceCount: activation.rejected.length, captureCount: 0, incidentCount: 0 });
     for (const task of tasks) options.frontier.enqueueTask(task);
   } else {
-    options.store.saveRun?.({ ...resumedRun, id: runId, tenantId: resumedRun?.tenantId ?? options.tenantId, planId, requestId: "req_public_canary", status: "running", createdAt: resumedRun?.createdAt ?? generatedAt, startedAt: resumedRun?.startedAt ?? generatedAt, updatedAt: generatedAt });
+    options.store.saveRun?.({ ...resumedRun, id: runId, tenantId: resumedRun?.tenantId ?? options.tenantId, planId, requestId: "req_public_canary", trigger: resumedRun?.trigger ?? options.trigger ?? "automated", status: "running", createdAt: resumedRun?.createdAt ?? generatedAt, startedAt: resumedRun?.startedAt ?? generatedAt, updatedAt: generatedAt });
   }
   const counters: any = {
     leasedTaskCount: Number(resumedRun?.leasedTaskCount ?? 0),
@@ -129,7 +129,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const remainingQueuedTaskCount = options.frontier.snapshot().map(frontierTask).filter((task: any) => task.runId === runId).length;
   const runStatus = remainingQueuedTaskCount ? "queued" : counters.failedTaskCount && counters.completedTaskCount ? "degraded" : counters.failedTaskCount ? "failed" : "completed";
   const completedAt = options.now?.() ?? nowIso();
-  options.store.saveRun?.({ ...resumedRun, id: runId, tenantId: resumedRun?.tenantId ?? options.tenantId, planId, requestId: "req_public_canary", status: runStatus, createdAt: resumedRun?.createdAt ?? generatedAt, startedAt: resumedRun?.startedAt ?? generatedAt, completedAt: runStatus === "queued" ? undefined : completedAt, updatedAt: completedAt, taskCount: resumedRun?.taskCount ?? tasks.length, sourceCount: resumedRun?.sourceCount ?? scheduledSourceIds.size, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, duplicateCaptureCount: counters.duplicateCaptureCount, leasedTaskCount: counters.leasedTaskCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, retryScheduledCount: counters.retryScheduledCount, retryExhaustedCount: counters.retryExhaustedCount, error: errors[0]?.message });
+  options.store.saveRun?.({ ...resumedRun, id: runId, tenantId: resumedRun?.tenantId ?? options.tenantId, planId, requestId: "req_public_canary", trigger: resumedRun?.trigger ?? options.trigger ?? "automated", status: runStatus, createdAt: resumedRun?.createdAt ?? generatedAt, startedAt: resumedRun?.startedAt ?? generatedAt, completedAt: runStatus === "queued" ? undefined : completedAt, updatedAt: completedAt, taskCount: resumedRun?.taskCount ?? tasks.length, sourceCount: resumedRun?.sourceCount ?? scheduledSourceIds.size, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, duplicateCaptureCount: counters.duplicateCaptureCount, leasedTaskCount: counters.leasedTaskCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, retryScheduledCount: counters.retryScheduledCount, retryExhaustedCount: counters.retryExhaustedCount, error: errors[0]?.message });
   return { generatedAt, tenantId: options.tenantId, mode: "production_canary", status: runStatus, runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, retiredSourceCount: productivity.retired.length, supersededTaskCount, activeSourceCount: scheduledSourceIds.size, deferredDueSourceCount: allDue.length - scheduledSourceIds.size, queuedTaskCount: tasks.length, queueLimit, availableQueueSlots, backpressureState, ...counters, remainingQueuedTaskCount, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
 }
 
@@ -232,14 +232,14 @@ function retainedCveId(capture: any) {
 
 export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { enabled?: boolean; intervalSeconds?: number; queueLimit?: number; onCycle?: (r: any) => void; onError?: (e: unknown) => void }): CanaryCollectionLoopHandle {
   const state = detachedState(options.now?.() ?? nowIso(), options.queueLimit ?? 500), intervalMs = Math.max(5, options.intervalSeconds ?? 300) * 1000; let timer: Timer | undefined, startupTimer: Timer | undefined, active: Promise<void> | undefined;
-  const cycle = () => {
+  const cycle = (trigger: "automated" | "manual" = "automated") => {
     if (!state.enabled || active) return active ?? Promise.resolve();
     state.running = true; state.lastCycleAt = nowIso();
     active = (async () => {
       try {
         const sourceFeedDiscovery = await runSourceFeedDiscoveryCycle(options, options.now?.() ?? nowIso());
         await (options.store as any).flush?.();
-        const result = await runCanaryCollectionCycle(options);
+        const result = await runCanaryCollectionCycle({ ...options, trigger });
         const watchlistDiscovery = options.scheduleWatchlistDiscovery === false
           ? { scheduledRunCount: 0, skippedRunCount: 0, reason: "disabled_for_scheduler_lane" }
           : await scheduleWatchlistDiscoveryRuns({ ...options, awaitWatchlistDiscoveryExecution: false }, options.now?.() ?? nowIso());
@@ -264,9 +264,9 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
   Object.assign(state, { supervisorAttached: true, enabled: options.enabled !== false, intervalSeconds: options.intervalSeconds ?? 300, maxSources: limits.maxSources, maxTasks: limits.maxTasks, maxConcurrentTasks: limits.maxConcurrentTasks, maxItemsPerTask: options.maxItemsPerTask ?? 40, maxBytes: options.maxBytes ?? 512_000, timeoutMs: options.timeoutMs ?? 30_000, queueLimit: options.queueLimit ?? 500, activateSources: Boolean(options.activateSources) });
   if (state.enabled) {
     state.nextCycleAt = new Date(Date.now() + 1_000).toISOString();
-    startupTimer = setTimeout(cycle, 1_000);
+    startupTimer = setTimeout(() => cycle("automated"), 1_000);
   }
-  timer = setInterval(cycle, intervalMs);
+  timer = setInterval(() => cycle("automated"), intervalMs);
   return {
     stop: async () => { if (startupTimer) clearTimeout(startupTimer); if (timer) clearInterval(timer); state.enabled = false; state.nextCycleAt = undefined; await active; },
     getState: () => ({ ...state }),
@@ -278,7 +278,7 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
       state.nextCycleAt = enabled ? nextAnchoredCycleAt(state.startedAt, intervalMs) : undefined;
       return { ...state };
     },
-    runOnce: () => cycle()
+    runOnce: () => cycle("manual")
   };
 }
 export async function runLeasedTask(options: any, runId: string, generatedAt: string, fetcher: any, mode: string, maxBytes: number, counters: any, latestCaptureIds: string[], errors: any[], completeEvaluationCaptures: any[] = []) {
