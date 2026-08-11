@@ -8,6 +8,23 @@ export function safeAlertSummary(alert: AlertDisplayInput) {
     return formatClaimSummary(alert.claimSummary, alert)
 }
 
+/** Customer-facing finding copy. Processing state belongs in the detail view, not the headline. */
+export function customerAlertSummary(alert: Pick<AlertDisplayInput, 'actor' | 'artifactType' | 'company' | 'matchedTerm' | 'sourceFamily'> & { observedMatchSummary?: string, evidenceSummary?: { evidenceCount?: number } }) {
+    const observed = redactDisplayText(alert.observedMatchSummary || '').replace(/\s+/g, ' ').trim()
+    if (observed && !/\b(reviewed|corroborated|parser|candidate|queue|worker|governance|evidence boundary)\b/i.test(observed)) return truncateDisplayText(observed)
+    const subject = alert.company || alert.matchedTerm.value
+    const source = stateLabel(alert.sourceFamily)
+    const count = alert.evidenceSummary?.evidenceCount ?? 0
+    return `${subject} was mentioned in ${source} intelligence${count ? ` (${count} captured record${count === 1 ? '' : 's'})` : ''}. Open the finding to see the source, publication time, collection time, and supporting excerpt.`
+}
+
+export function friendlyExtractionMessage(value?: string) {
+    const normalized = (value || '').toLowerCase()
+    if (!normalized || normalized.includes('not extracted')) return 'No actor entity identified in this capture.'
+    if (normalized.includes('parser') || normalized.includes('dynamic')) return 'The page contained dynamic application data that could not be interpreted into structured fields.'
+    return value || 'Structured fields were not available for this capture.'
+}
+
 export function formatClaimSummary(value: string, alert: Omit<AlertDisplayInput, 'claimSummary'>) {
     const clean = redactDisplayText(value || '').replace(/\s+/g, ' ').trim()
     const jsonLike = looksJsonLike(clean)
@@ -28,6 +45,8 @@ export function formatClaimSummary(value: string, alert: Omit<AlertDisplayInput,
 export function safeEvidenceExcerpt(value: string) {
     const clean = redactDisplayText(value || '').replace(/\s+/g, ' ').trim()
     if (!clean) return 'Evidence metadata is available.'
+    if (/not extracted/i.test(clean)) return 'No actor entity identified in this capture.'
+    if (/parser|dynamic application data/i.test(clean)) return 'The page contained dynamic application data that could not be interpreted into structured fields.'
 
     if (looksJsonLike(clean)) {
         const fields = collectJsonFields(clean)

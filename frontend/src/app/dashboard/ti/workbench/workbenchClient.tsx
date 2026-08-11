@@ -1000,7 +1000,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                             <span className='truncate text-sm font-semibold text-ui-text'>{item.title}</span>
                                             <span className={severityClass(item.severity)}>{item.severity}</span>
                                         </div>
-                                        <p className='mt-1 truncate text-xs text-ui-muted'>{item.queue} · {ownerLabel(item.owner)}</p>
+                                        <p className='mt-1 truncate text-xs text-ui-muted'>{item.company || item.matchedTerm} · {relativeTime(item.updatedAt)}</p>
                                         <p className='mt-2 line-clamp-2 wrap-break-word text-xs leading-5 text-ui-muted'>{item.subtitle}</p>
                                         <div className='mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-ui-muted'>
                                             <span className='rounded-full border border-ui-border bg-ui-canvas px-2 py-0.5 text-ui-muted'>{label(item.status)}</span>
@@ -2948,7 +2948,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                         {item.persistent && <span className='rounded-full bg-ui-success/10 px-2 py-0.5 text-xs font-semibold text-ui-success'>persistent workflow</span>}
                     </div>
                     <h2 className={`${compact ? 'mt-2 text-xl' : 'mt-3 text-2xl'} font-semibold tracking-normal text-ui-text`}>{item.title}</h2>
-                    <p className='mt-1 text-sm text-ui-muted'>{item.queue} · {item.routeLabel} · {relativeTime(item.updatedAt)}</p>
+                    <p className='mt-1 text-sm text-ui-muted'>Mentioned: {item.company || item.matchedTerm} · Found {relativeTime(item.updatedAt)}</p>
                 </div>
                 <div className='grid gap-1 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-xs text-ui-muted'>
                     <span className='font-semibold text-ui-text'>{effectiveOwner}</span>
@@ -3860,12 +3860,6 @@ function WorkbenchStat({ icon, label: statLabel, value, detail, tone, className 
             <p className='mt-0.5 truncate text-xs text-ui-muted'>{detail}</p>
         </div>
     )
-}
-
-function ownerLabel(value: string) {
-    if (!value || value === 'source-ops') return 'triage'
-    if (value === 'unassigned') return 'unassigned'
-    return value
 }
 
 function filterCases(cases: WorkbenchCase[], filter: QueueFilter, query: string) {

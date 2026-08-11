@@ -1,11 +1,11 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, RotateCcw, Send, ShieldCheck, SlidersHorizontal, UserRound, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmAlertAnalystAction, DwmProductSnapshot } from '@/utils/dwm/product'
-import { safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
+import { customerAlertSummary, safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
 import { dwmNextOperatorAction, type DwmNextOperatorActionKind } from '@/utils/dwm/nextOperatorAction'
 import type { PublicTiHandoffDecodeResult } from '@/utils/ti/actorWorkbench'
 import { DwmWorkflowActions } from './dwm-workflow-actions'
@@ -182,7 +182,6 @@ type DataHealthItem = {
 
 type QueueFilter = 'active' | 'ready' | 'critical' | 'source' | 'high_confidence' | 'fresh' | 'pending_delivery' | 'reviewing' | 'delivered' | 'muted' | 'all'
 type InvestigationTab = 'evidence' | 'entities' | 'sources' | 'delivery'
-const DWM_QUEUE_PREVIEW_ROWS = 5
 const DWM_TIMELINE_PREVIEW_ROWS = 4
 const DWM_RECOVERY_PREVIEW_ROWS = 3
 const DWM_DELIVERY_PREVIEW_ROWS = 3
@@ -209,6 +208,8 @@ export function DwmAnalystPortal({
     const [selectedId, setSelectedId] = useState(initialAlertId && alerts.some(alert => alert.id === initialAlertId) ? initialAlertId : alerts[0]?.id ?? '')
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [localDeliveries, setLocalDeliveries] = useState<DeliveryItem[]>(initialDeliveries)
+    const [refreshVersion, setRefreshVersion] = useState(0)
+    const pendingInitialAlertId = useRef(initialAlertId)
     const [queueFilter, setQueueFilter] = useState<QueueFilter>(() => normalizeQueueFilter(searchParams.get('filter')))
     const [queueQuery] = useState(() => searchParams.get('q')?.slice(0, 120) ?? '')
     const queue = useMemo(() => filterAlerts(orderAlerts(alerts), queueFilter, queueQuery), [alerts, queueFilter, queueQuery])
@@ -218,8 +219,8 @@ export function DwmAnalystPortal({
     const activeSourceCount = operations?.counts.activeSourceCount ?? 0
     const sourceCount = operations?.counts.sourceCount ?? 0
     const sharedCaptureCount = operations?.counts.captureCount ?? latestCaptures.length
-    const tenantRunCaptureCount = operations?.latestRun?.captureCount ?? 0
-    const watchlistMatchCount = view === 'cases' ? 0 : operations?.counts.watchlistMatchCount || latestCaptureWatchlistMatchCount(latestCaptures) || alertWatchlistMatchCount(alerts)
+    const tenantRunCaptureCount = operations?.latestRun?.captureCount || operations?.counts.captureCount || 0
+    const watchlistMatchCount = operations?.counts.watchlistMatchCount || latestCaptureWatchlistMatchCount(latestCaptures) || alertWatchlistMatchCount(alerts)
     const watchTermCount = snapshot.watchlist.length
     const webhookState = deliverySummaryLabel(localDeliveries)
     const workflowTelemetry = {
@@ -433,61 +434,8 @@ function AlertReviewPanel({ alerts, busyAction, onOpenCase, organizationId }: {
                                     </button>
                                 )}
                             </div>
-                        </div>
-                        <div className='max-h-[480px] overflow-auto'>
-                            {queue.length ? visibleQueue.map(alert => (
-                                <button
-                                    key={alert.id}
-                                    type='button'
-                                    onClick={() => selectAlert(alert)}
-                                    className={`grid w-full gap-1 border-b border-ui-border px-3 py-2 text-left transition last:border-b-0 ${selectedAlert?.id === alert.id ? 'bg-ui-panel' : 'hover:bg-ui-panel'}`}
-                                >
-                                    <div className='flex min-w-0 items-center justify-between gap-2'>
-                                        <span className='truncate text-sm font-semibold text-ui-text'>{alert.company}</span>
-                                        <span className={severityClass(alert.severity)}>{alert.severity}</span>
-                                    </div>
-                                    <p className='truncate text-xs font-semibold text-ui-muted'>Watched term: {alert.matchedTerm.value}</p>
-                                    <p className='line-clamp-1 text-xs leading-5 text-ui-muted'>{safeAlertSummary(alert)}</p>
-                                    <span className='flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 text-[11px] leading-4 text-ui-muted'>
-                                        <span>{stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)}</span>
-                                        <span className={alert.routingContext?.urgency === 'immediate' || alert.severity === 'critical' ? 'font-semibold text-ui-danger' : ''}>{stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))}</span>
-                                        <span>{alert.evidenceSummary?.evidenceCount ?? alert.evidence.length} evidence</span>
-                                        {alert.matchTiming?.kind === 'historical_backfill' && <span className='font-semibold text-ui-warning'>Historical match</span>}
-                                        <span>{relativeTimeLabel(alert.lastSeenAt || alert.evidenceSummary?.lastObservedAt || alert.firstSeenAt)}</span>
-                                    </span>
-                                </button>
-                            )) : (
-                                <div className='rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 text-sm leading-6 text-ui-muted'>
-                                    {alerts.length ? 'No attacks match the current filters.' : 'No alert is waiting for review. Monitoring stays live while watchlist terms listen for new captures.'}
-                                </div>
-                            )}
-                            {queue.length > visibleQueue.length && (
-                                <p className='px-2 py-1 text-xs leading-5 text-ui-muted'>Narrow the search or filters to see more matching attacks.</p>
-                            )}
-                        </div>
-                    </aside>
-
-                    <main className='order-1 min-w-0 bg-ui-panel xl:order-none'>
-                        {selectedAlert ? (
-                            <CaseWorkspace
-                                key={`${tenantId}:${selectedAlert.id}`}
-                                alert={selectedAlert}
-                                deliveries={selectedDeliveries}
-                                sourceCoverage={snapshot.sourceCoverage}
-                                sourceHealth={operations?.sourceHealth ?? []}
-                                busyAction={busyAction}
-                                actionMessage={message}
-                                onUpdate={updateAlert}
-                                onOpenCase={openCase}
-                                onReplay={replayAlert}
-                                onTest={testDelivery}
-                                onSend={sendAlert}
-                            />
-                        ) : (
-                            <NoCaseWorkspace latestCaptures={latestCaptures} workflowActions={workflowActions} watchTermCount={watchTermCount} dataHealth={dataHealth} />
-                        )}
-                    </main>
-
+                        )
+                    })}
                 </div>
             )}
         </section>
@@ -524,8 +472,9 @@ function CaseOverview({ organizationId, state, alerts, operations, isAdmin }: { 
                 {state.status === 'loading' && <div className='flex min-h-56 items-center justify-center px-4 py-16 text-sm text-ui-muted'>Loading cases…</div>}
                 {state.status === 'error' && <div className='flex min-h-56 items-center justify-center px-4 py-16 text-sm text-ui-danger'>{state.error || 'Cases unavailable.'}</div>}
                 {state.status === 'ready' && !state.rows.length && (
-                    <div className='flex min-h-40 items-center justify-center px-4 py-12 text-center text-ui-muted' data-dwm-cases-empty='true'>
+                    <div className='flex min-h-56 flex-col items-center justify-center gap-1 px-4 py-16 text-center text-ui-muted' data-dwm-cases-empty='true'>
                         <p className='font-semibold text-ui-text'>No cases.</p>
+                        <p className='max-w-md text-sm leading-6'>No alert is waiting for review. Cases appear after a scoped alert is retained and opened for investigation.</p>
                     </div>
                 )}
                 {state.status === 'ready' && state.rows.length > 0 && filteredRows.length === 0 && <div className='px-4 py-10 text-center text-sm text-ui-muted'>No cases match the current filters.</div>}
@@ -549,6 +498,7 @@ function CaseOverview({ organizationId, state, alerts, operations, isAdmin }: { 
                                     const reviewState = alert?.reviewState || row.reviewState
                                     return (
                                         <tr key={caseId} className='align-top text-ui-text' data-dwm-case-row='true'>
+
                                             <td className='px-4 py-3'>
                                                 <Link href={caseDetailHref(caseId, row.alertId, row.organizationId || organizationId, 'case_overview')} className='font-semibold text-ui-primary underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
                                                     {row.title}
@@ -708,6 +658,26 @@ async function refreshDwmAlerts(
         setDataHealth(current => ({ ...current, alerts: { state: 'live', label: 'Alerts live', detail: `${savedAlerts.length} saved alert(s).` } }))
     } catch (error) {
         if (!isAbortError(error)) setDataHealth(current => ({ ...current, alerts: { state: 'error', label: 'Alerts unavailable', detail: requestFailureDetail(error) } }))
+    }
+}
+
+async function refreshCases(
+    params: URLSearchParams,
+    signal: AbortSignal,
+    setCasesState: Dispatch<SetStateAction<CasesState>>,
+) {
+    setCasesState({ status: 'loading', rows: [] })
+    try {
+        const response = await fetch(`/api/cases?${params.toString()}`, { cache: 'no-store', signal })
+        if (!response.ok) {
+            setCasesState({ status: 'error', rows: [], error: await responseProblem(response) })
+            return
+        }
+        const payload = await response.json() as { items?: CaseListItem[], cases?: CaseListItem[] }
+        const rows = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.cases) ? payload.cases : []
+        setCasesState({ status: 'ready', rows })
+    } catch (error) {
+        if (!isAbortError(error)) setCasesState({ status: 'error', rows: [], error: requestFailureDetail(error) })
     }
 }
 
@@ -957,12 +927,6 @@ function alertWatchlistMatchCount(alerts: PortalAlert[]) {
     return uniqueStrings(alerts.map(alert => alert.matchedTerm.value)).length
 }
 
-function captureRunLabel(runCaptureCount = 0, captureCount = 0, activeSourceCount = 0) {
-    if (runCaptureCount > 0) return `${runCaptureCount} captures`
-    if (captureCount > 0) return `${captureCount} captures`
-    return activeSourceCount ? 'collecting' : 'source'
-}
-
 function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAction, actionMessage, onUpdate, onOpenCase, onReplay, onTest, onSend }: {
     alert: PortalAlert
     deliveries: DeliveryItem[]
@@ -1002,7 +966,8 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAc
     const selectedEvidence = alert.evidence.find(item => item.id === selectedEvidenceId) ?? visibleEvidence[0] ?? alert.evidence[0]
     const [copiedHash, setCopiedHash] = useState('')
     const analystBrief = buildAnalystBrief(alert, evidenceSummary, routingContext, workflowContext)
-    const caseHref = workflowContext.casePath || (workflowContext.caseId ? caseDetailHref(workflowContext.caseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined)
+    const caseId = alertCaseId(alert)
+    const caseHref = caseId ? caseDetailHref(caseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined
     const timeline = buildTimeline(alert, deliveries)
     async function copyHash(value: string) {
         try {
@@ -1034,6 +999,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAc
 
             <WorkflowSpine
                 alert={alert}
+
                 deliveries={deliveries}
                 workflowContext={workflowContext}
                 evidenceSummary={evidenceSummary}
@@ -1141,7 +1107,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAc
             </section>
 
             <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-4 md:grid-cols-2'>
-                <CaseBrief label='What happened' value={safeAlertSummary(alert)} />
+                <CaseBrief label='What happened' value={customerAlertSummary(alert)} />
                 <CaseBrief label='Next action' value={alert.recommendedAction} />
                 {alert.workflowNote && <CaseBrief label='Latest note' value={alert.workflowNote} />}
                 <CaseBrief label='Delivery destination' value={`${stateLabel(alert.webhookDelivery.recommendedRoute)} · ${alert.webhookDelivery.dedupeKey ? 'deduplicated alert' : 'pending alert key'}`} />
@@ -1264,19 +1230,19 @@ function AnalystBriefPanel({ brief }: { brief: ReturnType<typeof buildAnalystBri
                     <h3 className='mt-1 wrap-break-word text-xl font-semibold tracking-normal text-ui-text'>{brief.headline}</h3>
                 </div>
                 <span className={brief.readyForCustomer ? 'rounded-full border border-ui-success/35 bg-ui-success/10 px-3 py-1 text-xs font-semibold text-ui-success' : 'rounded-full border border-ui-warning/35 bg-ui-warning/10 px-3 py-1 text-xs font-semibold text-ui-warning'}>
-                    {brief.readyForCustomer ? 'Customer-ready after review' : 'Review before customer update'}
+                    {brief.readyForCustomer ? 'Ready to send' : 'Needs a decision'}
                 </span>
             </div>
             <div className='grid gap-3 md:grid-cols-2 2xl:grid-cols-4'>
-                <BriefStep label='Observed fact' value={brief.observedFact} />
-                <BriefStep label='Source claim' value={brief.sourceClaim} />
-                <BriefStep label='Analyst inference' value={brief.analystInference} />
+                <BriefStep label='What happened?' value={brief.observedFact} />
+                <BriefStep label='What the source says' value={brief.sourceClaim} />
+                <BriefStep label='Why it matters' value={brief.analystInference} />
                 <BriefStep label='What to do next' value={brief.nextAction} />
             </div>
             <div className='grid gap-3 border-t border-ui-border pt-3 md:grid-cols-3'>
-                <BriefFact label='Evidence boundary' value={brief.evidenceBoundary} />
-                <BriefFact label='Source records' value={brief.sourceRecords} />
-                <BriefFact label='Action status' value={brief.workflowReadiness} />
+                <BriefFact label='Evidence available' value={brief.evidenceBoundary} />
+                <BriefFact label='Where and when' value={brief.sourceRecords} />
+                <BriefFact label='Customer action' value={brief.workflowReadiness} />
             </div>
         </section>
     )
@@ -1534,6 +1500,7 @@ function ExposureEntitiesPanel({ entities, selectedEntityKey, workflowContext, o
                     <p className='mt-0.5 text-xs text-ui-muted'>{entities.length} watched item{entities.length === 1 ? '' : 's'} tied to this case.</p>
                 </div>
                 <a href={workflowContext.organizationId ? `/organizations?organizationId=${encodeURIComponent(workflowContext.organizationId)}` : '/organizations'} className='inline-flex h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas'>
+
                     Open organization
                 </a>
             </div>
@@ -1687,16 +1654,14 @@ function EvidenceDispositionQueue({ alert, visibleEvidence, selectedEvidence, se
     onSelectEvidence: (value: string) => void
     onCopyHash: (value: string) => void
 }) {
-    const workflowQueue = stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)
     const watchlist = workflowContext.watchlistIds.length ? `${workflowContext.watchlistIds.length} watchlists` : stateLabel(alert.matchedTerm.kind)
     const entityContext = selectedEntity?.name || alert.matchedTerm.value
-    const caseContext = workflowContext.caseId ? `case ${workflowContext.caseId}` : 'case candidate'
     return (
         <section className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
             <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
                 <div>
                     <h3 className='text-sm font-semibold text-ui-text'>Source evidence</h3>
-                    <p className='mt-0.5 text-xs text-ui-muted'>{visibleEvidence.length} row{visibleEvidence.length === 1 ? '' : 's'} · {workflowQueue} · {watchlist} · {entityContext} · {caseContext}</p>
+                    <p className='mt-0.5 text-xs text-ui-muted'>{visibleEvidence.length} supporting record{visibleEvidence.length === 1 ? '' : 's'} · term {watchlist} · {entityContext}</p>
                 </div>
             </div>
             <div className='overflow-x-auto'>
@@ -1706,7 +1671,7 @@ function EvidenceDispositionQueue({ alert, visibleEvidence, selectedEvidence, se
                             <th className='px-3 py-2 font-semibold'>Evidence</th>
                             <th className='px-3 py-2 font-semibold'>Source</th>
                             <th className='px-3 py-2 font-semibold'>Impact</th>
-                            <th className='px-3 py-2 font-semibold'>Alert review</th>
+                            <th className='px-3 py-2 font-semibold'>Finding status</th>
                             <th className='px-3 py-2 font-semibold'>Actions</th>
                         </tr>
                     </thead>
@@ -1719,7 +1684,7 @@ function EvidenceDispositionQueue({ alert, visibleEvidence, selectedEvidence, se
                                 </td>
                                 <td className='px-3 py-3'>
                                     <p className='max-w-45 truncate font-semibold text-ui-text' title={item.sourceName}>{item.sourceName}</p>
-                                    <p className='mt-1 text-[11px] text-ui-muted'>{stateLabel(item.sourceFamily)} · {relativeTimeLabel(item.observedAt || item.firstSeenAt || alert.firstSeenAt)}</p>
+                                    <p className='mt-1 text-[11px] text-ui-muted'>{stateLabel(item.sourceFamily)} · {evidenceObservedAt(item) ? relativeTimeLabel(evidenceObservedAt(item)!) : 'time unknown'}</p>
                                 </td>
                                 <td className='px-3 py-3'>
                                     <div className='grid gap-1'>
@@ -2034,6 +1999,7 @@ function ActionAvailability({ label, ready, reason }: { label: string, ready: bo
     return (
         <span title={ready ? undefined : reason} aria-label={`${label}: ${state}`} className={`min-w-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${ready ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'}`}>
             {label}: {state}
+
         </span>
     )
 }
@@ -2085,9 +2051,9 @@ function NoCaseWorkspace({ latestCaptures, workflowActions, watchTermCount, data
         },
         {
             stage: 'Collection',
-            state: hasError ? 'Live data unavailable' : latestCaptures.length ? `${latestCaptures.length} accepted capture${latestCaptures.length === 1 ? '' : 's'}` : allLive ? 'No retained match yet' : 'Loading retained evidence',
+            state: hasError ? 'Live data unavailable' : latestCaptures.length ? `${latestCaptures.length} shared capture${latestCaptures.length === 1 ? '' : 's'}` : allLive ? 'No retained match yet' : 'Loading retained evidence',
             action: 'Run collection',
-            detail: newestCapture ? `${newestCapture.sourceName} ${relativeTimeLabel(newestCapture.collectedAt)}` : hasError ? healthRows.filter(item => item.state === 'error').map(item => item.detail).join(' ') : 'Approved source records appear after duplicate and safety checks.',
+            detail: newestCapture ? `Shared source: ${newestCapture.sourceName} ${relativeTimeLabel(newestCapture.collectedAt)}` : hasError ? healthRows.filter(item => item.state === 'error').map(item => item.detail).join(' ') : 'Approved shared-source records appear after duplicate and safety checks.',
         },
         {
             stage: 'Case link',
@@ -2534,6 +2500,7 @@ function buildAnalystBrief(
         .map(([family, count]) => `${count} ${stateLabel(family)}`)
         .join(', ')
     const visibleCounts = [
+
         evidenceSummary.publicSafeCount ? `${evidenceSummary.publicSafeCount} redacted excerpt${evidenceSummary.publicSafeCount === 1 ? '' : 's'}` : '',
         evidenceSummary.metadataOnlyCount ? `${evidenceSummary.metadataOnlyCount} redacted source record${evidenceSummary.metadataOnlyCount === 1 ? '' : 's'}` : '',
     ].filter(Boolean).join(', ') || 'safe source records'

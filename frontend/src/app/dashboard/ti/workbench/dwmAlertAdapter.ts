@@ -1,5 +1,5 @@
 import type { DwmAlert, DwmSeverity } from '@/utils/dwm/product'
-import { safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
+import { customerAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
 import type { WorkbenchAction, WorkbenchCase, WorkbenchEvidence, WorkbenchTimelineItem } from './workbenchClient'
 
 type RuntimeDwmAlert = DwmAlert & {
@@ -143,7 +143,7 @@ export function dwmAlertToWorkbenchCase(input: DwmAlert): WorkbenchCase {
         kind: 'dwm_alert',
         queue: severity === 'critical' ? 'Incident response' : route.replaceAll('_', ' '),
         title: alert.company,
-        subtitle: safeAlertSummary(alert),
+        subtitle: customerAlertSummary(alert),
         severity,
         status: workflowStatus,
         priority: severityPriority(severity) + alert.confidence + (workflowStatus === 'new' ? 20 : 0),

@@ -565,11 +565,11 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                                 <table className='w-full min-w-190 text-left text-xs' data-dwm-case-evidence-desktop-table='true'>
                                                     <thead className='bg-ui-canvas text-ui-muted'>
                                                         <tr>
-                                                            <th className='px-3 py-2 font-semibold'>Report</th>
+                                                            <th className='px-3 py-2 font-semibold'>Include</th>
                                                             <th className='px-3 py-2 font-semibold'>Source</th>
-                                                            <th className='px-3 py-2 font-semibold'>Observed</th>
+                                                            <th className='px-3 py-2 font-semibold'>Published / collected</th>
                                                             <th className='px-3 py-2 font-semibold'>Excerpt</th>
-                                                            <th className='px-3 py-2 font-semibold'>Provenance</th>
+                                                            <th className='px-3 py-2 font-semibold'>Source details</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody className='divide-y divide-ui-border bg-ui-panel'>

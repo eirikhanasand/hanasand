@@ -30,10 +30,10 @@ export function ActorBusinessModelEvidence({ model, sources, caseStudies, state 
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
                     <h2 className='text-base font-semibold text-ui-text dark:text-ui-text'>Business model and communication</h2>
-                    <p className='mt-1 max-w-3xl text-xs leading-5 text-ui-muted dark:text-ui-muted'>Current reviewed findings linked to an exact retained claim and evidence chain.</p>
+                    <p className='mt-1 max-w-3xl text-xs leading-5 text-ui-muted dark:text-ui-muted'>Evidence-backed findings linked to retained source claims and supporting evidence.</p>
                 </div>
                 <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>
-                    {state === 'loading' ? 'Checking evidence' : state === 'error' ? 'Unavailable' : `${observationCount} reviewed finding${observationCount === 1 ? '' : 's'}`}
+                    {state === 'loading' ? 'Checking evidence' : state === 'error' ? 'Unavailable' : `${observationCount} evidence-backed finding${observationCount === 1 ? '' : 's'}`}
                 </span>
             </div>
 
@@ -157,7 +157,7 @@ function ActorCaseStudyIndex({ catalog }: { catalog: TiActorCaseStudyCatalog }) 
                 <div className='mt-3 min-w-0 border-t border-ui-border py-3 dark:border-ui-border'>
                     <div className='flex min-w-0 items-center justify-between gap-2'>
                         <span className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{currentCase.actor}</span>
-                        <span className='shrink-0 text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{currentCase.findingCount} reviewed findings</span>
+                        <span className='shrink-0 text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{currentCase.findingCount} evidence-backed findings</span>
                     </div>
                     <div className='mt-2 flex min-w-0 flex-wrap gap-1'>
                         {currentCase.categories.map(category => <span key={category} className='rounded-md bg-ui-raised px-1.5 py-0.5 text-[10px] font-semibold text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>{caseCategoryLabel(category)}</span>)}
