@@ -832,7 +832,7 @@ function persistClaimDecision(store: any, task: AutomaticReviewTask, decision: A
     requestSha256: task.requestSha256,
     automaticDecision: decision,
     calibrationContext: decision.calibrationContext
-  });
+  };
 }
 
 function persistSubjectDecision(store: any, index: ReviewIndex, task: AutomaticReviewTask, decision: AutomaticReviewDecision, at: string, actor?: ActorIdentityRecord, reviewer?: string, idKind?: string) {
