@@ -54,6 +54,7 @@ sub vcl_backend_response {
         # here because vcl_hash includes the complete authenticated cookie.
         # Set-Cookie is safe to replay only for that same session key.
         set beresp.ttl = 5s;
+        return (deliver);
     } else if (beresp.http.Set-Cookie) {
         set beresp.uncacheable = true;
         set beresp.ttl = 0s;
