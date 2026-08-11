@@ -29,6 +29,17 @@ export type TiActivityEvent = {
     tone: 'ok' | 'watch' | 'bad'
 }
 
+export type TiProfileUpdate = {
+    id: string
+    actorId: string
+    observedAt: string
+    sourceId: string
+    captureIds: string[]
+    kind: string
+    changedFields: string[]
+    summary: string
+}
+
 export type TiManagementAuditEvent = {
     id: string
     happenedAt: string
@@ -54,6 +65,7 @@ export type TiEnrichmentOverview = {
     updatedActors: TiEnrichedActor[]
     queuedActors: TiEnrichedActor[]
     activity: TiActivityEvent[]
+    updates: TiProfileUpdate[]
     auditLog: TiManagementAuditEvent[]
     stats: {
         updatedLastHour: number
@@ -123,11 +135,12 @@ export type TiPipelineOverview = {
 }
 
 export async function getTiEnrichmentOverview(): Promise<TiEnrichmentOverview> {
-    const [overview, profiles] = await Promise.all([
+    const [overview, profiles, updates] = await Promise.all([
         getTiAdminOverview(null, { limit: 50, includeCandidates: true }),
         getPersistedActorProfiles(),
+        getPersistedProfileUpdates(),
     ])
-    return passiveOverview(overview, profiles)
+    return passiveOverview(overview, profiles, updates)
 }
 
 type PersistedActorProfile = {
@@ -165,6 +178,36 @@ async function getPersistedActorProfiles(): Promise<PersistedActorProfile[]> {
     }
 }
 
+async function getPersistedProfileUpdates(): Promise<TiProfileUpdate[]> {
+    try {
+        const target = new URL('/v1/intel/evidence-deltas', tiScraperApiBase())
+        target.searchParams.set('tenantId', 'default')
+        target.searchParams.set('q', 'actor_profile')
+        target.searchParams.set('limit', '100')
+        const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
+        const response = await fetch(target, { cache: 'force-cache', next: { revalidate: 5 }, headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined, signal: AbortSignal.timeout(5_000) })
+        if (!response.ok) return []
+        const payload = await response.json() as { evidenceDeltas?: unknown[] }
+        return (payload.evidenceDeltas || []).map(profileUpdate).filter((update): update is TiProfileUpdate => Boolean(update))
+    } catch {
+        return []
+    }
+}
+
+function profileUpdate(value: unknown): TiProfileUpdate | undefined {
+    if (!value || typeof value !== 'object') return undefined
+    const record = value as Record<string, unknown>
+    const id = stringValue(record.id)
+    const actorId = stringValue(record.subjectId)
+    const observedAt = stringValue(record.observedAt)
+    if (!id || !actorId || !observedAt || record.subjectType !== 'actor_profile') return undefined
+    const metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata as Record<string, unknown> : {}
+    const aliases = listValue(metadata.aliasesAdded).map(stringValue).filter(Boolean)
+    const fields = Object.keys(metadata.characterization && typeof metadata.characterization === 'object' ? metadata.characterization as object : {})
+    const changedFields = [...new Set([...aliases.map(alias => `alias: ${alias}`), ...fields])]
+    return { id, actorId, observedAt, sourceId: stringValue(record.sourceId), captureIds: listValue(record.captureIds).map(stringValue).filter(Boolean), kind: stringValue(record.kind, 'updated'), changedFields, summary: changedFields.length ? changedFields.join(' · ') : 'New retained evidence linked to this profile.' }
+}
+
 function persistedProfile(value: unknown): PersistedActorProfile | undefined {
     if (!value || typeof value !== 'object') return undefined
     const profile = value as Record<string, unknown>
@@ -186,7 +229,7 @@ function persistedProfile(value: unknown): PersistedActorProfile | undefined {
     }
 }
 
-function passiveOverview(overview: Awaited<ReturnType<typeof getTiAdminOverview>>, profiles: PersistedActorProfile[]): TiEnrichmentOverview {
+function passiveOverview(overview: Awaited<ReturnType<typeof getTiAdminOverview>>, profiles: PersistedActorProfile[], updates: TiProfileUpdate[]): TiEnrichmentOverview {
     const actors = new Map<string, TiEnrichedActor>()
     const capturesById = new Map(overview.captures.map(capture => [capture.id, capture]))
     const profileByCaptureId = new Map(profiles.flatMap(profile => profile.captureIds.map(captureId => [captureId, profile] as const)))
@@ -264,6 +307,7 @@ function passiveOverview(overview: Awaited<ReturnType<typeof getTiAdminOverview>
         updatedActors: [...actors.values()],
         queuedActors: [],
         activity,
+        updates,
         auditLog: [],
         stats: {
             updatedLastHour,

@@ -25,6 +25,7 @@ const listRoutes = {
   "/v1/intel/actor-identity-catalogs": ["actorIdentityCatalogs", "listActorIdentityCatalogs"],
   "/v1/intel/actor-identities": ["actorIdentities", "listActorIdentities"],
   "/v1/intel/evidence-links": ["evidenceLinks", "listEvidenceLinks"],
+  "/v1/intel/evidence-deltas": ["evidenceDeltas", "listEvidenceDeltas"],
   "/v1/intel/validation-records": ["validationRecords", "listValidationRecords"],
   "/v1/intel/evaluation-labels": ["evaluationLabels", "listEvaluationLabels"],
   "/v1/intel/collection-runs": ["collectionRuns", "listRuns"],
@@ -143,6 +144,18 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
   if ((url.pathname === "/v1/evidence/claim-ledger" || url.pathname === "/v1/analyst/claim-ledger") && request.method === "GET") return claimLedger(request, url, options, url.pathname.startsWith("/v1/analyst"));
   if (/^\/v1\/analyst\/claim-ledger\/[^/]+\/actions$/.test(url.pathname) && request.method === "POST") return analystClaimAction(request, options, url.pathname.split("/")[4]);
   const route = listRoutes[url.pathname as keyof typeof listRoutes];
+  if (url.pathname === "/v1/intel/evidence-deltas" && request.method === "GET") {
+    const scope = resolveTenantScope(request, url);
+    if (scope.error) return scope.error;
+    const query = url.searchParams.get("q")?.trim().toLowerCase();
+    const limit = Math.max(1, Math.min(500, numberQuery(url.searchParams.get("limit")) ?? 100));
+    const offset = Math.max(0, numberQuery(url.searchParams.get("cursor")) ?? 0);
+    const records = ((options.store as any).listEvidenceDeltas?.() ?? [])
+      .filter((record: any) => inTenantScope(record, scope.tenantId))
+      .filter((record: any) => !query || JSON.stringify(record).toLowerCase().includes(query))
+      .sort((left: any, right: any) => String(right.observedAt ?? "").localeCompare(String(left.observedAt ?? "")));
+    return json({ evidenceDeltas: records.slice(offset, offset + limit), total: records.length, nextCursor: offset + limit < records.length ? String(offset + limit) : undefined });
+  }
   if (!route || request.method !== "GET") return undefined;
   const scope = resolveTenantScope(request, url);
   if (scope.error) return scope.error;

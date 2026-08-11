@@ -1,13 +1,13 @@
 import Link from 'next/link'
 import { ArrowRight, ExternalLink, Radio, Users } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
-import { getTiEnrichmentOverview, type TiActivityEvent, type TiEnrichedActor } from '@/utils/tiAdmin/enrichment'
+import { getTiEnrichmentOverview, type TiActivityEvent, type TiEnrichedActor, type TiProfileUpdate } from '@/utils/tiAdmin/enrichment'
 import { formatTiDate } from '@/utils/tiAdmin/ops'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TiEnrichmentPage() {
-    const { updatedActors, activity, worker, stats } = await getTiEnrichmentOverview()
+    const { updatedActors, activity, updates, worker, stats } = await getTiEnrichmentOverview()
     const actors = [...updatedActors].sort((left, right) => right.lastUpdatedAt.localeCompare(left.lastUpdatedAt))
     const recentActivity = activity.slice(0, 12)
     const sourceCount = new Set(actors.flatMap(actor => actor.sourceLinks.map(source => source.name))).size
@@ -30,10 +30,10 @@ export default async function TiEnrichmentPage() {
                         </div>
                         <p className='mt-1 max-w-2xl text-sm text-ui-muted'>Profiles are built from captured source evidence automatically. Open a profile to see its public intelligence and evidence trail.</p>
                     </div>
-                    <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>
-                        View sources
-                        <ArrowRight className='h-4 w-4' />
-                    </Link>
+                    <div className='flex flex-wrap gap-2'>
+                        <Link href='/dashboard/ti/control' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>Collection control</Link>
+                        <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>View sources <ArrowRight className='h-4 w-4' /></Link>
+                    </div>
                 </div>
                 <div className='mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4'>
                     <Metric label='Profiles observed' value={String(actors.length)} />
@@ -69,6 +69,13 @@ export default async function TiEnrichmentPage() {
                     </DashboardPanel>
                 </div>
             )}
+            {actors.length ? <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
+                <PanelHeader title='Profile update history' subtitle='Exact persisted changes and the evidence that triggered them.' />
+                <div className='divide-y divide-ui-border'>
+                    {updates.slice(0, 20).map(update => <ProfileUpdateRow key={update.id} update={update} actor={actors.find(item => item.id === update.actorId)} />)}
+                    {!updates.length ? <p className='p-5 text-sm text-ui-muted'>No field-level profile changes have been recorded yet. The next profile-changing observation will be listed here.</p> : null}
+                </div>
+            </DashboardPanel> : null}
         </DashboardPage>
     )
 }
@@ -107,6 +114,17 @@ function ActivityRow({ event }: { event: TiActivityEvent }) {
             <p className='mt-2 flex items-center gap-1 text-xs text-ui-primary'><ExternalLink className='h-3 w-3' />{event.source}</p>
         </div>
     )
+}
+
+function ProfileUpdateRow({ update, actor }: { update: TiProfileUpdate, actor: TiEnrichedActor | undefined }) {
+    return <div className='flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-ui-raised'>
+        <div className='min-w-0'>
+            <Link href={`/ti/${encodeURIComponent(update.actorId)}`} className='font-semibold text-ui-text hover:text-ui-primary'>{actor?.name || update.actorId}</Link>
+            <p className='mt-1 text-sm text-ui-muted'>{update.kind === 'added' ? 'Profile created from' : 'Profile updated from'} retained evidence · {update.summary}</p>
+            <p className='mt-1 text-xs text-ui-primary'>{update.sourceId || 'source linked'} · {update.captureIds.length} capture{update.captureIds.length === 1 ? '' : 's'}</p>
+        </div>
+        <span className='shrink-0 text-xs text-ui-muted'>{formatTiDate(update.observedAt)}</span>
+    </div>
 }
 
 function PanelHeader({ title, subtitle }: { title: string, subtitle: string }) {
