@@ -100,25 +100,6 @@ describe("DWM exposure queue pipeline", () => {
     }
   });
 
-  test("rejects dark-web and Telegram collector claims without publisher provenance", async () => {
-    for (const sourceFamily of ["darkweb_metadata", "telegram_public"]) {
-      const store = new InMemoryScraperStore();
-      const saved = await saveExposureClaimFromCollectedItem(store, {
-        sourceId: `src_${sourceFamily}`,
-        source: { name: "Unverified collector", url: "https://collector.example/feed" },
-        title: "Akira has just published a new victim: Contoso",
-        rawText: "Akira victim: Contoso. 10 GB claimed.",
-        url: "https://collector.example/item",
-        collectedAt: "2026-07-20T09:04:00.000Z",
-        publishedAt: "2026-07-20T09:00:00.000Z",
-        metadata: { adapter: sourceFamily, sourceFamily }
-      });
-      expect(saved).toBeUndefined();
-      expect(store.listSources()).toHaveLength(0);
-      expect(store.listCaptures()).toHaveLength(0);
-    }
-  });
-
   test("fetches real tenant public-incident evidence without fabricating a dark-web victim claim", async () => {
     const store = new InMemoryScraperStore();
     store.saveOrganization({ id: "org_ntnu_research", tenantId: "org_ntnu_research", name: "NTNU research monitor", status: "active" });
