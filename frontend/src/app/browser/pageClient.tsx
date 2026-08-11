@@ -28,6 +28,7 @@ type BrowserFingerprint = {
     isMobile?: boolean
     hasTouch?: boolean
 }
+type UserAgentLabel = { label: string; pattern: RegExp }
 type SandboxCapacity = {
     activeSessions: number
     queuedSessions: number
@@ -268,6 +269,31 @@ const browserFingerprints: BrowserFingerprint[] = [
         platform: 'MacIntel',
     },
 ]
+const browserUserAgentLabels: UserAgentLabel[] = [
+    { label: 'Headless Chrome', pattern: /HeadlessChrome\//i },
+    { label: 'Microsoft Edge', pattern: /Edg(?:A|iOS)?\//i },
+    { label: 'Opera', pattern: /OPR\//i },
+    { label: 'Samsung Internet', pattern: /SamsungBrowser\//i },
+    { label: 'Firefox', pattern: /(?:Firefox|FxiOS)\//i },
+    { label: 'Chrome', pattern: /(?:Chrome|CriOS)\//i },
+    { label: 'Safari', pattern: /Version\/.*Safari\//i },
+    { label: 'Googlebot', pattern: /Googlebot\//i },
+    { label: 'Bingbot', pattern: /bingbot\//i },
+    { label: 'PowerShell', pattern: /WindowsPowerShell\//i },
+    { label: 'curl', pattern: /(?:^|\s)curl\//i },
+    { label: 'Wget', pattern: /(?:^|\s)Wget\//i },
+    { label: 'Postman', pattern: /PostmanRuntime\//i },
+    { label: 'Python requests', pattern: /python-requests\//i },
+    { label: 'Java', pattern: /Java\/\d/i },
+]
+
+function userAgentLabel(value: string, fallback: string) {
+    const normalized = value.trim()
+    if (!normalized) return `Inherited from ${fallback}`
+    const quickLabel = browserFingerprints.find(item => item.userAgent === normalized)?.label
+    if (quickLabel) return quickLabel
+    return browserUserAgentLabels.find(item => item.pattern.test(normalized))?.label || 'Custom user agent'
+}
 
 function normalizeTarget(value: string) {
     const trimmed = value.trim()
@@ -355,6 +381,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const normalizedTarget = useMemo(() => normalizeTarget(target), [target])
     const selectedProfile = useMemo(() => profiles.find(profile => profile.id === selectedProfileId) || profiles[0], [profiles, selectedProfileId])
     const selectedFingerprint = useMemo(() => browserFingerprints.find(item => item.id === fingerprintId) || browserFingerprints[0], [fingerprintId])
+    const activeUserAgentLabel = useMemo(() => userAgentLabel(customUserAgent, selectedFingerprint.label), [customUserAgent, selectedFingerprint.label])
     const browserMetadata = useMemo(() => ({
         userAgent: customUserAgent.trim() || selectedFingerprint.userAgent,
         width: clampUiNumber(customViewportWidth, 320, 3840, selectedFingerprint.width),
@@ -1041,7 +1068,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                     <div className='absolute right-0 z-20 mt-2 grid w-[min(34rem,calc(100vw-2rem))] gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 shadow-xl'>
                                         <div className='flex flex-wrap gap-2'>
                                             {browserFingerprints.map(item => (
-                                                <button key={item.id} type='button' onClick={() => applyFingerprint(item.id)} className={`rounded-md border px-3 py-2 text-xs font-semibold transition ${fingerprintId === item.id ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'}`}>
+                                                <button key={item.id} type='button' onClick={() => applyFingerprint(item.id)} className={`rounded-md border px-3 py-2 text-xs font-semibold transition ${customUserAgent.trim() === item.userAgent ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'}`}>
                                                     {item.label}
                                                 </button>
                                             ))}
@@ -1069,7 +1096,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                             <input value={customPlatform} onChange={event => setCustomPlatform(event.target.value)} aria-label='Platform' className='min-w-0 flex-1 bg-transparent text-ui-text outline-none' />
                                         </label>
                                         <label className='grid gap-1 rounded-md border border-ui-border bg-ui-canvas px-3 py-2 focus-within:border-ui-primary'>
-                                            <span className='text-xs font-semibold uppercase text-ui-muted'>User agent</span>
+                                            <span className='flex items-center justify-between gap-2 text-xs font-semibold uppercase text-ui-muted'><span>User agent</span><span className='normal-case font-medium text-ui-primary'>{activeUserAgentLabel}</span></span>
                                             <textarea value={customUserAgent} onChange={event => setCustomUserAgent(event.target.value)} aria-label='User agent' rows={3} className='min-h-16 resize-y bg-transparent font-mono text-xs text-ui-text outline-none' />
                                         </label>
                                     </div>
