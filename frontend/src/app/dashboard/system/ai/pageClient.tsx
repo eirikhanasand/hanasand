@@ -237,9 +237,9 @@ export default function GPT_Page() {
                 <div className='mx-auto flex w-full max-w-330 flex-col gap-4 px-4 pb-4 pt-6 sm:px-6 md:px-8 md:pt-8'>
                     <div className='flex items-center justify-between gap-4'>
                         <div>
-                            <p className='text-xs uppercase tracking-[0.22em] text-ui-muted'>Model operations</p>
-                            <h1 className='mt-1 text-2xl font-semibold text-ui-text'>AI worker console</h1>
-                            <p className='mt-1 text-sm text-ui-muted'>Live sessions, GPU lanes, verification jobs, and spend pressure.</p>
+                            <p className='text-xs uppercase tracking-[0.22em] text-ui-muted'>System</p>
+                            <h1 className='mt-1 text-2xl font-semibold text-ui-text'>AI operations</h1>
+                            <p className='mt-1 text-sm text-ui-muted'>Connected workers, verified output, capacity, and spend.</p>
                         </div>
                         <Link
                             href='/dashboard/system'
@@ -321,8 +321,8 @@ function EconomicsPanel({ economics, error, aiContainers, containerError }: { ec
         <section className='space-y-4 rounded-xl bg-ui-panel p-4 border border-ui-border'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
                 <div>
-                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-ui-muted'>Worker output</p>
-                    <h2 className='mt-1 text-xl font-semibold text-ui-text'>Verified work, live capacity, and spend</h2>
+                    <h2 className='text-xl font-semibold text-ui-text'>Worker output</h2>
+                    <p className='mt-1 text-sm text-ui-muted'>Verified work, live capacity, and spend.</p>
                 </div>
                 <span className='w-fit rounded-full bg-ui-primary/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-ui-primary outline outline-ui-primary/20'>
                     {economics.windowDays} day window

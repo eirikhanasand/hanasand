@@ -8,6 +8,10 @@ type RegisteredGptClient = GPT_Client & {
     socket: WS
 }
 
+export function countGptViewers(id: string, clients: Map<string, Set<WS>> = gpt) {
+    return [...(clients.get(id) || [])].filter((socket) => gptSockets.get(socket)?.role !== 'producer').length
+}
+
 const gptClientRegistry = new Map<string, Map<string, RegisteredGptClient>>()
 const pendingPromptRequests = new Map<string, {
     resolve: (event: GPT_PromptCompletion) => void
@@ -139,7 +143,7 @@ export function unregisterGptSocket(id: string, socket: WS) {
 
 export function sendGptSnapshot(id: string, socket: WS) {
     const clients = listGptClients(id)
-    const participants = gpt.get(id)?.size || 0
+    const participants = countGptViewers(id)
     socket.send(JSON.stringify({
         type: 'snapshot',
         clients,
@@ -238,7 +242,7 @@ function broadcastUpdate(id: string, sender: WS, client: GPT_Client) {
         type: 'update',
         client,
         timestamp: new Date().toISOString(),
-        participants: clients.size
+        participants: countGptViewers(id)
     })
 
     for (const clientSocket of clients) {
