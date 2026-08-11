@@ -61,7 +61,7 @@ export function normalizeExposureQueue(value: unknown): ExposureQueue {
     const pageRecord = isRecord(record.page) ? record.page : {}
     return {
         generatedAt,
-        status: String(record.status || (generatedAt || items.length ? (items.length ? 'stale' : 'checking') : 'unavailable')),
+        status: String(record.status || (items.length ? 'stale' : 'unavailable')),
         freshness: {
             latestClaimAt: typeof freshnessRecord.latestClaimAt === 'string' || freshnessRecord.latestClaimAt === null ? freshnessRecord.latestClaimAt : undefined,
             latestCollectedAt: typeof freshnessRecord.latestCollectedAt === 'string' || freshnessRecord.latestCollectedAt === null ? freshnessRecord.latestCollectedAt : undefined,

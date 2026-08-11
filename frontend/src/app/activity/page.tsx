@@ -23,7 +23,7 @@ async function loadExposureQueue(): Promise<ExposureQueue> {
         const response = await fetchSharedExposureQueue(new URLSearchParams({ limit: '50', offset: '0' }), { timeoutMs: 8000 })
         if (!response.ok) return exposureQueueFallback('unavailable', 50)
         return normalizeExposureQueue(await response.json())
-    } catch {
+    } catch (error) {
         return exposureQueueFallback('unavailable', 50)
     }
 }
