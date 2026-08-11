@@ -67,7 +67,7 @@ export type GetVulnerabilities = {
 }
 
 export type WebScanSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info'
-export type WebScanCheck = { id: string, status: string, severity: WebScanSeverity, title: string, evidence: Record<string, unknown> }
+export type WebScanCheck = { id: string, status: string, severity: WebScanSeverity, title: string, explanation?: string, evidence: Record<string, unknown> }
 export type WebScanRun = { scanId: string, status: string, startedAt: string, finishedAt: string | null, durationMs: number | null, target: string, targets: Array<{ target: string, status: string, checks: WebScanCheck[], ports: Array<{ port: number, open: boolean, elapsedMs: number }> }>, severityCounts: Record<WebScanSeverity, number>, error: string | null }
 export type WebScanReport = { current: WebScanRun | null, history: WebScanRun[], schedule: { enabled: boolean, intervalMinutes: number, nextRunAt: string | null, lastRunAt: string | null, target: string, scope: 'global' }, error: string | null }
 
