@@ -82,10 +82,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const resumedTasks = resumedRunId ? queuedTasks.filter((task: any) => task.runId === resumedRunId).slice(0, maxTasks) : [];
   const resumedRun = resumedRunId ? options.store.getRun?.(resumedRunId) : undefined;
   const allDue = options.store.listSources()
-    .filter((s: any) => inCollectionScope(s, options.tenantId, options.includeSharedSources)
-      && (!selectedSourceIds.size || selectedSourceIds.has(s.id))
-      && sourceFamilyMatches(s, options.sourceFamily)
-      && isProductionCollectionSource(s, generatedAt, options.store))
+    .filter((s: any) => inCollectionScope(s, options.tenantId, options.includeSharedSources) && (!selectedSourceIds.size || selectedSourceIds.has(s.id)) && isProductionCollectionSource(s, generatedAt, options.store))
     .sort((left: any, right: any) => sourceScheduleTime(left) - sourceScheduleTime(right) || String(left.id).localeCompare(String(right.id)));
   const due = allDue.slice(0, maxSources);
   const generatedPlanId = stableId("canary-plan", `${options.tenantId ?? "global"}:${generatedAt}`);
@@ -356,8 +353,7 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
     if (!currentSource || currentSource.tenantId !== source.tenantId) return;
     const lastContentAt = useful ? latestTimestamp(taskMetrics.productivePublishedAt) ?? checkedAt : currentSource.health?.lastContentAt;
     const portfolioCandidate = governedPortfolioCandidate(currentSource, checkedAt, options.store);
-    const reviewGovernedSource = portfolioCandidate || isLegacySourceReviewCandidate(currentSource);
-    const productiveCycles = reviewGovernedSource ? currentProductiveSourceCycles(options.store, currentSource, checkedAt) : [];
+    const productiveCycles = portfolioCandidate ? currentProductiveCycles(options.store, currentSource, checkedAt) : [];
     const sustained = hasApprovedAutomaticSourceReview(currentSource)
       && automaticSourceReviewEvidenceBindingsMatch(currentSource, (id) => options.store.getCapture?.(id))
       && productiveCycles.length >= 2;
@@ -493,14 +489,12 @@ function isProductionCollectionSource(source: any, generatedAt: string, store: a
   return !nextEligibleAt || Date.parse(nextEligibleAt) <= Date.parse(generatedAt);
 }
 function governedPortfolioCandidate(source: any, generatedAt: string, store: any) {
-  const reviewState = source.metadata?.automaticSourceReview?.state;
   return source.status === "candidate"
     && source.metadata?.productionCollection === false
     && source.metadata?.sourcePortfolioExcluded !== true
     && source.metadata?.sourcePortfolioVerification?.outcome === "content_parsed"
     && (isCurrentSourcePortfolioVerification(source, generatedAt)
-      || ["approved", "needs_review"].includes(reviewState)
-        && hasGovernedAutomaticSourceReviewLineage(source)
+      || hasApprovedAutomaticSourceReview(source)
         && automaticSourceReviewEvidenceBindingsMatch(source, (id) => store.getCapture?.(id)))
     && source.accessMethod === "public_http"
     && source.risk === "low"

@@ -159,7 +159,7 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
   };
 }
 
-function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord, generatedAt: string, store: SourceStore, runtimeEvidenceIndex: RuntimeEvidenceIndex): SourceRecord | undefined {
+function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord, generatedAt: string, store: SourceStore): SourceRecord | undefined {
   const existingVerification = existing.metadata?.sourcePortfolioVerification as { verifiedAt?: unknown } | undefined;
   const seedVerification = verified.metadata?.sourcePortfolioVerification as { verifiedAt?: unknown } | undefined;
   const effectiveVerification = seedDuplicateKey(existing) === seedDuplicateKey(verified)
@@ -173,19 +173,8 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
   const restricted = effectiveVerified.type === "tor_metadata" && effectiveVerified.metadata?.transportCanary !== true;
   const portfolio = Boolean(effectiveVerified.metadata?.sourcePortfolioVerification);
   const expiredPortfolio = portfolio && !isCurrentSourcePortfolioVerification(effectiveVerified, generatedAt);
-  const runtimeEvidenceSource = restricted ? {
-    ...existing,
-    ...effectiveVerified,
-    id: existing.id,
-    tenantId: existing.tenantId,
-    createdAt: existing.createdAt ?? effectiveVerified.createdAt,
-    metadata: { ...(existing.metadata ?? {}), ...(effectiveVerified.metadata ?? {}) },
-    health: existing.health,
-    crawlState: existing.crawlState
-  } : existing;
-  const runtimeEvidence = portfolio || restricted ? currentRuntimeEvidence(runtimeEvidenceSource, generatedAt, runtimeEvidenceIndex) : undefined;
-  const revalidatedRestricted = restricted && isRevalidatedRestrictedSource(existing, effectiveVerified, generatedAt);
-  if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) || revalidatedRestricted : portfolio ? isSafePortfolioUpgradeTarget(existing) : isVerifiedProductionSource(effectiveVerified, generatedAt) && isSafeUpgradeTarget(existing))) return undefined;
+  const runtimeEvidence = portfolio ? currentRuntimeEvidence(existing, generatedAt, store) : undefined;
+  if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) : portfolio ? isSafePortfolioUpgradeTarget(existing) : isVerifiedProductionSource(effectiveVerified, generatedAt) && isSafeUpgradeTarget(existing))) return undefined;
   const sameSource = existing.id === effectiveVerified.id || existing.metadata?.verifiedSourceId === effectiveVerified.id;
   const metadata = {
     ...(existing.metadata ?? {}),
@@ -208,12 +197,6 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
     health: existing.health,
     crawlState: existing.crawlState
   };
-  if (revalidatedRestricted) {
-    delete reconciled.metadata.retiredAt;
-    delete reconciled.metadata.retiredReason;
-    reconciled.metadata.sourcePortfolioRevalidatedAt = effectiveVerified.metadata?.sourcePortfolioVerification?.verifiedAt;
-    reconciled.crawlState = { ...(existing.crawlState ?? {}), retryCount: 0, nextEligibleAt: generatedAt, backoffUntil: undefined, lastError: undefined, lastErrorAt: undefined };
-  }
   if (runtimeEvidence) {
     reconciled.status = "active";
     reconciled.countsAsCoverage = true;
@@ -224,13 +207,6 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
     reconciled.metadata.sourcePortfolioLastProductiveAt = runtimeEvidence.lastUsefulAt;
     if (reconciled.metadata.sourcePortfolioStatus === "verification_expired") delete reconciled.metadata.sourcePortfolioStatus;
     if (restricted) delete reconciled.metadata.restrictedMetadataCandidate;
-  } else if (restricted) {
-    reconciled.status = "candidate";
-    reconciled.countsAsCoverage = false;
-    reconciled.metadata.productionCollection = false;
-    reconciled.metadata.countsAsCoverage = false;
-    reconciled.metadata.sourcePortfolioQualificationState = "pending_sustained_productivity";
-    reconciled.metadata.restrictedMetadataCandidate = true;
   } else if (expiredPortfolio) {
     reconciled.status = "candidate";
     reconciled.countsAsCoverage = false;
@@ -369,25 +345,7 @@ export function prepareRuntimeSource(source: SourceRecord, seedPath: string, gen
   };
 }
 
-function buildRuntimeEvidenceIndex(store: SourceStore): RuntimeEvidenceIndex {
-  const observationsBySource = new Map<string, any[]>();
-  const capturesBySource = new Map<string, any[]>();
-  for (const observation of store.listSourceHealthObservations?.() ?? []) {
-    const key = sourceScopeKey(observation.tenantId, observation.sourceId);
-    observationsBySource.set(key, [...(observationsBySource.get(key) ?? []), observation]);
-  }
-  for (const capture of store.listCaptures?.() ?? []) {
-    const key = sourceScopeKey(capture.tenantId, capture.sourceId);
-    capturesBySource.set(key, [...(capturesBySource.get(key) ?? []), capture]);
-  }
-  return { observationsBySource, capturesBySource };
-}
-
-function sourceScopeKey(tenantId: unknown, sourceId: unknown) {
-  return `${String(tenantId ?? "")}\u0000${String(sourceId ?? "")}`;
-}
-
-function currentRuntimeEvidence(source: SourceRecord, generatedAt: string, runtimeEvidenceIndex: RuntimeEvidenceIndex) {
+function currentRuntimeEvidence(source: SourceRecord, generatedAt: string, store: SourceStore) {
   const projected = {
     ...source,
     status: "active",
@@ -396,8 +354,8 @@ function currentRuntimeEvidence(source: SourceRecord, generatedAt: string, runti
   };
   const qualification = qualifySourcePortfolio({
     sources: [projected],
-    observations: runtimeEvidenceIndex.observationsBySource.get(sourceScopeKey(source.tenantId, source.id)) ?? [],
-    captures: runtimeEvidenceIndex.capturesBySource.get(sourceScopeKey(source.tenantId, source.id)) ?? [],
+    observations: (store.listSourceHealthObservations?.() ?? []).filter((row) => row.sourceId === source.id && row.tenantId === source.tenantId),
+    captures: (store.listCaptures?.() ?? []).filter((row) => row.sourceId === source.id && row.tenantId === source.tenantId),
     generatedAt
   }).sources[0];
   return qualification?.qualifies === true ? qualification : undefined;
