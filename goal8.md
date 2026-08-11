@@ -52,6 +52,8 @@ At 2026-08-09T14:17:30Z, endpoint-only reconciliation across current Ransomwhere
 
 The production loss was a shared bootstrap identity defect, not missing source evidence. Restricted seed import assigned a new `createdAt` before qualification, changing the automatic-review identity hash and demoting already-qualified rows on every restart. Commit `14e1a7c2f1dbcd8ce942b16a8346894c856223fe` preserves the persisted identity during qualification, and `9f9e3a90f17e5973ed943cc1e8b0d6863d854474` preserves qualified legacy restricted sources that rely on real runtime evidence. Commit `7e357e448567e3149ecef0fe31b85c68fcd74526` fixes the second loss point: PostgreSQL now exposes successful run-linked `sourceReviewCandidate` captures to governed review even when their health row remains deliberately non-useful. After rollout, all 53 sources with that retained candidate evidence had source-review tasks and zero remained invisible; no health row received usefulness or qualification credit from the repair.
 
+The production scheduler is deployed at `e7aae5ba71e5a1a4a74111f62d0322e54fc9949d`. At 2026-08-09T06:22Z, PostgreSQL reported 9 admitted Tor candidates, 6 with one current productive scheduled cycle, 1 with an approved source review, and 0 with the complete two-cycle qualification proof. The remaining gap is 1,000.
+
 ## A source counts only when
 
 - its endpoint identity is canonical and unique across every source type;
@@ -77,28 +79,15 @@ The production loss was a shared bootstrap identity defect, not missing source e
 
 - The lawful Tor portfolio is part of the runtime bootstrap seed paths.
 - A previously admitted `restrictedMetadataCandidate` remains collectable after its immutable seed receipt ages out; expiry no longer prevents it from obtaining runtime qualification evidence.
-- The source-review prompt and deterministic governance layer recognize only an exact parser-verified metadata-only victim-list contract with coherent retained names as useful CTI; navigation and malformed output remain blocked.
-- The scraper cannot start its restricted scheduler until the Tor control port reports bootstrap progress at 100%; open proxy ports alone no longer count as healthy.
+- The source-review prompt explicitly recognizes bounded victim-organization listings as useful metadata-only CTI.
 - Promotion remains approval-only and still requires identity-bound retained evidence plus two novel useful scheduled cycles.
 - Public and Telegram candidates in `needs_review` may gather newer bound evidence after initial verification expiry, but cannot promote until the review becomes approved.
-- Restricted re-import preserves the persisted source identity before qualification, so approved review evidence remains bound across restart.
-- Legacy restricted seeds without a shipped portfolio-verification receipt may evaluate their current governed runtime evidence; this does not bypass review, two-cycle, freshness, or retention requirements.
-- The PostgreSQL review index includes explicitly marked retained candidate evidence without changing its non-useful health state; ordinary non-useful captures remain excluded.
-- A current governed global Tor portfolio source owns its endpoint across tenant scopes; active tenant duplicates are recoverably retired during bootstrap so capture volume cannot split canonical ownership or hide global qualification.
 
 ## Live progress ledger
 
 | Measured at | Deployed commit | Admitted candidates | At least one productive cycle | Approved review | Qualifying | Remaining |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | 2026-08-09T06:22Z | `e7aae5ba71e5a1a4a74111f62d0322e54fc9949d` | 9 | 6 | 1 | 0 | 1,000 |
-| 2026-08-09T06:47Z | `b64cdf05428dc2f6b5f60f258a6c348026a55060` | 9 | 6 | 2 | 0 | 1,000 |
-| 2026-08-09T06:49Z | `b64cdf05428dc2f6b5f60f258a6c348026a55060` | 9 | 6 | 3 | 0 | 1,000 |
-| 2026-08-09T07:11Z | `79e976b85ef0bb1ec1626c4eb9295b23b8aead15` | 9 | 6 | 4 | 0 | 1,000 |
-| 2026-08-09T07:20Z | `32ad0e8cbd1f62b9f443b641e7933cadbb1c2eee` | 7 | 7 | 4 | 2 | 998 |
-| 2026-08-09T08:31Z | `b206b20338cf8fe6d93b1509ed3da9bdd333c38b` | 9 | 11 | 7 | 2 | 998 |
-| 2026-08-09T09:42:20Z | `5f75ad6634ff5c3362ed0353b05a6e6d52f6b564` | 13 | 15 | 11 | 3 | 997 |
-| 2026-08-09T09:50Z | `bcac2d85028a434d232d335b1ddd9d3fc68a2053` | 13 | 14 | 11 | 3 | 997 |
-| 2026-08-09T10:36Z | `d38ec5f2d4f7aa5529cc763ca7e7a6bcce2bce2c` | 14 | 18 | 12 | 3 | 997 |
 
 Every later row must come from the live PostgreSQL/API/scheduler view. Never record onion locators or captured content in this file.
 
