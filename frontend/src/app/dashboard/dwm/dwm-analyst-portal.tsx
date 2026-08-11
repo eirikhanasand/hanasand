@@ -240,7 +240,6 @@ export function DwmAnalystPortal({
             organizationId={selectedOrganizationId}
             initialTerms={snapshot.watchlist.map(term => term.value)}
             telemetry={workflowTelemetry}
-            onChanged={() => setRefreshVersion(version => version + 1)}
         />
     )
 
