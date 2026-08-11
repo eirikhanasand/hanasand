@@ -41,6 +41,11 @@ describe('Mill detection catalog', () => {
         expect(adaptVendorEvent({}, { vendor: 'custom', product: 'json' })).toEqual({})
     })
 
+    test('does not invent an event timestamp when the source is undated', () => {
+        expect(normalizeMillEvent({ event_type: 'authentication' }, { vendor: 'custom', product: 'json' }).timestamp).toBe('')
+        expect(normalizeMillEvent({ timeGenerated: '2026-08-03T08:00:00Z' }, { vendor: 'Microsoft', product: 'Entra ID' }).timestamp).toBe('2026-08-03T08:00:00.000Z')
+    })
+
     test('compiles common Sigma selections into bounded rules', () => {
         const compiled = compileSigmaDocument({ title: 'Failed identity event', detection: { selection: { event_type: 'authentication', 'user.email|endswith': '@example.com' }, condition: 'selection' }, level: 'high' })
         expect('rules' in compiled).toBe(true)
