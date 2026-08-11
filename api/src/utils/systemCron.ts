@@ -4,6 +4,7 @@ import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { getBackgroundJobRuntime, type BackgroundJobRuntime } from './backgroundJobRuntime.ts'
 import { canRunApiCronJobNow, HOST_UPDATE_MONITOR_JOB_ID, isApiCronJobPaused, runApiCronJobNow, setApiCronJobPaused } from './cron.ts'
+import { ORGANIZATION_RETENTION_JOB_ID } from './organizationPrivacy.ts'
 import { getVulnerabilityReport, isVulnerabilityScanActive, setVulnerabilityScannerPaused, startTrackedVulnerabilityScan, VULNERABILITY_SCAN_CADENCE_SECONDS, VULNERABILITY_SCAN_JOB_ID } from './vulnerabilities/scanner.ts'
 import { collectDatabaseBackupServices, createDatabaseBackup, DATABASE_BACKUP_JOB_ID, setDatabaseBackupSchedulePaused } from './db/backups.ts'
 
