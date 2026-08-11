@@ -405,8 +405,15 @@ export async function restoreDatabaseBackupFile(input: {
             }
         }
 
+        if (cleanupError) {
+            await patchOperation(_operation.id, { targetRemoved: false })
+            const cleanupMessage = `Cleanup failed; isolated target ${targetDatabase} was not removed: ${sanitizeBackupError(cleanupError)}`
+            if (workError) {
+                throw new BackupOperationError(`Restore drill failed: ${sanitizeBackupError(workError)} ${cleanupMessage}`, 500)
+            }
+            throw new BackupOperationError(cleanupMessage, 500)
+        }
         if (workError) throw workError
-        if (cleanupError) throw new BackupOperationError('Restore drill completed but the isolated target database could not be removed.', 500)
         if (!restoredIntegrity) throw new BackupOperationError('Restore drill did not produce integrity evidence.', 500)
 
         const info = await stat(backup)
