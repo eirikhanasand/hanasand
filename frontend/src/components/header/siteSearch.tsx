@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileText, Loader2, Search, ShieldCheck, X } from 'lucide-react'
+import { ActorMark } from '@/components/ti/actorMark'
+import { actorSummary, usefulActorSummary } from '@/utils/ti/actorSummary'
 
 type SearchItem = {
     id: string
@@ -149,7 +151,7 @@ function ResultGroup({ title, items, icon, onSelect }: { title: string, items: S
                 {items.map(item => (
                     <Link key={item.id} href={item.href} onClick={onSelect} className='grid grid-cols-[2.25rem_1fr] gap-3 rounded-lg px-2 py-2 transition hover:bg-ui-raised'>
                         <span className='grid h-9 w-9 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
-                            {icon === 'case' ? <ShieldCheck className='h-4 w-4' /> : icon === 'actor' ? <ActorAvatar title={item.title} /> : <FileText className='h-4 w-4' />}
+                            {icon === 'case' ? <ShieldCheck className='h-4 w-4' /> : icon === 'actor' ? <ActorMark name={item.title} /> : <FileText className='h-4 w-4' />}
                         </span>
                         <span className='min-w-0'>
                             <span className='block truncate text-sm font-semibold text-ui-text'>{item.title}</span>
@@ -189,11 +191,6 @@ function actorDisplayName(value: string) {
     return /^apt\d+$/i.test(value) ? value.toUpperCase() : value
 }
 
-function ActorAvatar({ title }: { title: string }) {
-    const initials = title.replace(/[^a-z0-9]/gi, '').slice(0, 2).toUpperCase()
-    return <span className='grid h-full w-full place-items-center rounded-md bg-ui-primary/15 text-[10px] font-bold tracking-wide text-ui-primary'>{initials || 'TI'}</span>
-}
-
 async function loadCases(query: string, signal: AbortSignal): Promise<SearchItem[]> {
     const response = await fetch('/api/cases', { cache: 'no-store', signal })
     if (!response.ok) return []
@@ -221,9 +218,14 @@ function actorPreviewItem(payload: unknown, query: string): SearchItem | null {
     const intelligence = row.actorIntelligence && typeof row.actorIntelligence === 'object' ? row.actorIntelligence as Record<string, unknown> : null
     if (row.queryKind !== 'actor' && !intelligence) return null
     const title = actorDisplayName(stringValue(row.query) || query)
-    const detail = stringValue(row.summary)
-        || [stringValue(intelligence?.actorClass), stringValue(intelligence?.attribution)].filter(Boolean).join(' · ')
-        || 'Threat actor profile'
+    const detail = usefulActorSummary(stringValue(row.summary)) || actorSummary({
+        name: title,
+        actorClass: stringValue(intelligence?.actorClass),
+        attribution: stringValue(intelligence?.attribution),
+        targetSectors: stringArray(intelligence?.targetSectors),
+        geographies: stringArray(intelligence?.geographies),
+        malwareTools: stringArray(intelligence?.malwareTools),
+    }) || `${title} threat actor profile`
     return { id: `actor-preview:${title}`, title, detail, href: `/ti/${encodeURIComponent(stringValue(row.query) || query)}` }
 }
 
@@ -269,6 +271,10 @@ function arrayFrom(payload: unknown, keys: string[]) {
 
 function stringValue(value: unknown) {
     return typeof value === 'string' ? value.trim() : ''
+}
+
+function stringArray(value: unknown) {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
 function uniqueByHref(items: SearchItem[]) {

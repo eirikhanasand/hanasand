@@ -5,6 +5,8 @@
 import searchThreatIntel, { evidenceTimestamp, TiSearchResponse } from '@/utils/ti/search'
 import { actorGeoProfile, countryFromValue, victimObservationsFor } from '@/utils/ti/actorProfile'
 import { buildActorIntelligence, type TiActorIntelligenceProfile } from '@/utils/ti/actorIntelligence'
+import { ActorMark } from '@/components/ti/actorMark'
+import { actorSummary, usefulActorSummary } from '@/utils/ti/actorSummary'
 import { buildTiActionability, type TiActionabilityModel } from '@/utils/ti/actionability'
 import { PUBLIC_TI_HANDOFF_ACTIONS, buildActorArtifactHandoffs, buildActorArtifacts, encodeHandoffPayload, nextActorArtifactId, type ActorArtifact, type ActorArtifactHandoffs, type ActorArtifactKind, type PublicTiHandoffPayload } from '@/utils/ti/actorWorkbench'
 import { countryCentroids } from '@/utils/monitoring/geo'
@@ -420,7 +422,14 @@ function ActorProfileHeader({ result, title, actor, aliases, summary, actorQuery
     actorQuery?: boolean
 }) {
     const externalId = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0]?.externalId : undefined
-    const description = summary || actor.attribution || `${actor.actorClass}. Public activity and source evidence are shown below.`
+    const description = usefulActorSummary(summary) || actorSummary({
+        name: title,
+        actorClass: actor.actorClass,
+        attribution: actor.attribution,
+        targetSectors: actor.targetSectors,
+        geographies: actor.geographies,
+        malwareTools: actor.malwareTools,
+    }) || `${title} is a tracked threat actor.`
     const facts = [
         actor.attribution ? { label: 'Attribution', value: actor.attribution } : null,
         actor.motivation.length ? { label: 'Motivation', value: actor.motivation.slice(0, 2).join('; ') } : null,
@@ -429,7 +438,10 @@ function ActorProfileHeader({ result, title, actor, aliases, summary, actorQuery
     ].filter((fact): fact is { label: string; value: string } => Boolean(fact))
     return <section data-ti-actor-info='true' className='grid gap-4'>
         <div>
-            <h1 className='wrap-break-word text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>{title}{actorQuery && externalId ? ` · ${externalId}` : ''}</h1>
+            <div className='flex items-center gap-3'>
+                <ActorMark name={title} size='md' />
+                <h1 className='wrap-break-word text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>{title}{actorQuery && externalId ? ` · ${externalId}` : ''}</h1>
+            </div>
             <p className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>{displayRequirementText(description)}</p>
         </div>
         {facts.length ? <div className='grid gap-3 sm:grid-cols-2'>
