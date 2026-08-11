@@ -12,7 +12,7 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
     // watchlist data. The default tenant lane is intentionally empty here.
     const params = await props.searchParams
     const cursor = value(params?.cursor) || ''
-    const [{ runs, total: runTotal, nextCursor, previousCursor, available }, overview] = await Promise.all([
+  const [{ runs, total: runTotal, nextCursor, available }, overview] = await Promise.all([
         getTiCollectionRunsPage(null, { cursor, limit: 50 }),
         getTiAdminOverview(null, { limit: 50, includeSamples: false, includeCandidates: true }),
     ])
