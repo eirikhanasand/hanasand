@@ -1,5 +1,5 @@
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import { isRuntimeLogSourceAvailable } from '#utils/docker/engine.ts'
+import { isRuntimeLogSourceAvailable, listRuntimeContainers } from '#utils/docker/engine.ts'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 export default async function getDocker(this: FastifyInstance, req: FastifyRequest, res: FastifyReply) {
@@ -26,13 +26,24 @@ export default async function getDocker(this: FastifyInstance, req: FastifyReque
             })
         }
 
-        return res.type('application/json').send({
-            containers: [],
-            source: 'unavailable',
-            docker_socket_available: isRuntimeLogSourceAvailable(),
-            unavailable_reason: 'Docker telemetry cache is warming up.',
-            generated_at: new Date().toISOString(),
-        })
+        try {
+            const containers = await listRuntimeContainers()
+            return res.type('application/json').send({
+                containers,
+                source: 'docker_engine_inventory',
+                docker_socket_available: true,
+                unavailable_reason: 'Resource stats are warming up.',
+                generated_at: new Date().toISOString(),
+            })
+        } catch (error: any) {
+            return res.type('application/json').send({
+                containers: [],
+                source: 'unavailable',
+                docker_socket_available: isRuntimeLogSourceAvailable(),
+                unavailable_reason: error?.message || 'Docker runtime telemetry is unavailable.',
+                generated_at: new Date().toISOString(),
+            })
+        }
     } catch (error: any) {
         console.error('Error calling docker endpoint:', error)
         return res.status(500).send({ error: error.message })
