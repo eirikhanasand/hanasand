@@ -110,7 +110,7 @@ export default async function TiRunsPage() {
                                     <span className='text-ui-muted'>{shortDate(run.startedAt)}</span>
                                     <span className='font-semibold text-ui-text'>{durationLabel(run.startedAt, run.finishedAt)}</span>
                                     <span className='text-ui-primary'>{run.captures} cap · {run.screenshots} shots · {run.rows} rows</span>
-                                    <span className='text-ui-muted'>{run.nextRunAt ? relativeUntil(run.nextRunAt) : 'not scheduled'}</span>
+                                    <span className='text-ui-muted'>{run.nextRunAt ? relativeUntil(run.nextRunAt) : 'manual run'}</span>
                                     {run.sourceId ? <Link href={`/dashboard/ti/sources/${run.sourceId}`} className='inline-flex h-8 w-fit items-center gap-1.5 rounded-md border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text hover:bg-ui-raised'>
                                         Source
                                         <ArrowRight className='h-3.5 w-3.5' />
