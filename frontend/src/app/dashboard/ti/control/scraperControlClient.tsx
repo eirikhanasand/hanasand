@@ -393,47 +393,38 @@ export default function TiScraperControlClient() {
                                     <Info label='Active' value={String(scheduler.activeSources)} />
                                     <Info label='Checked' value={String(scheduler.checkedSources)} />
                                     <Info label='Successful' value={String(scheduler.successfulSources)} />
-                                    <Info label='Useful now' value={String(scheduler.usefulSources)} />
-                                    <Info label='Capture-producing' value={String(scheduler.captureProducingSources)} />
-                                    <Info label='Recently seen' value={String(scheduler.recentlySeenSources)} />
+                                    <Info label='Useful in latest check' value={String(scheduler.usefulSources)} />
+                                    <Info label='Produced captures' value={String(scheduler.captureProducingSources)} />
+                                    <Info label='Seen in 24 hours' value={String(scheduler.recentlySeenSources)} />
                                     <Info label="Today's coverage" value={coverageLabel(scheduler.dailyCovered, scheduler.dailySources)} />
-                                    <Info label='Qualified sources' value={String(scheduler.qualifyingSources)} />
-                                    <Info label='Qualified clear web' value={String(scheduler.qualifyingClearWeb)} />
-                                    <Info label='Qualified lawful Tor' value={String(scheduler.qualifyingDarkWeb)} />
-                                    <Info label='Qualified public Telegram' value={String(scheduler.qualifyingTelegram)} />
-                                    <Info label='AI parser' value={scheduler.aiStatus} />
-                                    <Info label='Active Telegram' value={String(sourceGrowth.activeTelegram)} />
-                                    <Info label='Darkweb/onion' value={String(sourceGrowth.activeDarkweb)} />
-                                    <Info label='Matches' value={String(sourceGrowth.watchlistMatches)} />
+                                    <Info label='Telegram sources' value={String(sourceGrowth.activeTelegram)} />
+                                    <Info label='Dark web metadata' value={String(sourceGrowth.activeDarkweb)} />
+                                    <Info label='Pending work' value={String(queueCount)} />
+                                    <Info label='Watchlist matches' value={String(sourceGrowth.watchlistMatches)} />
                                     <Info label='Alerts' value={String(sourceGrowth.alertsGenerated)} />
                                     <Info label='Deliveries' value={String(sourceGrowth.webhookDeliveries)} />
                                 </div>
-                                <label className='grid gap-1'>
-                                    <span className='text-xs font-semibold uppercase text-ui-muted'>Public channel</span>
-                                    <input
-                                        value={sourceTarget}
-                                        onChange={event => setSourceTarget(event.target.value)}
-                                        className='h-9 rounded-md border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/30'
-                                        placeholder='@channel or https://t.me/channel'
-                                    />
-                                </label>
-                                <div className='grid gap-2 sm:grid-cols-2'>
-                                    <ActionButton compact busy={busyAction === 'request_source'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('request_source')}>Add Telegram</ActionButton>
-                                    <ActionButton compact busy={busyAction === 'request_restricted_source'} icon={<DatabaseZap className='h-4 w-4' />} onClick={() => runAction('request_restricted_source')}>Request safe source</ActionButton>
-                                </div>
-                                <label className='grid gap-1'>
-                                    <span className='text-xs font-semibold uppercase text-ui-muted'>Watch terms</span>
-                                    <textarea
-                                        value={watchTerms}
-                                        onChange={event => setWatchTerms(event.target.value)}
-                                        className='min-h-20 rounded-md border border-ui-border bg-ui-panel p-2 text-sm text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/30'
-                                        placeholder='company.com, vendor, product, brand'
-                                    />
-                                </label>
-                                <div className='grid gap-2 sm:grid-cols-2'>
-                                    <ActionButton compact busy={busyAction === 'create_watchlist'} icon={<ListChecks className='h-4 w-4' />} onClick={() => runAction('create_watchlist')}>Save watchlist</ActionButton>
-                                    <ActionButton compact busy={busyAction === 'rebuild_alerts'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Rebuild alerts</ActionButton>
-                                </div>
+                                <details className='mt-3 rounded-md border border-ui-border bg-ui-panel'>
+                                    <summary className='cursor-pointer list-none px-3 py-2 text-xs font-semibold text-ui-text [&::-webkit-details-marker]:hidden'>Collection setup</summary>
+                                    <div className='grid gap-2 border-t border-ui-border p-2'>
+                                        <label className='grid gap-1'>
+                                            <span className='text-xs font-semibold uppercase text-ui-muted'>Public channel</span>
+                                            <input value={sourceTarget} onChange={event => setSourceTarget(event.target.value)} className='h-9 rounded-md border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/30' placeholder='@channel or https://t.me/channel' />
+                                        </label>
+                                        <div className='grid gap-2 sm:grid-cols-2'>
+                                            <ActionButton compact busy={busyAction === 'request_source'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('request_source')}>Add Telegram</ActionButton>
+                                            <ActionButton compact busy={busyAction === 'request_restricted_source'} icon={<DatabaseZap className='h-4 w-4' />} onClick={() => runAction('request_restricted_source')}>Request safe source</ActionButton>
+                                        </div>
+                                        <label className='grid gap-1'>
+                                            <span className='text-xs font-semibold uppercase text-ui-muted'>Watch terms</span>
+                                            <textarea value={watchTerms} onChange={event => setWatchTerms(event.target.value)} className='min-h-20 rounded-md border border-ui-border bg-ui-panel p-2 text-sm text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/30' placeholder='company.com, vendor, product, brand' />
+                                        </label>
+                                        <div className='grid gap-2 sm:grid-cols-2'>
+                                            <ActionButton compact busy={busyAction === 'create_watchlist'} icon={<ListChecks className='h-4 w-4' />} onClick={() => runAction('create_watchlist')}>Save watchlist</ActionButton>
+                                            <ActionButton compact busy={busyAction === 'rebuild_alerts'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Rebuild alerts</ActionButton>
+                                        </div>
+                                    </div>
+                                </details>
                             </SidePanel>
 
                             <SidePanel title='Activity' icon={<History className='h-4 w-4' />}>
