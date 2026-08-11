@@ -54,6 +54,7 @@ fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, b
         done(error as Error, undefined)
     }
 })
+fastify.addContentTypeParser('application/octet-stream', { parseAs: 'string' }, (_req, body, done) => done(null, Buffer.isBuffer(body) ? body.toString('utf8') : body))
 
 fastify.register(websocketPlugin)
 fastify.register(cors, {

@@ -215,6 +215,7 @@ import { getOrganizationPrivacy, postOrganizationPrivacy } from './handlers/orga
 import { deleteSavedSearch, getSavedSearches, postSavedSearch } from './handlers/ti/savedSearches.ts'
 import { getAptUpdates } from './handlers/aptUpdates.ts'
 import { getMillEvents, getMillFindings, getMillRules, getMillUsage, ingestMill, postMillEventAction, postMillFindingAction, postMillRule, postMillRuleAction, postMillRulePack, postMillSigmaPack } from './handlers/mill.ts'
+import { createBillingPortal, getBillingSubscription, receiveStripeWebhook } from './handlers/billing.ts'
 
 /**
  * Defines the routes available in the API.
@@ -467,6 +468,9 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/status/ingest', ingestStatus)
     fastify.get('/commercial/contact-requests', getCommercialContactRequests)
     fastify.post('/commercial/contact-requests', postCommercialContactRequest)
+    fastify.get('/billing/subscription', getBillingSubscription)
+    fastify.post('/billing/portal', createBillingPortal)
+    fastify.post('/billing/webhook', receiveStripeWebhook)
 
     // Legacy CDN/Queenbee traffic read compatibility
     fastify.get('/traffic/summary', getLegacyTrafficSummary)

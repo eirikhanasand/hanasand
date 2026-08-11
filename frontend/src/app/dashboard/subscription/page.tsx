@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { CheckCircle2 } from 'lucide-react'
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 import { commercialAccessPlans } from '@/utils/commercialAccess'
+import SubscriptionStatus from './subscriptionStatus'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,11 +15,13 @@ export default function SubscriptionPage() {
                 description='Simple monthly plans with clear quotas. Start immediately and change plans whenever you need.'
             />
 
+            <SubscriptionStatus />
+
             <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4' aria-label='Available plans'>
                 {commercialAccessPlans.map(plan => <PlanCard key={plan.id} plan={plan} />)}
             </section>
 
-            <p className='text-center text-xs text-ui-muted'>Secure checkout is handled by Stripe. Cancel anytime from your billing portal.</p>
+            <p className='text-center text-xs text-ui-muted'>Payments and subscription changes are handled securely by Stripe.</p>
         </DashboardPage>
     )
 }

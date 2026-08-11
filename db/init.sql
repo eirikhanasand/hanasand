@@ -261,6 +261,47 @@ CREATE TABLE IF NOT EXISTS load_test_subscriptions (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS billing_customers (
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    stripe_customer_id TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS billing_subscriptions (
+    id BIGSERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    stripe_customer_id TEXT NOT NULL,
+    stripe_subscription_id TEXT NOT NULL UNIQUE,
+    plan_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    current_period_start TIMESTAMPTZ,
+    current_period_end TIMESTAMPTZ,
+    cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_billing_subscriptions_user_status ON billing_subscriptions(user_id, status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_billing_subscriptions_customer ON billing_subscriptions(stripe_customer_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS billing_entitlements (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    plan_id TEXT NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    quotas JSONB NOT NULL DEFAULT '{}'::jsonb,
+    features JSONB NOT NULL DEFAULT '[]'::jsonb,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, plan_id)
+);
+CREATE INDEX IF NOT EXISTS idx_billing_entitlements_user_active ON billing_entitlements(user_id, active, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+    event_id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS load_test_runs (
     id BIGSERIAL PRIMARY KEY,
     test_id TEXT NOT NULL REFERENCES load_tests(id) ON DELETE CASCADE,
@@ -554,7 +595,7 @@ CREATE TABLE IF NOT EXISTS admin_audit_events (
     severity TEXT NOT NULL DEFAULT 'info' CHECK (severity IN ('info', 'notice', 'warning', 'critical')),
     source TEXT NOT NULL DEFAULT 'admin',
     service TEXT NOT NULL DEFAULT 'hanasand-api',
-    actor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    actor_id TEXT REFERENCES users(id) ON DELETE SET NULL,
     target_type TEXT,
     target_id TEXT,
     organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
@@ -576,6 +617,7 @@ CREATE INDEX IF NOT EXISTS idx_admin_audit_events_target_created ON admin_audit_
 CREATE INDEX IF NOT EXISTS idx_admin_audit_events_action_created ON admin_audit_events(action_type, severity, outcome, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_audit_events_entity_created ON admin_audit_events(entity_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_audit_events_request_created ON admin_audit_events(request_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_events_org_actor_created ON admin_audit_events(organization_id, actor_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS admin_access_recovery_approvals (
     request_id TEXT PRIMARY KEY,

@@ -34,6 +34,8 @@ export async function GET(request: Request) {
         cancel_url: `${siteUrl}/dashboard/subscription?checkout=cancelled`,
         'metadata[user_id]': id,
         'metadata[plan_id]': plan.id,
+        'subscription_data[metadata][user_id]': id,
+        'subscription_data[metadata][plan_id]': plan.id,
     })
     const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
         method: 'POST',
