@@ -171,32 +171,6 @@ type ReviewIndexCollections = {
   taskSummary?: ReviewTaskSummary;
 };
 
-type ReviewIndexCollections = {
-  tasksAndEvents: any[];
-  claims: any[];
-  incidents: any[];
-  captures: any[];
-  sources: any[];
-  health: any[];
-  claimEvidence: any[];
-  evidenceLinks: any[];
-  reviews: any[];
-  actorIdentities: ActorIdentityRecord[];
-};
-
-type ReviewIndexCollections = {
-  tasksAndEvents: any[];
-  claims: any[];
-  incidents: any[];
-  captures: any[];
-  sources: any[];
-  health: any[];
-  claimEvidence: any[];
-  evidenceLinks: any[];
-  reviews: any[];
-  actorIdentities: ActorIdentityRecord[];
-};
-
 const MAX_STALE_TASKS_SUPERSEDED_PER_CYCLE = 250;
 
 export async function handleAutomaticReviewRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
@@ -832,7 +806,7 @@ function persistClaimDecision(store: any, task: AutomaticReviewTask, decision: A
     requestSha256: task.requestSha256,
     automaticDecision: decision,
     calibrationContext: decision.calibrationContext
-  };
+  });
 }
 
 function persistSubjectDecision(store: any, index: ReviewIndex, task: AutomaticReviewTask, decision: AutomaticReviewDecision, at: string, actor?: ActorIdentityRecord, reviewer?: string, idKind?: string) {

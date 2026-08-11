@@ -64,9 +64,23 @@ function jsonItem(source: any, task: any, entry: any, at: string, metadata: any,
   const publishedAt = stringField(entry, ["discovered", "dateAdded", "published", "publishedDate", "lastModified", "lastModifiedDate", "updated"]);
   const url = stringField(entry, ["post_url", "link", "url", "source", "reference"]) || task.targetUrl;
   const rawText = ransomwareGroup ? ransomwareGroupSummary(source.name, ransomwareGroup) : [source.name, title, jsonSummary(entry)].filter(Boolean).join("\n").slice(0, 24_000);
-  const collected = row(source, task, /^https?:\/\//i.test(url) ? url : task.targetUrl, title, rawText, at, publishedAt, { ...metadata, jsonApi: true, structuredFields: structuredFields(entry), ransomwareGroup }, index, false);
-  const evaluationCveSet = source.id === "src_canary_nvd_recent" ? completeCveProjection(entry) : undefined;
+  const collected = row(source, task, /^https?:\/\//i.test(url) ? url : task.targetUrl, title, rawText, at, publishedAt, { ...metadata, jsonApi: true, structuredFields: structuredFields(entry), ransomwareGroup, ...victim }, index, false);
+  const evaluationCveSet = source.id === "src_canary_nvd_recent" || /services\.nvd\.nist\.gov\/rest\/json\/cves/i.test(String(source.url ?? task.targetUrl)) ? completeCveProjection(entry) : undefined;
   return evaluationCveSet ? { ...collected, evaluationCveSet: { ...evaluationCveSet, captureContentHash: collected.contentHash } } : collected;
+}
+
+function ransomwareVictimMetadata(source: any, title: string | undefined, publishedAt: string | undefined, actorValue?: string) {
+  if (!source.metadata?.exposureQueueSource) return {};
+  const match = String(title ?? "").match(/^(.+?)\s+by\s+(.+)$/i);
+  const victimName = cleanGroupValue(match?.[1] ?? title);
+  const actorName = cleanGroupValue(match?.[2] ?? actorValue);
+  if (!victimName || !actorName || victimName.length > 140 || actorName.length > 80) return {};
+  return { leakSite: { actorName, victimName, claimType: "ransomware_victim_publication", firstSeenAt: publishedAt, metadataOnly: true } };
+}
+
+function ransomwareVictimTitle(source: any, title: string | undefined) {
+  const metadata = ransomwareVictimMetadata(source, title, undefined).leakSite;
+  return metadata ? `${metadata.actorName} has just published a new victim: ${metadata.victimName}` : undefined;
 }
 
 function jsonRows(value: any): any[] {
@@ -122,6 +136,13 @@ function ransomwareGroupSummary(sourceName: string, group: any) {
 function cleanGroupValue(value: unknown): string | undefined {
   if (typeof value !== "string" || !value.trim()) return undefined;
   return value.replace(/\bhttps?:\/\/\S+/gi, "[public reference]").replace(/\b[a-z2-7]{56}\.onion\b/gi, "[restricted host]").replace(/\s+/g, " ").trim();
+}
+
+function publicReferenceUrl(value: unknown): string | undefined {
+  try {
+    const url = new URL(String(value));
+    return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? url.toString() : undefined;
+  } catch { return undefined; }
 }
 
 function safeJson(value: string) {

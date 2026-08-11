@@ -13,6 +13,7 @@ import { handleTimelinessRequest } from "./timelinessRoutes.ts";
 import { reconcileActorIdentityCoverage } from "../pipeline/mitreActorCatalog.ts";
 import { handleAutomaticReviewRequest } from "./automaticReviewRoutes.ts";
 import { upsertServiceMonitorIncident } from "./serviceMonitorIncident.ts";
+import { handleActorEnrichmentRequest } from "./actorEnrichmentRoutes.ts";
 
 const listRoutes = {
   "/v1/intel/sources": ["sources", "listSources"],
@@ -53,6 +54,8 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
   const automaticReviewResponse = await handleAutomaticReviewRequest(request, options);
   if (automaticReviewResponse) return automaticReviewResponse;
   const url = new URL(request.url);
+  const actorEnrichmentResponse = await handleActorEnrichmentRequest(request, options);
+  if (actorEnrichmentResponse) return actorEnrichmentResponse;
   const timelinessResponse = await handleTimelinessRequest(request, options);
   if (timelinessResponse) return timelinessResponse;
   const evaluationBenchmarkResponse = await handleEvaluationBenchmarkRequest(request, options);

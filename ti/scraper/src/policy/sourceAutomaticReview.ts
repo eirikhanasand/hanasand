@@ -63,16 +63,6 @@ export function sourceAutomaticReviewPromptVersionMatches(source: any, promptVer
     && (source?.metadata?.sourceFamily !== "dark_web_victim_feed" || promptVersion === SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION);
 }
 
-export function sourceAutomaticReviewPromptVersionMatches(source: any, promptVersion: unknown) {
-  return compatibleSourceReviewPromptVersions.has(String(promptVersion))
-    && (source?.metadata?.sourceFamily !== "dark_web_victim_feed" || promptVersion === SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION);
-}
-
-export function sourceAutomaticReviewPromptVersionMatches(source: any, promptVersion: unknown) {
-  return compatibleSourceReviewPromptVersions.has(String(promptVersion))
-    && (source?.metadata?.sourceFamily !== "dark_web_victim_feed" || promptVersion === SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION);
-}
-
 export function automaticSourceReviewIdentity(source: any) {
   const identity = {
     sourceId: String(source?.id ?? ""),
@@ -108,35 +98,6 @@ export function sourceAutomaticReviewEvidenceBound(review: any) {
     && /^[A-Za-z0-9_.:-]{1,200}$/.test(String(item?.captureId ?? ""))
     && /^[A-Za-z0-9_.:-]{1,200}$/.test(String(item?.contentHash ?? ""))
     && /^[a-f0-9]{64}$/.test(String(item?.captureStateSha256 ?? "")));
-}
-
-export function automaticSourceReviewIdentity(source: any) {
-  const identity = {
-    sourceId: String(source?.id ?? ""),
-    tenantKey: String(source?.tenantId ?? "global"),
-    canonicalFeedKey: canonicalFeedKey(String(source?.url ?? "")),
-    createdAt: String(source?.createdAt ?? "")
-  };
-  return { ...identity, sha256: createHash("sha256").update(JSON.stringify(identity)).digest("hex") };
-}
-
-export function sourceAutomaticReviewIdentityMatches(source: any, review = source?.metadata?.automaticSourceReview) {
-  const identity = automaticSourceReviewIdentity(source);
-  return review?.sourceIdentity?.sourceId === identity.sourceId
-    && review.sourceIdentity.tenantKey === identity.tenantKey
-    && review.sourceIdentity.canonicalFeedKey === identity.canonicalFeedKey
-    && review.sourceIdentity.createdAt === identity.createdAt
-    && review.sourceIdentity.sha256 === identity.sha256;
-}
-
-export function automaticSourceReviewIdentity(source: any) {
-  const identity = {
-    sourceId: String(source?.id ?? ""),
-    tenantKey: String(source?.tenantId ?? "global"),
-    canonicalFeedKey: canonicalFeedKey(String(source?.url ?? "")),
-    createdAt: String(source?.createdAt ?? "")
-  };
-  return { ...identity, sha256: createHash("sha256").update(JSON.stringify(identity)).digest("hex") };
 }
 
 export function hasApprovedAutomaticSourceReview(source: any, modelVersion = automaticReviewModelVersion()) {

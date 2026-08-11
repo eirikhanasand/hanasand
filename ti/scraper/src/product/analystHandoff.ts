@@ -1,5 +1,5 @@
 import { nowIso, stableId, uniqueStrings } from "../utils.ts";
-import type { DwmAlert, DwmRecommendedRoute, DwmWatchTerm } from "./dwmProduct.ts";
+import { customerStateForEvidence, type DwmAlert, type DwmRecommendedRoute, type DwmWatchTerm } from "./dwmProduct.ts";
 
 export const ANALYST_HANDOFF_SCHEMA_VERSION = "hanasand.analyst_handoff.v1" as const;
 export const ORG_ALERT_WATCHLIST_READINESS_SCHEMA_VERSION = "organization.watchlist_alert_readiness.v1" as const;
@@ -1202,6 +1202,7 @@ function alertFromOrgRelevance(
     sourceCount: sourceIds.length || 1,
     firstSeenAt: orgRelevance.freshness?.lastSeen ?? orgRelevance.generatedAt,
     lastSeenAt: orgRelevance.freshness?.lastSeen ?? orgRelevance.generatedAt,
+    customerState: customerStateForEvidence({ evidence: [], generatedAt: orgRelevance.generatedAt }),
     assertionKind: "source_claim",
     observedMatchSummary: `1 captured record from ${sourceIds.length || 1} source matched ${term.value}. This confirms the source mention, not the underlying incident.`,
     claimSummary: `${orgRelevance.query} matched ${term.value} from ${source.sourceName}.`,
@@ -1209,7 +1210,9 @@ function alertFromOrgRelevance(
       normalizedTerm: normalizeValue(term.value),
       termKind: term.kind,
       matchType: "bounded_text_or_metadata",
-      matchedFieldHints: ["publicTi.orgRelevance"]
+      matchedFieldHints: ["publicTi.orgRelevance"],
+      matchedText: term.value,
+      matchSpan: { start: -1, end: -1, text: term.value }
     },
     evidenceSummary: {
       evidenceCount: 1,

@@ -489,3 +489,23 @@ function requiredIso(value: unknown, label: string): string { const result = val
 function requiredZonedIso(value: unknown, label: string): string { const result = zonedIso(value); if (!result) throw new Error(`Invalid ${label}; include an explicit timezone`); return result; }
 function sameTime(left: unknown, right: unknown): boolean { const a = validIso(left), b = validIso(right); return Boolean(a && b && a === b); }
 function cleanText(value: unknown, max: number): string | undefined { const result = string(value)?.replace(/\s+/g, " "); return result?.slice(0, max); }
+export function publicReferenceUrl(value: unknown): string | undefined {
+  try {
+    const url = new URL(String(value ?? ""));
+    const host = url.hostname.toLowerCase();
+    const secret = /token|secret|password|authorization|cookie|api[_-]?key|signature|credential|session/i;
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.toString().length > 2_048 || !host || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".onion") || host.endsWith(".i2p") || privateHost(host)) return undefined;
+    if ([...url.searchParams.keys()].some((key) => secret.test(key)) || secret.test(url.hash)) return undefined;
+    return url.toString();
+  } catch { return undefined; }
+}
+function privateHost(host: string): boolean {
+  if (host === "::1" || host.includes(":")) return true;
+  const octets = host.split(".").map(Number);
+  if (octets.length !== 4 || octets.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) return false;
+  return octets[0] === 0 || octets[0] === 10 || octets[0] === 127 || octets[0] >= 224
+    || (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127)
+    || (octets[0] === 169 && octets[1] === 254)
+    || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
+    || octets[0] === 192 && octets[1] === 168;
+}

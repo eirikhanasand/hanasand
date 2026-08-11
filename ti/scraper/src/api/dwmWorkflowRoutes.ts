@@ -1,4 +1,4 @@
-import { captureEvidenceTiming, classifySourceFamily, normalizeWatchlist, withDwmAlertMatchTiming, type DwmMatchTimingBasis, type DwmSourceFamily, type DwmWatchTerm } from "../product/dwmProduct.ts";
+import { captureEvidenceTiming, classifySourceFamily, customerStateForEvidence, matchTimingForEvidence, normalizeWatchlist, withDwmAlertMatchTiming, type DwmMatchTimingBasis, type DwmSourceFamily, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationReadiness, buildDwmAlertRetentionAudit, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts, type RuntimeDwmWatchlist } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
 import { buildDwmCustomerAlertSummary, sanitizeDwmApiPayload, sanitizeDwmCustomerEvidenceExcerpt } from "../product/dwmCustomerDisplay.ts";
@@ -908,6 +908,12 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     firstSeenAt: alert.firstSeenAt,
     lastSeenAt: alert.lastSeenAt,
     matchTiming: alert.matchTiming,
+    customerState: alert.customerState ?? customerStateForEvidence({
+      evidence: alert.evidence ?? [],
+      matchTiming: alert.matchTiming,
+      generatedAt: alert.updatedAt ?? alert.alertCreatedAt ?? generatedAt,
+      blocked: alert.workflowStatus === "blocked" || alert.deliveryState === "blocked"
+    }),
     assertionKind: alert.assertionKind ?? "source_claim",
     observedMatchSummary: alert.observedMatchSummary,
     claimSummary: buildDwmCustomerAlertSummary(alert),
@@ -1468,13 +1474,15 @@ function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope
     sourceCount: 1,
     firstSeenAt,
     lastSeenAt: observedAt,
-    matchTiming: matchTimingForEvidence([evidence], generatedAt),
+    matchTiming: matchTimingForEvidence([evidence], { kind: "alert_created_at", at: generatedAt }),
     claimSummary: `${claim.actor ?? "Unknown actor"} exposure claim for ${claim.company ?? "Unknown company"}: ${claim.claimedData ?? "new victim claim"}.`,
     matchContext: {
       normalizedTerm: String(claim.company ?? "").toLowerCase(),
       termKind: "company",
       matchType: "exposure_queue_claim",
-      matchedFieldHints: ["exposure_queue.company", "exposure_queue.actor", "exposure_queue.claimedData"]
+      matchedFieldHints: ["exposure_queue.company", "exposure_queue.actor", "exposure_queue.claimedData"],
+      matchedText: String(claim.company ?? "Unknown company"),
+      matchSpan: { start: 0, end: String(claim.company ?? "Unknown company").length, text: String(claim.company ?? "Unknown company") }
     },
     evidenceSummary: {
       evidenceCount: 1,
@@ -1835,8 +1843,15 @@ function buildDwmAlertListItem(alert: any, options: ApiServerOptions, deliveries
   const deliveryReadiness = buildDwmAlertDeliveryReadiness(alert, alertDeliveries);
   const evidenceFreshness = buildDwmAlertEvidenceFreshness(alert);
   const provenanceFreshness = buildDwmAlertProvenanceFreshness(alert);
+  const customerState = alert.customerState ?? customerStateForEvidence({
+    evidence: alert.evidence ?? [],
+    matchTiming: alert.matchTiming,
+    generatedAt: alert.updatedAt ?? alert.alertCreatedAt ?? nowIso(),
+    blocked: alert.workflowStatus === "blocked" || alert.deliveryState === "blocked"
+  });
   return sanitizeDwmApiPayload({
     ...alert,
+    customerState,
     alertDetailPath: alertDetailPathFor(alert),
     workflowSummary,
     workflowExecutionReadiness,

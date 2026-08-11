@@ -1,6 +1,7 @@
 import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
 
 export type TiEnrichmentStatus = 'ready' | 'running' | 'queued' | 'review'
+export type TiWorkerState = 'active' | 'idle' | 'unavailable'
 
 export type TiEnrichedActor = {
     id: string
@@ -52,7 +53,7 @@ export type TiManagementAuditEvent = {
 export type TiEnrichmentOverview = {
     generatedAt: string
     worker: {
-        state: 'warming' | 'running' | 'idle' | 'ready' | 'error' | 'unavailable'
+        state: TiWorkerState
         mode: string
         intervalSeconds: number
         batchSize: number
@@ -60,6 +61,10 @@ export type TiEnrichmentOverview = {
         lastSweepFinishedAt: string | null
         lastError: string | null
         cursor: number
+        lastRunId?: string | null
+        lastRunAt?: string | null
+        lastSuccessfulRunAt?: string | null
+        snapshotFresh?: boolean
     }
     updatedActors: TiEnrichedActor[]
     queuedActors: TiEnrichedActor[]
@@ -72,6 +77,11 @@ export type TiEnrichmentOverview = {
         auditedEvents: number
         automaticCoverage: number
         totalRefreshes: number
+        profilesProcessed: number
+        profilesChanged: number
+        sourceRecords: number
+        evidenceRecords: number
+        failures: number
     }
     pipeline?: TiPipelineOverview
 }
@@ -134,11 +144,30 @@ export type TiPipelineOverview = {
 }
 
 export async function getTiEnrichmentOverview(): Promise<TiEnrichmentOverview> {
-    const [profiles, updates] = await Promise.all([
+    const [profiles, updates, status] = await Promise.all([
         getPersistedActorProfiles(),
         getPersistedProfileUpdates(),
+        getPersistedEnrichmentStatus(),
     ])
-    return passiveOverview(profiles, updates)
+    return passiveOverview(profiles, updates, status)
+}
+
+type PersistedEnrichmentStatus = {
+    worker: { state: TiWorkerState, lastRunAt: string | null, lastSuccessfulRunAt: string | null, currentFailure: string | null, snapshotFresh: boolean }
+    latestRun: { id: string, status: string, actorCount: number, sourceCount: number, changedFieldCount: number, evidenceCount: number, failureCount: number, finishedAt: string | null } | null
+}
+
+async function getPersistedEnrichmentStatus(): Promise<PersistedEnrichmentStatus | undefined> {
+    try {
+        const target = new URL('/v1/intel/actor-enrichment/status', tiScraperApiBase())
+        target.searchParams.set('tenantId', 'default')
+        const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
+        const response = await fetch(target, { cache: 'force-cache', next: { revalidate: 5 }, headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined, signal: AbortSignal.timeout(2_000) })
+        if (!response.ok) return undefined
+        return await response.json() as PersistedEnrichmentStatus
+    } catch {
+        return undefined
+    }
 }
 
 type PersistedActorProfile = {
@@ -227,7 +256,7 @@ function persistedProfile(value: unknown): PersistedActorProfile | undefined {
     }
 }
 
-function passiveOverview(profiles: PersistedActorProfile[], updates: TiProfileUpdate[]): TiEnrichmentOverview {
+function passiveOverview(profiles: PersistedActorProfile[], updates: TiProfileUpdate[], status?: PersistedEnrichmentStatus): TiEnrichmentOverview {
     const actors = new Map<string, TiEnrichedActor>()
     for (const profile of profiles) {
         const links = profile.sourceIds.map(sourceId => ({ name: sourceId, url: '' }))
@@ -264,14 +293,18 @@ function passiveOverview(profiles: PersistedActorProfile[], updates: TiProfileUp
     return {
         generatedAt: new Date().toISOString(),
         worker: {
-            state: 'ready',
+            state: status?.worker.state ?? 'unavailable',
             mode: 'automated monitoring',
             intervalSeconds: 300,
             batchSize: profiles.length,
-            lastSweepStartedAt: updates[0]?.observedAt || null,
-            lastSweepFinishedAt: updates[0]?.observedAt || null,
-            lastError: null,
+            lastSweepStartedAt: status?.latestRun?.finishedAt || null,
+            lastSweepFinishedAt: status?.worker.lastSuccessfulRunAt || null,
+            lastError: status?.worker.currentFailure || null,
             cursor: 0,
+            lastRunId: status?.latestRun?.id || null,
+            lastRunAt: status?.worker.lastRunAt || null,
+            lastSuccessfulRunAt: status?.worker.lastSuccessfulRunAt || null,
+            snapshotFresh: status?.worker.snapshotFresh ?? false,
         },
         updatedActors: [...actors.values()],
         queuedActors: [],
@@ -284,6 +317,11 @@ function passiveOverview(profiles: PersistedActorProfile[], updates: TiProfileUp
             auditedEvents: 0,
             automaticCoverage: profiles.length,
             totalRefreshes: activity.length,
+            profilesProcessed: status?.latestRun?.actorCount ?? 0,
+            profilesChanged: status?.latestRun?.changedFieldCount ?? 0,
+            sourceRecords: status?.latestRun?.sourceCount ?? 0,
+            evidenceRecords: status?.latestRun?.evidenceCount ?? 0,
+            failures: status?.latestRun?.failureCount ?? 0,
         },
     }
 }

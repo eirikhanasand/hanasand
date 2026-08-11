@@ -25,10 +25,11 @@ export default async function TiEnrichmentPage() {
                     <div>
                         <div className='flex items-center gap-2'>
                             <Radio className='h-5 w-5 text-ui-success' />
-                            <h2 className='text-lg font-semibold text-ui-text'>Automated monitoring</h2>
-                            <StatusPill label={worker.state === 'error' ? 'attention' : 'active'} tone={worker.state === 'error' ? 'bad' : 'ok'} />
+                            <h2 className='text-lg font-semibold text-ui-text'>Automated enrichment</h2>
+                            <StatusPill label={`worker ${worker.state}`} tone={worker.state === 'unavailable' ? 'bad' : 'ok'} />
                         </div>
-                        <p className='mt-1 max-w-2xl text-sm text-ui-muted'>Profiles are built from captured source evidence automatically. Open a profile to see its public intelligence and evidence trail.</p>
+                        <p className='mt-1 max-w-2xl text-sm text-ui-muted'>Profiles are built from captured source evidence. The status below reflects the last durable run, not a guessed live process.</p>
+                        <p className='mt-2 text-xs text-ui-muted'>{worker.state === 'unavailable' ? 'The enrichment status service could not be reached.' : worker.lastSuccessfulRunAt ? `Last successful run ${formatTiDate(worker.lastSuccessfulRunAt)}${worker.snapshotFresh === false ? ' · snapshot is stale' : ''}.` : 'No enrichment run has been recorded yet.'}</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         <Link href='/dashboard/ti/control' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>Collection control</Link>
@@ -36,10 +37,13 @@ export default async function TiEnrichmentPage() {
                     </div>
                 </div>
                 <div className='mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4'>
-                    <Metric label='Profiles observed' value={String(actors.length)} />
-                    <Metric label='Evidence rows' value={String(activity.length)} />
-                    <Metric label='Sources represented' value={String(sourceCount)} />
-                    <Metric label='New in 24 hours' value={String(stats.updatedLastHour)} />
+                    <Metric label='Profiles processed' value={String(stats.profilesProcessed || actors.length)} />
+                    <Metric label='Profile fields changed' value={String(stats.profilesChanged)} />
+                    <Metric label='Source records added' value={String(stats.sourceRecords || sourceCount)} />
+                    <Metric label='Evidence records' value={String(stats.evidenceRecords || activity.length)} />
+                </div>
+                <div className='mt-3 grid gap-2 text-xs text-ui-muted sm:grid-cols-3'>
+                    <span>Queued: {stats.queued}</span><span>Failures: {stats.failures}</span><span>Last run: {worker.lastRunAt ? formatTiDate(worker.lastRunAt) : 'none'}</span>
                 </div>
             </DashboardPanel>
 

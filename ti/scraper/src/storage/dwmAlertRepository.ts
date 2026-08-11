@@ -1,4 +1,4 @@
-import { buildDwmProductSnapshot, captureEvidenceTiming, classifySourceFamily, matchableCaptureText, matchTimingForEvidence, withDwmAlertMatchTiming, type DwmAlert, type DwmMatchTimingBasis, type DwmWatchTerm } from "../product/dwmProduct.ts";
+import { buildDwmProductSnapshot, captureEvidenceTiming, classifySourceFamily, customerStateForEvidence, matchableCaptureText, matchContextFor, matchTimingForEvidence, withDwmAlertMatchTiming, type DwmAlert, type DwmMatchTimingBasis, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { stableId, uniqueStrings } from "../utils.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 import type { RuntimeOrgMembershipContext, RuntimeOrgWatchlistTermContext } from "./dwmOrgWatchlistBridge.ts";
@@ -4459,6 +4459,9 @@ function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, so
     .map((ref) => evidenceFromGenerationCaptureRef(ref, captureById.get(String(ref.captureId)), sourceById.get(String(ref.sourceId))))
     .filter(Boolean) as DwmAlert["evidence"];
   if (!evidence.length) return undefined;
+  const primaryCapture = candidate.captureRefs
+    .map((ref) => captureById.get(String(ref.captureId)))
+    .find((capture): capture is RawCapture => Boolean(capture));
 
   const sourceFamilies = uniqueStrings(evidence.map((item) => item.sourceFamily)) as DwmAlert["sourceFamily"][];
   const sourceCount = uniqueStrings(evidence.map((item) => item.sourceId)).length;
@@ -4483,6 +4486,7 @@ function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, so
     firstSeenAt: observed[0] ?? generatedAt,
     lastSeenAt: observed.at(-1) ?? generatedAt,
     matchTiming: matchTimingForEvidence(evidence),
+    customerState: customerStateForEvidence({ evidence, generatedAt }),
     assertionKind: "source_claim",
     observedMatchSummary: generatedObservedMatchSummary(candidate.term.value, evidence.length, sourceCount),
     claimSummary: `${sourceFamily.replaceAll("_", " ")} evidence matched ${candidate.term.value} across ${evidence.length} capture${evidence.length === 1 ? "" : "s"}.`,
@@ -4490,7 +4494,11 @@ function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, so
       normalizedTerm: candidate.normalizedTerm,
       termKind: candidate.term.kind,
       matchType: "bounded_text_or_metadata",
-      matchedFieldHints: ["capture_text", "source_metadata"]
+      ...(primaryCapture ? matchContextFor(candidate.term, primaryCapture) : {
+        matchedFieldHints: ["capture_text", "source_metadata"],
+        matchedText: candidate.term.value,
+        matchSpan: { start: -1, end: -1, text: candidate.term.value }
+      })
     },
     evidenceSummary: {
       evidenceCount: evidence.length,

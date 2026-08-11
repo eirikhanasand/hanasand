@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest) {
     try {
         const body = await request.text()
-        const response = await fetch(`${config.url.api}/ti/enrichment/run`, {
+        const response = await fetch(`${config.url.api}/v1/intel/actor-enrichment/runs`, {
             method: 'POST',
             cache: 'no-store',
             headers: { 'content-type': 'application/json' },

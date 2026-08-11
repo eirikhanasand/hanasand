@@ -4,7 +4,7 @@ import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { evidenceIndependence } from "../storage/memoryStore.ts";
-import { activatePublicCanarySources, pausePublicCanarySources, reconcilePublicSourceProductivity } from "./canaryActivation.ts";
+import { activatePublicCanarySources, currentProductiveSourceCycles, pausePublicCanarySources, reconcilePublicSourceProductivity } from "./canaryActivation.ts";
 import { canaryQueries, PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 import { detachedState, externalize, fetchItems, health, maxItemsFor, nextAnchoredCycleAt, tasksForSource } from "./canaryHelpers.ts";
 import { isCisaKevSource, isNvdCveSource, isParserEmptyFallback } from "./canaryFeedItems.ts";
@@ -334,7 +334,8 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
     if (!currentSource || currentSource.tenantId !== source.tenantId) return;
     const lastContentAt = useful ? latestTimestamp(taskMetrics.productivePublishedAt) ?? checkedAt : currentSource.health?.lastContentAt;
     const portfolioCandidate = governedPortfolioCandidate(currentSource, checkedAt, options.store);
-    const productiveCycles = portfolioCandidate ? currentProductiveCycles(options.store, currentSource, checkedAt) : [];
+    const reviewGovernedSource = portfolioCandidate || isLegacySourceReviewCandidate(currentSource);
+    const productiveCycles = reviewGovernedSource ? currentProductiveSourceCycles(options.store, currentSource, checkedAt) : [];
     const sustained = hasApprovedAutomaticSourceReview(currentSource)
       && automaticSourceReviewEvidenceBindingsMatch(currentSource, (id) => options.store.getCapture?.(id))
       && productiveCycles.length >= 2;

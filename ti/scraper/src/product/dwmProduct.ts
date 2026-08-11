@@ -15,6 +15,12 @@ export type DwmMatchTimingBasis = {
   kind: "watchlist_created_at" | "alert_created_at";
   at: string;
 };
+export type DwmCustomerState = "newly_collected" | "previously_observed" | "updated" | "stale" | "unavailable" | "blocked";
+export type DwmCustomerStateDetail = {
+  state: DwmCustomerState;
+  label: "Newly collected" | "Previously observed" | "Updated" | "Stale" | "Unavailable" | "Blocked";
+  reason: string;
+};
 
 export interface DwmWatchTerm {
   value: string;
@@ -86,6 +92,8 @@ export interface DwmAlert {
     termKind: DwmWatchTerm["kind"];
     matchType: "bounded_text_or_metadata";
     matchedFieldHints: string[];
+    matchedText?: string;
+    matchSpan?: { start: number; end: number; text: string };
   };
   evidenceSummary: {
     evidenceCount: number;
@@ -117,6 +125,7 @@ export interface DwmAlert {
   recommendedAction: string;
   recommendedRoute: DwmRecommendedRoute;
   evidence: DwmEvidenceRef[];
+  customerState: DwmCustomerStateDetail;
   webhookDelivery: {
     recommendedRoute: DwmRecommendedRoute;
     payloadHash: string;
@@ -318,6 +327,7 @@ function buildAlerts(input: { watchlist: DwmWatchTerm[]; sources: SourceRecord[]
       recommendedAction: recommendedActionFor(artifactType, sourceFamily, matchedTerm),
       recommendedRoute: delivery.recommendedRoute,
       evidence: [evidence],
+      customerState: customerStateForEvidence({ evidence: [evidence], generatedAt: input.generatedAt }),
       webhookDelivery: delivery
     }));
   }
@@ -504,7 +514,7 @@ function mergeDuplicateAlerts(alerts: DwmAlert[]): DwmAlert[] {
     current.confidenceReasoning = uniqueStrings([...current.confidenceReasoning, ...alert.confidenceReasoning, "Multiple recent captures support the same watchlist alert."]);
     current.firstSeenAt = current.firstSeenAt < alert.firstSeenAt ? current.firstSeenAt : alert.firstSeenAt;
     current.lastSeenAt = current.lastSeenAt > alert.lastSeenAt ? current.lastSeenAt : alert.lastSeenAt;
-    current.matchTiming = matchTimingForEvidence(current.evidence, current.provenance.generatedAt);
+    current.matchTiming = matchTimingForEvidence(current.evidence, { kind: "alert_created_at", at: current.provenance.generatedAt });
     current.provenance = provenanceForAlert(current.provenance.generatedAt, current.evidence);
     current.evidenceSummary = evidenceSummaryFor(current.evidence);
     current.webhookDelivery = {
@@ -532,14 +542,40 @@ export function withDwmAlertMatchTiming<T extends DwmAlert>(alert: T, basis?: Dw
     ...item,
     matchTiming: evidenceMatchTiming(item, basis)
   }));
+  const matchTiming = matchTimingForEvidence(evidence, basis);
   const observed = evidence.map((item) => item.observedAt || item.firstSeenAt).filter(Boolean).sort();
   return {
     ...alert,
     evidence,
     firstSeenAt: observed[0] ?? alert.firstSeenAt,
     lastSeenAt: observed.at(-1) ?? alert.lastSeenAt,
-    matchTiming: matchTimingForEvidence(evidence, basis)
+    matchTiming,
+    customerState: customerStateForEvidence({
+      evidence,
+      matchTiming,
+      generatedAt: alert.provenance?.generatedAt ?? basis?.at ?? alert.lastSeenAt
+    })
   };
+}
+
+export function customerStateForEvidence(input: {
+  evidence: DwmEvidenceRef[];
+  matchTiming?: DwmAlert["matchTiming"];
+  generatedAt: string;
+  staleAfterSeconds?: number;
+  blocked?: boolean;
+}): DwmCustomerStateDetail {
+  if (input.blocked) return { state: "blocked", label: "Blocked", reason: "The source or policy currently prevents customer-visible monitoring." };
+  if (!input.evidence.length) return { state: "unavailable", label: "Unavailable", reason: "No retained evidence is available for this monitoring result." };
+  const timing = input.matchTiming;
+  if (timing?.kind === "unknown" || !timing?.lastObservedAt) return { state: "unavailable", label: "Unavailable", reason: "The retained evidence has no reliable observation timestamp." };
+  const staleAfterSeconds = input.staleAfterSeconds ?? 7 * 24 * 60 * 60;
+  const ageSeconds = (Date.parse(input.generatedAt) - Date.parse(timing.lastObservedAt)) / 1_000;
+  if (Number.isFinite(ageSeconds) && ageSeconds > staleAfterSeconds) return { state: "stale", label: "Stale", reason: "The most recent retained observation is older than the monitoring freshness window." };
+  if ((timing.currentEvidenceCount ?? 0) > 0 && (timing.historicalEvidenceCount ?? 0) > 0) return { state: "updated", label: "Updated", reason: "New evidence changed an observation that was previously seen." };
+  if ((timing.currentEvidenceCount ?? 0) > 0) return { state: "newly_collected", label: "Newly collected", reason: "The matching evidence was collected during the current monitoring window." };
+  if ((timing.historicalEvidenceCount ?? 0) > 0) return { state: "previously_observed", label: "Previously observed", reason: "The matching evidence was retained before the current monitoring window." };
+  return { state: "unavailable", label: "Unavailable", reason: "The evidence timing could not be classified." };
 }
 
 export function matchTimingForEvidence(evidence: DwmEvidenceRef[], basis?: DwmMatchTimingBasis): DwmAlert["matchTiming"] {
@@ -596,17 +632,17 @@ function validIso(value: unknown): string | undefined {
   return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
 }
 
-export function captureEvidenceTiming(capture: Pick<RawCapture, "publishedAt" | "collectedAt">, fallback = nowIso()) {
-  const collectedAt = validIso(capture.collectedAt);
-  const publishedAt = validIso(capture.publishedAt);
+export function legacyCaptureEvidenceTiming(capture: Pick<RawCapture, "publishedAt" | "observedAt" | "collectedAt">) {
+  const collectedAt = legacyValidIso(capture.collectedAt);
+  const publishedAt = legacyValidIso(capture.publishedAt);
   return {
     collectedAt,
     publishedAt,
-    observedAt: publishedAt ?? collectedAt ?? validIso(fallback) ?? nowIso()
+    observedAt: publishedAt ?? legacyValidIso(capture.observedAt)
   };
 }
 
-export function matchTimingForEvidence(evidence: DwmEvidenceRef[], generatedAt: string): DwmAlert["matchTiming"] {
+export function legacyMatchTimingForEvidence(evidence: DwmEvidenceRef[], generatedAt: string): DwmAlert["matchTiming"] {
   const observed = evidence.map((item) => item.observedAt || item.firstSeenAt).filter(Boolean).sort();
   const collected = evidence.map((item) => item.provenance.collectedAt).filter(Boolean).sort() as string[];
   // ponytail: a retained publication-to-collection gap is the smallest honest backfill signal
@@ -622,11 +658,13 @@ export function matchTimingForEvidence(evidence: DwmEvidenceRef[], generatedAt: 
     lastObservedAt: observed.at(-1) ?? generatedAt,
     firstCollectedAt: collected[0],
     lastCollectedAt: collected.at(-1),
-    historicalEvidenceCount
+    historicalEvidenceCount,
+    currentEvidenceCount: evidence.length - historicalEvidenceCount,
+    unknownEvidenceCount: 0
   };
 }
 
-function validIso(value: unknown): string | undefined {
+function legacyValidIso(value: unknown): string | undefined {
   const time = Date.parse(String(value ?? ""));
   return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
 }
@@ -786,12 +824,18 @@ function deliveryFor(term: DwmWatchTerm, artifactType: DwmArtifactType, sourceFa
   };
 }
 
-function matchContextFor(term: DwmWatchTerm, capture: RawCapture): DwmAlert["matchContext"] {
+export function matchContextFor(term: DwmWatchTerm, capture: RawCapture): DwmAlert["matchContext"] {
+  const text = matchableCaptureText(capture);
+  const start = text.toLowerCase().indexOf(term.value.toLowerCase());
+  const end = start >= 0 ? start + term.value.length : start;
+  const matchedText = start >= 0 ? text.slice(start, end) : term.value;
   return {
     normalizedTerm: normalizeMatchValue(term.value),
     termKind: term.kind,
     matchType: "bounded_text_or_metadata",
-    matchedFieldHints: matchedFieldHints(capture, term.value)
+    matchedFieldHints: matchedFieldHints(capture, term.value),
+    matchedText,
+    matchSpan: { start, end, text: matchedText }
   };
 }
 

@@ -2087,6 +2087,11 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return stored;
   }
   override saveActorOrgRelevanceReview(record: any): any { return this.saveWorkflow("actor_org_relevance_review", record, () => super.saveActorOrgRelevanceReview(record)); }
+  override saveActorEnrichmentRun(record: any): any { return this.saveWorkflow("actor_enrichment_run", record, () => super.saveActorEnrichmentRun(record)); }
+  override async listActorEnrichmentRuns(): Promise<any[]> {
+    const rows = await this.sql`SELECT record FROM threat_intel.workflow_records WHERE record_type = 'actor_enrichment_run' ORDER BY updated_at DESC, id DESC`;
+    return rows.map(readRecord);
+  }
 
   private async migrate(): Promise<void> {
     await this.sql.unsafe(`
@@ -2331,6 +2336,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       case "dwm_watchlist": super.saveDwmWatchlist(record); break;
       case "dwm_webhook_delivery": this.hydrateDwmWebhookDeliverySnapshot(record); break;
       case "actor_org_relevance_review": super.saveActorOrgRelevanceReview(record); break;
+      case "actor_enrichment_run": super.saveActorEnrichmentRun(record); break;
     }
   }
 

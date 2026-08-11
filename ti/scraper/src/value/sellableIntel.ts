@@ -32,7 +32,7 @@ function clean(value: string) {
   return String(value ?? "").replace(/<[^>]+>/g, " ").replace(/&[#a-z0-9]+;/gi, " ").replace(/\s+/g, " ").trim();
 }
 
-function hasThreatTerm(value: string) { return TERM_RE.test(value) || ACTOR_ID_RE.test(value) || MULTILINGUAL_TERM_RE.test(value) || EUROPEAN_THREAT_TERM_RE.test(value); }
+export function hasThreatTerm(value: string) { return TERM_RE.test(value) || ACTOR_ID_RE.test(value) || MULTILINGUAL_TERM_RE.test(value) || EUROPEAN_THREAT_TERM_RE.test(value); }
 
 function ageDays(value?: string, now = new Date().toISOString()) {
   const then = Date.parse(value ?? "");

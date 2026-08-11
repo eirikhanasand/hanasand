@@ -407,7 +407,6 @@ function CatalogOnlyActorResult({ result, identity }: { result: TiSearchResponse
                 <ActorProfileHeader result={result} title={title} actor={actor} aliases={result.aliases} />
                 <ThreatActorMap actor={actor} result={result} actionability={actionability} compact />
             </div>
-            <ActorIdentityPanel identity={identity} />
             <ActorProfileSections result={result} actor={actor} victims={victims} />
         </section>
     )
@@ -422,7 +421,8 @@ function ActorProfileHeader({ result, title, actor, aliases, summary, actorQuery
     actorQuery?: boolean
 }) {
     const externalId = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0]?.externalId : undefined
-    const description = usefulActorSummary(summary) || actorSummary({
+    const catalogDescription = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0]?.description : undefined
+    const description = usefulActorSummary(summary) || usefulActorSummary(catalogDescription) || actorSummary({
         name: title,
         actorClass: actor.actorClass,
         attribution: actor.attribution,
@@ -452,22 +452,32 @@ function ActorProfileHeader({ result, title, actor, aliases, summary, actorQuery
 
 function ActorProfileSections({ result, actor, victims }: { result: TiSearchResponse; actor: TiActorIntelligenceProfile; victims: ReturnType<typeof victimObservationsFor> }) {
     const sections = [
-        actor.campaigns.length ? { title: 'Activity and campaigns', items: actor.campaigns } : null,
-        actor.malwareTools.length || actor.techniqueCoverage.length ? { title: 'Capabilities and tradecraft', items: [...actor.malwareTools, ...actor.techniqueCoverage.map(item => item.attackId ? `${item.attackId} · ${item.name}` : item.name)] } : null,
-        actor.targetSectors.length || victims.length ? { title: 'Targeting', items: [...actor.targetSectors, ...victims.slice(0, 4).map(item => `${item.victim}${item.country !== 'Country not stated' ? ` · ${item.country}` : ''}`)] } : null,
-        actor.infrastructure.length || actor.indicators.length ? { title: 'Infrastructure and indicators', items: [...actor.infrastructure, ...actor.indicators] } : null,
-    ].filter((section): section is { title: string; items: string[] } => Boolean(section?.items.length))
-    if (!sections.length) return null
+        { title: 'Attribution', items: actor.attribution ? [actor.attribution] : [], empty: 'No attribution found in retained sources.' },
+        { title: 'Motivation', items: actor.motivation, empty: 'No motivation found in retained sources.' },
+        { title: 'Activity', items: [...actor.campaigns, ...result.recentActivity.slice(0, 4).map(item => item.title)], empty: 'No dated activity found in retained sources.' },
+        { title: 'Victims and sectors', items: [...actor.targetSectors, ...victims.slice(0, 4).map(item => `${item.victim}${item.country !== 'Country not stated' ? ` · ${item.country}` : ''}`)], empty: 'No victims or sectors found in retained sources.' },
+        { title: 'Malware and tools', items: actor.malwareTools, empty: 'No malware or tools found in retained sources.' },
+        { title: 'TTPs', items: actor.techniqueCoverage.map(item => item.attackId ? `${item.attackId} · ${item.name}` : item.name), empty: 'No techniques found in retained sources.' },
+    ]
     return <section data-ti-actor-profile='true' className='grid gap-4 border-y border-ui-border py-4 dark:border-ui-border'>
-        {result.actorIntelligence?.confidenceReasoning?.length ? <p className='text-sm leading-6 text-ui-muted dark:text-ui-muted'>{result.actorIntelligence.confidenceReasoning[0]}</p> : null}
         <div className='grid gap-4 md:grid-cols-2'>
-            {sections.map(section => <section key={section.title} className='min-w-0'>
+            {sections.map(section => <section key={section.title} className='min-w-0 rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
                 <h2 className='text-base font-semibold text-ui-text dark:text-ui-text'>{section.title}</h2>
-                <ul className='mt-2 grid gap-2'>
-                    {section.items.slice(0, 8).map(item => <li key={item} className='wrap-break-word rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text dark:border-ui-border dark:bg-ui-raised'>{displayRequirementText(item)}</li>)}
-                </ul>
+                {section.items.length ? <ul className='mt-2 grid gap-2'>{unique(section.items).slice(0, 8).map(item => <li key={item} className='wrap-break-word text-sm leading-6 text-ui-text dark:text-ui-text'>{displayRequirementText(item)}</li>)}</ul> : <p className='mt-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>{section.empty}</p>}
             </section>)}
         </div>
+        <ActorUpdateTimeline timeline={actor.updateTimeline} />
+    </section>
+}
+
+function ActorUpdateTimeline({ timeline }: { timeline: TiActorIntelligenceProfile['updateTimeline'] }) {
+    return <section className='grid gap-2'>
+        <div><h2 className='text-base font-semibold text-ui-text dark:text-ui-text'>Recent changes</h2><p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>Exact profile fields changed by captured evidence.</p></div>
+        {timeline.length ? <ol className='grid gap-2'>{timeline.slice(0, 8).map((item, index) => <li key={`${item.updatedAt}:${index}`} className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
+            <div className='flex flex-wrap items-center justify-between gap-2 text-xs text-ui-muted dark:text-ui-muted'><time dateTime={item.updatedAt}>{formatDate(item.updatedAt)}</time><span>{item.assertionKind === 'inferred' ? 'Inferred' : 'Extracted'}{item.confidence ? ` · ${Math.round(item.confidence * 100)}% confidence` : ''}</span></div>
+            {item.sourceName ? <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>Source: {item.sourceUrl ? <a className='text-ui-primary underline underline-offset-2' href={item.sourceUrl} target='_blank' rel='noreferrer'>{item.sourceName}</a> : item.sourceName}</p> : null}
+            <ul className='mt-2 grid gap-1 text-sm text-ui-text dark:text-ui-text'>{item.changes.slice(0, 6).map((change, changeIndex) => <li key={`${change.field}:${changeIndex}`}><span className='font-semibold'>{formatLabel(change.field)}:</span> {change.previousValue == null ? 'Not previously recorded' : String(change.previousValue)} → {String(change.newValue ?? 'Removed')}</li>)}</ul>
+        </li>)}</ol> : <p className='rounded-lg border border-dashed border-ui-border p-3 text-sm text-ui-muted dark:border-ui-border dark:text-ui-muted'>No profile changes are recorded yet.</p>}
     </section>
 }
 
@@ -5722,7 +5732,7 @@ function MapCoverageFallback({ regions, actor, actionability, compact = false }:
     return (
         <div data-ti-geo-coverage-fallback='true' className={`${compact ? 'gap-2 p-3' : 'gap-3 p-4'} grid bg-ui-panel dark:bg-ui-canvas`}>
             <EmptyActorMap compact={compact} />
-            <p className='text-sm leading-6 text-ui-muted dark:text-ui-muted'>No country-specific activity is established in the current sources.</p>
+            <p className='text-sm leading-6 text-ui-muted dark:text-ui-muted'>No country attribution found in retained sources.</p>
             <div className={`grid gap-2 ${compact ? 'sm:grid-cols-3' : 'md:grid-cols-3'}`}>
                 <CoverageFallbackMetric label='Regions' value={regions.length ? regions.join(', ') : 'None established'} />
                 <CoverageFallbackMetric label='Source rows' value={`${actor.sourceCoverage.totalRows}`} />

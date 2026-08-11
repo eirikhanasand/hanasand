@@ -17,6 +17,9 @@ import { canonicalizeUrl, captureDedupeKey, dedupeIndexKeys, enforceSensitiveMet
 import { nowIso, stableId } from "../utils.ts";
 import { canonicalActorIdentity, normalizeActorLabel, resolveMitreActorIdentity, type ActorIdentityRecord, type MitreActorCatalogSnapshot } from "../pipeline/mitreActorCatalog.ts";
 import type { RansomwareOperationCatalogSnapshot } from "../pipeline/ransomwareOperationCatalog.ts";
+import { publicReferenceUrl } from "../pipeline/timelinessGroundTruth.ts";
+import { mayContainExposureQueueClaim } from "../product/exposureQueueCandidate.ts";
+import { isLegacySourceReviewCandidate } from "../policy/sourceAutomaticReview.ts";
 export interface RawEvidenceStore extends CaptureMetadataStore {} export interface ScraperStore extends CaptureMetadataStore {}
 const mapValues = <T>(map: Map<string, T>) => [...map.values()];
 const put = <T extends { id: string }>(map: Map<string, T>, item: T) => (map.set(item.id, item), item);
@@ -42,6 +45,7 @@ export class InMemoryScraperStore implements ScraperStore {
   private cases = new Map<string, any>();
   private dwmWatchlists = new Map<string, any>(); private dwmAlerts = new Map<string, any>(); private dwmWebhookDeliveries = new Map<string, any>();
   private actorOrgRelevanceReviews = new Map<string, any>();
+  private actorEnrichmentRuns = new Map<string, any>();
   private replayJobs = new Map<string, CaptureReplayJob>(); private discoveryEvidence = new Map<string, DiscoveryEvidence>(); private liveSearchSnapshots = new Map<string, LiveSearchSnapshot>(); private evidenceDeltas = new Map<string, EvidenceDelta>(); private cursorOwners = new Map<string, string>(); private sequence = 0;
   private organizationWriteGuardDepth = 0;
   private evidenceQueries = new InMemoryEvidenceQueries(() => ({ captures: this.listCaptures(), incidents: this.listIncidents(), replayJobs: this.listReplayJobs(), discoveryEvidence: this.listDiscoveryEvidence(), liveSearchSnapshots: this.listLiveSearchSnapshots(), evidenceDeltas: this.listEvidenceDeltas() }));
@@ -386,6 +390,7 @@ export class InMemoryScraperStore implements ScraperStore {
   saveWebhookDestination(destination: any) { return this.putScoped(this.webhookDestinations, destination); } getWebhookDestination(id: string) { return this.webhookDestinations.get(id); } listWebhookDestinations() { return mapValues(this.webhookDestinations); }
   saveCase(caseRecord: any) { return this.putScoped(this.cases, caseRecord); } getCase(id: string) { return this.cases.get(id); } listCases() { return mapValues(this.cases); }
   saveDwmWatchlist(watchlist: any) { return this.putScoped(this.dwmWatchlists, watchlist); } getDwmWatchlist(id: string) { return this.dwmWatchlists.get(id); } listDwmWatchlists() { return mapValues(this.dwmWatchlists); }
+  saveActorEnrichmentRun(run: any) { return this.putScoped(this.actorEnrichmentRuns, run); } getActorEnrichmentRun(id: string) { return this.actorEnrichmentRuns.get(id); } listActorEnrichmentRuns(): any { return mapValues(this.actorEnrichmentRuns); }
   replaceRecordForRetention(recordType: string, record: any) {
     const records: Record<string, Map<string, any>> = {
       source: this.sources,
@@ -423,6 +428,7 @@ export class InMemoryScraperStore implements ScraperStore {
       alert: this.dwmAlerts,
       dwm_webhook_delivery: this.dwmWebhookDeliveries,
       actor_org_relevance_review: this.actorOrgRelevanceReviews
+      ,actor_enrichment_run: this.actorEnrichmentRuns
     };
     const target = records[recordType];
     if (!target?.has(record.id)) return undefined;
@@ -683,11 +689,25 @@ function recordActorProfileDelta(store: any, previous: any, profile: any, captur
   const characterization = Object.fromEntries(Object.entries(profile.characterization ?? {}).map(([field, rows]: any) => [field, rows.filter((row: any) => row.captureIds?.includes(capture.id) && !(previous?.characterization?.[field] ?? []).some((prior: any) => prior.entityType === row.entityType && prior.normalizedValue === row.normalizedValue && prior.captureIds?.includes(capture.id)))]).filter(([, rows]: any) => rows.length));
   if (previous && !aliasesAdded.length && !Object.keys(characterization).length) return;
   const metadata = capture.metadata ?? {};
+  const changes = [
+    ...(aliasesAdded.length ? [{ field: "aliases", previousValue: previous?.aliases ?? [], newValue: profile.aliases ?? aliasesAdded, assertionKind: "extracted", confidence: profile.confidence }] : []),
+    ...Object.entries(characterization).flatMap(([field, rows]: any) => rows.map((row: any) => ({
+      field,
+      previousValue: (previous?.characterization?.[field] ?? []).find((prior: any) => prior.normalizedValue === row.normalizedValue)?.value,
+      newValue: row.value,
+      sourceId: capture.sourceId,
+      captureId: capture.id,
+      publishedAt: capture.publishedAt,
+      collectedAt: capture.collectedAt,
+      assertionKind: row.assertionKind ?? "extracted",
+      confidence: row.confidence,
+    }))),
+  ];
   store.saveEvidenceDelta({
     id: stableId("delta", `actor-profile:${profile.id}:${capture.id}`), tenantId: capture.tenantId, query: metadata.query, normalizedQuery: metadata.normalizedQuery, runId: metadata.runId, cursor: "",
     kind: previous ? "updated" : "added", subjectType: "actor_profile", subjectId: profile.id, observedAt: capture.publishedAt ?? capture.collectedAt, sourceId: capture.sourceId,
     discoveryEvidenceIds: metadata.discoveryEvidenceId ? [metadata.discoveryEvidenceId] : [], captureIds: [capture.id], incidentIds: incident ? [incident.id] : [], relationshipIds: [], policyEventIds: [],
-    retentionClass: capture.retentionClass ?? "standard", metadata: { aliasesAdded, characterization, rawContentExposed: false }
+    retentionClass: capture.retentionClass ?? "standard", metadata: { aliasesAdded, characterization, changes, rawContentExposed: false }
   });
 }
 function link(capture: any, subjectType: string, subjectId: string, relationship: string, confidence: number, extractorVersion: string): any {

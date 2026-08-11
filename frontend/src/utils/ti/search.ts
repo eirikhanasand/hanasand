@@ -101,6 +101,7 @@ export interface TiActorIdentityCandidate {
     catalogId: string
     externalId: string
     canonicalName: string
+    description?: string
     associatedNames: string[]
     matchKinds: Array<'canonical' | 'associated'>
     status: 'current' | 'deprecated' | 'revoked' | 'retired'
@@ -135,6 +136,26 @@ export interface TiActorIntelligenceContract {
         reportDate?: string
         captureId?: string
     }
+    updateTimeline?: Array<{
+        updatedAt: string
+        changes: Array<{
+            field: string
+            previousValue?: unknown
+            newValue?: unknown
+            sourceId?: string
+            captureId?: string
+            publishedAt?: string
+            collectedAt?: string
+            assertionKind?: 'extracted' | 'inferred' | string
+            confidence?: number
+        }>
+        sourceId?: string
+        sourceName?: string
+        sourceUrl?: string
+        captureIds?: string[]
+        confidence?: number
+        assertionKind?: 'extracted' | 'inferred' | string
+    }>
     structuredProvenance?: Array<{
         sourceId?: string
         sourceName: string

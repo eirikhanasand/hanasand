@@ -71,6 +71,7 @@ export type TiActorIntelligenceProfile = {
     confidence: number
     confidenceReasoning: string[]
     sourceProvenance: string[]
+    updateTimeline: NonNullable<NonNullable<TiSearchResponse['actorIntelligence']>['updateTimeline']>
     provenanceRows: TiActorSourceProvenance[]
     sourceCoverage: TiActorSourceCoverage
     freshness: {
@@ -129,6 +130,7 @@ export function buildActorIntelligence(result: TiSearchResponse, victimObservati
         confidence: contract?.confidence ?? result.confidence ?? fallback.confidence,
         confidenceReasoning: unique([...(contract?.confidenceReasoning ?? []), ...fallback.confidenceReasoning]).slice(0, 8),
         sourceProvenance: sourceProvenance.length ? sourceProvenance : fallback.sourceProvenance,
+        updateTimeline: contract?.updateTimeline ?? [],
         provenanceRows,
         sourceCoverage,
         freshness: freshnessFor(result.generatedAt, lastSeen),

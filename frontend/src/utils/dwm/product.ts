@@ -39,6 +39,8 @@ export type DwmAlert = {
         termKind: DwmWatchTerm['kind']
         matchType: 'case_insensitive_substring'
         matchedFieldHints: string[]
+        matchedText?: string
+        matchSpan?: { start: number; end: number; text: string }
     }
     evidenceSummary?: {
         evidenceCount: number

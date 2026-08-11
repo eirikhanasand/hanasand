@@ -139,6 +139,25 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const actorCaseStudies = actorBusinessEvidence?.catalog;
   const attributionEvidence = actor ? actorAttribution(rows, unique([actor, ...aliases, ...identity.terms])) : undefined;
   const attribution = attributionEvidence?.statement;
+  const updateTimeline = actorQuery ? records.actorProfileDeltas
+    .filter((delta: any) => !profile?.id || delta.subjectId === profile.id)
+    .sort((a: any, b: any) => Date.parse(String(b.observedAt ?? "")) - Date.parse(String(a.observedAt ?? "")))
+    .slice(0, 24)
+    .map((delta: any) => ({
+      updatedAt: delta.observedAt ?? generatedAt,
+      changes: Array.isArray(delta.metadata?.changes) && delta.metadata.changes.length
+        ? delta.metadata.changes
+        : [
+            ...(delta.metadata?.aliasesAdded?.length ? [{ field: "aliases", previousValue: undefined, newValue: delta.metadata.aliasesAdded, assertionKind: "extracted" }] : []),
+            ...Object.entries(delta.metadata?.characterization ?? {}).flatMap(([field, rows]: any) => rows.map((row: any) => ({ field, previousValue: undefined, newValue: row.value, sourceId: delta.sourceId, captureId: row.captureIds?.[0], assertionKind: row.assertionKind ?? "extracted", confidence: row.confidence })))
+          ],
+      sourceId: delta.sourceId,
+      sourceName: sources.find((source: any) => source.id === delta.sourceId)?.name,
+      sourceUrl: sources.find((source: any) => source.id === delta.sourceId)?.url,
+      captureIds: delta.captureIds ?? [],
+      confidence: Math.max(...(delta.metadata?.changes ?? []).map((change: any) => Number(change.confidence ?? 0)), 0),
+      assertionKind: (delta.metadata?.changes ?? []).some((change: any) => change.assertionKind === "inferred") ? "inferred" : "extracted",
+    })) : [];
   const actorIntelligence = actorQuery ? {
     actorClass: profile?.actorType ?? (rows.length && actor ? "observed_threat_actor" : identity.catalogCandidates.length ? "cataloged_threat_group" : "unclassified_query"),
     attribution,
@@ -163,6 +182,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
       reportDate: attributionEvidence.row.publishedAt,
       captureId: attributionEvidence.row.id,
     } : undefined,
+    updateTimeline,
     missingFields: missing
   } : undefined;
   const claims = records.claims.map((claim) => {
@@ -477,9 +497,10 @@ async function searchRecords(store: any, tenantId: string | undefined, captureId
   const profiles = scoped("listActorProfiles").filter((record: any) => safeAggregate(record.captureIds));
   const profileIds = new Set(profiles.map((profile: any) => profile.id));
   const aliases = scoped("listActorAliases").filter((record: any) => profileIds.has(record.actorProfileId));
+  const actorProfileDeltas = scoped("listEvidenceDeltas").filter((record: any) => record.subjectType === "actor_profile" && profileIds.has(record.subjectId));
   const validations = scoped("listValidationRecords").filter((record: any) => captureIds.has(record.captureId) || incidents.some((incident: any) => incident.id === record.incidentId));
   const sourceIndependence = evidenceIndependence(store, [...captureIds]);
-  return { entities, businessEntities, businessClaims, businessClaimEvidence, indicators, incidents, claims, profiles, aliases, validations, sourceCount: captureIds.size ? sourceIndependence.groupCount : 0, sourceIndependence };
+  return { entities, businessEntities, businessClaims, businessClaimEvidence, indicators, incidents, claims, profiles, aliases, actorProfileDeltas, validations, sourceCount: captureIds.size ? sourceIndependence.groupCount : 0, sourceIndependence };
 }
 
 const SOURCE_BACKED_BUSINESS_TYPES = new Set([
@@ -1147,6 +1168,7 @@ function actorIdentity(store: any, tenantId: string | undefined, query: string) 
     catalogId: candidate.identity.catalogId,
     externalId: candidate.identity.externalId,
     canonicalName: candidate.identity.canonicalName,
+    description: (candidate.identity as any).description,
     associatedNames: candidate.identity.associatedNames,
     matchKinds: candidate.matchKinds,
     status: candidate.identity.status,

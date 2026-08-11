@@ -22,7 +22,7 @@ export async function executeScheduledCollectionRun(options: any, runId: string)
       }
       return failRun(options.store, run, "collection plan deadline expired", generatedAt);
     }
-    const tasks = (plan.tasks ?? []).map((task: any) => ({ ...task, runId, planId: plan.id, crawlBudgetKey: undefined }));
+    const tasks = (plan.tasks ?? []).map((task: any) => ({ ...task, tenantId: task.tenantId ?? run.tenantId, runId, planId: plan.id, crawlBudgetKey: undefined }));
     const queuedOrLeased = new Set([
       ...options.frontier.snapshot().map((item: any) => (item.task ?? item).id),
       ...options.frontier.leasedSnapshot().map((task: any) => task.id),
