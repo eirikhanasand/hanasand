@@ -2,7 +2,8 @@
 
 import type { SyntheticEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, AlertTriangle, CheckCircle2, ChevronDown, Clock3, DatabaseZap, FileSearch, Gauge, GitBranch, History, ListChecks, PauseCircle, PlayCircle, RefreshCcw, RotateCcw, Search, SlidersHorizontal, UserRound, Workflow, XCircle } from 'lucide-react'
+import Link from 'next/link'
+import { AlertTriangle, CheckCircle2, ChevronDown, Clock3, DatabaseZap, Gauge, PlayCircle, RefreshCcw, RotateCcw, Search, Workflow } from 'lucide-react'
 
 type EndpointState = { ok: boolean; status: number; error?: string }
 type ControlSnapshot = {
@@ -76,8 +77,6 @@ type WorkItem = {
 }
 
 type LocalControl = {
-    sourcePaused: Record<string, boolean>
-    notes: Record<string, string>
     decisions: Record<string, { status: string; reason: string; at: string }>
 }
 
@@ -91,9 +90,7 @@ export default function TiScraperControlClient() {
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [actionResult, setActionResult] = useState<ActionResult | null>(null)
     const [error, setError] = useState('')
-    const [localControl, setLocalControl] = useState<LocalControl>({ sourcePaused: {}, notes: {}, decisions: {} })
-    const [sourceTarget, setSourceTarget] = useState('@threatintel')
-    const [watchTerms, setWatchTerms] = useState('hanasand.com')
+    const [localControl, setLocalControl] = useState<LocalControl>({ decisions: {} })
 
     async function load(nextQuery = query, silent = false) {
         if (!silent) setLoading(true)
@@ -123,14 +120,11 @@ export default function TiScraperControlClient() {
     const workItems = useMemo(() => workItemsFor(snapshot, sources, frontierTasks), [snapshot, sources, frontierTasks])
     const selected = workItems.find(item => item.id === selectedWorkId) ?? workItems[0]
     const selectedSource = sources.find(source => source.id === selected?.sourceId) ?? sources[0]
-    const timeline = useMemo(() => timelineFor(snapshot, actionResult, localControl.decisions), [snapshot, actionResult, localControl.decisions])
     const endpointRows = Object.entries(snapshot?.endpoints ?? {})
     const queueCount = numberFrom(snapshot?.frontier?.queued) ?? numberFrom(snapshot?.resources?.queue?.queued) ?? frontierTasks.length
     const healthyEndpoints = endpointRows.filter(([, state]) => state.ok).length
     const sourceGrowth = sourceGrowthKpis(snapshot, sources)
     const scheduler = schedulerKpis(snapshot)
-    const selectedNote = selected ? localControl.notes[selected.id] ?? '' : ''
-    const selectedDecision = selected ? localControl.decisions[selected.id] : undefined
 
     async function runAction(action: 'run_query' | 'scheduler_run_now' | 'scheduler_pause' | 'scheduler_resume' | 'public_channel_status' | 'request_source' | 'request_restricted_source' | 'create_watchlist' | 'rebuild_alerts') {
         setBusyAction(action)
@@ -139,7 +133,7 @@ export default function TiScraperControlClient() {
             const response = await fetch('/api/ti/scraper/control', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify(actionBody(action, query, selectedSource, { sourceTarget, watchTerms })),
+                body: JSON.stringify(actionBody(action, query, selectedSource, { sourceTarget: '', watchTerms: '' })),
             })
             const payload = await response.json() as ActionResult
             setActionResult(payload)
@@ -151,36 +145,12 @@ export default function TiScraperControlClient() {
         }
     }
 
-    async function runEnrichment() {
-        setBusyAction('enrichment_run')
-        setActionResult(null)
-        try {
-            const response = await fetch('/api/ti/enrichment/run', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ batchSize: 8 }),
-            })
-            const payload = await response.json() as ActionResult
-            setActionResult({ ok: response.ok, status: response.status, payload })
-        } catch (caught) {
-            setActionResult({ ok: false, error: caught instanceof Error ? caught.message : String(caught) })
-        } finally {
-            setBusyAction(null)
-        }
-    }
 
     function submit(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         const clean = query.trim() || defaultQuery
         setQuery(clean)
         void load(clean)
-    }
-
-    function updateNote(workItemId: string, note: string) {
-        setLocalControl(current => ({
-            ...current,
-            notes: { ...current.notes, [workItemId]: note },
-        }))
     }
 
     function applySessionDecision(status: string) {
@@ -191,300 +161,105 @@ export default function TiScraperControlClient() {
                 ...current.decisions,
                 [selected.id]: {
                     status,
-                    reason: selectedNote || defaultDecisionReason(status),
+                    reason: defaultDecisionReason(status),
                     at: new Date().toISOString(),
                 },
             },
         }))
     }
 
-    function toggleLocalPause(sourceId: string) {
-        setLocalControl(current => ({
-            ...current,
-            sourcePaused: { ...current.sourcePaused, [sourceId]: !current.sourcePaused[sourceId] },
-        }))
-    }
+    const sourceCount = scheduler.totalSources || sources.length
+    const serviceReady = Boolean(snapshot?.ok && snapshot.baseConfigured !== false && !error)
+    const hasFailures = endpointRows.some(([, state]) => !state.ok)
+    const statusTitle = loading && !snapshot ? 'Connecting' : error || !serviceReady ? 'Unavailable' : hasFailures ? 'Needs attention' : queueCount ? 'Work queued' : 'Running normally'
+    const statusBody = statusTitle === 'Running normally' ? 'The scheduler is collecting sources automatically.' : statusTitle === 'Work queued' ? `${queueCount} collection item(s) need attention.` : statusTitle === 'Needs attention' ? 'One or more collection checks need attention.' : 'The collection service did not return a usable status.'
 
     return (
-        <div className='source-ops-workbench grid gap-2'>
-            {error ? <Notice tone='bad' title='Scraper control needs attention' body={error} /> : null}
+        <div className='source-ops-workbench grid gap-3'>
             {actionResult ? <Notice tone={actionResult.ok ? 'ok' : 'bad'} title={actionResult.ok ? 'Action completed' : 'Action failed'} body={actionSummary(actionResult)} /> : null}
-            {!snapshot?.baseConfigured && !loading ? <Notice tone='bad' title='Source stream connecting' body='Connect the scraper so source schedules, queue depth, and worker actions stay live here.' /> : null}
 
-            <section className='overflow-hidden rounded-md border border-ui-border bg-ui-panel shadow-sm'>
-                <div className='grid gap-2 border-b border-ui-border bg-ui-panel p-2 text-ui-text xl:grid-cols-[auto_minmax(0,1fr)_auto] xl:items-center'>
-                    <div className='flex flex-wrap items-center gap-2'>
-                        <MiniMetric label='Pending work' value={String(queueCount)} />
-                        <MiniMetric label="Today's coverage" value={coverageLabel(scheduler.dailyCovered, scheduler.dailySources)} />
-                        <MiniMetric label='Sources' value={String(scheduler.totalSources || sources.length)} />
-                        <MiniMetric label='Qualified sources' value={String(scheduler.qualifyingSources)} />
-                        <MiniMetric label='Alerts' value={String(sourceGrowth.alertsGenerated)} />
+            <section className='rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm'>
+                <div className='flex flex-wrap items-start justify-between gap-3'>
+                    <div>
+                        <p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Step 1 · System status</p>
+                        <h2 className='mt-1 text-xl font-semibold text-ui-text'>{statusTitle}</h2>
+                        <p className='mt-1 text-sm text-ui-muted'>{statusBody}</p>
                     </div>
-                    <form onSubmit={submit} className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]'>
-                        <label className='relative block'>
-                            <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-primary' />
-                            <input
-                                value={query}
-                                onChange={event => setQuery(event.target.value)}
-                                className='h-10 w-full rounded-lg border border-ui-border bg-ui-panel pl-9 pr-3 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/30'
-                                placeholder='Search sources or collection work'
-                            />
-                        </label>
-                        <button type='submit' className='inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel'>
-                            {loading ? <RefreshCcw className='h-4 w-4 animate-spin' /> : <Search className='h-4 w-4' />}
-                            Refresh
-                        </button>
-                    </form>
-                    <div className='grid gap-1.5'>
+                    <div className='flex flex-wrap gap-2'>
                         <ActionButton compact busy={busyAction === 'scheduler_run_now'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('scheduler_run_now')}>Run due</ActionButton>
+                        <button type='button' onClick={() => void load(query)} className='inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-ui-border bg-ui-raised px-3 py-1.5 text-xs font-semibold text-ui-text hover:bg-ui-panel'>
+                            <RefreshCcw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Refresh
+                        </button>
                     </div>
                 </div>
-
-                <div className='grid min-h-[440px] xl:grid-cols-[310px_minmax(0,1fr)_300px]'>
-                    <aside className='border-b border-ui-border bg-ui-canvas xl:border-b-0 xl:border-r'>
-                        <details className='border-b border-ui-border bg-ui-panel' data-ti-control-secondary-actions>
-                            <summary className='flex cursor-pointer list-none items-center justify-between gap-2 px-2 py-2 text-xs font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/35 [&::-webkit-details-marker]:hidden'>
-                                <span>Collection actions</span>
-                                <span className='text-[11px] font-medium text-ui-muted'>scheduler and alerts</span>
-                            </summary>
-                            <div className='grid grid-cols-2 gap-1.5 border-t border-ui-border p-2'>
-                                <ActionButton compact busy={busyAction === 'scheduler_run_now'} icon={<Activity className='h-4 w-4' />} onClick={() => runAction('scheduler_run_now')}>Run due</ActionButton>
-                                <ActionButton compact busy={busyAction === 'scheduler_pause'} icon={<PauseCircle className='h-4 w-4' />} onClick={() => runAction('scheduler_pause')}>Pause</ActionButton>
-                                <ActionButton compact busy={busyAction === 'scheduler_resume'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('scheduler_resume')}>Resume</ActionButton>
-                                <ActionButton compact busy={busyAction === 'enrichment_run'} icon={<ListChecks className='h-4 w-4' />} onClick={runEnrichment}>Enrich</ActionButton>
-                                <ActionButton compact busy={busyAction === 'rebuild_alerts'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Alerts</ActionButton>
-                            </div>
-                        </details>
-                        <div className='max-h-[calc(100vh-20rem)] overflow-auto p-1.5'>
-                            {workItems.map(item => {
-                                const active = selected?.id === item.id
-                                const decision = localControl.decisions[item.id]
-                                return (
-                                    <button
-                                        key={item.id}
-                                        type='button'
-                                        onClick={() => {
-                                            setSelectedWorkId(item.id)
-                                        }}
-                                        className={`grid w-full gap-1 rounded-md border px-2 py-1.5 text-left transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${active ? 'border-ui-primary/35 bg-ui-panel shadow-sm' : 'border-transparent hover:border-ui-border hover:bg-ui-panel'}`}
-                                    >
-                                        <div className='flex items-center justify-between gap-2'>
-                                            <span className={severityClass(item.severity)}>{item.severity}</span>
-                                            <span className='text-[11px] font-semibold text-ui-muted'>{displayQueue(item.queue)}</span>
-                                        </div>
-                                        <span className='truncate text-xs font-semibold text-ui-text'>{item.title}</span>
-                                        <span className='line-clamp-1 text-[11px] leading-4 text-ui-muted'>{item.subtitle}</span>
-                                        <span className='flex flex-wrap gap-2 text-[11px] text-ui-muted'>
-                                            <span>{decision?.status || item.status}</span>
-                                            <span>{item.timestamp}</span>
-                                        </span>
-                                    </button>
-                                )
-                            })}
-                            {!workItems.length ? <p className='rounded-md border border-dashed border-ui-border bg-ui-panel p-3 text-sm text-ui-muted'>Live and clear. Scheduled checks, reviews, and worker issues stream in here.</p> : null}
-                        </div>
-                    </aside>
-
-                    <main className='min-w-0 p-2'>
-                        {selected ? (
-                            <div className='grid gap-2'>
-                                <section className='rounded-md border border-ui-border bg-ui-panel p-2.5'>
-                                    <div className='flex flex-wrap items-start justify-between gap-2'>
-                                        <div className='min-w-0'>
-                                            <div className='flex flex-wrap items-center gap-2'>
-                                                <span className={severityClass(selected.severity)}>{selected.severity}</span>
-                                                <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-primary'>{selected.kind.replaceAll('_', ' ')}</span>
-                                                <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-muted'>{selectedDecision?.status || selected.status}</span>
-                                            </div>
-                                            <h2 className='mt-1.5 wrap-break-word text-lg font-semibold text-ui-text'>{selected.title}</h2>
-                                            <p className='mt-0.5 line-clamp-2 text-xs leading-5 text-ui-muted'>{selected.subtitle}</p>
-                                        </div>
-                                        <div className='rounded-md border border-ui-border bg-ui-panel px-2.5 py-2 text-xs text-ui-muted'>
-                                            <p className='font-semibold text-ui-text'>{selected.queue}</p>
-                                            <p className='mt-1'>{selected.timestamp}</p>
-                                        </div>
-                                    </div>
-
-                                    <div className='mt-2 grid gap-2 lg:grid-cols-2 2xl:grid-cols-3'>
-                                        {selected.evidence.map(item => <Info key={item.label} label={item.label} value={item.value} />)}
-                                    </div>
-                                </section>
-
-                                <section className='grid gap-2 2xl:grid-cols-[minmax(0,1fr)_19rem]'>
-                                    <div className='rounded-md border border-ui-border bg-ui-panel p-2.5'>
-                                        <div className='flex items-center gap-2 text-sm font-semibold text-ui-text'>
-                                            <FileSearch className='h-4 w-4 text-ui-primary' />
-                                            Source details
-                                        </div>
-                                        <div className='mt-2 grid gap-2'>
-                                            <EvidenceLine title='Impact' body={publicImpactFor(selected, snapshot?.query || query)} />
-                                            <EvidenceLine title='Source' body={provenanceFor(selected, selectedSource)} />
-                                            <EvidenceLine title='Quality' body={qualitySummary(snapshot)} />
-                                            <EvidenceLine title='Policy' body={policySummary(selected, selectedSource, snapshot)} />
-                                        </div>
-                                    </div>
-
-                                    <div className='rounded-md border border-ui-border bg-ui-panel p-2.5'>
-                                        <div className='flex items-center gap-2 text-sm font-semibold text-ui-text'>
-                                            <SlidersHorizontal className='h-4 w-4 text-ui-primary' />
-                                            Actions
-                                        </div>
-                                        <div className='mt-2 grid gap-1.5 sm:grid-cols-2 2xl:grid-cols-1'>
-                                            <ActionButton busy={busyAction === 'scheduler_run_now'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('scheduler_run_now')}>Run due sources</ActionButton>
-                                            <ActionButton busy={busyAction === 'public_channel_status'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('public_channel_status')}>Channels</ActionButton>
-                                            <ActionButton busy={busyAction === 'rebuild_alerts'} icon={<Activity className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Rebuild alerts</ActionButton>
-                                            <ActionButton icon={<PauseCircle className='h-4 w-4' />} onClick={() => selectedSource && toggleLocalPause(selectedSource.id)}>
-                                                {selectedSource && localControl.sourcePaused[selectedSource.id] ? 'Resume source' : 'Pause source'}
-                                            </ActionButton>
-                                            <ActionButton icon={<RotateCcw className='h-4 w-4' />} onClick={() => applySessionDecision('retry requested')}>Mark retry</ActionButton>
-                                            <ActionButton icon={<CheckCircle2 className='h-4 w-4' />} onClick={() => applySessionDecision('promoted for review')}>Send to review</ActionButton>
-                                            <ActionButton icon={<XCircle className='h-4 w-4' />} onClick={() => applySessionDecision('suppressed in session')}>Suppress</ActionButton>
-                                        </div>
-                                    </div>
-                                </section>
-
-                                <section className='rounded-md border border-ui-border bg-ui-panel p-2.5'>
-                                    <div className='flex items-center gap-2 text-sm font-semibold text-ui-text'>
-                                        <Workflow className='h-4 w-4 text-ui-primary' />
-                                        Next work
-                                    </div>
-                                    <div className='mt-2 grid gap-2 md:grid-cols-3'>
-                                        {selected.nextActions.map((action, index) => (
-                                            <div key={action} className='rounded-md border border-ui-border bg-ui-panel p-2'>
-                                                <p className='text-[10px] font-semibold uppercase text-ui-muted'>Step {index + 1}</p>
-                                                <p className='mt-1 text-xs leading-5 text-ui-text'>{action}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </section>
-                            </div>
-                        ) : (
-                            <div className='grid min-h-64 place-items-center rounded-md border border-dashed border-ui-border bg-ui-panel p-6 text-center text-sm text-ui-muted'>Connecting to the scraper feed. Worker checks and source schedules refresh here.</div>
-                        )}
-                    </main>
-
-                    <aside className='border-t border-ui-border bg-ui-canvas p-2 xl:border-l xl:border-t-0'>
-                        <div className='grid gap-2'>
-                            <SidePanel title='Decision' icon={<UserRound className='h-4 w-4' />}>
-                                <textarea
-                                    value={selected ? selectedNote : ''}
-                                    onChange={event => selected && updateNote(selected.id, event.target.value)}
-                                    placeholder='Owner, decision, retry condition...'
-                                    className='min-h-20 rounded-md border border-ui-border bg-ui-panel p-2 text-xs text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/30'
-                                />
-                            </SidePanel>
-
-                            <SidePanel title='Source' icon={<DatabaseZap className='h-4 w-4' />}>
-                                {selectedSource ? (
-                                    <div className='grid gap-2'>
-                                        <Info label='Name' value={selectedSource.name} />
-                                        <Info label='Status' value={localControl.sourcePaused[selectedSource.id] ? 'session paused' : operationalStateLabel(selectedSource.status)} />
-                                        <Info label='Risk' value={selectedSource.risk} />
-                                        <Info label='Trust' value={`${Math.round(selectedSource.trustScore * 100)}%`} />
-                                        <p className='line-clamp-2 break-all text-xs leading-5 text-ui-muted'>{selectedSource.url || 'URL hidden by safety rules'}</p>
-                                        <p className='line-clamp-2 text-xs leading-5 text-ui-muted'>{selectedSource.legalNotes || 'Safe-field rules enforced'}</p>
-                                    </div>
-                                ) : <p>Select a result or source row to inspect source detail.</p>}
-                            </SidePanel>
-
-                            <SidePanel title='Coverage' icon={<GitBranch className='h-4 w-4' />}>
-                                <div className='grid grid-cols-2 gap-2'>
-                                    <Info label='Candidates' value={String(sourceGrowth.candidates)} />
-                                    <Info label='Active' value={String(scheduler.activeSources)} />
-                                    <Info label='Checked' value={String(scheduler.checkedSources)} />
-                                    <Info label='Successful' value={String(scheduler.successfulSources)} />
-                                    <Info label='Useful in latest check' value={String(scheduler.usefulSources)} />
-                                    <Info label='Produced captures' value={String(scheduler.captureProducingSources)} />
-                                    <Info label='Seen in 24 hours' value={String(scheduler.recentlySeenSources)} />
-                                    <Info label="Today's coverage" value={coverageLabel(scheduler.dailyCovered, scheduler.dailySources)} />
-                                    <Info label='Telegram sources' value={String(sourceGrowth.activeTelegram)} />
-                                    <Info label='Dark web metadata' value={String(sourceGrowth.activeDarkweb)} />
-                                    <Info label='Pending work' value={String(queueCount)} />
-                                    <Info label='Watchlist matches' value={String(sourceGrowth.watchlistMatches)} />
-                                    <Info label='Alerts' value={String(sourceGrowth.alertsGenerated)} />
-                                    <Info label='Deliveries' value={String(sourceGrowth.webhookDeliveries)} />
-                                </div>
-                                <details className='mt-3 rounded-md border border-ui-border bg-ui-panel'>
-                                    <summary className='cursor-pointer list-none px-3 py-2 text-xs font-semibold text-ui-text [&::-webkit-details-marker]:hidden'>Collection setup</summary>
-                                    <div className='grid gap-2 border-t border-ui-border p-2'>
-                                        <label className='grid gap-1'>
-                                            <span className='text-xs font-semibold uppercase text-ui-muted'>Public channel</span>
-                                            <input value={sourceTarget} onChange={event => setSourceTarget(event.target.value)} className='h-9 rounded-md border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/30' placeholder='@channel or https://t.me/channel' />
-                                        </label>
-                                        <div className='grid gap-2 sm:grid-cols-2'>
-                                            <ActionButton compact busy={busyAction === 'request_source'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('request_source')}>Add Telegram</ActionButton>
-                                            <ActionButton compact busy={busyAction === 'request_restricted_source'} icon={<DatabaseZap className='h-4 w-4' />} onClick={() => runAction('request_restricted_source')}>Request safe source</ActionButton>
-                                        </div>
-                                        <label className='grid gap-1'>
-                                            <span className='text-xs font-semibold uppercase text-ui-muted'>Watch terms</span>
-                                            <textarea value={watchTerms} onChange={event => setWatchTerms(event.target.value)} className='min-h-20 rounded-md border border-ui-border bg-ui-panel p-2 text-sm text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/30' placeholder='company.com, vendor, product, brand' />
-                                        </label>
-                                        <div className='grid gap-2 sm:grid-cols-2'>
-                                            <ActionButton compact busy={busyAction === 'create_watchlist'} icon={<ListChecks className='h-4 w-4' />} onClick={() => runAction('create_watchlist')}>Save watchlist</ActionButton>
-                                            <ActionButton compact busy={busyAction === 'rebuild_alerts'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Rebuild alerts</ActionButton>
-                                        </div>
-                                    </div>
-                                </details>
-                            </SidePanel>
-
-                            <SidePanel title='Activity' icon={<History className='h-4 w-4' />}>
-                                <div className='grid gap-2'>
-                                    {timeline.slice(0, 5).map(item => (
-                                        <div key={item.id} className='border-l-2 border-ui-border pl-3'>
-                                            <p className='text-xs font-semibold text-ui-text'>{item.title}</p>
-                                            <p className='mt-1 text-[11px] text-ui-muted'>{item.at}</p>
-                                            <p className='mt-1 text-xs leading-5 text-ui-muted'>{item.body}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </SidePanel>
-                        </div>
-                    </aside>
+                <div className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5'>
+                    <MiniMetric label='Active sources' value={String(scheduler.activeSources || sourceCount)} />
+                    <MiniMetric label='Pending work' value={String(queueCount)} />
+                    <MiniMetric label="Today's coverage" value={coverageLabel(scheduler.dailyCovered, scheduler.dailySources)} />
+                    <MiniMetric label='Latest run' value={scheduler.lastRunStatus || 'No run recorded'} />
+                    <MiniMetric label='Alerts' value={String(sourceGrowth.alertsGenerated)} />
                 </div>
             </section>
 
-            <details className='group overflow-hidden rounded-md border border-ui-border bg-ui-panel' data-ti-control-telemetry-disclosure>
-                <summary className='flex cursor-pointer list-none flex-col gap-1 px-3 py-2 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                    <span className='inline-flex items-center gap-2'>
-                        <GitBranch className='h-4 w-4 text-ui-primary' />
-                        Operations telemetry
-                    </span>
-                    <span className='inline-flex items-center gap-2 text-xs font-medium text-ui-muted'>
-                        {healthyEndpoints}/{Math.max(endpointRows.length, 1)} checks healthy · {coverageLabel(scheduler.dailyCovered, scheduler.dailySources)} covered today · {sourceGrowth.alertsGenerated} alerts
-                        <ChevronDown className='h-4 w-4 transition group-open:rotate-180' />
-                    </span>
-                </summary>
-                <div className='grid gap-2 border-t border-ui-border p-2' data-ti-control-telemetry-panels>
-                    <section className='grid gap-2 sm:grid-cols-2 xl:grid-cols-5'>
-                        <Metric title='Scraper' value={snapshot?.health ? 'Reachable' : loading ? 'Loading' : 'Connecting'} detail={`${healthyEndpoints}/${Math.max(endpointRows.length, 1)} checks healthy`} icon={<Gauge className='h-4 w-4' />} tone={snapshot?.health ? 'ok' : 'bad'} />
-                        <Metric title='Pending work' value={String(queueCount)} detail='Collection tasks waiting to run' icon={<Workflow className='h-4 w-4' />} tone={queueCount > 200 ? 'warn' : 'ok'} />
-                        <Metric title="Today's coverage" value={coverageLabel(scheduler.dailyCovered, scheduler.dailySources)} detail={`${scheduler.dailyAttempted} source checks attempted today`} icon={<UserRound className='h-4 w-4' />} tone={scheduler.dailySources && scheduler.dailyCovered < scheduler.dailySources ? 'warn' : 'ok'} />
-                        <Metric title='AI parser' value={scheduler.aiStatus} detail={scheduler.aiDetail} icon={<DatabaseZap className='h-4 w-4' />} tone={scheduler.aiReady ? 'ok' : 'warn'} />
-                        <Metric title='Alerts' value={String(sourceGrowth.alertsGenerated)} detail={`${sourceGrowth.watchlistMatches} matches, ${sourceGrowth.webhookDeliveries} deliveries`} icon={<Clock3 className='h-4 w-4' />} tone={sourceGrowth.alertsGenerated ? 'ok' : 'hold'} />
-                    </section>
+            {error || (!loading && !serviceReady) ? (
+                <section className='grid gap-2 rounded-lg border border-ui-danger/35 bg-ui-danger/10 p-5 text-center'>
+                    <AlertTriangle className='mx-auto h-7 w-7 text-ui-danger' />
+                    <h2 className='text-lg font-semibold text-ui-text'>Collection unavailable</h2>
+                    <p className='text-sm text-ui-muted'>{error || 'The source service is not ready. No empty or guessed data is shown.'}</p>
+                    <button type='button' onClick={() => void load(query)} className='mx-auto inline-flex min-h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text hover:bg-ui-panel'><RefreshCcw className='h-4 w-4' /> Retry</button>
+                </section>
+            ) : loading && !snapshot ? (
+                <div className='grid min-h-32 place-items-center rounded-lg border border-ui-border bg-ui-panel text-sm text-ui-muted'><RefreshCcw className='mr-2 inline h-4 w-4 animate-spin' /> Loading collection status…</div>
+            ) : (
+                <section className='grid gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.5fr)]'>
+                    <div className='rounded-lg border border-ui-border bg-ui-panel p-3'>
+                        <div className='flex flex-wrap items-center justify-between gap-2'>
+                            <div>
+                                <p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Step 2 · Next actions</p>
+                                <h2 className='mt-1 text-lg font-semibold text-ui-text'>{workItems.length ? `${workItems.length} item${workItems.length === 1 ? '' : 's'} need attention` : 'No action required'}</h2>
+                            </div>
+                            <form onSubmit={submit} className='flex min-w-0 gap-1.5'>
+                                <label className='relative min-w-0'>
+                                    <Search className='pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-primary' />
+                                    <input value={query} onChange={event => setQuery(event.target.value)} className='h-8 w-full rounded-md border border-ui-border bg-ui-canvas pl-8 pr-2 text-xs text-ui-text outline-none focus:border-ui-primary' placeholder='Filter' />
+                                </label>
+                                <button type='submit' className='rounded-md border border-ui-border bg-ui-raised px-2 text-xs font-semibold text-ui-text'>Go</button>
+                            </form>
+                        </div>
+                        <div className='mt-3 grid max-h-[32rem] gap-1.5 overflow-auto'>
+                            {workItems.slice(0, 8).map(item => {
+                                const active = selected?.id === item.id
+                                const decision = localControl.decisions[item.id]
+                                return <button key={item.id} type='button' onClick={() => setSelectedWorkId(item.id)} className={`grid gap-1 rounded-md border p-2.5 text-left transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${active ? 'border-ui-primary bg-ui-raised' : 'border-ui-border bg-ui-canvas hover:bg-ui-raised'}`}>
+                                    <div className='flex items-center justify-between gap-2'><span className={severityClass(item.severity)}>{item.severity}</span><span className='text-[11px] text-ui-muted'>{decision?.status || 'Open'}</span></div>
+                                    <span className='text-sm font-semibold text-ui-text'>{item.title}</span>
+                                    <span className='line-clamp-2 text-xs leading-5 text-ui-muted'>{item.subtitle}</span>
+                                </button>
+                            })}
+                            {!workItems.length ? <div className='grid place-items-center rounded-md border border-dashed border-ui-border p-8 text-center'><CheckCircle2 className='h-7 w-7 text-ui-success' /><p className='mt-2 text-sm font-semibold text-ui-text'>Collection is running automatically</p><p className='mt-1 text-xs text-ui-muted'>New failures, overdue sources, and useful output are listed in this queue.</p></div> : null}
+                        </div>
+                    </div>
 
-                    <section className='grid gap-2 xl:grid-cols-[1fr_0.9fr]'>
-                        <Panel title='Endpoints' icon={<GitBranch className='h-4 w-4' />}>
-                            <div className='grid gap-2 md:grid-cols-2'>
-                                {endpointRows.map(([name, state]) => (
-                                    <div key={name} className='flex items-center justify-between gap-3 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs'>
-                                        <span className='font-semibold text-ui-text'>{name}</span>
-                                        <span className={state.ok ? 'text-ui-success' : 'text-ui-danger'}>{state.ok ? `HTTP ${state.status}` : state.error || `HTTP ${state.status}`}</span>
-                                    </div>
-                                ))}
-                                {!endpointRows.length ? <p className='text-sm text-ui-muted'>Live checks appear here when the scraper connects.</p> : null}
-                            </div>
-                        </Panel>
-                        <Panel title='Output feed' icon={<FileSearch className='h-4 w-4' />}>
-                            <div className='grid gap-2 md:grid-cols-2'>
-                                <Info label='Runs' value={scheduler.lastRunStatus || 'collection feed'} />
-                                <Info label='Pending work' value={`${queueCount} collection tasks`} />
-                                <Info label='Quality' value={qualitySummary(snapshot)} />
-                                <Info label='Next run' value={scheduler.nextRunAt ? formatTime(scheduler.nextRunAt) : 'checking'} />
-                            </div>
-                        </Panel>
-                    </section>
-                </div>
+                    <div className='rounded-lg border border-ui-border bg-ui-panel p-3'>
+                        <p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Step 3 · Selected action</p>
+                        {selected ? <>
+                            <div className='mt-2 flex flex-wrap items-start justify-between gap-2'><div><h2 className='text-lg font-semibold text-ui-text'>{selected.title}</h2><p className='mt-1 text-sm text-ui-muted'>{selected.subtitle}</p></div><span className={severityClass(selected.severity)}>{selected.severity}</span></div>
+                            <div className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3'>{selected.evidence.slice(0, 6).map(item => <Info key={item.label} label={item.label} value={item.value} />)}</div>
+                            <div className='mt-3 rounded-md border border-ui-border bg-ui-canvas p-3'><p className='text-xs font-semibold uppercase text-ui-muted'>What happens next</p><ol className='mt-2 grid gap-1.5'>{selected.nextActions.slice(0, 3).map((action, index) => <li key={action} className='flex gap-2 text-sm text-ui-text'><span className='font-semibold text-ui-primary'>{index + 1}.</span>{action}</li>)}</ol></div>
+                            <div className='mt-3 flex flex-wrap gap-2'><ActionButton compact busy={busyAction === 'scheduler_run_now'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('scheduler_run_now')}>Run due sources</ActionButton><ActionButton compact busy={busyAction === 'rebuild_alerts'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Rebuild alerts</ActionButton><button type='button' onClick={() => applySessionDecision('retry requested')} className='inline-flex min-h-8 items-center gap-1.5 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text'><RotateCcw className='h-4 w-4' /> Mark retry</button></div>
+                        </> : <div className='grid min-h-48 place-items-center text-center text-sm text-ui-muted'>Select an action to see the evidence and available controls.</div>}
+                    </div>
+                </section>
+            )}
+
+            <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
+                <div className='flex flex-wrap items-center justify-between gap-2'><div><p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Collection coverage</p><h2 className='mt-1 text-lg font-semibold text-ui-text'>What is being collected</h2></div><Link href='/dashboard/ti/sources' className='text-sm font-semibold text-ui-primary underline underline-offset-4'>Open source inventory</Link></div>
+                <div className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4'><Info label='Active sources' value={String(scheduler.activeSources || sourceCount)} /><Info label='Last useful output' value={String(scheduler.usefulSources)} /><Info label='Degraded sources' value={String(sourceGrowth.failingSources)} /><Info label='Customer alerts' value={String(sourceGrowth.alertsGenerated)} /></div>
+            </section>
+
+            <details className='group rounded-lg border border-ui-border bg-ui-panel' data-ti-control-telemetry-disclosure>
+                <summary className='flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-semibold text-ui-text [&::-webkit-details-marker]:hidden'>Technical health <span className='text-xs font-medium text-ui-muted'>{healthyEndpoints}/{Math.max(endpointRows.length, 1)} checks healthy <ChevronDown className='inline h-4 w-4 transition group-open:rotate-180' /></span></summary>
+                <div className='grid gap-3 border-t border-ui-border p-3'><div className='grid gap-2 sm:grid-cols-2 lg:grid-cols-4'><Metric title='Scraper' value={snapshot?.health ? 'Reachable' : loading ? 'Loading' : 'Unavailable'} detail={`${healthyEndpoints}/${Math.max(endpointRows.length, 1)} checks healthy`} icon={<Gauge className='h-4 w-4' />} tone={snapshot?.health ? 'ok' : 'bad'} /><Metric title='Scheduler' value={scheduler.lastRunStatus || 'Ready'} detail={scheduler.nextRunAt ? `Next run ${formatTime(scheduler.nextRunAt)}` : 'Automatic collection enabled'} icon={<Workflow className='h-4 w-4' />} tone='ok' /><Metric title='Parser' value={scheduler.aiStatus} detail={scheduler.aiDetail} icon={<DatabaseZap className='h-4 w-4' />} tone={scheduler.aiReady ? 'ok' : 'warn'} /><Metric title='Alerts' value={String(sourceGrowth.alertsGenerated)} detail={`${sourceGrowth.watchlistMatches} matches`} icon={<Clock3 className='h-4 w-4' />} tone={sourceGrowth.alertsGenerated ? 'ok' : 'hold'} /></div><div className='grid gap-2 md:grid-cols-2'>{endpointRows.map(([name, state]) => <div key={name} className='flex items-center justify-between rounded-md border border-ui-border bg-ui-canvas px-3 py-2 text-xs'><span className='font-semibold text-ui-text'>{name}</span><span className={state.ok ? 'text-ui-success' : 'text-ui-danger'}>{state.ok ? 'Healthy' : state.error || `HTTP ${state.status}`}</span></div>)}</div></div>
             </details>
         </div>
     )
@@ -725,55 +500,6 @@ function workItemsFor(snapshot: ControlSnapshot | null, sources: SourceRow[], ta
     return items.sort((a, b) => severityWeight(b.severity) - severityWeight(a.severity) || a.queue.localeCompare(b.queue))
 }
 
-function timelineFor(snapshot: ControlSnapshot | null, actionResult: ActionResult | null, decisions: LocalControl['decisions']) {
-    const items = Object.entries(decisions).map(([id, decision]) => ({
-        id: `decision-${id}-${decision.at}`,
-        title: `Session decision: ${decision.status}`,
-        at: formatTime(decision.at),
-        body: decision.reason,
-    }))
-    if (actionResult) {
-        items.unshift({ id: 'action', title: actionResult.ok ? 'Action completed' : 'Action failed', at: 'This session', body: actionSummary(actionResult) })
-    }
-    if (snapshot?.generatedAt) {
-        items.push({ id: 'snapshot', title: 'Control stream live', at: formatTime(snapshot.generatedAt), body: `${Object.keys(snapshot.endpoints ?? {}).length} scraper checks are being watched.` })
-    }
-    if (snapshot?.query) {
-        items.push({ id: 'query', title: 'Query in operation', at: formatTime(snapshot.generatedAt), body: `${snapshot.query} is driving checks, sources, reviews, and runs.` })
-    }
-    return items.length ? items : [{ id: 'snapshot-pending', title: 'Connecting collection', at: 'Now', body: 'Health, source schedules, and collection depth update here when the scraper responds.' }]
-}
-
-function publicImpactFor(item: WorkItem, query: string) {
-    if (item.kind === 'frontier_task') return `Checking this source for ${query}. Clean captures move into activity and alerts.`
-    if (item.kind === 'source') return `This source changes ${query} coverage. Preview changes before promotion.`
-    if (item.kind === 'policy') return 'Safe metadata can move forward; raw leaked material stays out of the console.'
-    if (item.kind === 'platform') return 'Worker check failures can slow source updates.'
-    return `This item affects ${query} coverage and freshness.`
-}
-
-function provenanceFor(item: WorkItem, source?: SourceRow) {
-    if (item.task) return `Task ${item.task.id}, source ${source?.name || item.task.sourceId || 'source checking'}, fairness ${item.task.fairnessKey}, discovered ${formatTime(item.task.discoveredAt)}.`
-    if (source) return `Source ${source.id}, ${source.type}, status ${source.status}, risk ${source.risk}, trust ${Math.round(source.trustScore * 100)}%.`
-    return 'Select a source or result to inspect provenance.'
-}
-
-function qualitySummary(snapshot: ControlSnapshot | null) {
-    const quality = asRecord(snapshot?.quality)
-    const nested = asRecord(quality.quality)
-    const publicWarningText = stringArray(nested.publicWarningText).join(', ')
-    const state = stringValue(nested.status) || stringValue(quality.status)
-    if (state || publicWarningText) return `${state || 'checked'}${publicWarningText ? `: ${publicWarningText}` : ''}`
-    return 'Checking quality.'
-}
-
-function policySummary(item: WorkItem, source: SourceRow | undefined, snapshot: ControlSnapshot | null) {
-    if (item.kind === 'policy' || source?.risk === 'restricted') return 'Restricted sources stay safe-field only: no raw leaked files, credential values, private access, CAPTCHA bypass, actor interaction, or payload redistribution.'
-    const restricted = asRecord(snapshot?.restricted?.status)
-    const status = stringValue(restricted.state) || stringValue(restricted.status)
-    return status ? `Sensitive-source state: ${status}.` : 'Sensitive-source rules are clear.'
-}
-
 function schedulerKpis(snapshot: ControlSnapshot | null) {
     const schedulerRoot = asRecord(snapshot?.scheduler)
     const scheduler = asRecord(schedulerRoot.scheduler)
@@ -819,10 +545,6 @@ function coverageLabel(covered: number, total: number) {
     return total > 0 ? `${covered}/${total}` : '—'
 }
 
-function displayQueue(value: string) {
-    return value === 'Source governance' ? 'Source review' : value
-}
-
 function sourceGrowthKpis(snapshot: ControlSnapshot | null, sources: SourceRow[]) {
     const inventory = asRecord(snapshot?.sourceInventory)
     const counts = asRecord(inventory.counts)
@@ -845,15 +567,6 @@ function sourceGrowthKpis(snapshot: ControlSnapshot | null, sources: SourceRow[]
         alertsGenerated: alerts.length,
         webhookDeliveries: deliveries.length,
     }
-}
-
-function EvidenceLine({ title, body }: { title: string; body: string }) {
-    return (
-        <div className='rounded-md border border-ui-border bg-ui-panel p-2.5'>
-            <p className='text-[10px] font-semibold uppercase text-ui-muted'>{title}</p>
-            <p className='mt-1 line-clamp-3 text-xs leading-5 text-ui-text'>{body}</p>
-        </div>
-    )
 }
 
 function Metric({ title, value, detail, icon, tone }: { title: string; value: string; detail: string; icon: ReactNode; tone: 'ok' | 'warn' | 'bad' | 'hold' }) {
@@ -885,30 +598,6 @@ function Info({ label, value }: { label: string; value: string }) {
             <p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p>
             <p className='mt-0.5 wrap-break-word text-xs font-semibold leading-5 text-ui-text'>{value || 'checking'}</p>
         </div>
-    )
-}
-
-function SidePanel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
-    return (
-        <section className='rounded-md border border-ui-border bg-ui-panel p-3'>
-            <div className='flex items-center gap-2 text-xs font-semibold text-ui-text'>
-                <span className='text-ui-primary'>{icon}</span>
-                {title}
-            </div>
-            <div className='mt-2 grid gap-2 text-[11px] leading-5 text-ui-muted'>{children}</div>
-        </section>
-    )
-}
-
-function Panel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
-    return (
-        <section className='rounded-md border border-ui-border bg-ui-panel p-3 shadow-sm'>
-            <div className='mb-2 flex items-center gap-2 text-sm font-semibold text-ui-text'>
-                <span className='text-ui-primary'>{icon}</span>
-                {title}
-            </div>
-            {children}
-        </section>
     )
 }
 
@@ -959,13 +648,6 @@ function defaultDecisionReason(status: string) {
     if (status.includes('promoted')) return 'Promoted for review from collection.'
     if (status.includes('suppressed')) return 'Suppressed locally pending persistent workflow support.'
     return 'Updated from collection.'
-}
-
-function operationalStateLabel(value: string) {
-    if (value === 'blocked') return 'syncing'
-    if (value === 'needs_action') return 'reviewing'
-    if (value === 'review') return 'reviewing'
-    return value.replaceAll('_', ' ')
 }
 
 function formatTime(value?: string) {
