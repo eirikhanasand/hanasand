@@ -1,5 +1,6 @@
 import type { ExtractedEntity, ExtractionProvenance, Indicator } from "../types.ts";
 import { normalizeWhitespace } from "../utils.ts";
+import { ACTOR_ALIAS_RECORDS } from "./actorAliases.ts";
 import { actorLookupPolicy, resolveMitreActorIdentity, type ActorIdentityRecord } from "./mitreActorCatalog.ts";
 
 export const EXTRACTOR_VERSION = "ti-extractor-v2";

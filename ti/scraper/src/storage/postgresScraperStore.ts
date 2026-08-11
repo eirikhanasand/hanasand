@@ -65,15 +65,7 @@ const DEFAULT_MIGRATIONS = [
   { version: "028_remove_generic_business_labels", path: fileURLToPath(new URL("../../migrations/028_remove_generic_business_labels.sql", import.meta.url)) },
   { version: "029_scope_capture_dedupe_by_tenant", path: fileURLToPath(new URL("../../migrations/029_scope_capture_dedupe_by_tenant.sql", import.meta.url)) },
   { version: "030_reconcile_actor_profiles", path: fileURLToPath(new URL("../../migrations/030_reconcile_actor_profiles.sql", import.meta.url)) },
-  { version: "031_archive_inactive_actor_profiles", path: fileURLToPath(new URL("../../migrations/031_archive_inactive_actor_profiles.sql", import.meta.url)) },
-  { version: "032_reconcile_actor_profile_scope_lineage", path: fileURLToPath(new URL("../../migrations/032_reconcile_actor_profile_scope_lineage.sql", import.meta.url)) },
-  { version: "033_bound_source_operations", path: fileURLToPath(new URL("../../migrations/033_bound_source_operations.sql", import.meta.url)) },
-  { version: "034_reconcile_incomplete_collection_runs", path: fileURLToPath(new URL("../../migrations/034_reconcile_incomplete_collection_runs.sql", import.meta.url)) },
-  { version: "035_preserve_unknown_delivery_completion", path: fileURLToPath(new URL("../../migrations/035_preserve_unknown_delivery_completion.sql", import.meta.url)) },
-  { version: "036_source_operations_runtime_indexes", path: fileURLToPath(new URL("../../migrations/036_source_operations_runtime_indexes.sql", import.meta.url)) },
-  { version: "037_remove_parser_fallback_artifacts", path: fileURLToPath(new URL("../../migrations/037_remove_parser_fallback_artifacts.sql", import.meta.url)) },
-  { version: "038_exposure_queue_candidate_index", path: fileURLToPath(new URL("../../migrations/038_exposure_queue_candidate_index.sql", import.meta.url)) },
-  { version: "039_capture_search_text_index", path: fileURLToPath(new URL("../../migrations/039_capture_search_text_index.sql", import.meta.url)) }
+  { version: "031_archive_inactive_actor_profiles", path: fileURLToPath(new URL("../../migrations/031_archive_inactive_actor_profiles.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 const MAINTENANCE_MIGRATION_VERSIONS = new Set(["037_remove_parser_fallback_artifacts"]);
@@ -1545,9 +1537,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     }
     const catalog = structuredClone(this.getActorIdentityCatalog(snapshot.catalogId));
     const identities = structuredClone(this.listActorIdentities());
-    const archivedIds = new Set(result.archivedActorProfileIds);
-    const changedProfiles = [...result.archivedActorProfileIds, ...result.reboundActorProfileIds]
-      .map((id: string) => structuredClone(this.getActorProfile(id)));
+    const archivedProfiles = result.archivedActorProfileIds.map((id: string) => structuredClone(this.getActorProfile(id)));
     this.enqueue(`actor-identity-catalog:${catalog.id}`, () => persistActorIdentityCatalog(
       this.sql,
       catalog,
@@ -2092,6 +2082,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         await this.persistActorProfile(this.getActorProfile(id), transaction);
       }
     });
+    this.pipelineDepth++;
+    let archivedActorProfileIds: string[] = [];
+    try {
+      archivedActorProfileIds = this.archiveInactiveActorProfiles(new Date().toISOString());
+    } finally {
+      this.pipelineDepth--;
+    }
+    for (const id of archivedActorProfileIds) await this.persistActorProfile(this.getActorProfile(id));
   }
 
   async purgeParserDiagnosticArchiveObjects(objectStore: { deleteObject: (reference: any, reason: string) => boolean | Promise<boolean> }) {

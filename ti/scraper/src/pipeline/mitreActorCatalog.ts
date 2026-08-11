@@ -18,7 +18,7 @@ export type ActorIdentityRecord = {
   normalizedCanonicalName: string;
   associatedNames: string[];
   status: MitreActorIdentityStatus;
-  lookupPolicy?: ActorLookupPolicy;
+  lookupPolicy: ActorLookupPolicy;
   aptNumberDesignationPresent: boolean;
   sourceUrl: string;
   catalogVersion: string;
@@ -105,6 +105,43 @@ export type MitreActorResolution = {
     resolutionKinds: Array<"direct" | "revoked_by" | "cross_catalog_alias">;
   }>;
   ambiguous: boolean;
+};
+
+export type ActorIdentityRecord = {
+  id: string;
+  catalogId: string;
+  externalId: string;
+  canonicalName: string;
+  normalizedCanonicalName: string;
+  associatedNames: string[];
+  status: MitreActorIdentityStatus;
+  lookupPolicy?: ActorLookupPolicy;
+  aptNumberDesignationPresent: boolean;
+  sourceUrl: string;
+  catalogVersion: string;
+  catalogModifiedAt?: string;
+  bundleSha256: string;
+  retrievedAt: string;
+  revokedByExternalId?: string;
+  relatedOperationNames?: string[];
+  lineageRelations?: Array<{ relationship: "evolved_from"; name: string; targetIdentityId?: string }>;
+  canonicalIdentityId?: string;
+  canonicalIdentityEvidence?: {
+    relationship: "same_as";
+    matchedLabel: string;
+    sourceCatalogId: string;
+    sourceCatalogVersion: string;
+    sourceCaptureId: string;
+    targetCatalogId: string;
+    targetCatalogVersion: string;
+    targetCaptureId: string;
+  };
+  activityEvidence?: Array<{
+    kind: "recent_public_claim" | "reachable_publication_location";
+    observedAt: string;
+    count: number;
+    contentHash: string;
+  }>;
 };
 
 type JsonObject = Record<string, unknown>;
@@ -226,7 +263,7 @@ export function resolveMitreActorIdentity(
 ): MitreActorResolution {
   const normalizedQuery = normalizeActorLabel(query);
   const matched = identities.flatMap((identity) => {
-    const allowed = (label: string) => options.allowStructuredOnly === true || actorLookupPolicy(label) !== "structured_only";
+    const allowed = (label: string) => options.allowStructuredOnly !== false || actorLookupPolicy(label) !== "structured_only";
     const canonical = normalizeActorLabel(identity.canonicalName) === normalizedQuery && allowed(identity.canonicalName) ? [identity.canonicalName] : [];
     const associated = identity.associatedNames.filter((label) => normalizeActorLabel(label) === normalizedQuery && allowed(label));
     if (!canonical.length && !associated.length) return [];
@@ -322,7 +359,7 @@ export function actorLookupPolicy(value: string): ActorLookupPolicy {
 
 const STRUCTURED_ONLY_LABELS = new Set([
   "actor", "aware", "backdoor", "blackout", "exploit", "global", "group", "loader", "malware",
-  "payload", "play", "ransomware", "silence", "silent", "trojan", "unsafe", "victim"
+  "payload", "play", "ransomware", "silent", "trojan", "unsafe", "victim"
 ]);
 
 function successorIdentity(identity: ActorIdentityRecord, identities: readonly ActorIdentityRecord[]): ActorIdentityRecord {

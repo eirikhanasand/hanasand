@@ -9,7 +9,7 @@ import { hashContent } from "../utils.ts";
 
 // Exact safe fields from the public Ransomware.live feeds; restricted locators are intentionally omitted.
 const groups = JSON.stringify([
-  { ...group("Akira", null, "conti", "2026-07-21T21:00:00Z", 200), date: "2026-07-21T21:00:00Z" },
+  group("Akira", null, "conti", "2026-07-21T21:00:00Z", 200),
   { ...group("Recent Only", "Recent Alias", null, "2026-07-21T20:00:00Z", 503), description: "A documented operation with recent public claims." },
   { ...group("Live Only", null, null, "2026-07-21T20:00:00Z", 200), description: "A documented operation with a reachable publication location." },
   { ...group("Historical Group", null, null, "2026-01-01T00:00:00Z", 503), description: "A documented historical operation.", _victim_count: 4 },
@@ -33,7 +33,6 @@ test("registers current and historical identities independently from per-signal 
     ["Recent Only", "current"]
   ]);
   expect(catalog.identities.find((identity) => identity.canonicalName === "Akira")).toMatchObject({
-    sourceFirstReportedAt: "2026-07-21T21:00:00.000Z",
     relatedOperationNames: ["conti"],
     lineageRelations: [{ relationship: "evolved_from", name: "conti" }],
     activityEvidence: [
@@ -41,8 +40,6 @@ test("registers current and historical identities independently from per-signal 
       { kind: "reachable_publication_location", count: 1, contentHash: catalog.evidenceContentHashes[0] }
     ]
   });
-  expect(catalog.identities.find((identity) => identity.canonicalName === "Akira")).not.toHaveProperty("createdAt");
-  expect(catalog.identities.find((identity) => identity.canonicalName === "Akira")).not.toHaveProperty("modifiedAt");
   expect(catalog.identities.find((identity) => identity.canonicalName === "Recent Only")).toMatchObject({
     associatedNames: ["Recent Alias"],
     activityEvidence: [{ kind: "recent_public_claim", contentHash: catalog.evidenceContentHashes[1] }]
@@ -71,9 +68,8 @@ test("registers current and historical identities independently from per-signal 
     historicalDescriptionIdentityCount: 1,
     historicalVictimHistoryIdentityCount: 1,
     unreliableExcludedCount: 1,
-    resolvedRecentClaimAliasCount: 0,
     unmatchedRecentClaimGroupCount: 1,
-    identityActivityEvidenceCount: 4,
+    identityActivityEvidenceCount: 3,
     sourceVictimRecordCount: 6
   });
   expect(catalog.exclusions).toEqual({
@@ -81,7 +77,6 @@ test("registers current and historical identities independently from per-signal 
     invalidIdentityLabels: [],
     generatedIdentityLabels: [],
     invalidAliasLabels: [],
-    recentClaimAliasesResolvedByUniqueLocation: [],
     recentClaimNamesMissingFromGroupCatalog: ["Missing Group"]
   });
   expect(catalog.lifecycle).toEqual({
@@ -113,49 +108,6 @@ test("registers current and historical identities independently from per-signal 
     }
   });
   expect(resolveMitreActorIdentity("Akira", store.listActorIdentities()).candidates.map((candidate) => candidate.identity.externalId)).toEqual(["G1024"]);
-});
-
-test("resolves a victim-feed spelling alias only through one matching authoritative group location", () => {
-  const catalog = parseCurrentRansomwareOperations(
-    JSON.stringify([
-      {
-        ...group("secp0", null, null, "2026-07-23T10:05:45Z", 200),
-        locations: [{
-          enabled: true,
-          available: true,
-          fqdn: "secponewsxgrlnirowclps2kllzaotaf5w2bsvktdnz4qhjr2jnwvvyd.onion",
-          lastscrape: "2026-07-23T10:05:45Z",
-          http: { status: 200 }
-        }]
-      }
-    ]),
-    JSON.stringify([{
-      group_name: "secpo",
-      published: "2026-07-23T09:00:00Z",
-      post_url: "http://secponewsxgrlnirowclps2kllzaotaf5w2bsvktdnz4qhjr2jnwvvyd.onion/post/example/index.html"
-    }]),
-    { retrievedAt: "2026-07-23T11:00:00Z", minimumCurrentIdentities: 1 }
-  );
-
-  expect(catalog.identities).toEqual([
-    expect.objectContaining({
-      canonicalName: "secp0",
-      associatedNames: ["secpo"],
-      status: "current",
-      activityEvidence: expect.arrayContaining([expect.objectContaining({ kind: "recent_public_claim", count: 1 })])
-    })
-  ]);
-  expect(catalog.counts).toMatchObject({
-    recentClaimGroupCount: 1,
-    recentClaimIdentityCount: 1,
-    resolvedRecentClaimAliasCount: 1,
-    unmatchedRecentClaimGroupCount: 0
-  });
-  expect(catalog.exclusions).toMatchObject({
-    recentClaimAliasesResolvedByUniqueLocation: [{ claimName: "secpo", canonicalName: "secp0" }],
-    recentClaimNamesMissingFromGroupCatalog: []
-  });
-  expect(JSON.stringify(catalog)).not.toContain(".onion");
 });
 
 test("uses retrieval-time freshness and preserves future source timestamps only as anomalies", () => {

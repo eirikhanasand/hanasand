@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { actorLookupPolicy, normalizeActorLabel, type ActorIdentityRecord } from "./mitreActorCatalog.ts";
+import { actorLookupPolicy, normalizeActorLabel } from "./mitreActorCatalog.ts";
 
 const CURRENT_WINDOW_MS = 90 * 86_400_000;
 const LOCATION_FRESHNESS_MS = 7 * 86_400_000;
@@ -14,18 +14,42 @@ export type RansomwareOperationCurrentActivityEvidence = {
   contentHash: string;
 };
 
-export type RansomwareOperationIdentity = ActorIdentityRecord & {
+export type RansomwareOperationIdentity = {
+  id: string;
   catalogId: "ransomware-live-current-operations";
+  externalId: string;
+  canonicalName: string;
+  normalizedCanonicalName: string;
+  associatedNames: string[];
+  relatedOperationNames: string[];
   status: "current" | "retired";
   lookupPolicy: "text_safe" | "structured_only";
+  aptNumberDesignationPresent: false;
   identityKind: "ransomware_operation";
-  relatedOperationNames: string[];
   lineageRelations: Array<{ relationship: "evolved_from"; name: string; targetIdentityId?: string }>;
-  activityEvidence: Array<RansomwareOperationCurrentActivityEvidence>;
+  canonicalIdentityId?: string;
+  canonicalIdentityEvidence?: {
+    relationship: "same_as";
+    matchedLabel: string;
+    sourceCatalogId: string;
+    sourceCatalogVersion: string;
+    sourceCaptureId: string;
+    targetCatalogId: string;
+    targetCatalogVersion: string;
+    targetCaptureId: string;
+  };
+  activityEvidence: RansomwareOperationCurrentActivityEvidence[];
   descriptionAvailable: boolean;
   descriptionSha256?: string;
   sourceFirstReportedAt?: string;
   operationKinds: string[];
+  createdAt?: string;
+  modifiedAt?: string;
+  sourceUrl: string;
+  catalogVersion: string;
+  catalogModifiedAt?: string;
+  bundleSha256: string;
+  retrievedAt: string;
 };
 
 export type RansomwareOperationCatalogSnapshot = {
@@ -71,7 +95,6 @@ export type RansomwareOperationCatalogSnapshot = {
     invalidIdentityLabelExcludedCount: number;
     generatedIdentityLabelExcludedCount: number;
     invalidAliasLabelExcludedCount: number;
-    resolvedRecentClaimAliasCount: number;
     unmatchedRecentClaimGroupCount: number;
     identityActivityEvidenceCount: number;
     sourceVictimRecordCount: number;
@@ -85,7 +108,6 @@ export type RansomwareOperationCatalogSnapshot = {
     invalidIdentityLabels: string[];
     generatedIdentityLabels: string[];
     invalidAliasLabels: string[];
-    recentClaimAliasesResolvedByUniqueLocation: Array<{ claimName: string; canonicalName: string }>;
     recentClaimNamesMissingFromGroupCatalog: string[];
   };
   lifecycle: {
@@ -129,7 +151,6 @@ type ClaimSummary = {
   latestAt: string;
   recentCount: number;
   latestRecentAt?: string;
-  locatorHosts: string[];
 };
 
 export function parseCurrentRansomwareOperations(
@@ -151,9 +172,8 @@ export function parseCurrentRansomwareOperations(
     const name = text(victim.group_name);
     if (!name || !Number.isFinite(publishedMs)) continue;
     const key = normalizeActorLabel(name);
-    const current = claims.get(key) ?? { name, count: 0, latestAt: new Date(publishedMs).toISOString(), recentCount: 0, locatorHosts: [] };
+    const current = claims.get(key) ?? { name, count: 0, latestAt: new Date(publishedMs).toISOString(), recentCount: 0 };
     current.count++;
-    current.locatorHosts = uniqueCaseInsensitive([...current.locatorHosts, publicHost(victim.post_url)]).filter(Boolean);
     if (publishedMs > Date.parse(current.latestAt)) current.latestAt = new Date(publishedMs).toISOString();
     if (publishedMs >= retrievedMs - CURRENT_WINDOW_MS && publishedMs <= retrievedMs) {
       current.recentCount++;
@@ -161,7 +181,6 @@ export function parseCurrentRansomwareOperations(
     }
     claims.set(key, current);
   }
-  const sourceRecentClaimGroupCount = [...claims.values()].filter((claim) => claim.recentCount > 0).length;
 
   const groupContentHash = hash(groupsBody);
   const activityContentHash = hash(victimsBody);
@@ -214,24 +233,6 @@ export function parseCurrentRansomwareOperations(
       ...(sourceFirstReportedAt ? { sourceFirstReportedAt } : {}),
       operationKinds: Object.entries(objectOrEmpty(group.type)).filter(([, enabled]) => enabled === true).map(([kind]) => kind).sort()
     });
-  }
-  const recentClaimAliasesResolvedByUniqueLocation: Array<{ claimName: string; canonicalName: string }> = [];
-  for (const [claimKey, claim] of [...claims]) {
-    if (definitions.some((definition) => definition.normalizedCanonicalName === claimKey)) continue;
-    const candidates = definitions.filter((definition) => {
-      const locationHosts = array(definition.group.locations ?? [], `${definition.canonicalName} locations`)
-        .flatMap((location) => [text(location?.fqdn), publicHost(location?.slug)])
-        .map((host) => host.toLowerCase())
-        .filter(Boolean);
-      return claim.locatorHosts.some((host) => locationHosts.includes(host.toLowerCase()));
-    });
-    if (candidates.length !== 1) continue;
-    const target = candidates[0];
-    const existing = claims.get(target.normalizedCanonicalName);
-    claims.set(target.normalizedCanonicalName, mergeClaimSummaries(existing, claim, target.canonicalName));
-    claims.delete(claimKey);
-    if (!identityLabelExclusion(claim.name)) target.associatedNames = uniqueCaseInsensitive([...target.associatedNames, claim.name]).sort(labelOrder);
-    recentClaimAliasesResolvedByUniqueLocation.push({ claimName: claim.name, canonicalName: target.canonicalName });
   }
   if (new Set(definitions.map((identity) => identity.id)).size !== definitions.length) throw new Error("Ransomware operation catalog contains duplicate normalized identities.");
 
@@ -331,6 +332,9 @@ export function parseCurrentRansomwareOperations(
       ...(definition.descriptionSha256 ? { descriptionSha256: definition.descriptionSha256 } : {}),
       ...(definition.sourceFirstReportedAt ? { sourceFirstReportedAt: definition.sourceFirstReportedAt } : {}),
       operationKinds: definition.operationKinds,
+      ...(definition.sourceFirstReportedAt && Date.parse(definition.sourceFirstReportedAt) <= retrievedMs
+        ? { createdAt: definition.sourceFirstReportedAt, modifiedAt: definition.sourceFirstReportedAt }
+        : {}),
       sourceUrl,
       catalogVersion,
       bundleSha256,
@@ -393,7 +397,7 @@ export function parseCurrentRansomwareOperations(
       registeredVictimHistoryIdentityCount: definitions.filter((definition) => nonNegativeInteger(definition.group._victim_count) > 0).length,
       historicalDescriptionIdentityCount: historical.filter((identity) => definitionById.get(identity.id)?.descriptionAvailable).length,
       historicalVictimHistoryIdentityCount: historical.filter((identity) => nonNegativeInteger(definitionById.get(identity.id)?.group?._victim_count) > 0).length,
-      recentClaimGroupCount: sourceRecentClaimGroupCount,
+      recentClaimGroupCount: recentClaims.length,
       recentClaimIdentityCount: definitions.filter((definition) => (claims.get(definition.normalizedCanonicalName)?.recentCount ?? 0) > 0).length,
       reachableLocationGroupCount,
       liveLocationGroupCount,
@@ -405,9 +409,8 @@ export function parseCurrentRansomwareOperations(
       invalidIdentityLabelExcludedCount: invalidIdentityLabels.length,
       generatedIdentityLabelExcludedCount: generatedIdentityLabels.length,
       invalidAliasLabelExcludedCount: invalidAliasLabels.length,
-      resolvedRecentClaimAliasCount: recentClaimAliasesResolvedByUniqueLocation.length,
       unmatchedRecentClaimGroupCount: missingRecent.length,
-      identityActivityEvidenceCount: current.reduce((count, identity) => count + identity.activityEvidence.length, 0),
+      identityActivityEvidenceCount: current.length,
       sourceVictimRecordCount: victims.length,
       restrictedLocatorFieldCount: groups.reduce((count, group) => count + array(group.locations ?? [], "locations").filter((location) => text(location?.fqdn) || text(location?.slug)).length, 0),
       futureTimestampAnomalyCount: timestampAnomalies.length
@@ -419,7 +422,6 @@ export function parseCurrentRansomwareOperations(
       invalidIdentityLabels: invalidIdentityLabels.sort(),
       generatedIdentityLabels: generatedIdentityLabels.sort(),
       invalidAliasLabels: invalidAliasLabels.sort(),
-      recentClaimAliasesResolvedByUniqueLocation: recentClaimAliasesResolvedByUniqueLocation.sort((left, right) => left.claimName.localeCompare(right.claimName)),
       recentClaimNamesMissingFromGroupCatalog: missingRecent
     },
     lifecycle: {
@@ -453,30 +455,6 @@ function locationTime(location: any): number {
 
 function claimTime(victim: any): number {
   return Date.parse(text(victim?.published) || text(victim?.discovered));
-}
-
-function publicHost(value: unknown): string {
-  const raw = text(value);
-  if (!raw) return "";
-  try {
-    return new URL(raw).hostname.toLowerCase();
-  } catch {
-    return raw.replace(/^https?:\/\//i, "").split("/")[0].toLowerCase();
-  }
-}
-
-function mergeClaimSummaries(existing: ClaimSummary | undefined, alias: ClaimSummary, canonicalName: string): ClaimSummary {
-  if (!existing) return { ...alias, name: canonicalName };
-  const latestAt = Date.parse(existing.latestAt) >= Date.parse(alias.latestAt) ? existing.latestAt : alias.latestAt;
-  const recentTimes = [existing.latestRecentAt, alias.latestRecentAt].filter(Boolean) as string[];
-  return {
-    name: canonicalName,
-    count: existing.count + alias.count,
-    latestAt,
-    recentCount: existing.recentCount + alias.recentCount,
-    ...(recentTimes.length ? { latestRecentAt: recentTimes.sort((left, right) => Date.parse(right) - Date.parse(left))[0] } : {}),
-    locatorHosts: uniqueCaseInsensitive([...existing.locatorHosts, ...alias.locatorHosts])
-  };
 }
 
 function identityLabelExclusion(value: string): "invalid" | "generated" | undefined {

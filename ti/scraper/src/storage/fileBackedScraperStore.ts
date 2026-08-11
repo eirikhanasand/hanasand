@@ -31,10 +31,7 @@ export class FileBackedScraperStore extends InMemoryScraperStore {
   override saveExtractedEntity(entity: any): any { return this.saved(() => super.saveExtractedEntity(entity)); }
   override saveIndicator(indicator: any): any { return this.saved(() => super.saveIndicator(indicator)); }
   override saveActorProfile(profile: any): any { return this.saved(() => super.saveActorProfile(profile)); }
-  override replaceActorIdentityCatalog(
-    snapshot: Parameters<InMemoryScraperStore["replaceActorIdentityCatalog"]>[0],
-    provenance: Parameters<InMemoryScraperStore["replaceActorIdentityCatalog"]>[1]
-  ) { return this.saved(() => super.replaceActorIdentityCatalog(snapshot, provenance)); }
+  override replaceActorIdentityCatalog(snapshot: any, provenance: any): any { return this.saved(() => super.replaceActorIdentityCatalog(snapshot, provenance)); }
   override saveEvidenceLink(linkRecord: any): any { return this.saved(() => super.saveEvidenceLink(linkRecord)); }
   override saveValidationRecord(record: EvaluationValidationRecord): EvaluationValidationRecord { return this.saved(() => super.saveValidationRecord(record)); }
   override saveEvaluationLabel(label: EvaluationLabelRecord): EvaluationLabelRecord { return this.saved(() => super.saveEvaluationLabel(label)); }

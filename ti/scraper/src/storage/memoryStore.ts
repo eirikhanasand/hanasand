@@ -17,17 +17,7 @@ import { canonicalizeUrl, captureDedupeKey, dedupeIndexKeys, enforceSensitiveMet
 import { nowIso, stableId } from "../utils.ts";
 import { canonicalActorIdentity, normalizeActorLabel, resolveMitreActorIdentity, type ActorIdentityRecord, type MitreActorCatalogSnapshot } from "../pipeline/mitreActorCatalog.ts";
 import type { RansomwareOperationCatalogSnapshot } from "../pipeline/ransomwareOperationCatalog.ts";
-import { publicReferenceUrl } from "../pipeline/timelinessGroundTruth.ts";
-import { mayContainExposureQueueClaim } from "../product/exposureQueueCandidate.ts";
-import { isLegacySourceReviewCandidate } from "../policy/sourceAutomaticReview.ts";
-export interface RawEvidenceStore extends CaptureMetadataStore {} export interface ScraperStore extends CaptureMetadataStore {
-  querySourceOperationalSummary?: (input: { tenantId?: string; generatedAt: string; executableOnly?: boolean }) => Promise<any>;
-  queryPublicCoverageSummary?: (input: { generatedAt: string }) => Promise<{ summary?: Record<string, unknown> }>;
-  queryPublicCoverageLatency?: () => Promise<{ status: string; sampleCount: number; medianSeconds: number | null; p95Seconds: number | null }>;
-  queryPublicCoverageCadence?: () => Promise<{ status: string; sourceCount: number; minimumSeconds: number | null; medianSeconds: number | null; maximumSeconds: number | null }>;
-}
-export type ActorIdentityCatalogSnapshot = MitreActorCatalogSnapshot | RansomwareOperationCatalogSnapshot;
-export type ActorIdentityCatalogProvenance = { sourceId: string; captureId: string; importedAt?: string };
+export interface RawEvidenceStore extends CaptureMetadataStore {} export interface ScraperStore extends CaptureMetadataStore {}
 const mapValues = <T>(map: Map<string, T>) => [...map.values()];
 const put = <T extends { id: string }>(map: Map<string, T>, item: T) => (map.set(item.id, item), item);
 const indexKeys = (index: Map<string, Set<string>>, id: string, previous: unknown[], next: unknown[]) => {
@@ -244,38 +234,17 @@ export class InMemoryScraperStore implements ScraperStore {
   async listActorAliasesForOwnership() { return this.actorAliasesForPersistence(); }
   async listActorProfileIdentityHistoryForOwnership(): Promise<any[]> { return []; }
   async replaceActorProfileIdentityHistoryForRetention(_record: any): Promise<any | undefined> { return undefined; }
-  protected reconcileActorProfilesForCatalog(at: string, catalogId?: string) {
-    const archivedActorProfileIds: string[] = [];
-    const reboundActorProfileIds: string[] = [];
-    for (const profile of this.actorProfilesForPersistence()) {
-      if (!activeActorProfile(profile)) continue;
-      const identityIds = unique(profile.actorIdentityIds ?? []);
-      if (!this.actorIdentities.size && !identityIds.length) continue;
-      const relevant = !catalogId || !identityIds.length || identityIds.some((id) => id.startsWith(`${catalogId}:`) || this.actorIdentities.get(id)?.catalogId === catalogId);
-      if (!relevant) continue;
-      const identity = currentActorProfileIdentity(profile, this.listActorIdentities());
-      if (identity) {
-        if (identityIds.length !== 1 || identityIds[0] !== identity.id || profile.canonicalName !== identity.canonicalName || profile.normalizedName !== identity.normalizedCanonicalName) {
-          const activeAliases = uniqueActorAliases([identity.canonicalName, ...identity.associatedNames]);
-          const { identityResolutionReason: _archivedReason, ...preserved } = profile;
-          this.saveActorProfile({
-            ...preserved,
-            canonicalName: identity.canonicalName,
-            normalizedName: identity.normalizedCanonicalName,
-            aliases: activeAliases,
-            retiredAliases: uniqueActorAliases([
-              ...(profile.retiredAliases ?? []),
-              ...[profile.canonicalName, ...(profile.aliases ?? [])].filter((alias) => !activeAliases.some((active) => active.toLowerCase() === String(alias).toLowerCase()))
-            ]),
-            actorIdentityIds: [identity.id],
-            identityResolutionState: "canonical",
-            updatedAt: at
-          });
-          reboundActorProfileIds.push(profile.id);
-        }
-        continue;
-      }
-      archivedActorProfileIds.push(this.saveActorProfile({
+  protected archiveInactiveActorProfiles(at: string, catalogId?: string): string[] {
+    return this.actorProfilesForPersistence()
+      .filter((profile: any) => {
+        if (!activeActorProfile(profile)) return false;
+        const identityIds = unique(profile.actorIdentityIds ?? []);
+        if (!this.actorIdentities.size && !identityIds.length) return false;
+        if (!identityIds.length) return true;
+        const relevant = !catalogId || identityIds.some((id) => id.startsWith(`${catalogId}:`) || this.actorIdentities.get(id)?.catalogId === catalogId);
+        return relevant && identityIds.some((id) => this.actorIdentities.get(id)?.status !== "current");
+      })
+      .map((profile: any) => this.saveActorProfile({
         ...profile,
         normalizedName: `archived:${profile.id}`,
         aliases: [],
@@ -283,24 +252,18 @@ export class InMemoryScraperStore implements ScraperStore {
         identityResolutionReason: "inactive_identity",
         updatedAt: at
       }).id);
-    }
-    return { archivedActorProfileIds, reboundActorProfileIds };
   }
   private actorProfileIdentityIsCurrent(profile: any): boolean {
     const identityIds = unique(profile?.actorIdentityIds ?? []);
     if (!this.actorIdentities.size) return identityIds.length === 0;
-    return Boolean(currentActorProfileIdentity(profile, this.listActorIdentities()));
+    return identityIds.length > 0 && identityIds.every((id) => this.actorIdentities.get(id)?.status === "current");
   }
-  replaceActorIdentityCatalog(snapshot: ActorIdentityCatalogSnapshot, provenance: ActorIdentityCatalogProvenance) {
+  replaceActorIdentityCatalog(snapshot: MitreActorCatalogSnapshot | RansomwareOperationCatalogSnapshot, provenance: { sourceId: string; captureId: string; importedAt?: string }) {
     this.assertOrganizationWritable(snapshot);
     const incomingIds = new Set(snapshot.identities.map((identity) => identity.id));
     if (incomingIds.size !== snapshot.identities.length || snapshot.counts.totalIdentityCount !== snapshot.identities.length) throw new Error("Actor identity catalog count mismatch.");
     const importedAt = provenance.importedAt ?? snapshot.retrievedAt;
     const previous = this.actorIdentityCatalogs.get(snapshot.catalogId);
-    if (previous?.authoritativeManifestValidated && (snapshot as any).authoritativeManifestValidated) {
-      const missingIds = (previous.identityIds ?? []).filter((id: string) => !incomingIds.has(id));
-      if (missingIds.length) throw new Error(`Actor identity catalog ${snapshot.catalogId} omitted ${missingIds.length} identities from the last accepted authoritative manifest.`);
-    }
     const retired = this.listActorIdentities().filter((identity: any) => identity.catalogId === snapshot.catalogId && !incomingIds.has(identity.id)).map((identity: any) => ({ ...identity, status: "retired", retiredAt: identity.retiredAt ?? importedAt, updatedAt: importedAt }));
     const identities = snapshot.identities.map((identity: ActorIdentityRecord) => ({ ...identity, sourceId: provenance.sourceId, captureId: provenance.captureId, importedAt, updatedAt: importedAt }));
     const { identities: _omitted, ...catalog } = snapshot;
@@ -316,8 +279,8 @@ export class InMemoryScraperStore implements ScraperStore {
     });
     for (const identity of [...identities, ...retired]) put(this.actorIdentities, identity);
     for (const identity of reconcileCrossCatalogActorIdentities(this.listActorIdentities())) put(this.actorIdentities, identity);
-    const { archivedActorProfileIds, reboundActorProfileIds } = this.reconcileActorProfilesForCatalog(importedAt, snapshot.catalogId);
-    return { catalogId: snapshot.catalogId, currentIdentityCount: snapshot.counts.currentIdentityCount, retainedHistoricalIdentityCount: retired.length, archivedActorProfileIds, reboundActorProfileIds, bundleSha256: snapshot.bundleSha256 };
+    const archivedActorProfileIds = this.archiveInactiveActorProfiles(importedAt, snapshot.catalogId);
+    return { catalogId: snapshot.catalogId, currentIdentityCount: snapshot.counts.currentIdentityCount, retainedHistoricalIdentityCount: retired.length, archivedActorProfileIds, bundleSha256: snapshot.bundleSha256 };
   }
   protected hydrateActorIdentityCatalogSnapshot(catalog: any) { return put(this.actorIdentityCatalogs, catalog); }
   protected hydrateActorIdentitySnapshot(identity: any) { return put(this.actorIdentities, identity); }
@@ -580,9 +543,9 @@ function actorProfileResolution(store: any, capture: any, entity: any): ActorPro
   let identity: ActorIdentityRecord | undefined;
   if (explicitIds.length) {
     const explicit = explicitIds.map((id) => identities.find((candidate) => candidate.id === id));
-    if (explicit.some((candidate) => !candidate)) return undefined;
+    if (explicit.some((candidate) => !candidate || candidate.status !== "current")) return undefined;
     const canonical = uniqueObjects(explicit.map((candidate) => canonicalActorIdentity(candidate!, identities)), (candidate) => candidate.id);
-    identity = canonical.length === 1 && canonical[0].status === "current" ? canonical[0] : undefined;
+    identity = canonical.length === 1 ? canonical[0] : undefined;
   } else {
     const resolved = resolveMitreActorIdentity(String(entity.value ?? ""), identities);
     if (resolved.ambiguous) return undefined;
@@ -601,17 +564,17 @@ function actorProfileResolution(store: any, capture: any, entity: any): ActorPro
     actorIdentityIds: [identity.id]
   };
 }
-function publicActorTenant(tenantId: unknown): string | undefined { return tenantId ? String(tenantId) : undefined; }
+function publicActorTenant(tenantId: unknown): string | undefined { return !tenantId || tenantId === "default" ? undefined : String(tenantId); }
 function reconcileCrossCatalogActorIdentities(identities: any[]): any[] {
   const mitre = identities.filter((identity) => identity.catalogId === "mitre-attack-enterprise" && identity.status === "current");
   return identities.filter((identity) => identity.catalogId === "ransomware-live-current-operations").map((identity) => {
     const { canonicalIdentityId: _canonicalIdentityId, canonicalIdentityEvidence: _canonicalIdentityEvidence, ...unmapped } = identity;
-    const normalizedCanonicalName = normalizeActorLabel(identity.canonicalName);
-    const labelMatches = mitre.filter((candidate) => [candidate.canonicalName, ...(candidate.associatedNames ?? [])]
-      .some((label) => normalizeActorLabel(label) === normalizedCanonicalName));
-    const matches = labelMatches.length === 1 && normalizeActorLabel(labelMatches[0].canonicalName) === normalizedCanonicalName
-      ? [{ candidate: labelMatches[0], matchedLabel: identity.canonicalName }]
-      : [];
+    const labels = [identity.canonicalName, ...(identity.associatedNames ?? [])];
+    const matches = mitre.flatMap((candidate) => {
+      const targetLabels = [candidate.canonicalName, ...(candidate.associatedNames ?? [])];
+      const matchedLabel = labels.find((label) => targetLabels.some((target) => normalizeActorLabel(target) === normalizeActorLabel(label)));
+      return matchedLabel ? [{ candidate, matchedLabel }] : [];
+    });
     if (matches.length !== 1 || !identity.captureId || !matches[0].candidate.captureId) return unmapped;
     const { candidate, matchedLabel } = matches[0];
     return {
@@ -633,8 +596,9 @@ function reconcileCrossCatalogActorIdentities(identities: any[]): any[] {
 function actorProfileMatches(store: any, profile: any, resolution: ActorProfileResolution): boolean {
   if (publicActorTenant(profile.tenantId) !== resolution.tenantId) return false;
   const identities = (store.listActorIdentities?.() ?? []) as ActorIdentityRecord[];
-  const identityIds = unique(profile.actorIdentityIds ?? []);
-  if (identityIds.length) return currentActorProfileIdentity(profile, identities)?.id === resolution.actorIdentityIds[0];
+  const explicit = uniqueObjects((profile.actorIdentityIds ?? []).map((id: string) => identities.find((identity) => identity.id === id)).filter((identity: any) => identity?.status === "current").map((identity: any) => canonicalActorIdentity(identity, identities)), (identity: any) => identity.id);
+  if (explicit.length) return explicit.length === 1 && explicit[0].id === resolution.actorIdentityIds[0];
+  if ((profile.actorIdentityIds ?? []).includes(resolution.actorIdentityIds[0])) return true;
   const candidates = uniqueObjects([profile.canonicalName, ...(profile.aliases ?? [])].flatMap((label: string) => {
     const match = resolveMitreActorIdentity(label, identities);
     return match.ambiguous ? [] : match.candidates.map((candidate) => candidate.identity);
