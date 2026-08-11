@@ -1144,7 +1144,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                     <div className='mx-auto flex max-w-[96rem] flex-wrap items-start justify-between gap-3'>
                         <div className='min-w-0 flex-1 basis-56'>
                             <p className='text-xs font-semibold uppercase text-ui-primary'>Browser sandbox</p>
-                            <h1 className='mt-0.5 line-clamp-2 break-all text-sm font-semibold leading-5 text-ui-text sm:text-lg'>{activeUrl || normalizedTarget}</h1>
+                            <h1 className='mt-0.5 line-clamp-2 break-all text-sm font-semibold leading-5 text-ui-text sm:text-lg'>{normalizedTarget}</h1>
                         </div>
                         <div className='flex flex-wrap items-center gap-2'>
                             <StatusPill label='Run' value={summary.navigationFailed || sessionState === 'unreachable' ? 'unreachable' : sessionStateLabel(sessionState)} good={sessionState === 'live'} />
