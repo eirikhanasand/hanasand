@@ -12,12 +12,12 @@ const displaySource = readFileSync(new URL('../src/utils/dwm/display.ts', import
 for (const token of [
     'data-dwm-analyst-brief',
     'Analyst brief',
-    'Observed fact',
-    'Source claim',
-    'Analyst inference',
+    'What happened?',
+    'What the source says',
+    'Why it matters',
     'What to do next',
-    'Evidence boundary',
-    'Action status',
+    'Evidence available',
+    'Customer action',
     'data-dwm-zero-case-recovery',
     'Exposure operations',
     'No alert is waiting for review',
@@ -58,7 +58,7 @@ for (const blockedCopy of [
 if (workbenchAdapterSource.includes('{alert.claimSummary}')) {
     throw new Error('TI workbench adapter renders raw alert.claimSummary')
 }
-assert.ok(workbenchAdapterSource.includes('safeAlertSummary(alert)'), 'TI workbench adapter should render sanitized alert summaries.')
+assert.ok(workbenchAdapterSource.includes('customerAlertSummary(alert)'), 'TI workbench adapter should render customer-facing alert summaries.')
 
 for (const token of [
     'export function safeAlertSummary',
@@ -145,7 +145,7 @@ for (const token of [
     'Commands',
     'RouteStateCard label=\'Terms\'',
     'Save and rebuild alerts',
-    'Run full workflow',
+    'Run Telegram collection',
     'workflowTerms(terms)',
     'Add at least one customer-owned watchlist term.',
     'No persisted watchlist terms. Add terms owned by this tenant before collecting or rebuilding alerts.',

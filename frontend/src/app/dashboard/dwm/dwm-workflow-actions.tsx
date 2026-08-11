@@ -118,7 +118,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         }
 
         try {
-            const ingest = await ingestPublicEvidence({ company, url }, scope)
+            const ingest = await ingestPublicEvidence({ actor, company, claimedData, url }, scope)
             if (!ingest.ok) throw new Error(ingest.message)
             const accepted = typeof ingest.accepted === 'number' ? ingest.accepted : 0
             if (!accepted) throw new Error('The source was not accepted. It must name the subject, describe a cyber incident, and publish a supported original timestamp.')
@@ -161,7 +161,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         }
 
         try {
-            const ingest = await ingestPublicEvidence({ company, url }, scope)
+            const ingest = await ingestPublicEvidence({ actor, company, claimedData, url }, scope)
             const accepted = typeof ingest.accepted === 'number' ? ingest.accepted : 0
             if (!accepted) throw new Error('The source was not accepted. It must name the subject, describe a cyber incident, and publish a supported original timestamp.')
 
@@ -836,16 +836,16 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     )
 }
 
-async function ingestPublicEvidence(input: { company: string, url: string }, scope: { tenantId: string, organizationId?: string }) {
+async function ingestPublicEvidence(input: { actor: string, company: string, claimedData: string, url: string }, scope: { tenantId: string, organizationId?: string }) {
     return postJson('/api/dwm/exposure-claims/ingest', {
         items: [{
             ...scope,
             company: input.company,
             claimedData: input.claimedData,
-            sourceName: `${input.actor} metadata intake`,
-            sourceFamily: 'darkweb_metadata',
-            title: `${input.actor} has just published a new victim: ${input.company}`,
-            text: `${input.actor} victim: ${input.company}. ${input.claimedData}.`,
+            sourceName: `${input.actor} public report`,
+            sourceFamily: 'public_advisory',
+            title: `${input.actor} reported a new issue involving ${input.company}`,
+            text: `${input.actor} reported an issue involving ${input.company}. ${input.claimedData}.`,
             url: input.url || undefined,
         }],
     })
