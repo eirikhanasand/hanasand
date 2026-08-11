@@ -402,18 +402,19 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const runRemainingSeconds = runTiming ? Math.max(0, Math.ceil((new Date(runTiming.expiresAt).getTime() - clockNow) / 1000)) : 0
     const paidBrowserPlan = Boolean(quota && quota.plan !== 'anonymous' && quota.plan !== 'free')
     const runIsActive = sessionState === 'queued' || sessionState === 'connecting' || sessionState === 'live'
-    const waitingForFrame = runIsActive && !activeImage && !streamUrl && !activeTool
-    const waitingSeconds = runStartedAt && waitingForFrame ? Math.floor((clockNow - runStartedAt) / 1000) : 0
+    const waitingForFrame = runIsActive && !activeViewportImage && !streamUrl
+    const waitingSeconds = runStartedAt && runIsActive && waitingForFrame ? Math.floor((clockNow - runStartedAt) / 1000) : 0
 
     useEffect(() => {
         setFormReady(true)
     }, [])
 
     useEffect(() => {
-        if (!waitingForFrame) return
+        if (!runStartedAt || !runIsActive) return
+        setClockNow(Date.now())
         const timer = window.setInterval(() => setClockNow(Date.now()), 1_000)
         return () => window.clearInterval(timer)
-    }, [waitingForFrame])
+    }, [runIsActive, runStartedAt])
 
     useEffect(() => {
         if (!runTiming || sessionState !== 'live') return
@@ -1239,7 +1240,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                     <div className='grid h-full place-items-center'>
                                         <div className='grid max-w-md gap-2 text-center'>
                                             <ShieldCheck className='mx-auto h-8 w-8 text-ui-primary' />
-                                            <p className='text-lg font-semibold text-ui-text'>{activeTool ? `${activeTool.name} tab loading` : runBlocker ? 'Browser run blocked' : sessionState === 'queued' ? 'Queued for sandbox capacity' : sessionState === 'connecting' && waitingSeconds >= 5 ? 'Taking longer than expected...' : sessionState === 'connecting' ? 'Waiting for first browser frame' : 'No browser frame captured yet'}</p>
+                                            <p className='text-lg font-semibold text-ui-text'>{activeTool ? `${activeTool.name} tab loading` : runBlocker ? 'Browser run blocked' : waitingSeconds >= 5 ? 'Taking longer than expected...' : sessionState === 'queued' ? 'Queued for sandbox capacity' : sessionState === 'connecting' ? 'Waiting for first browser frame' : 'No browser frame captured yet'}</p>
                                             <p className='text-sm leading-6 text-ui-muted'>{activeTool ? providerDetail(activeToolCapture?.toolAnalysis, activeToolCapture) : runBlocker || (sessionState === 'queued' ? queueCopy(capacity) : waitingSeconds >= 5 ? 'The remote browser is still starting.' : 'The remote browser has not sent a screenshot yet. If this persists, rerun the URL or check the broker and provider status below.')}</p>
                                             {waitingForFrame && waitingSeconds >= 10 ? <div className='mt-2 flex flex-wrap justify-center gap-2'><button type='button' onClick={() => undefined} className='rounded-md border border-ui-border px-3 py-2 text-xs font-semibold text-ui-text'>Keep waiting</button><button type='button' onClick={() => { stopRun(); startRun({ target: normalizedTarget }) }} className='rounded-md border border-ui-primary bg-ui-primary/10 px-3 py-2 text-xs font-semibold text-ui-primary'>Try again</button><button type='button' onClick={() => window.dispatchEvent(new CustomEvent('hanasand:open-support'))} className='rounded-md border border-ui-border px-3 py-2 text-xs font-semibold text-ui-text'>Contact us</button></div> : null}
                                         </div>
