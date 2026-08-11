@@ -172,21 +172,25 @@ export function headerChecks(headers: Record<string, string>, https: boolean): W
 
 async function explainChecks(checks: WebScanCheck[]): Promise<WebScanCheck[]> {
     const relevant = checks.filter(check => check.id !== 'http.reachable')
-    const fallback = new Map(relevant.map(check => [check.id, fallbackExplanation(check)]))
+    const fallback = new Map(checks.map(check => [check.id, fallbackExplanation(check)]))
     try {
         const completion = await requestGptCompletion('gpt', {
             maxTokens: 700,
             temperature: 0,
             messages: [
-                { role: 'system', content: 'You explain web security scan checks for a non-expert operator. Return only a JSON object mapping each supplied check id to one concise sentence. Explain what the result means, why it matters, and the practical next step. Do not invent facts.' },
+                { role: 'system', content: 'You explain web security scan checks for a non-expert operator. Return only a JSON object mapping each supplied check id to one concise sentence. Use the observed header presence and supplied evidence. Say what the browser or attacker can do as a result and give the practical next step. Never say the explanation is unavailable, never describe the pipeline, and do not invent a weakness that the supplied evidence does not show.' },
                 { role: 'user', content: JSON.stringify(relevant.map(check => ({ id: check.id, status: check.status, severity: check.severity, title: check.title, header: check.evidence.header, present: Boolean(check.evidence.value) }))) },
             ],
         }, 15_000)
         const generated = parseExplanationObject(completion.content || '')
-        return checks.map(check => ({ ...check, explanation: generated[check.id] || fallback.get(check.id) || 'The scan completed this check successfully.' }))
+        return checks.map(check => ({ ...check, explanation: isUsefulExplanation(generated[check.id]) ? generated[check.id] : fallback.get(check.id) }))
     } catch {
-        return checks.map(check => ({ ...check, explanation: fallback.get(check.id) || 'The scan completed this check successfully.' }))
+        return checks.map(check => ({ ...check, explanation: fallback.get(check.id) }))
     }
+}
+
+function isUsefulExplanation(value: string | undefined) {
+    return Boolean(value && value.length >= 40 && !/explanation is not available|completed this check/i.test(value))
 }
 
 function parseExplanationObject(content: string): Record<string, string> {
@@ -200,13 +204,15 @@ function parseExplanationObject(content: string): Record<string, string> {
     }
 }
 
-function fallbackExplanation(check: WebScanCheck): string {
-    if (check.id === 'header.hsts') return check.status === 'pass' ? 'Browsers are instructed to keep using HTTPS for this site; keep the policy long-lived and include subdomains where appropriate.' : 'Browsers are not being told to enforce HTTPS, so a user can be exposed to downgrade or first-visit interception; add a carefully scoped Strict-Transport-Security policy.'
-    if (check.id === 'header.csp') return check.status === 'pass' ? 'The site declares which scripts and resources browsers may load, reducing the impact of injected content; keep the policy tested as the application changes.' : 'The site does not declare an explicit browser resource policy, so injected scripts have fewer browser-level restrictions; add and test a Content-Security-Policy suited to the application.'
-    if (check.id === 'header.frame-ancestors') return check.status === 'pass' ? 'Browsers are told not to render the site inside an unauthorized frame, reducing clickjacking risk; keep the framing policy aligned with legitimate embeds.' : 'The response does not clearly prevent unauthorized framing, so an attacker could disguise clicks over the site; send X-Frame-Options or an equivalent frame-ancestors policy.'
-    if (check.id === 'header.nosniff') return check.status === 'pass' ? 'Browsers are told to respect declared content types, reducing MIME-confusion attacks.' : 'The response does not disable MIME sniffing, so browsers may interpret content more broadly than intended; send X-Content-Type-Options: nosniff.'
-    if (check.id === 'header.server') return check.status === 'pass' ? 'The response does not expose a Server header that identifies implementation details.' : 'The Server header exposes implementation information that helps fingerprint the stack; remove or minimize it at the edge.'
-    return check.status === 'pass' ? 'This control passed and no immediate change is indicated.' : 'This control did not pass; review the evidence and apply the recommended response-header change.'
+export function fallbackExplanation(check: WebScanCheck): string {
+    const present = Boolean(check.evidence.value)
+    if (check.id === 'http.reachable') return check.status === 'pass' ? 'The target accepted an HTTPS request during this scan, so encrypted transport was reachable.' : `The scanner could not complete an HTTPS request to the target: ${String(check.evidence.error || 'the connection failed')}.`
+    if (check.id === 'header.hsts') return present ? 'The response included Strict-Transport-Security, telling browsers to keep using HTTPS for this host.' : 'The response did not include Strict-Transport-Security, so browsers are not instructed to enforce HTTPS on future visits.'
+    if (check.id === 'header.csp') return present ? 'The response included Content-Security-Policy. The retained scan confirms the header is present but does not assess whether its directives are restrictive enough.' : 'The response did not include Content-Security-Policy, so the browser has no explicit policy limiting where scripts and other resources may load from.'
+    if (check.id === 'header.frame-ancestors') return present ? `The response included ${String(check.evidence.header || 'a framing policy')}, which gives browsers a clickjacking protection rule.` : 'The response did not include a framing restriction, so the site may be embeddable in an attacker-controlled frame.'
+    if (check.id === 'header.nosniff') return present ? 'The response included X-Content-Type-Options, telling browsers to respect declared content types instead of guessing.' : 'The response did not include X-Content-Type-Options: nosniff, so browsers may interpret content using MIME sniffing.'
+    if (check.id === 'header.server') return present ? `The response included a Server header (${String(check.evidence.value)}), which reveals an implementation detail useful for fingerprinting.` : 'The response did not expose a Server header, so this scan found no server implementation detail to fingerprint.'
+    return check.status === 'pass' ? `The scan observed the condition described by “${check.title}”; no immediate change is indicated by this result.` : `The scan observed “${check.title}” as needing attention; inspect the retained evidence for the next action.`
 }
 
 export function countSeverities(targets: WebScanTargetResult[]) {

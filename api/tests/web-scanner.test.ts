@@ -6,7 +6,7 @@ const stateDir = await mkdtemp(path.join('/tmp', 'hanasand-web-scan-'))
 process.env.WEB_SCAN_STATE_PATH = path.join(stateDir, 'web-scan.json')
 process.env.WEB_SCAN_INTERVAL_MINUTES = 'not-a-number'
 
-const { countSeverities, headerChecks, normalizeIntervalMinutes, setWebScanSchedule, withWebScanLock } = await import('../src/utils/vulnerabilities/webScanner.ts')
+const { countSeverities, fallbackExplanation, headerChecks, normalizeIntervalMinutes, setWebScanSchedule, withWebScanLock } = await import('../src/utils/vulnerabilities/webScanner.ts')
 
 afterAll(async() => {
     await rm(stateDir, { recursive: true, force: true })
@@ -18,6 +18,13 @@ describe('Hanasand safe web scanner', () => {
         expect(checks.find(check => check.id === 'header.hsts')?.status).toBe('fail')
         expect(checks.find(check => check.id === 'header.csp')?.status).toBe('warn')
         expect(checks.find(check => check.id === 'header.server')?.status).toBe('warn')
+    })
+
+    test('explains retained checks from their recorded evidence', () => {
+        const checks = headerChecks({ 'content-security-policy': "default-src 'self'", server: 'nginx' }, true)
+        expect(fallbackExplanation(checks.find(check => check.id === 'header.csp')!)).toContain('included Content-Security-Policy')
+        expect(fallbackExplanation(checks.find(check => check.id === 'header.server')!)).toContain('nginx')
+        expect(fallbackExplanation(checks.find(check => check.id === 'http.reachable')!)).toContain('accepted an HTTPS request')
     })
 
     test('normalizes malformed and bounded schedule intervals', async() => {
