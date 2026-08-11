@@ -525,151 +525,7 @@ export function createEvaluationBenchmark(store: CaptureMetadataStore, input: {
     createdAt,
     updatedAt: createdAt
   };
-  if (input.independentOnly && datasetSplit === "test" && reviewMode === "automatic_model" && !automaticHeldOutSelectionReady(benchmark)) return undefined;
-  store.saveEvaluationBenchmark(benchmark);
-  return benchmark;
-}
-
-export function createReferenceCurationBenchmark(store: CaptureMetadataStore, input: {
-  sampleSize: number;
-  createdAt?: string;
-  createdBy?: string;
-  labelTypes?: EvaluationLabelType[];
-}) {
-  const createdAt = input.createdAt ?? nowIso();
-  const seed = evaluationHash(randomUUID());
-  const labelTypes = input.labelTypes?.length ? input.labelTypes : [...LABEL_TYPES];
-  const existingKeys = new Set(store.listEvaluationBenchmarks()
-    .filter((benchmark) => benchmark.protocol?.version === REFERENCE_CURATION_PROTOCOL_VERSION)
-    .flatMap((benchmark) => benchmark.manifest ?? [])
-    .map(referenceCurationTaskKey)
-    .filter(isString));
-  const candidates = referenceCurationCandidates(store, labelTypes, createdAt)
-    .filter((candidate) => !existingKeys.has(referenceCurationCandidateKey(candidate)));
-  const selected = balancedReferenceCurationSample(candidates, Math.max(1, Math.min(200, Math.floor(input.sampleSize))), seed);
-  if (!selected.length) return undefined;
-  const id = stableId("evaluation-reference-curation", `${seed}:${createdAt}`);
-  const sources = new Map(store.listSources().map((source) => [source.id, source]));
-  const manifest = selected.map((candidate) => {
-    const taskId = stableId("evaluation-reference-task", `${id}:${candidate.capture.id}:${candidate.labelType}:${candidate.reference.id}`);
-    const referenceSource = sources.get(candidate.reference.sourceId);
-    const references: EvaluationReferenceEvidence[] = [
-      {
-        id: stableId("evaluation-reference", `capture:${candidate.capture.id}:${candidate.capture.contentHash}`),
-        kind: "retained_capture",
-        captureId: candidate.capture.id,
-        sourceId: candidate.capture.sourceId,
-        sourceName: sources.get(candidate.capture.sourceId)?.name ?? "Retained target evidence",
-        sourceFamily: sourceFamily(sources.get(candidate.capture.sourceId), candidate.capture),
-        contentHash: candidate.capture.contentHash,
-        excerptHash: evaluationHash(candidate.evidence),
-        immutable: true,
-        truthRole: "governed_target_context",
-        independence: "prediction_hidden_retained_target"
-      },
-      {
-        id: stableId("evaluation-reference-candidate", `${candidate.reference.id}:${candidate.reference.contentHash}`),
-        kind: "independent_reference_candidate",
-        referenceCaptureId: candidate.reference.id,
-        referenceSourceId: candidate.reference.sourceId,
-        referenceContentHash: candidate.reference.contentHash,
-        excerptHash: evaluationHash(candidate.referenceEvidence),
-        sourceName: referenceSource?.name ?? "Independent retained reference candidate",
-        sourceFamily: sourceFamily(referenceSource, candidate.reference),
-        publishedAt: candidate.reference.publishedAt,
-        collectedAt: candidate.reference.collectedAt,
-        immutable: true,
-        truthRole: "candidate_pending_independent_adjudication",
-        independence: "different_publisher_and_content_lineage"
-      }
-    ];
-    return {
-      id: taskId,
-      benchmarkId: id,
-      captureId: candidate.capture.id,
-      labelType: candidate.labelType,
-      contentHash: candidate.capture.contentHash,
-      excerptHash: evaluationHash(candidate.evidence),
-      evidenceHashAlgorithm: "sha256",
-      sourceFamily: sourceFamily(sources.get(candidate.capture.sourceId), candidate.capture),
-      referenceEvidence: references,
-      referenceEvidenceHash: evaluationHash(JSON.stringify(references)),
-      candidateClass: candidate.candidateClass,
-      candidatePivotHash: candidate.pivotHash,
-      caseTags: candidate.caseTags,
-      extractorVersions: candidate.extractorVersions,
-      independenceContext: {
-        extractorPredictionsExcluded: true,
-        reviewerContextsIsolated: true,
-        governedEvidenceComplete: true,
-        authoritativeReferenceSetComplete: false,
-        truthBasis: "reference_curation_pending",
-        referenceCandidateCaptureId: candidate.reference.id,
-        referenceCandidateSourceId: candidate.reference.sourceId,
-        referenceCandidateContentHash: candidate.reference.contentHash,
-        referenceCandidateExcerptHash: evaluationHash(candidate.referenceEvidence),
-        extractionDecisionVersions: candidate.extractorVersions,
-        extractionDecisionLineage: candidate.extractionDecisionLineage,
-        evaluationModelIsolationRequired: true,
-        predictionSnapshotSeparatedAt: createdAt
-      },
-      reviewContexts: [
-        { role: "reviewer_1", contextId: stableId("evaluation-review-context", `${taskId}:reviewer:1:${seed}`) },
-        { role: "reviewer_2", contextId: stableId("evaluation-review-context", `${taskId}:reviewer:2:${seed}`) },
-        { role: "adjudicator", contextId: stableId("evaluation-review-context", `${taskId}:adjudicator:${seed}`) }
-      ],
-      automation: {
-        status: "queued",
-        stage: "reviewer_1",
-        attemptCount: 0,
-        lifetimeAttemptCount: 0,
-        maxAttempts: 5,
-        replayCount: 0,
-        nextAttemptAt: createdAt,
-        history: [{ status: "queued", at: createdAt, reason: "reference_curation_created" }]
-      }
-    };
-  });
-  const benchmark: EvaluationBenchmarkRecord = {
-    id,
-    name: `Automatic independent-reference curation ${createdAt.slice(0, 10)}`,
-    status: "annotating",
-    reviewMode: "automatic_model",
-    datasetSplit: "validation",
-    labelTypes: unique(selected.map((candidate) => candidate.labelType)),
-    requiredReviewers: 2,
-    selectionSeed: seed,
-    selectionSeedSource: "server_generated",
-    samplingMethod: "prediction_hidden_cross_publisher_candidate_retrieval",
-    selectionStrata: countByValue(selected.flatMap((candidate) => [candidate.labelType, `${candidate.labelType}_${candidate.candidateClass}_candidate`, ...candidate.caseTags])),
-    selectionFrameHash: evaluationHash(candidates.map(referenceCurationCandidateKey).sort().join("\n")),
-    eligibleCaptureCount: new Set(candidates.map((candidate) => candidate.capture.id)).size,
-    captureIds: unique(selected.map((candidate) => candidate.capture.id)),
-    taskCount: manifest.length,
-    manifest,
-    manifestHash: evaluationHash(JSON.stringify(manifest.map(({ automation: _automation, ...task }) => task))),
-    protocol: {
-      version: REFERENCE_CURATION_PROTOCOL_VERSION,
-      reviewPromptVersion: REFERENCE_CURATION_PROMPT_VERSION,
-      reviewSchemaVersion: REFERENCE_CURATION_SCHEMA_VERSION,
-      evidenceHashAlgorithm: "sha256",
-      blinded: true,
-      predictionHiddenUntilSubmission: true,
-      predictionHiddenFromReviewers: true,
-      exhaustiveExpectedValues: true,
-      consensusRequired: true,
-      independentAdjudicatorForDisagreement: true,
-      automaticReviewerContextsIndependent: true,
-      evaluationModelIsolationRequired: true,
-      truthBasis: "pending_source_separated_reference_curation",
-      datasetUsage: "reference_curation_only",
-      testSplitLocked: false
-    },
-    automation: { status: "queued", promptVersion: REFERENCE_CURATION_PROMPT_VERSION, schemaVersion: REFERENCE_CURATION_SCHEMA_VERSION, nextCycleAt: createdAt },
-    createdBy: input.createdBy ?? "automatic-evaluation-runtime",
-    createdAt,
-    updatedAt: createdAt
-  };
+  if (input.independentOnly && datasetSplit === "test" && !automaticHeldOutSelectionReady(benchmark)) return undefined;
   store.saveEvaluationBenchmark(benchmark);
   return benchmark;
 }
@@ -1345,27 +1201,18 @@ export function startAutomaticEvaluationLoop(options: AutomaticEvaluationCycleOp
 function ensureAutomaticBenchmarks(store: CaptureMetadataStore, generatedAt: string, options: AutomaticEvaluationCycleOptions) {
   const created: string[] = [];
   const automatic = store.listEvaluationBenchmarks().map(completeBenchmark).filter((benchmark): benchmark is EvaluationBenchmark => Boolean(benchmark?.reviewMode === "automatic_model" && !benchmark.tenantId));
-  const extractionAutomatic = automatic.filter((benchmark) => benchmark.protocol?.version !== REFERENCE_CURATION_PROTOCOL_VERSION);
-  const curations = automatic.filter((benchmark) => benchmark.protocol?.version === REFERENCE_CURATION_PROTOCOL_VERSION).sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
-  const sampleSizes = automaticBenchmarkSampleSizes(options.sampleSize);
-  const latestCuration = curations[0];
-  const curationRefreshMs = Math.max(86_400_000, Number(options.refreshIntervalMs ?? 7 * 86_400_000));
-  if (!curations.some((benchmark) => !TERMINAL_BENCHMARK_STATUSES.has(benchmark.status))
-    && (!latestCuration || Date.parse(generatedAt) - Date.parse(latestCuration.createdAt) >= curationRefreshMs)) {
-    const curation = createReferenceCurationBenchmark(store, { sampleSize: Math.max(130, sampleSizes.validation), createdAt: generatedAt });
-    if (curation) created.push(curation.id);
-  }
-  let currentTest = extractionAutomatic
+  const sampleSize = Math.max(1, Math.min(200, Number(options.sampleSize ?? 51)));
+  let currentTest = automatic
     .filter((benchmark) => benchmark.datasetSplit === "test")
     .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))
     .find((benchmark) => referenceReadyAutomaticBenchmark(store, benchmark) && automaticHeldOutSelectionReady(benchmark));
   if (!currentTest) {
-    const excludedCaptureIds = unique(extractionAutomatic.filter((benchmark) => benchmark.datasetSplit === "test" && referenceReadyAutomaticBenchmark(store, benchmark)).flatMap((benchmark) => benchmark.captureIds ?? []));
-    const benchmark = createEvaluationBenchmark(store, { sampleSize: sampleSizes.test, datasetSplit: "test", reviewMode: "automatic_model", createdAt: generatedAt, createdBy: "automatic-evaluation-runtime", name: `Locked automatic evaluation ${generatedAt.slice(0, 10)}`, excludedCaptureIds, independentOnly: true });
+    const excludedCaptureIds = unique(automatic.filter((benchmark) => benchmark.datasetSplit === "test" && referenceReadyAutomaticBenchmark(store, benchmark)).flatMap((benchmark) => benchmark.captureIds ?? []));
+    const benchmark = createEvaluationBenchmark(store, { sampleSize, datasetSplit: "test", reviewMode: "automatic_model", createdAt: generatedAt, createdBy: "automatic-evaluation-runtime", name: `Locked automatic evaluation ${generatedAt.slice(0, 10)}`, excludedCaptureIds, independentOnly: true });
     if (benchmark) { currentTest = benchmark; created.push(benchmark.id); }
   }
   if (currentTest) {
-    for (const legacy of extractionAutomatic.filter((benchmark) => benchmark.datasetSplit === "test" && benchmark.id !== currentTest.id && benchmark.status !== "retired")) {
+    for (const legacy of automatic.filter((benchmark) => benchmark.datasetSplit === "test" && benchmark.id !== currentTest.id && benchmark.status !== "retired")) {
       store.patchEvaluationBenchmark(legacy.id, {
         status: "retired",
         retiredAt: generatedAt,
@@ -1379,10 +1226,10 @@ function ensureAutomaticBenchmarks(store: CaptureMetadataStore, generatedAt: str
   const validations = extractionAutomatic.filter((benchmark) => benchmark.datasetSplit === "validation").sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   const latest = validations[0], refreshMs = Math.max(86_400_000, Number(options.refreshIntervalMs ?? 7 * 86_400_000));
   if (!latest || !referenceReadyAutomaticBenchmark(store, latest) || (TERMINAL_BENCHMARK_STATUSES.has(latest.status) && Date.parse(generatedAt) - Date.parse(latest.createdAt) >= refreshMs)) {
-    const benchmark = createEvaluationBenchmark(store, { sampleSize: sampleSizes.validation, datasetSplit: "validation", reviewMode: "automatic_model", createdAt: generatedAt, createdBy: "automatic-evaluation-runtime", name: `Rolling automatic evaluation ${generatedAt.slice(0, 10)}`, independentOnly: true });
+    const benchmark = createEvaluationBenchmark(store, { sampleSize, datasetSplit: "validation", reviewMode: "automatic_model", createdAt: generatedAt, createdBy: "automatic-evaluation-runtime", name: `Rolling automatic evaluation ${generatedAt.slice(0, 10)}`, independentOnly: true });
     if (benchmark) {
       created.push(benchmark.id);
-      for (const prior of extractionAutomatic.filter((candidate) => candidate.datasetSplit === "test" && candidate.status !== "retired" && !automaticHeldOutSelectionReady(candidate))) {
+      for (const prior of automatic.filter((candidate) => candidate.datasetSplit === "test" && candidate.status !== "retired" && !automaticHeldOutSelectionReady(candidate))) {
         store.patchEvaluationBenchmark(prior.id, {
           status: "retired",
           retiredAt: generatedAt,
@@ -1405,12 +1252,6 @@ function ensureAutomaticBenchmarks(store: CaptureMetadataStore, generatedAt: str
     }
   }
   return created;
-}
-
-export function automaticBenchmarkSampleSizes(value: unknown) {
-  const requested = Math.floor(Number(value ?? 51));
-  const validation = Number.isFinite(requested) ? Math.max(1, Math.min(200, requested)) : 51;
-  return { test: Math.max(51, validation), validation };
 }
 
 function referenceReadyAutomaticBenchmark(store: CaptureMetadataStore, benchmark: EvaluationBenchmark) {
