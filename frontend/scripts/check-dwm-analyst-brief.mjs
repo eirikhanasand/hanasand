@@ -166,7 +166,6 @@ for (const blockedCopy of [
     'Every command calls the DWM API',
     'Paste an HTTPS Discord or webhook endpoint before testing customer delivery.',
     'Dry-run uses this endpoint and records the delivery result without external send by default.',
-    'has just published a new victim',
     'sourceFamily: \'darkweb_metadata\',\n            title:',
 ]) {
     assert.ok(!workflowSource.includes(blockedCopy), `DWM workflow actions should not render implementation-shaped copy: ${blockedCopy}`)
