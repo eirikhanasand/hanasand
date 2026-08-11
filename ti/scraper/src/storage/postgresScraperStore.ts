@@ -1366,6 +1366,28 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         'retainedSourceCount', count(*) FILTER (WHERE collection_executable),
         'inactiveSourceCount', count(*) FILTER (WHERE NOT collection_executable),
         'activeSourceCount', count(*) FILTER (WHERE collection_executable),
+        'qualifyingClearWebSourceCount', count(*) FILTER (
+          WHERE collection_executable
+            AND COALESCE((sources.record->>'countsAsCoverage')::boolean, FALSE)
+            AND COALESCE((sources.record->'metadata'->>'productionCollection')::boolean, FALSE)
+            AND sources.record->'metadata'->>'sourcePortfolioQualificationState' = 'sustained_productive'
+            AND source_type IN ('rss', 'api', 'json_api', 'blog')
+        ),
+        'qualifyingLawfulDarkWebSourceCount', count(*) FILTER (
+          WHERE collection_executable
+            AND COALESCE((sources.record->>'countsAsCoverage')::boolean, FALSE)
+            AND COALESCE((sources.record->'metadata'->>'productionCollection')::boolean, FALSE)
+            AND sources.record->'metadata'->>'sourcePortfolioQualificationState' = 'sustained_productive'
+            AND source_type IN ('tor_metadata', 'darkweb_metadata')
+            AND COALESCE((sources.record->'governance'->>'metadataOnly')::boolean, (sources.record->'metadata'->>'captureMode') = 'metadata_only')
+        ),
+        'qualifyingPublicTelegramSourceCount', count(*) FILTER (
+          WHERE collection_executable
+            AND COALESCE((sources.record->>'countsAsCoverage')::boolean, FALSE)
+            AND COALESCE((sources.record->'metadata'->>'productionCollection')::boolean, FALSE)
+            AND sources.record->'metadata'->>'sourcePortfolioQualificationState' = 'sustained_productive'
+            AND source_type = 'telegram_public'
+        ),
         'measurementState', 'measured',
         'observedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
         'checkedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NOT NULL),
