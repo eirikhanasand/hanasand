@@ -65,7 +65,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "028_remove_generic_business_labels", path: fileURLToPath(new URL("../../migrations/028_remove_generic_business_labels.sql", import.meta.url)) },
   { version: "029_scope_capture_dedupe_by_tenant", path: fileURLToPath(new URL("../../migrations/029_scope_capture_dedupe_by_tenant.sql", import.meta.url)) },
   { version: "030_reconcile_actor_profiles", path: fileURLToPath(new URL("../../migrations/030_reconcile_actor_profiles.sql", import.meta.url)) },
-  { version: "031_archive_inactive_actor_profiles", path: fileURLToPath(new URL("../../migrations/031_archive_inactive_actor_profiles.sql", import.meta.url)) }
+  { version: "031_archive_inactive_actor_profiles", path: fileURLToPath(new URL("../../migrations/031_archive_inactive_actor_profiles.sql", import.meta.url)) },
+  { version: "041_query_path_indexes", path: fileURLToPath(new URL("../../migrations/041_query_path_indexes.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 const MAINTENANCE_MIGRATION_VERSIONS = new Set(["037_remove_parser_fallback_artifacts"]);

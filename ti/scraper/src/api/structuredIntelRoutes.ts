@@ -14,6 +14,9 @@ import { reconcileActorIdentityCoverage } from "../pipeline/mitreActorCatalog.ts
 import { handleAutomaticReviewRequest } from "./automaticReviewRoutes.ts";
 import { upsertServiceMonitorIncident } from "./serviceMonitorIncident.ts";
 import { handleActorEnrichmentRequest } from "./actorEnrichmentRoutes.ts";
+import { buildSourceQualityReport } from "../pipeline/sourceQuality.ts";
+import { buildActorCoverageReport } from "../pipeline/actorCoverage.ts";
+import { buildQueryCoverageReport } from "../pipeline/queryCoverage.ts";
 
 const listRoutes = {
   "/v1/intel/sources": ["sources", "listSources"],
@@ -139,6 +142,25 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
     const datasetSplit = url.searchParams.get("datasetSplit") ?? undefined;
     if (datasetSplit && !["train", "validation", "test", "unassigned"].includes(datasetSplit)) return error("invalid_dataset_split", "Unsupported evaluation dataset split", 400);
     return json(buildEvaluationMetrics(options.store, { tenantId: scope.tenantId, datasetSplit }));
+  }
+  if (url.pathname === "/v1/intel/source-quality" && request.method === "GET") {
+    const authentication = await authenticateOperatorRequest(request, options);
+    if (authentication.error) return authentication.error;
+    const scope = resolveTenantScope(request, url);
+    if (scope.error) return scope.error;
+    const windowDays = Math.max(1, Math.min(365, numberQuery(url.searchParams.get("windowDays")) ?? 30));
+    return json(buildSourceQualityReport(options.store, { tenantId: scope.tenantId, windowDays }));
+  }
+  if (url.pathname === "/v1/intel/actor-coverage" && request.method === "GET") {
+    const scope = resolveTenantScope(request, url);
+    if (scope.error) return scope.error;
+    const recentDays = Math.max(1, Math.min(365, numberQuery(url.searchParams.get("recentDays")) ?? 30));
+    return json(buildActorCoverageReport(options.store, { tenantId: scope.tenantId, recentDays }));
+  }
+  if (url.pathname === "/v1/intel/query-coverage" && request.method === "GET") {
+    const scope = resolveTenantScope(request, url);
+    if (scope.error) return scope.error;
+    return json(buildQueryCoverageReport(options.store, { tenantId: scope.tenantId }));
   }
   if (url.pathname === "/v1/intel/governance-actions" && request.method === "POST") return applyGovernanceAction(request, options);
   if (url.pathname === "/v1/intel/validation-records" && request.method === "POST") return createValidationRecord(request, options);
@@ -350,6 +372,14 @@ async function createEvaluationLabel(request: Request, options: ApiServerOptions
     labeledAt,
     datasetSplit: body.datasetSplit ?? "unassigned",
     notes: typeof body.notes === "string" ? body.notes.trim().slice(0, 2_000) : undefined,
+    expectedNormalization: typeof body.expectedNormalization === "string" ? body.expectedNormalization.trim().slice(0, 500) : undefined,
+    sourceSpan: evaluationSpan(body.sourceSpan),
+    observedSpan: evaluationSpan(body.observedSpan),
+    ambiguityFlag: body.ambiguityFlag === true,
+    sourceTimestamp: validIso(body.sourceTimestamp),
+    language: typeof body.language === "string" ? body.language.trim().slice(0, 32) : undefined,
+    provenance: typeof body.provenance === "string" ? body.provenance.trim().slice(0, 500) : undefined,
+    processingLatencyMs: Number.isFinite(Number(body.processingLatencyMs)) && Number(body.processingLatencyMs) >= 0 ? Number(body.processingLatencyMs) : undefined,
     tenantId: scope.tenantId,
     updatedAt: nowIso()
   };
@@ -586,6 +616,11 @@ function unique(values: unknown[]): string[] {
 }
 
 function cleanId(value: unknown): string | undefined { return typeof value === "string" && /^[A-Za-z0-9_.:-]{1,200}$/.test(value) ? value : undefined; }
+function evaluationSpan(value: unknown): { start: number; end: number; text: string } | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const row = value as Record<string, unknown>, start = Number(row.start), end = Number(row.end), text = typeof row.text === "string" ? row.text.trim() : "";
+  return Number.isInteger(start) && Number.isInteger(end) && start >= 0 && end > start && text.length <= 2_000 && text ? { start, end, text } : undefined;
+}
 function validIso(value: unknown): string | undefined { if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) return undefined; return new Date(value).toISOString(); }
 function isPublicReferenceUrl(value: unknown): boolean { try { const url = new URL(String(value)); return ["http:", "https:"].includes(url.protocol) && !url.hostname.endsWith(".onion"); } catch { return false; } }
 function containsForbiddenMaterial(value: unknown): boolean {
@@ -596,7 +631,7 @@ function containsForbiddenMaterial(value: unknown): boolean {
 
 function validEvaluationLabelType(value: unknown): boolean {
   if (typeof value !== "string") return false;
-  return /^(?:actor|victim|date|source|ttp|impact|dataset|leak_type|indicator|incident|cve|vendor|product|malware|ransomware_family|country|sector|publication_strategy|publicity_tactic|channel_type|victim_pressure_tactic|communication_channel|extortion_type|monetization_path|buyer_seller_communication|intermediary_communication|profitability_signal)(?:_extraction)?$/.test(value.trim());
+  return /^(?:actor|alias|victim|date|source|source_url|ttp|impact|dataset|leak_type|indicator|incident|incident_date|publication_date|cve|vendor|product|malware|tool|campaign|vulnerability|ransomware_family|country|sector|duplicate_article|contradictory_claim|irrelevant_page|dynamic_page|publication_strategy|publicity_tactic|channel_type|victim_pressure_tactic|communication_channel|extortion_type|monetization_path|buyer_seller_communication|intermediary_communication|profitability_signal)(?:_extraction)?$/.test(value.trim());
 }
 function safeEvaluationValue(value: unknown): boolean {
   if (value === undefined) return true;

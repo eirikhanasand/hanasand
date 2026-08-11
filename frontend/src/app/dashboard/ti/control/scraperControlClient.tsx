@@ -173,10 +173,30 @@ export default function TiScraperControlClient() {
     const hasFailures = endpointRows.some(([, state]) => !state.ok)
     const statusTitle = loading && !snapshot ? 'Connecting' : error || !serviceReady ? 'Unavailable' : hasFailures ? 'Checks degraded' : queueCount ? 'Work queued' : 'Running normally'
     const statusBody = statusTitle === 'Running normally' ? 'The scheduler is collecting sources automatically.' : statusTitle === 'Work queued' ? `${queueCount} collection item(s) are queued.` : statusTitle === 'Checks degraded' ? 'One or more collection checks are degraded.' : 'The collection service did not return a usable status.'
+    void actionResult
+    void healthyEndpoints
+    void sourceGrowth
+
+    return <OperatorCollectionView
+        snapshot={snapshot}
+        loading={loading}
+        error={error}
+        statusTitle={statusTitle}
+        statusBody={statusBody}
+        scheduler={scheduler}
+        queueCount={queueCount}
+        sourceCount={sourceCount}
+        endpointRows={endpointRows}
+        workItems={workItems.filter(item => ['run', 'frontier_task', 'platform'].includes(item.kind) && ['queued', 'degraded', 'failed', 'connecting'].includes(item.status))}
+        firstUse={!loading && serviceReady && sourceGrowth.watchlists === 0}
+        busyAction={busyAction}
+        load={() => void load(query)}
+        runDue={() => void runAction('scheduler_run_now')}
+    />
 
     return (
         <div className='source-ops-workbench grid gap-3'>
-            {actionResult ? <Notice tone={actionResult.ok ? 'ok' : 'bad'} title={actionResult.ok ? 'Action completed' : 'Action failed'} body={actionSummary(actionResult)} /> : null}
+            {actionResult ? <Notice tone={actionResult?.ok ? 'ok' : 'bad'} title={actionResult?.ok ? 'Action completed' : 'Action failed'} body={actionSummary(actionResult as ActionResult)} /> : null}
 
             <section className='rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm'>
                 <div className='flex flex-wrap items-start justify-between gap-3'>
@@ -264,6 +284,101 @@ export default function TiScraperControlClient() {
         </div>
     )
 
+}
+
+function OperatorCollectionView({
+    snapshot,
+    loading,
+    error,
+    statusTitle,
+    statusBody,
+    scheduler,
+    queueCount,
+    sourceCount,
+    endpointRows,
+    workItems,
+    firstUse,
+    busyAction,
+    load,
+    runDue,
+}: {
+    snapshot: ControlSnapshot | null
+    loading: boolean
+    error: string
+    statusTitle: string
+    statusBody: string
+    scheduler: ReturnType<typeof schedulerKpis>
+    queueCount: number
+    sourceCount: number
+    endpointRows: Array<[string, EndpointState]>
+    workItems: WorkItem[]
+    firstUse: boolean
+    busyAction: string | null
+    load: () => void
+    runDue: () => void
+}) {
+    const queue = asRecord(snapshot?.resources?.queue)
+    const parser = asRecord(asRecord(snapshot?.scheduler).parser)
+    const inventoryCounts = asRecord(asRecord(snapshot?.sourceInventory).counts)
+    const activeJobs = numberFrom(queue.leased) ?? numberFrom(queue.active)
+    const failedJobs = numberFrom(queue.deadLetter)
+    const overdueSources = numberFrom(inventoryCounts.overdueSources) ?? numberFrom(inventoryCounts.staleSources)
+    const parserFailures = numberFrom(parser.failureCount) ?? numberFrom(asRecord(snapshot?.quality).parserFailures) ?? 0
+    const capacity = numberFrom(asRecord(snapshot?.resources).capacity) ?? numberFrom(asRecord(snapshot?.resources).availableWorkers)
+    const unavailable = Boolean(error) || Boolean(snapshot && !snapshot.ok)
+
+    if (firstUse) {
+        return (
+            <section className='grid min-h-[22rem] place-items-center rounded-lg border border-ui-border bg-ui-panel p-8 text-center'>
+                <div className='grid max-w-xl justify-items-center gap-3'>
+                    <div className='grid h-12 w-12 place-items-center rounded-full border border-ui-primary/35 bg-ui-primary/10 text-ui-primary'><DatabaseZap className='h-6 w-6' /></div>
+                    <p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Welcome to collection</p>
+                    <h2 className='text-2xl font-semibold text-ui-text'>Create your first watchlist</h2>
+                    <p className='max-w-lg text-sm leading-6 text-ui-muted'>Add a company, domain, brand, vendor, or keyword to tell Hanasand what matters to you. Collection will then turn relevant source activity into matches and alerts.</p>
+                    <Link href='/dashboard/dwm/watchlists' className='mt-2 inline-flex min-h-10 items-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas hover:opacity-90'>Create your first watchlist <span aria-hidden='true'>→</span></Link>
+                    <p className='text-xs text-ui-muted'>Source collection runs automatically after monitoring is configured.</p>
+                </div>
+            </section>
+        )
+    }
+
+    return (
+        <div className='grid gap-3'>
+            <section className='rounded-lg border border-ui-border bg-ui-panel p-4'>
+                <div className='flex flex-wrap items-start justify-between gap-3'>
+                    <div>
+                        <p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Internal operations</p>
+                        <h2 className='mt-1 text-xl font-semibold text-ui-text'>{statusTitle}</h2>
+                        <p className='mt-1 max-w-2xl text-sm text-ui-muted'>{statusBody}</p>
+                    </div>
+                    <div className='flex gap-2'>
+                        <button type='button' onClick={runDue} disabled={busyAction === 'scheduler_run_now'} className='inline-flex min-h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas disabled:opacity-60'><PlayCircle className='h-4 w-4' /> Run due</button>
+                        <button type='button' onClick={load} className='inline-flex min-h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text'><RefreshCcw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Refresh</button>
+                    </div>
+                </div>
+                <div className='mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4'>
+                    <Metric title='Active jobs' value={activeJobs === undefined ? 'Not reported' : String(activeJobs)} detail='Leased collector jobs' icon={<PlayCircle className='h-4 w-4' />} tone={activeJobs ? 'ok' : 'hold'} />
+                    <Metric title='Queued jobs' value={String(queueCount)} detail='Waiting in the collector queue' icon={<Clock3 className='h-4 w-4' />} tone={queueCount ? 'warn' : 'ok'} />
+                    <Metric title='Failed jobs' value={failedJobs === undefined ? 'Not reported' : String(failedJobs)} detail='Dead-lettered collector jobs' icon={<AlertTriangle className='h-4 w-4' />} tone={failedJobs ? 'bad' : 'ok'} />
+                    <Metric title='Overdue sources' value={overdueSources === undefined ? 'Not reported' : String(overdueSources)} detail='Sources past their scheduled check' icon={<Workflow className='h-4 w-4' />} tone={overdueSources ? 'warn' : 'ok'} />
+                </div>
+            </section>
+
+            {unavailable ? <section className='rounded-lg border border-ui-danger/35 bg-ui-danger/10 p-4'><p className='font-semibold text-ui-danger'>Collection data unavailable</p><p className='mt-1 text-sm text-ui-muted'>{error || 'The collector did not return a valid operational snapshot. Counts are not being shown as zero.'}</p></section> : null}
+
+            <section className='rounded-lg border border-ui-border bg-ui-panel p-4'>
+                <div className='flex flex-wrap items-center justify-between gap-2'><div><p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Operational work</p><h2 className='mt-1 text-lg font-semibold text-ui-text'>{workItems.length ? 'Work requiring attention' : 'No queued work'}</h2></div><Link href='/dashboard/ti/runs' className='text-sm font-semibold text-ui-primary underline underline-offset-4'>Collection history</Link></div>
+                {workItems.length ? <div className='mt-3 divide-y divide-ui-border rounded-md border border-ui-border'>{workItems.slice(0, 12).map(item => <div key={item.id} className='flex flex-wrap items-center justify-between gap-3 bg-ui-canvas px-3 py-3'><div className='min-w-0'><p className='font-semibold text-ui-text'>{item.title}</p><p className='mt-1 text-sm text-ui-muted'>{item.subtitle}</p></div><span className={severityClass(item.severity)}>{item.status}</span></div>)}</div> : <div className='mt-3 rounded-md border border-dashed border-ui-border p-6 text-center'><CheckCircle2 className='mx-auto h-7 w-7 text-ui-success' /><p className='mt-2 font-semibold text-ui-text'>The collector has no queued or failed work.</p><p className='mt-1 text-sm text-ui-muted'>Automatic collection continues according to the next scheduled check.</p></div>}
+            </section>
+
+            <section className='grid gap-3 lg:grid-cols-2'>
+                <div className='rounded-lg border border-ui-border bg-ui-panel p-4'><h2 className='text-lg font-semibold text-ui-text'>Output and capacity</h2><div className='mt-3 grid gap-2 sm:grid-cols-2'><Info label='Active sources' value={String(scheduler.activeSources || sourceCount)} /><Info label='Successful sources' value={String(scheduler.successfulSources)} /><Info label='Parser failures' value={String(parserFailures)} /><Info label='Collector capacity' value={capacity === undefined ? 'Not reported' : String(capacity)} /></div></div>
+                <div className='rounded-lg border border-ui-border bg-ui-panel p-4'><h2 className='text-lg font-semibold text-ui-text'>Schedule</h2><div className='mt-3 grid gap-2 sm:grid-cols-2'><Info label='Next scheduled work' value={scheduler.nextRunAt ? formatTime(scheduler.nextRunAt) : 'Not reported'} /><Info label='Last run' value={scheduler.lastRunStatus || 'Not recorded'} /><Info label='Useful output' value={String(scheduler.usefulSources)} /><Info label='Service checks' value={`${endpointRows.filter(([, state]) => state.ok).length}/${Math.max(endpointRows.length, 1)} healthy`} /></div></div>
+            </section>
+
+            <details className='group rounded-lg border border-ui-border bg-ui-panel'><summary className='flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold text-ui-text [&::-webkit-details-marker]:hidden'>Technical diagnostics <ChevronDown className='h-4 w-4 transition group-open:rotate-180' /></summary><div className='grid gap-2 border-t border-ui-border p-4 sm:grid-cols-2'>{endpointRows.map(([name, state]) => <div key={name} className='flex items-center justify-between rounded-md border border-ui-border bg-ui-canvas px-3 py-2 text-xs'><span className='font-semibold text-ui-text'>{name}</span><span className={state.ok ? 'text-ui-success' : 'text-ui-danger'}>{state.ok ? 'Healthy' : state.error || `HTTP ${state.status}`}</span></div>)}</div></details>
+        </div>
+    )
 }
 
 function actionBody(action: 'run_query' | 'scheduler_run_now' | 'scheduler_pause' | 'scheduler_resume' | 'public_channel_status' | 'request_source' | 'request_restricted_source' | 'create_watchlist' | 'rebuild_alerts', query: string, source: SourceRow | undefined, input: { sourceTarget: string; watchTerms: string }) {

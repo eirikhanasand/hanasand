@@ -28,7 +28,8 @@ const LATENCIES = [
   "reportToAlertSeconds",
   "reportToDeliveredSeconds"
 ] as const;
-const REQUIRED_BENCHMARK_LABEL_TYPES = ["actor", "ransomware", "victim", "incident", "cve", "malware", "ttp", "country", "sector", "indicator", "impact", "dataset", "business_mechanism"];
+const REQUIRED_BENCHMARK_LABEL_TYPES = ["actor", "alias", "victim", "country", "sector", "malware", "tool", "cve", "vulnerability", "campaign", "ttp", "incident_date", "publication_date", "source_url"];
+const REQUIRED_DATASET_SCENARIOS = ["duplicate", "contradictory", "irrelevant", "dynamic", "multilingual"];
 const INDEPENDENT_BENCHMARK_PROTOCOL = "ti.independent_extraction_benchmark.v4";
 const INDEPENDENT_TRUTH_BASIS = "separately_retained_authoritative_reference";
 
@@ -59,6 +60,15 @@ type EvaluationMetricRow = {
   labeledAt?: string;
   predictionConfidence?: number;
   exhaustiveExpectedValues: boolean;
+  sourceSpan?: { start: number; end: number; text: string };
+  observedSpan?: { start: number; end: number; text: string };
+  expectedNormalization?: string;
+  ambiguityFlag?: boolean;
+  sourceTimestamp?: string;
+  language?: string;
+  processingLatencyMs?: number;
+  expectedValue?: string | null;
+  observedValue?: string | null;
 };
 type ActorTimelineRecord = EvaluationTimelinessRecord & { actorName: string };
 type AdjudicatedTaskTruth = {
@@ -101,7 +111,7 @@ export function buildEvaluationMetrics(store: CaptureMetadataStore, input: { ten
     const benchmark = completedBenchmarkById.get(key.slice(0, key.indexOf("\u0000")));
     const taskLabels = groupedLabels.get(key) ?? [];
     const taskAdjudications = groupedAdjudications.get(key) ?? [];
-    return benchmark && acceptedEvaluationLabelSet(store, benchmark, task, taskAdjudications, taskLabels, evaluationLookup) ? taskLabels : [];
+    return benchmark && acceptedEvaluationLabelSet(store, benchmark, task, taskAdjudications, taskLabels, createEvaluationLookup()) ? taskLabels : [];
   });
   const diagnosticLabels = labels.filter((label) => !independentLabels.includes(label));
   const rows = independentLabels.map((label) => labelRow(label, subjects, captureById, sourceById));
@@ -129,6 +139,7 @@ export function buildEvaluationMetrics(store: CaptureMetadataStore, input: { ten
     const values = heldOutTaskTruth.filter((row) => row.labelType === name);
     return { name, sampleSize: values.length, positiveCount: values.filter((row) => row.positive).length, negativeCount: values.filter((row) => !row.positive).length };
   });
+  const datasetCoverage = datasetCoverageSummary(labelEvents, captures, allBenchmarks);
   const stratifiedCoverageComplete = labelTypeCoverage.every((row) => row.positiveCount >= 5 && row.negativeCount >= 5);
   const representativeFailureCoverageComplete = heldOutCaseCoverage.ambiguousTaskCount > 0 && heldOutCaseCoverage.parserFailureTaskCount > 0 && heldOutCaseCoverage.unsupportedAttributionTaskCount > 0;
   const heldOutBenchmarkCount = heldOutBenchmarks.length;
@@ -147,6 +158,7 @@ export function buildEvaluationMetrics(store: CaptureMetadataStore, input: { ten
       classifiedCount: rows.filter((row) => row.bucket !== "needs_review").length,
       needsReviewCount: rows.filter((row) => row.bucket === "needs_review").length,
       overall: score(rows),
+      extractionMetrics: extractionMetrics(rows),
       byLabelType: groupedScores(rows, (row) => row.labelType),
       byParser: groupedScores(rows, (row) => row.parserVersion),
       bySourceFamily: groupedScores(rows, (row) => row.sourceFamily),
@@ -176,6 +188,7 @@ export function buildEvaluationMetrics(store: CaptureMetadataStore, input: { ten
         heldOutCaptureCount,
         heldOutReviewerCount,
         labelTypeCoverage,
+        datasetCoverage,
         caseCoverage: evaluationCaseCoverage(measuredBenchmarks, independentAnnotations, independentAdjudications),
         heldOutCaseCoverage,
         stratifiedCoverageComplete,
@@ -248,6 +261,8 @@ function labelRow(label: EvaluationLabelRecord, subjects: Map<string, MetricSubj
     labelType: label.labelType ?? "unknown",
     datasetSplit: label.datasetSplit ?? "unassigned",
     bucket: outcomeBucket(label.outcome),
+    expectedValue: label.expectedValue,
+    observedValue: label.observedValue,
     labelingMethod: evaluationLabelMethod(label),
     parserVersion: label.parserVersion ?? subject?.extractorVersion ?? capture?.metadata?.extractorVersion ?? capture?.provenance?.extractorVersion ?? "unknown",
     sourceFamily: label.sourceFamily ?? sourceFamily(source),
@@ -256,7 +271,14 @@ function labelRow(label: EvaluationLabelRecord, subjects: Map<string, MetricSubj
     reviewSchemaVersion: label.reviewSchemaVersion ?? "unknown",
     labeledAt: label.labeledAt,
     predictionConfidence: normalizedConfidence(label.predictionConfidence),
-    exhaustiveExpectedValues: label.exhaustiveExpectedValues === true && label.blinded === true && label.adjudicationStatus === "adjudicated"
+    exhaustiveExpectedValues: label.exhaustiveExpectedValues === true && label.blinded === true && label.adjudicationStatus === "adjudicated",
+    sourceSpan: label.sourceSpan,
+    observedSpan: label.observedSpan,
+    expectedNormalization: label.expectedNormalization,
+    ambiguityFlag: label.ambiguityFlag === true,
+    sourceTimestamp: label.sourceTimestamp,
+    language: label.language,
+    processingLatencyMs: Number.isFinite(Number(label.processingLatencyMs)) ? Number(label.processingLatencyMs) : undefined
   };
 }
 
@@ -354,6 +376,7 @@ function score(rows: EvaluationMetricRow[]) {
     precision,
     recall,
     specificity,
+    falsePositiveRate: ratio(counts.falsePositive, counts.falsePositive + counts.trueNegative),
     recallSampleSize: positiveCount,
     f1: precision === null || recall === null ? null : precision + recall === 0 ? 0 : round((2 * precision * recall) / (precision + recall)),
     classBalance: { positiveCount, negativeCount, positiveRate: ratio(positiveCount, positiveCount + negativeCount) },
@@ -365,6 +388,57 @@ function score(rows: EvaluationMetricRow[]) {
       specificity: wilson(exhaustiveTrueNegative, negativeCount)
     },
     calibration: calibration(rows)
+  };
+}
+
+function extractionMetrics(rows: EvaluationMetricRow[]) {
+  const spanRows = rows.filter((row) => row.sourceSpan && row.observedSpan);
+  const overlap = spanRows.length ? spanRows.reduce((sum, row) => sum + spanIoU(row.sourceSpan!, row.observedSpan!), 0) / spanRows.length : null;
+  const exactRows = rows.filter((row) => row.expectedNormalization !== undefined && row.observedValue !== undefined);
+  const exact = exactRows.length ? exactRows.filter((row) => normalizeMetricValue(row.expectedNormalization) === normalizeMetricValue(row.observedValue)).length / exactRows.length : null;
+  const entityRows = rows.filter((row) => ["actor", "alias", "victim"].includes(baseLabelType(row.labelType)));
+  const entityResolution = entityRows.length ? entityRows.filter((row) => row.bucket === "true_positive").length / entityRows.length : null;
+  const duplicateRows = rows.filter((row) => baseLabelType(row.labelType) === "duplicate_article");
+  const publicationRows = rows.filter((row) => baseLabelType(row.labelType) === "publication_date");
+  const latency = rows.map((row) => row.processingLatencyMs).filter((value): value is number => Number.isFinite(value));
+  return {
+    exactMatch: exact,
+    spanOverlap: overlap,
+    entityResolutionAccuracy: entityResolution,
+    duplicateDetectionAccuracy: binaryAccuracy(duplicateRows),
+    publicationDateExtractionAccuracy: binaryAccuracy(publicationRows),
+    falsePositiveRate: score(rows).falsePositiveRate,
+    processingLatencyMs: { sampleSize: latency.length, median: percentile(latency, 0.5), p95: percentile(latency, 0.95) }
+  };
+}
+
+function baseLabelType(labelType: string) {
+  return labelType.replace(/_extraction$/, "");
+}
+
+function binaryAccuracy(rows: EvaluationMetricRow[]) {
+  if (!rows.length) return null;
+  return rows.filter((row) => ["true_positive", "true_negative"].includes(row.bucket)).length / rows.length;
+}
+
+function spanIoU(expected: { start: number; end: number }, observed: { start: number; end: number }) {
+  const intersection = Math.max(0, Math.min(expected.end, observed.end) - Math.max(expected.start, observed.start));
+  const union = Math.max(expected.end, observed.end) - Math.min(expected.start, observed.start);
+  return union ? intersection / union : 0;
+}
+
+function datasetCoverageSummary(labels: EvaluationLabelRecord[], captures: RawCapture[], benchmarks: EvaluationBenchmarkRecord[]) {
+  const byType = new Map<string, number>();
+  for (const label of labels) byType.set(String(label.labelType ?? "unknown").replace(/_extraction$/, ""), (byType.get(String(label.labelType ?? "unknown").replace(/_extraction$/, "")) ?? 0) + 1);
+  const tags = new Set(benchmarks.flatMap((benchmark) => (benchmark.manifest ?? []).flatMap((task) => task.caseTags ?? [])));
+  const languages = new Set(labels.map((label) => label.language).filter(Boolean));
+  if (captures.some((capture) => capture.metadata?.duplicateOf || capture.metadata?.duplicate === true || capture.metadata?.duplicateArticle === true)) tags.add("duplicate");
+  return {
+    labelTypes: REQUIRED_BENCHMARK_LABEL_TYPES.map((name) => ({ name, count: byType.get(name) ?? 0 })),
+    scenarios: REQUIRED_DATASET_SCENARIOS.map((name) => ({ name, present: tags.has(name) || (name === "multilingual" && languages.size > 1) })),
+    languages: [...languages].sort(),
+    missingLabelTypes: REQUIRED_BENCHMARK_LABEL_TYPES.filter((name) => !(byType.get(name) ?? 0)),
+    missingScenarios: REQUIRED_DATASET_SCENARIOS.filter((name) => !(tags.has(name) || (name === "multilingual" && languages.size > 1)))
   };
 }
 

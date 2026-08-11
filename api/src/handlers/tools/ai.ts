@@ -693,6 +693,7 @@ async function requestCompletionWithRetry({
                         role: 'system',
                         content: [
                             'You are Hanasand AI inside the Hanasand developer workspace.',
+                            'Language rule: reply in the same language as the customer’s latest message when it is clearly written in one language. Do not switch languages because of the workspace, source material, code, or earlier messages. If the message is mixed, too short to identify reliably, or contains only code, identifiers, or URLs, reply in English unless the customer explicitly requests another language. Keep code, commands, filenames, and quoted text unchanged.',
                             'Answer simple conversation normally without pretending to inspect or edit files.',
                             'When asked to edit a share project, emit one or more Hanasand tool tags with complete replacement content for each file that should change.',
                             'Supported share tool actions are update_share and upsert_share. Prefer upsert_share for creating or replacing files by path.',
@@ -726,7 +727,9 @@ function wait(ms: number) {
 function directChatResponse(prompt: string) {
     const normalized = prompt.trim().toLowerCase()
     if (/^(hei|he+i|hello|hi|hey|yo|hallo|god dag)[!.?\s]*$/.test(normalized)) {
-        return 'Hei. What should we build or change in this project?'
+        return /^(hei|he+i|god dag)[!.?\s]*$/.test(normalized)
+            ? 'Hei. Hva skal vi bygge eller endre i dette prosjektet?'
+            : 'Hi. What should we build or change in this project?'
     }
     return null
 }

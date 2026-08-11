@@ -14,6 +14,7 @@ import type {
   EvaluationLineageIdentity,
   EvaluationPrediction,
   EvaluationReferenceEvidence,
+  EvaluationSpan,
   EvaluationStoreRecord,
   EvaluationTaskRecord,
   EvaluationValidationRecord
@@ -27,7 +28,15 @@ import type { ApiServerOptions } from "./serverTypes.ts";
 import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
 
 const BASE = "/v1/intel/evaluation/benchmarks";
-const LABEL_TYPES = ["actor", "ransomware", "victim", "incident", "cve", "malware", "ttp", "country", "sector", "indicator", "impact", "dataset", "business_mechanism"] as const;
+const BENCHMARK_PROTOCOL_VERSION = "ti.independent_extraction_benchmark.v4";
+const REFERENCE_CURATION_PROTOCOL_VERSION = "ti.independent_reference_curation.v1";
+const REFERENCE_TRUTH_SCHEMA_VERSION = "ti.independent_evaluation_reference.v1";
+const REFERENCE_VALIDATION_TYPE = "independent_evaluation_reference";
+const TERMINAL_TASK_STATUSES = new Set(["adjudicated", "dead_letter", "failed"]);
+const TERMINAL_BENCHMARK_STATUSES = new Set(["complete", "complete_with_failures", "retired"]);
+const EXTRACTION_PROVIDER = "hanasand-ti";
+const EXTRACTION_MODEL = "extraction-pipeline";
+const LABEL_TYPES = ["actor", "alias", "ransomware", "victim", "incident", "cve", "malware", "tool", "campaign", "ttp", "country", "sector", "indicator", "impact", "vulnerability", "incident_date", "publication_date", "source_url", "duplicate_article", "contradictory_claim", "irrelevant_page", "dynamic_page", "dataset", "business_mechanism"] as const;
 const LABEL_TYPE_SET = new Set<string>(LABEL_TYPES);
 const REVIEW_PROMPT_VERSION = "ti.automatic_evaluation_review.v2";
 const REVIEW_SCHEMA_VERSION = "ti.automatic_evaluation_response.v1";
@@ -47,7 +56,7 @@ type EvaluationCreateRequest = {
   automatic?: boolean;
   reviewMode?: "human" | "automatic_model";
 };
-type EvaluationAnnotationRequest = { tenantId?: string; taskId?: string; expectedValues?: unknown; independenceAttested?: boolean; notes?: string };
+type EvaluationAnnotationRequest = { tenantId?: string; taskId?: string; expectedValues?: unknown; independenceAttested?: boolean; notes?: string; sourceSpan?: unknown; ambiguityFlag?: boolean; sourceTimestamp?: string; expectedNormalization?: string; language?: string; provenance?: string };
 type EvaluationAdjudicationRequest = { tenantId?: string; expectedValues?: unknown; independenceAttested?: boolean };
 type EvaluationTenantRequest = { tenantId?: string };
 type AutomaticReviewDecision = "present" | "absent" | "ambiguous";
@@ -219,6 +228,9 @@ type EvaluationSubjectRecord = EvaluationStoreRecord & {
   normalizedValue?: string;
   title?: string;
   summary?: string;
+  text?: string;
+  start?: number;
+  end?: number;
   confidence?: number;
   extractorProvider?: string;
   extractorModel?: string;
@@ -564,6 +576,12 @@ async function createAnnotation(request: Request, options: ApiServerOptions, ben
   const annotation = {
     id, tenantId: benchmark.tenantId, benchmarkId: benchmark.id, taskId: task.id, captureId: task.captureId, labelType: task.labelType,
     reviewerId, expectedValues, notes: cleanText(body.notes, 1_000), sourceExcerptHash: task.excerptHash,
+    sourceSpan: evaluationSpan(body.sourceSpan),
+    ambiguityFlag: body.ambiguityFlag === true,
+    sourceTimestamp: validIso(body.sourceTimestamp),
+    expectedNormalization: cleanText(body.expectedNormalization, 500),
+    language: cleanText(body.language, 32),
+    provenance: cleanText(body.provenance, 500),
     blinded: true, predictionAccessed: false, independenceAttested: true, annotatedAt, createdAt: annotatedAt, updatedAt: annotatedAt
   };
   options.store.saveEvaluationAnnotation(annotation);
@@ -736,7 +754,7 @@ function saveReferenceCurationAdjudication(
   return completeAdjudication(adjudication)!;
 }
 
-export function evaluationLabelsForAdjudication(_store: CaptureMetadataStore, benchmark: EvaluationBenchmarkRecord, task: EvaluationTaskRecord, adjudication: EvaluationAdjudicationRecord): EvaluationLabelRecord[] {
+export function evaluationLabelsForAdjudication(store: CaptureMetadataStore, benchmark: EvaluationBenchmarkRecord, task: EvaluationTaskRecord, adjudication: EvaluationAdjudicationRecord): EvaluationLabelRecord[] {
   const expected = valueMap(adjudication.expectedValues ?? []);
   const observed = valueMap(task.observedValues ?? []);
   const values = unique([...expected.keys(), ...observed.keys()]);
@@ -745,6 +763,8 @@ export function evaluationLabelsForAdjudication(_store: CaptureMetadataStore, be
   const independentFromExtractor = adjudication.reviewKind === "automatic_model_adjudication"
     ? validAutomaticIndependence(independenceContext)
     : adjudication.independenceAttested === true;
+  const annotations = store.listEvaluationAnnotations().filter((row) => row.taskId === task.id);
+  const annotation = annotations[0];
   return units.map((unit) => {
     const expectedValue = expected.get(unit);
     const observedValue = observed.get(unit);
@@ -755,6 +775,13 @@ export function evaluationLabelsForAdjudication(_store: CaptureMetadataStore, be
       id: stableId("evaluation-label", evaluationUnitId), tenantId: benchmark.tenantId, captureId: task.captureId,
       evaluationUnitId, benchmarkId: benchmark.id, taskId: task.id, annotationIds: adjudication.annotationIds,
       labelType: `${task.labelType}_extraction`, expectedValue: expectedValue ?? null, observedValue: observedValue ?? null, outcome,
+      expectedNormalization: annotation?.expectedNormalization,
+      sourceSpan: annotation?.sourceSpan,
+      observedSpan: observedPrediction?.span,
+      ambiguityFlag: annotation?.ambiguityFlag === true,
+      sourceTimestamp: annotation?.sourceTimestamp,
+      language: annotation?.language,
+      provenance: annotation?.provenance,
       predictionConfidence: observedValue ? normalizedConfidence(observedPrediction?.confidence) ?? null : 0,
       datasetSplit: benchmark.datasetSplit, labeledBy: adjudication.adjudicatedBy, labelingMethod: adjudication.reviewKind === "automatic_model_adjudication" ? "automatic_model_review" : "manual_source_review",
       parserVersion: task.extractorVersions?.join(",") || "unknown", sourceFamily: task.sourceFamily,
@@ -1213,7 +1240,7 @@ function ensureAutomaticBenchmarks(store: CaptureMetadataStore, generatedAt: str
       });
     }
   }
-  const validations = extractionAutomatic.filter((benchmark) => benchmark.datasetSplit === "validation").sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  const validations = automatic.filter((benchmark) => benchmark.datasetSplit === "validation").sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   const latest = validations[0], refreshMs = Math.max(86_400_000, Number(options.refreshIntervalMs ?? 7 * 86_400_000));
   if (!latest || !referenceReadyAutomaticBenchmark(store, latest) || (TERMINAL_BENCHMARK_STATUSES.has(latest.status) && Date.parse(generatedAt) - Date.parse(latest.createdAt) >= refreshMs)) {
     const benchmark = createEvaluationBenchmark(store, { sampleSize, datasetSplit: "validation", reviewMode: "automatic_model", createdAt: generatedAt, createdBy: "automatic-evaluation-runtime", name: `Rolling automatic evaluation ${generatedAt.slice(0, 10)}`, independentOnly: true });
@@ -2090,6 +2117,12 @@ function unique<T>(values: T[]): T[] { return [...new Set(values)]; }
 function isString(value: unknown): value is string { return typeof value === "string" && Boolean(value); }
 function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
 function cleanText(value: unknown, max: number): string | undefined { return typeof value === "string" && value.trim() ? value.trim().slice(0, max) : undefined; }
+function evaluationSpan(value: unknown): EvaluationSpan | undefined {
+  if (!isRecord(value)) return undefined;
+  const start = Number(value.start), end = Number(value.end), text = cleanText(value.text, 2_000);
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start || !text) return undefined;
+  return { start, end, text };
+}
 function entityMatches(labelType: string, entityType: string) {
   const type = String(entityType).toLowerCase();
   if (labelType === "actor") return ["actor", "threat_actor"].includes(type);
@@ -2112,7 +2145,7 @@ function predictionsFor(labelType: string, subjects: EvaluationSubjects): Evalua
 }
 
 function predictionSnapshot(predictions: EvaluationSubjectRecord[], labelType = ""): EvaluationPrediction[] {
-  const byValue = new Map<string, { value: string; confidence?: number; entityType: string; extractorProvider?: string; extractorModel?: string; extractorVersion: string }>();
+  const byValue = new Map<string, { value: string; confidence?: number; entityType: string; extractorProvider?: string; extractorModel?: string; extractorVersion: string; span?: EvaluationSpan }>();
   for (const prediction of predictions) {
     const rawValue = String(prediction.value ?? prediction.normalizedValue ?? prediction.title ?? prediction.summary ?? "").trim();
     const value = labelType === "business_mechanism" && rawValue ? `${prediction.type}: ${rawValue}` : rawValue;
@@ -2124,7 +2157,8 @@ function predictionSnapshot(predictions: EvaluationSubjectRecord[], labelType = 
       entityType: String(prediction.type ?? "unknown"),
       extractorProvider: cleanText(prediction.extractorProvider, 200),
       extractorModel: cleanText(prediction.extractorModel, 200),
-      extractorVersion: String(prediction.extractorVersion ?? "unknown")
+      extractorVersion: String(prediction.extractorVersion ?? "unknown"),
+      span: evaluationSpan({ start: prediction.start, end: prediction.end, text: prediction.text })
     });
   }
   return [...byValue.values()].sort((left, right) => normalize(left.value).localeCompare(normalize(right.value)));
@@ -2142,7 +2176,11 @@ function captureStrata(capture: RawCapture, subjects: Partial<EvaluationSubjects
   const markers = [
     (capture.metadata?.parserWarnings?.length || capture.metadata?.parserStatus === "failed") && "parser_failure",
     (capture.metadata?.review?.state === "needs_review" || entities.some((entity) => Number(entity.confidence ?? 1) < 0.6)) && "ambiguous",
-    (capture.metadata?.duplicateOf || capture.metadata?.duplicate === true) && "duplicate",
+    (capture.metadata?.duplicateOf || capture.metadata?.duplicate === true || capture.metadata?.duplicateArticle === true) && "duplicate",
+    (capture.metadata?.contradictoryClaim === true || capture.metadata?.contradictoryClaims === true) && "contradictory",
+    (capture.metadata?.irrelevant === true || capture.metadata?.irrelevantPage === true) && "irrelevant",
+    (capture.metadata?.dynamicPage === true || capture.metadata?.parserStatus === "dynamic_unparsed") && "dynamic",
+    (capture.metadata?.language && capture.metadata.language !== "en") && "multilingual",
     entities.filter((entity) => ["actor", "ransomware_family"].includes(entity.type ?? "")).length > 1 && "cross_actor_mention",
     capture.publishedAt && Date.parse(generatedAt) - Date.parse(capture.publishedAt) > 180 * 86_400_000 && "stale",
     entities.some((entity) => BUSINESS_MECHANISM_TYPES.has(entity.type ?? "")) && "business_mechanism",

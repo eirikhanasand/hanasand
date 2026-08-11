@@ -6,7 +6,7 @@ export type AdminAuditOutcome = 'success' | 'denied' | 'failed'
 
 export type AdminAuditEventInput = {
     actionType: string
-    actorId: string
+    actorId: string | null
     source?: string | null
     service?: string | null
     targetType?: string | null
@@ -195,9 +195,7 @@ export async function recordAdminAuditEvent(req: FastifyRequest, input: AdminAud
         JSON.stringify(input.context || {}),
         req.ip,
         String(req.headers['user-agent'] || ''),
-    ]).catch(error => {
-        req.log.warn({ error, actionType: input.actionType, actorId: input.actorId }, 'Failed to write admin audit event')
-    })
+    ])
 }
 
 function cleanAuditDimension(value: unknown) {

@@ -2,9 +2,10 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
+import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
 
 export default async function stopVms(req: FastifyRequest, res: FastifyReply) {
-    const { valid } = await tokenWrapper(req, res)
+    const { valid, id: userId } = await tokenWrapper(req, res)
     const { valid: validRole } = await hasRole(req, res, 'system_admin')
     if (!valid || !validRole) {
         return res.status(401).send({ error: 'Unauthorized.' })
@@ -49,6 +50,14 @@ export default async function stopVms(req: FastifyRequest, res: FastifyReply) {
             SET "time" = EXCLUDED."time"
             RETURNING name
         `, [targetNames])
+
+        await recordAdminAuditEvent(req, {
+            actionType: 'vm.shutdown.queued',
+            actorId: userId || null,
+            targetType: 'vm_batch',
+            targetId: result.rows.map((row) => String(row.name)).join(','),
+            context: { vmNames: result.rows.map((row) => String(row.name)) },
+        })
 
         return res.send({
             success: true,

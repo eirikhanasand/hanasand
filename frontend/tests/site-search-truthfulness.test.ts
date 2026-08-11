@@ -12,15 +12,21 @@ test('header search may link an explicit actor only from a ready response', () =
     assert.deepEqual(actorItems({ query: 'APT29', actor: 'APT29', status: 'ready' }), [{
         id: 'actor:APT29',
         title: 'APT29',
-        detail: 'Open threat intelligence result',
+        detail: 'Threat actor profile',
         href: '/ti/APT29',
     }])
-    assert.deepEqual(directThreatItem('apt42'), {
-        id: 'threat:apt42',
+    assert.deepEqual(directThreatItem('apt42', [{
+        id: 'actor:APT42',
         title: 'APT42',
-        detail: 'Threat actor profile',
+        detail: 'Threat actor profile · Russia-linked espionage group',
+        href: '/ti/apt42',
+    }]), {
+        id: 'actor:APT42',
+        title: 'APT42',
+        detail: 'Threat actor profile · Russia-linked espionage group',
         href: '/ti/apt42',
     })
+    assert.equal(directThreatItem('apt42'), null)
     assert.equal(directThreatItem(''), null)
 })
 

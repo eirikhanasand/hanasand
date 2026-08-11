@@ -15,6 +15,7 @@ type Score = {
     recall: number | null
     specificity: number | null
     f1: number | null
+    falsePositiveRate: number | null
     truePositive: number
     falsePositive: number
     falseNegative: number
@@ -85,6 +86,7 @@ type EvaluationMetrics = {
         evaluatedUnitCount: number
         needsReviewCount: number
         overall: Score
+        extractionMetrics: { exactMatch: number | null, spanOverlap: number | null, entityResolutionAccuracy: number | null, duplicateDetectionAccuracy: number | null, publicationDateExtractionAccuracy: number | null, falsePositiveRate: number | null, processingLatencyMs: { sampleSize: number, median: number | null, p95: number | null } }
         byLabelType: Breakdown[]
         byParser: Breakdown[]
         bySourceFamily: Breakdown[]
@@ -98,6 +100,7 @@ type EvaluationMetrics = {
             heldOutReviewerCount: number
             stratifiedCoverageComplete: boolean
             heldOutCaseCoverage: { positiveTaskCount: number, negativeTaskCount: number, ambiguousTaskCount: number, parserFailureTaskCount: number, unsupportedAttributionTaskCount: number }
+            datasetCoverage: { labelTypes: Array<{ name: string, count: number }>, scenarios: Array<{ name: string, present: boolean }>, languages: string[], missingLabelTypes: string[], missingScenarios: string[] }
         }
         drift: { status: string, latestDelta: { precision: number | null, recall: number | null, specificity: number | null, f1: number | null } | null, series: Array<{ benchmarkId: string, completedAt?: string, datasetSplit: string, sampleSize: number, precision: number | null, recall: number | null, specificity: number | null, f1: number | null, reviewerModelVersions: string[], parserVersions: string[] }> }
     }
@@ -105,7 +108,7 @@ type EvaluationMetrics = {
 
 type CreateFormState = { name: string, sampleSize: number, datasetSplit: 'validation' | 'test', requiredReviewers: number, labelTypes: string[], scope: 'default' | 'global' }
 
-const LABEL_TYPES = ['actor', 'ransomware', 'victim', 'incident', 'cve', 'malware', 'ttp', 'country', 'sector', 'indicator', 'impact', 'dataset', 'business_mechanism'] as const
+const LABEL_TYPES = ['actor', 'alias', 'ransomware', 'victim', 'incident', 'cve', 'malware', 'tool', 'campaign', 'ttp', 'country', 'sector', 'indicator', 'impact', 'vulnerability', 'incident_date', 'publication_date', 'source_url', 'duplicate_article', 'contradictory_claim', 'irrelevant_page', 'dynamic_page', 'dataset', 'business_mechanism'] as const
 const FILTERS = ['active', 'retry', 'dead_letter', 'complete'] as const
 
 export default function EvaluationBenchmarkClient() {
@@ -315,23 +318,36 @@ function Results({ results }: { results: Result[] }) {
 }
 
 function MetricsSummary({ metrics }: { metrics: EvaluationMetrics }) {
-    const { overall, endToEnd, benchmarkEvidence, evaluatedUnitCount } = metrics.quality
+    const { overall, extractionMetrics, endToEnd, benchmarkEvidence, evaluatedUnitCount } = metrics.quality
     const cases = benchmarkEvidence.heldOutCaseCoverage
-    return <dl className='grid grid-cols-2 gap-px border-t border-ui-border bg-ui-border sm:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-12'>
-        <ScoreDatum label='Validation' value={benchmarkEvidence.validationStatus.replaceAll('_', ' ')} />
-        <ScoreDatum label='Units' value={String(evaluatedUnitCount)} />
-        <ScoreDatum label='Precision' value={metricWithCi(overall.precision, overall.confidenceIntervals.precision)} />
-        <ScoreDatum label='Recall' value={metricWithCi(overall.recall, overall.confidenceIntervals.recall)} />
-        <ScoreDatum label='Specificity' value={metricWithCi(overall.specificity, overall.confidenceIntervals.specificity)} />
-        <ScoreDatum label='F1' value={percent(overall.f1)} />
-        <ScoreDatum label='Calibration / Brier' value={`${decimal(overall.calibration.expectedCalibrationError)} / ${decimal(overall.calibration.brierScore)}`} />
-        <ScoreDatum label='Class balance' value={`${overall.classBalance.positiveCount}+ / ${overall.classBalance.negativeCount}−`} />
-        <ScoreDatum label='Task exact match' value={`${percent(endToEnd.taskSetExactMatch.exactMatchRate)} · n=${endToEnd.taskSetExactMatch.sampleSize}`} />
-        <ScoreDatum label='Capture exact match' value={`${percent(endToEnd.captureExactMatch.exactMatchRate)} · n=${endToEnd.captureExactMatch.sampleSize}`} />
-        <ScoreDatum label='Held-out cases' value={`${cases.positiveTaskCount}+ / ${cases.negativeTaskCount}− / ${cases.ambiguousTaskCount} ambiguous`} />
-        <ScoreDatum label='Failure cases' value={`${cases.parserFailureTaskCount} parser / ${cases.unsupportedAttributionTaskCount} attribution`} />
-        <ScoreDatum label='Held-out evidence' value={`${benchmarkEvidence.heldOutCaptureCount} captures / ${benchmarkEvidence.heldOutReviewerCount} reviewers`} />
-    </dl>
+    return <>
+        <dl className='grid grid-cols-2 gap-px border-t border-ui-border bg-ui-border sm:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-12'>
+            <ScoreDatum label='Validation' value={benchmarkEvidence.validationStatus.replaceAll('_', ' ')} />
+            <ScoreDatum label='Units' value={String(evaluatedUnitCount)} />
+            <ScoreDatum label='Precision' value={metricWithCi(overall.precision, overall.confidenceIntervals.precision)} />
+            <ScoreDatum label='Recall' value={metricWithCi(overall.recall, overall.confidenceIntervals.recall)} />
+            <ScoreDatum label='Specificity' value={metricWithCi(overall.specificity, overall.confidenceIntervals.specificity)} />
+            <ScoreDatum label='F1' value={percent(overall.f1)} />
+            <ScoreDatum label='False-positive rate' value={percent(extractionMetrics.falsePositiveRate)} />
+            <ScoreDatum label='Span overlap' value={percent(extractionMetrics.spanOverlap)} />
+            <ScoreDatum label='Entity resolution' value={percent(extractionMetrics.entityResolutionAccuracy)} />
+            <ScoreDatum label='Duplicate accuracy' value={percent(extractionMetrics.duplicateDetectionAccuracy)} />
+            <ScoreDatum label='Publication-date accuracy' value={percent(extractionMetrics.publicationDateExtractionAccuracy)} />
+            <ScoreDatum label='Processing latency' value={extractionMetrics.processingLatencyMs.sampleSize ? `${extractionMetrics.processingLatencyMs.median ?? '—'} / ${extractionMetrics.processingLatencyMs.p95 ?? '—'} ms` : 'Unmeasured'} />
+            <ScoreDatum label='Calibration / Brier' value={`${decimal(overall.calibration.expectedCalibrationError)} / ${decimal(overall.calibration.brierScore)}`} />
+            <ScoreDatum label='Class balance' value={`${overall.classBalance.positiveCount}+ / ${overall.classBalance.negativeCount}−`} />
+            <ScoreDatum label='Task exact match' value={`${percent(endToEnd.taskSetExactMatch.exactMatchRate)} · n=${endToEnd.taskSetExactMatch.sampleSize}`} />
+            <ScoreDatum label='Capture exact match' value={`${percent(endToEnd.captureExactMatch.exactMatchRate)} · n=${endToEnd.captureExactMatch.sampleSize}`} />
+            <ScoreDatum label='Held-out cases' value={`${cases.positiveTaskCount}+ / ${cases.negativeTaskCount}− / ${cases.ambiguousTaskCount} ambiguous`} />
+            <ScoreDatum label='Failure cases' value={`${cases.parserFailureTaskCount} parser / ${cases.unsupportedAttributionTaskCount} attribution`} />
+            <ScoreDatum label='Held-out evidence' value={`${benchmarkEvidence.heldOutCaptureCount} captures / ${benchmarkEvidence.heldOutReviewerCount} reviewers`} />
+            <ScoreDatum label='Dataset coverage' value={`${benchmarkEvidence.datasetCoverage.missingLabelTypes.length ? `${benchmarkEvidence.datasetCoverage.missingLabelTypes.length} label types missing` : 'all label types present'} · ${benchmarkEvidence.datasetCoverage.missingScenarios.length ? `${benchmarkEvidence.datasetCoverage.missingScenarios.length} scenarios missing` : 'all scenarios present'}`} />
+        </dl>
+        <div className='grid gap-3 border-t border-ui-border p-3 text-xs text-ui-muted md:grid-cols-2'>
+            <div><h3 className='font-semibold text-ui-text'>Dataset label coverage</h3><p className='mt-1'>{benchmarkEvidence.datasetCoverage.labelTypes.map(item => `${item.name}: ${item.count}`).join(' · ')}</p></div>
+            <div><h3 className='font-semibold text-ui-text'>Required edge cases</h3><p className='mt-1'>{benchmarkEvidence.datasetCoverage.scenarios.map(item => `${item.name}: ${item.present ? 'present' : 'missing'}`).join(' · ')}</p><p className='mt-1'>{benchmarkEvidence.datasetCoverage.languages.length ? `Languages: ${benchmarkEvidence.datasetCoverage.languages.join(', ')}` : 'No language metadata recorded yet.'}</p></div>
+        </div>
+    </>
 }
 
 function MetricsBreakdowns({ metrics }: { metrics: EvaluationMetrics }) {

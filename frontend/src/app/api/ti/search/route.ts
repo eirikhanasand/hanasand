@@ -12,11 +12,13 @@ export async function GET(request: NextRequest) {
     }
 
     try {
+        const entityType = request.nextUrl.searchParams.get('entityType')?.trim() || undefined
+        const cached = request.nextUrl.searchParams.get('cached') === 'true'
         const response = await fetch(`${authApiUrl().replace(/\/$/, '')}/ti/search`, {
             method: 'POST',
             cache: 'no-store',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ query }),
+            body: JSON.stringify({ query, ...(entityType ? { entityType } : {}), ...(cached ? { cached: true } : {}) }),
             signal: AbortSignal.timeout(PUBLIC_TI_SEARCH_TIMEOUT_MS),
         })
         return new NextResponse(await response.text(), {

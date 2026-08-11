@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto'
 import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import recordLog from '#utils/logs/recordLog.ts'
+import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
 import {
     createApiKey,
     findEnabledOrganizationApiKey,
@@ -781,6 +782,18 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
         revokedInviteIds: revokedInvites.rows.map((invite: OrganizationInviteRow) => invite.id),
         revokedInviteCount: revokedInvites.rows.length,
     })
+    await recordAdminAuditEvent(req, {
+        actionType: 'organization.membership.removed',
+        actorId: userId,
+        organizationId: req.params.id,
+        targetType: 'organization_member',
+        targetId: req.params.userId,
+        entityId: req.params.id,
+        context: {
+            targetRole: authorizedTarget.role,
+            revokedInviteIds: revokedInvites.rows.map((invite: OrganizationInviteRow) => invite.id),
+        },
+    })
 
     const updated = await loadOrganizationForMember(req.params.id, userId)
     return res.send({
@@ -1144,7 +1157,20 @@ export async function patchOrganizationMemberRole(req: FastifyRequest<{ Params: 
         actorRole: authorizedOrganization.role,
         reason: input.reason,
     })
-
+    await recordAdminAuditEvent(req, {
+        actionType: 'organization.membership.role_updated',
+        actorId: userId,
+        organizationId: req.params.id,
+        targetType: 'organization_member',
+        targetId: req.params.userId,
+        entityId: req.params.id,
+        context: {
+            previousRole: authorizedTarget.role,
+            newRole: input.role,
+            reason: input.reason,
+            requestId: input.requestId,
+        },
+    })
     const updated = await loadOrganizationForMember(req.params.id, userId)
     return res.send({
         organization: updated ? toOrganization(updated) : null,
@@ -1386,6 +1412,19 @@ export async function postOrganizationOwnershipTransfer(req: FastifyRequest<{ Pa
         previousOwnerCount: ownerCount,
         reason: input.reason,
     })
+    await recordAdminAuditEvent(req, {
+        actionType: 'organization.ownership.transferred',
+        actorId: userId,
+        organizationId: req.params.id,
+        targetType: 'organization_member',
+        targetId: input.targetUserId,
+        entityId: req.params.id,
+        context: {
+            previousOwnerId: userId,
+            previousTargetRole: authorizedTarget.role,
+            reason: input.reason,
+        },
+    })
 
     const updated = await loadOrganizationForMember(req.params.id, userId)
     return res.send({
@@ -1516,6 +1555,15 @@ export async function postOrganizationInvites(req: FastifyRequest<{ Params: Orga
         }, {}),
         role: input.role,
         expiresAt: input.expiresAt,
+    })
+    await recordAdminAuditEvent(req, {
+        actionType: 'organization.membership.invites_created',
+        actorId: userId,
+        organizationId: req.params.id,
+        targetType: 'organization_invites',
+        targetId: requestId,
+        entityId: req.params.id,
+        context: { inviteIds: rows.map(invite => invite.id), role: input.role, inviteCount: rows.length },
     })
     return res.status(201).send({
         requestId,
@@ -1657,6 +1705,15 @@ export async function postOrganizationInviteAction(req: FastifyRequest<{ Params:
         newStatus: input.action === 'resend' ? 'pending' : 'revoked',
         expiresAt: input.action === 'resend' ? resendExpiresAt : null,
         reason: input.reason,
+    })
+    await recordAdminAuditEvent(req, {
+        actionType: input.action === 'resend' ? 'organization.membership.invite_resent' : 'organization.membership.invite_revoked',
+        actorId: userId,
+        organizationId: req.params.id,
+        targetType: 'organization_invite',
+        targetId: req.params.inviteId,
+        entityId: req.params.id,
+        context: { role: existing.role, previousStatus: existing.status, reason: input.reason },
     })
 
     const invite = result.rows[0] as OrganizationInviteRow
@@ -1932,6 +1989,15 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
     logOrganizationEvent(req, serviceLogAction, row.organization_id, userId, {
         inviteId: row.invite_id,
         role: row.member_role,
+    })
+    await recordAdminAuditEvent(req, {
+        actionType: 'organization.membership.invite_accepted',
+        actorId: userId,
+        organizationId: row.organization_id,
+        targetType: 'organization_member',
+        targetId: userId,
+        entityId: row.invite_id,
+        context: { inviteId: row.invite_id, role: row.member_role },
     })
     const organization = await loadOrganizationForMember(row.organization_id, userId)
     return res.send({
@@ -2840,6 +2906,17 @@ export async function postOrganizationWatchlist(req: FastifyRequest<{ Params: Or
         value: input.value,
         reason: input.reason,
     })
+    await recordAdminAuditEvent(req, {
+        actionType: existing.rows[0] ? 'watchlist.updated' : 'watchlist.created',
+        actorId: userId,
+        source: 'organization',
+        targetType: 'watchlist_item',
+        targetId: result.rows[0]?.id,
+        organizationId: req.params.id,
+        requestId: input.requestId,
+        reason: input.reason,
+        context: { kind: input.kind, status: result.rows[0]?.status },
+    })
     return res.status(201).send({
         watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow),
         operation: organizationWatchlistOperation(organization, {
@@ -2922,6 +2999,17 @@ export async function putOrganizationWatchlist(req: FastifyRequest<{ Params: Wat
         value: input.value,
         reason: input.reason,
     })
+    await recordAdminAuditEvent(req, {
+        actionType: 'watchlist.updated',
+        actorId: userId,
+        source: 'organization',
+        targetType: 'watchlist_item',
+        targetId: req.params.itemId,
+        organizationId: req.params.organizationId,
+        requestId: input.requestId,
+        reason: input.reason,
+        context: { kind: input.kind, status: result.rows[0]?.status },
+    })
     return res.send({
         watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow),
         operation: organizationWatchlistOperation(organization, {
@@ -2990,6 +3078,16 @@ export async function deleteOrganizationWatchlist(req: FastifyRequest<{ Params: 
         requestId,
         reason,
         watchlistItemId: req.params.itemId,
+    })
+    await recordAdminAuditEvent(req, {
+        actionType: 'watchlist.deleted',
+        actorId: userId,
+        source: 'organization',
+        targetType: 'watchlist_item',
+        targetId: req.params.itemId,
+        organizationId: req.params.organizationId,
+        requestId,
+        reason,
     })
     return res.send({
         watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow),
@@ -3080,6 +3178,17 @@ export async function postOrganizationWatchlistAction(req: FastifyRequest<{ Para
         watchlistItemId: req.params.itemId,
         action: input.action,
         status: nextStatus,
+    })
+    await recordAdminAuditEvent(req, {
+        actionType: `watchlist.${input.action === 'pause' ? 'paused' : input.action === 'resume' || input.action === 'restore' ? 'resumed' : 'deleted'}`,
+        actorId: userId,
+        source: 'organization',
+        targetType: 'watchlist_item',
+        targetId: req.params.itemId,
+        organizationId: req.params.organizationId,
+        requestId: input.requestId,
+        reason: input.reason,
+        context: { action: input.action, status: nextStatus },
     })
 
     return res.send({

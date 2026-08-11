@@ -5,6 +5,7 @@ import sanitize from '#utils/sanitize.ts'
 import run from '#db'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { canUseLocalLxd, setLocalLxdInstanceState } from '#utils/vms/lxd.ts'
+import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
 
 const allowedActions = new Set(['start', 'stop', 'restart'])
 
@@ -35,6 +36,13 @@ export default async function vmAction(req: FastifyRequest, res: FastifyReply) {
 
         if (vm.primary_host === config.vm_host_id && await canUseLocalLxd()) {
             const details = await setLocalLxdInstanceState(vm.name, action as 'start' | 'stop' | 'restart', { tolerateAlready: true })
+            await recordAdminAuditEvent(req, {
+                actionType: `vm.${action}`,
+                actorId: userId,
+                targetType: 'vm',
+                targetId: vm.name,
+                context: { status: details.status, execution: 'local_lxd' },
+            })
             return res.send({
                 ok: true,
                 name: vm.name,
@@ -71,6 +79,14 @@ export default async function vmAction(req: FastifyRequest, res: FastifyReply) {
             WHERE name = $1
         `, [id, nextStatus]).catch((error) => {
             req.log.warn({ err: error, id, action }, 'Unable to update cached VM status after action.')
+        })
+
+        await recordAdminAuditEvent(req, {
+            actionType: `vm.${action}`,
+            actorId: userId,
+            targetType: 'vm',
+            targetId: id,
+            context: { status: nextStatus, execution: 'internal_vm_api' },
         })
 
         return res.send(payload)

@@ -5,18 +5,35 @@ export type ObjectEvidenceRecord = any;
 export type ObjectEvidenceStore = any;
 export type EvaluationLabelType =
   | "actor"
+  | "alias"
   | "ransomware"
   | "victim"
   | "incident"
   | "cve"
   | "malware"
+  | "tool"
+  | "campaign"
   | "ttp"
   | "country"
   | "sector"
   | "indicator"
   | "impact"
+  | "vulnerability"
+  | "incident_date"
+  | "publication_date"
+  | "source_url"
+  | "duplicate_article"
+  | "contradictory_claim"
+  | "irrelevant_page"
+  | "dynamic_page"
   | "dataset"
   | "business_mechanism";
+
+export type EvaluationSpan = {
+  start: number;
+  end: number;
+  text: string;
+};
 
 export type EvaluationStoreRecord = {
   id: string;
@@ -86,6 +103,7 @@ export type EvaluationPrediction = {
   extractorProvider?: string;
   extractorModel?: string;
   extractorVersion: string;
+  span?: EvaluationSpan;
 };
 
 export type EvaluationAutomationState = {
@@ -162,6 +180,12 @@ export type EvaluationAnnotationRecord = EvaluationStoreRecord & {
   labelType?: EvaluationLabelType | string;
   reviewerId?: string;
   expectedValues?: string[];
+  sourceSpan?: EvaluationSpan;
+  ambiguityFlag?: boolean;
+  sourceTimestamp?: string;
+  expectedNormalization?: string;
+  language?: string;
+  provenance?: string;
   decision?: string;
   confidence?: number;
   notes?: string;
@@ -192,6 +216,12 @@ export type EvaluationAdjudicationRecord = EvaluationStoreRecord & {
   captureId?: string;
   labelType?: EvaluationLabelType | string;
   expectedValues?: string[];
+  sourceSpan?: EvaluationSpan;
+  ambiguityFlag?: boolean;
+  sourceTimestamp?: string;
+  expectedNormalization?: string;
+  language?: string;
+  provenance?: string;
   annotationIds?: string[];
   method?: string;
   adjudicatedBy?: string;
@@ -229,6 +259,14 @@ export type EvaluationLabelRecord = EvaluationStoreRecord & {
   labelType?: string;
   expectedValue?: string | null;
   observedValue?: string | null;
+  expectedNormalization?: string;
+  sourceSpan?: EvaluationSpan;
+  observedSpan?: EvaluationSpan;
+  ambiguityFlag?: boolean;
+  sourceTimestamp?: string;
+  language?: string;
+  provenance?: string;
+  processingLatencyMs?: number;
   outcome?: string;
   datasetSplit?: string;
   labelingMethod?: string;

@@ -276,8 +276,9 @@ describe("durable evaluation metrics", () => {
     });
     store.saveEvaluationAnnotation({ id: "review_ambiguous_victim", benchmarkId: "benchmark_stratified", taskId: "victim_0", reviewerId: "reviewer_three", decision: "ambiguous", expectedValues: ["expected_victim_0"] });
     const metrics = buildEvaluationMetrics(store, { datasetSplit: "test" });
-    expect(metrics.quality).toMatchObject({ status: "measured", benchmarkEvidence: { validationStatus: "validated", heldOutCaptureCount: 50, heldOutReviewerCount: 3, stratifiedCoverageComplete: true, representativeFailureCoverageComplete: true, heldOutCaseCoverage: { ambiguousTaskCount: 1, parserFailureTaskCount: 1, unsupportedAttributionTaskCount: 1 } } });
-    expect(metrics.quality.benchmarkEvidence.labelTypeCoverage).toEqual(labelTypes.map((name) => ({ name, sampleSize: 10, positiveCount: 5, negativeCount: 5 })));
+    expect(metrics.quality).toMatchObject({ status: "pilot_only", benchmarkEvidence: { validationStatus: "pilot_only", heldOutCaptureCount: 50, heldOutReviewerCount: 3, stratifiedCoverageComplete: false, representativeFailureCoverageComplete: true, heldOutCaseCoverage: { ambiguousTaskCount: 1, parserFailureTaskCount: 1, unsupportedAttributionTaskCount: 1 } } });
+    expect(metrics.quality.benchmarkEvidence.labelTypeCoverage.find((row) => row.name === "actor")).toEqual({ name: "actor", sampleSize: 10, positiveCount: 5, negativeCount: 5 });
+    expect(metrics.quality.benchmarkEvidence.datasetCoverage.missingLabelTypes).toContain("alias");
   });
 });
 

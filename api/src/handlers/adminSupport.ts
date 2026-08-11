@@ -64,6 +64,7 @@ type AuditQuery = {
     from?: string
     to?: string
     limit?: string
+    cursor?: string
 }
 
 type AuditEventParams = {
@@ -355,6 +356,7 @@ const supportInspectionFilters = new Set([
     'from',
     'to',
     'limit',
+    'cursor',
 ])
 
 const adminAuditFilters = new Set([
@@ -404,6 +406,7 @@ const adminAuditFilters = new Set([
     'from',
     'to',
     'limit',
+    'cursor',
 ])
 
 export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply) {
@@ -442,6 +445,10 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     const to = text(query.to)
     const parsedLimit = Number(query.limit || 200)
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 500) : 200
+    const cursor = decodeAuditCursor(text(query.cursor))
+    if (text(query.cursor) && !cursor) {
+        return res.status(400).send(supportError('invalid_audit_cursor', 'Audit cursor is invalid.'))
+    }
     const filterError = adminAuditFilterError(query, { severity, outcome, from, to, limit })
     if (filterError) {
         return res.status(400).send(filterError)
@@ -508,6 +515,9 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     if (outcome) where.push(`e.outcome = ${add(outcome)}`)
     if (from && !Number.isNaN(Date.parse(from))) where.push(`e.created_at >= ${add(new Date(from).toISOString())}`)
     if (to && !Number.isNaN(Date.parse(to))) where.push(`e.created_at <= ${add(new Date(to).toISOString())}`)
+    if (cursor) {
+        where.push(`(e.created_at, e.id) < (${add(cursor.createdAt)}, ${add(cursor.id)})`)
+    }
 
     const result = await run(`
         SELECT
@@ -537,14 +547,25 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
         LEFT JOIN organizations organization ON organization.id = e.organization_id
         ${where.length ? `WHERE ${where.join('\n          AND ')}` : ''}
         ORDER BY e.created_at DESC
-        LIMIT ${add(limit)}
+        LIMIT ${add(limit + 1)}
     `, values)
 
-    const events = result.rows.map(toAdminAuditEvent)
+    const pageRows = result.rows.slice(0, limit)
+    const events = pageRows.map(toAdminAuditEvent)
     const timeline = events.map(event => event.detail.timelineEvent)
-    const filters = { q, org, actor: actorFilter, target, action, severity, source, service, entity, entityType, request, correlation, idempotency, supportSession, workflow, blocker, reason, scope, context: contextFilter, outcome, from, to, limit }
+    const nextCursor = result.rows.length > limit && pageRows.length ? encodeAuditCursor(pageRows[pageRows.length - 1].created_at, pageRows[pageRows.length - 1].id) : null
+    const filters = { q, org, actor: actorFilter, target, action, severity, source, service, entity, entityType, request, correlation, idempotency, supportSession, workflow, blocker, reason, scope, context: contextFilter, outcome, from, to, limit, cursor: text(query.cursor) }
     return res.send({
         events,
+        pagination: {
+            limit,
+            cursor: text(query.cursor) || null,
+            nextCursor,
+            previousCursor: null,
+            appliedFilters: filters,
+            sortField: 'createdAt',
+            direction: 'desc',
+        },
         filters,
         detail: {
             schemaVersion: 'admin.audit.timeline.v1',
@@ -570,6 +591,23 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
             copyText: events.slice(0, 20).map(event => event.detail.copyText).join('\n'),
         },
     })
+}
+
+function encodeAuditCursor(createdAt: unknown, id: unknown) {
+    return encodeURIComponent(JSON.stringify({ createdAt: new Date(String(createdAt)).toISOString(), id: Number(id) }))
+}
+
+function decodeAuditCursor(value: string) {
+    if (!value) return null
+    try {
+        const parsed = JSON.parse(decodeURIComponent(value)) as { createdAt?: unknown, id?: unknown }
+        const createdAt = new Date(String(parsed.createdAt || ''))
+        const id = Number(parsed.id)
+        if (!Number.isFinite(createdAt.getTime()) || !Number.isSafeInteger(id) || id <= 0) return null
+        return { createdAt: createdAt.toISOString(), id }
+    } catch {
+        return null
+    }
 }
 
 export async function getAdminAuditEvent(req: FastifyRequest<{ Params: AuditEventParams }>, res: FastifyReply) {

@@ -8,6 +8,7 @@ import syncUserCertificatesToVm from '#utils/vms/syncUserCertificatesToVm.ts'
 import config from '#constants'
 import { canUseLocalLxd, provisionLocalLxdInstance } from '#utils/vms/lxd.ts'
 import recordLog from '#utils/logs/recordLog.ts'
+import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
 
 export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     const body = req.body as {
@@ -22,6 +23,7 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     let created_by = body.created_by
 
     const internal = hasInternalToken(req)
+    let actorId: string | null = null
     if (!internal) {
         const { valid, id } = await tokenWrapper(req, res)
         if (!valid || !id) {
@@ -29,6 +31,7 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
         }
 
         const { valid: validRole } = await hasRole(req, res, 'system_admin')
+        actorId = id
         owner = validRole ? owner || id : id
         created_by = validRole ? created_by || id : id
     }
@@ -85,6 +88,21 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
 
             await provisionIfLocal(name, req, body.provision_local !== false)
 
+            await recordAdminAuditEvent(req, {
+                actionType: 'vm.access.updated',
+                actorId,
+                targetType: 'vm',
+                targetId: name,
+                context: {
+                    owner: nextOwner,
+                    creator: nextCreatedBy,
+                    accessUsers: nextAccessUsers ?? [],
+                    previousOwner: existing.owner,
+                    previousCreator: existing.created_by,
+                    previousAccessUsers: existing.access_users ?? [],
+                },
+            })
+
             return res.status(201).send(result.rows[0])
         }
 
@@ -111,6 +129,18 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
         }).catch((error) => {
             req.log.warn({ err: error, vmName: name }, 'Unable to synchronize user certificates to the VM after creation.')
             void recordVmProvisioningError(name, error, 'certificate_sync')
+        })
+
+        await recordAdminAuditEvent(req, {
+            actionType: 'vm.created',
+            actorId,
+            targetType: 'vm',
+            targetId: name,
+            context: {
+                owner,
+                creator: created_by,
+                accessUsers: access_users ?? [],
+            },
         })
 
         return res.status(201).send(result.rows[0])
