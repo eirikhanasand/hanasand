@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { cookies } from 'next/headers'
 import config from '@/config'
 import { buildRouteMetadata } from '../seo'
-import BrowserPageClient, { type BrowserInitialData } from './pageClient'
+import BrowserPageClient, { sanitizeHistory, type BrowserInitialData } from './pageClient'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Browser',
@@ -39,7 +39,7 @@ async function loadBrowserInitialData(): Promise<BrowserInitialData> {
             statsResponse.ok ? statsResponse.json() as Promise<BrowserInitialData['stats']> : null,
         ])
         return {
-            history: Array.isArray(runs?.runs) ? runs.runs : [],
+            history: sanitizeHistory(runs?.runs),
             quota: runs?.quota || null,
             stats: stats || fallback.stats,
         }
