@@ -1,32 +1,9 @@
 import { strict as assert } from 'node:assert'
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, test } from 'node:test'
-import { dwmOrganizationMutationDenial, dwmStorageScope, resolveDwmRequestScope, withDwmRequestScope } from '../src/app/api/dwm/_tiProxy'
-import { exposureQueueFallback, normalizeExposureQueue } from '../src/app/exposureQueue'
+import { resolveDwmRequestScope, withDwmRequestScope } from '../src/app/api/dwm/_tiProxy'
 
 describe('DWM tenant scope', () => {
-    test('keeps unavailable exposure data distinct from an empty successful feed', () => {
-        assert.deepEqual(exposureQueueFallback('unavailable', 10), {
-            generatedAt: '',
-            status: 'unavailable',
-            page: { limit: 10, offset: 0 },
-            items: [],
-        })
-        assert.equal(normalizeExposureQueue({}).status, 'unavailable')
-        assert.equal(normalizeExposureQueue({ items: [] }).status, 'unavailable')
-    })
-
-    test('bounds shared exposure reads without changing unavailable semantics', () => {
-        const sharedQueue = readFileSync(new URL('../src/utils/dwm/sharedExposureQueue.ts', import.meta.url), 'utf8')
-        const homepage = readFileSync(new URL('../src/app/page.tsx', import.meta.url), 'utf8')
-        const activity = readFileSync(new URL('../src/app/activity/page.tsx', import.meta.url), 'utf8')
-
-        assert.match(sharedQueue, /EXPOSURE_QUEUE_TIMEOUT_MS = 8000/)
-        assert.match(sharedQueue, /AbortSignal\.timeout\(options\.timeoutMs \?\? EXPOSURE_QUEUE_TIMEOUT_MS\)/)
-        assert.match(homepage, /timeoutMs: 8000/)
-        assert.match(activity, /timeoutMs: 8000/)
-    })
-
     test('derives a personal tenant from the authenticated identity', () => {
         const scope = resolveDwmRequestScope({
             identityId: 'user-123',
@@ -47,7 +24,6 @@ describe('DWM tenant scope', () => {
         })
 
         assert.deepEqual(scope, { tenantId: 'org-456', organizationId: 'org-456' })
-        assert.deepEqual(dwmStorageScope(scope), { tenantId: 'org-456', organizationId: 'org-456' })
     })
 
     test('rejects conflicting organization scopes', () => {
@@ -73,32 +49,12 @@ describe('DWM tenant scope', () => {
         })
 
         assert.deepEqual(scope, { tenantId: 'org-456', organizationId: 'org-456' })
-        assert.deepEqual(withDwmRequestScope({ items: [{ tenantId: 'another-tenant', organizationId: 'org-456', actor: 'Actor' }] }, dwmStorageScope(scope)), {
+        assert.deepEqual(withDwmRequestScope({ items: [{ tenantId: 'another-tenant', organizationId: 'org-456', actor: 'Actor' }] }, scope), {
             tenantId: 'org-456',
             organizationId: 'org-456',
             orgId: 'org-456',
             items: [{ tenantId: 'org-456', organizationId: 'org-456', orgId: 'org-456', actor: 'Actor' }],
         })
-    })
-
-    test('forwards explicit organization scope and preserves repeated evidence selections', () => {
-        const proxy = readFileSync(new URL('../src/app/api/dwm/_tiProxy.ts', import.meta.url), 'utf8')
-
-        assert.match(proxy, /target\.searchParams\.append\(key, value\)/)
-        assert.match(proxy, /target\.searchParams\.set\('organizationId', storageScope\.organizationId\)/)
-        assert.match(proxy, /target\.searchParams\.set\('orgId', storageScope\.organizationId\)/)
-        assert.match(proxy, /'x-organization-id': storageScope\.organizationId/)
-        assert.doesNotMatch(proxy, /target\.searchParams\.set\(key, value\)/)
-    })
-
-    test('keeps organization mutations active and role scoped', () => {
-        assert.equal(dwmOrganizationMutationDenial({ lifecycleStatus: 'active', role: 'admin' }), null)
-        assert.equal(dwmOrganizationMutationDenial({ lifecycleStatus: 'active', role: 'member' }), null)
-        assert.deepEqual(dwmOrganizationMutationDenial({ lifecycleStatus: 'active', role: 'viewer' }), {
-            status: 403,
-            error: { code: 'organization_access_denied', message: 'Your organization role cannot change DWM data.' },
-        })
-        assert.equal(dwmOrganizationMutationDenial({ lifecycleStatus: 'archived', role: 'owner' })?.status, 409)
     })
 
     test('keeps the legacy URL as a redirect without retaining sample pages', () => {
@@ -115,8 +71,6 @@ describe('DWM tenant scope', () => {
         const actions = readFileSync(new URL('../src/app/dashboard/dwm/dwm-workflow-actions.tsx', import.meta.url), 'utf8')
         const readinessRoute = readFileSync(new URL('../src/app/api/dwm/alerts/generation-readiness/route.ts', import.meta.url), 'utf8')
         const exposureQueueRoute = readFileSync(new URL('../src/app/api/dwm/exposure-queue/route.ts', import.meta.url), 'utf8')
-        const deliveryRoute = readFileSync(new URL('../src/app/api/dwm/webhooks/deliver/route.ts', import.meta.url), 'utf8')
-        const deliveryTestRoute = readFileSync(new URL('../src/app/api/dwm/webhooks/test/route.ts', import.meta.url), 'utf8')
 
         assert.doesNotMatch(portal, /hanasand:dwm-case-state/)
         assert.doesNotMatch(portal, /new Date\(\)\.toISOString\(\)/)
@@ -128,19 +82,5 @@ describe('DWM tenant scope', () => {
         assert.doesNotMatch(actions, /at: new Date\(\)\.toISOString\(\)/)
         assert.doesNotMatch(readinessRoute, /productProgress|ProofLedger|tenantId.*default/)
         assert.doesNotMatch(exposureQueueRoute, /generatedAt: new Date|status: 'checking'/)
-        assert.doesNotMatch(deliveryRoute, /clean\(body\.tenantId\)/)
-        assert.match(deliveryRoute, /dryRun: body\.dryRun === true/)
-        assert.match(deliveryTestRoute, /dryRun: true, live: false/)
-        assert.match(portal, /setRefreshVersion\(version => version \+ 1\)/)
-        assert.match(portal, /pendingInitialAlertId/)
-        assert.match(portal, /const sharedCaptureCount = operations\?\.counts\.captureCount/)
-        assert.match(portal, /const tenantRunCaptureCount = operations\?\.latestRun\?\.captureCount \?\? 0/)
-        assert.match(portal, /shared active sources.*shared captures/)
-        assert.match(portal, /shared sources active/)
-        assert.match(portal, /shared capture/)
-        assert.doesNotMatch(portal, /accepted capture/)
-        assert.match(portal, /captureCount: tenantRunCaptureCount/)
-        assert.doesNotMatch(portal, /captureRunLabel\(operations\?\.latestRun\?\.captureCount, captureCount/)
-        assert.match(actions, /onChanged\?\.\(\)/)
     })
 })

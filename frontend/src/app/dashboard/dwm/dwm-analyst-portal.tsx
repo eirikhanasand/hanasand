@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { Fragment, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, RotateCcw, Send, ShieldCheck, SlidersHorizontal, UserRound, XCircle } from 'lucide-react'
@@ -181,6 +181,7 @@ type DataHealthItem = {
 
 type QueueFilter = 'active' | 'ready' | 'critical' | 'source' | 'high_confidence' | 'fresh' | 'pending_delivery' | 'reviewing' | 'delivered' | 'muted' | 'all'
 type InvestigationTab = 'evidence' | 'entities' | 'sources' | 'delivery'
+const DWM_QUEUE_PREVIEW_ROWS = 5
 const DWM_TIMELINE_PREVIEW_ROWS = 4
 const DWM_RECOVERY_PREVIEW_ROWS = 3
 const DWM_DELIVERY_PREVIEW_ROWS = 3
@@ -206,8 +207,6 @@ export function DwmAnalystPortal({
     const [selectedId, setSelectedId] = useState(initialAlertId && alerts.some(alert => alert.id === initialAlertId) ? initialAlertId : alerts[0]?.id ?? '')
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [localDeliveries, setLocalDeliveries] = useState<DeliveryItem[]>(initialDeliveries)
-    const [refreshVersion, setRefreshVersion] = useState(0)
-    const pendingInitialAlertId = useRef(initialAlertId)
     const [queueFilter, setQueueFilter] = useState<QueueFilter>(() => normalizeQueueFilter(searchParams.get('filter')))
     const [queueQuery] = useState(() => searchParams.get('q')?.slice(0, 120) ?? '')
     const queue = useMemo(() => filterAlerts(orderAlerts(alerts), queueFilter, queueQuery), [alerts, queueFilter, queueQuery])
@@ -431,8 +430,60 @@ function AlertReviewPanel({ alerts, busyAction, onOpenCase, organizationId }: {
                                     </button>
                                 )}
                             </div>
-                        )
-                    })}
+                        </div>
+                        <div className='max-h-[480px] overflow-auto'>
+                            {queue.length ? visibleQueue.map(alert => (
+                                <button
+                                    key={alert.id}
+                                    type='button'
+                                    onClick={() => selectAlert(alert)}
+                                    className={`grid w-full gap-1 border-b border-ui-border px-3 py-2 text-left transition last:border-b-0 ${selectedAlert?.id === alert.id ? 'bg-ui-panel' : 'hover:bg-ui-panel'}`}
+                                >
+                                    <div className='flex min-w-0 items-center justify-between gap-2'>
+                                        <span className='truncate text-sm font-semibold text-ui-text'>{alert.company}</span>
+                                        <span className={severityClass(alert.severity)}>{alert.severity}</span>
+                                    </div>
+                                    <p className='truncate text-xs font-semibold text-ui-muted'>Watched term: {alert.matchedTerm.value}</p>
+                                    <p className='line-clamp-1 text-xs leading-5 text-ui-muted'>{safeAlertSummary(alert)}</p>
+                                    <span className='flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 text-[11px] leading-4 text-ui-muted'>
+                                        <span>{stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)}</span>
+                                        <span className={alert.routingContext?.urgency === 'immediate' || alert.severity === 'critical' ? 'font-semibold text-ui-danger' : ''}>{stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))}</span>
+                                        <span>{alert.evidenceSummary?.evidenceCount ?? alert.evidence.length} evidence</span>
+                                        <span>{relativeTimeLabel(alert.lastSeenAt || alert.evidenceSummary?.lastObservedAt || alert.firstSeenAt)}</span>
+                                    </span>
+                                </button>
+                            )) : (
+                                <div className='rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 text-sm leading-6 text-ui-muted'>
+                                    {alerts.length ? 'No attacks match the current filters.' : 'No alert is waiting for review. Monitoring stays live while watchlist terms listen for new captures.'}
+                                </div>
+                            )}
+                            {queue.length > visibleQueue.length && (
+                                <p className='px-2 py-1 text-xs leading-5 text-ui-muted'>Narrow the search or filters to see more matching attacks.</p>
+                            )}
+                        </div>
+                    </aside>
+
+                    <main className='order-1 min-w-0 bg-ui-panel xl:order-none'>
+                        {selectedAlert ? (
+                            <CaseWorkspace
+                                key={`${tenantId}:${selectedAlert.id}`}
+                                alert={selectedAlert}
+                                deliveries={selectedDeliveries}
+                                sourceCoverage={snapshot.sourceCoverage}
+                                sourceHealth={operations?.sourceHealth ?? []}
+                                busyAction={busyAction}
+                                actionMessage={message}
+                                onUpdate={updateAlert}
+                                onOpenCase={openCase}
+                                onReplay={replayAlert}
+                                onTest={testDelivery}
+                                onSend={sendAlert}
+                            />
+                        ) : (
+                            <NoCaseWorkspace latestCaptures={latestCaptures} workflowActions={workflowActions} watchTermCount={watchTermCount} dataHealth={dataHealth} />
+                        )}
+                    </main>
+
                 </div>
             )}
         </section>
@@ -614,26 +665,6 @@ async function refreshDwmAlerts(
         setDataHealth(current => ({ ...current, alerts: { state: 'live', label: 'Alerts live', detail: `${savedAlerts.length} saved alert(s).` } }))
     } catch (error) {
         if (!isAbortError(error)) setDataHealth(current => ({ ...current, alerts: { state: 'error', label: 'Alerts unavailable', detail: requestFailureDetail(error) } }))
-    }
-}
-
-async function refreshCases(
-    params: URLSearchParams,
-    signal: AbortSignal,
-    setCasesState: Dispatch<SetStateAction<CasesState>>,
-) {
-    setCasesState({ status: 'loading', rows: [] })
-    try {
-        const response = await fetch(`/api/cases?${params.toString()}`, { cache: 'no-store', signal })
-        if (!response.ok) {
-            setCasesState({ status: 'error', rows: [], error: await responseProblem(response) })
-            return
-        }
-        const payload = await response.json() as { items?: CaseListItem[], cases?: CaseListItem[] }
-        const rows = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.cases) ? payload.cases : []
-        setCasesState({ status: 'ready', rows })
-    } catch (error) {
-        if (!isAbortError(error)) setCasesState({ status: 'error', rows: [], error: requestFailureDetail(error) })
     }
 }
 
@@ -883,6 +914,12 @@ function alertWatchlistMatchCount(alerts: PortalAlert[]) {
     return uniqueStrings(alerts.map(alert => alert.matchedTerm.value)).length
 }
 
+function captureRunLabel(runCaptureCount = 0, captureCount = 0, activeSourceCount = 0) {
+    if (runCaptureCount > 0) return `${runCaptureCount} captures`
+    if (captureCount > 0) return `${captureCount} captures`
+    return activeSourceCount ? 'collecting' : 'source'
+}
+
 function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAction, actionMessage, onUpdate, onOpenCase, onReplay, onTest, onSend }: {
     alert: PortalAlert
     deliveries: DeliveryItem[]
@@ -922,8 +959,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAc
     const selectedEvidence = alert.evidence.find(item => item.id === selectedEvidenceId) ?? visibleEvidence[0] ?? alert.evidence[0]
     const [copiedHash, setCopiedHash] = useState('')
     const analystBrief = buildAnalystBrief(alert, evidenceSummary, routingContext, workflowContext)
-    const caseId = alertCaseId(alert)
-    const caseHref = caseId ? caseDetailHref(caseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined
+    const caseHref = workflowContext.casePath || (workflowContext.caseId ? caseDetailHref(workflowContext.caseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined)
     const timeline = buildTimeline(alert, deliveries)
     async function copyHash(value: string) {
         try {
@@ -1640,7 +1676,7 @@ function EvidenceDispositionQueue({ alert, visibleEvidence, selectedEvidence, se
                                 </td>
                                 <td className='px-3 py-3'>
                                     <p className='max-w-45 truncate font-semibold text-ui-text' title={item.sourceName}>{item.sourceName}</p>
-                                    <p className='mt-1 text-[11px] text-ui-muted'>{stateLabel(item.sourceFamily)} · {evidenceObservedAt(item) ? relativeTimeLabel(evidenceObservedAt(item)!) : 'time unknown'}</p>
+                                    <p className='mt-1 text-[11px] text-ui-muted'>{stateLabel(item.sourceFamily)} · {relativeTimeLabel(item.observedAt || item.firstSeenAt || alert.firstSeenAt)}</p>
                                 </td>
                                 <td className='px-3 py-3'>
                                     <div className='grid gap-1'>
@@ -2006,9 +2042,9 @@ function NoCaseWorkspace({ latestCaptures, workflowActions, watchTermCount, data
         },
         {
             stage: 'Collection',
-            state: hasError ? 'Live data unavailable' : latestCaptures.length ? `${latestCaptures.length} shared capture${latestCaptures.length === 1 ? '' : 's'}` : allLive ? 'No retained match yet' : 'Loading retained evidence',
+            state: hasError ? 'Live data unavailable' : latestCaptures.length ? `${latestCaptures.length} accepted capture${latestCaptures.length === 1 ? '' : 's'}` : allLive ? 'No retained match yet' : 'Loading retained evidence',
             action: 'Run collection',
-            detail: newestCapture ? `Shared source: ${newestCapture.sourceName} ${relativeTimeLabel(newestCapture.collectedAt)}` : hasError ? healthRows.filter(item => item.state === 'error').map(item => item.detail).join(' ') : 'Approved shared-source records appear after duplicate and safety checks.',
+            detail: newestCapture ? `${newestCapture.sourceName} ${relativeTimeLabel(newestCapture.collectedAt)}` : hasError ? healthRows.filter(item => item.state === 'error').map(item => item.detail).join(' ') : 'Approved source records appear after duplicate and safety checks.',
         },
         {
             stage: 'Case link',

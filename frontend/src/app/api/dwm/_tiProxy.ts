@@ -40,28 +40,24 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
             return NextResponse.json({ error: { code: 'invalid_scope', message: scope.error } }, { status: 400 })
         }
         if (scope.organizationId) {
-            const scopeError = await organizationScopeError(scope.organizationId, token, id, method !== 'GET')
+            const scopeError = await organizationScopeError(scope.organizationId, token, id)
             if (scopeError) return scopeError
         }
-        const storageScope = dwmStorageScope(scope)
         const target = new URL(path, base)
         for (const [key, value] of request.nextUrl.searchParams.entries()) {
             if (key === 'tenantId' || key === 'organizationId' || key === 'orgId') continue
-            target.searchParams.append(key, value)
+            target.searchParams.set(key, value)
         }
-        target.searchParams.set('tenantId', storageScope.tenantId)
-        if (storageScope.organizationId) {
-            target.searchParams.set('organizationId', storageScope.organizationId)
-            target.searchParams.set('orgId', storageScope.organizationId)
-        }
+        target.searchParams.set('tenantId', scope.tenantId)
+        if (scope.organizationId) target.searchParams.set('organizationId', scope.organizationId)
 
         const init: RequestInit = {
             method,
             cache: 'no-store',
             headers: {
                 'content-type': 'application/json',
-                'x-tenant-id': storageScope.tenantId,
-                ...(storageScope.organizationId ? { 'x-organization-id': storageScope.organizationId } : {}),
+                'x-tenant-id': scope.tenantId,
+                ...(scope.organizationId ? { 'x-organization-id': scope.organizationId } : {}),
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 ...(id ? { id } : {}),
                 ...(actorId ? { 'x-actor-id': actorId, 'x-user-id': actorId } : {}),
@@ -71,7 +67,7 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
         }
 
         if (method !== 'GET') {
-            init.body = JSON.stringify(withDwmRequestScope(body || {}, storageScope))
+            init.body = JSON.stringify(withDwmRequestScope(body || {}, scope))
         }
 
         const response = await fetch(target, init)
@@ -131,14 +127,7 @@ export function withDwmRequestScope(body: Record<string, unknown>, scope: Pick<D
     return scoped
 }
 
-export function dwmStorageScope(scope: Pick<DwmRequestScope, 'tenantId' | 'organizationId'>) {
-    return {
-        tenantId: scope.tenantId,
-        ...(scope.organizationId ? { organizationId: scope.organizationId } : {}),
-    }
-}
-
-export async function organizationScopeError(organizationId: string, token: string, id: string, mutation: boolean) {
+async function organizationScopeError(organizationId: string, token: string, id: string) {
     try {
         const target = new URL(`${authApiUrl().replace(/\/$/, '')}/organizations/${encodeURIComponent(organizationId)}`)
         const response = await fetch(target, {
@@ -149,14 +138,7 @@ export async function organizationScopeError(organizationId: string, token: stri
             },
             signal: AbortSignal.timeout(8000),
         })
-        if (response.ok) {
-            if (!mutation) return null
-            const payload = await response.json().catch(() => null) as Record<string, unknown> | null
-            const organization = isRecord(payload?.organization) ? payload.organization : {}
-            const denial = dwmOrganizationMutationDenial(organization)
-            if (denial) return NextResponse.json({ error: denial.error }, { status: denial.status, headers: { 'cache-control': 'no-store' } })
-            return null
-        }
+        if (response.ok) return null
         const notFound = response.status === 404
         const accessDenied = response.status === 401 || response.status === 403
         return NextResponse.json({
@@ -168,16 +150,6 @@ export async function organizationScopeError(organizationId: string, token: stri
     } catch {
         return NextResponse.json({ error: { code: 'organization_unavailable', message: 'Organization access could not be verified.' } }, { status: 502 })
     }
-}
-
-export function dwmOrganizationMutationDenial(organization: Record<string, unknown>) {
-    if (clean(organization.lifecycleStatus) !== 'active') {
-        return { status: 409, error: { code: 'organization_inactive', message: 'Organization DWM changes require an active organization.' } }
-    }
-    if (!['owner', 'admin', 'member'].includes(clean(organization.role))) {
-        return { status: 403, error: { code: 'organization_access_denied', message: 'Your organization role cannot change DWM data.' } }
-    }
-    return null
 }
 
 function parseJsonObject(value: string) {

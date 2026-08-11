@@ -10,8 +10,7 @@ test('public workflow reliability contracts are not demo-only', async () => {
     const pwnedPage = await readFile(path.join(root, 'src/app/pwned/pageClient.tsx'), 'utf8')
     const registerPage = await readFile(path.join(root, 'src/app/register/pageClient.tsx'), 'utf8')
     const contact = await readFile(path.join(root, 'src/components/contact/contact.tsx'), 'utf8')
-    const contactClient = await readFile(path.join(root, 'src/utils/contact/submitContactRequest.ts'), 'utf8')
-    const contactHandler = await readFile(path.join(root, '../api/src/handlers/commercialContactRequests.ts'), 'utf8')
+    const contactRoute = await readFile(path.join(root, 'src/app/api/contact/route.ts'), 'utf8')
     const apiPwnedHandler = await readFile(path.join(root, '../api/src/handlers/pwned/post.ts'), 'utf8')
     const apiPwnedUtility = await readFile(path.join(root, '../api/src/utils/pwned/checkPwned.ts'), 'utf8')
 

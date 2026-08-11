@@ -28,6 +28,7 @@ export default async function DwmCaseDetailPage({
                 tenantId={tenantId}
                 organizationId={organizationId}
                 alertId={firstParam(query?.alertId)}
+                routeRun={firstParam(query?.route)}
             />
         </DashboardPage>
     )

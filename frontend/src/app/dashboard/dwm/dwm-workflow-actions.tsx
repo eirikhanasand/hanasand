@@ -39,7 +39,7 @@ type WorkflowRouteSummary = {
     deliveryState?: string
 }
 
-export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, telemetry, onChanged }: { tenantId: string, organizationId?: string, initialTerms: string[], telemetry?: WorkflowTelemetry, onChanged?: () => void }) {
+export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, telemetry }: { tenantId: string, organizationId?: string, initialTerms: string[], telemetry?: WorkflowTelemetry }) {
     const router = useRouter()
     const webhookInputRef = useRef<HTMLInputElement>(null)
     const watchlistInputRef = useRef<HTMLTextAreaElement>(null)
@@ -107,11 +107,12 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         setResult(null)
 
         const company = claimCompany.trim()
+        const claimedData = claimData.trim()
         const url = claimUrl.trim()
         const nextTerms = ensureTerm(terms, company)
 
-        if (!company || !validEvidenceUrl(url)) {
-            setResult({ ok: false, message: 'Subject and an HTTPS source URL are required.' })
+        if (!actor || !company || !claimedData || !validEvidenceUrl(url)) {
+            setResult({ ok: false, message: 'Actor, affected company, exposure details, and an HTTPS source URL are required.' })
             setBusyAction(null)
             return
         }
@@ -131,7 +132,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             setClaimUrl('')
             setResult({ ok: rebuild.ok, message: rebuild.ok ? `Collected ${accepted} public incident report${accepted === 1 ? '' : 's'}. Matched ${savedAlertCount} alert${savedAlertCount === 1 ? '' : 's'}.` : rebuild.message })
             setLastRoute({
-                label: 'Public advisory',
+                label: 'Metadata intake',
                 watchTerms: countTerms(nextTerms),
                 captureCount: accepted,
                 alertCount: savedAlertCount,
@@ -149,11 +150,12 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         setResult(null)
 
         const company = claimCompany.trim()
+        const claimedData = claimData.trim()
         const url = claimUrl.trim()
         const nextTerms = ensureTerm(terms, company)
 
-        if (!company || !validEvidenceUrl(url)) {
-            setResult({ ok: false, message: 'Subject and an HTTPS source URL are required.' })
+        if (!actor || !company || !claimedData || !validEvidenceUrl(url)) {
+            setResult({ ok: false, message: 'Actor, affected company, exposure details, and an HTTPS source URL are required.' })
             setBusyAction(null)
             return
         }
@@ -208,7 +210,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             setTerms(nextTerms)
             setClaimUrl('')
             setLastRoute({
-                label: 'Public advisory case',
+                label: 'Metadata case',
                 watchTerms: countTerms(nextTerms),
                 captureCount: accepted,
                 alertCount: 1,
@@ -227,7 +229,131 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             if (caseId) {
                 router.push(caseDetailPath(caseId, alert.id, organizationId, 'public_advisory'))
             } else {
-                refreshWorkspace()
+                router.refresh()
+            }
+        } catch (error) {
+            setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
+        } finally {
+            setBusyAction(null)
+        }
+    }
+
+    async function runSourcePackToCase() {
+        setBusyAction('source-case')
+        setResult(null)
+        const nextTerms = workflowTerms(terms)
+
+        try {
+            const watchlist = await saveWatchlistTerms(nextTerms)
+            if (!watchlist.ok) throw new Error(watchlist.message)
+
+            const telegram = await postJson('/api/dwm/source-requests', {
+                ...scope,
+                seedPackIds: ['telegram-ransomware-claim-watch', 'telegram-stealer-broker-watch', 'telegram-regional-language-watch'],
+                activate: true,
+                limit: 60,
+                scope: nextTerms,
+            })
+            if (!telegram.ok) throw new Error(telegram.message)
+
+            const darkweb = await postJson('/api/dwm/darkweb/approve-metadata', {
+                ...scope,
+                seedPackIds: ['darkweb-actor-metadata-core', 'darkweb-market-metadata-watch'],
+                activate: true,
+                approveMetadataOnly: true,
+                approvedBy: 'dashboard',
+                limit: 68,
+                scope: nextTerms,
+            })
+            if (!darkweb.ok) throw new Error(darkweb.message)
+
+            const advisory = await enablePublicAdvisorySources(nextTerms, 24)
+            if (!advisory.ok) throw new Error(advisory.message)
+
+            const run = await postJson('/api/dwm/canary/run', {
+                ...scope,
+                operatorApproval: true,
+                approvedBy: 'dashboard',
+                maxSources: 48,
+                maxTasks: 96,
+            })
+            if (!run.ok) throw new Error(run.message)
+
+            const rebuild = await postJson('/api/dwm/alerts/rebuild', scope)
+            if (!rebuild.ok) throw new Error(rebuild.message)
+            const alert = selectRebuiltAlert(rebuild, '', nextTerms)
+            const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
+            const captureCount = readNumber(run.canaryRun, 'insertedCaptureCount')
+            const telegramCount = readSummaryNumber(telegram, 'telegramPublicCreated')
+            const darkwebCount = readSummaryNumber(darkweb, 'darkwebMetadataCreated')
+            const advisorySummary = advisory.summary && typeof advisory.summary === 'object' ? advisory.summary as Record<string, unknown> : {}
+            const advisoryCount = typeof advisorySummary.publicAdvisoryCreated === 'number' ? advisorySummary.publicAdvisoryCreated : 0
+            if (!alert?.id) {
+                setTerms(nextTerms)
+                setLastRoute({
+                    label: 'Source pack run',
+                    watchTerms: countTerms(nextTerms),
+                    sourceCount: telegramCount + darkwebCount + advisoryCount,
+                    captureCount,
+                    alertCount: savedAlertCount,
+                })
+                setResult({ ok: true, message: `Sources updated. Collected ${captureCount} capture(s) and rebuilt ${savedAlertCount} alert(s). No watchlist match opened a case.` })
+                router.refresh()
+                return
+            }
+
+            const casePayload = await postJson(`/api/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`, {
+                ...scope,
+                actor: 'dashboard',
+                note: 'Case opened from source-pack collection.',
+                idempotencyKey: `dashboard-source-pack-case:${alert.id}`,
+            })
+            if (!casePayload.ok) throw new Error(casePayload.message)
+            const caseId = readNestedString(casePayload, ['case', 'id']) || readNestedString(casePayload, ['alertCaseHandoff', 'caseId'])
+
+            let deliveryText = ''
+            let deliveryAttempts: number | undefined
+            let deliveryReady = false
+            if (webhookConfigured) {
+                const delivery = await postJson('/api/dwm/webhooks/deliver', {
+                    ...scope,
+                    alertId: alert.id,
+                    caseId: caseId || undefined,
+                    limit: 1,
+                    dryRun: true,
+                    webhookUrl: webhookUrl.trim(),
+                    attachToWatchlist: true,
+                })
+                if (!delivery.ok) throw new Error(delivery.message)
+                const attemptedCount = typeof delivery.attemptedCount === 'number' ? delivery.attemptedCount : 0
+                deliveryAttempts = attemptedCount
+                deliveryReady = attemptedCount > 0
+                deliveryText = deliveryReady ? ' Dry-run delivery recorded.' : ' Delivery needs setup.'
+            }
+
+            setTerms(nextTerms)
+            setLastRoute({
+                label: 'Full route',
+                watchTerms: countTerms(nextTerms),
+                sourceCount: telegramCount + darkwebCount + advisoryCount,
+                captureCount,
+                alertCount: savedAlertCount,
+                alertId: alert.id,
+                caseId: caseId || undefined,
+                caseHref: caseId ? caseDetailPath(caseId, alert.id, organizationId, 'source_pack') : undefined,
+                deliveryAttempts,
+                deliveryState: deliveryText ? (deliveryReady ? deliveryText.trim() : 'Delivery needs setup. Configure or test a destination before sending customer notification.') : undefined,
+            })
+            setResult({
+                ok: true,
+                message: `Added ${advisoryCount} public advisory source(s), collected ${captureCount} capture(s), rebuilt ${savedAlertCount} alert(s), opened ${caseId || 'a case'}.${deliveryReady ? deliveryText : deliveryText ? ' Configure or test a destination before sending customer notification.' : ''}`,
+                actionHref: deliveryText && !deliveryReady ? deliverySetupHref(organizationId, alert.id, caseId || undefined) : undefined,
+                actionLabel: deliveryText && !deliveryReady ? 'Configure delivery' : undefined,
+            })
+            if (caseId) {
+                router.push(caseDetailPath(caseId, alert.id, organizationId, 'source_pack'))
+            } else {
+                router.refresh()
             }
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
@@ -300,7 +426,97 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 captureCount,
                 alertCount: savedAlertCount,
             })
-            refreshWorkspace()
+            router.refresh()
+        } catch (error) {
+            setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
+        } finally {
+            setBusyAction(null)
+        }
+    }
+
+    async function expandTelegramCoverage() {
+        setBusyAction('telegram-pack')
+        setResult(null)
+        const nextTerms = workflowTerms(terms)
+
+        try {
+            const watchlist = await saveWatchlistTerms(nextTerms)
+            if (!watchlist.ok) throw new Error(watchlist.message)
+
+            const applied = await postJson('/api/dwm/source-requests', {
+                ...scope,
+                seedPackIds: ['telegram-ransomware-claim-watch', 'telegram-stealer-broker-watch', 'telegram-regional-language-watch'],
+                activate: true,
+                limit: 60,
+                scope: nextTerms,
+            })
+            if (!applied.ok) throw new Error(applied.message)
+
+            const run = await postJson('/api/dwm/canary/run', {
+                ...scope,
+                operatorApproval: true,
+                approvedBy: 'dashboard',
+                maxSources: 48,
+                maxTasks: 96,
+            })
+            if (!run.ok) throw new Error(run.message)
+
+            const rebuild = await postJson('/api/dwm/alerts/rebuild', scope)
+            const summary = applied.summary && typeof applied.summary === 'object' ? applied.summary as Record<string, unknown> : {}
+            const createdCount = typeof summary.telegramPublicCreated === 'number' ? summary.telegramPublicCreated : 0
+            const duplicateCount = typeof summary.duplicateCount === 'number' ? summary.duplicateCount : 0
+            const captureCount = readNumber(run.canaryRun, 'insertedCaptureCount')
+            const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
+            setTerms(nextTerms)
+            setResult({ ok: true, message: `Added ${createdCount} Telegram canary source(s), skipped ${duplicateCount} duplicate(s), collected ${captureCount} capture(s), rebuilt ${savedAlertCount} alert(s).` })
+            setLastRoute({
+                label: 'Telegram expansion',
+                watchTerms: countTerms(nextTerms),
+                sourceCount: createdCount,
+                captureCount,
+                alertCount: savedAlertCount,
+            })
+            router.refresh()
+        } catch (error) {
+            setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
+        } finally {
+            setBusyAction(null)
+        }
+    }
+
+    async function approveDarkwebMetadata() {
+        setBusyAction('darkweb')
+        setResult(null)
+        const nextTerms = workflowTerms(terms)
+
+        try {
+            const watchlist = await saveWatchlistTerms(nextTerms)
+            if (!watchlist.ok) throw new Error(watchlist.message)
+
+            const approved = await postJson('/api/dwm/darkweb/approve-metadata', {
+                ...scope,
+                seedPackIds: ['darkweb-actor-metadata-core', 'darkweb-market-metadata-watch'],
+                activate: true,
+                approveMetadataOnly: true,
+                approvedBy: 'dashboard',
+                limit: 68,
+                scope: nextTerms,
+            })
+            if (!approved.ok) throw new Error(approved.message)
+            const advisory = await enablePublicAdvisorySources(nextTerms, 24)
+            if (!advisory.ok) throw new Error(advisory.message)
+            const summary = approved.summary && typeof approved.summary === 'object' ? approved.summary as Record<string, unknown> : {}
+            const count = typeof summary.darkwebMetadataCreated === 'number' ? summary.darkwebMetadataCreated : 0
+            const advisorySummary = advisory.summary && typeof advisory.summary === 'object' ? advisory.summary as Record<string, unknown> : {}
+            const advisoryCount = typeof advisorySummary.publicAdvisoryCreated === 'number' ? advisorySummary.publicAdvisoryCreated : 0
+            setTerms(nextTerms)
+            setResult({ ok: true, message: `Approved ${count} dark-web metadata source(s) and ${advisoryCount} public advisory source(s). No payload downloads enabled.` })
+            setLastRoute({
+                label: 'Metadata sources',
+                watchTerms: countTerms(nextTerms),
+                sourceCount: count + advisoryCount,
+            })
+            router.refresh()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
         } finally {
@@ -409,7 +625,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const effectiveTermCount = countTerms(workflowTerms(terms))
     const webhookConfigured = /^https?:\/\//i.test(webhookUrl.trim())
     const sourceReady = sourceTarget.trim().length > 0
-    const claimReady = claimCompany.trim().length > 0 && validEvidenceUrl(claimUrl)
+    const claimReady = claimActor.trim().length > 0 && claimCompany.trim().length > 0 && claimData.trim().length > 0 && validEvidenceUrl(claimUrl)
     const busy = busyAction !== null
     const sourceCount = telemetry?.sourceCount ?? 0
     const activeSourceCount = telemetry?.activeSourceCount ?? 0
@@ -420,7 +636,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const latestRunCaptureCount = telemetry?.latestRunCaptureCount ?? 0
     const watchlistDisabledReason = termCount ? '' : 'Add at least one customer-owned watchlist term.'
     const sourceDisabledReason = sourceReady ? '' : 'Add a public Telegram handle or t.me URL first.'
-    const claimDisabledReason = claimReady ? '' : 'Add the affected subject and an HTTPS source URL.'
+    const claimDisabledReason = claimReady ? '' : 'Add the actor, affected company, exposure details, and an HTTPS source URL.'
     const webhookTestDisabledReason = webhookConfigured ? '' : 'Enter an HTTPS webhook URL before testing delivery.'
     const webhookSendDisabledReason = webhookConfigured || organizationId ? '' : 'Enter an HTTPS webhook URL or open an organization with a saved delivery destination before sending queued alerts.'
     const routeQueue = [
@@ -625,8 +841,12 @@ async function ingestPublicEvidence(input: { company: string, url: string }, sco
         items: [{
             ...scope,
             company: input.company,
-            sourceFamily: 'public_advisory',
-            url: input.url,
+            claimedData: input.claimedData,
+            sourceName: `${input.actor} metadata intake`,
+            sourceFamily: 'darkweb_metadata',
+            title: `${input.actor} has just published a new victim: ${input.company}`,
+            text: `${input.actor} victim: ${input.company}. ${input.claimedData}.`,
+            url: input.url || undefined,
         }],
     })
 }
@@ -873,11 +1093,9 @@ function readNumber(value: unknown, key: string) {
     return typeof candidate === 'number' ? candidate : 0
 }
 
-function durableDeliveryRows(value: Record<string, unknown>) {
-    const rows = Array.isArray(value.deliveries)
-        ? value.deliveries
-        : isRecord(value.delivery)
-            ? [value.delivery]
-            : []
-    return rows.filter(isRecord)
+function readSummaryNumber(value: Record<string, unknown>, key: string) {
+    const summary = value.summary
+    if (!summary || typeof summary !== 'object') return 0
+    const candidate = (summary as Record<string, unknown>)[key]
+    return typeof candidate === 'number' ? candidate : 0
 }
