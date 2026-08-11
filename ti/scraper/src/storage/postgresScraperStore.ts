@@ -2031,7 +2031,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                 ) ranked_latest
                 WHERE latest_rank = 1
               ), productive_runs AS (
-                SELECT record, checked_at, id, source_id, tenant_id, collection_run_id,
+                SELECT health.record, health.checked_at, health.id, health.source_id, health.tenant_id, health.collection_run_id,
                   row_number() OVER (PARTITION BY source_id, tenant_id, collection_run_id ORDER BY checked_at DESC, id DESC) AS run_rank
                 FROM threat_intel.source_health health
                 WHERE success AND useful AND capture_count > 0 AND collection_run_id IS NOT NULL
