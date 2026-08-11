@@ -257,64 +257,36 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(allTasks.tasks).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: foreignTask.id })]));
   });
 
-  test("processes bounded PostgreSQL tasks that are absent from the startup memory window", async () => {
-    const store: any = seededClaimStore();
-    expect(await syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(1);
-    const task = store.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task");
-    store.analystMetadataReviewTasks.delete(task.id);
-    let queryInput: any;
-    store.queryAutomaticReviewRecords = async (input: any) => {
-      queryInput = input;
-      return ({
-      tasksAndEvents: [task],
-      claims: store.listIntelligenceClaims(),
-      incidents: store.listIncidents(),
-      captures: store.listCaptures(),
-      sources: store.listSources(),
-      health: store.listSourceHealthObservations(),
-      claimEvidence: store.listClaimEvidence(),
-      evidenceLinks: store.listEvidenceLinks(),
-      reviews: store.listClaimReviews(),
-      actorIdentities: store.listActorIdentities()
-      });
-    };
+  test("processes a bounded task when it is not hydrated into the task map", async () => {
+    const store: any = new InMemoryScraperStore();
+    const claim = { id: "claim_projection_only", tenantId: "default", claimType: "actor", reviewState: "unreviewed", summary: "Projection-only claim", value: { actor: "APT29" } };
+    store.saveIntelligenceClaim(claim);
+    store.getAnalystMetadataReviewTask = () => undefined;
+    store.queryAutomaticReviewRecords = async () => ({
+      tasksAndEvents: [],
+      claims: [claim],
+      incidents: [],
+      captures: [],
+      sources: [],
+      health: [],
+      claimEvidence: [],
+      evidenceLinks: [],
+      reviews: [],
+      actorIdentities: []
+    });
 
     const cycle = await runAutomaticReviewCycle(options(store), {
       allTenants: true,
       now: firstAt,
-      modelVersion: "hanasand",
+      modelVersion: "test-model",
       limit: 1,
-      concurrency: 1,
-      fetcher: async (_input, init) => {
-        const request = promptRequest(JSON.parse(String(init?.body)).prompt);
-        return completedTools(request, supportedDecision(request));
-      }
+      concurrency: 1
     });
 
-    expect(cycle).toMatchObject({ attempted: 1, results: [{ state: "terminal", action: "confirm" }] });
-    expect(queryInput).toMatchObject({ allTenants: true, taskLimit: 100, modelVersion: "hanasand" });
-    expect(store.getAnalystMetadataReviewTask(task.id)).toMatchObject({ state: "terminal", outcome: "decided" });
-  });
-
-  test("does not recreate tasks that are outside the bounded task window", async () => {
-    const store: any = seededClaimStore();
-    expect(await syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" })).toBe(1);
-    const task = store.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task");
-    store.queryAutomaticReviewRecords = async () => ({
-      tasksAndEvents: [],
-      taskIds: [task.id],
-      claims: store.listIntelligenceClaims(),
-      incidents: store.listIncidents(),
-      captures: store.listCaptures(),
-      sources: store.listSources(),
-      health: store.listSourceHealthObservations(),
-      claimEvidence: store.listClaimEvidence(),
-      evidenceLinks: store.listEvidenceLinks(),
-      reviews: store.listClaimReviews(),
-      actorIdentities: store.listActorIdentities()
-    });
-
-    expect(await syncAutomaticReviewQueue(options(store), { allTenants: true, now: "2026-07-22T10:01:00.000Z", modelVersion: "hanasand" })).toBe(0);
+    expect(cycle).toMatchObject({ queued: 1, attempted: 1, results: [{ state: "quarantined" }] });
+    const persistedTasks = store.listAnalystMetadataReviewTasks().filter((item: any) => item.recordKind === "automatic_intelligence_review_task");
+    expect(persistedTasks).toHaveLength(1);
+    expect(persistedTasks[0]).toMatchObject({ state: "quarantined", lastError: "No governed evidence is linked to this subject" });
   });
 
   test("treats governed metadata-only victim lists as operational source evidence", async () => {

@@ -762,7 +762,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             'duplicateCount', COALESCE(sum(source_health.duplicate_count), 0),
             'lastSuccessAt', max(source_health.checked_at) FILTER (WHERE source_health.success),
             'lastUsefulAt', max(source_health.checked_at) FILTER (WHERE source_health.success AND source_health.useful AND source_health.capture_count > 0),
-            'latest', (array_agg(source_health.record ORDER BY source_health.checked_at DESC, source_health.id DESC))[1]
+            'latest', (
+              SELECT latest_health.record
+              FROM threat_intel.source_health AS latest_health
+              WHERE latest_health.source_id = page.id
+                AND latest_health.tenant_id IS NOT DISTINCT FROM page.tenant_id
+              ORDER BY latest_health.checked_at DESC, latest_health.id DESC
+              LIMIT 1
+            )
           ) AS stats
           FROM threat_intel.source_health
           WHERE source_health.source_id = page.id
@@ -1278,61 +1285,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return { rows, totals, total, nextCursor: offset + rows.length < total ? String(offset + rows.length) : undefined };
   }
 
-  async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string; executableOnly?: boolean }, executor: any = this.sql) {
-    const tenantPredicate = input.tenantId === undefined ? "IS NULL AND $1::text IS NULL" : "= $1::text";
-    const [row] = await executor.unsafe(`
-      WITH source_scope AS MATERIALIZED (
-        SELECT sources.*
-        FROM threat_intel.sources sources
-        WHERE sources.tenant_id ${tenantPredicate}
-          AND (NOT $2::boolean OR sources.collection_executable)
-      ), capture_counts AS (
-        SELECT captures.source_id, captures.tenant_id, count(*) AS capture_count
-        FROM threat_intel.captures captures
-        JOIN source_scope scoped
-          ON scoped.id = captures.source_id
-          AND scoped.tenant_id IS NOT DISTINCT FROM captures.tenant_id
-        WHERE captures.tenant_id ${tenantPredicate}
-        GROUP BY captures.source_id, captures.tenant_id
-      ), latest_health AS (
-        SELECT DISTINCT ON (health.source_id, health.tenant_id)
-          health.source_id, health.tenant_id, health.checked_at, health.success, health.useful, health.capture_count, health.parser_warning_count
-        FROM threat_intel.source_health health
-        JOIN source_scope scoped
-          ON scoped.id = health.source_id
-          AND scoped.tenant_id IS NOT DISTINCT FROM health.tenant_id
-        WHERE health.tenant_id ${tenantPredicate}
-        ORDER BY health.source_id, health.tenant_id, health.checked_at DESC, health.id DESC
-      ), historical_usefulness AS (
-        SELECT health.source_id, health.tenant_id, max(health.checked_at) AS last_useful_at
-        FROM threat_intel.source_health health
-        JOIN source_scope scoped
-          ON scoped.id = health.source_id
-          AND scoped.tenant_id IS NOT DISTINCT FROM health.tenant_id
-        JOIN threat_intel.captures retained
-          ON retained.source_id = health.source_id
-          AND retained.tenant_id ${tenantPredicate}
-          AND retained.record->'metadata'->>'runId' = health.collection_run_id
-        WHERE health.tenant_id ${tenantPredicate}
-          AND health.success
-          AND health.useful
-          AND health.capture_count > 0
-        GROUP BY health.source_id, health.tenant_id
-      ), ranked_sources AS (
-        SELECT sources.*,
-          row_number() OVER (
-            PARTITION BY COALESCE(sources.canonical_feed_key, 'source:' || sources.id)
-            ORDER BY sources.collection_executable DESC,
-              COALESCE(capture_counts.capture_count, 0) DESC,
-              COALESCE(sources.record->>'createdAt', ''),
-              sources.id
-          ) AS canonical_rank
-        FROM source_scope sources
-        LEFT JOIN capture_counts
-          ON capture_counts.source_id = sources.id
-          AND capture_counts.tenant_id IS NOT DISTINCT FROM sources.tenant_id
-        WHERE sources.tenant_id ${tenantPredicate}
-      )
+  async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string; executableOnly?: boolean }) {
+    const [row] = await this.sql.unsafe(`
       SELECT jsonb_build_object(
         'sourceCount', count(*),
         'retainedSourceCount', count(*) FILTER (WHERE collection_executable),
@@ -1417,14 +1371,18 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           LIMIT 1
         )
       ) AS summary
-      FROM ranked_sources sources
-      LEFT JOIN latest_health
-        ON latest_health.source_id = sources.id
-        AND latest_health.tenant_id IS NOT DISTINCT FROM sources.tenant_id
-      LEFT JOIN historical_usefulness
-        ON historical_usefulness.source_id = sources.id
-        AND historical_usefulness.tenant_id IS NOT DISTINCT FROM sources.tenant_id
-      WHERE NOT $2::boolean OR sources.collection_executable
+      FROM threat_intel.sources sources
+      LEFT JOIN LATERAL (
+        SELECT source_health.source_id, source_health.checked_at, source_health.success,
+          source_health.useful, source_health.capture_count, source_health.parser_warning_count
+        FROM threat_intel.source_health AS source_health
+        WHERE source_health.tenant_id IS NOT DISTINCT FROM $1::text
+          AND source_health.source_id = sources.id
+        ORDER BY source_health.checked_at DESC, source_health.id DESC
+        LIMIT 1
+      ) latest_health ON TRUE
+      WHERE sources.tenant_id IS NOT DISTINCT FROM $1::text
+        AND (NOT $2::boolean OR sources.collection_executable)
     `, [input.tenantId ?? null, input.executableOnly === true]);
     return { schemaVersion: "ti.source_operations_summary.v1", generatedAt: input.generatedAt, tenantId: input.tenantId ?? "global", summary: row?.summary ?? {} };
   }

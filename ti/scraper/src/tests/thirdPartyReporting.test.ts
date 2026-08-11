@@ -227,6 +227,16 @@ describe("authenticated third-party reporting", () => {
     expect(payload.standardsValidation).toEqual({ standard: "STIX 2.1", valid: true, issues: [] });
     expectCustomerSafe(payload);
   });
+
+  test("exports selected evidence through keyed store lookups", async () => {
+    const { store, options } = reportingFixture();
+    store.listCaptures = (() => { throw new Error("case reports must not enumerate captures"); }) as any;
+    store.listSources = (() => { throw new Error("case reports must not enumerate sources"); }) as any;
+
+    const response = await report(options, "json", ["evidence_public"]);
+    expect(response.status).toBe(200);
+    expect((await response.json() as any).evidence.map((item: any) => item.id)).toEqual(["evidence_public"]);
+  });
 });
 
 const unsafeCustomerText = [

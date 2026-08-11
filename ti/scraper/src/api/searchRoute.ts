@@ -134,9 +134,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     }))
   ], (candidate) => `${candidate.kind}:${candidate.value.toLowerCase()}`);
   const missing = missingFields({ query, entityType, actor, victims, sectors, countries, ttps, records, generatedAt });
-  const actorBusinessEvidence = actorQuery
-    ? await actorBusinessEvidenceCatalog(options.store, scope.tenantId, query, generatedAt, new Set(rows.map((row: any) => row.id)))
-    : undefined;
+  const actorBusinessEvidence = actorQuery ? await actorBusinessEvidenceCatalog(options.store, scope.tenantId, query, generatedAt, new Set(rows.map((row) => row.id))) : undefined;
   const businessModel = actorQuery ? businessModelAssessment(options.store, actorBusinessEvidence?.reviewedFindings ?? [], actorBusinessEvidence?.pendingFindings ?? []) : undefined;
   const actorCaseStudies = actorBusinessEvidence?.catalog;
   const attributionEvidence = actor ? actorAttribution(rows, unique([actor, ...aliases, ...identity.terms])) : undefined;
@@ -619,7 +617,7 @@ function businessObservations(store: any, findings: any[], reviewed: boolean) {
   });
 }
 
-async function actorBusinessEvidenceCatalog(store: any, tenantId: string | undefined, query: string, generatedAt: string, searchCaptureIds: Set<string>) {
+async function actorBusinessEvidenceCatalog(store: any, tenantId: string | undefined, query: string, generatedAt: string, captureIds?: Set<string>) {
   const inScope = (record: any) => Boolean(record) && (!record.tenantId || (record.tenantId || undefined) === tenantId);
   const indexedInScope = (method: string, keys: Iterable<string>) => {
     const values = [...keys];
@@ -628,18 +626,29 @@ async function actorBusinessEvidenceCatalog(store: any, tenantId: string | undef
       ...(tenantId ? store[method](values, tenantId) : []),
     ], (record: any) => record.id);
   };
-  const sources = (store.listSources?.() ?? []).filter(inScope);
+  const candidateEntities = captureIds && typeof store.listExtractedEntitiesByCaptureIds === "function"
+    ? uniqueBy([
+      ...store.listExtractedEntitiesByCaptureIds(captureIds, undefined),
+      ...(tenantId ? store.listExtractedEntitiesByCaptureIds(captureIds, tenantId) : [])
+    ], (record: any) => record.id).filter(inScope)
+    : undefined;
+  const relevantSourceIds = candidateEntities ? new Set(candidateEntities.map((entity: any) => entity.sourceId).filter(Boolean)) : undefined;
+  const sources = (store.listSources?.() ?? []).filter((source: any) => inScope(source) && (!relevantSourceIds || relevantSourceIds.has(source.id)));
   const allSourceById = uniqueMap(sources);
   const sourceById = uniqueMap(sources.filter((source: any) => source.status === "active"));
-  const entities = typeof store.listExtractedEntitiesByCaptureIds === "function"
-    ? store.listExtractedEntitiesByCaptureIds(searchCaptureIds, tenantId).filter(isSafeBusinessMechanism).filter(inScope)
+  const entities = candidateEntities
+    ? candidateEntities.filter(isSafeBusinessMechanism)
+    : typeof store.listExtractedEntitiesByTypes === "function"
+    ? indexedInScope("listExtractedEntitiesByTypes", SOURCE_BACKED_BUSINESS_TYPES).filter(isSafeBusinessMechanism)
     : (store.listExtractedEntities?.() ?? []).filter(inScope).filter(isSafeBusinessMechanism);
   const entityById = uniqueMap(entities);
   const businessCaptureIds = new Set(entities.map((entity: any) => entity.captureId));
   const captureById = new Map([...businessCaptureIds].flatMap((id) => { const capture = store.getCapture?.(id); return capture && inScope(capture) ? [[id, capture] as const] : []; }));
   const actorEntitiesByCapture = new Map<string, any[]>();
-  const actorEntities = typeof store.listExtractedEntitiesByCaptureIds === "function"
-    ? store.listExtractedEntitiesByCaptureIds(businessCaptureIds, tenantId)
+  const actorEntities = candidateEntities
+    ? candidateEntities
+    : typeof store.listExtractedEntitiesByTypes === "function"
+    ? indexedInScope("listExtractedEntitiesByTypes", ["actor", "ransomware_family"])
     : (store.listExtractedEntities?.() ?? []).filter(inScope);
   for (const entity of actorEntities) {
     if (!businessCaptureIds.has(entity.captureId)) continue;

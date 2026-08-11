@@ -484,6 +484,9 @@ function newTask(index: ReviewIndex, subject: AutomaticReviewTask["subject"], at
 async function processTask(options: ApiServerOptions, original: AutomaticReviewTask, input: CycleInput, index: ReviewIndex) {
   const store = options.store as any;
   const startedAt = executionTime(input);
+  // PostgreSQL review cycles use a bounded task projection rather than hydrating
+  // every workflow row into the in-memory map. Keep processing the projected
+  // task when the map has no copy of it.
   let task = (store.getAnalystMetadataReviewTask(original.id) ?? original) as AutomaticReviewTask;
   if (!task.nextAttemptAt) task = { ...task, nextAttemptAt: task.updatedAt ?? task.queuedAt };
   if (!["queued", "retrying"].includes(task.state)) return { taskId: task.id, state: task.state, outcome: task.outcome };

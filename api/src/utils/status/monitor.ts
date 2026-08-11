@@ -9,7 +9,6 @@ const webBase = (process.env.MONITOR_WEB_BASE || 'https://hanasand.com').replace
 const scraperBase = (process.env.TI_SCRAPER_API_BASE || 'http://ti-scraper:8097').replace(/\/$/, '')
 const modelClientBase = (process.env.HANASAND_MODEL_CLIENT_HEALTH_BASE || 'http://hanasand_ai_model_client:18182').replace(/\/$/, '')
 const MONITOR_REQUEST_TIMEOUT_MS = 5_000
-const SCRAPER_PENDING_WRITES_DEGRADED_THRESHOLD = 1_000
 type CheckResult = string | void | { status: MonitorStatus, message: string }
 type MonitorRecorder = typeof recordMonitorResult
 
@@ -27,10 +26,7 @@ export async function check(
         const explicit = typeof result === 'object' && result ? result : undefined
         const status = explicit?.status || latencyStatus(latency, latencyThresholds)
         const message = explicit?.message || (typeof result === 'string' ? result : '')
-        const recordedMessage = status !== 'up' && !explicit && typeof result === 'string'
-            ? `Response took ${latency} ms.`
-            : message
-        await recorder(service, checkName, status, latency, status === 'up' ? recordedMessage : recordedMessage || `Response took ${latency} ms.`)
+        await recorder(service, checkName, status, latency, status === 'up' ? message : message || `Response took ${latency} ms.`)
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         await recorder(service, checkName, 'down', Math.round(performance.now() - started), message)
@@ -72,6 +68,10 @@ function object(value: unknown): Record<string, unknown> | null {
 
 function hasToken(body: unknown): body is { token: string } {
     return Boolean(body && typeof body === 'object' && 'token' in body && typeof (body as { token?: unknown }).token === 'string')
+}
+
+function remainingMonitorTimeout(deadline: number) {
+    return Math.max(1, deadline - Date.now())
 }
 
 export default async function runSyntheticMonitor() {
@@ -116,14 +116,20 @@ export default async function runSyntheticMonitor() {
             return 'The public website rendered successfully.'
         }),
         check('threat-intelligence', 'Public search', async () => {
+            const deadline = Date.now() + MONITOR_REQUEST_TIMEOUT_MS
             const request = () => fetchJson('/ti/search', {
                 method: 'POST',
                 body: JSON.stringify({ query: 'APT29' }),
-            }, publicApiBase)
-            const result = await request()
+            }, publicApiBase, remainingMonitorTimeout(deadline))
+            let result = await request()
             const valid = (value: typeof result) => {
                 const body = object(value.body)
                 return value.response.status === 200 && body?.mode === 'scraper' && Array.isArray(body.sources) && Array.isArray(body.recentActivity)
+            }
+            for (let attempt = 0; !valid(result) && attempt < 2 && Date.now() < deadline; attempt += 1) {
+                await new Promise((resolve) => setTimeout(resolve, Math.min(1_000, remainingMonitorTimeout(deadline))))
+                if (Date.now() >= deadline) break
+                result = await request()
             }
             if (!valid(result)) {
                 throw new Error(`Threat intelligence search is unavailable (${result.response.status})`)
@@ -239,14 +245,15 @@ export default async function runSyntheticMonitor() {
             return 'The authenticated dark-web monitoring workspace rendered successfully.'
         }),
         check('dark-web-monitoring', 'Latest activity', async () => {
-            // Use the authenticated scraper service as the canonical data
-            // source. The public hostname can race the frontend proxy during
-            // scraper restarts even when retained customer activity is live.
-            const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN
-            if (!serviceToken) throw new Error('Threat-intelligence service authentication is not configured.')
-            const { response, body } = await fetchJson('/v1/dwm/exposure-queue?limit=1', {
-                headers: { 'x-hanasand-service-token': serviceToken },
-            }, scraperBase)
+            const deadline = Date.now() + MONITOR_REQUEST_TIMEOUT_MS
+            let { response, body } = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase, remainingMonitorTimeout(deadline))
+            for (let attempt = 0; response.status >= 500 && attempt < 2 && Date.now() < deadline; attempt += 1) {
+                await new Promise((resolve) => setTimeout(resolve, Math.min(1_000, remainingMonitorTimeout(deadline))))
+                if (Date.now() >= deadline) break
+                const retry = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase, remainingMonitorTimeout(deadline))
+                response = retry.response
+                body = retry.body
+            }
             const queue = object(body)
             const counts = object(queue?.counts)
             const freshness = object(queue?.freshness)

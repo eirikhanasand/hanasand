@@ -120,7 +120,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
     retryExhaustedCount: Number(resumedRun?.retryExhaustedCount ?? 0)
   };
   const latestCaptureIds: string[] = [], completeEvaluationCaptures: any[] = [], errors: any[] = [];
-  const concurrency = Math.max(1, Math.min(tasks.length || 1, maxConcurrentTasks));
+  const concurrency = Math.max(1, Math.min(tasks.length || 1, Number(options.maxConcurrentTasks ?? 5)));
   for (let done = 0; done < tasks.length; done += concurrency) {
     await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length - done) }, () => runLeasedTask(options, runId, generatedAt, fetcher, mode, maxBytes, counters, latestCaptureIds, errors, completeEvaluationCaptures)));
     if (done + concurrency < tasks.length) await new Promise<void>((resolve) => setTimeout(resolve, 0));

@@ -39,18 +39,9 @@ export class TorMetadataHttpBoundary {
       }
       if (!response.ok) throw Object.assign(new Error(`Tor metadata HTTP ${response.status}`), { httpStatus: response.status });
       const contentType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
-      const actor = String(request.actorName ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-      const approvedJavascript = contentType === "application/javascript" && (
-        actor === "abyssdata" && target.pathname === "/static/data.js"
-        || actor === "atomsilo" && target.pathname === "/javascript/data.js"
-      );
-      if (contentType && !["text/html", "application/xhtml+xml", "text/plain", "application/json"].includes(contentType) && !approvedJavascript) throw new Error(`Tor metadata unsupported media type: ${contentType}`);
+      if (contentType && !["text/html", "application/xhtml+xml", "text/plain", "application/json"].includes(contentType)) throw new Error(`Tor metadata unsupported media type: ${contentType}`);
       const body = await boundedText(response, maxBytes, this.requestTimeoutMs);
-      return contentType === "application/json"
-        ? metadataFromJson(body.text, request.actorName, target.pathname)
-        : approvedJavascript
-          ? metadataFromJavascript(body.text, request.actorName)
-          : metadataFromHtml(body.text, request.actorName);
+      return contentType === "application/json" ? metadataFromJson(body.text, request.actorName) : metadataFromHtml(body.text, request.actorName);
     }
     throw new Error("Tor metadata redirect limit exceeded");
   }
@@ -68,11 +59,13 @@ async function boundedText(response: Response, maxBytes: number, timeoutMs: numb
   const decoder = new TextDecoder();
   let text = "", bytes = 0;
   let timeout: Timer | undefined;
+  const deadlineAt = Date.now() + timeoutMs;
   const deadline = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => reject(new Error(`Tor metadata response body timeout after ${timeoutMs}ms`)), timeoutMs);
   });
   try {
     while (true) {
+      if (Date.now() >= deadlineAt) throw new Error(`Tor metadata response body timeout after ${timeoutMs}ms`);
       const chunk = await Promise.race([reader.read(), deadline]);
       if (chunk.done) break;
       const remaining = maxBytes - bytes;

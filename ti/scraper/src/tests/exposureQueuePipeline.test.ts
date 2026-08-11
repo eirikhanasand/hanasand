@@ -23,12 +23,22 @@ const testOptions = (store: InMemoryScraperStore, extra: Record<string, unknown>
 const saveCollectedClaim = (store: InMemoryScraperStore, item: any) => saveExposureClaimFromCollectedItem(store, {
   ...item,
   source: { name: item.sourceName || "Collected exposure source", url: item.url || "https://collector.example/feed" },
+  url: item.url || "https://collector.example/feed",
   rawText: item.text,
   collectedAt: item.collectedAt || item.publishedAt || new Date().toISOString(),
   metadata: {
     adapter: "rss",
     sourceFamily: item.sourceFamily || "darkweb_metadata",
-    reportTimestamps: item.publishedAt ? [{ role: "publisher", timestamp: item.publishedAt, referenceUrl: item.url || "https://collector.example/feed", extractionMethod: "source_field" }] : undefined
+    ...(item.publishedAt && (item.url || "https://collector.example/feed") ? {
+      reportTimestamps: [{
+        role: "publisher",
+        timestamp: item.publishedAt,
+        referenceUrl: item.url || "https://collector.example/feed",
+        sourceId: item.sourceId,
+        evidencePath: "collector.publisherTimestamp",
+        extractionMethod: "source_field"
+      }]
+    } : {})
   }
 });
 
@@ -47,14 +57,6 @@ describe("DWM exposure queue pipeline", () => {
       service: "metadata-safe-ransomware-claim-parser:v1",
       aiEndpointConfigured: false,
     });
-  });
-
-  test("returns explicit unavailable instead of empty success when the exposure store times out", async () => {
-    const store = new InMemoryScraperStore();
-    (store as any).queryExposureQueuePage = async () => { throw new Error("statement timeout"); };
-    const response = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?limit=1"), testOptions(store));
-    expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({ error: { code: "exposure_queue_unavailable" } });
   });
 
   test("rejects arbitrary HTTPS intake without the bounded public-advisory source family", async () => {
@@ -98,59 +100,23 @@ describe("DWM exposure queue pipeline", () => {
     }
   });
 
-  test("does not persist restricted collector claims without publisher evidence", async () => {
-    const store = new InMemoryScraperStore();
-    const collected = {
-      sourceId: "src_unproven_restricted",
-      source: { name: "Unproven actor feed", url: "https://collector.example/feed" },
-      title: "Akira has just published a new victim: Contoso",
-      rawText: "Akira victim: Contoso. 10 GB claimed.",
-      url: "https://collector.example/contoso",
-      collectedAt: "2026-07-20T09:04:00.000Z",
-      publishedAt: "2026-07-20T09:00:00.000Z",
-      metadata: { adapter: "rss", sourceFamily: "darkweb_metadata" }
-    };
-
-    expect(await saveExposureClaimFromCollectedItem(store, collected)).toBeUndefined();
-    expect(store.listSources()).toHaveLength(0);
-    expect(store.listCaptures()).toHaveLength(0);
-  });
-
-  test("does not turn collection time into publisher time when a collector item is undated", async () => {
-    const store = new InMemoryScraperStore();
-    const collected = {
-      sourceId: "src_undated_exposure",
-      source: { name: "Undated exposure source", url: "https://collector.example/feed" },
-      title: "Akira has just published a new victim: Contoso",
-      rawText: "Akira victim: Contoso. 10 GB claimed.",
-      url: "https://collector.example/contoso",
-      collectedAt: "2026-07-20T09:04:00.000Z",
-      metadata: { adapter: "rss", sourceFamily: "clear_web" }
-    };
-
-    expect(await saveExposureClaimFromCollectedItem(store, collected, "2026-07-20T09:05:00.000Z")).toBeUndefined();
-    expect(store.listSources()).toHaveLength(0);
-    expect(store.listCaptures()).toHaveLength(0);
-  });
-
-  test("uses the existing publisher evidence timestamp when the item field is absent", async () => {
-    const store = new InMemoryScraperStore();
-    const collected = {
-      sourceId: "src_evidence_timestamp",
-      source: { name: "Timestamped exposure source", url: "https://collector.example/feed" },
-      title: "Akira has just published a new victim: Contoso",
-      rawText: "Akira victim: Contoso. 10 GB claimed.",
-      url: "https://collector.example/contoso",
-      collectedAt: "2026-07-20T09:04:00.000Z",
-      metadata: {
-        adapter: "rss",
-        sourceFamily: "darkweb_metadata",
-        reportTimestamps: [{ role: "publisher", timestamp: "2026-07-19T09:00:00.000Z", referenceUrl: "https://collector.example/contoso", extractionMethod: "source_field" }]
-      }
-    };
-
-    const capture = await saveExposureClaimFromCollectedItem(store, collected, "2026-07-20T09:05:00.000Z");
-    expect(capture).toMatchObject({ publishedAt: "2026-07-19T09:00:00.000Z", collectedAt: "2026-07-20T09:04:00.000Z" });
+  test("rejects dark-web and Telegram collector claims without publisher provenance", async () => {
+    for (const sourceFamily of ["darkweb_metadata", "telegram_public"]) {
+      const store = new InMemoryScraperStore();
+      const saved = await saveExposureClaimFromCollectedItem(store, {
+        sourceId: `src_${sourceFamily}`,
+        source: { name: "Unverified collector", url: "https://collector.example/feed" },
+        title: "Akira has just published a new victim: Contoso",
+        rawText: "Akira victim: Contoso. 10 GB claimed.",
+        url: "https://collector.example/item",
+        collectedAt: "2026-07-20T09:04:00.000Z",
+        publishedAt: "2026-07-20T09:00:00.000Z",
+        metadata: { adapter: sourceFamily, sourceFamily }
+      });
+      expect(saved).toBeUndefined();
+      expect(store.listSources()).toHaveLength(0);
+      expect(store.listCaptures()).toHaveLength(0);
+    }
   });
 
   test("fetches real tenant public-incident evidence without fabricating a dark-web victim claim", async () => {

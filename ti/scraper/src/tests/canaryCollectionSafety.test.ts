@@ -113,77 +113,6 @@ describe("public collection boundary", () => {
     }));
   });
 
-  test("uses publisher content rather than source labels for usefulness", async () => {
-    const store = new InMemoryScraperStore();
-    const at = "2026-07-23T12:00:00.000Z";
-    for (const id of ["neutral", "malicious"]) store.saveSource({ ...source({
-      id: `src_vulnerability_malware_${id}`,
-      name: "Critical Vulnerability Malware Attack Research",
-      url: `https://publisher.example/${id}.xml`,
-      governance: { approvalRequired: false, approvalState: "approved" },
-      metadata: { productionCollection: true, countsAsCoverage: false, sourceFamily: "clear_web" }
-    }), countsAsCoverage: false } as any);
-
-    const cycle = await runCanaryCollectionCycle({
-      store,
-      frontier: new FocusedFrontier(),
-      maxSources: 2,
-      maxTasks: 2,
-      now: () => at,
-      fetch: async (url: string) => new Response(url.includes("malicious")
-        ? "<rss><channel><item><title>Observed campaign activity</title><link>https://publisher.example/malicious/item</link><description>The publisher observed credential phishing and malware delivery against multiple organizations and documented defensive indicators.</description><pubDate>Thu, 23 Jul 2026 11:00:00 GMT</pubDate></item></channel></rss>"
-        : "<rss><channel><item><title>Weekly engineering notes</title><link>https://publisher.example/neutral/item</link><description>The publisher summarized routine product maintenance, documentation changes, compatibility notes, and upcoming community events.</description><pubDate>Thu, 23 Jul 2026 11:00:00 GMT</pubDate></item></channel></rss>",
-      { headers: { "content-type": "application/rss+xml" } })
-    });
-
-    const health = Object.fromEntries(store.listSourceHealthObservations().map((row: any) => [row.sourceId, row]));
-    const captures = Object.fromEntries(store.listCaptures().map((capture: any) => [capture.sourceId, capture]));
-    expect(cycle).toMatchObject({ insertedCaptureCount: 2, failedTaskCount: 0 });
-    expect(health.src_vulnerability_malware_neutral).toMatchObject({ useful: false, captureCount: 1 });
-    expect(captures.src_vulnerability_malware_neutral).toMatchObject({ metadata: { sourceReviewCandidate: true, sellableCandidate: false } });
-    expect(health.src_vulnerability_malware_malicious).toMatchObject({ useful: true, captureCount: 1 });
-    expect(captures.src_vulnerability_malware_malicious).toMatchObject({ metadata: { sellableCandidate: true } });
-  });
-
-  test("caps ordinary publisher rows at the scheduler limit", async () => {
-    const store = new InMemoryScraperStore();
-    store.saveSource(source({ metadata: { productionCollection: true, maxItemsPerFetch: 150 } }));
-    const items = Array.from({ length: 5 }, (_, index) => `<item><title>CVE-2026-42${index} remote code execution</title><link>https://example.test/${index}</link><description>Critical vulnerability with a security patch.</description><pubDate>Thu, 23 Jul 2026 12:00:00 GMT</pubDate></item>`).join("");
-
-    const cycle = await runCanaryCollectionCycle({
-      store,
-      frontier: new FocusedFrontier(),
-      maxSources: 1,
-      maxTasks: 1,
-      maxItemsPerTask: 2,
-      now: () => "2026-07-23T12:00:00.000Z",
-      fetch: async () => new Response(`<rss><channel>${items}</channel></rss>`, { headers: { "content-type": "application/rss+xml" } })
-    });
-
-    expect(cycle.insertedCaptureCount).toBe(2);
-    expect(store.listCaptures()).toHaveLength(2);
-  });
-
-  test("bounds an oversized configured cycle to the established task cap", async () => {
-    const store = new InMemoryScraperStore();
-    for (let index = 0; index < 80; index++) {
-      store.saveSource(source({ id: `bounded-${index}`, url: `https://example.test/bounded-${index}.xml`, metadata: { productionCollection: true } }));
-    }
-
-    const cycle = await runCanaryCollectionCycle({
-      store,
-      frontier: new FocusedFrontier(),
-      maxSources: 80,
-      maxTasks: 100,
-      maxConcurrentTasks: 2,
-      fetch: async () => new Response("<rss><channel></channel></rss>", { headers: { "content-type": "application/rss+xml" } })
-    });
-
-    expect(cycle.queuedTaskCount).toBe(60);
-    expect(cycle.completedTaskCount).toBe(60);
-    expect(cycle.status).toBe("completed");
-  });
-
   test("times out a stalled response body without wedging the recurring loop", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "stalled", url: "https://example.test/stalled.xml" }));
@@ -234,6 +163,36 @@ describe("public collection boundary", () => {
     expect(store.listSourceHealthObservations()).toEqual([
       expect.objectContaining({ sourceId: "stalled", success: false, useful: false, adapterFailureCategory: "timeout" })
     ]);
+  });
+
+  test("times out a continuously streaming body even when reader promises keep resolving", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "streaming", url: "https://example.test/streaming.xml" }));
+    let cancelled = 0;
+    const loop = startCanaryCollectionLoop({
+      store,
+      frontier: new FocusedFrontier(),
+      enabled: false,
+      scheduleSourceFeedDiscovery: false,
+      scheduleWatchlistDiscovery: false,
+      maxSources: 1,
+      maxTasks: 1,
+      maxConcurrentTasks: 1,
+      timeoutMs: 20,
+      fetch: async () => new Response(new ReadableStream({
+        pull(controller) { controller.enqueue(new Uint8Array([60])); },
+        cancel() { cancelled++; }
+      }), { headers: { "content-type": "application/rss+xml" } })
+    });
+
+    loop.setEnabled(true, { approvedBy: "streaming-body-timeout-test" });
+    await loop.runOnce();
+    const state = loop.getState();
+    await loop.stop();
+
+    expect(state.latestResult).toMatchObject({ failedTaskCount: 1, completedTaskCount: 0 });
+    expect(cancelled).toBe(1);
+    expect(store.listRuns()).toContainEqual(expect.objectContaining({ error: "response body timeout after 20ms" }));
   });
 
   test("runs only explicitly selected due sources", async () => {

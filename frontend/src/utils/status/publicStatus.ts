@@ -5,7 +5,7 @@ const requiredPublicChecks = [
     { service: 'website', check_name: 'Public website' },
     { service: 'threat-intelligence', check_name: 'Public search' },
     { service: 'threat-intelligence', check_name: 'Processing backlog' },
-    { service: 'threat-intelligence', check_name: 'Source collection' },
+    { service: 'threat-intelligence', check_name: 'Source operations' },
     { service: 'browser-sandbox', check_name: 'Browser workspace' },
     { service: 'dark-web-monitoring', check_name: 'Monitoring workspace' },
     { service: 'dark-web-monitoring', check_name: 'Latest activity' },
@@ -161,11 +161,8 @@ function publicStatusMessage(message: string | null, status?: ServiceCheck['stat
     if (/stale reviews|processing backlog/i.test(message)) {
         return 'Threat-intelligence processing is behind its current review target.'
     }
-    const internalSourceMessage = `${['source', 'operations'].join(' ')} returned`
-    if (new RegExp(`${internalSourceMessage}|source collection`, 'i').test(message)) {
-        return status === 'up'
-            ? 'Source collection is responding; freshness is being monitored.'
-            : 'Source collection is degraded; new intelligence may be delayed.'
+    if (/source operations returned|source collection/i.test(message)) {
+        return 'Source collection is degraded; new intelligence may be delayed.'
     }
 
     return message

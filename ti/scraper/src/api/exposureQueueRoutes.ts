@@ -256,8 +256,7 @@ export async function exposureParserHealth() {
 export async function saveExposureClaimFromCollectedItem(store: any, item: any, at = nowIso()) {
   if (!shouldPromoteExposureClaim(item)) return undefined;
   const sourceFamily = collectedExposureSourceFamily(item);
-  const publisherTimestamp = validTimestamp(item.publishedAt) ?? publisherEvidenceTimestamp(item);
-  if (!publisherTimestamp || (restrictedExposureFamily(sourceFamily) && !hasPublisherEvidence(item))) return undefined;
+  if (requiresPublisherEvidence(sourceFamily) && !hasPublisherEvidence(item)) return undefined;
   const claim = await parseExposureClaim({
     sourceId: item.sourceId,
     sourceName: item.source?.name || item.metadata?.sourceName,
@@ -275,37 +274,33 @@ export async function saveExposureClaimFromCollectedItem(store: any, item: any, 
 }
 
 function collectedExposureSourceFamily(item: any) {
-  const value = String(item?.metadata?.sourceFamily ?? item?.sourceFamily ?? item?.metadata?.adapter ?? "");
-  if (value === "public_advisory") return "public_advisory";
-  if (value === "telegram_public") return "telegram_public";
-  if (value === "darkweb_metadata" || value === "darknet_metadata") return "darkweb_metadata";
+  const explicit = String(item.metadata?.sourceFamily ?? "").trim();
+  if (explicit) return explicit;
+  if (item.metadata?.adapter === "public_advisory") return "public_advisory";
+  if (item.metadata?.adapter === "darknet_metadata") return "darkweb_metadata";
+  if (item.metadata?.adapter === "telegram_public") return "telegram_public";
   return undefined;
 }
 
-function restrictedExposureFamily(value: unknown) {
-  return value === "darkweb_metadata" || value === "telegram_public";
+function requiresPublisherEvidence(sourceFamily: unknown) {
+  return sourceFamily === "darkweb_metadata" || sourceFamily === "telegram_public";
 }
 
 function hasPublisherEvidence(item: any) {
-  return Array.isArray(item?.metadata?.reportTimestamps) && item.metadata.reportTimestamps.some((reference: any) =>
-    reference?.role === "publisher"
-    && validTimestamp(reference.timestamp)
-    && typeof reference.referenceUrl === "string"
-    && reference.referenceUrl.startsWith("https://")
-    && reference.extractionMethod === "source_field"
-  );
-}
-
-function publisherEvidenceTimestamp(item: any) {
-  const reference = Array.isArray(item?.metadata?.reportTimestamps)
-    ? item.metadata.reportTimestamps.find((candidate: any) =>
-      candidate?.role === "publisher"
-      && validTimestamp(candidate.timestamp)
-      && typeof candidate.referenceUrl === "string"
-      && candidate.referenceUrl.startsWith("https://")
-      && candidate.extractionMethod === "source_field")
-    : undefined;
-  return validTimestamp(reference?.timestamp);
+  const publishedAt = zonedSourceTimestamp(item.publishedAt);
+  const referenceUrl = publicSourceReferenceUrl(item.url);
+  if (!publishedAt || !referenceUrl || !Array.isArray(item.metadata?.reportTimestamps)) return false;
+  return item.metadata.reportTimestamps.some((record: any) => {
+    const timestamp = zonedSourceTimestamp(record?.timestamp);
+    const recordUrl = publicSourceReferenceUrl(record?.referenceUrl);
+    return record?.role === "publisher"
+      && record?.sourceId === item.sourceId
+      && record?.extractionMethod === "source_field"
+      && typeof record?.evidencePath === "string"
+      && record.evidencePath.trim().length > 0
+      && timestamp === publishedAt
+      && recordUrl === referenceUrl;
+  });
 }
 
 type ExposureQueueFilters = { q?: string; company?: string; actor?: string; category?: string; size?: string; country?: string; from?: string; to?: string };
