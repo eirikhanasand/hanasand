@@ -1794,11 +1794,14 @@ function EmptyWorkspacePreview() {
                 </div>
                 <div className='min-w-0'>
                     <h2 className='text-xl font-semibold text-ui-text dark:text-ui-text'>Create an organization to start monitoring</h2>
-                    <div className='mt-3 flex flex-wrap gap-2 text-xs font-semibold text-ui-muted dark:text-ui-muted'>
-                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Org settings</span>
-                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Shared watchlists</span>
-                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Team invites</span>
-                    </div>
+                    <ul className='mt-3 grid gap-2 text-sm font-semibold text-ui-text sm:grid-cols-3 dark:text-ui-text' aria-label='Organization benefits'>
+                        {['Dark web monitoring', 'Shared browser runs', 'Team alert and case workflows'].map(benefit => (
+                            <li key={benefit} className='flex items-center gap-2'>
+                                <CheckCircle2 className='h-4 w-4 shrink-0 text-ui-success' />
+                                <span>{benefit}</span>
+                            </li>
+                        ))}
+                    </ul>
                     <div className='mt-3 flex flex-wrap gap-2'>
                         <a href='#org-create-primary' className='inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text'>
                             Create organization
