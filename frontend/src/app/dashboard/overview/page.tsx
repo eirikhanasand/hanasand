@@ -53,10 +53,6 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
 
             <DwmOverviewPanel organizationId={typeof params.organizationId === 'string' ? params.organizationId.trim() : undefined} />
 
-            <div className='grid gap-3 md:grid-cols-2'>
-                <OverviewCard title='Vulnerability monitoring' value='Not configured' detail='no organization-scoped image scanner' icon={<ShieldAlert className='h-4 w-4' />} tone='neutral' />
-            </div>
-
             <div className='grid gap-3 xl:grid-cols-[1fr_0.9fr]'>
                 <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                     <div className='flex items-center justify-between border-b border-ui-border px-4 py-3'>
