@@ -9,6 +9,11 @@ test('actor summaries turn structured actor facts into customer language', () =>
     assert.doesNotMatch(summary, /captured|reviewed|corroborated|evidence available/i)
 })
 
+test('actor summaries provide a useful identity description when the feed has only a catalog class', () => {
+    assert.match(actorSummary({ name: 'APT29', actorClass: 'observed_threat_actor' }), /Russia-linked espionage group/)
+    assert.doesNotMatch(actorSummary({ name: 'APT29', actorClass: 'observed_threat_actor' }), /observed_threat_actor|tracked threat actor/i)
+})
+
 test('actor summaries reject internal evidence-state copy', () => {
     assert.equal(usefulActorSummary('3 captured public-intelligence records match apt29; reviewed evidence is available.'), '')
 })

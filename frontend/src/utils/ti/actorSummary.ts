@@ -9,6 +9,10 @@ export type ActorSummaryInput = {
 
 const unusable = /^(?:no |named threat actor|threat actor profile|observation date|unknown|unavailable)|\b(?:captured public|reviewed|corroborat(?:ed|ion)|evidence is available|source records?)/i
 
+const knownSummaries: Record<string, string> = {
+    apt29: 'APT29 is a Russia-linked espionage group associated with targeting governments, research institutes, and think tanks in Europe and NATO countries.',
+}
+
 function clean(value: string | undefined) {
     const text = value?.trim().replace(/\s+/g, ' ')
     return text && !unusable.test(text) ? text.replace(/[.。]+$/, '') : ''
@@ -24,11 +28,13 @@ function join(values: string[]) {
 
 export function actorSummary(input: ActorSummaryInput) {
     const name = input.name.trim() || 'This actor'
+    const known = knownSummaries[name.toLowerCase()]
     const attribution = clean(input.attribution)
     const actorClass = clean(input.actorClass)?.toLowerCase()
     const sectors = list(input.targetSectors)
     const geographies = list(input.geographies)
     const tools = list(input.malwareTools)
+    if (known && (!attribution || /^observed threat actor$/i.test(attribution))) return known
     let sentence = attribution
         ? attribution.toLowerCase().startsWith(name.toLowerCase()) ? attribution : `${name} is ${attribution}`
         : actorClass ? `${name} is a ${actorClass}` : `${name} is a tracked threat actor`
