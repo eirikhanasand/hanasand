@@ -17,7 +17,7 @@ const dashboardRoutes = [
     { path: '/dashboard', heading: /Good|You're|It’s/ },
     { path: '/dashboard/overview', heading: 'Operations Overview', screenshot: 'dashboard-overview.png' },
     { path: '/dashboard/dwm', heading: 'Company and vendor exposure alerts' },
-    { path: '/dashboard/subscription', heading: 'Enable product access' },
+    { path: '/dashboard/subscription', heading: 'Choose what you need' },
 ]
 
 const normalSidebarLinks = [
