@@ -1468,6 +1468,7 @@ function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope
     sourceCount: 1,
     firstSeenAt,
     lastSeenAt: observedAt,
+    matchTiming: matchTimingForEvidence([evidence], generatedAt),
     claimSummary: `${claim.actor ?? "Unknown actor"} exposure claim for ${claim.company ?? "Unknown company"}: ${claim.claimedData ?? "new victim claim"}.`,
     matchContext: {
       normalizedTerm: String(claim.company ?? "").toLowerCase(),

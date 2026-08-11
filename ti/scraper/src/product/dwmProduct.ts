@@ -504,6 +504,7 @@ function mergeDuplicateAlerts(alerts: DwmAlert[]): DwmAlert[] {
     current.confidenceReasoning = uniqueStrings([...current.confidenceReasoning, ...alert.confidenceReasoning, "Multiple recent captures support the same watchlist alert."]);
     current.firstSeenAt = current.firstSeenAt < alert.firstSeenAt ? current.firstSeenAt : alert.firstSeenAt;
     current.lastSeenAt = current.lastSeenAt > alert.lastSeenAt ? current.lastSeenAt : alert.lastSeenAt;
+    current.matchTiming = matchTimingForEvidence(current.evidence, current.provenance.generatedAt);
     current.provenance = provenanceForAlert(current.provenance.generatedAt, current.evidence);
     current.evidenceSummary = evidenceSummaryFor(current.evidence);
     current.webhookDelivery = {
@@ -588,6 +589,41 @@ function evidenceMatchTiming(item: DwmEvidenceRef, basis?: DwmMatchTimingBasis):
     return { kind: "historical_backfill", basisKind: basis?.kind, basisAt, reason: "observed_before_basis" };
   }
   return { kind: "new_evidence", basisKind: basis?.kind, basisAt, reason: "on_or_after_basis" };
+}
+
+function validIso(value: unknown): string | undefined {
+  const time = Date.parse(String(value ?? ""));
+  return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
+}
+
+export function captureEvidenceTiming(capture: Pick<RawCapture, "publishedAt" | "collectedAt">, fallback = nowIso()) {
+  const collectedAt = validIso(capture.collectedAt);
+  const publishedAt = validIso(capture.publishedAt);
+  return {
+    collectedAt,
+    publishedAt,
+    observedAt: publishedAt ?? collectedAt ?? validIso(fallback) ?? nowIso()
+  };
+}
+
+export function matchTimingForEvidence(evidence: DwmEvidenceRef[], generatedAt: string): DwmAlert["matchTiming"] {
+  const observed = evidence.map((item) => item.observedAt || item.firstSeenAt).filter(Boolean).sort();
+  const collected = evidence.map((item) => item.provenance.collectedAt).filter(Boolean).sort() as string[];
+  // ponytail: a retained publication-to-collection gap is the smallest honest backfill signal
+  // until captures carry an explicit ingestion mode; rebuild time is not evidence time.
+  const historicalEvidenceCount = evidence.filter((item) => {
+    const publishedAt = Date.parse(item.provenance.publishedAt ?? "");
+    const collectedAt = Date.parse(item.provenance.collectedAt ?? "");
+    return Number.isFinite(publishedAt) && Number.isFinite(collectedAt) && collectedAt - publishedAt >= 86_400_000;
+  }).length;
+  return {
+    kind: evidence.length > 0 && historicalEvidenceCount === evidence.length ? "historical_backfill" : "new_evidence",
+    firstObservedAt: observed[0] ?? generatedAt,
+    lastObservedAt: observed.at(-1) ?? generatedAt,
+    firstCollectedAt: collected[0],
+    lastCollectedAt: collected.at(-1),
+    historicalEvidenceCount
+  };
 }
 
 function validIso(value: unknown): string | undefined {

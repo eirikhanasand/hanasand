@@ -452,6 +452,7 @@ function AlertReviewPanel({ alerts, busyAction, onOpenCase, organizationId }: {
                                         <span>{stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)}</span>
                                         <span className={alert.routingContext?.urgency === 'immediate' || alert.severity === 'critical' ? 'font-semibold text-ui-danger' : ''}>{stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))}</span>
                                         <span>{alert.evidenceSummary?.evidenceCount ?? alert.evidence.length} evidence</span>
+                                        {alert.matchTiming?.kind === 'historical_backfill' && <span className='font-semibold text-ui-warning'>Historical match</span>}
                                         <span>{relativeTimeLabel(alert.lastSeenAt || alert.evidenceSummary?.lastObservedAt || alert.firstSeenAt)}</span>
                                     </span>
                                 </button>
