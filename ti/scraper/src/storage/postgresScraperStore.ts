@@ -529,16 +529,17 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     filters?: { q?: string; company?: string; actor?: string; category?: string; size?: string; country?: string; from?: string; to?: string };
     limit: number;
     offset: number;
+    global?: boolean;
   }) {
     const filters = input.filters ?? {};
     const tenantId = input.tenantId === "default" ? null : input.tenantId ?? null;
-    const values: unknown[] = tenantId === null ? [] : [tenantId];
+    const global = input.global === true;
+    const values: unknown[] = global || tenantId === null ? [] : [tenantId];
     const tenantPredicate = (alias: string) => tenantId === null
       ? `(${alias}.tenant_id IS NULL OR ${alias}.tenant_id = 'default')`
       : `${alias}.tenant_id = $1::text`;
     const where = [
-      tenantPredicate("capture"),
-      "(source.tenant_id IS NULL OR source.tenant_id IS NOT DISTINCT FROM capture.tenant_id)",
+      ...(global ? [] : [tenantPredicate("capture"), "(source.tenant_id IS NULL OR source.tenant_id IS NOT DISTINCT FROM capture.tenant_id)"]),
       "NOT (concat_ws(' ', capture.source_id, source.name, source.source_family) ~* '(cisa known exploited|known exploited vulnerabilities|mitre att&ck|attack enterprise|groups dataset|public groups dataset|nvd recent cve|github advisory database)')",
       "((capture.record->'metadata'->'leakSite'->>'actorName' <> '' AND capture.record->'metadata'->'leakSite'->>'victimName' <> '') OR (concat_ws(' ', capture.source_id, source.name, source.source_family) ~* '(victim feed|ransomware\\.live victim|ransomlook|leak site|extortion|darkweb|darknet|actor claim|tor_metadata|i2p_metadata|freenet_metadata)' AND capture.record->>'title' ~* '(has just published a new victim|claims victim|claimed victim|claims victim|victim\\s*:|added victim|listed victim|published victim)'))"
     ];
@@ -557,7 +558,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const sourceTerms = `WITH candidate_captures AS MATERIALIZED (
       SELECT *
       FROM threat_intel.captures
-      WHERE ${tenantId === null ? "(tenant_id IS NULL OR tenant_id = 'default')" : "tenant_id IS NOT DISTINCT FROM $1::text"}
+      WHERE ${global ? "TRUE" : tenantId === null ? "(tenant_id IS NULL OR tenant_id = 'default')" : "tenant_id IS NOT DISTINCT FROM $1::text"}
         AND (
           (record->'metadata'->'leakSite'->>'actorName' <> '' AND record->'metadata'->'leakSite'->>'victimName' <> '')
           OR record->>'title' ~* '(has just published a new victim|claims victim|claimed victim|claims victim|victim\\s*:|added victim|listed victim|published victim)'

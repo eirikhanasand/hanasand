@@ -70,14 +70,14 @@ export async function listExposureQueue(request: Request, url: URL, options: Api
   let postgresPage;
   try {
     postgresPage = typeof (options.store as any).queryExposureQueuePage === "function"
-      ? await (options.store as any).queryExposureQueuePage({ tenantId, filters, limit, offset })
+      ? await (options.store as any).queryExposureQueuePage({ tenantId, filters, limit, offset, global: true })
       : undefined;
   } catch {
     return error("exposure_queue_unavailable", "The exposure queue is temporarily unavailable.", 503);
   }
   const allItems = postgresPage
     ? postgresPage.captures.map((capture: any) => exposureClaimFromCapture(capture, options.store.getSource?.(capture.sourceId))).filter(Boolean)
-    : exposureClaimsFromStore(options.store, filters, { tenantId });
+    : exposureClaimsFromStore(options.store, filters, { global: true });
   // The full filtered list is already materialized for totals/freshness; slicing it
   // here avoids a second full capture-store scan on every public read.
   const items = postgresPage ? allItems : allItems.slice(offset, offset + limit);
@@ -270,7 +270,7 @@ export async function saveExposureClaimFromCollectedItem(store: any, item: any, 
     sourceFamily
   }, at);
   if (!claim.actor || !claim.company) return undefined;
-  return saveExposureClaim(store, claim, at, { tenantId: item.tenantId ?? "default", organizationId: item.organizationId, submittedBy: "collector" });
+  return saveExposureClaim(store, claim, at, { tenantId: "default", organizationId: item.organizationId, submittedBy: "collector" });
 }
 
 function collectedExposureSourceFamily(item: any) {
@@ -423,7 +423,7 @@ function exposureQueueFilters(url: URL): ExposureQueueFilters {
   };
 }
 
-export function exposureClaimsFromStore(store: any, filters: string | ExposureQueueFilters = "", options: { limit?: number; offset?: number; tenantId?: string } = {}) {
+export function exposureClaimsFromStore(store: any, filters: string | ExposureQueueFilters = "", options: { limit?: number; offset?: number; tenantId?: string; global?: boolean } = {}) {
   const filter = typeof filters === "string" ? { q: filters } : filters;
   const needle = String(filter.q ?? "").trim().toLowerCase();
   const company = String(filter.company ?? "").trim().toLowerCase();
@@ -442,7 +442,7 @@ export function exposureClaimsFromStore(store: any, filters: string | ExposureQu
   for (const capture of captures) {
     if (Object.hasOwn(options, "tenantId") && normalizedTenantId(capture.tenantId) !== normalizedTenantId(options.tenantId)) continue;
     const source = store.getSource?.(capture.sourceId);
-    if (source?.tenantId && normalizedTenantId(source.tenantId) !== normalizedTenantId(capture.tenantId)) continue;
+    if (!options.global && source?.tenantId && normalizedTenantId(source.tenantId) !== normalizedTenantId(capture.tenantId)) continue;
     if (!mayContainExposureQueueClaim(capture, source)) continue;
     if (!shouldShowExposureQueueCapture(capture, source)) continue;
     const item = exposureClaimFromCapture(capture, source);
@@ -480,13 +480,12 @@ export async function exposureClaimsFromStoreAsync(store: any, filters: string |
 function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId: string; organizationId?: string; submittedBy?: string }) {
   if (claim.parserMode === "public_advisory_fetch") return savePublicAdvisory(store, claim, at, scope);
   const requestedSourceId = /^[A-Za-z0-9_.:-]{1,200}$/.test(String(claim.sourceId ?? "")) ? String(claim.sourceId) : undefined;
-  const sourceId = requestedSourceId || stableId("src_exposure", `${scope.tenantId}:${claim.sourceName || claim.sourceUrl || claim.actor}`);
+  const sourceId = requestedSourceId || stableId("src_exposure", `${claim.sourceName || claim.sourceUrl || claim.actor}`);
   const existingSource = store.getSource?.(sourceId);
-  if (existingSource && (existingSource.tenantId || "default") !== scope.tenantId) return undefined;
   if (store.saveSource && !existingSource) {
     store.saveSource({
       id: sourceId,
-      tenantId: scope.tenantId,
+      tenantId: undefined,
       name: claim.sourceName || `${claim.actor} exposure source`,
       type: claim.sourceFamily === "public_advisory" ? "news" : "metadata_intake",
       url: claim.sourceUrl || claim.url || `metadata://exposure/${encodeURIComponent(claim.actor)}/claims`,
@@ -505,7 +504,7 @@ function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId
         submittedAt: at,
         submittedBy: scope.submittedBy
       },
-      metadata: { sourceFamily: claim.sourceFamily || "darkweb_metadata", exposureQueueIntake: true, organizationId: scope.organizationId }
+      metadata: { sourceFamily: claim.sourceFamily || "darkweb_metadata", exposureQueueIntake: true }
     });
   }
 
@@ -514,7 +513,7 @@ function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId
   const title = `${claim.actor} has just published a new victim: ${claim.company}`;
   const safeExcerpt = [title, claim.claimedData ? `Claimed data category: ${claim.claimedData}.` : undefined, claim.claimedDataSize ? `Claimed size: ${claim.claimedDataSize}.` : undefined, claim.country ? `Claimed country: ${claim.country}.` : undefined].filter(Boolean).join(" ");
   const pipeline = processCollectedItem({
-    tenantId: scope.tenantId,
+    tenantId: undefined,
     sourceId,
     url: claim.url || `metadata://exposure/${encodeURIComponent(claim.actor)}/${encodeURIComponent(claim.company)}`,
     title,
@@ -564,7 +563,7 @@ async function collectPublicAdvisory(item: ExposureClaimItem, options: ApiServer
   const fetchSourceId = publicAdvisorySourceIdentity(requestedUrl, options.store.listSources?.()).id;
   const source = {
     id: fetchSourceId,
-    tenantId: scope.tenantId,
+    tenantId: undefined,
     name: `Public incident report ${new URL(requestedUrl).hostname}`,
     type: "static_web",
     url: requestedUrl,
@@ -664,7 +663,7 @@ function savePublicAdvisory(store: any, claim: ParsedExposureClaim, at: string, 
     ? (adapterProvenance as Record<string, unknown>).taskId as string
     : undefined;
   const pipeline = processCollectedItem({
-    tenantId: scope.tenantId,
+    tenantId: undefined,
     sourceId,
     taskId: provenanceTaskId,
     url: claim.url!,
@@ -698,7 +697,7 @@ function savePublicAdvisory(store: any, claim: ParsedExposureClaim, at: string, 
   const source = store.getSource?.(sourceId);
   store.saveSourceHealthObservation?.({
     id: stableId("source-health", `manual-public-advisory:${taskId}:${capture.id}:${checkedAt}`),
-    tenantId: scope.tenantId,
+    tenantId: undefined,
     sourceId,
     taskId,
     captureId: capture.id,
