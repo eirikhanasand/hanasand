@@ -6,7 +6,6 @@ import { getBackgroundJobRuntime, type BackgroundJobRuntime } from './background
 import { canRunApiCronJobNow, HOST_UPDATE_MONITOR_JOB_ID, isApiCronJobPaused, runApiCronJobNow, setApiCronJobPaused } from './cron.ts'
 import { getVulnerabilityReport, isVulnerabilityScanActive, setVulnerabilityScannerPaused, startTrackedVulnerabilityScan, VULNERABILITY_SCAN_CADENCE_SECONDS, VULNERABILITY_SCAN_JOB_ID } from './vulnerabilities/scanner.ts'
 import { collectDatabaseBackupServices, createDatabaseBackup, DATABASE_BACKUP_JOB_ID, setDatabaseBackupSchedulePaused } from './db/backups.ts'
-import { ORGANIZATION_RETENTION_JOB_ID } from './organizationPrivacy.ts'
 
 const execFileAsync = promisify(execFile)
 const BEGIN = '# BEGIN HANASAND MANAGED CRON'

@@ -298,7 +298,7 @@ export async function verifyDatabaseBackupFile(file: string, actorId = 'system_a
             throw new BackupOperationError('Backup checksum does not match its persisted verification metadata.', 409)
         }
 
-        const sourceIntegrity = archive.integrity
+        const sourceIntegrity = existing?.sourceIntegrity || archive.integrity
         const metadata: BackupMetadata = {
             schemaVersion: 'hanasand.database_backup.v1',
             file: path.basename(backup),
@@ -378,7 +378,7 @@ export async function restoreDatabaseBackupFile(input: {
 
             await updateStage('checking_integrity')
             restoredIntegrity = await queryIntegrity(targetDatabase)
-            sourceIntegrity = archive.integrity
+            sourceIntegrity = existing?.sourceIntegrity || archive.integrity
             if (restoredIntegrity.tables !== sourceIntegrity.tables) {
                 throw new BackupOperationError(`Restore drill integrity failed: expected ${sourceIntegrity.tables} user tables and restored ${restoredIntegrity.tables}.`, 500)
             }
@@ -405,15 +405,8 @@ export async function restoreDatabaseBackupFile(input: {
             }
         }
 
-        if (cleanupError) {
-            await patchOperation(_operation.id, { targetRemoved: false })
-            const cleanupMessage = `Cleanup failed; isolated target ${targetDatabase} was not removed: ${sanitizeBackupError(cleanupError)}`
-            if (workError) {
-                throw new BackupOperationError(`Restore drill failed: ${sanitizeBackupError(workError)} ${cleanupMessage}`, 500)
-            }
-            throw new BackupOperationError(cleanupMessage, 500)
-        }
         if (workError) throw workError
+        if (cleanupError) throw new BackupOperationError('Restore drill completed but the isolated target database could not be removed.', 500)
         if (!restoredIntegrity) throw new BackupOperationError('Restore drill did not produce integrity evidence.', 500)
 
         const info = await stat(backup)
@@ -768,10 +761,7 @@ async function inspectArchive(file: string) {
     const lines = output.split('\n')
     const entries = lines.filter(line => line.trim() && !line.trim().startsWith(';')).length
     if (!entries) throw new BackupOperationError('Backup archive contains no restorable entries.', 500)
-    const tableLines = lines.filter(line => {
-        const fields = line.trim().split(/\s+/)
-        return fields[3] === 'TABLE' && fields[4] !== 'DATA' && fields[4] !== 'ATTACH'
-    })
+    const tableLines = lines.filter(line => /\bTABLE\b/.test(line) && !/TABLE DATA/.test(line))
     const schemas = new Set(tableLines.map(line => {
         const fields = line.trim().split(/\s+/)
         return fields[fields.indexOf('TABLE') + 1]
@@ -783,7 +773,7 @@ async function inspectArchive(file: string) {
 }
 
 async function queryIntegrity(database: string): Promise<IntegritySummary> {
-    const sql = 'SELECT json_build_object(\'schemas\', COUNT(DISTINCT n.nspname), \'tables\', COUNT(*), \'estimatedRows\', COALESCE(SUM(GREATEST(c.reltuples, 0)), 0))::text FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relkind IN (\'r\', \'p\') AND n.nspname NOT LIKE \'pg_%\' AND n.nspname <> \'information_schema\''
+    const sql = 'SELECT json_build_object(\'schemas\', COUNT(DISTINCT schemaname), \'tables\', COUNT(*), \'estimatedRows\', COALESCE(SUM(n_live_tup), 0))::text FROM pg_stat_user_tables'
     const output = await runBackupCommand('psql', [
         ...connectionArgs(),
         '--dbname', database,

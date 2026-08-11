@@ -187,7 +187,6 @@ export async function verifyDatabaseBackup(file: string) {
     return await requestService<{ message: string, operation: BackupOperation }>('internal', 'backup/verify', {
         method: 'POST',
         body: JSON.stringify({ file }),
-        signal: AbortSignal.timeout(10 * 60 * 1000),
     })
 }
 
@@ -195,6 +194,5 @@ export async function restoreDatabaseBackup(file: string, targetDatabase: string
     return await requestService<{ message: string, operation: BackupOperation }>('internal', 'backup/restore', {
         method: 'POST',
         body: JSON.stringify({ file, targetDatabase, confirmation }),
-        signal: AbortSignal.timeout(10 * 60 * 1000),
     })
 }
