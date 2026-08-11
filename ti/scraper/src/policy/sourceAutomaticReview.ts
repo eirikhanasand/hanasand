@@ -110,6 +110,25 @@ export function sourceAutomaticReviewEvidenceBound(review: any) {
     && /^[a-f0-9]{64}$/.test(String(item?.captureStateSha256 ?? "")));
 }
 
+export function automaticSourceReviewIdentity(source: any) {
+  const identity = {
+    sourceId: String(source?.id ?? ""),
+    tenantKey: String(source?.tenantId ?? "global"),
+    canonicalFeedKey: canonicalFeedKey(String(source?.url ?? "")),
+    createdAt: String(source?.createdAt ?? "")
+  };
+  return { ...identity, sha256: createHash("sha256").update(JSON.stringify(identity)).digest("hex") };
+}
+
+export function sourceAutomaticReviewIdentityMatches(source: any, review = source?.metadata?.automaticSourceReview) {
+  const identity = automaticSourceReviewIdentity(source);
+  return review?.sourceIdentity?.sourceId === identity.sourceId
+    && review.sourceIdentity.tenantKey === identity.tenantKey
+    && review.sourceIdentity.canonicalFeedKey === identity.canonicalFeedKey
+    && review.sourceIdentity.createdAt === identity.createdAt
+    && review.sourceIdentity.sha256 === identity.sha256;
+}
+
 export function hasApprovedAutomaticSourceReview(source: any, modelVersion = automaticReviewModelVersion()) {
   if (!sourceRequiresAutomaticReview(source)) return true;
   const review = source?.metadata?.automaticSourceReview;
