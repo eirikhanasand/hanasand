@@ -3918,6 +3918,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     const now = Date.now();
     for (const [index, checkedAt] of [new Date(now - 7_200_000).toISOString(), new Date(now - 3_600_000).toISOString()].entries()) {
       const runId = `run_bounded_productive_${index + 1}`;
+      first.saveRun({ id: runId, requestId: "req_public_canary", status: "completed", startedAt: checkedAt, completedAt: checkedAt, updatedAt: checkedAt } as any);
       first.saveCapture(fixtureCapture({
         id: `capture_bounded_productive_${index + 1}`,
         sourceId,
@@ -3937,6 +3938,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         legalMode: "public_content"
       });
     }
+    first.saveRun({ id: "run_bounded_latest", requestId: "req_public_canary", status: "completed", startedAt: new Date(now - 1_800_000).toISOString(), completedAt: new Date(now - 1_800_000).toISOString(), updatedAt: new Date(now - 1_800_000).toISOString() } as any);
     first.saveSourceHealthObservation({
       id: "health_bounded_latest",
       sourceId,
