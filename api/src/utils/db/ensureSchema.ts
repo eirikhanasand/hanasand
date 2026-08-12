@@ -299,9 +299,20 @@ export default async function ensureSchema() {
             END IF;
         END $$;
     `)
-    await run('ALTER INDEX IF EXISTS idx_impersonation_sessions_target_created RENAME TO idx_impersonation_sessions_object_created')
-    await run('ALTER INDEX IF EXISTS idx_impersonation_events_target_created RENAME TO idx_impersonation_events_object_created')
-    await run('ALTER INDEX IF EXISTS idx_impersonation_events_route_recent RENAME TO idx_impersonation_events_route_recent_object')
+    await run(`
+        DO $$
+        BEGIN
+            IF to_regclass('public.idx_impersonation_sessions_target_created') IS NOT NULL AND to_regclass('public.idx_impersonation_sessions_object_created') IS NULL THEN
+                ALTER INDEX public.idx_impersonation_sessions_target_created RENAME TO idx_impersonation_sessions_object_created;
+            END IF;
+            IF to_regclass('public.idx_impersonation_events_target_created') IS NOT NULL AND to_regclass('public.idx_impersonation_events_object_created') IS NULL THEN
+                ALTER INDEX public.idx_impersonation_events_target_created RENAME TO idx_impersonation_events_object_created;
+            END IF;
+            IF to_regclass('public.idx_impersonation_events_route_recent') IS NOT NULL AND to_regclass('public.idx_impersonation_events_route_recent_object') IS NULL THEN
+                ALTER INDEX public.idx_impersonation_events_route_recent RENAME TO idx_impersonation_events_route_recent_object;
+            END IF;
+        END $$;
+    `)
     await run('ALTER TABLE IF EXISTS impersonation_sessions DROP CONSTRAINT IF EXISTS impersonation_sessions_target_id_fkey')
     await run('ALTER TABLE IF EXISTS impersonation_events DROP CONSTRAINT IF EXISTS impersonation_events_target_id_fkey')
     await run('ALTER TABLE IF EXISTS impersonation_sessions ADD CONSTRAINT impersonation_sessions_object_id_fkey FOREIGN KEY (object_id) REFERENCES users(id) ON DELETE CASCADE')
