@@ -15,8 +15,9 @@ WORKDIR /app/ti/scraper
 # keep the production image build focused on the executable type boundary.
 RUN bun run check
 
-FROM test AS runtime
+FROM deps AS runtime
 
+COPY . /app/
 WORKDIR /app/ti/scraper
 ENV NODE_ENV=production \
     SCRAPER_PORT=8097 \
