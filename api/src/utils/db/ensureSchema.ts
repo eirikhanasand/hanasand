@@ -315,8 +315,19 @@ export default async function ensureSchema() {
     `)
     await run('ALTER TABLE IF EXISTS impersonation_sessions DROP CONSTRAINT IF EXISTS impersonation_sessions_target_id_fkey')
     await run('ALTER TABLE IF EXISTS impersonation_events DROP CONSTRAINT IF EXISTS impersonation_events_target_id_fkey')
-    await run('ALTER TABLE IF EXISTS impersonation_sessions ADD CONSTRAINT impersonation_sessions_object_id_fkey FOREIGN KEY (object_id) REFERENCES users(id) ON DELETE CASCADE')
-    await run('ALTER TABLE IF EXISTS impersonation_events ADD CONSTRAINT impersonation_events_object_id_fkey FOREIGN KEY (object_id) REFERENCES users(id) ON DELETE CASCADE')
+    await run(`
+        DO $$
+        BEGIN
+            IF to_regclass('public.impersonation_sessions') IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'impersonation_sessions_object_id_fkey') THEN
+                ALTER TABLE public.impersonation_sessions ADD CONSTRAINT impersonation_sessions_object_id_fkey FOREIGN KEY (object_id) REFERENCES users(id) ON DELETE CASCADE;
+            END IF;
+            IF to_regclass('public.impersonation_events') IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'impersonation_events_object_id_fkey') THEN
+                ALTER TABLE public.impersonation_events ADD CONSTRAINT impersonation_events_object_id_fkey FOREIGN KEY (object_id) REFERENCES users(id) ON DELETE CASCADE;
+            END IF;
+        END $$;
+    `)
     await run(`
         CREATE TABLE IF NOT EXISTS impersonation_sessions (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
