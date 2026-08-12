@@ -122,7 +122,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   static async create(options: PostgresScraperStoreOptions = {}): Promise<PostgresScraperStore> {
     const databaseUrl = options.databaseUrl ?? Bun.env.TI_DATABASE_URL;
-    const sql = createPostgresClient(databaseUrl);
+    const sql = new SQL(databaseUrl);
     const runMaintenanceMigrations = options.runMaintenanceMigrations !== false;
     const migrations = DEFAULT_MIGRATIONS.filter((migration) => runMaintenanceMigrations || !MAINTENANCE_MIGRATION_VERSIONS.has(migration.version)).map((migration, index) => ({
       ...migration,
