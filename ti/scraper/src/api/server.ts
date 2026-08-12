@@ -153,6 +153,24 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (/^\/v1\/organizations\/[^/]+\/webhooks\/test$/.test(url.pathname) && request.method === "POST") return testOrganizationWebhook(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/webhooks\/[^/]+$/.test(url.pathname) && request.method === "PATCH") return updateWebhookDestination(request, options, url.pathname.split("/")[3], url.pathname.split("/")[5]);
     if (/^\/v1\/organizations\/[^/]+\/webhooks\/[^/]+$/.test(url.pathname) && request.method === "DELETE") return disableWebhookDestination(request, options, url.pathname.split("/")[3], url.pathname.split("/")[5]);
+    if (/^\/v1\/organizations\/[^/]+\/workflow-events$/.test(url.pathname) && request.method === "GET") {
+      const authentication = await authenticateOperatorRequest(request, options);
+      if (authentication.error) return authentication.error;
+      if (!authentication.identity) return error("authentication_unavailable", "Organization event authentication is not configured", 503);
+      const organizationId = url.pathname.split("/")[3] ?? "";
+      const scope = resolveTenantScope(request, url);
+      if (scope.error) return scope.error;
+      const accessError = authorizeOperatorScope(authentication.identity, options, scope.tenantId);
+      if (accessError) return accessError;
+      if (scope.tenantId && scope.tenantId !== organizationId) return error("organization_scope_forbidden", "Organization event access is outside the authenticated scope", 403);
+      return json(await (options.store as any).queryOrganizationWorkflowEvents({
+        organizationId,
+        tenantId: scope.tenantId,
+        limit: numberQuery(url.searchParams.get("limit")),
+        cursor: url.searchParams.get("cursor") ?? undefined,
+        eventType: url.searchParams.get("eventType")?.trim() || undefined
+      }));
+    }
     if (url.pathname === "/v1/cases" && request.method === "GET") return listCases(url, options, request);
     if (url.pathname === "/v1/cases" && request.method === "POST") return createCase(request, options);
     if (/^\/v1\/cases\/[^/]+\/action-replay-export$/.test(url.pathname) && request.method === "GET") return exportCaseActionReplay(url, options, url.pathname.split("/")[3], request);

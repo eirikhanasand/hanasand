@@ -3,7 +3,7 @@ import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import sanitize from '#utils/sanitize.ts'
-import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
+import { recordSystemEvent } from '#utils/systemEvent.ts'
 
 type FeatureBody = {
     always_running_enabled?: boolean
@@ -90,7 +90,7 @@ export default async function putVmHostFeatures(req: FastifyRequest, res: Fastif
             RETURNING *
         `, [vmName, alwaysPremium, alwaysEnabled, failoverPremium, failoverEnabled, primaryHost, failoverHost])
 
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'vm.features.updated',
             actorId: userId,
             targetType: 'vm',

@@ -67,7 +67,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "029_scope_capture_dedupe_by_tenant", path: fileURLToPath(new URL("../../migrations/029_scope_capture_dedupe_by_tenant.sql", import.meta.url)) },
   { version: "030_reconcile_actor_profiles", path: fileURLToPath(new URL("../../migrations/030_reconcile_actor_profiles.sql", import.meta.url)) },
   { version: "031_archive_inactive_actor_profiles", path: fileURLToPath(new URL("../../migrations/031_archive_inactive_actor_profiles.sql", import.meta.url)) },
-  { version: "041_query_path_indexes", path: fileURLToPath(new URL("../../migrations/041_query_path_indexes.sql", import.meta.url)) }
+  { version: "041_query_path_indexes", path: fileURLToPath(new URL("../../migrations/041_query_path_indexes.sql", import.meta.url)) },
+  { version: "042_organization_workflow_events", path: fileURLToPath(new URL("../../migrations/042_organization_workflow_events.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 const MAINTENANCE_MIGRATION_VERSIONS = new Set(["037_remove_parser_fallback_artifacts"]);
@@ -321,6 +322,38 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       ? await this.sql.unsafe(`SELECT record FROM threat_intel.${table.name} WHERE (${collectionWhere}) ORDER BY ${table.orderBy} DESC`)
       : await this.sql.unsafe(`SELECT record FROM threat_intel.${table.name} WHERE ${tenantWhere} AND (${collectionWhere}) ORDER BY ${table.orderBy} DESC`, [input.tenantId]);
     return rows.map(readRecord);
+  }
+
+  async queryOrganizationWorkflowEvents(input: { organizationId: string; limit?: number; cursor?: string; eventType?: string }) {
+    const limit = Math.max(1, Math.min(100, Number(input.limit ?? 50)));
+    const cursor = decodeKeysetCursor(input.cursor);
+    const values: unknown[] = [input.organizationId];
+    const filters = ['organization_id = $1'];
+    if (input.eventType) {
+      values.push(input.eventType);
+      filters.push(`event_type = $${values.length}`);
+    }
+    if (cursor) {
+      values.push(cursor.at, cursor.id);
+      filters.push(`(occurred_at, id) < ($${values.length - 1}::timestamptz, $${values.length}::text)`);
+    }
+    values.push(limit + 1);
+    const rows = await this.sql.unsafe(`
+      SELECT id, organization_id, tenant_id, event_type, object_type, object_id,
+             occurred_at, outcome, context, created_at
+      FROM threat_intel.organization_workflow_events
+      WHERE ${filters.join(' AND ')}
+      ORDER BY occurred_at DESC, id DESC
+      LIMIT $${values.length}
+    `, values);
+    const pageRows = rows.slice(0, limit);
+    const last = pageRows.at(-1) as { id?: string; occurred_at?: string } | undefined;
+    return {
+      organizationId: input.organizationId,
+      events: pageRows,
+      nextCursor: rows.length > limit && last?.occurred_at && last.id ? encodeKeysetCursor(new Date(last.occurred_at).toISOString(), last.id) : undefined,
+      appliedFilters: { eventType: input.eventType ?? null }
+    };
   }
 
   async queryAutomaticReviewRecords(input: { tenantId?: string; allTenants?: boolean } = {}) {

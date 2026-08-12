@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { listApiKeys } from '#utils/auth/apiKeys.ts'
-import { recordAdminAuditEvent, requireAuditReason } from '#utils/adminAudit.ts'
+import { recordSystemEvent, requireAuditReason } from '#utils/systemEvent.ts'
 import { resetApiKeyRateLimitBuckets } from '#plugins/rateLimit.ts'
 
 export default async function resetApiKeyUsageHandler(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
@@ -25,7 +25,7 @@ export default async function resetApiKeyUsageHandler(req: FastifyRequest<{ Para
     if (!apiKey) return res.status(404).send({ error: 'API key not found.' })
 
     const resetCount = await resetApiKeyRateLimitBuckets(apiKey.id)
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'support.api_key.usage_reset',
         actorId: access.authenticatedId || access.id || '',
         targetType: 'api_key',

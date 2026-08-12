@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
-import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
+import { recordSystemEvent } from '#utils/systemEvent.ts'
 
 export default async function stopVms(req: FastifyRequest, res: FastifyReply) {
     const { valid, id: userId } = await tokenWrapper(req, res)
@@ -51,7 +51,7 @@ export default async function stopVms(req: FastifyRequest, res: FastifyReply) {
             RETURNING name
         `, [targetNames])
 
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'vm.shutdown.queued',
             actorId: userId || null,
             targetType: 'vm_batch',

@@ -2,10 +2,10 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import crypto from 'crypto'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import { actorHasAdminSupportAccess, recordAdminAuditEvent, requireAuditReason } from '#utils/adminAudit.ts'
+import { actorHasAdminSupportAccess, recordSystemEvent, requireAuditReason } from '#utils/systemEvent.ts'
 
 type StartBody = {
-    target_id?: string
+    object_id?: string
     targetId?: string
     target_user_id?: string
     reason?: string
@@ -57,7 +57,7 @@ async function getActiveUser(id: string) {
 
 async function audit(req: FastifyRequest, sessionId: string | null, actorId: string, targetId: string, actionPath: string, actionType: string, reason?: string, context: Record<string, unknown> = {}) {
     await run(`
-        INSERT INTO impersonation_events (session_id, actor_id, target_id, method, path, ip, user_agent)
+        INSERT INTO impersonation_events (session_id, actor_id, object_id, method, path, ip, user_agent)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
     `, [
         sessionId,
@@ -71,7 +71,7 @@ async function audit(req: FastifyRequest, sessionId: string | null, actorId: str
         req.log.warn({ error, actorId, targetId, actionPath }, 'Failed to audit impersonation lifecycle event')
     })
     const requestId = supportRequestId(req)
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType,
         actorId,
         targetType: 'user',
@@ -87,7 +87,7 @@ async function audit(req: FastifyRequest, sessionId: string | null, actorId: str
             ...context,
         },
     })
-    const eventIds = await loadAdminAuditEventIds({
+    const eventIds = await loadSystemEventIds({
         requestId,
         actionType,
         entityId: sessionId || targetId,
@@ -108,7 +108,7 @@ async function auditDeniedImpersonationStart(req: FastifyRequest, input: {
     expiresAt: string | null
 }) {
     const requestId = supportRequestId(req)
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'impersonation.start',
         actorId: input.actorId,
         targetType: 'user',
@@ -135,7 +135,7 @@ async function auditDeniedImpersonationStart(req: FastifyRequest, input: {
             redactionRequired: true,
         },
     })
-    const eventIds = await loadAdminAuditEventIds({
+    const eventIds = await loadSystemEventIds({
         requestId,
         actionType: 'impersonation.start',
         entityId: input.supportSessionId || input.targetId,
@@ -145,15 +145,15 @@ async function auditDeniedImpersonationStart(req: FastifyRequest, input: {
 
 async function loadSupportSessionState(supportSessionId: string) {
     const result = await run(`
-        SELECT id, action_type, actor_id, target_id, organization_id, entity_id, request_id, reason, outcome, context, created_at
-        FROM admin_audit_events
-        WHERE entity_id = $1
-          AND action_type IN ('support.session.create', 'support.session.revoke')
+        SELECT id, event_type, actor_id, object_id, organization_id, subject_id, request_id, reason, outcome, context, created_at
+        FROM system_events
+        WHERE subject_id = $1
+          AND event_type IN ('support.session.create', 'support.session.revoke')
         ORDER BY created_at ASC, id ASC
     `, [supportSessionId])
-    const create = result.rows.find((row: Record<string, unknown>) => row.action_type === 'support.session.create') as Record<string, any> | undefined
+    const create = result.rows.find((row: Record<string, unknown>) => row.event_type === 'support.session.create') as Record<string, any> | undefined
     if (!create) return null
-    const revoke = [...result.rows].reverse().find((row: Record<string, unknown>) => row.action_type === 'support.session.revoke' && row.outcome === 'success') as Record<string, any> | undefined
+    const revoke = [...result.rows].reverse().find((row: Record<string, unknown>) => row.event_type === 'support.session.revoke' && row.outcome === 'success') as Record<string, any> | undefined
     const context = create.context as Record<string, unknown>
     return {
         supportSessionId,
@@ -161,7 +161,7 @@ async function loadSupportSessionState(supportSessionId: string) {
         reason: cleanText(create.reason),
         requestId: cleanText(create.request_id),
         organizationId: cleanText(context.targetOrganizationId || create.organization_id),
-        targetUserId: cleanText(context.targetUserId || create.target_id),
+        targetUserId: cleanText(context.targetUserId || create.object_id),
         allowedActions: Array.isArray(context.allowedActions) ? context.allowedActions.map(action => cleanText(action)).filter(Boolean) : [],
         scope: Array.isArray(context.scope) ? context.scope.map(item => cleanText(item)).filter(Boolean) : [],
         expiresAt: cleanText(context.expiresAt),
@@ -223,9 +223,9 @@ export async function startImpersonation(req: FastifyRequest, res: FastifyReply)
         return res.status(401).send({ error: actor.error || 'Unauthorized.' })
     }
     const body = req.body as StartBody | undefined
-    const targetId = cleanText(body?.target_id || body?.targetId || body?.target_user_id)
+    const targetId = cleanText(body?.object_id || body?.targetId || body?.target_user_id)
     if (!await actorHasAdminSupportAccess(actor.id)) {
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'impersonation.start',
             actorId: actor.id,
             targetType: 'user',
@@ -338,7 +338,7 @@ export async function startImpersonation(req: FastifyRequest, res: FastifyReply)
 
     const rawToken = `${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`
     const session = await run(`
-        INSERT INTO impersonation_sessions (token_hash, actor_id, target_id, reason, expires_at)
+        INSERT INTO impersonation_sessions (token_hash, actor_id, object_id, reason, expires_at)
         VALUES ($1, $2, $3, $4, $5)
         RETURNING id, created_at, expires_at
     `, [hashToken(rawToken), actor.id, target.id, reason, expiresAt.toISOString()])
@@ -433,14 +433,14 @@ export async function stopImpersonation(req: FastifyRequest, res: FastifyReply) 
         WHERE token_hash = $1
           AND actor_id = $2
           AND revoked_at IS NULL
-        RETURNING id, actor_id, target_id, reason, created_at, expires_at, revoked_at
+        RETURNING id, actor_id, object_id, reason, created_at, expires_at, revoked_at
     `, [hashToken(token), actor.authenticatedId])
-    const row = result.rows[0] as { id: string, actor_id: string, target_id: string, reason?: string | null, created_at?: string, expires_at?: string, revoked_at?: string } | undefined
+    const row = result.rows[0] as { id: string, actor_id: string, object_id: string, reason?: string | null, created_at?: string, expires_at?: string, revoked_at?: string } | undefined
     if (row) {
-        const auditTrail = await audit(req, row.id, row.actor_id, row.target_id, '/api/impersonation/stop', 'impersonation.stop', stopReason, {
+        const auditTrail = await audit(req, row.id, row.actor_id, row.object_id, '/api/impersonation/stop', 'impersonation.stop', stopReason, {
             schemaVersion: 'support.impersonation.stop.v1',
             requestId: supportRequestId(req),
-            targetUserId: row.target_id,
+            targetUserId: row.object_id,
             startReason: row.reason || null,
             stopReason,
             supportContext: stopContext || null,
@@ -459,7 +459,7 @@ export async function stopImpersonation(req: FastifyRequest, res: FastifyReply) 
                 requestId: auditTrail.requestId,
                 sessionId: row.id,
                 actorId: row.actor_id,
-                targetUserId: row.target_id,
+                targetUserId: row.object_id,
                 reason: stopReason,
                 supportContext: stopContext || null,
                 createdAt: row.created_at || null,
@@ -510,7 +510,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
         where.push(`(
             e.actor_id ILIKE ${placeholder}
             OR actor.name ILIKE ${placeholder}
-            OR e.target_id ILIKE ${placeholder}
+            OR e.object_id ILIKE ${placeholder}
             OR target.name ILIKE ${placeholder}
             OR e.path ILIKE ${placeholder}
             OR e.method ILIKE ${placeholder}
@@ -526,7 +526,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
     }
     if (targetFilter) {
         const placeholder = add(`%${targetFilter}%`)
-        where.push('(e.target_id ILIKE ' + placeholder + ' OR target.name ILIKE ' + placeholder + ')')
+        where.push('(e.object_id ILIKE ' + placeholder + ' OR target.name ILIKE ' + placeholder + ')')
     }
     if (actionFilter && !['impersonation.start', 'impersonation.stop', 'start', 'stop'].includes(actionFilter)) {
         return res.status(400).send(impersonationError('unsupported_impersonation_action_filter', 'Unsupported impersonation action filter.', {
@@ -568,7 +568,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
             e.session_id,
             e.actor_id,
             actor.name AS actor_name,
-            e.target_id,
+            e.object_id,
             target.name AS target_name,
             e.method,
             e.path,
@@ -582,7 +582,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
         FROM impersonation_events e
         LEFT JOIN impersonation_sessions session ON session.id = e.session_id
         LEFT JOIN users actor ON actor.id = e.actor_id
-        LEFT JOIN users target ON target.id = e.target_id
+        LEFT JOIN users target ON target.id = e.object_id
         ${where.length ? `WHERE ${where.join('\n          AND ')}` : ''}
         ORDER BY e.created_at DESC
         LIMIT ${add(limit)}
@@ -615,7 +615,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
 }
 
 async function loadImpersonationGuardrailAuditEvents(filters: Record<string, unknown>) {
-    const where = ['event.action_type = \'impersonation.start\'']
+    const where = ['event.event_type = \'impersonation.start\'']
     const values: Array<string | number> = []
     const add = (value: string | number) => {
         values.push(value)
@@ -636,9 +636,9 @@ async function loadImpersonationGuardrailAuditEvents(filters: Record<string, unk
         where.push(`(
             event.actor_id ILIKE ${placeholder}
             OR actor.name ILIKE ${placeholder}
-            OR event.target_id ILIKE ${placeholder}
+            OR event.object_id ILIKE ${placeholder}
             OR target.name ILIKE ${placeholder}
-            OR event.entity_id ILIKE ${placeholder}
+            OR event.subject_id ILIKE ${placeholder}
             OR event.request_id ILIKE ${placeholder}
             OR event.reason ILIKE ${placeholder}
             OR event.context::text ILIKE ${placeholder}
@@ -650,12 +650,12 @@ async function loadImpersonationGuardrailAuditEvents(filters: Record<string, unk
     }
     if (target) {
         const placeholder = add(`%${target}%`)
-        where.push('(event.target_id ILIKE ' + placeholder + ' OR target.name ILIKE ' + placeholder + ')')
+        where.push('(event.object_id ILIKE ' + placeholder + ' OR target.name ILIKE ' + placeholder + ')')
     }
     if (outcome) where.push(`event.outcome = ${add(outcome)}`)
     if (session) {
         const placeholder = add(`%${session}%`)
-        where.push('(event.entity_id ILIKE ' + placeholder + ' OR event.context->>\'supportSessionId\' ILIKE ' + placeholder + ' OR event.context->>\'sessionId\' ILIKE ' + placeholder + ')')
+        where.push('(event.subject_id ILIKE ' + placeholder + ' OR event.context->>\'supportSessionId\' ILIKE ' + placeholder + ' OR event.context->>\'sessionId\' ILIKE ' + placeholder + ')')
     }
     if (reason) where.push(`event.reason ILIKE ${add(`%${reason}%`)}`)
     if (from && !Number.isNaN(Date.parse(from))) where.push(`event.created_at >= ${add(new Date(from).toISOString())}`)
@@ -664,22 +664,22 @@ async function loadImpersonationGuardrailAuditEvents(filters: Record<string, unk
     const result = await run(`
         SELECT
             event.id,
-            event.action_type,
+            event.event_type,
             event.severity,
             event.actor_id,
             actor.name AS actor_name,
-            event.target_id,
+            event.object_id,
             target.name AS target_name,
             event.organization_id,
-            event.entity_id,
+            event.subject_id,
             event.request_id,
             event.outcome,
             event.reason,
             event.context,
             event.created_at
-        FROM admin_audit_events event
+        FROM system_events event
         LEFT JOIN users actor ON actor.id = event.actor_id
-        LEFT JOIN users target ON target.id = event.target_id
+        LEFT JOIN users target ON target.id = event.object_id
         WHERE ${where.join('\n          AND ')}
         ORDER BY event.created_at DESC, event.id DESC
         LIMIT ${add(Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 500) : 200)}
@@ -694,7 +694,7 @@ function supportImpersonationGuardrailAuditReplay(filters: Record<string, unknow
             schemaVersion: 'support.impersonation.guardrail_audit_event.v1',
             id: Number(row.id),
             timestamp: row.created_at || null,
-            actionType: row.action_type || 'impersonation.start',
+            actionType: row.event_type || 'impersonation.start',
             severity: row.severity || null,
             outcome: row.outcome || null,
             actor: {
@@ -703,11 +703,11 @@ function supportImpersonationGuardrailAuditReplay(filters: Record<string, unknow
             },
             target: {
                 type: 'user',
-                id: row.target_id || null,
+                id: row.object_id || null,
                 name: row.target_name || null,
             },
             organizationId: row.organization_id || context.organizationId || null,
-            entityId: row.entity_id || null,
+            entityId: row.subject_id || null,
             requestId: row.request_id || context.requestId || null,
             reasonPresent: Boolean(cleanText(row.reason)),
             supportSessionId: context.supportSessionId || context.sessionId || null,
@@ -790,7 +790,7 @@ function toImpersonationTimelineEvent(row: Record<string, any>) {
         },
         target: {
             type: 'user',
-            id: row.target_id,
+            id: row.object_id,
             name: row.target_name || null,
         },
         entity: {
@@ -813,7 +813,7 @@ function toImpersonationTimelineEvent(row: Record<string, any>) {
             audit: `/api/admin/audit-events?action=${encodeURIComponent(actionType)}&entity=${encodeURIComponent(String(row.session_id || ''))}&source=admin&service=hanasand-api`,
             request: `/api/admin/audit-events?action=${encodeURIComponent(actionType)}&entity=${encodeURIComponent(String(row.session_id || ''))}&reason=${encodeURIComponent(String(row.session_reason || ''))}&source=admin&service=hanasand-api`,
         },
-        copyText: `${row.created_at} ${actionType} actor=${row.actor_id} target=${row.target_id} session=${row.session_id || ''} duration=${durationMinutes ?? ''} reason=${row.session_reason || ''}`,
+        copyText: `${row.created_at} ${actionType} actor=${row.actor_id} target=${row.object_id} session=${row.session_id || ''} duration=${durationMinutes ?? ''} reason=${row.session_reason || ''}`,
     }
 }
 
@@ -846,7 +846,7 @@ function impersonationTimelineFilterContract(filters: Record<string, unknown>, t
         supportedFilters: ['q', 'actor', 'target', 'action', 'outcome', 'method', 'path', 'session', 'supportSession', 'supportSessionId', 'reason', 'from', 'to', 'limit'],
         filterReadiness: impersonationTimelineFilterReadiness(filters, timeline),
         lifecycleStorage: 'impersonation_events',
-        auditStorage: 'admin_audit_events',
+        auditStorage: 'system_events',
         eventCount: timeline.length,
         redacted: true,
         unavailableFilters: [
@@ -971,7 +971,7 @@ function impersonationTimelineDecisionPacket(filters: Record<string, unknown>, t
                 route: impersonationEventsQuery({ ...filters, session: activeSessionIds[0] }),
             } : null,
             missingReasonEventIds.length || missingDurationEventIds.length ? {
-                action: 'review_admin_audit_denials',
+                action: 'review_system_event_denials',
                 route: '/api/admin/audit-events?action=impersonation&outcome=denied&source=admin&service=hanasand-api',
             } : null,
         ].filter(Boolean),
@@ -1015,12 +1015,12 @@ function impersonationCaseReviewPacket(filters: Record<string, unknown>, timelin
         const context = row.context && typeof row.context === 'object' ? row.context as Record<string, unknown> : {}
         return {
             id: Number(row.id),
-            actionType: cleanText(row.action_type),
+            actionType: cleanText(row.event_type),
             outcome: cleanText(row.outcome),
             severity: cleanText(row.severity),
             actorId: cleanText(row.actor_id),
-            targetId: cleanText(row.target_id),
-            entityId: cleanText(row.entity_id),
+            targetId: cleanText(row.object_id),
+            entityId: cleanText(row.subject_id),
             requestId: cleanText(row.request_id),
             reason: cleanText(row.reason),
             supportSessionId: cleanText(context.supportSessionId || context.sessionId),
@@ -1429,13 +1429,13 @@ function headerText(value: string | string[] | undefined) {
     return Array.isArray(value) ? cleanText(value[0]) : cleanText(value)
 }
 
-async function loadAdminAuditEventIds(input: { requestId: string, actionType: string, entityId: string }) {
+async function loadSystemEventIds(input: { requestId: string, actionType: string, entityId: string }) {
     const result = await run(`
         SELECT id
-        FROM admin_audit_events
+        FROM system_events
         WHERE request_id = $1
-          AND action_type = $2
-          AND entity_id = $3
+          AND event_type = $2
+          AND subject_id = $3
         ORDER BY created_at DESC, id DESC
         LIMIT 10
     `, [input.requestId, input.actionType, input.entityId])
@@ -1454,6 +1454,6 @@ export async function getImpersonationCurrent(req: FastifyRequest, res: FastifyR
     return res.send({
         active: true,
         actor_id: actor.authenticatedId,
-        target_id: actor.id,
+        object_id: actor.id,
     })
 }

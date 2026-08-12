@@ -3,7 +3,7 @@ import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { revokeAllTokens } from '#utils/auth/session.ts'
-import { recordAdminAuditEvent, userHasAdministrativeRole } from '#utils/adminAudit.ts'
+import { recordSystemEvent, userHasAdministrativeRole } from '#utils/systemEvent.ts'
 
 export default async function deleteUser(req: FastifyRequest, res: FastifyReply) {
     const { valid, id: actorId } = await tokenWrapper(req, res)
@@ -33,7 +33,7 @@ export default async function deleteUser(req: FastifyRequest, res: FastifyReply)
         }
 
         await revokeAllTokens({ userId: id, revokedBy: actorId })
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'user.account.deleted',
             actorId,
             source: 'admin',
@@ -43,7 +43,7 @@ export default async function deleteUser(req: FastifyRequest, res: FastifyReply)
             context: { deletionMode: 'scheduled', administrativeAccount: wasAdmin },
         })
         if (wasAdmin) {
-            await recordAdminAuditEvent(req, {
+            await recordSystemEvent(req, {
                 actionType: 'admin.account.deleted',
                 actorId,
                 source: 'admin',

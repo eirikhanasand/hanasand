@@ -1,10 +1,10 @@
 import type { FastifyRequest } from 'fastify'
 import run from '#db'
 
-export type AdminAuditSeverity = 'info' | 'notice' | 'warning' | 'critical'
-export type AdminAuditOutcome = 'success' | 'denied' | 'failed'
+export type SystemEventSeverity = 'info' | 'notice' | 'warning' | 'critical'
+export type SystemEventOutcome = 'success' | 'denied' | 'failed'
 
-export type AdminAuditEventInput = {
+export type SystemEventInput = {
     actionType: string
     actorId: string | null
     source?: string | null
@@ -13,8 +13,8 @@ export type AdminAuditEventInput = {
     targetId?: string | null
     organizationId?: string | null
     entityId?: string | null
-    severity?: AdminAuditSeverity
-    outcome?: AdminAuditOutcome
+    severity?: SystemEventSeverity
+    outcome?: SystemEventOutcome
     reason?: string | null
     requestId?: string | null
     context?: Record<string, unknown>
@@ -29,8 +29,8 @@ export type SupportTimelineAuditBridgeInput = {
     organizationId?: string | null
     entityId?: string | null
     requestId?: string | null
-    severity?: AdminAuditSeverity
-    outcome?: AdminAuditOutcome
+    severity?: SystemEventSeverity
+    outcome?: SystemEventOutcome
     reason?: string | null
     source?: string | null
     service?: string | null
@@ -69,7 +69,7 @@ export function redactAuditValue(value: unknown): unknown {
     ]))
 }
 
-export function supportTimelineAuditBridgeEvent(input: SupportTimelineAuditBridgeInput): AdminAuditEventInput {
+export function supportTimelineAuditBridgeEvent(input: SupportTimelineAuditBridgeInput): SystemEventInput {
     const action = cleanAuditAction(input.action)
     const workflow = cleanAuditDimension(input.workflow) || 'support'
     const actionType = action.includes('.') ? action : `${workflow}.${action}`
@@ -136,7 +136,7 @@ export function supportTimelineAuditBridgeEvent(input: SupportTimelineAuditBridg
 }
 
 export async function recordSupportTimelineAuditBridgeEvent(req: FastifyRequest, input: SupportTimelineAuditBridgeInput) {
-    await recordAdminAuditEvent(req, supportTimelineAuditBridgeEvent(input))
+    await recordSystemEvent(req, supportTimelineAuditBridgeEvent(input))
 }
 
 export async function actorHasAdminSupportAccess(actorId: string) {
@@ -173,19 +173,19 @@ export async function userHasAdministrativeRole(userId: string) {
     return result.rows.length > 0
 }
 
-export async function recordAdminAuditEvent(req: FastifyRequest, input: AdminAuditEventInput) {
+export async function recordSystemEvent(req: FastifyRequest, input: SystemEventInput) {
     const requestId = input.requestId || requestIdFrom(req)
     await run(`
-        INSERT INTO admin_audit_events (
-            action_type,
+        INSERT INTO system_events (
+            event_type,
             severity,
             source,
             service,
             actor_id,
-            target_type,
-            target_id,
+            object_type,
+            object_id,
             organization_id,
-            entity_id,
+            subject_id,
             request_id,
             outcome,
             reason,
@@ -197,7 +197,7 @@ export async function recordAdminAuditEvent(req: FastifyRequest, input: AdminAud
     `, [
         input.actionType,
         input.severity || 'info',
-        cleanAuditDimension(input.source) || 'admin',
+        cleanAuditDimension(input.source) || 'system',
         cleanAuditDimension(input.service) || 'hanasand-api',
         input.actorId,
         input.targetType || null,

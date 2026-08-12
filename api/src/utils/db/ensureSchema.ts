@@ -291,7 +291,7 @@ export default async function ensureSchema() {
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             token_hash TEXT NOT NULL UNIQUE,
             actor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            target_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            object_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             reason TEXT NOT NULL DEFAULT '',
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             expires_at TIMESTAMPTZ NOT NULL,
@@ -300,13 +300,13 @@ export default async function ensureSchema() {
         )
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_impersonation_sessions_actor_active ON impersonation_sessions(actor_id, expires_at DESC) WHERE revoked_at IS NULL')
-    await run('CREATE INDEX IF NOT EXISTS idx_impersonation_sessions_target_created ON impersonation_sessions(target_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_impersonation_sessions_target_created ON impersonation_sessions(object_id, created_at DESC)')
     await run(`
         CREATE TABLE IF NOT EXISTS impersonation_events (
             id BIGSERIAL PRIMARY KEY,
             session_id UUID REFERENCES impersonation_sessions(id) ON DELETE SET NULL,
             actor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            target_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            object_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             method TEXT NOT NULL DEFAULT '',
             path TEXT NOT NULL DEFAULT '',
             ip TEXT NOT NULL DEFAULT '',
@@ -316,8 +316,8 @@ export default async function ensureSchema() {
     `)
     await run('ALTER TABLE impersonation_events ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES impersonation_sessions(id) ON DELETE SET NULL')
     await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_actor_created ON impersonation_events(actor_id, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_target_created ON impersonation_events(target_id, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_route_recent ON impersonation_events(actor_id, target_id, method, path, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_target_created ON impersonation_events(object_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_route_recent ON impersonation_events(actor_id, object_id, method, path, created_at DESC)')
     await run(`
         CREATE TABLE IF NOT EXISTS share (
             id TEXT PRIMARY KEY,
@@ -619,7 +619,7 @@ export default async function ensureSchema() {
             interval_minutes INT,
             run_at TIMESTAMPTZ,
             status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'archived')),
-            action_type TEXT NOT NULL DEFAULT 'agent_prompt' CHECK (action_type IN ('agent_prompt', 'echo', 'mail_health_check', 'system_alert', 'organization_report')),
+            event_type TEXT NOT NULL DEFAULT 'agent_prompt' CHECK (event_type IN ('agent_prompt', 'echo', 'mail_health_check', 'system_alert', 'organization_report')),
             organization_id TEXT,
             timezone TEXT NOT NULL DEFAULT 'UTC',
             model_name TEXT,
@@ -894,17 +894,49 @@ export default async function ensureSchema() {
     await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_organization_retention_one_active ON organization_retention_runs(organization_id) WHERE status IN (\'queued\', \'running\', \'failed\')')
     await run('CREATE INDEX IF NOT EXISTS idx_organization_retention_items_org_processed ON organization_retention_run_items(organization_id, processed_at DESC)')
     await run(`
-        CREATE TABLE IF NOT EXISTS admin_audit_events (
+        DO $$
+        BEGIN
+            IF to_regclass('admin_audit_events') IS NOT NULL AND to_regclass('system_events') IS NULL THEN
+                ALTER TABLE admin_audit_events RENAME TO system_events;
+            END IF;
+            IF to_regclass('system_events') IS NOT NULL THEN
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'system_events' AND column_name = 'action_type') THEN
+                    ALTER TABLE system_events RENAME COLUMN action_type TO event_type;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'system_events' AND column_name = 'target_type') THEN
+                    ALTER TABLE system_events RENAME COLUMN target_type TO object_type;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'system_events' AND column_name = 'target_id') THEN
+                    ALTER TABLE system_events RENAME COLUMN target_id TO object_id;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'system_events' AND column_name = 'entity_id') THEN
+                    ALTER TABLE system_events RENAME COLUMN entity_id TO subject_id;
+                END IF;
+            END IF;
+        END $$;
+    `)
+    await run('ALTER INDEX IF EXISTS idx_admin_audit_events_created_at RENAME TO idx_system_events_created_at')
+    await run('ALTER INDEX IF EXISTS idx_admin_audit_events_source_service_created RENAME TO idx_system_events_source_service_created')
+    await run('ALTER INDEX IF EXISTS idx_admin_audit_events_org_created RENAME TO idx_system_events_org_created')
+    await run('ALTER INDEX IF EXISTS idx_admin_audit_events_actor_created RENAME TO idx_system_events_actor_created')
+    await run('ALTER INDEX IF EXISTS idx_admin_audit_events_target_created RENAME TO idx_system_events_object_created')
+    await run('ALTER INDEX IF EXISTS idx_admin_audit_events_action_created RENAME TO idx_system_events_type_created')
+    await run('ALTER INDEX IF EXISTS idx_admin_audit_events_entity_created RENAME TO idx_system_events_subject_created')
+    await run('ALTER INDEX IF EXISTS idx_admin_audit_events_request_created RENAME TO idx_system_events_request_created')
+    await run('ALTER INDEX IF EXISTS idx_admin_audit_events_org_actor_created RENAME TO idx_system_events_org_actor_created')
+    await run('ALTER TABLE IF EXISTS system_events DROP CONSTRAINT IF EXISTS admin_audit_events_actor_id_fkey')
+    await run(`
+        CREATE TABLE IF NOT EXISTS system_events (
             id BIGSERIAL PRIMARY KEY,
-            action_type TEXT NOT NULL,
+            event_type TEXT NOT NULL,
             severity TEXT NOT NULL DEFAULT 'info' CHECK (severity IN ('info', 'notice', 'warning', 'critical')),
-            source TEXT NOT NULL DEFAULT 'admin',
+            source TEXT NOT NULL DEFAULT 'system',
             service TEXT NOT NULL DEFAULT 'hanasand-api',
             actor_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-            target_type TEXT,
-            target_id TEXT,
+            object_type TEXT,
+            object_id TEXT,
             organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
-            entity_id TEXT,
+            subject_id TEXT,
             request_id TEXT,
             outcome TEXT NOT NULL DEFAULT 'success' CHECK (outcome IN ('success', 'denied', 'failed')),
             reason TEXT NOT NULL DEFAULT '',
@@ -914,20 +946,20 @@ export default async function ensureSchema() {
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `)
-    await run('ALTER TABLE admin_audit_events ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT \'admin\'')
-    await run('ALTER TABLE admin_audit_events ADD COLUMN IF NOT EXISTS service TEXT NOT NULL DEFAULT \'hanasand-api\'')
-    await run('ALTER TABLE admin_audit_events ALTER COLUMN actor_id DROP NOT NULL')
-    await run('ALTER TABLE admin_audit_events DROP CONSTRAINT IF EXISTS admin_audit_events_actor_id_fkey')
-    await run('ALTER TABLE admin_audit_events ADD CONSTRAINT admin_audit_events_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL')
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_created_at ON admin_audit_events(created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_source_service_created ON admin_audit_events(source, service, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_org_created ON admin_audit_events(organization_id, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_actor_created ON admin_audit_events(actor_id, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_target_created ON admin_audit_events(target_type, target_id, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_action_created ON admin_audit_events(action_type, severity, outcome, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_entity_created ON admin_audit_events(entity_id, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_request_created ON admin_audit_events(request_id, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_org_actor_created ON admin_audit_events(organization_id, actor_id, created_at DESC)')
+    await run('ALTER TABLE system_events ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT \'system\'')
+    await run('ALTER TABLE system_events ADD COLUMN IF NOT EXISTS service TEXT NOT NULL DEFAULT \'hanasand-api\'')
+    await run('ALTER TABLE system_events ALTER COLUMN actor_id DROP NOT NULL')
+    await run('ALTER TABLE system_events DROP CONSTRAINT IF EXISTS system_events_actor_id_fkey')
+    await run('ALTER TABLE system_events ADD CONSTRAINT system_events_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL')
+    await run('CREATE INDEX IF NOT EXISTS idx_system_events_created_at ON system_events(created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_system_events_source_service_created ON system_events(source, service, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_system_events_org_created ON system_events(organization_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_system_events_actor_created ON system_events(actor_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_system_events_object_created ON system_events(object_type, object_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_system_events_type_created ON system_events(event_type, severity, outcome, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_system_events_subject_created ON system_events(subject_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_system_events_request_created ON system_events(request_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_system_events_org_actor_created ON system_events(organization_id, actor_id, created_at DESC)')
     await run(`
         CREATE TABLE IF NOT EXISTS admin_access_recovery_approvals (
             request_id TEXT PRIMARY KEY,

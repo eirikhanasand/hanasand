@@ -3,7 +3,7 @@ import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { revokeAllTokens } from '#utils/auth/session.ts'
 import { createAccountRestoreToken } from '#utils/auth/accountDeletion.ts'
-import { recordAdminAuditEvent, userHasAdministrativeRole } from '#utils/adminAudit.ts'
+import { recordSystemEvent, userHasAdministrativeRole } from '#utils/systemEvent.ts'
 
 type PendingDeletionUser = User & { deletion_scheduled_at: string }
 
@@ -68,7 +68,7 @@ export default async function deleteSelf(req: FastifyRequest, res: FastifyReply)
         }
 
         const wasAdmin = await userHasAdministrativeRole(id)
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'user.account.deleted',
             actorId: id,
             source: 'auth',
@@ -78,7 +78,7 @@ export default async function deleteSelf(req: FastifyRequest, res: FastifyReply)
             context: { deletionMode: 'scheduled', administrativeAccount: wasAdmin },
         })
         if (wasAdmin) {
-            await recordAdminAuditEvent(req, {
+            await recordSystemEvent(req, {
                 actionType: 'admin.account.deleted',
                 actorId: id,
                 source: 'auth',

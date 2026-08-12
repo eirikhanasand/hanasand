@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import crypto from 'crypto'
 import { validateSession } from './session.ts'
 import run from '#db'
-import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
+import { recordSystemEvent } from '#utils/systemEvent.ts'
 
 type Valid = {
     valid: boolean
@@ -20,7 +20,7 @@ type ImpersonationTarget = {
 type ImpersonationSession = {
     id: string
     actor_id: string
-    target_id: string
+    object_id: string
     target_name: string
     reason: string
     scope: string[]
@@ -40,20 +40,20 @@ async function getImpersonationSession(token: string, actorId: string): Promise<
         SELECT
             s.id,
             s.actor_id,
-            s.target_id,
+            s.object_id,
             s.reason,
             u.name AS target_name,
             audit.context AS audit_context
         FROM impersonation_sessions s
         JOIN users u
-          ON u.id = s.target_id
+          ON u.id = s.object_id
          AND u.active IS TRUE
          AND u.deletion_scheduled_at IS NULL
         LEFT JOIN LATERAL (
             SELECT context
-            FROM admin_audit_events
-            WHERE action_type = 'impersonation.start'
-              AND entity_id = s.id::text
+            FROM system_events
+            WHERE event_type = 'impersonation.start'
+              AND subject_id = s.id::text
             ORDER BY created_at DESC, id DESC
             LIMIT 1
         ) audit ON TRUE
@@ -69,7 +69,7 @@ async function getImpersonationSession(token: string, actorId: string): Promise<
     return {
         id: row.id,
         actor_id: row.actor_id,
-        target_id: row.target_id,
+        object_id: row.object_id,
         target_name: row.target_name,
         reason: row.reason || '',
         scope: normalizeStoredImpersonationScope(context?.scope),
@@ -115,13 +115,13 @@ async function auditImpersonationRequest(req: FastifyRequest, actorId: string, t
     const path = (req.url || '').split('?')[0] || ''
     const userAgent = String(req.headers['user-agent'] || '')
     await run(`
-        INSERT INTO impersonation_events (session_id, actor_id, target_id, method, path, ip, user_agent)
+        INSERT INTO impersonation_events (session_id, actor_id, object_id, method, path, ip, user_agent)
         SELECT $1, $2, $3, $4, $5, $6, $7
         WHERE NOT EXISTS (
             SELECT 1
             FROM impersonation_events
             WHERE actor_id = $2
-              AND target_id = $3
+              AND object_id = $3
               AND method = $4
               AND path = $5
               AND created_at > NOW() - INTERVAL '5 minutes'
@@ -129,7 +129,7 @@ async function auditImpersonationRequest(req: FastifyRequest, actorId: string, t
     `, [sessionId || null, actorId, targetId, method, path, req.ip, userAgent]).catch(error => {
         req.log.warn({ error, actorId, targetId, method, path }, 'Failed to audit impersonation request')
     })
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'impersonation.request',
         actorId,
         targetType: 'user',
@@ -161,11 +161,11 @@ function isImpersonationScopeAllowed(req: FastifyRequest, session: Impersonation
 async function auditImpersonationScopeDenied(req: FastifyRequest, session: ImpersonationSession) {
     const method = req.method || ''
     const path = (req.url || '').split('?')[0] || ''
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'impersonation.scope_denied',
         actorId: session.actor_id,
         targetType: 'user',
-        targetId: session.target_id,
+        targetId: session.object_id,
         organizationId: session.organization_id,
         entityId: session.id,
         severity: 'warning',
@@ -256,8 +256,8 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
                     error: 'Impersonation session expired.'
                 }
             }
-            effectiveId = serverSession.target_id
-            target = { id: serverSession.target_id, name: serverSession.target_name }
+            effectiveId = serverSession.object_id
+            target = { id: serverSession.object_id, name: serverSession.target_name }
             impersonationSessionId = serverSession.id
             activeImpersonationSession = serverSession
             impersonating = true

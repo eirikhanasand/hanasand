@@ -6,7 +6,7 @@ import login from '#utils/auth/login.ts'
 import { loadSQL } from '#utils/loadSQL.ts'
 import { ensureMailAccountForUser } from '#utils/mail/accounts.ts'
 import { getReservedUsernameReason, normalizeUsername } from '#utils/auth/reservedUsernames.ts'
-import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
+import { recordSystemEvent } from '#utils/systemEvent.ts'
 
 type GetUserBodyProps = {
     id: string
@@ -94,7 +94,7 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
             const rootQuery = await loadSQL('assignAdministratorRole.sql')
             await run(rootQuery, [normalizedId])
             assignedRoot = true
-            await recordAdminAuditEvent(req, {
+            await recordSystemEvent(req, {
                 actionType: 'admin.account.created',
                 actorId: null,
                 source: 'auth',

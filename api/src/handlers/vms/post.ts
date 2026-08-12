@@ -8,7 +8,7 @@ import syncUserCertificatesToVm from '#utils/vms/syncUserCertificatesToVm.ts'
 import config from '#constants'
 import { canUseLocalLxd, provisionLocalLxdInstance } from '#utils/vms/lxd.ts'
 import recordLog from '#utils/logs/recordLog.ts'
-import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
+import { recordSystemEvent } from '#utils/systemEvent.ts'
 
 export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     const body = req.body as {
@@ -88,7 +88,7 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
 
             await provisionIfLocal(name, req, body.provision_local !== false)
 
-            await recordAdminAuditEvent(req, {
+            await recordSystemEvent(req, {
                 actionType: 'vm.access.updated',
                 actorId,
                 targetType: 'vm',
@@ -131,7 +131,7 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
             void recordVmProvisioningError(name, error, 'certificate_sync')
         })
 
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'vm.created',
             actorId,
             targetType: 'vm',

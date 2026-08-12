@@ -4,7 +4,7 @@ import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { loadSQL } from '#utils/loadSQL.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import hasPermissionToModifyRole from '#utils/auth/hasPermissionToModifyRole.ts'
-import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
+import { recordSystemEvent } from '#utils/systemEvent.ts'
 
 /**
  * POST /role/assign
@@ -41,7 +41,7 @@ export default async function assignRole(req: FastifyRequest, res: FastifyReply)
         }
 
         if (isAdministrativeRole(role_id)) {
-            await recordAdminAuditEvent(req, {
+            await recordSystemEvent(req, {
                 actionType: 'admin.account.created',
                 actorId: assignedBy,
                 source: 'admin',

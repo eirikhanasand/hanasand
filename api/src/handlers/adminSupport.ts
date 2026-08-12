@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { randomUUID } from 'crypto'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import { actorHasAdminSupportAccess, recordAdminAuditEvent, redactAuditValue, requireAuditReason, supportTimelineAuditBridgeEvent } from '#utils/adminAudit.ts'
+import { actorHasAdminSupportAccess, recordSystemEvent, redactAuditValue, requireAuditReason, supportTimelineAuditBridgeEvent } from '#utils/systemEvent.ts'
 import {
     buildOrganizationDwmAlertReference,
     normalizeInviteInput,
@@ -359,7 +359,7 @@ const supportInspectionFilters = new Set([
     'cursor',
 ])
 
-const adminAuditFilters = new Set([
+const systemEventFilters = new Set([
     'q',
     'org',
     'orgId',
@@ -409,7 +409,7 @@ const adminAuditFilters = new Set([
     'cursor',
 ])
 
-export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply) {
+export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
     const actor = await requireAdminSupport(req, res)
     if (!actor) return
 
@@ -449,7 +449,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     if (text(query.cursor) && !cursor) {
         return res.status(400).send(supportError('invalid_audit_cursor', 'Audit cursor is invalid.'))
     }
-    const filterError = adminAuditFilterError(query, { severity, outcome, from, to, limit })
+    const filterError = systemEventFilterError(query, { severity, outcome, from, to, limit })
     if (filterError) {
         return res.status(400).send(filterError)
     }
@@ -457,17 +457,17 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     if (q) {
         const placeholder = add(`%${q}%`)
         where.push(`(
-            e.action_type ILIKE ${placeholder}
+            e.event_type ILIKE ${placeholder}
             OR e.source ILIKE ${placeholder}
             OR e.service ILIKE ${placeholder}
             OR e.actor_id ILIKE ${placeholder}
             OR actor.name ILIKE ${placeholder}
-            OR e.target_id ILIKE ${placeholder}
+            OR e.object_id ILIKE ${placeholder}
             OR target_user.name ILIKE ${placeholder}
-            OR e.target_type ILIKE ${placeholder}
+            OR e.object_type ILIKE ${placeholder}
             OR e.organization_id ILIKE ${placeholder}
             OR organization.name ILIKE ${placeholder}
-            OR e.entity_id ILIKE ${placeholder}
+            OR e.subject_id ILIKE ${placeholder}
             OR e.request_id ILIKE ${placeholder}
             OR e.outcome ILIKE ${placeholder}
             OR e.reason ILIKE ${placeholder}
@@ -483,14 +483,14 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     }
     if (target) {
         const placeholder = add(`%${target}%`)
-        where.push('(e.target_id ILIKE ' + placeholder + ' OR target_user.name ILIKE ' + placeholder + ' OR e.target_type ILIKE ' + placeholder + ')')
+        where.push('(e.object_id ILIKE ' + placeholder + ' OR target_user.name ILIKE ' + placeholder + ' OR e.object_type ILIKE ' + placeholder + ')')
     }
-    if (action) where.push(`e.action_type ILIKE ${add(`%${action}%`)}`)
+    if (action) where.push(`e.event_type ILIKE ${add(`%${action}%`)}`)
     if (severity) where.push(`e.severity = ${add(severity)}`)
     if (source) where.push(`e.source ILIKE ${add(`%${source}%`)}`)
     if (service) where.push(`e.service ILIKE ${add(`%${service}%`)}`)
-    if (entity) where.push(`e.entity_id ILIKE ${add(`%${entity}%`)}`)
-    if (entityType) where.push(`e.target_type ILIKE ${add(`%${entityType}%`)}`)
+    if (entity) where.push(`e.subject_id ILIKE ${add(`%${entity}%`)}`)
+    if (entityType) where.push(`e.object_type ILIKE ${add(`%${entityType}%`)}`)
     if (request) where.push(`e.request_id ILIKE ${add(`%${request}%`)}`)
     if (correlation) {
         const placeholder = add(`%${correlation}%`)
@@ -499,7 +499,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     if (idempotency) where.push(`e.context->>'idempotencyKey' ILIKE ${add(`%${idempotency}%`)}`)
     if (supportSession) {
         const placeholder = add(`%${supportSession}%`)
-        where.push('(e.entity_id ILIKE ' + placeholder + ' OR e.context->>\'supportSessionId\' ILIKE ' + placeholder + ')')
+        where.push('(e.subject_id ILIKE ' + placeholder + ' OR e.context->>\'supportSessionId\' ILIKE ' + placeholder + ')')
     }
     if (workflow) where.push(`e.context->>'workflow' ILIKE ${add(`%${workflow}%`)}`)
     if (blocker) {
@@ -522,18 +522,18 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     const result = await run(`
         SELECT
             e.id,
-            e.action_type,
+            e.event_type,
             e.severity,
             e.source,
             e.service,
             e.actor_id,
             actor.name AS actor_name,
-            e.target_type,
-            e.target_id,
+            e.object_type,
+            e.object_id,
             target_user.name AS target_name,
             e.organization_id,
             organization.name AS organization_name,
-            e.entity_id,
+            e.subject_id,
             e.request_id,
             e.outcome,
             e.reason,
@@ -541,9 +541,9 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
             e.ip,
             e.user_agent,
             e.created_at
-        FROM admin_audit_events e
+        FROM system_events e
         LEFT JOIN users actor ON actor.id = e.actor_id
-        LEFT JOIN users target_user ON target_user.id = e.target_id
+        LEFT JOIN users target_user ON target_user.id = e.object_id
         LEFT JOIN organizations organization ON organization.id = e.organization_id
         ${where.length ? `WHERE ${where.join('\n          AND ')}` : ''}
         ORDER BY e.created_at DESC
@@ -551,7 +551,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     `, values)
 
     const pageRows = result.rows.slice(0, limit)
-    const events = pageRows.map(toAdminAuditEvent)
+    const events = pageRows.map(toSystemEvent)
     const timeline = events.map(event => event.detail.timelineEvent)
     const nextCursor = result.rows.length > limit && pageRows.length ? encodeAuditCursor(pageRows[pageRows.length - 1].created_at, pageRows[pageRows.length - 1].id) : null
     const filters = { q, org, actor: actorFilter, target, action, severity, source, service, entity, entityType, request, correlation, idempotency, supportSession, workflow, blocker, reason, scope, context: contextFilter, outcome, from, to, limit, cursor: text(query.cursor) }
@@ -610,7 +610,7 @@ function decodeAuditCursor(value: string) {
     }
 }
 
-export async function getAdminAuditEvent(req: FastifyRequest<{ Params: AuditEventParams }>, res: FastifyReply) {
+export async function getSystemEvent(req: FastifyRequest<{ Params: AuditEventParams }>, res: FastifyReply) {
     const actor = await requireAdminSupport(req, res)
     if (!actor) return
 
@@ -624,18 +624,18 @@ export async function getAdminAuditEvent(req: FastifyRequest<{ Params: AuditEven
     const result = await run(`
         SELECT
             e.id,
-            e.action_type,
+            e.event_type,
             e.severity,
             e.source,
             e.service,
             e.actor_id,
             actor.name AS actor_name,
-            e.target_type,
-            e.target_id,
+            e.object_type,
+            e.object_id,
             target_user.name AS target_name,
             e.organization_id,
             organization.name AS organization_name,
-            e.entity_id,
+            e.subject_id,
             e.request_id,
             e.outcome,
             e.reason,
@@ -643,9 +643,9 @@ export async function getAdminAuditEvent(req: FastifyRequest<{ Params: AuditEven
             e.ip,
             e.user_agent,
             e.created_at
-        FROM admin_audit_events e
+        FROM system_events e
         LEFT JOIN users actor ON actor.id = e.actor_id
-        LEFT JOIN users target_user ON target_user.id = e.target_id
+        LEFT JOIN users target_user ON target_user.id = e.object_id
         LEFT JOIN organizations organization ON organization.id = e.organization_id
         WHERE e.id = $1
         LIMIT 1
@@ -657,12 +657,12 @@ export async function getAdminAuditEvent(req: FastifyRequest<{ Params: AuditEven
         }))
     }
 
-    const event = toAdminAuditEvent(row)
-    const relatedTimeline = await loadAdminAuditEventRelatedTimeline(event)
-    await recordAdminAuditEvent(req, {
+    const event = toSystemEvent(row)
+    const relatedTimeline = await loadSystemEventRelatedTimeline(event)
+    await recordSystemEvent(req, {
         actionType: 'support.audit_event.inspect',
         actorId: actor.id,
-        targetType: 'admin_audit_event',
+        targetType: 'system_event_event',
         targetId: String(event.id),
         organizationId: event.detail?.organizationId || null,
         entityId: event.detail?.entityId || String(event.id),
@@ -731,7 +731,7 @@ export async function postSupportSession(req: FastifyRequest<{ Body: SupportSess
         immutableAudit: true,
         redactionRequired: true,
     }
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'support.session.create',
         actorId: actor.id,
         targetType: targetUserId ? 'user' : 'organization',
@@ -744,7 +744,7 @@ export async function postSupportSession(req: FastifyRequest<{ Body: SupportSess
         reason,
         context,
     })
-    const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType: 'support.session.create', entityId: supportSessionId })
+    const auditEventIds = await loadSystemEventIds({ requestId, actionType: 'support.session.create', entityId: supportSessionId })
 
     return res.status(201).send({
         supportSession: supportSessionResponse({
@@ -772,7 +772,7 @@ export async function getSupportSession(req: FastifyRequest<{ Params: SupportSes
     const requestId = supportRequestId(req)
     const state = await loadSupportSessionState(supportSessionId)
     if (!state) {
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'support.session.inspect',
             actorId: actor.id,
             targetType: 'support_session',
@@ -791,7 +791,7 @@ export async function getSupportSession(req: FastifyRequest<{ Params: SupportSes
         return res.status(404).send(supportError('support_session_not_found', 'Support session not found.', { supportSessionId }))
     }
 
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'support.session.inspect',
         actorId: actor.id,
         targetType: state.targetUserId ? 'user' : 'support_session',
@@ -953,7 +953,7 @@ export async function postSupportSessionRevoke(req: FastifyRequest<{ Params: Sup
         outcome: 'success',
         blocker: null,
     })
-    const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType: 'support.session.revoke', entityId: supportSessionId })
+    const auditEventIds = await loadSystemEventIds({ requestId, actionType: 'support.session.revoke', entityId: supportSessionId })
     return res.send({
         supportSession: supportSessionResponse({
             ...state,
@@ -975,7 +975,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
     const inspectionAudit = supportInspectionAuditMetadata(req)
     const organization = await loadOrganizationSupportDetail(req.params.id)
     if (!organization) {
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'support.organization.inspect',
             actorId: actor.id,
             targetType: 'organization',
@@ -1051,8 +1051,8 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
             ORDER BY status ASC, updated_at DESC
         `, [organization.id]),
         run(`
-            SELECT id, action_type, severity, source, service, actor_id, target_type, target_id, entity_id, request_id, outcome, reason, context, created_at
-            FROM admin_audit_events
+            SELECT id, event_type, severity, source, service, actor_id, object_type, object_id, subject_id, request_id, outcome, reason, context, created_at
+            FROM system_events
             WHERE organization_id = $1
             ORDER BY created_at DESC
             LIMIT 25
@@ -1060,7 +1060,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         loadOrganizationAvailability([organization.id]),
     ])
 
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'support.organization.inspect',
         actorId: actor.id,
         targetType: 'organization',
@@ -1358,7 +1358,7 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
     `, [req.params.id])
     const userRow = user.rows[0] as Record<string, unknown> | undefined
     if (!userRow) {
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'support.user.inspect',
             actorId: actor.id,
             targetType: 'user',
@@ -1399,18 +1399,18 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
             ORDER BY organization_invites.created_at DESC
         `, [req.params.id]),
         run(`
-            SELECT id, action_type, severity, source, service, actor_id, target_type, target_id, organization_id, entity_id, request_id, outcome, reason, context, created_at
-            FROM admin_audit_events
-            WHERE target_id = $1
+            SELECT id, event_type, severity, source, service, actor_id, object_type, object_id, organization_id, subject_id, request_id, outcome, reason, context, created_at
+            FROM system_events
+            WHERE object_id = $1
                OR actor_id = $1
-               OR entity_id = $1
+               OR subject_id = $1
             ORDER BY created_at DESC
             LIMIT 25
         `, [req.params.id]),
         loadInspectionApprovals({ org: '', user: req.params.id, email: '', request: inspectionAudit.requestId, outcome: '', limit: 25 }),
     ])
 
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'support.user.inspect',
         actorId: actor.id,
         targetType: 'user',
@@ -1674,7 +1674,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         const userMismatch = Boolean(requestedUser && sessionState.targetUserId && requestedUser !== sessionState.targetUserId)
         if (orgMismatch || userMismatch) {
             const blocker = orgMismatch ? 'support_session_org_mismatch' : 'support_session_user_mismatch'
-            await recordAdminAuditEvent(req, {
+            await recordSystemEvent(req, {
                 actionType: 'support.inspect',
                 actorId: actor.id,
                 targetType: 'support_session',
@@ -2017,7 +2017,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         authorization,
     })
 
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'support.inspect',
         actorId: actor.id,
         targetType: user ? 'user' : email ? 'invite' : org ? 'organization' : supportSession ? 'support_session' : 'request',
@@ -2163,7 +2163,7 @@ export async function getSupportReadiness(req: FastifyRequest<{ Querystring: Sup
     const action = text(query.action || 'support')
     const severity = normalizeOption(query.severity, ['info', 'notice', 'warning', 'critical'])
     const outcome = normalizeOption(query.outcome, ['success', 'denied', 'failed'])
-    const source = text(query.source || 'admin')
+    const source = text(query.source || 'system')
     const service = text(query.service || 'hanasand-api')
     const blocker = text(query.blocker || query.blockerCode)
     const reason = text(query.reason || query.supportReason)
@@ -2347,7 +2347,7 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
                     query: supportInviteAssistAuditQuery({
                         requestId: duplicate.request_id,
                         organizationId: organization.id,
-                        entityId: duplicate.entity_id || duplicateInviteIds.join(','),
+                        entityId: duplicate.subject_id || duplicateInviteIds.join(','),
                         correlationId: executorControls.correlationId,
                         idempotencyKey: executorControls.idempotencyKey,
                         reason,
@@ -2412,7 +2412,7 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
     const inviteIds = rows.map(row => row.id)
     const entityId = inviteIds.join(',')
     await run('UPDATE organizations SET updated_at = NOW() WHERE id = $1', [organization.id])
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'support.organization.invite_assist',
         actorId: actor.id,
         targetType: 'organization',
@@ -2451,7 +2451,7 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
             supportContext: cleanContext(req.body?.context),
         },
     })
-    const auditEventIds = await loadAdminAuditEventIds({
+    const auditEventIds = await loadSystemEventIds({
         requestId,
         actionType: 'support.organization.invite_assist',
         entityId,
@@ -2570,7 +2570,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
             controls: controls.value,
             supportContext: cleanContext(req.body?.context),
         })
-        const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: req.params.inviteId })
+        const auditEventIds = await loadSystemEventIds({ requestId, actionType, entityId: req.params.inviteId })
         return res.status(controls.error.status).send(supportError(controls.error.code, controls.error.message, {
             executorBlocker: supportInviteActionExecutorDetail({
                 organizationId: organization.id,
@@ -2636,7 +2636,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
             controls: executorControls,
             supportContext: cleanContext(req.body?.context),
         })
-        const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: invite.id })
+        const auditEventIds = await loadSystemEventIds({ requestId, actionType, entityId: invite.id })
         return res.status(sessionValidation.error.status).send(supportError(sessionValidation.error.code, sessionValidation.error.message, {
             executorBlocker: supportInviteActionExecutorDetail({
                 organizationId: organization.id,
@@ -2756,7 +2756,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
             controls: executorControls,
             supportContext: cleanContext(req.body?.context),
         })
-        const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: invite.id })
+        const auditEventIds = await loadSystemEventIds({ requestId, actionType, entityId: invite.id })
         return res.status(409).send(supportError('active_admin_available', 'An active organization admin is available; support invite action requires unavailable org administration.', {
             executorBlocker: supportInviteActionExecutorDetail({
                 organizationId: organization.id,
@@ -2790,7 +2790,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
     }
 
     if (invite.status === 'accepted') {
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType,
             actorId: actor.id,
             targetType: 'invite',
@@ -2833,7 +2833,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
                 supportContext: cleanContext(req.body?.context),
             },
         })
-        const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: invite.id })
+        const auditEventIds = await loadSystemEventIds({ requestId, actionType, entityId: invite.id })
         return res.status(409).send({
             error: 'Accepted invites cannot be revoked or resent by support action; inspect membership state instead.',
             inviteAction: {
@@ -2910,7 +2910,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
     const after = inviteSnapshot(updatedInvite)
     await run('UPDATE organizations SET updated_at = NOW() WHERE id = $1', [organization.id])
 
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType,
         actorId: actor.id,
         targetType: 'invite',
@@ -2953,7 +2953,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
             supportContext: cleanContext(req.body?.context),
         },
     })
-    const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: updatedInvite.id })
+    const auditEventIds = await loadSystemEventIds({ requestId, actionType, entityId: updatedInvite.id })
 
     return res.send({
         inviteAction: {
@@ -3038,7 +3038,7 @@ export async function getSupportOrganizationInvite(req: FastifyRequest<{ Params:
     const inspectionAudit = supportInspectionAuditMetadata(req)
     const organization = await loadOrganizationSupportDetail(req.params.id)
     if (!organization) {
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'support.organization.invite.inspect',
             actorId: actor.id,
             targetType: 'invite',
@@ -3064,7 +3064,7 @@ export async function getSupportOrganizationInvite(req: FastifyRequest<{ Params:
     `, [req.params.inviteId, organization.id])
     const invite = inviteResult.rows[0] as OrganizationInviteRow | undefined
     if (!invite) {
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'support.organization.invite.inspect',
             actorId: actor.id,
             targetType: 'invite',
@@ -3083,38 +3083,38 @@ export async function getSupportOrganizationInvite(req: FastifyRequest<{ Params:
     const auditRows = await run(`
         SELECT
             event.id,
-            event.action_type,
+            event.event_type,
             event.severity,
             event.source,
             event.service,
             event.actor_id,
             actor.name AS actor_name,
-            event.target_type,
-            event.target_id,
+            event.object_type,
+            event.object_id,
             target_user.name AS target_name,
             event.organization_id,
             organization.name AS organization_name,
-            event.entity_id,
+            event.subject_id,
             event.request_id,
             event.outcome,
             event.reason,
             event.context,
             event.created_at
-        FROM admin_audit_events event
+        FROM system_events event
         LEFT JOIN users actor ON actor.id = event.actor_id
-        LEFT JOIN users target_user ON target_user.id = event.target_id
+        LEFT JOIN users target_user ON target_user.id = event.object_id
         LEFT JOIN organizations organization ON organization.id = event.organization_id
         WHERE event.organization_id = $1
           AND (
-              event.entity_id = $2
-              OR event.target_id = $2
+              event.subject_id = $2
+              OR event.object_id = $2
               OR event.context->>'inviteId' = $2
               OR event.context->'inviteIds' ? $2
           )
         ORDER BY event.created_at DESC
         LIMIT 25
     `, [organization.id, invite.id])
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'support.organization.invite.inspect',
         actorId: actor.id,
         targetType: 'invite',
@@ -3252,7 +3252,7 @@ export async function getSupportOrganizationMember(req: FastifyRequest<{ Params:
     const inspectionAudit = supportInspectionAuditMetadata(req)
     const organization = await loadOrganizationSupportDetail(req.params.id)
     if (!organization) {
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'support.organization.member.inspect',
             actorId: actor.id,
             targetType: 'member',
@@ -3270,7 +3270,7 @@ export async function getSupportOrganizationMember(req: FastifyRequest<{ Params:
 
     const member = await loadSupportMemberDetail(organization.id, req.params.userId)
     if (!member) {
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'support.organization.member.inspect',
             actorId: actor.id,
             targetType: 'member',
@@ -3289,38 +3289,38 @@ export async function getSupportOrganizationMember(req: FastifyRequest<{ Params:
     const auditRows = await run(`
         SELECT
             event.id,
-            event.action_type,
+            event.event_type,
             event.severity,
             event.source,
             event.service,
             event.actor_id,
             actor.name AS actor_name,
-            event.target_type,
-            event.target_id,
+            event.object_type,
+            event.object_id,
             target_user.name AS target_name,
             event.organization_id,
             organization.name AS organization_name,
-            event.entity_id,
+            event.subject_id,
             event.request_id,
             event.outcome,
             event.reason,
             event.context,
             event.created_at
-        FROM admin_audit_events event
+        FROM system_events event
         LEFT JOIN users actor ON actor.id = event.actor_id
-        LEFT JOIN users target_user ON target_user.id = event.target_id
+        LEFT JOIN users target_user ON target_user.id = event.object_id
         LEFT JOIN organizations organization ON organization.id = event.organization_id
         WHERE event.organization_id = $1
           AND (
-              event.entity_id = $2
-              OR event.target_id = $2
+              event.subject_id = $2
+              OR event.object_id = $2
               OR event.context->>'targetUserId' = $2
               OR event.context->>'memberId' = $2
           )
         ORDER BY event.created_at DESC
         LIMIT 25
     `, [organization.id, req.params.userId])
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'support.organization.member.inspect',
         actorId: actor.id,
         targetType: 'member',
@@ -3684,7 +3684,7 @@ export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequ
     const noOp = member.role === input.role
     if (permissionError || noOp) {
         const error = permissionError || 'member_role_already_set'
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType,
             actorId: actor.id,
             targetType: 'member',
@@ -3728,7 +3728,7 @@ export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequ
                 supportContext: cleanContext(req.body?.context),
             },
         })
-        const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: req.params.userId })
+        const auditEventIds = await loadSystemEventIds({ requestId, actionType, entityId: req.params.userId })
         return res.status(permissionError ? 403 : 409).send({
             error: permissionError || 'Member already has the requested role.',
             memberRoleRecovery: {
@@ -3780,7 +3780,7 @@ export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequ
     }
     const after = membershipSnapshot(updatedMember)
 
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType,
         actorId: actor.id,
         targetType: 'member',
@@ -3824,7 +3824,7 @@ export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequ
             supportContext: cleanContext(req.body?.context),
         },
     })
-    const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: req.params.userId })
+    const auditEventIds = await loadSystemEventIds({ requestId, actionType, entityId: req.params.userId })
 
     return res.send({
         memberRoleRecovery: {
@@ -3934,14 +3934,14 @@ export async function getSupportAccessRecoveryApprovals(req: FastifyRequest<{ Qu
             COALESCE((
                 SELECT jsonb_agg(jsonb_build_object(
                     'id', event.id,
-                    'actionType', event.action_type,
+                    'actionType', event.event_type,
                     'outcome', event.outcome,
                     'severity', event.severity,
                     'createdAt', event.created_at
                 ) ORDER BY event.created_at ASC)
-                FROM admin_audit_events event
+                FROM system_events event
                 WHERE event.request_id = approval.request_id
-                  AND event.action_type ILIKE 'support.organization.access_recovery%'
+                  AND event.event_type ILIKE 'support.organization.access_recovery%'
             ), '[]'::jsonb) AS audit_events
         FROM admin_access_recovery_approvals approval
         JOIN organization_invites invite ON invite.id = approval.invite_id
@@ -3975,7 +3975,7 @@ export async function getSupportAccessRecoveryApproval(req: FastifyRequest<{ Par
     const approval = requestId ? await loadAccessRecoveryApproval(requestId) : undefined
     const inspectionRequestId = supportRequestId(req)
     if (!approval) {
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'support.organization.access_recovery.inspect',
             actorId: actor.id,
             targetType: 'access_recovery',
@@ -4000,33 +4000,33 @@ export async function getSupportAccessRecoveryApproval(req: FastifyRequest<{ Par
     const auditRows = await run(`
         SELECT
             event.id,
-            event.action_type,
+            event.event_type,
             event.severity,
             event.source,
             event.service,
             event.actor_id,
             actor.name AS actor_name,
-            event.target_type,
-            event.target_id,
+            event.object_type,
+            event.object_id,
             target_user.name AS target_name,
             event.organization_id,
             organization.name AS organization_name,
-            event.entity_id,
+            event.subject_id,
             event.request_id,
             event.outcome,
             event.reason,
             event.context,
             event.created_at
-        FROM admin_audit_events event
+        FROM system_events event
         LEFT JOIN users actor ON actor.id = event.actor_id
-        LEFT JOIN users target_user ON target_user.id = event.target_id
+        LEFT JOIN users target_user ON target_user.id = event.object_id
         LEFT JOIN organizations organization ON organization.id = event.organization_id
         WHERE event.request_id = $1
-           OR event.entity_id = $2
+           OR event.subject_id = $2
         ORDER BY event.created_at DESC
         LIMIT 50
     `, [approval.request_id, approval.invite_id])
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'support.organization.access_recovery.inspect',
         actorId: actor.id,
         targetType: 'access_recovery',
@@ -4177,7 +4177,7 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
         input = normalizeInviteInput({
             email: req.body?.email,
             emails: req.body?.emails,
-            role: req.body?.role || 'admin',
+            role: req.body?.role || 'system',
             expiresAt: req.body?.expiresAt,
         })
     } catch (error) {
@@ -4206,7 +4206,7 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
         targetUserId: targetUserId || null,
     })
     if (sessionValidation.error) {
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'support.organization.access_recovery',
             actorId: actor.id,
             targetType: targetUserId ? 'user' : 'invite',
@@ -4233,7 +4233,7 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
                 redactionRequired: true,
             },
         })
-        const auditEventIds = await loadAdminAuditEventIds({
+        const auditEventIds = await loadSystemEventIds({
             requestId,
             actionType: 'support.organization.access_recovery',
             entityId: supportSessionId || targetUserId || input.emails[0],
@@ -4358,7 +4358,7 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
         approval.approvalRequired ? 'pending' : 'not_required',
         inviteRow.expires_at,
     ])
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'support.organization.access_recovery',
         actorId: actor.id,
         targetType: targetUserId ? 'user' : 'invite',
@@ -4384,7 +4384,7 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
             approval,
         },
     })
-    const auditEventIds = await loadAdminAuditEventIds({
+    const auditEventIds = await loadSystemEventIds({
         requestId,
         actionType: 'support.organization.access_recovery',
         entityId: inviteRow.id,
@@ -4431,7 +4431,7 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
                 outcome: 'success',
                 severity: 'warning',
                 eventIds: auditEventIds,
-                query: `/api/admin/audit-events?request=${encodeURIComponent(requestId)}&outcome=success&source=admin&service=hanasand-api`,
+                query: `/api/admin/audit-events?request=${encodeURIComponent(requestId)}&outcome=success&source=system&service=hanasand-api`,
             },
             copyText: [
                 `Access recovery invite created for ${inviteRow.email}`,
@@ -4473,7 +4473,7 @@ async function decideSupportAccessRecovery(
 
     const current = await loadAccessRecoveryApproval(req.params.requestId)
     if (!current) {
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: `support.organization.access_recovery.${decision === 'approved' ? 'approve' : 'deny'}`,
             actorId: actor.id,
             targetType: 'access_recovery',
@@ -4511,7 +4511,7 @@ async function decideSupportAccessRecovery(
             supportContext: cleanContext(req.body?.context),
             redactionRequired: true,
         })
-        const auditEventIds = await loadAdminAuditEventIds({
+        const auditEventIds = await loadSystemEventIds({
             requestId: current.request_id,
             actionType: `support.organization.access_recovery.${decision === 'approved' ? 'approve' : 'deny'}`,
             entityId: current.invite_id,
@@ -4540,7 +4540,7 @@ async function decideSupportAccessRecovery(
 
     if (!current.approval_required) {
         await recordAccessRecoveryDecisionAudit(req, actor.id, current, decision, 'failed', reason, { error: 'approval_not_required' })
-        const auditEventIds = await loadAdminAuditEventIds({
+        const auditEventIds = await loadSystemEventIds({
             requestId: current.request_id,
             actionType: `support.organization.access_recovery.${decision === 'approved' ? 'approve' : 'deny'}`,
             entityId: current.invite_id,
@@ -4565,7 +4565,7 @@ async function decideSupportAccessRecovery(
 
     if (current.requested_by === actor.id) {
         await recordAccessRecoveryDecisionAudit(req, actor.id, current, decision, 'denied', reason, { error: 'self_approval_denied' })
-        const auditEventIds = await loadAdminAuditEventIds({
+        const auditEventIds = await loadSystemEventIds({
             requestId: current.request_id,
             actionType: `support.organization.access_recovery.${decision === 'approved' ? 'approve' : 'deny'}`,
             entityId: current.invite_id,
@@ -4590,7 +4590,7 @@ async function decideSupportAccessRecovery(
 
     if (current.status !== 'pending') {
         await recordAccessRecoveryDecisionAudit(req, actor.id, current, decision, 'failed', reason, { error: 'approval_not_pending', status: current.status })
-        const auditEventIds = await loadAdminAuditEventIds({
+        const auditEventIds = await loadSystemEventIds({
             requestId: current.request_id,
             actionType: `support.organization.access_recovery.${decision === 'approved' ? 'approve' : 'deny'}`,
             entityId: current.invite_id,
@@ -4665,7 +4665,7 @@ async function decideSupportAccessRecovery(
         supportSessionId: supportSessionId || null,
         supportContext: cleanContext(req.body?.context),
     })
-    const auditEventIds = await loadAdminAuditEventIds({
+    const auditEventIds = await loadSystemEventIds({
         requestId: updated.request_id,
         actionType: `support.organization.access_recovery.${decision === 'approved' ? 'approve' : 'deny'}`,
         entityId: updated.invite_id,
@@ -4749,7 +4749,7 @@ async function loadInspectionOrganizations(input: { q?: string, org: string, use
             OR o.slug ILIKE ${placeholder}
             OR EXISTS (SELECT 1 FROM organization_members om WHERE om.organization_id = o.id AND om.user_id ILIKE ${placeholder})
             OR EXISTS (SELECT 1 FROM organization_invites invite WHERE invite.organization_id = o.id AND invite.email ILIKE ${placeholder})
-            OR EXISTS (SELECT 1 FROM admin_audit_events event WHERE event.organization_id = o.id AND (event.action_type ILIKE ${placeholder} OR event.request_id ILIKE ${placeholder} OR event.entity_id ILIKE ${placeholder} OR event.reason ILIKE ${placeholder}))
+            OR EXISTS (SELECT 1 FROM system_events event WHERE event.organization_id = o.id AND (event.event_type ILIKE ${placeholder} OR event.request_id ILIKE ${placeholder} OR event.subject_id ILIKE ${placeholder} OR event.reason ILIKE ${placeholder}))
         )`)
     }
     if (input.user) {
@@ -4770,7 +4770,7 @@ async function loadInspectionOrganizations(input: { q?: string, org: string, use
         const placeholder = add(`%${input.request}%`)
         where.push(`(
             EXISTS (SELECT 1 FROM admin_access_recovery_approvals approval WHERE approval.organization_id = o.id AND approval.request_id ILIKE ${placeholder})
-            OR EXISTS (SELECT 1 FROM admin_audit_events event WHERE event.organization_id = o.id AND event.request_id ILIKE ${placeholder})
+            OR EXISTS (SELECT 1 FROM system_events event WHERE event.organization_id = o.id AND event.request_id ILIKE ${placeholder})
         )`)
     }
     if (!where.length) return []
@@ -4819,9 +4819,9 @@ async function loadInspectionUsers(input: { q?: string, user: string, request: s
                   AND users.id IN (approval.requested_by, approval.target_user_id, approval.approved_by, approval.denied_by)
             )
             OR EXISTS (
-                SELECT 1 FROM admin_audit_events event
+                SELECT 1 FROM system_events event
                 WHERE event.request_id ILIKE ${placeholder}
-                  AND users.id IN (event.actor_id, event.target_id)
+                  AND users.id IN (event.actor_id, event.object_id)
             )
         )`)
     }
@@ -4961,14 +4961,14 @@ async function loadInspectionApprovals(input: { q?: string, org: string, user: s
             COALESCE((
                 SELECT jsonb_agg(jsonb_build_object(
                     'id', event.id,
-                    'actionType', event.action_type,
+                    'actionType', event.event_type,
                     'outcome', event.outcome,
                     'severity', event.severity,
                     'createdAt', event.created_at
                 ) ORDER BY event.created_at ASC)
-                FROM admin_audit_events event
+                FROM system_events event
                 WHERE event.request_id = approval.request_id
-                  AND event.action_type ILIKE 'support.organization.access_recovery%'
+                  AND event.event_type ILIKE 'support.organization.access_recovery%'
             ), '[]'::jsonb) AS audit_events
         FROM admin_access_recovery_approvals approval
         JOIN organization_invites invite ON invite.id = approval.invite_id
@@ -4994,14 +4994,14 @@ async function loadInspectionAuditEvents(input: { q: string, org: string, user: 
     if (input.q) {
         const placeholder = add(`%${input.q}%`)
         where.push(`(
-            event.action_type ILIKE ${placeholder}
+            event.event_type ILIKE ${placeholder}
             OR event.actor_id ILIKE ${placeholder}
-            OR event.target_id ILIKE ${placeholder}
-            OR event.target_type ILIKE ${placeholder}
+            OR event.object_id ILIKE ${placeholder}
+            OR event.object_type ILIKE ${placeholder}
             OR event.organization_id ILIKE ${placeholder}
             OR organization.name ILIKE ${placeholder}
             OR organization.slug ILIKE ${placeholder}
-            OR event.entity_id ILIKE ${placeholder}
+            OR event.subject_id ILIKE ${placeholder}
             OR event.request_id ILIKE ${placeholder}
             OR event.outcome ILIKE ${placeholder}
             OR event.reason ILIKE ${placeholder}
@@ -5010,24 +5010,24 @@ async function loadInspectionAuditEvents(input: { q: string, org: string, user: 
     }
     if (input.user) {
         const placeholder = add(`%${input.user}%`)
-        where.push('(event.actor_id ILIKE ' + placeholder + ' OR event.target_id ILIKE ' + placeholder + ' OR event.entity_id ILIKE ' + placeholder + ')')
+        where.push('(event.actor_id ILIKE ' + placeholder + ' OR event.object_id ILIKE ' + placeholder + ' OR event.subject_id ILIKE ' + placeholder + ')')
     }
     if (input.email) {
         const placeholder = add(`%${input.email}%`)
-        where.push('(event.target_id ILIKE ' + placeholder + ' OR event.context->>\'email\' ILIKE ' + placeholder + ')')
+        where.push('(event.object_id ILIKE ' + placeholder + ' OR event.context->>\'email\' ILIKE ' + placeholder + ')')
     }
     if (input.request) where.push(`event.request_id ILIKE ${add(`%${input.request}%`)}`)
     if (input.entity) {
         const placeholder = add(`%${input.entity}%`)
-        where.push('(event.entity_id ILIKE ' + placeholder + ' OR event.target_id ILIKE ' + placeholder + ' OR event.context->>\'inviteId\' ILIKE ' + placeholder + ')')
+        where.push('(event.subject_id ILIKE ' + placeholder + ' OR event.object_id ILIKE ' + placeholder + ' OR event.context->>\'inviteId\' ILIKE ' + placeholder + ')')
     }
     if (input.supportSession) {
         const placeholder = add(`%${input.supportSession}%`)
-        where.push('(event.entity_id ILIKE ' + placeholder + ' OR event.context->>\'supportSessionId\' ILIKE ' + placeholder + ')')
+        where.push('(event.subject_id ILIKE ' + placeholder + ' OR event.context->>\'supportSessionId\' ILIKE ' + placeholder + ')')
     }
     if (input.workflow) where.push(`event.context->>'workflow' ILIKE ${add(`%${input.workflow}%`)}`)
-    if (input.entityType) where.push(`event.target_type ILIKE ${add(`%${input.entityType}%`)}`)
-    if (input.action) where.push(`event.action_type ILIKE ${add(`%${input.action}%`)}`)
+    if (input.entityType) where.push(`event.object_type ILIKE ${add(`%${input.entityType}%`)}`)
+    if (input.action) where.push(`event.event_type ILIKE ${add(`%${input.action}%`)}`)
     if (input.severity) where.push(`event.severity = ${add(input.severity)}`)
     if (input.outcome) where.push(`event.outcome = ${add(input.outcome)}`)
     if (input.source) where.push(`event.source ILIKE ${add(`%${input.source}%`)}`)
@@ -5049,26 +5049,26 @@ async function loadInspectionAuditEvents(input: { q: string, org: string, user: 
     const result = await run(`
         SELECT
             event.id,
-            event.action_type,
+            event.event_type,
             event.severity,
             event.source,
             event.service,
             event.actor_id,
             actor.name AS actor_name,
-            event.target_type,
-            event.target_id,
+            event.object_type,
+            event.object_id,
             target_user.name AS target_name,
             event.organization_id,
             organization.name AS organization_name,
-            event.entity_id,
+            event.subject_id,
             event.request_id,
             event.outcome,
             event.reason,
             event.context,
             event.created_at
-        FROM admin_audit_events event
+        FROM system_events event
         LEFT JOIN users actor ON actor.id = event.actor_id
-        LEFT JOIN users target_user ON target_user.id = event.target_id
+        LEFT JOIN users target_user ON target_user.id = event.object_id
         LEFT JOIN organizations organization ON organization.id = event.organization_id
         WHERE ${where.join('\n           AND ')}
         ORDER BY event.created_at DESC
@@ -5077,13 +5077,13 @@ async function loadInspectionAuditEvents(input: { q: string, org: string, user: 
     return result.rows as Record<string, unknown>[]
 }
 
-async function loadAdminAuditEventIds(input: { requestId: string, actionType: string, entityId: string }) {
+async function loadSystemEventIds(input: { requestId: string, actionType: string, entityId: string }) {
     const result = await run(`
         SELECT id
-        FROM admin_audit_events
+        FROM system_events
         WHERE request_id = $1
-          AND action_type = $2
-          AND entity_id = $3
+          AND event_type = $2
+          AND subject_id = $3
         ORDER BY created_at DESC, id DESC
         LIMIT 10
     `, [input.requestId, input.actionType, input.entityId])
@@ -5092,15 +5092,15 @@ async function loadAdminAuditEventIds(input: { requestId: string, actionType: st
 
 async function loadSupportSessionState(supportSessionId: string) {
     const result = await run(`
-        SELECT id, action_type, actor_id, target_id, organization_id, entity_id, request_id, reason, outcome, context, created_at
-        FROM admin_audit_events
-        WHERE entity_id = $1
-          AND action_type IN ('support.session.create', 'support.session.revoke')
+        SELECT id, event_type, actor_id, object_id, organization_id, subject_id, request_id, reason, outcome, context, created_at
+        FROM system_events
+        WHERE subject_id = $1
+          AND event_type IN ('support.session.create', 'support.session.revoke')
         ORDER BY created_at ASC, id ASC
     `, [supportSessionId])
-    const create = result.rows.find((row: Record<string, unknown>) => row.action_type === 'support.session.create') as Record<string, any> | undefined
+    const create = result.rows.find((row: Record<string, unknown>) => row.event_type === 'support.session.create') as Record<string, any> | undefined
     if (!create) return null
-    const revoke = [...result.rows].reverse().find((row: Record<string, unknown>) => row.action_type === 'support.session.revoke' && row.outcome === 'success') as Record<string, any> | undefined
+    const revoke = [...result.rows].reverse().find((row: Record<string, unknown>) => row.event_type === 'support.session.revoke' && row.outcome === 'success') as Record<string, any> | undefined
     const context = create.context as Record<string, unknown>
     return {
         supportSessionId,
@@ -5108,7 +5108,7 @@ async function loadSupportSessionState(supportSessionId: string) {
         reason: text(create.reason),
         requestId: text(create.request_id),
         organizationId: text(context.targetOrganizationId || create.organization_id),
-        targetUserId: text(context.targetUserId || create.target_id),
+        targetUserId: text(context.targetUserId || create.object_id),
         allowedActions: Array.isArray(context.allowedActions) ? context.allowedActions.map(action => text(action)).filter(Boolean) : [],
         scope: Array.isArray(context.scope) ? context.scope.map(item => text(item)).filter(Boolean) : [],
         durationMinutes: Number(context.durationMinutes || 0),
@@ -5124,18 +5124,18 @@ async function loadSupportSessionTimeline(supportSessionId: string) {
     const result = await run(`
         SELECT
             e.id,
-            e.action_type,
+            e.event_type,
             e.severity,
             e.source,
             e.service,
             e.actor_id,
             actor.name AS actor_name,
-            e.target_type,
-            e.target_id,
+            e.object_type,
+            e.object_id,
             target_user.name AS target_name,
             e.organization_id,
             organization.name AS organization_name,
-            e.entity_id,
+            e.subject_id,
             e.request_id,
             e.outcome,
             e.reason,
@@ -5143,19 +5143,19 @@ async function loadSupportSessionTimeline(supportSessionId: string) {
             e.ip,
             e.user_agent,
             e.created_at
-        FROM admin_audit_events e
+        FROM system_events e
         LEFT JOIN users actor ON actor.id = e.actor_id
-        LEFT JOIN users target_user ON target_user.id = e.target_id
+        LEFT JOIN users target_user ON target_user.id = e.object_id
         LEFT JOIN organizations organization ON organization.id = e.organization_id
-        WHERE e.entity_id = $1
+        WHERE e.subject_id = $1
            OR e.context->>'supportSessionId' = $1
         ORDER BY e.created_at ASC, e.id ASC
         LIMIT 250
     `, [supportSessionId])
-    return result.rows.map(toAdminAuditEvent).map(event => event.detail.timelineEvent)
+    return result.rows.map(toSystemEvent).map(event => event.detail.timelineEvent)
 }
 
-async function loadAdminAuditEventRelatedTimeline(event: Record<string, any>) {
+async function loadSystemEventRelatedTimeline(event: Record<string, any>) {
     const detail = event.detail || {}
     const context = detail.context || {}
     const eventId = Number(event.id)
@@ -5170,27 +5170,27 @@ async function loadAdminAuditEventRelatedTimeline(event: Record<string, any>) {
         return `$${values.length}`
     }
     if (requestId) where.push(`e.request_id = ${add(requestId)}`)
-    if (entityId) where.push(`e.entity_id = ${add(entityId)}`)
+    if (entityId) where.push(`e.subject_id = ${add(entityId)}`)
     if (supportSessionId) {
         const placeholder = add(supportSessionId)
-        where.push(`(e.entity_id = ${placeholder} OR e.context->>'supportSessionId' = ${placeholder})`)
+        where.push(`(e.subject_id = ${placeholder} OR e.context->>'supportSessionId' = ${placeholder})`)
     }
 
     const result = await run(`
         SELECT
             e.id,
-            e.action_type,
+            e.event_type,
             e.severity,
             e.source,
             e.service,
             e.actor_id,
             actor.name AS actor_name,
-            e.target_type,
-            e.target_id,
+            e.object_type,
+            e.object_id,
             target_user.name AS target_name,
             e.organization_id,
             organization.name AS organization_name,
-            e.entity_id,
+            e.subject_id,
             e.request_id,
             e.outcome,
             e.reason,
@@ -5198,15 +5198,15 @@ async function loadAdminAuditEventRelatedTimeline(event: Record<string, any>) {
             e.ip,
             e.user_agent,
             e.created_at
-        FROM admin_audit_events e
+        FROM system_events e
         LEFT JOIN users actor ON actor.id = e.actor_id
-        LEFT JOIN users target_user ON target_user.id = e.target_id
+        LEFT JOIN users target_user ON target_user.id = e.object_id
         LEFT JOIN organizations organization ON organization.id = e.organization_id
         WHERE ${where.join('\n           OR ')}
         ORDER BY e.created_at DESC, e.id DESC
         LIMIT 50
     `, values)
-    return result.rows.map(toAdminAuditEvent).map(row => row.detail.timelineEvent)
+    return result.rows.map(toSystemEvent).map(row => row.detail.timelineEvent)
 }
 
 async function validateSupportSessionForAction(input: {
@@ -5259,7 +5259,7 @@ async function recordSupportSessionRevokeAudit(req: FastifyRequest, input: {
     outcome: 'success' | 'denied' | 'failed'
     blocker: string | null
 }) {
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'support.session.revoke',
         actorId: input.actorId,
         targetType: input.targetUserId ? 'user' : 'support_session',
@@ -5497,7 +5497,7 @@ function supportSessionWorkflowRoutes(input: {
     return {
         detail: `/api/admin/support/sessions/${encodeURIComponent(input.supportSessionId)}`,
         revoke: `/api/admin/support/sessions/${encodeURIComponent(input.supportSessionId)}/revoke`,
-        audit: `/api/admin/audit-events?supportSession=${encodeURIComponent(input.supportSessionId)}&source=admin&service=hanasand-api`,
+        audit: `/api/admin/audit-events?supportSession=${encodeURIComponent(input.supportSessionId)}&source=system&service=hanasand-api`,
         inviteAssistance: actions.has('invite_assist') && scope.has('invite:create')
             ? `/api/admin/support/organizations/${organizationId}/invites`
             : null,
@@ -5645,46 +5645,46 @@ function normalizeSupportSessionExpiry(value: unknown, durationMinutes: number):
 
 async function loadSupportInviteAssistByIdempotencyKey(input: { organizationId: string, idempotencyKey: string }) {
     const result = await run(`
-        SELECT id, request_id, entity_id, context
-        FROM admin_audit_events
-        WHERE action_type = 'support.organization.invite_assist'
+        SELECT id, request_id, subject_id, context
+        FROM system_events
+        WHERE event_type = 'support.organization.invite_assist'
           AND organization_id = $1
           AND outcome = 'success'
           AND context->>'idempotencyKey' = $2
         ORDER BY created_at ASC, id ASC
         LIMIT 1
     `, [input.organizationId, input.idempotencyKey])
-    return result.rows[0] as { id: number, request_id: string, entity_id: string | null, context: Record<string, unknown> } | undefined
+    return result.rows[0] as { id: number, request_id: string, subject_id: string | null, context: Record<string, unknown> } | undefined
 }
 
 async function loadSupportInviteActionByIdempotencyKey(input: { organizationId: string, inviteId: string, actionType: string, idempotencyKey: string }) {
     const result = await run(`
-        SELECT id, request_id, entity_id, context
-        FROM admin_audit_events
-        WHERE action_type = $1
+        SELECT id, request_id, subject_id, context
+        FROM system_events
+        WHERE event_type = $1
           AND organization_id = $2
-          AND entity_id = $3
+          AND subject_id = $3
           AND outcome = 'success'
           AND context->>'idempotencyKey' = $4
         ORDER BY created_at ASC, id ASC
         LIMIT 1
     `, [input.actionType, input.organizationId, input.inviteId, input.idempotencyKey])
-    return result.rows[0] as { id: number, request_id: string, entity_id: string | null, context: Record<string, unknown> } | undefined
+    return result.rows[0] as { id: number, request_id: string, subject_id: string | null, context: Record<string, unknown> } | undefined
 }
 
 async function loadSupportMemberRoleRecoveryByIdempotencyKey(input: { organizationId: string, userId: string, idempotencyKey: string }) {
     const result = await run(`
-        SELECT id, request_id, entity_id, context
-        FROM admin_audit_events
-        WHERE action_type = 'support.organization.member_role_recovery'
+        SELECT id, request_id, subject_id, context
+        FROM system_events
+        WHERE event_type = 'support.organization.member_role_recovery'
           AND organization_id = $1
-          AND entity_id = $2
+          AND subject_id = $2
           AND outcome = 'success'
           AND context->>'idempotencyKey' = $3
         ORDER BY created_at ASC, id ASC
         LIMIT 1
     `, [input.organizationId, input.userId, input.idempotencyKey])
-    return result.rows[0] as { id: number, request_id: string, entity_id: string | null, context: Record<string, unknown> } | undefined
+    return result.rows[0] as { id: number, request_id: string, subject_id: string | null, context: Record<string, unknown> } | undefined
 }
 
 async function loadOrganizationInvitesByIds(organizationId: string, inviteIds: string[]) {
@@ -5803,7 +5803,7 @@ async function recordAccessRecoveryDecisionAudit(
     reason: string,
     extra: Record<string, unknown> = {},
 ) {
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: `support.organization.access_recovery.${decision === 'approved' ? 'approve' : 'deny'}`,
         actorId,
         targetType: 'invite',
@@ -10763,7 +10763,7 @@ function supportActionExecutorReadiness(input: {
 
 function supportActionExecutorRequiredBody(action: SupportActionPreparationInput['action']) {
     if (action === 'impersonation') {
-        return ['target_id', 'organization_id', 'reason', 'scope', 'duration_minutes', 'context']
+        return ['object_id', 'organization_id', 'reason', 'scope', 'duration_minutes', 'context']
     }
     if (action === 'access_recovery') {
         return ['email', 'targetUserId', 'reason', 'context', 'scope', 'expiresAt']
@@ -10797,7 +10797,7 @@ function supportActionExecutionTarget(input: {
             headers,
             auditActionType: 'impersonation.start',
             body: redactAuditValue({
-                target_id: input.user,
+                object_id: input.user,
                 organization_id: input.organizationId,
                 reason: input.reason,
                 scope: input.scope,
@@ -10960,7 +10960,7 @@ async function recordSupportInviteAssistExecutorBlock(req: FastifyRequest, input
     controls: ReturnType<typeof supportInviteAssistExecutorControls>['value']
     supportContext: string
 }) {
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'support.organization.invite_assist',
         actorId: input.actorId,
         targetType: 'organization',
@@ -11253,7 +11253,7 @@ async function recordSupportInviteActionExecutorBlock(req: FastifyRequest, input
     controls: ReturnType<typeof supportInviteActionExecutorControls>['value']
     supportContext: string
 }) {
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: input.actionType,
         actorId: input.actorId,
         targetType: 'invite',
@@ -11663,7 +11663,7 @@ async function recordSupportMemberRoleRecoveryExecutorBlock(req: FastifyRequest,
     supportContext: string
     before?: Record<string, unknown> | null
 }) {
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'support.organization.member_role_recovery',
         actorId: input.actorId,
         targetType: 'member',
@@ -12092,19 +12092,19 @@ function supportAuditEntityLinks(input: {
     supportSessionId?: string
 }) {
     const organizationId = text(input.event.organization_id || input.context.organizationId || input.context.targetOrganizationId)
-    const targetUserId = text(input.context.targetUserId || (input.event.target_type === 'user' ? input.event.target_id : ''))
+    const targetUserId = text(input.context.targetUserId || (input.event.object_type === 'user' ? input.event.object_id : ''))
     const inviteId = text(input.context.inviteId)
         || (Array.isArray(input.context.inviteIds) ? text(input.context.inviteIds[0]) : '')
-        || (input.event.target_type === 'invite' ? text(input.event.entity_id || input.event.target_id) : '')
+        || (input.event.object_type === 'invite' ? text(input.event.subject_id || input.event.object_id) : '')
     const memberId = text(input.context.memberId)
-        || (input.event.target_type === 'member' ? text(input.event.entity_id || input.event.target_id) : '')
-        || (input.event.target_type === 'user' ? targetUserId : '')
+        || (input.event.object_type === 'member' ? text(input.event.subject_id || input.event.object_id) : '')
+        || (input.event.object_type === 'user' ? targetUserId : '')
     const alertId = text(input.context.alertId || input.context.alert_id || input.context.dwmAlertId || input.context.alertReferenceId)
-        || (input.event.target_type === 'alert' ? text(input.event.entity_id || input.event.target_id) : '')
+        || (input.event.object_type === 'alert' ? text(input.event.subject_id || input.event.object_id) : '')
     const watchlistId = text(input.context.watchlistId || input.context.watchlistItemId || input.context.watchlist_item_id)
-        || (input.event.target_type === 'watchlist' ? text(input.event.entity_id || input.event.target_id) : '')
+        || (input.event.object_type === 'watchlist' ? text(input.event.subject_id || input.event.object_id) : '')
     const webhookId = text(input.context.webhookId || input.context.deliveryId || input.context.webhookDeliveryId)
-        || (input.event.target_type === 'webhook' ? text(input.event.entity_id || input.event.target_id) : '')
+        || (input.event.object_type === 'webhook' ? text(input.event.subject_id || input.event.object_id) : '')
     const requestId = text(input.event.request_id || input.context.requestId)
     const entityId = text(input.entityId)
     const inspectionParams = new URLSearchParams()
@@ -12382,7 +12382,7 @@ function toSupportAuditTimelineEvent(row: Record<string, unknown>) {
     const context = redactAuditValue(event.context && typeof event.context === 'object' ? event.context : {}) as Record<string, unknown>
     const beforeAfter = auditBeforeAfter(context)
     const id = Number(event.id)
-    const entityId = event.entity_id || event.target_id || event.organization_id || null
+    const entityId = event.subject_id || event.object_id || event.organization_id || null
     const supportSessionId = text(context.supportSessionId)
         || (text(entityId).startsWith('support_session_') ? text(entityId) : '')
     const actionEvidence = supportAuditActionEvidence({ event, context, entityId, supportSessionId })
@@ -12393,15 +12393,15 @@ function toSupportAuditTimelineEvent(row: Record<string, unknown>) {
             name: event.actor_name || null,
         },
         target: {
-            type: event.target_type || null,
-            id: event.target_id || null,
+            type: event.object_type || null,
+            id: event.object_id || null,
             name: event.target_name || null,
         },
-        entityType: event.target_type || 'admin_audit_event',
+        entityType: event.object_type || 'system_event_event',
         entityId,
         organizationId: event.organization_id || null,
         organizationName: event.organization_name || null,
-        action: event.action_type,
+        action: event.event_type,
         outcome: event.outcome,
         severity: event.severity,
         requestId: event.request_id || null,
@@ -12418,7 +12418,7 @@ function toSupportAuditTimelineEvent(row: Record<string, unknown>) {
             entities: supportAuditEntityLinks({ event, context, entityId, supportSessionId }),
         },
         createdAt: event.created_at,
-        copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.action_type} actor=${event.actor_id} entity=${event.entity_id || event.target_id || ''} request=${event.request_id || ''}`,
+        copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.event_type} actor=${event.actor_id} entity=${event.subject_id || event.object_id || ''} request=${event.request_id || ''}`,
     }
 }
 
@@ -12434,12 +12434,12 @@ function supportError(code: string, message: string, extra: Record<string, unkno
     }
 }
 
-function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
+function toSystemEvent(row: Record<string, unknown>): Record<string, any> {
     const event = row as Record<string, any>
     const context = redactAuditValue(event.context || {}) as Record<string, unknown>
     const beforeAfter = auditBeforeAfter(context)
     const id = Number(event.id)
-    const entityId = event.entity_id || event.target_id || event.organization_id || null
+    const entityId = event.subject_id || event.object_id || event.organization_id || null
     const supportSessionId = text(context.supportSessionId)
         || (text(entityId).startsWith('support_session_') ? text(entityId) : '')
     const actionEvidence = supportAuditActionEvidence({ event, context, entityId, supportSessionId })
@@ -12447,7 +12447,7 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
         schemaVersion: 'admin.audit.timeline_event.v1',
         id,
         timestamp: event.created_at,
-        actionType: event.action_type,
+        actionType: event.event_type,
         severity: event.severity,
         outcome: event.outcome,
         source: event.source,
@@ -12457,8 +12457,8 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
             name: event.actor_name || null,
         },
         target: {
-            type: event.target_type || null,
-            id: event.target_id || null,
+            type: event.object_type || null,
+            id: event.object_id || null,
             name: event.target_name || null,
         },
         organization: {
@@ -12467,7 +12467,7 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
         },
         entity: {
             id: entityId,
-            type: event.target_type || 'admin_audit_event',
+            type: event.object_type || 'system_event_event',
         },
         requestId: event.request_id || null,
         reason: event.reason || '',
@@ -12489,16 +12489,16 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
         context,
         detail: {
             schemaVersion: 'admin.audit.event_detail.v1',
-            actionType: event.action_type,
+            actionType: event.event_type,
             source: event.source,
             service: event.service,
             severity: event.severity,
             outcome: event.outcome,
             actorId: event.actor_id,
-            targetType: event.target_type,
-            targetId: event.target_id,
+            targetType: event.object_type,
+            targetId: event.object_id,
             organizationId: event.organization_id,
-            entityId: event.entity_id,
+            entityId: event.subject_id,
             requestId: event.request_id,
             reason: event.reason,
             before: beforeAfter.before,
@@ -12509,12 +12509,12 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
             redactedSummary: {
                 schemaVersion: 'support.audit.redacted_summary.v1',
                 eventId: Number(event.id),
-                actionType: event.action_type,
+                actionType: event.event_type,
                 outcome: event.outcome,
                 severity: event.severity,
                 actorId: event.actor_id,
-                targetId: event.target_id || null,
-                entityId: event.entity_id || null,
+                targetId: event.object_id || null,
+                entityId: event.subject_id || null,
                 requestId: event.request_id || null,
                 correlationId: text(context.correlationId) || event.request_id || null,
                 idempotencyKey: text(context.idempotencyKey) || null,
@@ -12524,7 +12524,7 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
                 supportActionEvidence: actionEvidence,
                 relatedEntityLinks: timelineEvent.links.entities,
             },
-            copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.action_type} actor=${event.actor_id} target=${event.target_id || ''} org=${event.organization_id || ''} request=${event.request_id || ''} reason=${event.reason || ''}`,
+            copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.event_type} actor=${event.actor_id} target=${event.object_id || ''} org=${event.organization_id || ''} request=${event.request_id || ''} reason=${event.reason || ''}`,
         },
     }
 }
@@ -12535,7 +12535,7 @@ function supportAuditActionEvidence(input: {
     entityId: unknown
     supportSessionId: string
 }) {
-    const actionType = text(input.event.action_type)
+    const actionType = text(input.event.event_type)
     const workflow = supportAuditWorkflowName({
         actionType,
         source: input.event.source,
@@ -12552,7 +12552,7 @@ function supportAuditActionEvidence(input: {
     const actionLinkFilters = {
         org: input.event.organization_id || '',
         actor: input.event.actor_id || '',
-        target: input.event.target_id || '',
+        target: input.event.object_id || '',
         action: actionType,
         outcome: input.event.outcome || '',
         entity: input.entityId || '',
@@ -12572,8 +12572,8 @@ function supportAuditActionEvidence(input: {
             id: input.event.actor_id || null,
         },
         target: {
-            type: input.event.target_type || null,
-            id: input.event.target_id || null,
+            type: input.event.object_type || null,
+            id: input.event.object_id || null,
         },
         organizationId: input.event.organization_id || null,
         entityId: input.entityId || null,
@@ -12942,7 +12942,7 @@ function supportAuditCaseReplayExport(filters: Record<string, unknown>, timeline
         supportSession: text(filters.supportSession || supportSessionIds[0]),
         workflow: text(filters.workflow || sourceWorkflows[0]),
         reason: text(filters.reason || reasons[0]),
-        source: text(filters.source) || 'admin',
+        source: text(filters.source) || 'system',
         service: text(filters.service) || 'hanasand-api',
     }
     const replayQuery = auditFilterQuery(replayFilter)
@@ -13395,7 +13395,7 @@ function supportAuditEventActionTemplates(input: {
                 route: '/api/impersonation/start',
                 body: {
                     ...baseBody,
-                    target_id: targetId || entityId || 'target-user-id',
+                    object_id: targetId || entityId || 'target-user-id',
                     organizationId: organizationId || undefined,
                     scope: ['read_profile', 'read_org'],
                     durationMinutes: 30,
@@ -13420,12 +13420,12 @@ function supportAuditEventActionTemplates(input: {
     }
 }
 
-function adminAuditFilterError(rawQuery: AuditQuery, filter: { severity: string, outcome: string, from: string, to: string, limit: number }) {
-    const unsupported = Object.keys(rawQuery as Record<string, unknown>).filter(key => !adminAuditFilters.has(key))
+function systemEventFilterError(rawQuery: AuditQuery, filter: { severity: string, outcome: string, from: string, to: string, limit: number }) {
+    const unsupported = Object.keys(rawQuery as Record<string, unknown>).filter(key => !systemEventFilters.has(key))
     if (unsupported.length) {
         return supportError('unsupported_audit_filter', `Unsupported audit filter: ${unsupported[0]}.`, {
             unavailableFilters: unsupported,
-            supportedFilters: Array.from(adminAuditFilters),
+            supportedFilters: Array.from(systemEventFilters),
         })
     }
     if (rawQuery.severity && !filter.severity) {
@@ -13474,7 +13474,7 @@ function supportAuditFilterContract(filters: Record<string, unknown>, timeline: 
     return {
         schemaVersion: 'support.audit.filter_contract.v1',
         filters,
-        supportedFilters: Array.from(adminAuditFilters),
+        supportedFilters: Array.from(systemEventFilters),
         redacted: true,
         redactedSummary: supportAuditRedactedSummary(timeline),
         entityLinkRollup: supportAuditEntityLinkRollup(timeline),
@@ -13569,7 +13569,7 @@ function supportAuditFilterReadiness(filters: Record<string, unknown>, timeline:
 }
 
 function supportAuditBridgeAdapterContract(filters: Record<string, unknown>) {
-    const filterFields = Array.from(adminAuditFilters)
+    const filterFields = Array.from(systemEventFilters)
     return {
         schemaVersion: 'support.audit.bridge_adapter_contract.v1',
         route: '/api/admin/audit-events',
@@ -13860,7 +13860,7 @@ function supportAuditExportProof(filters: Record<string, unknown>, timeline: Arr
             'links.entities',
             'actionEvidence.workflow',
         ],
-        supportedFilters: Array.from(adminAuditFilters),
+        supportedFilters: Array.from(systemEventFilters),
         supportWorkflows: [
             'support_session',
             'invite_assistance',
@@ -14298,7 +14298,7 @@ function toAccessRecoveryDecision(row: AccessRecoveryApprovalRow) {
             service: 'hanasand-api',
             outcome: row.outcome,
             eventIds: auditEvents.map(event => event.id),
-            query: `/api/admin/audit-events?request=${encodeURIComponent(row.request_id)}&source=admin&service=hanasand-api`,
+            query: `/api/admin/audit-events?request=${encodeURIComponent(row.request_id)}&source=system&service=hanasand-api`,
         },
         copyText: [
             `Access recovery ${displayStatus} for ${row.email || row.invite_id}`,
@@ -14607,8 +14607,8 @@ function supportAccessRecoveryApprovalTimeline(filters: Record<string, unknown>,
             },
             links: {
                 detail: auditEventIds[0] ? `/api/admin/audit-events/${encodeURIComponent(String(auditEventIds[0]))}` : null,
-                request: `/api/admin/audit-events?request=${encodeURIComponent(String(approval.requestId))}&source=admin&service=hanasand-api`,
-                entity: `/api/admin/audit-events?entity=${encodeURIComponent(String(approval.requestId))}&source=admin&service=hanasand-api`,
+                request: `/api/admin/audit-events?request=${encodeURIComponent(String(approval.requestId))}&source=system&service=hanasand-api`,
+                entity: `/api/admin/audit-events?entity=${encodeURIComponent(String(approval.requestId))}&source=system&service=hanasand-api`,
             },
         }
     })

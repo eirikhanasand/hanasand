@@ -3,7 +3,7 @@ import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { getVulnerabilityReport, startTrackedVulnerabilityScan } from '#utils/vulnerabilities/scanner.ts'
 import { getWebScanReport, setWebScanSchedule, startWebScan } from '#utils/vulnerabilities/webScanner.ts'
-import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
+import { recordSystemEvent } from '#utils/systemEvent.ts'
 import { checkBillingCapacity } from './billing.ts'
 
 async function requireSystemAdmin(req: FastifyRequest, res: FastifyReply) {
@@ -34,7 +34,7 @@ export async function postVulnerabilityScan(req: FastifyRequest, res: FastifyRep
         console.error('Failed to run vulnerability scanner from dashboard', error)
     })
     const report = await getVulnerabilityReport()
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'security_scanner.execution.started',
         actorId,
         targetType: 'vulnerability_scanner',
@@ -58,7 +58,7 @@ export async function postWebScanner(req: FastifyRequest, res: FastifyReply) {
     const quota = await checkBillingCapacity(actorId, 'monitoredTargets', 1)
     if (!quota.allowed) return res.status(quota.subscriptionRequired ? 402 : 409).send({ error: quota.subscriptionRequired ? 'subscription_required' : 'quota_exhausted', message: quota.subscriptionRequired ? 'A Security Scanner plan is required to run web scans.' : 'Your monitored-target quota has been reached.', quota })
     void startWebScan().catch(error => console.error('Failed to run Hanasand web scanner', error))
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'security_scanner.execution.started',
         actorId,
         targetType: 'security_scanner',
@@ -77,7 +77,7 @@ export async function putWebScannerSchedule(req: FastifyRequest, res: FastifyRep
     const quota = await checkBillingCapacity(actorId, 'monitoredTargets', 1)
     if (!quota.allowed) return res.status(quota.subscriptionRequired ? 402 : 409).send({ error: quota.subscriptionRequired ? 'subscription_required' : 'quota_exhausted', message: quota.subscriptionRequired ? 'A Security Scanner plan is required to schedule web scans.' : 'Your monitored-target quota has been reached.', quota })
     const schedule = await setWebScanSchedule({ enabled: typeof body?.enabled === 'boolean' ? body.enabled : undefined, intervalMinutes })
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'security_scanner.schedule.updated',
         actorId,
         targetType: 'security_scanner',

@@ -145,8 +145,8 @@ import { deleteAutomation, getAutomation, getAutomations, postAutomation, postAu
 import { getSystemCronJobs, putSystemCronJob } from './handlers/systemCron.ts'
 import { getImpersonationCurrent, getImpersonationEvents, startImpersonation, stopImpersonation } from './handlers/impersonation.ts'
 import {
-    getAdminAuditEvent,
-    getAdminAuditEvents,
+    getSystemEvent,
+    getSystemEvents,
     getSupportAccessRecoveryApprovals,
     getSupportAccessRecoveryApproval,
     getSupportInspection,
@@ -262,8 +262,11 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/impersonation/start', startImpersonation)
     fastify.delete('/impersonation', stopImpersonation)
     fastify.get('/impersonation/events', getImpersonationEvents)
-    fastify.get('/admin/audit-events', getAdminAuditEvents)
-    fastify.get('/admin/audit-events/:id', getAdminAuditEvent)
+    fastify.get('/system/events', getSystemEvents)
+    fastify.get('/system/events/:id', getSystemEvent)
+    // Compatibility aliases for existing clients; system events are the canonical name.
+    fastify.get('/admin/audit-events', getSystemEvents)
+    fastify.get('/admin/audit-events/:id', getSystemEvent)
     fastify.get('/admin/support/readiness', getSupportReadiness)
     fastify.get('/admin/support/inspect', getSupportInspection)
     fastify.get('/admin/support/users/:id', getSupportUser)

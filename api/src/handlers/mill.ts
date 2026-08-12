@@ -3,7 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { matchApiKeyScope, validateApiKey } from '#utils/auth/apiKeys.ts'
-import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
+import { recordSystemEvent } from '#utils/systemEvent.ts'
 import { parse as parseYaml } from 'yaml'
 
 type MillEvent = Record<string, unknown>
@@ -116,7 +116,7 @@ export async function postMillEventAction(req: FastifyRequest<{ Params: { id: st
         normalized: object(row.normalized), original: object(row.original),
     }
     await createMillFindings(access.organizationId, String(row.id), event, await loadConfiguredMillRules(access.organizationId))
-    await recordAdminAuditEvent(req, { actionType: 'mill.event.replayed', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_event', targetId: req.params.id, context: { eventType: event.eventType } })
+    await recordSystemEvent(req, { actionType: 'mill.event.replayed', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_event', targetId: req.params.id, context: { eventType: event.eventType } })
     return res.send({ replayed: true, eventId: req.params.id })
 }
 
@@ -161,7 +161,7 @@ export async function postMillRule(req: FastifyRequest, res: FastifyReply) {
         VALUES ($1, $2, $3, '1', $4, 'Custom', $5, $6, $7, TRUE, $8)
         RETURNING id, rule_id, version, name, family, severity, explanation, definition, source, source_reference, enabled, created_at, updated_at
     `, [randomUUID(), access.organizationId, ruleId, name, severity, explanation, JSON.stringify({ match: 'all', conditions: conditionResult.conditions }), access.userId])
-    await recordAdminAuditEvent(req, { actionType: 'mill.rule.created', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule', targetId: result.rows[0].id, context: { ruleId, severity, conditionCount: conditionResult.conditions.length } })
+    await recordSystemEvent(req, { actionType: 'mill.rule.created', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule', targetId: result.rows[0].id, context: { ruleId, severity, conditionCount: conditionResult.conditions.length } })
     return res.status(201).send({ rule: { ...result.rows[0], source: 'owned' } })
 }
 
@@ -198,7 +198,7 @@ export async function postMillRulePack(req: FastifyRequest, res: FastifyReply) {
             ON CONFLICT (organization_id, rule_id) DO UPDATE SET version = EXCLUDED.version, name = EXCLUDED.name, family = EXCLUDED.family, severity = EXCLUDED.severity, explanation = EXCLUDED.explanation, definition = EXCLUDED.definition, source = EXCLUDED.source, source_reference = EXCLUDED.source_reference, updated_at = NOW()
         `, [randomUUID(), access.organizationId, rule.ruleId, rule.name, packName, rule.severity, rule.explanation, JSON.stringify(rule.definition), sourceReference, access.userId])
     }
-    await recordAdminAuditEvent(req, { actionType: 'mill.rule_pack.imported', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule_pack', targetId: `${packSlug}@${packVersion}`, context: { packName, packVersion, sourceReference, ruleCount: prepared.length } })
+    await recordSystemEvent(req, { actionType: 'mill.rule_pack.imported', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule_pack', targetId: `${packSlug}@${packVersion}`, context: { packName, packVersion, sourceReference, ruleCount: prepared.length } })
     return res.status(201).send({ imported: prepared.length, pack: { name: packName, version: packVersion, sourceReference } })
 }
 
@@ -229,7 +229,7 @@ export async function postMillSigmaPack(req: FastifyRequest, res: FastifyReply) 
             ON CONFLICT (organization_id, rule_id) DO UPDATE SET name = EXCLUDED.name, severity = EXCLUDED.severity, explanation = EXCLUDED.explanation, definition = EXCLUDED.definition, source = EXCLUDED.source, source_reference = EXCLUDED.source_reference, updated_at = NOW()
         `, [randomUUID(), access.organizationId, ruleId, rule.name, rule.severity, rule.explanation, JSON.stringify({ match: 'all', conditions: rule.conditions }), sourceReference, access.userId])
     }
-    await recordAdminAuditEvent(req, { actionType: 'mill.sigma_pack.imported', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_sigma_pack', targetId: `${packSlug}@${packVersion}`, context: { packName, packVersion, sourceReference, ruleCount: compiled.rules.length } })
+    await recordSystemEvent(req, { actionType: 'mill.sigma_pack.imported', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_sigma_pack', targetId: `${packSlug}@${packVersion}`, context: { packName, packVersion, sourceReference, ruleCount: compiled.rules.length } })
     return res.status(201).send({ imported: compiled.rules.length, pack: { name: packName, version: packVersion, sourceReference } })
 }
 
@@ -247,7 +247,7 @@ export async function postMillRuleAction(req: FastifyRequest<{ Params: { id: str
             ON CONFLICT (organization_id, rule_id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()
             RETURNING id, rule_id, version, name, family, severity, explanation, definition, source, source_reference, enabled, updated_at
         `, [randomUUID(), access.organizationId, builtIn.id, builtIn.version, builtIn.name, builtIn.family, builtIn.severity, builtIn.explanation, action === 'enable', access.userId])
-        await recordAdminAuditEvent(req, { actionType: 'mill.rule.updated', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule', targetId: result.rows[0].id, context: { action, ruleId: builtIn.id } })
+        await recordSystemEvent(req, { actionType: 'mill.rule.updated', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule', targetId: result.rows[0].id, context: { action, ruleId: builtIn.id } })
         return res.send({ rule: { ...result.rows[0], id: builtIn.id, source: 'hanasand' } })
     }
     const result = await run(`
@@ -257,7 +257,7 @@ export async function postMillRuleAction(req: FastifyRequest<{ Params: { id: str
         RETURNING id, rule_id, version, name, family, severity, explanation, definition, source, source_reference, enabled, updated_at
     `, [req.params.id, access.organizationId, action === 'enable'])
     if (!result.rows[0]) return res.status(404).send({ error: 'Custom Mill rule not found.' })
-    await recordAdminAuditEvent(req, { actionType: 'mill.rule.updated', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule', targetId: req.params.id, context: { action } })
+    await recordSystemEvent(req, { actionType: 'mill.rule.updated', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule', targetId: req.params.id, context: { action } })
     return res.send({ rule: { ...result.rows[0], source: result.rows[0].source || 'owned' } })
 }
 
@@ -304,7 +304,7 @@ export async function postMillFindingAction(req: FastifyRequest<{ Params: { id: 
         RETURNING id, status, analyst_note, assignee_id, updated_at
     `, [req.params.id, access.organizationId, status, note, assigneeId])
     if (!result.rows[0]) return res.status(404).send({ error: 'Finding not found.' })
-    await recordAdminAuditEvent(req, {
+    await recordSystemEvent(req, {
         actionType: 'mill.finding.updated',
         actorId: access.userId,
         organizationId: access.organizationId,

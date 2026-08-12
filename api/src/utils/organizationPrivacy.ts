@@ -464,13 +464,13 @@ async function completePrivacyDeletion(retentionRun: RetentionRun, protection: {
                AND (delivery.payload <> '{}'::jsonb OR delivery.response_body IS NOT NULL OR delivery.error IS NOT NULL
                     OR delivery.endpoint_hint <> '' OR delivery.watchlist_name IS NOT NULL OR delivery.route IS NOT NULL OR delivery.case_path IS NOT NULL)
             RETURNING id
-        ), redacted_admin_audit AS (
-            UPDATE admin_audit_events event
-               SET actor_id = NULL, target_id = NULL, entity_id = NULL, request_id = NULL,
+        ), redacted_system_event AS (
+            UPDATE system_events event
+               SET actor_id = NULL, object_id = NULL, subject_id = NULL, request_id = NULL,
                    reason = '', context = jsonb_build_object('privacyDeletionRunId', $2::text),
                    ip = '', user_agent = ''
              WHERE event.organization_id IN (SELECT id FROM locked_organization)
-               AND (event.actor_id IS NOT NULL OR event.target_id IS NOT NULL OR event.entity_id IS NOT NULL
+               AND (event.actor_id IS NOT NULL OR event.object_id IS NOT NULL OR event.subject_id IS NOT NULL
                     OR event.request_id IS NOT NULL OR event.reason <> '' OR event.context <> '{}'::jsonb
                     OR event.ip <> '' OR event.user_agent <> '')
             RETURNING id::text id
@@ -503,7 +503,7 @@ async function completePrivacyDeletion(retentionRun: RetentionRun, protection: {
             UNION ALL SELECT 'organization_watchlist_item', id, 'delete', 'deleted' FROM deleted_watchlists
             UNION ALL SELECT 'dwm_webhook_destination', id, 'delete', 'deleted' FROM deleted_destinations
             UNION ALL SELECT 'dwm_webhook_delivery', id, 'redact', 'redacted' FROM redacted_deliveries
-            UNION ALL SELECT 'admin_audit_event', id, 'redact', 'redacted' FROM redacted_admin_audit
+            UNION ALL SELECT 'system_event_event', id, 'redact', 'redacted' FROM redacted_system_event
             UNION ALL SELECT 'dwm_webhook_audit_event', id, 'redact', 'redacted' FROM redacted_webhook_audit
             UNION ALL SELECT 'service_log', id, 'redact', 'redacted' FROM redacted_service_logs
         ), recorded AS (
@@ -554,7 +554,7 @@ export async function organizationPrivacyState(organizationId: string, page = { 
               (SELECT COUNT(*)::int FROM organization_retention_run_items WHERE organization_id = $1 AND status = 'protected') protected_events,
               (SELECT COUNT(*)::int FROM organization_retention_run_items WHERE organization_id = $1) total_retention_items,
               (SELECT COUNT(*)::int FROM admin_access_recovery_approvals WHERE organization_id = $1) access_recovery_holds,
-              (SELECT COUNT(*)::int FROM admin_audit_events WHERE organization_id = $1) immutable_admin_audit_events,
+              (SELECT COUNT(*)::int FROM system_events WHERE organization_id = $1) immutable_system_events,
               (SELECT COUNT(*)::int FROM dwm_webhook_audit_events WHERE org_id = $1) immutable_webhook_audit_events,
               (SELECT COUNT(*)::int FROM service_logs WHERE metadata->>'organizationId' = $1 OR metadata->>'tenantId' = $1) immutable_service_logs
         `, [organizationId]),
@@ -590,7 +590,7 @@ export async function exportOrganizationPrivacyData(organizationId: string) {
                    , COALESCE((SELECT jsonb_agg(run ORDER BY run.created_at) FROM organization_retention_runs run WHERE run.organization_id = organization.id), '[]'::jsonb) retention_runs
                    , COALESCE((SELECT jsonb_agg(item ORDER BY item.processed_at) FROM organization_retention_run_items item WHERE item.organization_id = organization.id), '[]'::jsonb) retention_items
                    , COALESCE((SELECT jsonb_agg(approval ORDER BY approval.created_at) FROM admin_access_recovery_approvals approval WHERE approval.organization_id = organization.id), '[]'::jsonb) access_recovery_evidence
-                   , COALESCE((SELECT jsonb_agg(event ORDER BY event.created_at) FROM admin_audit_events event WHERE event.organization_id = organization.id), '[]'::jsonb) admin_audit_events
+                   , COALESCE((SELECT jsonb_agg(event ORDER BY event.created_at) FROM system_events event WHERE event.organization_id = organization.id), '[]'::jsonb) system_events
                    , COALESCE((SELECT jsonb_agg(event ORDER BY event.created_at) FROM dwm_webhook_audit_events event WHERE event.org_id = organization.id), '[]'::jsonb) webhook_audit_events
                    , COALESCE((SELECT jsonb_agg(event ORDER BY event.created_at) FROM service_logs event WHERE event.metadata->>'organizationId' = organization.id OR event.metadata->>'tenantId' = organization.id), '[]'::jsonb) service_logs
               FROM organizations organization WHERE organization.id = $1

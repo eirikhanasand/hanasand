@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
-import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
+import { recordSystemEvent } from '#utils/systemEvent.ts'
 
 export default async function deleteVM(req: FastifyRequest, res: FastifyReply) {
     const { valid, id: userId } = await tokenWrapper(req, res)
@@ -26,7 +26,7 @@ export default async function deleteVM(req: FastifyRequest, res: FastifyReply) {
             return res.status(404).send({ error: 'VM not found' })
         }
 
-        await recordAdminAuditEvent(req, {
+        await recordSystemEvent(req, {
             actionType: 'vm.deleted',
             actorId: userId || null,
             targetType: 'vm',
