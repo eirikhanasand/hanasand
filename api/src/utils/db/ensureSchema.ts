@@ -287,6 +287,26 @@ export default async function ensureSchema() {
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_user_passkeys_user_created ON user_passkeys(user_id, created_at DESC)')
     await run(`
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'impersonation_sessions' AND column_name = 'target_id')
+                AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'impersonation_sessions' AND column_name = 'object_id') THEN
+                ALTER TABLE public.impersonation_sessions RENAME COLUMN target_id TO object_id;
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'impersonation_events' AND column_name = 'target_id')
+                AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'impersonation_events' AND column_name = 'object_id') THEN
+                ALTER TABLE public.impersonation_events RENAME COLUMN target_id TO object_id;
+            END IF;
+        END $$;
+    `)
+    await run('ALTER INDEX IF EXISTS idx_impersonation_sessions_target_created RENAME TO idx_impersonation_sessions_object_created')
+    await run('ALTER INDEX IF EXISTS idx_impersonation_events_target_created RENAME TO idx_impersonation_events_object_created')
+    await run('ALTER INDEX IF EXISTS idx_impersonation_events_route_recent RENAME TO idx_impersonation_events_route_recent_object')
+    await run('ALTER TABLE IF EXISTS impersonation_sessions DROP CONSTRAINT IF EXISTS impersonation_sessions_target_id_fkey')
+    await run('ALTER TABLE IF EXISTS impersonation_events DROP CONSTRAINT IF EXISTS impersonation_events_target_id_fkey')
+    await run('ALTER TABLE IF EXISTS impersonation_sessions ADD CONSTRAINT impersonation_sessions_object_id_fkey FOREIGN KEY (object_id) REFERENCES users(id) ON DELETE CASCADE')
+    await run('ALTER TABLE IF EXISTS impersonation_events ADD CONSTRAINT impersonation_events_object_id_fkey FOREIGN KEY (object_id) REFERENCES users(id) ON DELETE CASCADE')
+    await run(`
         CREATE TABLE IF NOT EXISTS impersonation_sessions (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             token_hash TEXT NOT NULL UNIQUE,
@@ -896,21 +916,21 @@ export default async function ensureSchema() {
     await run(`
         DO $$
         BEGIN
-            IF to_regclass('admin_audit_events') IS NOT NULL AND to_regclass('system_events') IS NULL THEN
-                ALTER TABLE admin_audit_events RENAME TO system_events;
+            IF to_regclass('public.admin_audit_events') IS NOT NULL AND to_regclass('public.system_events') IS NULL THEN
+                ALTER TABLE public.admin_audit_events RENAME TO system_events;
             END IF;
-            IF to_regclass('system_events') IS NOT NULL THEN
-                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'system_events' AND column_name = 'action_type') THEN
-                    ALTER TABLE system_events RENAME COLUMN action_type TO event_type;
+            IF to_regclass('public.system_events') IS NOT NULL THEN
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'system_events' AND column_name = 'action_type') THEN
+                    ALTER TABLE public.system_events RENAME COLUMN action_type TO event_type;
                 END IF;
-                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'system_events' AND column_name = 'target_type') THEN
-                    ALTER TABLE system_events RENAME COLUMN target_type TO object_type;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'system_events' AND column_name = 'target_type') THEN
+                    ALTER TABLE public.system_events RENAME COLUMN target_type TO object_type;
                 END IF;
-                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'system_events' AND column_name = 'target_id') THEN
-                    ALTER TABLE system_events RENAME COLUMN target_id TO object_id;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'system_events' AND column_name = 'target_id') THEN
+                    ALTER TABLE public.system_events RENAME COLUMN target_id TO object_id;
                 END IF;
-                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'system_events' AND column_name = 'entity_id') THEN
-                    ALTER TABLE system_events RENAME COLUMN entity_id TO subject_id;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'system_events' AND column_name = 'entity_id') THEN
+                    ALTER TABLE public.system_events RENAME COLUMN entity_id TO subject_id;
                 END IF;
             END IF;
         END $$;
