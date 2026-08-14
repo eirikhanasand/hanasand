@@ -2776,6 +2776,15 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     }
     const firstSeenAt = profile.firstSeenAt ?? profile.lastSeenAt ?? new Date().toISOString();
     const lastSeenAt = profile.lastSeenAt ?? firstSeenAt;
+    const [conflictingProfile] = await sql<{ id: string }[]>`
+      SELECT id
+      FROM threat_intel.actor_profiles
+      WHERE COALESCE(tenant_id, '') = COALESCE(${nullable(profile.tenantId)}, '')
+        AND normalized_name = ${profile.normalizedName}
+        AND id <> ${profile.id}
+      LIMIT 1
+    `;
+    if (conflictingProfile) return;
     await sql`
       INSERT INTO threat_intel.actor_profiles (
         id, tenant_id, canonical_name, normalized_name, actor_type, confidence,

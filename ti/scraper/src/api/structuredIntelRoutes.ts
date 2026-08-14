@@ -7,7 +7,7 @@ import { buildSourceOperationsSnapshot, buildSourceOperationsSummary } from "./s
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
 import { buildEvaluationMetrics } from "../pipeline/evaluationMetrics.ts";
-import { authenticateRequest } from "./requestAuthentication.ts";
+import { authenticateOperatorRequest, authenticateRequest, authorizeOperatorScope } from "./requestAuthentication.ts";
 import { handleEvaluationBenchmarkRequest } from "./evaluationBenchmarkRoutes.ts";
 import { handleTimelinessRequest } from "./timelinessRoutes.ts";
 import { reconcileActorIdentityCoverage } from "../pipeline/mitreActorCatalog.ts";
