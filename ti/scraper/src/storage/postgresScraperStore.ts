@@ -2368,6 +2368,132 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     for (const id of archivedActorProfileIds) await this.persistActorProfile(this.getActorProfile(id));
   }
 
+  async purgeParserDiagnosticArchiveObjects(objectStore: { deleteObject: (reference: any, reason: string) => boolean | Promise<boolean> }) {
+    const [table] = await this.sql<{ table_name: string | null }[]>`
+      SELECT to_regclass('threat_intel.parser_diagnostic_cleanup_history')::text AS table_name
+    `;
+    if (!table?.table_name) return { pendingCount: 0, deletedCount: 0, failedIds: [] as string[] };
+    const rows = await this.sql<any[]>`
+      SELECT id, original_record->'object_ref' AS object_ref
+      FROM threat_intel.parser_diagnostic_cleanup_history
+      WHERE record_type = 'capture' AND object_deleted_at IS NULL
+      ORDER BY original_id
+    `;
+    let deleted = 0;
+    const failed: string[] = [];
+    for (const row of rows) {
+      try {
+        if (row.object_ref && await objectStore.deleteObject(row.object_ref, "parser-diagnostic-cleanup") !== true) {
+          failed.push(row.id);
+          continue;
+        }
+        await this.sql`
+          UPDATE threat_intel.parser_diagnostic_cleanup_history
+          SET object_deleted_at = now(), object_deletion_reason = ${row.object_ref ? "parser-diagnostic-cleanup" : "no-external-object"}
+          WHERE id = ${row.id} AND object_deleted_at IS NULL
+        `;
+        deleted++;
+      } catch {
+        failed.push(row.id);
+      }
+    }
+    return { pendingCount: rows.length, deletedCount: deleted, failedIds: failed };
+  }
+
+  private async backfillSourceOperationalKeys(): Promise<void> {
+    for (const source of this.listSources()) {
+      const executable = isExecutableSource(source);
+      await this.sql`
+        UPDATE threat_intel.sources
+        SET canonical_feed_key = ${source.url ? canonicalFeedKey(source.url) : null},
+            collection_executable = ${executable}
+        WHERE id = ${source.id}
+          AND (canonical_feed_key IS NULL OR collection_executable IS DISTINCT FROM ${executable})
+      `;
+    }
+  }
+
+  private async syncOrganizationWatchlists(): Promise<void> {
+    const [table] = await this.sql<{ table_name: string | null }[]>`
+      SELECT to_regclass('public.organization_watchlist_items')::text AS table_name
+    `;
+    if (!table?.table_name) return;
+    const items = await this.sql<any[]>`
+      SELECT organization.id AS organization_id,
+        organization.status AS organization_status,
+        organization.alert_visibility_policy,
+        item.id AS watchlist_item_id,
+        item.kind,
+        item.value,
+        item.created_by,
+        item.updated_by,
+        item.lifecycle_reason,
+        item.lifecycle_request_id
+      FROM public.organizations organization
+      JOIN public.organization_watchlist_items item
+        ON item.organization_id = organization.id
+       AND item.status = 'active'
+       AND item.archived_at IS NULL
+      WHERE organization.status = 'active'
+      ORDER BY organization.id, item.id
+    `;
+    const destinations = await this.sql<{ organization_id: string; id: string }[]>`
+      SELECT DISTINCT ON (org_id) org_id AS organization_id, id
+      FROM public.dwm_webhook_destinations
+      WHERE status = 'active'
+      ORDER BY org_id, updated_at DESC, id DESC
+    `.catch(() => []);
+    const destinationByOrganization = new Map<string, string>();
+    for (const row of destinations) destinationByOrganization.set(row.organization_id, row.id);
+    const grouped = new Map<string, any[]>();
+    for (const item of items) {
+      const group = grouped.get(item.organization_id) ?? [];
+      group.push(item);
+      grouped.set(item.organization_id, group);
+    }
+    const desired = new Set<string>();
+    const syncedAt = new Date().toISOString();
+    for (const [organizationId, rows] of grouped) {
+      const runtime = orgWatchlistContractToRuntimeDwmWatchlists({
+        schemaVersion: "organization.shared_watchlist_contract.v1",
+        organizationId,
+        tenantId: organizationId,
+        ownerOrganizationId: organizationId,
+        visibilityPolicy: rows[0].alert_visibility_policy,
+        canGenerateAlerts: true,
+        activeTerms: rows.map((row) => ({
+          watchlistId: `org_shared_watchlist:${organizationId}:${row.watchlist_item_id}`,
+          watchlistItemId: row.watchlist_item_id,
+          organizationId,
+          tenantId: organizationId,
+          kind: row.kind,
+          term: row.value,
+          value: row.value,
+          status: "active",
+          createdBy: row.created_by,
+          updatedBy: row.updated_by,
+          lifecycleReason: row.lifecycle_reason,
+          lifecycleRequestId: row.lifecycle_request_id
+        }))
+      });
+      for (const watchlist of runtime) {
+        desired.add(watchlist.id);
+        this.saveDwmWatchlist({
+          ...watchlist,
+          orgSharedWatchlist: true,
+          webhookDestinationId: destinationByOrganization.get(organizationId),
+          updatedAt: syncedAt
+        });
+      }
+    }
+    for (const watchlist of this.listDwmWatchlists()) {
+      if (watchlist.orgSharedWatchlist && !desired.has(watchlist.id) && watchlist.status !== "paused") {
+        this.saveDwmWatchlist({ ...watchlist, status: "paused", updatedAt: syncedAt });
+      }
+    }
+    await this.flush();
+  }
+
   private hasStoredData(): boolean {
     return this.listSources().length > 0 || this.listCaptures().length > 0 || this.listIncidents().length > 0 || this.listActorIdentityCatalogs().length > 0 || this.listDwmAlerts().length > 0 || legacyWorkflowLoaders.some(([, , , list]) => list(this).length > 0);
   }
