@@ -23,6 +23,15 @@ export type * from "./canaryCollectionTypes.ts";
 import type { CanaryCollectionCycleResult, CanaryCollectionLoopHandle, CanaryCollectionOptions } from "./canaryCollectionTypes.ts";
 const MAX_CANARY_TASKS_PER_CYCLE = 60;
 const MAX_HEALTHY_PENDING_WRITES = 1_000;
+function storageBackpressure(store: any) {
+  const snapshot = store?.databaseHealthSnapshot?.();
+  if (!snapshot) return undefined;
+  const pendingWrites = Number(snapshot.pendingWrites ?? 0);
+  const lastWriteError = typeof snapshot.lastWriteError === "string" ? snapshot.lastWriteError.trim() : "";
+  if (!lastWriteError && !(snapshot.ok === false && pendingWrites > 0)) return undefined;
+  const reason = lastWriteError || "PostgreSQL write queue is unhealthy.";
+  return { ok: false, pendingWrites, lastWriteError: reason, message: `Collection paused because PostgreSQL writes are unhealthy: ${reason}` };
+}
 function effectiveCanaryLimits(options: any) {
   const maxConcurrentTasks = Math.max(1, Math.min(Number(options.maxConcurrentTasks ?? 5), 32));
   const maxTasks = Math.min(Math.max(1, options.maxTasks ?? 5), MAX_CANARY_TASKS_PER_CYCLE);
