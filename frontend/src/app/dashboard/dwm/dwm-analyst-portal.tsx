@@ -355,9 +355,13 @@ export function DwmAnalystPortal({
                         </div>
                         <p className='text-xs font-medium text-ui-muted'>{watchTermCount} terms · {activeSourceCount}/{sourceCount} shared sources active</p>
                     </div>
-                    <div className='p-3'>
-                        {workflowActions}
-                    </div>
+                    {!watchTermCount ? (
+                        <div className='grid gap-2 px-4 py-8 text-center'>
+                            <h2 className='text-base font-semibold text-ui-text'>Create your first watchlist</h2>
+                            <p className='mx-auto max-w-md text-sm leading-6 text-ui-muted'>Add a company, domain, vendor, brand, or product to start monitoring.</p>
+                            <div><Link href='/dashboard/dwm/actions?focus=watchlist' className='inline-flex min-h-9 items-center rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>Create watchlist</Link></div>
+                        </div>
+                    ) : <div className='p-3'>{workflowActions}</div>}
                 </section>
             </div>
         )
@@ -373,7 +377,7 @@ export function DwmAnalystPortal({
 
     if (view === 'delivery') {
         return (
-            <DwmPanelPage title='Delivery' meta={`${localDeliveries.length} delivery attempts · webhook ${webhookState}`}>
+            <DwmPanelPage title='Integrations' meta={`${localDeliveries.length} delivery attempts · webhook ${webhookState}`}>
                 <DeliveryPanel alert={selectedAlert} deliveries={localDeliveries} busyAction={busyAction} onTest={testDelivery} onSend={sendAlert} />
             </DwmPanelPage>
         )
@@ -665,18 +669,19 @@ async function refreshCases(
     signal: AbortSignal,
     setCasesState: Dispatch<SetStateAction<CasesState>>,
 ) {
-    setCasesState({ status: 'loading', rows: [] })
+    setCasesState(current => ({ status: 'loading', rows: current.rows }))
     try {
         const response = await fetch(`/api/cases?${params.toString()}`, { cache: 'no-store', signal })
         if (!response.ok) {
-            setCasesState({ status: 'error', rows: [], error: await responseProblem(response) })
+            const error = await responseProblem(response)
+            setCasesState(current => ({ status: 'error', rows: current.rows, error }))
             return
         }
         const payload = await response.json() as { items?: CaseListItem[], cases?: CaseListItem[] }
         const rows = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.cases) ? payload.cases : []
         setCasesState({ status: 'ready', rows })
     } catch (error) {
-        if (!isAbortError(error)) setCasesState({ status: 'error', rows: [], error: requestFailureDetail(error) })
+        if (!isAbortError(error)) setCasesState(current => ({ status: 'error', rows: current.rows, error: requestFailureDetail(error) }))
     }
 }
 
@@ -2199,6 +2204,18 @@ function DeliveryPanel({ alert, deliveries, busyAction, onTest, onSend }: { aler
     const orgHref = organizationDeliveryWorkspaceHref({ organizationId: orgId, alertId: alert?.id, caseId, delivery: latestDelivery })
     const testBusy = alert ? busyAction === `test:${alert.id}` : false
     const sendBusy = alert ? busyAction === `send:${alert.id}` : false
+    if (!orgId) {
+        return (
+            <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-6 text-center'>
+                <h2 className='text-base font-semibold text-ui-text'>Create an organization to set up integrations</h2>
+                <p className='mx-auto max-w-md text-sm leading-6 text-ui-muted'>Integrations connect monitored alerts to the tools your organization already uses.</p>
+                <div><Link href='/organizations' className='inline-flex min-h-9 items-center rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>Create organization</Link></div>
+                <div className='grid gap-2 text-left sm:grid-cols-3'>
+                    {['Slack', 'Microsoft Teams', 'Webhook'].map(preset => <Link key={preset} href='/organizations' className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted'>{preset}<span className='mt-1 block font-normal'>Available after setup</span></Link>)}
+                </div>
+            </section>
+        )
+    }
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel'>
             <div className='flex flex-col gap-3 border-b border-ui-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
@@ -2239,6 +2256,15 @@ function DeliveryPanel({ alert, deliveries, busyAction, onTest, onSend }: { aler
                             <span className='mt-0.5 block font-normal'>Open a case to attach delivery audit.</span>
                         </div>
                     )}
+                </div>
+                <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3'>
+                    <div>
+                        <p className='text-sm font-semibold text-ui-text'>Integration presets</p>
+                        <p className='mt-1 text-xs text-ui-muted'>Start with a common destination, then test it before sending alerts.</p>
+                    </div>
+                    <div className='grid gap-2 sm:grid-cols-3'>
+                        {['Slack', 'Microsoft Teams', 'Webhook'].map(preset => <a key={preset} href={`${orgHref}&preset=${encodeURIComponent(preset.toLowerCase().replaceAll(' ', '_'))}`} className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text transition hover:border-ui-primary'>{preset}<span className='mt-1 block font-normal text-ui-muted'>Configure preset</span></a>)}
+                    </div>
                 </div>
                 {visible.slice(0, DWM_DELIVERY_PREVIEW_ROWS).map(delivery => {
                     const deliveryOrgHref = organizationDeliveryWorkspaceHref({ organizationId: orgId, alertId: alert?.id, caseId, delivery })

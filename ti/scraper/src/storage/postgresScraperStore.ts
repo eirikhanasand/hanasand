@@ -1752,7 +1752,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     }
     const catalog = structuredClone(this.getActorIdentityCatalog(snapshot.catalogId));
     const identities = structuredClone(this.listActorIdentities());
-    const archivedProfiles = result.archivedActorProfileIds.map((id: string) => structuredClone(this.getActorProfile(id)));
+    const archivedIds = new Set(result.archivedActorProfileIds);
+    const changedProfiles = [...result.archivedActorProfileIds, ...(result.reboundActorProfileIds ?? [])]
+      .map((id: string) => structuredClone(this.getActorProfile(id)))
+      .filter(Boolean);
     this.enqueue(`actor-identity-catalog:${catalog.id}`, () => persistActorIdentityCatalog(
       this.sql,
       catalog,

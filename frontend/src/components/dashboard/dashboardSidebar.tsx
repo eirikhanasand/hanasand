@@ -51,7 +51,7 @@ export default function DashboardSidebar({
         { href: '/dashboard/dwm', label: 'DWM', icon: <ShieldCheck className='h-4 w-4' />, subItems: [
             { href: '/dashboard/dwm/cases', label: 'Cases' },
             { href: '/dashboard/dwm/watchlists', label: 'Watchlists' },
-            { href: '/dashboard/dwm/delivery', label: 'Delivery' },
+            { href: '/dashboard/dwm/delivery', label: 'Integrations' },
             { href: '/dashboard/dwm/actors', label: 'Actors' },
             { href: '/dashboard/dwm/actions', label: 'Actions' },
         ] },

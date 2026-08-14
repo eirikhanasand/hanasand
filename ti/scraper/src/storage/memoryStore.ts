@@ -257,6 +257,45 @@ export class InMemoryScraperStore implements ScraperStore {
         updatedAt: at
       }).id);
   }
+  protected reconcileActorProfilesForCatalog(at: string, catalogId?: string) {
+    const archivedActorProfileIds: string[] = [];
+    const reboundActorProfileIds: string[] = [];
+    const identities = this.listActorIdentities();
+    for (const profile of this.actorProfilesForPersistence()) {
+      if (!activeActorProfile(profile)) continue;
+      const identityIds = unique(profile.actorIdentityIds ?? []);
+      if (!identities.length && !identityIds.length) continue;
+      const relevant = !catalogId || !identityIds.length || identityIds.some((id) => id.startsWith(`${catalogId}:`) || identities.find((identity) => identity.id === id)?.catalogId === catalogId);
+      if (!relevant) continue;
+      const identity = currentActorProfileIdentity(profile, identities);
+      if (identity) {
+        const activeAliases = uniqueActorAliases([identity.canonicalName, ...identity.associatedNames]);
+        if (identityIds.length === 1 && identityIds[0] === identity.id && profile.canonicalName === identity.canonicalName && profile.normalizedName === identity.normalizedCanonicalName) continue;
+        const { identityResolutionReason: _archivedReason, ...preserved } = profile;
+        this.saveActorProfile({
+          ...preserved,
+          canonicalName: identity.canonicalName,
+          normalizedName: identity.normalizedCanonicalName,
+          aliases: activeAliases,
+          retiredAliases: uniqueActorAliases([...(profile.retiredAliases ?? []), ...[profile.canonicalName, ...(profile.aliases ?? [])].filter((alias) => !activeAliases.some((active) => active.toLowerCase() === String(alias).toLowerCase()))]),
+          actorIdentityIds: [identity.id],
+          identityResolutionState: "canonical",
+          updatedAt: at
+        });
+        reboundActorProfileIds.push(profile.id);
+        continue;
+      }
+      archivedActorProfileIds.push(this.saveActorProfile({
+        ...profile,
+        normalizedName: `archived:${profile.id}`,
+        aliases: [],
+        identityResolutionState: "archived",
+        identityResolutionReason: "inactive_identity",
+        updatedAt: at
+      }).id);
+    }
+    return { archivedActorProfileIds, reboundActorProfileIds };
+  }
   private actorProfileIdentityIsCurrent(profile: any): boolean {
     const identityIds = unique(profile?.actorIdentityIds ?? []);
     if (!this.actorIdentities.size) return identityIds.length === 0;
