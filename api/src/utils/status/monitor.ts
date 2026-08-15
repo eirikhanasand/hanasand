@@ -256,11 +256,16 @@ export default async function runSyntheticMonitor() {
         }),
         check('dark-web-monitoring', 'Latest activity', async () => {
             const deadline = Date.now() + MONITOR_REQUEST_TIMEOUT_MS
-            let { response, body } = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase, remainingMonitorTimeout(deadline))
+            const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
+            let { response, body } = await fetchJson('/v1/dwm/exposure-queue?limit=1&tenantId=default', {
+                headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : {},
+            }, scraperBase, remainingMonitorTimeout(deadline))
             for (let attempt = 0; response.status >= 500 && attempt < 2 && Date.now() < deadline; attempt += 1) {
                 await new Promise((resolve) => setTimeout(resolve, Math.min(1_000, remainingMonitorTimeout(deadline))))
                 if (Date.now() >= deadline) break
-                const retry = await fetchJson('/api/dwm/exposure-queue?limit=1', {}, webBase, remainingMonitorTimeout(deadline))
+                const retry = await fetchJson('/v1/dwm/exposure-queue?limit=1&tenantId=default', {
+                    headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : {},
+                }, scraperBase, remainingMonitorTimeout(deadline))
                 response = retry.response
                 body = retry.body
             }

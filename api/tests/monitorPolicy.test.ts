@@ -46,12 +46,12 @@ describe('production monitor notification transitions', () => {
         expect(source).toContain('Threat-intelligence storage has ${pendingWrites} pending writes.')
     })
 
-    test('latest activity failure does not retry inside one status read', async () => {
+    test('latest activity monitor uses the authenticated scraper health path', async () => {
         const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
         const latestActivity = source.slice(source.indexOf('check(\'dark-web-monitoring\', \'Latest activity\''))
-        expect(latestActivity).toContain('fetchJson(\'/api/dwm/exposure-queue?limit=1\', {}, webBase)')
-        expect(latestActivity).not.toContain('for (let attempt = 0; response.status >= 500')
-        expect(latestActivity).not.toContain('setTimeout(resolve, 1_000)')
+        expect(latestActivity).toContain("fetchJson('/v1/dwm/exposure-queue?limit=1&tenantId=default'")
+        expect(latestActivity).toContain("'x-hanasand-service-token'")
+        expect(latestActivity).toContain('}, scraperBase, remainingMonitorTimeout(deadline))')
     })
 
     test('public search failure does not retry inside one status run', async () => {
