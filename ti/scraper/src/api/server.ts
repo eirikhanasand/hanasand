@@ -98,7 +98,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       const reportedStorage = storageBacklogged
         ? { ...storage, ok: false, status: "backlogged", lastWriteError: storage.lastWriteError ?? `Write queue exceeds ${MAX_HEALTHY_PENDING_WRITES} pending records.` }
         : storage;
-      const healthy = reportedStorage.ok !== false;
+      const databaseAvailable = reportedStorage.databaseAvailable !== false;
+      const healthy = databaseAvailable && !reportedStorage.lastWriteError && !storageBacklogged;
       return json({ ok: healthy, service: "ti-scraper", version: "v1", storage: reportedStorage, search: { status: searchReady ? "ready" : "starting", ready: searchReady }, collection: { public: (options.canaryLoop as any)?.getState?.(), publicDefault: (options.defaultCanaryLoop as any)?.getState?.(), restrictedMetadata: (options.restrictedMetadataLoop as any)?.getState?.() }, ...runtime, generatedAt: nowIso() }, healthy ? 200 : 503);
     }
     if (url.pathname === "/v1/public/coverage" && request.method === "GET") {

@@ -28,7 +28,7 @@ function storageBackpressure(store: any) {
   if (!snapshot) return undefined;
   const pendingWrites = Number(snapshot.pendingWrites ?? 0);
   const lastWriteError = typeof snapshot.lastWriteError === "string" ? snapshot.lastWriteError.trim() : "";
-  if (!lastWriteError && !(snapshot.ok === false && pendingWrites > 0)) return undefined;
+  if (!lastWriteError && pendingWrites <= MAX_HEALTHY_PENDING_WRITES) return undefined;
   const reason = lastWriteError || "PostgreSQL write queue is unhealthy.";
   return { ok: false, pendingWrites, lastWriteError: reason, message: `Collection paused because PostgreSQL writes are unhealthy: ${reason}` };
 }

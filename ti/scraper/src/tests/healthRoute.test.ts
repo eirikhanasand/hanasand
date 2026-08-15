@@ -41,6 +41,20 @@ describe("health route", () => {
     }
   });
 
+  test("keeps the service available when actor-scope integrity is degraded", async () => {
+    const store = new InMemoryScraperStore();
+    (store as any).databaseHealthSnapshot = () => ({ ok: false, databaseAvailable: true, actorProfileScopeReady: false, pendingWrites: 1 });
+    const server = startApiServer({ port: 0, store, frontier: new FocusedFrontier() });
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/v1/health`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ ok: true, storage: { databaseAvailable: true, actorProfileScopeReady: false } });
+    } finally {
+      await server.stop();
+    }
+  });
+
   test("keeps public search responsive while mutations wait for storage", async () => {
     const store = new InMemoryScraperStore();
     let release = () => {};

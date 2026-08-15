@@ -86,6 +86,7 @@ type PendingWrite = { description: string; run: () => Promise<void> };
 type Migration = { version: string; path: string };
 type DatabaseHealth = {
   ok: boolean;
+  databaseAvailable?: boolean;
   backend: "postgresql";
   schema: "threat_intel";
   migrationVersion: string;
@@ -237,6 +238,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       `;
       health = {
         ok: Boolean(row?.schema_ready && row?.migration_ready && row?.actor_profile_scope_ready),
+        databaseAvailable: Boolean(row?.schema_ready && row?.migration_ready),
         backend: "postgresql",
         schema: "threat_intel",
         migrationVersion: this.latestMigrationVersion,
@@ -247,6 +249,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     } catch (error) {
       health = {
         ok: false,
+        databaseAvailable: false,
         backend: "postgresql",
         schema: "threat_intel",
         migrationVersion: this.latestMigrationVersion,
@@ -267,6 +270,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     }
     const health = this.lastDatabaseHealth ?? {
       ok: !this.lastWriteError,
+      databaseAvailable: true,
       backend: "postgresql" as const,
       schema: "threat_intel" as const,
       migrationVersion: this.latestMigrationVersion,
