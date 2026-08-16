@@ -106,7 +106,7 @@ if (error) throw new Error(error.error.message)`
 }
 
 function CodeBlock({ title, code }: { title: string, code: string }) {
-    return <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-text'><div className='flex items-center justify-between gap-3 border-b border-ui-border/40 px-4 py-3 text-sm font-semibold text-ui-canvas'><span className='flex items-center gap-2'><Braces className='h-4 w-4 text-ui-primary' />{title}</span><CopyCodeButton value={code} /></div><pre className='overflow-x-auto whitespace-pre-wrap p-5 text-sm leading-7 text-ui-canvas/85'>{code}</pre></div>
+    return <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'><div className='flex items-center justify-between gap-3 border-b border-ui-border/40 px-4 py-3 text-sm font-semibold text-ui-text'><span className='flex items-center gap-2'><Braces className='h-4 w-4 text-ui-primary' />{title}</span><CopyCodeButton value={code} /></div><pre className='overflow-x-auto whitespace-pre-wrap p-5 text-sm leading-7 text-ui-muted'>{code}</pre></div>
 }
 
 function operationAccessLabel(security: OpenApiOperation['security']) {

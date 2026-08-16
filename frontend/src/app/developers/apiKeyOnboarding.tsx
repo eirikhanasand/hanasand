@@ -223,7 +223,7 @@ export default function ApiKeyOnboarding({ server }: { server: string }) {
 }
 
 function FirstRequest({ code }: { code: string }) {
-    return <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-text'><div className='flex items-center justify-between gap-2 border-b border-ui-border/40 px-3 py-2 text-xs font-semibold text-ui-canvas'><span>Run from your terminal</span><CopyCodeButton value={code} /></div><pre className='overflow-x-auto whitespace-pre-wrap p-3 text-xs leading-6 text-ui-canvas/85'>{code}</pre></div>
+    return <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'><div className='flex items-center justify-between gap-2 border-b border-ui-border/40 px-3 py-2 text-xs font-semibold text-ui-text'><span>Run from your terminal</span><CopyCodeButton value={code} /></div><pre className='overflow-x-auto whitespace-pre-wrap p-3 text-xs leading-6 text-ui-muted'>{code}</pre></div>
 }
 
 function StateLine({ icon, text }: { icon: ReactNode, text: string }) {
