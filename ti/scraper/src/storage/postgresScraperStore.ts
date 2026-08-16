@@ -2236,7 +2236,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     {
       const [sources, captures, incidents, entities, actorProfiles, actorIdentityCatalogs, actorIdentities, validations, alerts, evaluationLabels, timeliness, runs, claims, sourceHealth, workflows, reviewTasks, workflowEvents] = await Promise.all([
         this.sql`SELECT record FROM threat_intel.sources ORDER BY created_at`,
-        this.sql`SELECT record FROM threat_intel.captures ORDER BY collected_at`,
+        deferHighVolumeHydration
+          ? this.sql`SELECT record FROM threat_intel.captures ORDER BY collected_at DESC LIMIT 10000`
+          : this.sql`SELECT record FROM threat_intel.captures ORDER BY collected_at`,
         this.sql`SELECT record FROM threat_intel.incidents ORDER BY first_seen_at`,
         deferHighVolumeHydration ? Promise.resolve([]) : this.sql`SELECT record FROM threat_intel.entities ORDER BY created_at`,
         this.sql`SELECT record FROM threat_intel.actor_profiles ORDER BY first_seen_at`,
