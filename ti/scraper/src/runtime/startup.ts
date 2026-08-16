@@ -212,8 +212,10 @@ export async function startScraperRuntime() {
   });
   // ponytail: warm the common global inventory page once; later reads are served
   // from the bounded five-second backend cache instead of repeating cold joins.
-  await store.querySourceOperationalPage?.({ generatedAt: new Date().toISOString(), limit: 50, offset: 0, executableOnly: false, sort: "source", direction: "asc" });
   const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, defaultCanaryLoop: defaultCanary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
+  // ponytail: cache warming must never delay listener startup or make health fail.
+  void store.querySourceOperationalPage?.({ generatedAt: new Date().toISOString(), limit: 50, offset: 0, executableOnly: false, sort: "source", direction: "asc" })
+    ?.catch((error) => logger.warn("source inventory warm failed", { event: "source_inventory.warm_failed", error: error instanceof Error ? error.message : String(error) }));
   startupPhase("search_index_warm_queued");
   setTimeout(() => void warmSearchCaptureIndexAsync(store)
     .then((result) => startupPhase("search_index_built", result))
