@@ -41,7 +41,7 @@ export default function ActivityClient({ initialQueue }: Props) {
         for (const key of ['company', 'actor', 'category', 'size', 'country', 'from', 'to'] as const) {
             if (filters[key]) params.set(key, filters[key])
         }
-        const response = await fetch(`/api/dwm/exposure-queue?${params.toString()}`, { cache: 'no-store' })
+        const response = await fetch(`/api/public/exposure-queue?${params.toString()}`, { cache: 'default' })
         if (!response.ok && response.status !== 202) throw new Error(`activity-status:${response.status}`)
         return normalizeExposureQueue(await response.json())
     }, [filters])

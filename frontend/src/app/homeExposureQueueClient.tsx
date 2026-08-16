@@ -11,7 +11,7 @@ type Props = {
 }
 
 const PAGE_SIZE = 10
-const REFRESH_MS = 30_000
+const REFRESH_MS = 300_000
 
 export default function HomeExposureQueueClient({ initialQueue }: Props) {
     const [queue, setQueue] = useState(initialQueue)
@@ -21,6 +21,12 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
     const [refreshing, setRefreshing] = useState(false)
     const [error, setError] = useState('')
     const sentinelRef = useRef<HTMLDivElement | null>(null)
+    const viewportRef = useRef<HTMLDivElement | null>(null)
+    const itemsRef = useRef(items)
+
+    useEffect(() => {
+        itemsRef.current = items
+    }, [items])
 
     const mergeQueue = useCallback((nextQueue: ExposureQueue, mode: 'replace' | 'append') => {
         setQueue(nextQueue)
@@ -30,7 +36,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
 
     const fetchQueue = useCallback(async (offset = 0) => {
         const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) })
-        const response = await fetch(`/api/dwm/exposure-queue?${params.toString()}`, { cache: 'no-store' })
+        const response = await fetch(`/api/public/exposure-queue?${params.toString()}`, { cache: 'default' })
         if (!response.ok && response.status !== 202) throw new Error(`activity-status:${response.status}`)
         return normalizeExposureQueue(await response.json())
     }, [])
@@ -42,7 +48,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
             mergeQueue(next, 'replace')
             setError('')
         } catch (reason) {
-            setError(activityErrorMessage(reason))
+            if (!itemsRef.current.length) setError(activityErrorMessage(reason))
         } finally {
             setRefreshing(false)
         }
@@ -56,7 +62,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
             mergeQueue(next, 'append')
             setError('')
         } catch (reason) {
-            setError(activityErrorMessage(reason))
+            if (!itemsRef.current.length) setError(activityErrorMessage(reason))
         } finally {
             setLoadingMore(false)
         }
@@ -82,7 +88,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
             if (entries.some((entry) => entry.isIntersecting)) {
                 void loadMore()
             }
-        }, { rootMargin: '320px 0px' })
+        }, { root: viewportRef.current, rootMargin: '320px 0px' })
         observer.observe(node)
         return () => observer.disconnect()
     }, [loadMore])
@@ -98,7 +104,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                     <Marquee text={subtitle} className='text-xs text-ui-muted' />
                 </div>
                 <div className='flex flex-wrap items-center gap-2'>
-                    <span className='landing-surface-border rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-muted'>{refreshing ? 'Refreshing' : queue.status === 'unavailable' ? 'Unavailable' : queue.status === 'checking' ? 'Checking' : `${items.length}/${total}`}</span>
+                    <span className='landing-surface-border rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-muted'>{queue.status === 'unavailable' && !items.length ? 'Unavailable' : queue.status === 'checking' && !items.length ? 'Checking' : `${items.length}/${total}`}</span>
                     <span className='text-xs text-ui-muted'>{formatRefreshCadence(queue.scheduler?.cadenceSeconds)}</span>
                     <button type='button' onClick={() => void refresh()} disabled={refreshing} className='landing-surface-border rounded-md border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-primary transition hover:border-ui-primary disabled:cursor-wait disabled:opacity-60'>
                         {refreshing ? 'Checking...' : 'Check now'}
@@ -108,7 +114,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                     </Link>
                 </div>
             </div>
-            <div className='max-h-[34rem] min-w-0 overflow-auto'>
+            <div ref={viewportRef} className='max-h-[34rem] min-h-72 min-w-0 overscroll-contain overflow-x-auto overflow-y-auto'>
                 <div className='w-full min-w-[56rem]'>
                     <div className='landing-surface-divider sticky top-0 z-10 grid grid-cols-[7rem_minmax(12rem,1fr)_11rem_9rem_9rem_11rem] gap-3 border-b border-ui-border bg-ui-panel px-4 py-2 text-[0.68rem] font-semibold uppercase text-ui-muted' data-home-exposure-panel-table-header='true'>
                         <span>Group</span>
@@ -136,7 +142,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                         )}
                     </div>
                     <div ref={sentinelRef} className='px-4 py-4 text-center text-xs text-ui-muted'>
-                        {loadingMore ? 'Loading more activity...' : nextOffset !== null ? 'Scroll for more' : items.length ? 'End of list' : ''}
+                        {loadingMore ? 'Loading...' : nextOffset !== null ? 'Scroll for more' : items.length ? 'End of list' : ''}
                     </div>
                 </div>
             </div>
@@ -174,8 +180,8 @@ function latestActivityEmptyTitle(status: string) {
 function activityErrorMessage(reason: unknown) {
     const message = reason instanceof Error ? reason.message : String(reason)
     const status = message.match(/\b(4\d\d|5\d\d)\b/)?.[1]
-    if (status) return 'Latest activity is refreshing; alert rows will return when the live feed is available.'
-    return 'Latest activity is refreshing; try again shortly.'
+    if (status) return 'Activity is temporarily unavailable. Try again shortly.'
+    return 'Activity could not be updated. Try again shortly.'
 }
 
 function formatRefreshCadence(seconds?: number) {
