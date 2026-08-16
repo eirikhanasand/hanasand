@@ -6,6 +6,7 @@ import searchThreatIntel, { evidenceTimestamp, TiSearchResponse } from '@/utils/
 import { actorGeoProfile, countryFromValue, victimObservationsFor } from '@/utils/ti/actorProfile'
 import { buildActorIntelligence, type TiActorIntelligenceProfile } from '@/utils/ti/actorIntelligence'
 import { ActorMark } from '@/components/ti/actorMark'
+import MarkdownRender from '@/components/markdown/markdown'
 import { actorSummary, usefulActorSummary } from '@/utils/ti/actorSummary'
 import { buildTiActionability, type TiActionabilityModel } from '@/utils/ti/actionability'
 import { PUBLIC_TI_HANDOFF_ACTIONS, buildActorArtifactHandoffs, buildActorArtifacts, encodeHandoffPayload, nextActorArtifactId, type ActorArtifact, type ActorArtifactHandoffs, type ActorArtifactKind, type PublicTiHandoffPayload } from '@/utils/ti/actorWorkbench'
@@ -443,7 +444,7 @@ function ActorProfileHeader({ result, title, actor, aliases, summary, actorQuery
                 <ActorMark name={title} size='md' />
                 <h1 className='wrap-break-word text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>{title}{actorQuery && externalId ? ` · ${externalId}` : ''}</h1>
             </div>
-            <p className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>{displayRequirementText(description)}</p>
+            <div className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'><MarkdownRender MDstr={displayRequirementText(description)} /></div>
         </div>
         {facts.length ? <div className='grid gap-3 sm:grid-cols-2'>
             {facts.map(fact => <EvidenceMetric key={fact.label} label={fact.label} value={fact.value} />)}
