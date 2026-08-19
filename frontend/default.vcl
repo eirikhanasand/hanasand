@@ -49,7 +49,16 @@ sub vcl_hash {
 }
 
 sub vcl_backend_response {
-    if (bereq.url ~ "^/dashboard(?:/|$)" && beresp.status == 200) {
+    if (bereq.url ~ "^/$" && beresp.status == 200 && !(bereq.http.Cookie ~ "(^|; )access_token=") && !(bereq.http.Cookie ~ "(^|; )id=")) {
+        # The public homepage is safe to cache even though the shared Next
+        # layout reads cookies and headers. Authenticated requests already
+        # pass in vcl_recv; theme cookies are part of the cache hash.
+        unset beresp.http.Set-Cookie;
+        set beresp.ttl = 5s;
+        set beresp.grace = 30s;
+        set beresp.http.Cache-Control = "public, max-age=5, stale-while-revalidate=30";
+        return (deliver);
+    } else if (bereq.url ~ "^/dashboard(?:/|$)" && beresp.status == 200) {
         # Next marks cookie-aware dynamic pages private. They are still safe
         # here because vcl_hash includes the complete authenticated cookie.
         # Set-Cookie is safe to replay only for that same session key.
