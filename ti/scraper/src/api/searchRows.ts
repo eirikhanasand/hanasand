@@ -98,7 +98,7 @@ export function safePublicSearchUrl(url: unknown, metadata: any = {}) {
 }
 
 export function isMetadataOnlyCapture(capture: any) {
-  return capture.storageKind === "metadata_only" || capture.metadata?.adapter === "darknet_metadata";
+  return Boolean(capture) && (capture.storageKind === "metadata_only" || capture.metadata?.adapter === "darknet_metadata");
 }
 
 export function cleanSearchText(value: unknown, maxLength = 500) {

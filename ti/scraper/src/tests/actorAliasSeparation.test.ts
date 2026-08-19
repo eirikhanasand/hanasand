@@ -16,6 +16,22 @@ test("does not collapse distinct ATT&CK groups through associated names", () => 
   expect(actor("Carbanak was reported.")).toBe("Carbanak");
 });
 
+test("extracts current activity context from public reporting", () => {
+  const entities = extractEntities("APT29 targeted hospitality organizations with credential theft.", {
+    sourceId: "src_microsoft_security_blog",
+    captureId: "cap_apt29_current",
+    url: "https://example.test/apt29",
+    collectedAt: "2026-08-19T00:00:00.000Z",
+    contentHash: "apt29-current"
+  }, [actorIdentity("G0016", "APT29")]);
+
+  expect(entities.map((entity) => `${entity.type}:${entity.value}`)).toEqual([
+    "actor:APT29",
+    "sector:hospitality",
+    "ttp:credential theft"
+  ]);
+});
+
 function actor(text: string) {
   return extractEntities(text, {
     sourceId: "src_mitre_actor_separation",

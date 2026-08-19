@@ -3510,8 +3510,9 @@ function summarizeReviewTaskRows(rows: Array<{ state?: string; outcome?: string;
 function nullable<T>(value: T | null | undefined): T | null { return value ?? null; }
 function isDuplicateScopedCaptureError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
-  const record = error as { code?: unknown; message?: unknown };
-  return record.code === "23505" && String(record.message ?? "").includes("duplicate scoped capture text");
+  const record = error as { code?: unknown; message?: unknown; detail?: unknown; constraint?: unknown };
+  const text = [record.message, record.detail, record.constraint].map((value) => String(value ?? "")).join(" ").toLowerCase();
+  return record.code === "23505" && /duplicate scoped capture text|captures_scoped_text/.test(text);
 }
 function score(value: unknown): number { const parsed = Number(value); return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 0; }
 function alertScore(value: unknown): number { const parsed = Number(value); return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : 0; }
