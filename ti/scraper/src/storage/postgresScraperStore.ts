@@ -40,6 +40,15 @@ import { orgWatchlistContractToRuntimeDwmWatchlists } from "./dwmOrgWatchlistBri
 import { mayContainExposureQueueClaim } from "../product/exposureQueueCandidate.ts";
 import { decodeKeysetCursor, encodeKeysetCursor, legacyOffset } from "../api/pagination.ts";
 
+type ExposureQueuePageInput = {
+  tenantId?: string;
+  filters?: { q?: string; company?: string; actor?: string; category?: string; size?: string; country?: string; from?: string; to?: string };
+  limit: number;
+  offset: number;
+  global?: boolean;
+  _skipCache?: boolean;
+};
+
 const DEFAULT_MIGRATIONS = [
   { version: "006_threat_intelligence_store", path: fileURLToPath(new URL("../../migrations/006_threat_intelligence_store.sql", import.meta.url)) },
   { version: "007_operational_intelligence_spine", path: fileURLToPath(new URL("../../migrations/007_operational_intelligence_spine.sql", import.meta.url)) },
@@ -111,6 +120,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   private databaseHealthCheckedAt = 0;
   private databaseHealthRefresh?: Promise<void>;
   private readonly sourceOperationalPageCache = new Map<string, { expiresAt: number; value: any; refreshing?: Promise<void> }>();
+  private readonly exposureQueuePageCache = new Map<string, { input: ExposureQueuePageInput; value: any; refreshing?: Promise<void> }>();
   private pipelineDepth = 0;
 
   private constructor(sql: SQL, migrations: Migration[], deferHighVolumeHydration = false) {
@@ -573,13 +583,24 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return rows.map(readRecord);
   }
 
-  async queryExposureQueuePage(input: {
-    tenantId?: string;
-    filters?: { q?: string; company?: string; actor?: string; category?: string; size?: string; country?: string; from?: string; to?: string };
-    limit: number;
-    offset: number;
-    global?: boolean;
-  }) {
+  async queryExposureQueuePage(input: ExposureQueuePageInput) {
+    const cacheKey = JSON.stringify({
+      tenantId: input.tenantId,
+      filters: input.filters ?? {},
+      limit: input.limit,
+      offset: input.offset,
+      global: input.global === true
+    });
+    if (!input._skipCache) {
+      const cached = this.exposureQueuePageCache.get(cacheKey);
+      if (cached) return cached.value;
+    }
+    const value = await this.queryExposureQueuePageUncached(input);
+    if (!input._skipCache) this.exposureQueuePageCache.set(cacheKey, { input, value });
+    return value;
+  }
+
+  private async queryExposureQueuePageUncached(input: ExposureQueuePageInput) {
     const filters = input.filters ?? {};
     const tenantId = input.tenantId === "default" ? null : input.tenantId ?? null;
     const global = input.global === true;
@@ -651,6 +672,15 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       latestClaimAt: first?.latest_claim_at,
       latestCollectedAt: first?.latest_collected_at
     };
+  }
+
+  private invalidateExposureQueuePageCache() {
+    for (const [cacheKey, cached] of this.exposureQueuePageCache) {
+      if (cached.refreshing) continue;
+      cached.refreshing = this.queryExposureQueuePage({ ...cached.input, _skipCache: true })
+        .then((value) => { this.exposureQueuePageCache.set(cacheKey, { input: cached.input, value }); })
+        .catch(() => { this.exposureQueuePageCache.set(cacheKey, { input: cached.input, value: cached.value }); });
+    }
   }
 
   async querySourceOperationalPage(input: { tenantId?: string; generatedAt: string; limit?: number; offset?: number; cursor?: string; sourceId?: string; executableOnly?: boolean; query?: string; family?: string; lifecycle?: string; access?: string; health?: string; output?: string; matches?: string; sort?: string; direction?: string; _skipCache?: boolean } ) {
@@ -2650,6 +2680,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       )
       ON CONFLICT (id) DO NOTHING
     `;
+    this.invalidateExposureQueuePageCache();
   }
 
   private async persistCaptureMetadata(capture: any): Promise<void> {
@@ -2661,6 +2692,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           first_visible_at = COALESCE(first_visible_at, ${nullable(capture.firstVisibleAt)})
       WHERE id = ${capture.id}
     `;
+    this.invalidateExposureQueuePageCache();
   }
 
   private async persistCaptureRetention(capture: any): Promise<void> {
@@ -2673,6 +2705,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           record = ${toJson(capture)}::text::jsonb
       WHERE id = ${capture.id}
     `;
+    this.invalidateExposureQueuePageCache();
   }
 
   private async persistIncident(incident: any, sql: any = this.sql): Promise<void> {
