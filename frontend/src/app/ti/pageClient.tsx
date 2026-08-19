@@ -5711,7 +5711,7 @@ function MapCoverageFallback({ regions, actor, actionability, compact = false }:
     return (
         <div data-ti-geo-coverage-fallback='true' className={`${compact ? 'gap-2 p-3' : 'gap-3 p-4'} grid bg-ui-panel dark:bg-ui-canvas`}>
             <EmptyActorMap compact={compact} />
-            <p className='text-sm leading-6 text-ui-muted dark:text-ui-muted'>No country attribution found in retained sources.</p>
+            <p className='text-sm leading-6 text-ui-muted dark:text-ui-muted'>It is currently unknown where this threat actor operates or who their targets are.</p>
             <div className={`grid gap-2 ${compact ? 'sm:grid-cols-1' : 'md:grid-cols-1'}`}>
                 <CoverageFallbackMetric label='Regions' value={regions.length ? regions.join(', ') : 'Unknown'} />
             </div>
