@@ -421,6 +421,7 @@ function ActorProfileHeader({ result, title, actor, aliases, summary, references
     actorQuery?: boolean
 }) {
     const externalId = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0]?.externalId : undefined
+    const catalogCandidate = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0] : undefined
     const catalogDescription = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0]?.description : undefined
     const description = usefulActorSummary(summary) || usefulActorSummary(catalogDescription) || actorSummary({
         name: title,
@@ -441,7 +442,10 @@ function ActorProfileHeader({ result, title, actor, aliases, summary, references
         <div>
             <div className='flex items-center gap-3'>
                 <ActorMark name={title} size='md' />
-                <h1 className='wrap-break-word text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>{title}{actorQuery && externalId ? ` · ${externalId}` : ''}</h1>
+                <div className='flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1'>
+                    <h1 className='wrap-break-word text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>{title}{actorQuery && externalId ? ` · ${externalId}` : ''}</h1>
+                    {catalogCandidate ? <span className='text-[11px] font-medium text-ui-primary/70 dark:text-ui-primary/70'>Created {formatDate(catalogCandidate.createdAt)} · Updated {formatDate(catalogCandidate.modifiedAt)}</span> : null}
+                </div>
             </div>
             <ActorDescription description={description} references={references} />
         </div>
@@ -5708,9 +5712,8 @@ function MapCoverageFallback({ regions, actor, actionability, compact = false }:
         <div data-ti-geo-coverage-fallback='true' className={`${compact ? 'gap-2 p-3' : 'gap-3 p-4'} grid bg-ui-panel dark:bg-ui-canvas`}>
             <EmptyActorMap compact={compact} />
             <p className='text-sm leading-6 text-ui-muted dark:text-ui-muted'>No country attribution found in retained sources.</p>
-            <div className={`grid gap-2 ${compact ? 'sm:grid-cols-2' : 'md:grid-cols-2'}`}>
+            <div className={`grid gap-2 ${compact ? 'sm:grid-cols-1' : 'md:grid-cols-1'}`}>
                 <CoverageFallbackMetric label='Regions' value={regions.length ? regions.join(', ') : 'Unknown'} />
-                <CoverageFallbackMetric label='Newest' value={actor.sourceCoverage.latestReportDate ? formatDate(actor.sourceCoverage.latestReportDate) : formatDate(actor.lastSeen)} />
             </div>
             {regions.length ? (
                 <div className='flex flex-wrap gap-2'>

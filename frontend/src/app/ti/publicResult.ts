@@ -83,6 +83,8 @@ export function sanitizeTiResultForPublicPage(result: TiSearchResponse | null): 
                 status: candidate.status,
                 aptNumberDesignationPresent: candidate.aptNumberDesignationPresent,
                 sourceUrl: candidate.sourceUrl,
+                createdAt: candidate.createdAt,
+                modifiedAt: candidate.modifiedAt,
                 catalogVersion: candidate.catalogVersion,
                 catalogModifiedAt: candidate.catalogModifiedAt,
                 captureId: candidate.captureId,

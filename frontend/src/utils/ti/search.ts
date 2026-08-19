@@ -106,6 +106,8 @@ export interface TiActorIdentityCandidate {
     aptNumberDesignationPresent: boolean
     sourceUrl: string
     referenceSources?: Array<{ name: string; url?: string }>
+    createdAt: string
+    modifiedAt: string
     catalogVersion: string
     catalogModifiedAt: string
     captureId?: string
