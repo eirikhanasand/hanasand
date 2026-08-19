@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { Braces, Code2, ExternalLink, LockKeyhole } from 'lucide-react'
 import { authApiUrl } from '@/utils/auth/authApiUrl'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
@@ -43,7 +44,7 @@ export default async function ApiDocsPage() {
                 eyebrow='Developer tools'
                 title={contract.info.title}
                 description={contract.info.description || 'Use the production API with documented paths, authentication, request shapes, and response codes.'}
-                actions={<a href='/developers' target='_blank' rel='noreferrer' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary'>Public guide <ExternalLink className='h-3.5 w-3.5' /></a>}
+                actions={<Link href='/developers' target='_blank' rel='noopener noreferrer' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary'>Public guide <ExternalLink className='h-3.5 w-3.5' /></Link>}
             />
 
             <DashboardPanel className='grid gap-3 p-4 sm:grid-cols-3'>
