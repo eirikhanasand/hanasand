@@ -12,6 +12,11 @@ const bun = process.execPath
 
 const tasks: TestTask[] = [
     {
+        id: 'dashboard-sidebar-shell',
+        title: 'Dashboard sidebar shell contract',
+        command: [bun, 'scripts/check-dashboard-sidebar-shell.mjs'],
+    },
+    {
         id: 'status-traffic',
         title: 'Status traffic contract',
         command: [bun, 'scripts/check-status-traffic.mjs'],
