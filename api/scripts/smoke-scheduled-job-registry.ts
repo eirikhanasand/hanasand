@@ -78,7 +78,7 @@ const tiMock = Bun.serve({
         }
 
         if (url.pathname === '/v1/ops/collection-scheduler') return json(tiSchedulerPayload())
-        if (url.pathname === '/health') return json({
+        if (url.pathname === '/v1/health') return json({
             ok: true,
             collection: {
                 restrictedMetadata: {
