@@ -480,11 +480,11 @@ function ActorDescription({ description, references }: { description: string; re
         <MarkdownRender MDstr={displayRequirementText(renderedDescription)} />
         <section className='mt-4 border-t border-ui-border pt-3 dark:border-ui-border'>
             <h2 className='text-xs font-semibold uppercase tracking-wide text-ui-muted dark:text-ui-muted'>References</h2>
-            <ol className='mt-2 grid gap-1 pl-5 text-xs leading-5 text-ui-muted dark:text-ui-muted'>
+            <ol className='mt-2 grid list-none gap-1 pl-0 text-xs leading-5 text-ui-muted dark:text-ui-muted'>
                 {citations.map((name, index) => {
                     const source = sourceByName.get(name.toLocaleLowerCase())
                     const number = index + 1
-                    return <li key={name} id={`ti-reference-${number}`} aria-current={activeCitation === number ? 'location' : undefined} className={`rounded-md px-2 py-1 pl-1 transition-colors ${activeCitation === number ? 'bg-ui-primary/15 text-ui-text ring-1 ring-ui-primary/45 dark:bg-ui-primary/15 dark:text-ui-text' : ''}`}><span className='mr-2 font-semibold text-ui-primary'>[{number}]</span>{source?.url ? <a href={source.url} target='_blank' rel='noopener noreferrer' className='hover:text-ui-primary hover:underline'>{name}</a> : name}</li>
+                    return <li key={name} id={`ti-reference-${number}`} aria-current={activeCitation === number ? 'location' : undefined} className={`rounded-md px-0 py-1 transition-colors ${activeCitation === number ? 'bg-ui-primary/15 text-ui-text ring-1 ring-ui-primary/45 dark:bg-ui-primary/15 dark:text-ui-text' : ''}`}><span className='mr-2 font-semibold text-ui-primary'>[{number}]</span>{source?.url ? <a href={source.url} target='_blank' rel='noopener noreferrer' className='hover:text-ui-primary hover:underline'>{name}</a> : name}</li>
                 })}
             </ol>
         </section>
