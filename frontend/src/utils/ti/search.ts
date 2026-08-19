@@ -633,11 +633,9 @@ export default async function searchThreatIntel(query: string, options: { prefer
 
     let response: Response
     try {
-        response = await fetch(`${config.url.api}/ti/search`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: clean, ...(options.preferCached ? { preferCached: true } : {}) })
-        })
+        const params = new URLSearchParams({ q: clean })
+        if (options.preferCached) params.set('cached', 'true')
+        response = await fetch(`/api/ti/search?${params.toString()}`, { cache: 'no-store' })
     } catch {
         return null
     }
