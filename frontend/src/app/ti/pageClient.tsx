@@ -5708,9 +5708,8 @@ function MapCoverageFallback({ regions, actor, actionability, compact = false }:
         <div data-ti-geo-coverage-fallback='true' className={`${compact ? 'gap-2 p-3' : 'gap-3 p-4'} grid bg-ui-panel dark:bg-ui-canvas`}>
             <EmptyActorMap compact={compact} />
             <p className='text-sm leading-6 text-ui-muted dark:text-ui-muted'>No country attribution found in retained sources.</p>
-            <div className={`grid gap-2 ${compact ? 'sm:grid-cols-3' : 'md:grid-cols-3'}`}>
+            <div className={`grid gap-2 ${compact ? 'sm:grid-cols-2' : 'md:grid-cols-2'}`}>
                 <CoverageFallbackMetric label='Regions' value={regions.length ? regions.join(', ') : 'Unknown'} />
-                <CoverageFallbackMetric label='Source rows' value={`${actor.sourceCoverage.totalRows}`} />
                 <CoverageFallbackMetric label='Newest' value={actor.sourceCoverage.latestReportDate ? formatDate(actor.sourceCoverage.latestReportDate) : formatDate(actor.lastSeen)} />
             </div>
             {regions.length ? (
