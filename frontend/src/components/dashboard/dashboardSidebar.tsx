@@ -58,7 +58,7 @@ export default function DashboardSidebar({
         { href: '/dashboard/mill', label: 'Security Monitoring', icon: <ShieldAlert className='h-4 w-4' /> },
         { href: '/dashboard/automations', label: 'Automations', icon: <AlarmClockCheck className='h-4 w-4' /> },
         { href: '/dashboard/scanner', label: 'Security Scanner', icon: <ScanSearch className='h-4 w-4' /> },
-        { href: '/dashboard/api-docs', label: 'API docs', icon: <Code2 className='h-4 w-4' /> },
+        { href: '/api', label: 'API docs', icon: <Code2 className='h-4 w-4' /> },
         { href: '/dashboard/subscription', label: 'Subscription', icon: <ScanSearch className='h-4 w-4' /> },
     ]
 
