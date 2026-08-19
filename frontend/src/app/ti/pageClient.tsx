@@ -5709,7 +5709,7 @@ function MapCoverageFallback({ regions, actor, actionability, compact = false }:
             <EmptyActorMap compact={compact} />
             <p className='text-sm leading-6 text-ui-muted dark:text-ui-muted'>No country attribution found in retained sources.</p>
             <div className={`grid gap-2 ${compact ? 'sm:grid-cols-3' : 'md:grid-cols-3'}`}>
-                <CoverageFallbackMetric label='Regions' value={regions.length ? regions.join(', ') : 'None established'} />
+                <CoverageFallbackMetric label='Regions' value={regions.length ? regions.join(', ') : 'Unknown'} />
                 <CoverageFallbackMetric label='Source rows' value={`${actor.sourceCoverage.totalRows}`} />
                 <CoverageFallbackMetric label='Newest' value={actor.sourceCoverage.latestReportDate ? formatDate(actor.sourceCoverage.latestReportDate) : formatDate(actor.lastSeen)} />
             </div>
