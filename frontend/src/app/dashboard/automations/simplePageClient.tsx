@@ -155,9 +155,8 @@ function WelcomeState({ onCreate, compact = false }: { onCreate: () => void, com
                 </svg>
                 <img src='/images/empty-states/automations-barn.png' alt='A maintained red barn with its doors open and the inside empty' className='relative z-10 h-full w-full object-contain' />
             </div>
-            <p className='text-xs font-semibold uppercase tracking-[0.2em] text-ui-primary'>0 automations configured</p>
-            <h2 className='mt-3 text-3xl font-semibold text-ui-text'>Your barn is empty</h2>
-            <p className='mx-auto mt-3 max-w-lg text-base leading-7 text-ui-muted'>Nothing is checking your systems yet. Create your first automation to start filling it with useful checks.</p>
+            <h2 className='text-3xl font-semibold text-ui-text'>Create automation</h2>
+            <p className='mx-auto mt-3 max-w-lg text-base leading-7 text-ui-muted'>Check that everything is working as it should, and get alerted if something is wrong.</p>
             <button type='button' onClick={onCreate} className='mt-7 inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-5 text-sm font-semibold text-ui-canvas shadow-lg shadow-ui-primary/20 hover:opacity-90'><Plus className='h-4 w-4' />Create your first automation</button>
         </div>
     </section>
