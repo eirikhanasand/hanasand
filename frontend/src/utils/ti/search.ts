@@ -1,5 +1,3 @@
-import config from '@/config'
-
 const cacheTtlMs = 60_000
 const memoryCache = new Map<string, { expiresAt: number; result: TiSearchResponse }>()
 const browserCachePrefix = 'hanasand:ti-search:'
