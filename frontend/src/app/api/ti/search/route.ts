@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
             method: 'POST',
             cache: 'no-store',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ query, ...(entityType ? { entityType } : {}), ...(cached ? { cached: true } : {}) }),
+            body: JSON.stringify({ query, ...(entityType ? { entityType } : {}), ...(cached ? { preferCached: true } : {}) }),
             signal: AbortSignal.timeout(PUBLIC_TI_SEARCH_TIMEOUT_MS),
         })
         return new NextResponse(await response.text(), {
