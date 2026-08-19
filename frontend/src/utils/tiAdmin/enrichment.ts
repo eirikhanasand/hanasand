@@ -143,13 +143,30 @@ export type TiPipelineOverview = {
     }>
 }
 
+// ponytail: serve the last snapshot immediately; a slow scraper must not block dashboard navigation.
+const ENRICHMENT_CACHE_TTL_MS = 5_000
+let enrichmentCache: { value: TiEnrichmentOverview, expiresAt: number, refreshing?: Promise<void> } | undefined
+
 export async function getTiEnrichmentOverview(): Promise<TiEnrichmentOverview> {
+    const now = Date.now()
+    if (enrichmentCache?.expiresAt && enrichmentCache.expiresAt > now) return enrichmentCache.value
+    if (enrichmentCache?.refreshing) return enrichmentCache.value
+
+    const value = enrichmentCache?.value || passiveOverview([], [], undefined)
+    enrichmentCache = { value, expiresAt: now + ENRICHMENT_CACHE_TTL_MS }
+    enrichmentCache.refreshing = refreshEnrichmentCache().finally(() => {
+        if (enrichmentCache?.refreshing) delete enrichmentCache.refreshing
+    })
+    return value
+}
+
+async function refreshEnrichmentCache() {
     const [profiles, updates, status] = await Promise.all([
         getPersistedActorProfiles(),
         getPersistedProfileUpdates(),
         getPersistedEnrichmentStatus(),
     ])
-    return passiveOverview(profiles, updates, status)
+    enrichmentCache = { value: passiveOverview(profiles, updates, status), expiresAt: Date.now() + ENRICHMENT_CACHE_TTL_MS }
 }
 
 type PersistedEnrichmentStatus = {
