@@ -580,6 +580,9 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
             heroVictimContext.length ? `Victim context: ${heroVictimContext.join('; ')}.` : '',
         ].filter(Boolean).join(' '))
         : displayRequirementText(result.summary)
+    const primaryActorSourceUrl = actorQuery && result.actorIdentity?.candidates.length === 1
+        ? result.actorIdentity.candidates[0]?.sourceUrl
+        : undefined
     const sourceRows = uniqueBy([
         ...sources.map(source => ({
             id: source.id,
@@ -602,7 +605,9 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
             href: row.href || linkFromText(row.provenance),
             meta: row.reportDate ? formatDate(row.reportDate) : sourceBasisLabel(row.confidence),
         })) ?? []),
-    ], row => (row.href || row.detail || row.id).trim().toLowerCase()).slice(0, 12)
+    ], row => (row.href || row.detail || row.id).trim().toLowerCase())
+        .filter(row => !primaryActorSourceUrl || normalizedReferenceUrl(row.href) !== normalizedReferenceUrl(primaryActorSourceUrl))
+        .slice(0, 12)
     useEffect(() => {
         if (!recentItems.length) return
         if (!recentItems.some(item => item.id === selectedId)) setSelectedId(recentItems[0]?.id ?? '')
@@ -701,8 +706,8 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
 
                 <section id='ti-sources' data-ti-sources='true' className='grid gap-3 border-t border-ui-border pt-4 dark:border-ui-border'>
                     <div>
-                        <h2 className='text-base font-semibold text-ui-text dark:text-ui-text'>Sources</h2>
-                        <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>{sourceRows.length} references collected automatically from scraper output and actor provenance.</p>
+                        <h2 className='text-base font-semibold text-ui-text dark:text-ui-text'>Further reading</h2>
+                        <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>{sourceRows.length} related references collected automatically from scraper output and actor provenance. These are not necessarily direct evidence about this actor.</p>
                     </div>
                     <div className='grid gap-2 md:grid-cols-2'>
                         {sourceRows.map(row => (
@@ -716,7 +721,7 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
                                 </div>
                             </EvidenceBox>
                         ))}
-                        {!sourceRows.length ? <p className='rounded-lg border border-dashed border-ui-border p-4 text-sm text-ui-muted dark:border-ui-border dark:text-ui-muted'>Sources are syncing from the scraper.</p> : null}
+                        {!sourceRows.length ? <p className='rounded-lg border border-dashed border-ui-border p-4 text-sm text-ui-muted dark:border-ui-border dark:text-ui-muted'>Further reading is syncing from the scraper.</p> : null}
                     </div>
                 </section>
             </section>
@@ -3504,6 +3509,16 @@ function compactSourceReferenceLabel(value: string, sourceName?: string, query?:
     return cleaned
 }
 
+function normalizedReferenceUrl(value?: string) {
+    if (!value) return ''
+    try {
+        const url = new URL(value)
+        return `${url.origin}${url.pathname}`.replace(/\/+$/, '').toLowerCase()
+    } catch {
+        return value.trim().replace(/\/+$/, '').toLowerCase()
+    }
+}
+
 function sourceReferenceSummary(sourceName?: string, query?: string) {
     const source = (sourceName || 'This source').trim()
     const actor = humanizeSlug(query || 'this actor')
@@ -3512,7 +3527,7 @@ function sourceReferenceSummary(sourceName?: string, query?: string) {
     if (/google cloud security/i.test(source)) return `Google Cloud Security's APT group directory entry for ${actor}.`
     if (/cisa/i.test(source)) return `CISA advisories used to cross-check public government reporting on ${actor}.`
     if (/live reporting query/i.test(source)) return `Live news search used to refresh recent reporting on ${actor}.`
-    return `${source} reporting used for ${actor} context.`
+    return `Related reading from ${source} for ${actor} context.`
 }
 
 function sourceHealthEvidenceLabel(row: SourceHealthRow) {
