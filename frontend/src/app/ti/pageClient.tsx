@@ -213,7 +213,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
         const expectedQuery = result.query
         const expectedKey = expectedQuery.trim().toLowerCase()
         const timer = window.setTimeout(async () => {
-            const next = await searchThreatIntel(expectedQuery)
+            const next = await searchThreatIntel(expectedQuery, { bypassCache: true })
             if (next && activeQueryRef.current === expectedKey) {
                 setError('')
                 setResult(next)

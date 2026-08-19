@@ -621,13 +621,15 @@ export interface TiVictimNotificationPacket {
     recommendedAction: string
 }
 
-export default async function searchThreatIntel(query: string, options: { preferCached?: boolean } = {}): Promise<TiSearchResponse | null> {
+export default async function searchThreatIntel(query: string, options: { preferCached?: boolean; bypassCache?: boolean } = {}): Promise<TiSearchResponse | null> {
     const clean = query.trim()
     if (!clean) return null
 
     const key = clean.toLowerCase()
-    const cached = readCachedResult(key)
-    if (cached) return cached
+    if (!options.bypassCache) {
+        const cached = readCachedResult(key)
+        if (cached) return cached
+    }
 
     let response: Response
     try {
