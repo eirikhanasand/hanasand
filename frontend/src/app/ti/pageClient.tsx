@@ -59,7 +59,6 @@ import {
     selectedEnrichmentTriageFor,
     selectedReviewHandoffFor,
     selectedSourceDrilldownFor,
-    selectedTriageBriefFor,
     selectedWatchlistPlanFor,
     severityClass,
     severityWeight,
@@ -102,7 +101,6 @@ import {
     type SelectedReviewHandoff,
     type SelectedSourceDrilldown,
     type SelectedSourceDrilldownRow,
-    type SelectedTriageBrief,
     type SelectedWatchlistPlan,
     type SourceHealthRow,
     type StagedHandoff,
@@ -568,7 +566,7 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
     const selectedCaseCreateRequest = selected ? selectedCaseCreateRequestFor(result, selected, actorIntel, actionability, selectedCaseDraft, selectedCaseOwnership, selectedSourceDrilldown, selectedWatchlistPlan) : null
     const selectedDeliveryPlan = selected ? selectedDeliveryReadinessPlanFor(result, selected, actionability, selectedAlertPlan, selectedCaseOwnership) : null
     const selectedConsoleLinks = selected ? selectedConsoleLinksFor(result, selected, selectedWatchlistPlan, selectedCaseCreateRequest, selectedAlertPlan, selectedSourceDrilldown, selectedArtifactHandoffs) : null
-    const selectedTriageBrief = selected ? selectedTriageBriefFor(result, selected, actionability, watchlist, alertPacket, selectedCaseDraft) : null
+    const showActorActivity = !actorQuery || !result.actorIdentity || result.actorIdentity.activityEvidenceAvailable
     const hasStableActorProfile = actorQuery && Boolean(actorIntel.attribution || actorIntel.motivation.length || victimObservations.length || actorIntel.sourceProvenance.length)
     const heroVictimContext = victimObservations
         .slice(0, 4)
@@ -580,34 +578,6 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
             heroVictimContext.length ? `Victim context: ${heroVictimContext.join('; ')}.` : '',
         ].filter(Boolean).join(' '))
         : displayRequirementText(result.summary)
-    const primaryActorSourceUrl = actorQuery && result.actorIdentity?.candidates.length === 1
-        ? result.actorIdentity.candidates[0]?.sourceUrl
-        : undefined
-    const sourceRows = uniqueBy([
-        ...sources.map(source => ({
-            id: source.id,
-            name: source.name,
-            detail: source.url || source.provenance || source.type,
-            href: source.url || linkFromText(source.provenance),
-            meta: source.reportDate ? formatDate(source.reportDate) : sourceStatusLabel(source.parserStatus || source.type),
-        })),
-        ...(actorQuery ? actorIntel.provenanceRows : []).map(row => ({
-            id: row.sourceId || `${row.sourceName}:${row.provenance}`,
-            name: row.sourceName,
-            detail: row.provenance,
-            href: linkFromText(row.provenance),
-            meta: row.reportDate ? formatDate(row.reportDate) : sourceBasisLabel(row.confidence),
-        })),
-        ...(selectedSourceDrilldown?.rows.map(row => ({
-            id: row.sourceId || `${row.sourceName}:${row.provenance}`,
-            name: row.sourceName,
-            detail: row.provenance,
-            href: row.href || linkFromText(row.provenance),
-            meta: row.reportDate ? formatDate(row.reportDate) : sourceBasisLabel(row.confidence),
-        })) ?? []),
-    ], row => (row.href || row.detail || row.id).trim().toLowerCase())
-        .filter(row => !primaryActorSourceUrl || normalizedReferenceUrl(row.href) !== normalizedReferenceUrl(primaryActorSourceUrl))
-        .slice(0, 12)
     useEffect(() => {
         if (!recentItems.length) return
         if (!recentItems.some(item => item.id === selectedId)) setSelectedId(recentItems[0]?.id ?? '')
@@ -658,7 +628,7 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
 
                 {actorQuery ? <ActorProfileSections result={result} actor={actorIntel} victims={victimObservations} /> : <EvidenceBoundaryStrip result={result} />}
 
-                <section id='ti-activity' data-ti-activity='true' className='grid gap-3 border-t border-ui-border pt-4 dark:border-ui-border'>
+                {showActorActivity ? <section id='ti-activity' data-ti-activity='true' className='grid gap-3 border-t border-ui-border pt-4 dark:border-ui-border'>
                     <div className='flex flex-wrap items-end justify-between gap-3'>
                         <div>
                             <h2 className='text-base font-semibold text-ui-text dark:text-ui-text'>Recent activity</h2>
@@ -699,31 +669,9 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
                             <h3 className='mt-3 wrap-break-word text-2xl font-semibold text-ui-text dark:text-ui-text'>{displayRequirementText(selected.title)}</h3>
                             <p className='mt-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>{displayRequirementText(selected.detail)}</p>
                             {selected.observationSummary ? <p className='mt-2 text-xs leading-5 text-ui-muted dark:text-ui-muted'><span className='font-semibold text-ui-text dark:text-ui-text'>Observed evidence:</span> {displayRequirementText(selected.observationSummary)}</p> : null}
-                            {selectedTriageBrief ? <SelectedTriageBriefPanel brief={selectedTriageBrief} /> : null}
                         </section>
                     ) : null}
-                </section>
-
-                <section id='ti-sources' data-ti-sources='true' className='grid gap-3 border-t border-ui-border pt-4 dark:border-ui-border'>
-                    <div>
-                        <h2 className='text-base font-semibold text-ui-text dark:text-ui-text'>Further reading</h2>
-                        <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>{sourceRows.length} related references collected automatically from scraper output and actor provenance. These are not necessarily direct evidence about this actor.</p>
-                    </div>
-                    <div className='grid gap-2 md:grid-cols-2'>
-                        {sourceRows.map(row => (
-                            <EvidenceBox key={row.id} href={row.href}>
-                                <div className='flex min-w-0 items-start justify-between gap-3'>
-                                    <div className='min-w-0'>
-                                        <p className='wrap-break-word text-sm font-semibold text-ui-text dark:text-ui-text'>{row.name}</p>
-                                        <p className='mt-1 line-clamp-2 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(row.detail, row.name, result.query)}</p>
-                                    </div>
-                                    <span className='shrink-0 text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{row.meta}</span>
-                                </div>
-                            </EvidenceBox>
-                        ))}
-                        {!sourceRows.length ? <p className='rounded-lg border border-dashed border-ui-border p-4 text-sm text-ui-muted dark:border-ui-border dark:text-ui-muted'>Further reading is syncing from the scraper.</p> : null}
-                    </div>
-                </section>
+                </section> : null}
             </section>
         </div>
     )
@@ -3509,16 +3457,6 @@ function compactSourceReferenceLabel(value: string, sourceName?: string, query?:
     return cleaned
 }
 
-function normalizedReferenceUrl(value?: string) {
-    if (!value) return ''
-    try {
-        const url = new URL(value)
-        return `${url.origin}${url.pathname}`.replace(/\/+$/, '').toLowerCase()
-    } catch {
-        return value.trim().replace(/\/+$/, '').toLowerCase()
-    }
-}
-
 function sourceReferenceSummary(sourceName?: string, query?: string) {
     const source = (sourceName || 'This source').trim()
     const actor = humanizeSlug(query || 'this actor')
@@ -5038,15 +4976,6 @@ function EvidencePanel({ title, children }: { title: string; children: React.Rea
     )
 }
 
-function SelectedTriageBriefPanel({ brief }: { brief: SelectedTriageBrief }) {
-    return (
-        <section data-ti-selected-brief='true' className='mt-4 rounded-lg border border-ui-border bg-ui-raised p-4 dark:border-ui-border dark:bg-ui-raised'>
-            <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Analyst brief</p>
-            <BriefStep title='Summary' value={brief.whatHappened} />
-        </section>
-    )
-}
-
 function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActorIntelligenceProfile; result: TiSearchResponse; actionability: TiActionabilityModel }) {
     const targets = [
         ...actor.targetSectors.slice(0, 2),
@@ -5185,15 +5114,6 @@ function ActorSummaryFact({ icon, label, value, meta }: { icon: ReactNode; label
             </p>
             <p className='mt-0.5 wrap-break-word text-sm font-semibold leading-5 text-ui-text dark:text-ui-text'>{value}</p>
             <p className='mt-0.5 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>{meta}</p>
-        </div>
-    )
-}
-
-function BriefStep({ title, value }: { title: string; value: string }) {
-    return (
-        <div className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
-            <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>{title}</p>
-            <p className='mt-1 wrap-break-word text-sm leading-6 text-ui-text dark:text-ui-text'>{value}</p>
         </div>
     )
 }
