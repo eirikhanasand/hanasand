@@ -1,13 +1,18 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Notify from '../notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 
 export default function LogoutClient({ logoutServer }: { logoutServer: boolean }) {
     const router = useRouter()
+    const [logoutFromQuery, setLogoutFromQuery] = useState(false)
+    useEffect(() => {
+        setLogoutFromQuery(new URLSearchParams(window.location.search).has('logout'))
+    }, [])
     const { condition: logout } = useClearStateAfter({
-        initialState: logoutServer,
+        initialState: logoutServer || logoutFromQuery,
         timeout: 5000,
         onClear: () => router.push('/')
     })

@@ -3,13 +3,14 @@ import Link from 'next/link'
 import { ArrowRight, Building2, ChevronRight, ExternalLink, Search, ShieldCheck, Waypoints } from 'lucide-react'
 import LogoutClient from '@/components/logout/logoutClient'
 import Marquee from '@/components/shared/marquee'
-import { fetchSharedExposureQueue } from '@/utils/dwm/sharedExposureQueue'
-import { exposureQueueFallback, normalizeExposureQueue, type ExposureQueue } from './exposureQueue'
+import { exposureQueueFallback } from './exposureQueue'
 import { buildRouteMetadata } from './seo'
 import { homepageFaqs } from './faqData'
 import HomeExposureQueueClient from './homeExposureQueueClient'
 
-export const dynamic = 'force-dynamic'
+// The live activity panel hydrates independently through its cached public API.
+// Keep the marketing shell cacheable so a scraper response can never block /.
+export const revalidate = 5
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Hanasand Threat Intelligence',
@@ -128,18 +129,12 @@ const customerSteps = [
     },
 ]
 
-export default async function Page({
-    searchParams,
-}: {
-    searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-}) {
-    const params = await searchParams
-    const logout = Boolean(firstParam(params.logout)) || false
-    const exposureQueue = await loadExposureQueue()
+export default function Page() {
+    const exposureQueue = exposureQueueFallback('checking', 10)
 
     return (
         <main className='min-h-full bg-transparent text-ui-text'>
-            <LogoutClient logoutServer={logout} />
+            <LogoutClient logoutServer={false} />
 
             <section className='border-b border-ui-border bg-transparent'>
                 <div className='mx-auto grid w-full max-w-7xl content-start gap-10 px-4 pb-12 pt-16 md:px-8 md:pt-24 lg:pt-28'>
@@ -399,19 +394,4 @@ function HomeOperatorPaths() {
             </div>
         </section>
     )
-}
-
-async function loadExposureQueue(): Promise<ExposureQueue> {
-    try {
-        const response = await fetchSharedExposureQueue(new URLSearchParams({ limit: '10', offset: '0' }), { timeoutMs: 8000 })
-        if (!response.ok) return exposureQueueFallback('unavailable', 10)
-        return normalizeExposureQueue(await response.json())
-    } catch {
-        return exposureQueueFallback('unavailable', 10)
-    }
-}
-
-function firstParam(value: string | string[] | undefined) {
-    if (Array.isArray(value)) return value[0] || undefined
-    return value
 }
