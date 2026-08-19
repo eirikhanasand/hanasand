@@ -155,6 +155,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         options.onStartupPhase?.("organization_watchlists_synced");
       }
       await store.databaseHealth();
+      await store.queryExposureQueuePage({ tenantId: "default", filters: {}, limit: 25, offset: 0, global: true });
       options.onStartupPhase?.("health_checked");
       return store;
     } catch (error) {
