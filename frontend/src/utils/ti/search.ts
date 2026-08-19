@@ -105,6 +105,7 @@ export interface TiActorIdentityCandidate {
     status: 'current' | 'deprecated' | 'revoked' | 'retired'
     aptNumberDesignationPresent: boolean
     sourceUrl: string
+    referenceSources?: Array<{ name: string; url?: string }>
     catalogVersion: string
     catalogModifiedAt: string
     captureId?: string

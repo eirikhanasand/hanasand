@@ -1177,6 +1177,7 @@ function actorIdentity(store: any, tenantId: string | undefined, query: string) 
     status: candidate.identity.status,
     aptNumberDesignationPresent: candidate.identity.aptNumberDesignationPresent,
     sourceUrl: candidate.identity.sourceUrl,
+    referenceSources: candidate.identity.referenceSources,
     catalogVersion: candidate.identity.catalogVersion,
     catalogModifiedAt: candidate.identity.catalogModifiedAt,
     captureId: (candidate.identity as any).captureId

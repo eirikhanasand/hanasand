@@ -405,7 +405,7 @@ function CatalogOnlyActorResult({ result, identity }: { result: TiSearchResponse
     return (
         <section data-ti-catalog-only='true' className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <div className='grid gap-4 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)] xl:items-start'>
-                <ActorProfileHeader result={result} title={title} actor={actor} aliases={result.aliases} summary={candidate?.description} />
+                <ActorProfileHeader result={result} title={title} actor={actor} aliases={result.aliases} summary={candidate?.description} references={candidate?.referenceSources} />
                 <ThreatActorMap actor={actor} result={result} actionability={actionability} compact />
             </div>
             <ActorProfileSections result={result} actor={actor} victims={victims} />
@@ -413,12 +413,13 @@ function CatalogOnlyActorResult({ result, identity }: { result: TiSearchResponse
     )
 }
 
-function ActorProfileHeader({ result, title, actor, aliases, summary, actorQuery = true }: {
+function ActorProfileHeader({ result, title, actor, aliases, summary, references, actorQuery = true }: {
     result: TiSearchResponse
     title: string
     actor: TiActorIntelligenceProfile
     aliases: string[]
     summary?: string
+    references?: Array<{ name: string; url?: string }>
     actorQuery?: boolean
 }) {
     const externalId = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0]?.externalId : undefined
@@ -444,12 +445,44 @@ function ActorProfileHeader({ result, title, actor, aliases, summary, actorQuery
                 <ActorMark name={title} size='md' />
                 <h1 className='wrap-break-word text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>{title}{actorQuery && externalId ? ` · ${externalId}` : ''}</h1>
             </div>
-            <div className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'><MarkdownRender MDstr={displayRequirementText(description)} /></div>
+            <ActorDescription description={description} references={references} />
         </div>
         {facts.length ? <div className='grid gap-3 sm:grid-cols-2'>
             {facts.map(fact => <EvidenceMetric key={fact.label} label={fact.label} value={fact.value} />)}
         </div> : null}
     </section>
+}
+
+function ActorDescription({ description, references }: { description: string; references?: Array<{ name: string; url?: string }> }) {
+    const citationPattern = new RegExp('\\(Citation:\\s*([^)]+)\\)', 'g')
+    const citations: string[] = []
+    const parts: ReactNode[] = []
+    let cursor = 0
+    let match: RegExpExecArray | null
+    while ((match = citationPattern.exec(description))) {
+        const name = match[1].trim()
+        if (!name) continue
+        const existing = citations.indexOf(name)
+        const citationNumber = existing >= 0 ? existing + 1 : citations.push(name)
+        if (match.index > cursor) parts.push(<MarkdownRender key={`text-${cursor}`} MDstr={displayRequirementText(description.slice(cursor, match.index))} />)
+        parts.push(<sup key={`citation-${match.index}`} className='ml-0.5 align-super text-xs'><a href={`#ti-reference-${citationNumber}`} aria-label={`Reference ${citationNumber}`} className='text-ui-primary hover:underline'>[{citationNumber}]</a></sup>)
+        cursor = match.index + match[0].length
+    }
+    if (!citations.length) return <div className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'><MarkdownRender MDstr={displayRequirementText(description)} /></div>
+    if (cursor < description.length) parts.push(<MarkdownRender key={`text-${cursor}`} MDstr={displayRequirementText(description.slice(cursor))} />)
+    const sourceByName = new Map((references ?? []).map(source => [source.name.trim().toLocaleLowerCase(), source]))
+    return <div className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
+        <div>{parts}</div>
+        <section className='mt-4 border-t border-ui-border pt-3 dark:border-ui-border'>
+            <h2 className='text-xs font-semibold uppercase tracking-wide text-ui-muted dark:text-ui-muted'>References</h2>
+            <ol className='mt-2 grid gap-1 pl-5 text-xs leading-5 text-ui-muted dark:text-ui-muted'>
+                {citations.map((name, index) => {
+                    const source = sourceByName.get(name.toLocaleLowerCase())
+                    return <li key={name} id={`ti-reference-${index + 1}`} className='pl-1'>{source?.url ? <a href={source.url} target='_blank' rel='noopener noreferrer' className='hover:text-ui-primary hover:underline'>{name}</a> : name}</li>
+                })}
+            </ol>
+        </section>
+    </div>
 }
 
 function ActorProfileSections({ result, actor, victims }: { result: TiSearchResponse; actor: TiActorIntelligenceProfile; victims: ReturnType<typeof victimObservationsFor> }) {

@@ -60,6 +60,7 @@ export type MitreActorIdentity = ActorIdentityRecord & {
   domains: string[];
   contributors: string[];
   referenceUrls: string[];
+  referenceSources: Array<{ name: string; url?: string }>;
   catalogModifiedAt: string;
 };
 
@@ -183,6 +184,10 @@ export function parseMitreActorCatalog(
     const status: MitreActorIdentityStatus = group.revoked === true ? "revoked" : group.x_mitre_deprecated === true ? "deprecated" : "current";
     const labels = [canonicalName, ...associatedNames];
     const referenceUrls = references(group).map((reference) => string(reference.url)).filter(Boolean);
+    const referenceSources = uniqueReferenceSources(references(group).map((reference) => ({
+      name: optionalString(reference.description) || optionalString(reference.source_name),
+      url: optionalString(reference.url)
+    })).filter((reference): reference is { name: string; url?: string } => Boolean(reference.name)));
     const sourceReference = references(group).find((reference) => reference.source_name === "mitre-attack");
     return {
       id: `mitre-attack-enterprise:${externalId}`,
@@ -202,6 +207,7 @@ export function parseMitreActorCatalog(
       contributors: strings(group.x_mitre_contributors),
       sourceUrl: string(sourceReference?.url) || `https://attack.mitre.org/groups/${externalId}/`,
       referenceUrls: unique(referenceUrls),
+      referenceSources,
       revokedByExternalId: revokedBy.get(externalId),
       catalogVersion,
       catalogModifiedAt,
@@ -415,6 +421,16 @@ function iso(value: unknown, field = "collection modified time"): string {
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function uniqueReferenceSources(values: Array<{ name: string; url?: string }>): Array<{ name: string; url?: string }> {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const key = normalizeActorLabel(value.name);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function uniqueCaseInsensitive(values: string[]): string[] {
