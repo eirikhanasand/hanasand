@@ -29,13 +29,60 @@ type Contract = {
     components?: { schemas?: Record<string, Schema> }
 }
 
+type ApplicationEndpoint = { path: string, method: string, summary: string }
+
+const applicationEndpoints: ApplicationEndpoint[] = [
+    { method: 'GET', path: '/share/:id', summary: 'Read a shared file' },
+    { method: 'GET', path: '/share/tree/:id', summary: 'Read a share file tree' },
+    { method: 'GET', path: '/share/user/:id', summary: 'List the current user’s shares' },
+    { method: 'GET', path: '/share/lock/:id', summary: 'Toggle a share lock' },
+    { method: 'POST', path: '/share', summary: 'Create or update a shared file' },
+    { method: 'PUT', path: '/share/:id', summary: 'Update a shared file' },
+    { method: 'DELETE', path: '/share/:id', summary: 'Delete a shared file' },
+    { method: 'GET', path: '/project/:alias', summary: 'Read a shared project' },
+    { method: 'GET', path: '/projects/user/:id', summary: 'List the current user’s projects' },
+    { method: 'DELETE', path: '/project/:alias', summary: 'Delete a shared project' },
+    { method: 'GET', path: '/browser/profiles', summary: 'Read browser sandbox profiles' },
+    { method: 'PUT', path: '/browser/profiles', summary: 'Update browser sandbox profiles' },
+    { method: 'GET', path: '/browser/stats', summary: 'Read browser usage statistics' },
+    { method: 'GET', path: '/browser/runs', summary: 'List browser runs' },
+    { method: 'GET', path: '/browser/runs/:id/report', summary: 'Read a browser run report' },
+    { method: 'POST', path: '/browser/runs/:id/report', summary: 'Create a browser run report' },
+    { method: 'GET', path: '/support/tickets', summary: 'List support tickets' },
+    { method: 'POST', path: '/support/tickets', summary: 'Create a support ticket' },
+    { method: 'GET', path: '/support/tickets/:id/messages', summary: 'List support messages' },
+    { method: 'POST', path: '/support/tickets/:id/messages', summary: 'Post a support message' },
+    { method: 'GET', path: '/ti/enrichment', summary: 'Read threat-intelligence enrichment' },
+    { method: 'POST', path: '/ti/enrichment/run', summary: 'Run threat-intelligence enrichment' },
+    { method: 'GET', path: '/ti/saved-searches', summary: 'List saved searches' },
+    { method: 'POST', path: '/ti/saved-searches', summary: 'Save a search' },
+    { method: 'DELETE', path: '/ti/saved-searches', summary: 'Delete a saved search' },
+    { method: 'GET', path: '/organizations', summary: 'List organizations' },
+    { method: 'POST', path: '/organizations', summary: 'Create an organization' },
+    { method: 'GET', path: '/organizations/:id', summary: 'Read an organization' },
+    { method: 'GET', path: '/organizations/:id/members', summary: 'List organization members' },
+    { method: 'GET', path: '/organizations/:id/settings', summary: 'Read organization settings' },
+    { method: 'PUT', path: '/organizations/:id/settings', summary: 'Update organization settings' },
+    { method: 'GET', path: '/organizations/:id/api-keys', summary: 'List organization API keys' },
+    { method: 'POST', path: '/organizations/:id/api-keys', summary: 'Create an organization API key' },
+    { method: 'DELETE', path: '/organizations/:id/api-keys/:keyId', summary: 'Revoke an organization API key' },
+    { method: 'GET', path: '/organizations/:id/watchlists', summary: 'List organization watchlists' },
+    { method: 'POST', path: '/organizations/:id/watchlists', summary: 'Create a watchlist item' },
+    { method: 'GET', path: '/dwm/webhook-destinations', summary: 'List webhook destinations' },
+    { method: 'POST', path: '/dwm/webhook-destinations', summary: 'Create a webhook destination' },
+    { method: 'PUT', path: '/dwm/webhook-destinations/:id', summary: 'Update a webhook destination' },
+    { method: 'DELETE', path: '/dwm/webhook-destinations/:id', summary: 'Delete a webhook destination' },
+    { method: 'GET', path: '/billing/subscription', summary: 'Read billing subscription' },
+    { method: 'POST', path: '/billing/portal', summary: 'Create a billing portal session' },
+].sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method))
+
 export default async function ApiDocsPage() {
     const contract = await loadContract()
     if (!contract) return <DashboardPage><DashboardHeader eyebrow='Developer tools' title='API docs' description='The API contract could not be loaded.' /><DashboardPanel className='p-4 text-sm text-ui-danger'>The live API contract is temporarily unavailable. Try again shortly.</DashboardPanel></DashboardPage>
 
     const server = contract.servers?.[0]?.url || 'https://api.hanasand.com/api/v1'
-    const operations = Object.entries(contract.paths).flatMap(([path, methods]) => Object.entries(methods).map(([method, operation]) => ({ path, method: method.toUpperCase(), operation: operation as Operation })))
-    const schemaEntries = Object.entries(contract.components?.schemas || {})
+    const operations = Object.entries(contract.paths).flatMap(([path, methods]) => Object.entries(methods).map(([method, operation]) => ({ path, method: method.toUpperCase(), operation: operation as Operation }))).sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method))
+    const schemaEntries = Object.entries(contract.components?.schemas || {}).sort(([a], [b]) => a.localeCompare(b))
 
     return (
         <DashboardPage>
@@ -55,6 +102,11 @@ export default async function ApiDocsPage() {
             <section className='grid gap-3' aria-label='API endpoints'>
                 <div className='flex items-center gap-2'><Code2 className='h-4 w-4 text-ui-primary' /><h2 className='text-base font-semibold text-ui-text'>Endpoints</h2></div>
                 {operations.map(({ path, method, operation }) => <div key={`${method}:${path}`} data-api-search={`${method} ${path} ${operation.summary || operation.operationId || ''}`}><Endpoint path={path} method={method} operation={operation} /></div>)}
+            </section>
+
+            <section className='grid gap-3' aria-label='Application API endpoints'>
+                <div><div className='flex items-center gap-2'><Code2 className='h-4 w-4 text-ui-primary' /><h2 className='text-base font-semibold text-ui-text'>Application API</h2></div><p className='mt-1 text-sm text-ui-muted'>Customer-facing dashboard, sharing, support, browser, organization, and billing endpoints.</p></div>
+                {applicationEndpoints.map(endpoint => <div key={`${endpoint.method}:${endpoint.path}`} data-api-search={`${endpoint.method} ${endpoint.path} ${endpoint.summary}`}><Endpoint path={endpoint.path} method={endpoint.method} operation={{ summary: endpoint.summary }} /></div>)}
             </section>
 
             {schemaEntries.length ? <section className='grid gap-3'><div className='flex items-center gap-2'><Braces className='h-4 w-4 text-ui-primary' /><h2 className='text-base font-semibold text-ui-text'>Schemas</h2></div><div className='grid gap-2'>{schemaEntries.map(([name, schema]) => <details key={name} data-api-search={`${name} ${JSON.stringify(schema)}`} className='rounded-lg border border-ui-border bg-ui-panel'><summary className='cursor-pointer px-4 py-3 text-sm font-semibold text-ui-text'>{name}</summary><pre className='overflow-x-auto border-t border-ui-border bg-ui-canvas p-4 text-xs leading-6 text-ui-muted'>{JSON.stringify(schema, null, 2)}</pre></details>)}</div></section> : null}
@@ -84,7 +136,7 @@ function Endpoint({ path, method, operation }: { path: string, method: string, o
 
 function AuthBadge({ security }: { security?: Array<Record<string, unknown>> }) {
     const anonymous = Array.isArray(security) && security.length === 0
-    return <span className='ml-auto inline-flex items-center gap-1 rounded-full border border-ui-border px-2 py-1 text-[10px] font-semibold text-ui-muted'>{anonymous ? 'Anonymous' : <><LockKeyhole className='h-3 w-3' />Authenticated</>}</span>
+    return <span className='ml-auto inline-flex items-center gap-1 rounded-full border border-ui-border px-2 py-1 text-[10px] font-semibold text-ui-muted'>{anonymous ? 'Public' : <><LockKeyhole className='h-3 w-3' />Authenticated</>}</span>
 }
 
 function Info({ label, value, mono = false }: { label: string, value: string, mono?: boolean }) {
