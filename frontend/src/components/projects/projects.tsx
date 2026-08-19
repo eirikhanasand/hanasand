@@ -23,6 +23,8 @@ export default async function Projects() {
     const fileCount = sortedProjects.reduce((sum, project) => sum + (project.file_count || 0), 0)
     const editorCount = new Set(sortedProjects.flatMap((project) => project.editors || [])).size
 
+    if (!sortedProjects.length) return <WorkspaceWelcome />
+
     return (
         <div className='grid gap-3 xl:grid-cols-[minmax(0,1fr)_19rem]'>
             <DashboardPanel className='grid content-start gap-3 border-ui-border bg-ui-panel p-3'>
@@ -59,11 +61,35 @@ export default async function Projects() {
                                 <p className='truncate text-xs text-ui-muted'>{prettyDate(project.last_updated)}</p>
                             </Link>
                         ))}
-                        {!sortedProjects.length && <p className='text-sm text-ui-muted'>Workspace movement streams here as files change.</p>}
+                        {!sortedProjects.length && <p className='text-sm text-ui-muted'>No recent activity.</p>}
                     </div>
                 </div>
             </DashboardPanel>
         </div>
+    )
+}
+
+function WorkspaceWelcome() {
+    return (
+        <section className='relative isolate grid min-h-[32rem] overflow-hidden rounded-2xl border border-ui-border bg-ui-panel px-6 py-10 text-center shadow-sm sm:px-12'>
+            <div className='pointer-events-none absolute left-1/2 top-8 -z-10 h-56 w-[min(34rem,90%)] -translate-x-1/2 rounded-full bg-emerald-400/15 blur-3xl' />
+            <div className='mx-auto flex max-w-xl flex-col items-center justify-center'>
+                <svg viewBox='0 0 280 170' role='img' aria-label='Fresh rows in a farm field' className='mb-7 h-44 w-72 drop-shadow-[0_16px_12px_rgba(15,23,42,0.2)]'>
+                    <path d='M30 145h220' stroke='#64748b' strokeOpacity='.3' strokeWidth='8' strokeLinecap='round' />
+                    <path d='M38 133 138 94l105 38-101 29z' fill='#7c4a2e' />
+                    <path d='m58 132 80-29m-47 42 87-34m-39 44 88-35' stroke='#a86f42' strokeWidth='7' strokeLinecap='round' />
+                    <path d='M137 123V72' stroke='#166534' strokeWidth='7' strokeLinecap='round' />
+                    <path d='M137 90c-25-18-34-4-34-4 17 17 34 12 34 12m0-15c22-20 36-7 36-7-12 20-36 15-36 15' fill='#22c55e' stroke='#86efac' strokeWidth='3' />
+                    <path d='M137 72c-8-24 9-37 9-37 13 17 2 36-9 37' fill='#4ade80' stroke='#86efac' strokeWidth='3' />
+                    <circle cx='51' cy='125' r='5' fill='#fbbf24' /><circle cx='222' cy='128' r='5' fill='#fbbf24' />
+                    <path d='M77 49c9-10 23-10 32-2 9-13 32-10 36 6H72c0-2 2-3 5-4Z' fill='#bfdbfe' fillOpacity='.75' />
+                </svg>
+                <p className='text-xs font-semibold uppercase tracking-[0.2em] text-ui-primary'>Workspace not started</p>
+                <h2 className='mt-3 text-3xl font-semibold text-ui-text'>Workspaces</h2>
+                <p className='mx-auto mt-3 max-w-lg text-base leading-7 text-ui-muted'>Create a workspace to gather files, collaborate with editors, and keep project movement in one place.</p>
+                <Link href='/s' className='mt-7 inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-5 text-sm font-semibold text-ui-canvas shadow-lg shadow-ui-primary/20 hover:opacity-90'><Plus className='h-4 w-4' />Create workspace</Link>
+            </div>
+        </section>
     )
 }
 
