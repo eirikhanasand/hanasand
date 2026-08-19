@@ -1,1 +1,5 @@
-export { default } from '../system/cron/page'
+import { redirect } from 'next/navigation'
+
+export default function LegacyCronJobsPage() {
+    redirect('/dashboard/automations/cron')
+}

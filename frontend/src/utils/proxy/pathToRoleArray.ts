@@ -5,7 +5,7 @@ const pathToRoleArray = [
     { path: '/dashboard/thought', role: 'content_admin' },
     { path: '/dashboard/thoughts', role: 'content_admin' },
     { path: '/dashboard/automations', role: 'system_admin' },
-    { path: '/dashboard/cron-jobs', role: 'system_admin' },
+    { path: '/dashboard/automations/cron', role: 'system_admin' },
     { path: '/dashboard/load-testing', role: 'system_admin' },
     { path: '/dashboard/mail', role: 'system_admin' },
     { path: '/dashboard/projects', role: 'system_admin' },

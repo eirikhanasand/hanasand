@@ -1238,6 +1238,9 @@ async function fetchTiJson(path: string): Promise<TiFetchResult> {
     try {
         const response = await fetch(new URL(path, base), {
             cache: 'no-store',
+            headers: process.env.TI_SCRAPER_SERVICE_TOKEN
+                ? { 'x-hanasand-service-token': process.env.TI_SCRAPER_SERVICE_TOKEN }
+                : undefined,
             signal: AbortSignal.timeout(6000),
         })
         const text = await response.text()

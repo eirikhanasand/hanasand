@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, AlarmClockCheck, BookOpen, BrainCircuit, Building2, CalendarClock, ChevronDown, ClipboardCheck, ClipboardList, Code2, Database, DatabaseBackup, DatabaseZap, FileCode2, FileWarning, FolderKanban, Gauge, Globe2, Inbox, LayoutDashboard, ListChecks, Network, NotebookText, PanelLeftClose, PanelLeftOpen, PlayCircle, Radar, ScanSearch, Server, Settings2, ShieldAlert, ShieldCheck, Sparkles, UserRound, UserRoundCheck, Zap } from 'lucide-react'
+import { Activity, AlarmClockCheck, BookOpen, BrainCircuit, Building2, ChevronDown, ClipboardCheck, ClipboardList, Code2, Database, DatabaseBackup, DatabaseZap, FileCode2, FileWarning, FolderKanban, Gauge, Globe2, Inbox, LayoutDashboard, ListChecks, Network, NotebookText, PanelLeftClose, PanelLeftOpen, PlayCircle, Radar, ScanSearch, Server, Settings2, ShieldAlert, ShieldCheck, Sparkles, UserRound, UserRoundCheck, Zap } from 'lucide-react'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 
@@ -56,7 +56,11 @@ export default function DashboardSidebar({
             { href: '/dashboard/dwm/actions', label: 'Actions' },
         ] },
         { href: '/dashboard/mill', label: 'Security Monitoring', icon: <ShieldAlert className='h-4 w-4' /> },
-        { href: '/dashboard/automations', label: 'Automations', icon: <AlarmClockCheck className='h-4 w-4' /> },
+        { href: '/dashboard/automations', label: 'Automations', icon: <AlarmClockCheck className='h-4 w-4' />, subItems: [
+            { href: '/dashboard/automations/health-checks', label: 'Health checks' },
+            { href: '/dashboard/automations/monitoring', label: 'Monitoring' },
+            { href: '/dashboard/automations/cron', label: 'Cron jobs' },
+        ] },
         { href: '/dashboard/scanner', label: 'Security Scanner', icon: <ScanSearch className='h-4 w-4' /> },
         { href: '/api', label: 'API docs', icon: <Code2 className='h-4 w-4' /> },
         { href: '/dashboard/subscription', label: 'Subscription', icon: <ScanSearch className='h-4 w-4' /> },
@@ -120,7 +124,6 @@ export default function DashboardSidebar({
             { href: '/dashboard/db', label: 'Database', icon: <Database className='h-4 w-4' /> },
             { href: '/dashboard/db/backups', label: 'Backup', icon: <DatabaseBackup className='h-4 w-4' /> },
             { href: '/dashboard/system/rate-limits', label: 'Rate Limits', icon: <Gauge className='h-4 w-4' /> },
-            { href: '/dashboard/cron-jobs', label: 'Cron Jobs', icon: <CalendarClock className='h-4 w-4' /> },
             { href: '/dashboard/system/updates', label: 'Host Updates', icon: <ShieldCheck className='h-4 w-4' /> },
             { href: '/dashboard/system/impersonation', label: 'Helpdesk', icon: <UserRoundCheck className='h-4 w-4' /> },
             { href: '/dashboard/management', label: 'Management', icon: <ShieldCheck className='h-4 w-4' /> },
