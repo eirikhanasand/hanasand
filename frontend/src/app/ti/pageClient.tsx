@@ -456,23 +456,17 @@ function ActorProfileHeader({ result, title, actor, aliases, summary, references
 function ActorDescription({ description, references }: { description: string; references?: Array<{ name: string; url?: string }> }) {
     const citationPattern = new RegExp('\\(Citation:\\s*([^)]+)\\)', 'g')
     const citations: string[] = []
-    const parts: ReactNode[] = []
-    let cursor = 0
-    let match: RegExpExecArray | null
-    while ((match = citationPattern.exec(description))) {
-        const name = match[1].trim()
-        if (!name) continue
+    const renderedDescription = description.replace(citationPattern, (_match, rawName: string) => {
+        const name = rawName.trim()
+        if (!name) return _match
         const existing = citations.indexOf(name)
         const citationNumber = existing >= 0 ? existing + 1 : citations.push(name)
-        if (match.index > cursor) parts.push(<MarkdownRender key={`text-${cursor}`} MDstr={displayRequirementText(description.slice(cursor, match.index))} />)
-        parts.push(<sup key={`citation-${match.index}`} className='ml-0.5 align-super text-xs'><a href={`#ti-reference-${citationNumber}`} aria-label={`Reference ${citationNumber}`} className='text-ui-primary hover:underline'>[{citationNumber}]</a></sup>)
-        cursor = match.index + match[0].length
-    }
+        return `[${citationNumber}](#ti-reference-${citationNumber})`
+    })
     if (!citations.length) return <div className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'><MarkdownRender MDstr={displayRequirementText(description)} /></div>
-    if (cursor < description.length) parts.push(<MarkdownRender key={`text-${cursor}`} MDstr={displayRequirementText(description.slice(cursor))} />)
     const sourceByName = new Map((references ?? []).map(source => [source.name.trim().toLocaleLowerCase(), source]))
     return <div className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
-        <div>{parts}</div>
+        <MarkdownRender MDstr={displayRequirementText(renderedDescription)} />
         <section className='mt-4 border-t border-ui-border pt-3 dark:border-ui-border'>
             <h2 className='text-xs font-semibold uppercase tracking-wide text-ui-muted dark:text-ui-muted'>References</h2>
             <ol className='mt-2 grid gap-1 pl-5 text-xs leading-5 text-ui-muted dark:text-ui-muted'>
