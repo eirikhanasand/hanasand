@@ -5755,7 +5755,6 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
 }
 
 function MapCoverageFallback({ regions, actor, actionability, compact = false }: { regions: string[]; actor: TiActorIntelligenceProfile; actionability: TiActionabilityModel; compact?: boolean }) {
-    const families = actor.sourceCoverage.sourceFamilies.slice(0, compact ? 3 : 4)
     const gaps = actor.sourceCoverage.missing.slice(0, compact ? 1 : 3)
     const sourceRows = compact ? [] : actor.provenanceRows.slice(0, 3)
     return (
@@ -5774,20 +5773,6 @@ function MapCoverageFallback({ regions, actor, actionability, compact = false }:
                     ))}
                 </div>
             ) : null}
-            <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel dark:border-ui-border dark:bg-ui-raised'>
-                <div className='grid grid-cols-[minmax(0,1fr)_5rem_minmax(0,0.8fr)] gap-2 border-b border-ui-border px-3 py-2 text-[11px] font-semibold uppercase text-ui-muted dark:border-ui-border dark:text-ui-muted'>
-                    <span>Coverage</span>
-                    <span>Count</span>
-                    <span>Next action</span>
-                </div>
-                {(families.length ? families : [{ family: 'source coverage', count: actor.sourceCoverage.totalRows }]).map(item => (
-                    <div key={item.family} className='grid grid-cols-[minmax(0,1fr)_5rem_minmax(0,0.8fr)] gap-2 border-b border-ui-border px-3 py-2 text-xs last:border-b-0 dark:border-ui-border'>
-                        <span className='wrap-break-word font-semibold text-ui-text dark:text-ui-text'>{formatLabel(item.family)}</span>
-                        <span className='text-ui-muted dark:text-ui-muted'>{item.count}</span>
-                        <span className='wrap-break-word text-ui-muted dark:text-ui-muted'>{gaps[0] ? sourceHealthFieldLabel(gaps[0]) : 'Review sources'}</span>
-                    </div>
-                ))}
-            </div>
             {!compact ? (
                 <>
                     <div className='grid gap-2 sm:grid-cols-2'>
