@@ -2664,22 +2664,26 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   private async persistCapture(capture: any, sql: any = this.sql): Promise<void> {
-    await sql`
-      INSERT INTO threat_intel.captures (
-        id, tenant_id, source_id, task_id, url, canonical_url, collected_at, published_at, processed_at, first_visible_at,
-        content_hash, normalized_text_hash, media_type, storage_kind, body, object_ref,
-        sensitive, retention_class, extractor_version, record
-      ) VALUES (
-        ${capture.id}, ${nullable(capture.tenantId)}, ${capture.sourceId}, ${nullable(capture.taskId)},
-        ${capture.url}, ${capture.canonicalUrl ?? capture.url}, ${capture.collectedAt}, ${nullable(capture.publishedAt)},
-        ${capture.processedAt ?? capture.collectedAt}, ${capture.firstVisibleAt ?? capture.processedAt ?? capture.collectedAt},
-        ${capture.contentHash}, ${nullable(capture.normalizedTextHash)}, ${capture.mediaType ?? "application/octet-stream"},
-        ${capture.storageKind ?? "metadata_only"}, ${nullable(capture.body)},
-        ${capture.objectRef ? toJson(capture.objectRef) : null}::text::jsonb, ${Boolean(capture.sensitive)},
-        ${capture.retentionClass ?? "standard"}, ${nullable(capture.provenance?.extractorVersion)}, ${toJson(capture)}::text::jsonb
-      )
-      ON CONFLICT (id) DO NOTHING
-    `;
+    try {
+      await sql`
+        INSERT INTO threat_intel.captures (
+          id, tenant_id, source_id, task_id, url, canonical_url, collected_at, published_at, processed_at, first_visible_at,
+          content_hash, normalized_text_hash, media_type, storage_kind, body, object_ref,
+          sensitive, retention_class, extractor_version, record
+        ) VALUES (
+          ${capture.id}, ${nullable(capture.tenantId)}, ${capture.sourceId}, ${nullable(capture.taskId)},
+          ${capture.url}, ${capture.canonicalUrl ?? capture.url}, ${capture.collectedAt}, ${nullable(capture.publishedAt)},
+          ${capture.processedAt ?? capture.collectedAt}, ${capture.firstVisibleAt ?? capture.processedAt ?? capture.collectedAt},
+          ${capture.contentHash}, ${nullable(capture.normalizedTextHash)}, ${capture.mediaType ?? "application/octet-stream"},
+          ${capture.storageKind ?? "metadata_only"}, ${nullable(capture.body)},
+          ${capture.objectRef ? toJson(capture.objectRef) : null}::text::jsonb, ${Boolean(capture.sensitive)},
+          ${capture.retentionClass ?? "standard"}, ${nullable(capture.provenance?.extractorVersion)}, ${toJson(capture)}::text::jsonb
+        )
+        ON CONFLICT (id) DO NOTHING
+      `;
+    } catch (error) {
+      if (!isDuplicateScopedCaptureError(error)) throw error;
+    }
     this.invalidateExposureQueuePageCache();
   }
 
@@ -3503,6 +3507,11 @@ function summarizeReviewTaskRows(rows: Array<{ state?: string; outcome?: string;
 }
 
 function nullable<T>(value: T | null | undefined): T | null { return value ?? null; }
+function isDuplicateScopedCaptureError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const record = error as { code?: unknown; message?: unknown };
+  return record.code === "23505" && record.message === "duplicate scoped capture text";
+}
 function score(value: unknown): number { const parsed = Number(value); return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 0; }
 function alertScore(value: unknown): number { const parsed = Number(value); return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : 0; }
 function count(value: unknown): number { const parsed = Number(value); return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0; }
