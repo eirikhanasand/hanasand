@@ -601,7 +601,7 @@ async function listTiScheduledJobs(): Promise<UnifiedScheduledJob[]> {
 
     const [scheduler, scraperHealth, exposureQueue, parserHealth, alertReadiness, resources, sourcePacks, frontier] = await Promise.all([
         fetchTiJson('/v1/ops/collection-scheduler'),
-        fetchTiJson('/health'),
+        fetchTiJson('/v1/health'),
         fetchTiJson('/v1/dwm/exposure-queue?limit=25'),
         fetchTiJson('/v1/dwm/exposure-parser/health'),
         fetchTiJson('/v1/dwm/alerts/generation-readiness?tenantId=default'),

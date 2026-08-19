@@ -183,7 +183,9 @@ async function boundedCollectionSchedulerStatus(
     // the smallest bounded query that also keeps operational totals measured.
     limit: page.limit ?? 2,
     cursor: page.cursor,
-    executableOnly: true
+    // Aggregate status uses the bounded totals query; the executable-only
+    // detail query performs per-source lateral joins and is not needed here.
+    executableOnly: false
   }) as any;
   const totals = operations.summary;
   const operationalTotals = operations.operationalTotals ?? {};
