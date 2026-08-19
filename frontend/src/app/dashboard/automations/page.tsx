@@ -1,10 +1,10 @@
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
-import AutomationsClient from './pageClient'
+import AutomationsClient from './simplePageClient'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
     title: 'Automations',
-    description: 'Create monitoring, mail, system, and delivery-test automations and review recent runs.',
+    description: 'Check that everything is working as it should, and get alerted if something is wrong.',
 }
 
 export default async function Page({
@@ -18,9 +18,9 @@ export default async function Page({
     return (
         <DashboardPage>
             <DashboardHeader
-                eyebrow='Automation portal'
+                eyebrow='Monitoring'
                 title='Automations'
-                description='Create monitoring, mail, system, and delivery-test automations from one operator console.'
+                description='Check that everything is working as it should, and get alerted if something is wrong.'
             />
             <AutomationsClient setup={setup === 'dwm' ? 'dwm' : undefined} />
         </DashboardPage>

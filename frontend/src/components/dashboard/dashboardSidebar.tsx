@@ -56,6 +56,7 @@ export default function DashboardSidebar({
             { href: '/dashboard/dwm/actions', label: 'Actions' },
         ] },
         { href: '/dashboard/mill', label: 'Security Monitoring', icon: <ShieldAlert className='h-4 w-4' /> },
+        { href: '/dashboard/automations', label: 'Automations', icon: <AlarmClockCheck className='h-4 w-4' /> },
         { href: '/dashboard/scanner', label: 'Security Scanner', icon: <ScanSearch className='h-4 w-4' /> },
         { href: '/dashboard/api-docs', label: 'API docs', icon: <Code2 className='h-4 w-4' /> },
         { href: '/dashboard/subscription', label: 'Subscription', icon: <ScanSearch className='h-4 w-4' /> },
@@ -112,7 +113,6 @@ export default function DashboardSidebar({
         )
 
         adminItems.push(
-            { href: '/dashboard/automations', label: 'Automations', icon: <AlarmClockCheck className='h-4 w-4' /> },
             { href: '/dashboard/projects', label: 'Projects', icon: <FolderKanban className='h-4 w-4' /> },
             { href: '/dashboard/shares', label: 'Shares', icon: <FileCode2 className='h-4 w-4' /> },
             { href: '/dashboard/logs', label: 'Logs', icon: <FileWarning className='h-4 w-4' /> },
