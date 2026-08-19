@@ -1428,8 +1428,10 @@ async function ensureExposureQueueDwmAlerts(options: ApiServerOptions, scope: { 
     }
   };
 
-  if (typeof (options.store as any).batch === "function") await (options.store as any).batch(saveMissingAlerts);
-  else await saveMissingAlerts();
+  // This is a read-side projection repair. Do not turn a customer GET into a
+  // transaction/flush: an unrelated queued capture write must not make alerts
+  // unavailable. saveDwmAlert still persists the projection asynchronously.
+  await saveMissingAlerts();
 
   return { savedAlertCount };
 }

@@ -167,6 +167,20 @@ describe("health route", () => {
     }
   });
 
+  test("keeps DWM alerts readable while lazy projection repair persists", async () => {
+    const store = new InMemoryScraperStore();
+    (store as any).batch = async () => { throw new Error("read path must not flush storage"); };
+    const server = startApiServer({ port: 0, store, frontier: new FocusedFrontier() });
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/v1/dwm/alerts`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ alerts: [] });
+    } finally {
+      await server.stop();
+    }
+  });
+
   test("keeps the live exposure queue responsive while mutations wait for storage", async () => {
     const store = new InMemoryScraperStore();
     let release = () => {};
