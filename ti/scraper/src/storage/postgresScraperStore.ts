@@ -2619,7 +2619,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }): Promise<void> {
     const { capture, incident, entities, indicators, profiles, claims, claimEvidence, links, timeliness, deltas } = snapshot;
     await this.sql.begin(async (sql) => {
-      await this.persistCapture(capture, sql);
+      // A duplicate-content trigger can intentionally skip this capture. Do not
+      // persist dependent rows for a capture that is not present in Postgres.
+      if (!await this.persistCapture(capture, sql)) return;
       if (incident) await this.persistIncident(incident, sql);
       for (const entity of entities) await this.persistEntity(entity, sql);
       for (const indicator of indicators) await this.persistIndicator(indicator, sql);
@@ -2665,9 +2667,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     `;
   }
 
-  private async persistCapture(capture: any, sql: any = this.sql): Promise<void> {
+  private async persistCapture(capture: any, sql: any = this.sql): Promise<boolean> {
     try {
-      await sql`
+      const inserted = await sql`
         INSERT INTO threat_intel.captures (
           id, tenant_id, source_id, task_id, url, canonical_url, collected_at, published_at, processed_at, first_visible_at,
           content_hash, normalized_text_hash, media_type, storage_kind, body, object_ref,
@@ -2682,11 +2684,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           ${capture.retentionClass ?? "standard"}, ${nullable(capture.provenance?.extractorVersion)}, ${toJson(capture)}::text::jsonb
         )
         ON CONFLICT DO NOTHING
+        RETURNING id
       `;
+      this.invalidateExposureQueuePageCache();
+      return inserted.length > 0;
     } catch (error) {
       if (!isDuplicateScopedCaptureError(error)) throw error;
+      return false;
     }
-    this.invalidateExposureQueuePageCache();
   }
 
   private async persistCaptureMetadata(capture: any): Promise<void> {
