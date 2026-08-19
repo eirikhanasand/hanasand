@@ -3,10 +3,14 @@ import { queryOnce } from '../src/utils/db.ts'
 import { listUnifiedScheduledJobs, updateManagedCronJob } from '../src/utils/systemCron.ts'
 
 const previousTiBase = process.env.TI_SCRAPER_API_BASE
+const previousBackupEnabled = process.env.DB_BACKUP_ENABLED
 delete process.env.TI_SCRAPER_API_BASE
+process.env.DB_BACKUP_ENABLED = 'false'
 
 const jobs = await listUnifiedScheduledJobs()
 restoreTiBase()
+if (previousBackupEnabled === undefined) delete process.env.DB_BACKUP_ENABLED
+else process.env.DB_BACKUP_ENABLED = previousBackupEnabled
 
 const byId = new Map(jobs.map(job => [job.id, job]))
 
