@@ -17,7 +17,7 @@ import { Activity, BellRing, Bookmark, Building2, CheckCircle2, ClipboardList, C
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getCookie } from '@/utils/cookies/cookies'
-import { SyntheticEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { MouseEvent, SyntheticEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
 import {
     actionOwnerLabel,
@@ -463,16 +463,28 @@ function ActorDescription({ description, references }: { description: string; re
         const citationNumber = existing >= 0 ? existing + 1 : citations.push(name)
         return `[${citationNumber}](#ti-reference-${citationNumber})`
     })
+    const [activeCitation, setActiveCitation] = useState<number | null>(null)
     if (!citations.length) return <div className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'><MarkdownRender MDstr={displayRequirementText(description)} /></div>
+    const handleCitationClick = (event: MouseEvent<HTMLDivElement>) => {
+        const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href^="#ti-reference-"]')
+        if (!link) return
+        const match = link.hash.match(/^#ti-reference-(\d+)$/)
+        if (!match) return
+        event.preventDefault()
+        const number = Number(match[1])
+        setActiveCitation(number)
+        document.getElementById(match[0].slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
     const sourceByName = new Map((references ?? []).map(source => [source.name.trim().toLocaleLowerCase(), source]))
-    return <div className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
+    return <div onClick={handleCitationClick} className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
         <MarkdownRender MDstr={displayRequirementText(renderedDescription)} />
         <section className='mt-4 border-t border-ui-border pt-3 dark:border-ui-border'>
             <h2 className='text-xs font-semibold uppercase tracking-wide text-ui-muted dark:text-ui-muted'>References</h2>
             <ol className='mt-2 grid gap-1 pl-5 text-xs leading-5 text-ui-muted dark:text-ui-muted'>
                 {citations.map((name, index) => {
                     const source = sourceByName.get(name.toLocaleLowerCase())
-                    return <li key={name} id={`ti-reference-${index + 1}`} className='pl-1'>{source?.url ? <a href={source.url} target='_blank' rel='noopener noreferrer' className='hover:text-ui-primary hover:underline'>{name}</a> : name}</li>
+                    const number = index + 1
+                    return <li key={name} id={`ti-reference-${number}`} aria-current={activeCitation === number ? 'location' : undefined} className={`rounded-md px-2 py-1 pl-1 transition-colors ${activeCitation === number ? 'bg-ui-primary/15 text-ui-text ring-1 ring-ui-primary/45 dark:bg-ui-primary/15 dark:text-ui-text' : ''}`}><span className='mr-2 font-semibold text-ui-primary'>[{number}]</span>{source?.url ? <a href={source.url} target='_blank' rel='noopener noreferrer' className='hover:text-ui-primary hover:underline'>{name}</a> : name}</li>
                 })}
             </ol>
         </section>

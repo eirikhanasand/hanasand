@@ -72,6 +72,21 @@
     text-decoration: underline;
 }
 
+.markdown-render_citation {
+    color: var(--color-link-primary);
+    font-size: .72em;
+    font-weight: 600;
+    line-height: 0;
+    margin: 0 .2rem;
+    position: relative;
+    text-decoration: none;
+    top: -.45em;
+}
+
+.markdown-render_citation:hover {
+    text-decoration: underline;
+}
+
 
 /* table */
 .markdown-render_table {
