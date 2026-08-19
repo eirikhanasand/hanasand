@@ -148,35 +148,17 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
 function WelcomeState({ onCreate, compact = false }: { onCreate: () => void, compact?: boolean }) {
     if (compact) return <div className='grid min-h-72 place-items-center text-center'><div><Clock3 className='mx-auto h-8 w-8 text-ui-primary' /><h2 className='mt-3 text-lg font-semibold text-ui-text'>Nothing selected</h2><p className='mt-1 text-sm text-ui-muted'>Choose an automation to see its latest checks.</p></div></div>
     return <section className='relative isolate grid min-h-[32rem] overflow-hidden rounded-2xl border border-ui-border bg-ui-panel px-6 py-10 text-center shadow-sm sm:px-12'>
-        <div className='pointer-events-none absolute left-1/2 top-8 -z-10 h-56 w-[min(34rem,90%)] -translate-x-1/2 rounded-full bg-sky-400/15 blur-3xl' />
         <div className='mx-auto flex max-w-xl flex-col items-center justify-center'>
-            <div className='relative mb-7 h-52 w-80'>
-                <div className='absolute inset-x-4 top-0 h-32 rounded-full bg-sky-400/20 blur-2xl' />
-                <svg viewBox='0 0 320 210' role='img' aria-label='An empty red farm barn' className='relative h-full w-full drop-shadow-[0_18px_12px_rgba(15,23,42,0.25)]'>
-                    <path d='M35 186h250' stroke='#64748b' strokeOpacity='.35' strokeWidth='8' strokeLinecap='round' />
-                    <path d='M49 173h222l-10 22H59z' fill='#94a3b8' fillOpacity='.28' />
-                    <path d='M57 73 113 27l174 29-23 42H57z' fill='#0f172a' stroke='#29344d' strokeWidth='7' strokeLinejoin='round' />
-                    <path d='m57 73 55-46v54L57 118z' fill='#182238' stroke='#29344d' strokeWidth='7' strokeLinejoin='round' />
-                    <path d='M63 74 112 35l159 27-14 22H63z' fill='#111827' />
-                    <path d='M58 75h225v99H58z' fill='#ef4444' stroke='#fecdd3' strokeWidth='7' />
-                    <path d='M58 75 112 30v47' fill='#dc2626' stroke='#fecdd3' strokeWidth='7' strokeLinejoin='round' />
-                    <path d='M112 30v44h171' fill='none' stroke='#fecdd3' strokeWidth='7' />
-                    <path d='M151 174v-61q0-10 10-10h42q10 0 10 10v61' fill='#6b3016' stroke='#fef2f2' strokeWidth='8' />
-                    <path d='M160 174v-53h44v53' fill='#3f2118' />
-                    <path d='M76 92h34v31H76zM236 92h28v31h-28z' fill='#cbd5e1' stroke='#fef2f2' strokeWidth='7' />
-                    <path d='M76 92h34M93 92v31M236 92h28M250 92v31' stroke='#94a3b8' strokeWidth='3' />
-                    <path d='M49 78 22 126h27z' fill='#fecdd3' stroke='#fef2f2' strokeWidth='5' />
-                    <path d='m239 108 13-64' stroke='#b45309' strokeWidth='10' strokeLinecap='round' />
-                    <path d='m95 166 19-34m-19 34 17 4m-17-4 4-37' stroke='#b45309' strokeWidth='6' strokeLinecap='round' />
-                    <path d='m261 167 18-34m-18 34 17 4m-17-4 4-37' stroke='#b45309' strokeWidth='6' strokeLinecap='round' />
-                    <path d='m37 182 12-8m-4 14 14-8m204 0 14-8m-8 15 13-7' stroke='#cbd5e1' strokeOpacity='.55' strokeWidth='4' strokeLinecap='round' />
-                    <path d='m80 184 15-7 13 7-14 7z' fill='#c8793d' />
+            <div className='relative mb-7 h-64 w-[min(34rem,100%)]'>
+                <svg viewBox='0 0 280 100' aria-hidden='true' className='absolute bottom-0 left-1/2 z-0 h-24 w-64 -translate-x-1/2'>
+                    <path d='M31 72c-15 0-27-10-27-24s12-25 27-25c4 0 8 1 12 2C49 10 63 2 79 2c21 0 38 13 44 31 7-6 17-10 27-10 16 0 30 9 36 23 4-2 9-3 14-3 15 0 27 11 27 25s-12 24-27 24H31Z' fill='#fff' />
                 </svg>
+                <img src='/images/empty-states/automations-barn.png' alt='A maintained red barn with its doors open and the inside empty' className='relative z-10 h-full w-full object-contain' />
             </div>
-            <p className='text-xs font-semibold uppercase tracking-[0.2em] text-ui-primary'>Monitoring not configured</p>
-            <h2 className='mt-3 text-3xl font-semibold text-ui-text'>Automations</h2>
-            <p className='mx-auto mt-3 max-w-lg text-base leading-7 text-ui-muted'>Check that everything is working as it should, and get alerted if something is wrong.</p>
-            <button type='button' onClick={onCreate} className='mt-7 inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-5 text-sm font-semibold text-ui-canvas shadow-lg shadow-ui-primary/20 hover:opacity-90'><Plus className='h-4 w-4' />Create automation</button>
+            <p className='text-xs font-semibold uppercase tracking-[0.2em] text-ui-primary'>0 automations configured</p>
+            <h2 className='mt-3 text-3xl font-semibold text-ui-text'>Your barn is empty</h2>
+            <p className='mx-auto mt-3 max-w-lg text-base leading-7 text-ui-muted'>Nothing is checking your systems yet. Create your first automation to start filling it with useful checks.</p>
+            <button type='button' onClick={onCreate} className='mt-7 inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-5 text-sm font-semibold text-ui-canvas shadow-lg shadow-ui-primary/20 hover:opacity-90'><Plus className='h-4 w-4' />Create your first automation</button>
         </div>
     </section>
 }
