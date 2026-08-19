@@ -2680,7 +2680,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           ${capture.objectRef ? toJson(capture.objectRef) : null}::text::jsonb, ${Boolean(capture.sensitive)},
           ${capture.retentionClass ?? "standard"}, ${nullable(capture.provenance?.extractorVersion)}, ${toJson(capture)}::text::jsonb
         )
-        ON CONFLICT (id) DO NOTHING
+        ON CONFLICT DO NOTHING
       `;
     } catch (error) {
       if (!isDuplicateScopedCaptureError(error)) throw error;
