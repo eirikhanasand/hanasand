@@ -37,7 +37,7 @@ export default async function Page() {
             <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
                 <AdminMetric icon={<UsersRound className='h-4 w-4' />} label='Users' value={String(users.length)} detail={`${assignedUsers} with roles`} tone={users.length ? 'ok' : 'watch'} />
                 <AdminMetric icon={<Shield className='h-4 w-4' />} label='Roles' value={String(roles.length)} detail={priorityRole ? `Highest: ${priorityRole.name}` : 'roles are ready'} tone={roles.length ? 'ok' : 'watch'} />
-                <AdminMetric icon={<UserRound className='h-4 w-4' />} label='Reserved' value={String(reservedCount)} detail='system/reserved accounts in the user stream' tone={reservedCount ? 'neutral' : 'ok'} />
+                <AdminMetric icon={<UserRound className='h-4 w-4' />} label='Reserved' value={String(reservedCount)} detail='Reserved accounts' tone={reservedCount ? 'neutral' : 'ok'} />
                 <AdminMetric icon={<Radio className='h-4 w-4' />} label='Admin controls' value='Live' detail='user and role controls are visible below' tone='ok' />
             </section>
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
