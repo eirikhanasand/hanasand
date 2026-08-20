@@ -18,7 +18,7 @@ export default function RouteFrame({ children, serverPath, token }: { children: 
     const isAppSurface = isLoggedInTi || (!isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile || isOrganizations))
 
     const frameSizing = isAppSurface
-        ? 'mt-[7.5vh] h-[92.5vh]'
+        ? 'mt-16 h-[calc(100vh-4rem)]'
         : isPublicProduct
             ? 'mt-[4.5rem] h-[calc(100vh-4.5rem)]'
             : 'mt-[8.25vh] h-[91.75vh] md:mt-[9.5vh] md:h-[90.5vh]'
