@@ -399,7 +399,6 @@ function CatalogOnlyActorResult({ result, identity }: { result: TiSearchResponse
     const title = candidate?.canonicalName ?? humanizeSlug(result.query)
     const victims = victimObservationsFor(result)
     const actor = buildActorIntelligence(result, victims)
-    const actionability = buildTiActionability(result, actor, victims)
     const [activeCitation, setActiveCitation] = useState<number | null>(null)
     const description = usefulActorSummary(candidate?.description) || `${title} is a tracked threat actor.`
     const citations = citationNames(description)
@@ -407,7 +406,7 @@ function CatalogOnlyActorResult({ result, identity }: { result: TiSearchResponse
         <section data-ti-catalog-only='true' className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <div className='grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(24rem,0.85fr)] xl:items-start'>
                 <ActorProfileHeader result={result} title={title} actor={actor} aliases={result.aliases} summary={candidate?.description} references={candidate?.referenceSources} activeCitation={activeCitation} onCitationClick={setActiveCitation} />
-                <ThreatActorMap actor={actor} result={result} actionability={actionability} compact />
+                <ThreatActorMap actor={actor} result={result} compact />
             </div>
             <ActorProfileSections result={result} actor={actor} victims={victims} />
             <ActorReferences citations={citations} references={candidate?.referenceSources} activeCitation={activeCitation} />
@@ -697,7 +696,7 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
                         <ActorProfileHeader result={result} title={humanizeSlug(result.query)} actor={actorIntel} aliases={result.aliases} summary={actorProfileSummary} references={actorReferences} actorQuery={actorQuery} activeCitation={activeCitation} onCitationClick={setActiveCitation} />
                     </div>
                     {actorQuery ? <section data-ti-map='true' className='min-w-0'>
-                        <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
+                        <ThreatActorMap actor={actorIntel} result={result} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                     </section> : null}
                 </div>
 
@@ -5579,7 +5578,7 @@ function ProfileStat({ icon, label, value, dark = false }: { icon: React.ReactNo
     )
 }
 
-function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact = false }: { actor: TiActorIntelligenceProfile; result: TiSearchResponse; actionability: TiActionabilityModel; onSelectCountry?: (country: string) => void; compact?: boolean }) {
+function ThreatActorMap({ actor, result, onSelectCountry, compact = false }: { actor: TiActorIntelligenceProfile; result: TiSearchResponse; onSelectCountry?: (country: string) => void; compact?: boolean }) {
     const geo = actorGeoProfile(result)
     const hasPoints = geo.points.length > 0
     const regionalAreas = actor.geographies.filter(Boolean).slice(0, 6)
@@ -5659,7 +5658,7 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
                 <div>
                     <h2 className='text-sm font-semibold text-ui-text dark:text-ui-text'>Actor country map</h2>
                     <p className='mt-0.5 text-xs text-ui-muted dark:text-ui-muted'>
-                        {hasPoints || hasRegionalAreas ? 'Reported operator origin and victim or target countries from linked sources.' : 'Country-level source coverage for this actor profile.'}
+                        {hasPoints || hasRegionalAreas ? 'Known origin and target countries associated with this actor.' : 'No origin or target countries are available yet.'}
                     </p>
                 </div>
                 <span className='rounded-lg bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-primary dark:bg-ui-raised dark:text-ui-primary'>{hasPoints ? `${geo.points.length} countries` : hasRegionalAreas ? `${regionalAreas.length} region${regionalAreas.length === 1 ? '' : 's'}` : 'Source coverage'}</span>
@@ -5750,15 +5749,14 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
                         </svg>
                     </>
                 ) : (
-                    <MapCoverageFallback regions={regionalAreas} actor={actor} actionability={actionability} compact={compact} />
+                    <MapCoverageFallback regions={regionalAreas} actor={actor} compact={compact} />
                 )}
             </div>
             {hasPoints ? (
                 <div className='grid gap-3 border-t border-ui-border bg-ui-panel px-4 py-3 dark:border-ui-border dark:bg-ui-panel'>
                     <div className='flex flex-wrap gap-3 text-xs'>
-                        <span className='inline-flex items-center gap-1.5 text-ui-muted dark:text-ui-muted'><span className='h-2.5 w-2.5 rounded-full bg-ui-primary' />Operator attribution</span>
-                        <span className='inline-flex items-center gap-1.5 text-ui-muted dark:text-ui-muted'><span className='h-2.5 w-2.5 rounded-full bg-ui-danger' />Reported victim or target country</span>
-                        <span className='inline-flex items-center gap-1.5 text-ui-muted dark:text-ui-muted'><span className='h-2.5 w-2.5 rounded-full border border-ui-border' />Country-level source coverage</span>
+                        <span className='inline-flex items-center gap-1.5 text-ui-muted dark:text-ui-muted'><span className='h-2.5 w-2.5 rounded-full bg-ui-primary' />Origin</span>
+                        <span className='inline-flex items-center gap-1.5 text-ui-muted dark:text-ui-muted'><span className='h-2.5 w-2.5 rounded-full bg-ui-danger' />Target</span>
                     </div>
                     <div className='grid gap-2 sm:grid-cols-2'>
                         {geo.points.map(point => (
@@ -5766,7 +5764,6 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
                                 key={`${point.role}-row-${point.code}`}
                                 point={point}
                                 active={selectedPoint?.code === point.code}
-                                handoff={actionability.geographyHandoffs.find(item => item.code === point.code && item.role === point.role) ?? actionability.geographyHandoffs.find(item => item.code === point.code)}
                                 onFocus={() => focusCountry(point.code)}
                             />
                         ))}
@@ -5777,9 +5774,7 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
     )
 }
 
-function MapCoverageFallback({ regions, actor, actionability, compact = false }: { regions: string[]; actor: TiActorIntelligenceProfile; actionability: TiActionabilityModel; compact?: boolean }) {
-    const gaps = actor.sourceCoverage.missing.slice(0, compact ? 1 : 3)
-    const sourceRows = compact ? [] : actor.provenanceRows.slice(0, 3)
+function MapCoverageFallback({ regions, actor, compact = false }: { regions: string[]; actor: TiActorIntelligenceProfile; compact?: boolean }) {
     return (
         <div data-ti-geo-coverage-fallback='true' className={`${compact ? 'gap-2 p-3' : 'gap-3 p-4'} grid bg-ui-panel dark:bg-ui-canvas`}>
             <EmptyActorMap compact={compact} />
@@ -5793,28 +5788,6 @@ function MapCoverageFallback({ regions, actor, actionability, compact = false }:
                         <span key={region} className='rounded-md border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-xs font-semibold text-ui-primary dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary'>{region}</span>
                     ))}
                 </div>
-            ) : null}
-            {!compact ? (
-                <>
-                    <div className='grid gap-2 sm:grid-cols-2'>
-                        {sourceRows.map(row => (
-                            <div key={`${row.sourceName}-${row.provenance}`} className='rounded-lg border border-ui-border bg-ui-panel p-3 text-xs dark:border-ui-border dark:bg-ui-raised'>
-                                <p className='wrap-break-word font-semibold text-ui-text dark:text-ui-text'>{row.sourceName}</p>
-                                <p className='mt-1 wrap-break-word text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.shownBecause)}</p>
-                                <p className='mt-2 text-[11px] text-ui-muted dark:text-ui-muted'>{[row.reportDate ? formatDate(row.reportDate) : '', typeof row.confidence === 'number' ? sourceBasisLabel(row.confidence) : '', captureReferenceLabel(row.captureId)].filter(Boolean).join(' · ')}</p>
-                            </div>
-                        ))}
-                        {!sourceRows.length ? (
-                            <div className='rounded-lg border border-dashed border-ui-border bg-ui-panel p-3 text-xs text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'>
-                                Add source name, report date, and provenance before using geography for customer routing.
-                            </div>
-                        ) : null}
-                    </div>
-                    <div className='flex min-w-0 flex-wrap gap-2'>
-                        <span className={sourceHealthChipClass(gaps.length ? 'review' : 'ready')}>{gaps.length ? `${gaps.length} source question${gaps.length === 1 ? '' : 's'}` : 'sources ready'}</span>
-                        <span className={sourceHealthChipClass(actionability.watchlistRelevance.terms.length ? 'ready' : 'review')}>{actionability.watchlistRelevance.terms.length ? `${actionability.watchlistRelevance.terms.length} watch terms` : 'watch term needed'}</span>
-                    </div>
-                </>
             ) : null}
         </div>
     )
@@ -5860,9 +5833,7 @@ const mapFeatureNameToCode: Record<string, string> = {
     usa: 'US',
 }
 
-function MapPointActionRow({ point, active, handoff, onFocus }: { point: ReturnType<typeof actorGeoProfile>['points'][number]; active: boolean; handoff?: TiActionabilityModel['geographyHandoffs'][number]; onFocus: () => void }) {
-    const payload = geographyContextPayloadFor(point, handoff)
-    const routeLabel = handoff?.watchlistTerm ? 'Watchlist review' : 'Source review'
+function MapPointActionRow({ point, active, onFocus }: { point: ReturnType<typeof actorGeoProfile>['points'][number]; active: boolean; onFocus: () => void }) {
     return (
         <div
             data-ti-geo-context-actions='true'
@@ -5871,33 +5842,10 @@ function MapPointActionRow({ point, active, handoff, onFocus }: { point: ReturnT
             <button type='button' onClick={onFocus} className='grid min-h-9 w-full min-w-0 items-center gap-1 rounded-md text-left focus:outline-none focus:ring-2 focus:ring-ui-primary/35'>
                 <span className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                     <span className='min-w-0 wrap-break-word font-semibold text-ui-text dark:text-ui-text'>{point.label}</span>
-                    <span className={point.role === 'operator' ? 'whitespace-nowrap text-ui-primary dark:text-ui-primary' : 'whitespace-nowrap text-ui-danger dark:text-ui-danger'}>{point.role === 'operator' ? 'operator attribution' : `${point.count} observation${point.count === 1 ? '' : 's'}`}</span>
+                    <span className={point.role === 'operator' ? 'whitespace-nowrap text-ui-primary dark:text-ui-primary' : 'whitespace-nowrap text-ui-danger dark:text-ui-danger'}>{point.role === 'operator' ? 'Origin' : 'Target'}</span>
                 </span>
             </button>
             <p className='mt-1 leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(point.detail)}</p>
-            {handoff ? (
-                <div className='mt-2 rounded-md border border-ui-border bg-ui-panel px-2 py-1.5 dark:border-ui-border dark:bg-ui-panel'>
-                    <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
-                        <div className='min-w-0'>
-                            <p className='font-semibold text-ui-text dark:text-ui-text'>{handoff.watchlistTerm ? `${handoff.watchlistTerm.kind}: ${handoff.watchlistTerm.value}` : 'Source review task'}</p>
-                            <p className='mt-1 leading-5 text-ui-muted dark:text-ui-muted'>{handoff.watchlistTerm?.reason ?? handoff.enrichmentTask}</p>
-                        </div>
-                        <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 sm:shrink-0'>
-                            <span className={sourceHealthChipClass(handoff.watchlistTerm ? 'ready' : 'review')}>{routeLabel}</span>
-                            <CopyPayloadButton label='Geography context' payload={payload} />
-                        </div>
-                    </div>
-                    {handoff.evidenceRows.length ? (
-                        <div data-ti-geo-sources='true' data-ti-geo-provenance='true' className='mt-2 grid gap-1 border-t border-ui-border pt-2'>
-                            {handoff.evidenceRows.slice(0, 2).map(row => (
-                                <p key={`${point.code}-${row.victim}-${row.reportDate}`} className='wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                                    {row.victim} · {row.reportDate ? formatDate(row.reportDate) : 'Observation date unavailable'} · {sourceBasisLabel(row.confidence)} · {sourceReferenceCountLabel(row.sourceIds, row.source)}
-                                </p>
-                            ))}
-                        </div>
-                    ) : null}
-                </div>
-            ) : null}
         </div>
     )
 }
