@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
-import { listUnifiedScheduledJobs, updateManagedCronJob, type ManagedCronUpdate } from '#utils/systemCron.ts'
+import { hasUnifiedScheduledJobsCache, listUnifiedScheduledJobs, updateManagedCronJob, type ManagedCronUpdate } from '#utils/systemCron.ts'
 
 async function requireSystemAdmin(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
@@ -20,7 +20,7 @@ async function requireSystemAdmin(req: FastifyRequest, res: FastifyReply) {
 export async function getSystemCronJobs(req: FastifyRequest, res: FastifyReply) {
     if (!await requireSystemAdmin(req, res)) return
     const jobs = await listUnifiedScheduledJobs({ fast: true })
-    return res.send({ jobs, ready: jobs.length > 0 })
+    return res.send({ jobs, ready: hasUnifiedScheduledJobsCache() })
 }
 
 export async function putSystemCronJob(req: FastifyRequest<{ Params: { id: string }, Body: ManagedCronUpdate }>, res: FastifyReply) {

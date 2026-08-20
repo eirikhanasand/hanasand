@@ -21,9 +21,10 @@ export default function CronJobsClient() {
         const enabled = loadedJobs.filter(job => job.enabled).length
         const running = loadedJobs.filter(job => job.running || job.status === 'running').length
         const failed = loadedJobs.filter(job => job.status === 'failed' || job.status === 'blocked' || job.failureCount > 0).length
+        const pending = loadedJobs.filter(job => job.status === 'unknown').length
         const hourly = sumMoney(loadedJobs.map(job => job.costEstimate.hourlyUsd))
         const daily = sumMoney(loadedJobs.map(job => job.costEstimate.dailyUsd))
-        return { total: loadedJobs.length, enabled, running, failed, hourly, daily }
+        return { total: loadedJobs.length, enabled, running, failed, pending, hourly, daily }
     }, [loadedJobs])
     const attentionJobs = useMemo(() => loadedJobs.filter(needsAttention), [loadedJobs])
     const runnableJobs = useMemo(() => loadedJobs.filter(job => job.controls.includes('run_now') && !needsAttention(job)).slice(0, 3), [loadedJobs])
@@ -45,13 +46,12 @@ export default function CronJobsClient() {
         setBusy('load')
         try {
             const payload = await fetchManagedCronJobs()
-            if (payload.ready === false || !payload.jobs.length) {
-                retryTimer.current = setTimeout(() => void load(), 250)
-                return
+            if (payload.jobs.length) {
+                setJobs(payload.jobs)
+                setDrafts(Object.fromEntries(payload.jobs.map(job => [job.id, job.schedule])))
+                setMessage(payload.ready ? 'Background jobs streaming.' : 'Showing the job registry while live state refreshes.')
             }
-            setJobs(payload.jobs)
-            setDrafts(Object.fromEntries(payload.jobs.map(job => [job.id, job.schedule])))
-            setMessage('Background jobs streaming.')
+            if (!payload.ready) retryTimer.current = setTimeout(() => void load(), 1000)
         } catch (error) {
             setMessage(error instanceof Error ? error.message : 'Unable to load background jobs.')
         } finally {
@@ -258,8 +258,9 @@ function LoadingState({ message, onRetry }: { message: string, onRetry: () => vo
     </div>
 }
 
-function primaryHeadline(summary: { failed: number, running: number, total: number }) {
+function primaryHeadline(summary: { failed: number, pending: number, running: number, total: number }) {
     if (!summary.total) return 'Loading scheduled work'
+    if (summary.pending) return 'Live job state is loading'
     if (summary.failed === 1) return '1 job needs review'
     if (summary.failed) return `${summary.failed} jobs need review`
     if (summary.running) return `${summary.running} job${summary.running === 1 ? '' : 's'} running now`

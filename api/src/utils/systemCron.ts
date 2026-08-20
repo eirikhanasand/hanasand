@@ -355,7 +355,41 @@ export async function listUnifiedScheduledJobs(options: { fast?: boolean } = {})
     }).finally(() => {
         unifiedCronRefresh = null
     })
-    return options.fast ? unifiedCronCache?.jobs || [] : unifiedCronRefresh
+    return options.fast ? unifiedCronCache?.jobs || fastUnifiedScheduledJobs() : unifiedCronRefresh
+}
+
+export function hasUnifiedScheduledJobsCache() {
+    return Boolean(unifiedCronCache && unifiedCronCache.expiresAt > Date.now())
+}
+
+function fastUnifiedScheduledJobs(): UnifiedScheduledJob[] {
+    const telemetry = unavailableTelemetry('Live job state is refreshing.')
+    const apiJobs = apiBackgroundJobDefinitions
+        .filter(job => job.id !== 'api-mail-account-provisioning' || Boolean(process.env.MAIL_ADMIN_PASSWORD))
+        .map(job => ({
+            id: job.id, name: job.name, description: job.description, category: job.category,
+            source: job.source, service: 'hanasand-api', schedule: job.schedule,
+            cadenceSeconds: job.cadenceSeconds, enabled: true, running: false, status: 'unknown' as const,
+            lastRunAt: null, lastSuccessAt: null, lastFinishedAt: null, nextRunAt: null,
+            currentRunDurationMs: null, averageRuntimeMs: null, failureCount: 0, lastError: null,
+            logExcerpt: 'Live state is refreshing.', controls: job.controls,
+            controlMode: job.controls.length ? 'safe_control' as const : 'observable_only' as const,
+            resourceUsage: telemetry, costEstimate: costEstimate(18, 'Live cost estimate is refreshing.'),
+            assumptions: ['This immediate registry snapshot will be replaced by live runtime state.'],
+        }))
+    const managedJobs = managedCronDefinitions.map(job => ({
+        id: job.id, name: job.name, description: job.description, category: job.category || 'Forgejo' as const,
+        source: 'api/src/utils/systemCron.ts', service: job.service || 'forgejo', schedule: job.defaultSchedule,
+        cadenceSeconds: cronCadenceSeconds(job.defaultSchedule), enabled: false, running: false, status: 'unknown' as const,
+        installed: false, command: job.command, host: job.host, logPath: job.logPath,
+        lastRunAt: null, lastSuccessAt: null, lastFinishedAt: null, nextRunAt: null,
+        currentRunDurationMs: null, averageRuntimeMs: null, failureCount: 0, lastError: null,
+        logExcerpt: 'Live state is refreshing.', controls: ['edit_schedule', 'resume'] as ScheduledJobControl[],
+        controlMode: 'editable' as const, resourceUsage: telemetry,
+        costEstimate: costEstimate(8, 'Live cost estimate is refreshing.'),
+        assumptions: ['This immediate registry snapshot will be replaced by live crontab state.'],
+    }))
+    return [...tiUnavailableJobs('Live TI state is refreshing.'), ...apiJobs, ...managedJobs]
 }
 
 async function refreshUnifiedScheduledJobs(): Promise<UnifiedScheduledJob[]> {
