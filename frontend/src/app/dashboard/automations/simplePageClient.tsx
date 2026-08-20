@@ -157,7 +157,7 @@ function WelcomeState({ onCreate, compact = false }: { onCreate: () => void, com
             </div>
             <h2 className='text-3xl font-semibold text-(--automation-cloud-ink)'>Create automation</h2>
             <p className='mx-auto mt-3 max-w-lg text-base leading-7 text-(--automation-cloud-ink)/70'>Check that everything is working as it should, and get alerted if something is wrong.</p>
-            <button type='button' onClick={onCreate} className='mt-7 inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-5 text-sm font-semibold text-ui-canvas shadow-lg shadow-ui-primary/20 hover:opacity-90'><Plus className='h-4 w-4' />Create your first automation</button>
+            <button type='button' onClick={onCreate} className='mt-7 inline-flex h-11 items-center gap-2 rounded-lg bg-(--automation-cloud-ink) px-5 text-sm font-semibold text-white shadow-lg shadow-black/20 hover:opacity-90'><Plus className='h-4 w-4' />Create</button>
         </div>
     </section>
 }
