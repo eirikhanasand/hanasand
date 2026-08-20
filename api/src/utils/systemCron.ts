@@ -346,7 +346,7 @@ export async function listManagedCronJobs(): Promise<ManagedCronJob[]> {
 
 export async function listUnifiedScheduledJobs(options: { fast?: boolean } = {}): Promise<UnifiedScheduledJob[]> {
     const now = Date.now()
-    if (unifiedCronCache && unifiedCronCache.expiresAt > now) return unifiedCronCache.jobs
+    if (options.fast && unifiedCronCache && unifiedCronCache.expiresAt > now) return unifiedCronCache.jobs
     if (unifiedCronRefresh) return options.fast ? unifiedCronCache?.jobs || [] : unifiedCronRefresh
 
     unifiedCronRefresh = refreshUnifiedScheduledJobs()
