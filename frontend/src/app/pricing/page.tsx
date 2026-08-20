@@ -17,8 +17,8 @@ export default function PricingPage() {
             <div className='mx-auto grid max-w-7xl gap-8'>
                 <header className='mx-auto grid max-w-3xl gap-3 text-center'>
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Pricing</p>
-                    <h1 className='text-4xl font-semibold md:text-6xl'>Choose what you need.</h1>
-                    <p className='text-lg leading-8 text-ui-muted'>Simple monthly plans with clear quotas. Start immediately and cancel anytime.</p>
+                    <h1 className='text-4xl font-semibold md:text-6xl'>Know more. Respond faster.</h1>
+                    <p className='text-lg leading-8 text-ui-muted'>Search threats. Watch your exposure. Scan your attack surface. Investigate what you find.</p>
                 </header>
                 <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4' aria-label='Available plans'>
                     {commercialAccessPlans.map(plan => (
