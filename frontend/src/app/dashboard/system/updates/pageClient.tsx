@@ -34,7 +34,7 @@ export default function AptUpdatesClient() {
                 <Summary icon={<Clock3 />} label='Updates' value={`${regular.length} package${regular.length === 1 ? '' : 's'}`} tone={regular.length ? 'warning' : 'success'} />
             </div>
             <div className='grid gap-2 md:grid-cols-2'>
-                <Detail label='Last check' value={formatDate(status?.checked_at)} />
+                <Detail label='Last check' value={formatLastCheck(status?.checked_at)} />
                 <Detail label='Last installed' value={`${status?.last_update_at ? formatDate(status.last_update_at) : 'Never'}${status?.last_updated_packages?.length ? ` · ${status.last_updated_packages.join(', ')}` : ''}`} />
                 <Detail label='Policy' value='Security updates immediately; other Ubuntu updates after 72 hours.' />
                 <Detail label='Verification' value={status?.policy?.repository_verification || 'Waiting for the host to report its verification policy.'} />
@@ -50,6 +50,18 @@ function Summary({ icon, label, value, tone }: { icon: ReactNode, label: string,
 function Detail({ label, value }: { label: string, value: string }) { return <div className='rounded-lg border border-ui-border bg-ui-raised p-3'><p className='text-xs font-semibold text-ui-muted'>{label}</p><p className='mt-1 wrap-break-word text-sm'>{value}</p></div> }
 function label(value?: string) { return value === 'ok' ? 'Healthy' : value === 'pending' ? 'Updates pending' : value === 'failed' ? 'Update failed' : 'Waiting for host check-in' }
 function formatDate(value?: string | null) { return value ? new Date(value).toLocaleString() : 'Not reported' }
+function formatLastCheck(value?: string | null) {
+    if (!value) return 'Not reported'
+    const date = new Date(value)
+    const age = Date.now() - date.getTime()
+    if (age >= 0 && age < 24 * 60 * 60 * 1000) {
+        const hours = Math.floor(age / (60 * 60 * 1000))
+        const minutes = Math.floor((age % (60 * 60 * 1000)) / (60 * 1000))
+        return hours || minutes ? `${hours ? `${hours}h ` : ''}${minutes ? `${minutes}min ` : ''}ago` : 'Just now'
+    }
+    if (age < 48 * 60 * 60 * 1000) return `Yesterday ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+    return date.toLocaleString()
+}
 function updateAgeHours(firstSeen: number) { return Math.max(0, Math.floor((Date.now() - firstSeen * 1000) / 3600000)) }
 function historyStatusIcon(status: string) {
     const normalized = status.toLowerCase()
