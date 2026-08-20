@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { commercialAccessPlans } from '@/utils/commercialAccess'
+import { authApiUrl } from '@/utils/auth/authApiUrl'
 import tokenIsValid from '@/utils/proxy/tokenIsValid'
 
 export const dynamic = 'force-dynamic'
@@ -10,18 +11,30 @@ export async function GET(request: Request) {
     const plan = commercialAccessPlans.find(item => item.id === selected)
     if (!plan) return NextResponse.json({ error: 'Unknown plan.' }, { status: 400 })
 
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://hanasand.com').replace(/\/$/, '')
+
     const cookieStore = await cookies()
     const token = cookieStore.get('access_token')?.value
     const id = cookieStore.get('id')?.value
-    if (!token || !id) return NextResponse.redirect(new URL('/login?next=/dashboard/subscription', request.url))
+    if (!token || !id) return NextResponse.redirect(new URL('/login?next=/dashboard/subscription', siteUrl))
 
     const session = await tokenIsValid(token, id)
-    if (!session.valid) return NextResponse.redirect(new URL('/login?next=/dashboard/subscription', request.url))
+    if (!session.valid) return NextResponse.redirect(new URL('/login?next=/dashboard/subscription', siteUrl))
+
+    const billingResponse = await fetch(`${authApiUrl().replace(/\/$/, '')}/billing/subscription`, {
+        headers: { Authorization: `Bearer ${token}`, id },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(10000),
+    })
+    if (!billingResponse.ok) return NextResponse.json({ error: 'Subscription status is temporarily unavailable. Please try again.' }, { status: 503 })
+    const billing = await billingResponse.json() as { entitlements?: Array<{ planId?: string }> }
+    if (billing.entitlements?.some(entitlement => entitlement.planId === plan.id)) {
+        return NextResponse.json({ error: `You already have an active ${plan.name} subscription.` }, { status: 409 })
+    }
 
     const secret = process.env.STRIPE_SECRET_KEY
     if (!secret) return NextResponse.json({ error: 'Checkout is temporarily unavailable. Stripe is not configured.' }, { status: 503 })
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin
     const body = new URLSearchParams({
         mode: 'subscription',
         'line_items[0][price_data][currency]': 'nok',
