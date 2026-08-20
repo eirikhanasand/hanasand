@@ -35,7 +35,7 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
             <DashboardHeader
                 title='Overview'
                 description='A focused view of monitoring, alerts, cases, and service health that matter now.'
-                eyebrow='Dashboard'
+                eyebrow={null}
             />
 
             {accessDenied ? (
