@@ -56,12 +56,13 @@ for line in track.read_text().splitlines():
 
 updates = []
 for line in sim.read_text(errors='replace').splitlines():
-    match = re.match(r'^Inst\s+(\S+)\s+\((\S+)\s+([^\[]+)\s+\[([^]]+)\]', line)
+    # Ubuntu 24.04 emits: Inst pkg [installed] (candidate Ubuntu:24.04/noble-updates [amd64])
+    match = re.match(r'^Inst\s+(\S+)(?:\s+\[[^\]]+\])?\s+\((\S+)\s+([^\s\[]+)(?:\s+\[[^\]]+\])?\)', line)
     if not match:
         continue
-    package, version, repo, origin = match.groups()
-    repo = repo.strip()
-    security = 'noble-security' in repo and origin.strip().lower() == 'ubuntu'
+    package, version, repo = match.groups()
+    origin = repo.split(':', 1)[0]
+    security = 'noble-security' in repo.lower() and origin.lower() == 'ubuntu'
     key = (package, version)
     prior = old.get(key)
     updates.append({'package': package, 'version': version, 'repo': repo, 'origin': origin.strip(),
