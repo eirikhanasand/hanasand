@@ -511,7 +511,9 @@ function ActorDescription({ description, references }: { description: string; re
             : `@misc{ti-${number}, author = {${reference.author}}, title = {${reference.name}}, year = {${reference.year}}, url = {${reference.url ?? ''}}}`
         try {
             await navigator.clipboard.writeText(value)
-            setCopiedCitation(`${number}-${format}`)
+            const copiedKey = `${number}-${format}`
+            setCopiedCitation(copiedKey)
+            window.setTimeout(() => setCopiedCitation(current => current === copiedKey ? null : current), 1000)
         } catch { setCopiedCitation(null) }
     }
     return <div onClick={handleCitationClick} className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
