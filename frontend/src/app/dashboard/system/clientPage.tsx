@@ -572,7 +572,12 @@ function ContainerRow({
     const health = containerHealth(container)
 
     return (
-        <tr className={`align-top text-ui-text ${selected ? 'bg-ui-primary/10' : ''}`}>
+        <tr
+            className={`cursor-pointer align-top text-ui-text transition-colors hover:bg-ui-primary/5 ${selected ? 'bg-ui-primary/10' : ''}`}
+            onClick={onSelect}
+            aria-selected={selected}
+            data-container-row
+        >
             <td className='py-3 pr-3'>
                 <button type='button' onClick={onSelect} className='text-left'>
                     <span className='block font-semibold text-ui-text'>{containerDisplayName(container.name)}</span>
