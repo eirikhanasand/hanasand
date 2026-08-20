@@ -344,6 +344,18 @@ CREATE TABLE IF NOT EXISTS api_rate_limit_buckets (
 );
 CREATE INDEX IF NOT EXISTS idx_api_rate_limit_buckets_updated_at ON api_rate_limit_buckets(updated_at);
 
+CREATE TABLE IF NOT EXISTS web_scan_targets (
+    id TEXT PRIMARY KEY,
+    target_url TEXT NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO web_scan_targets (id, target_url)
+VALUES ('primary', 'https://hanasand.com')
+ON CONFLICT (id) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS api_keys (
     id TEXT PRIMARY KEY,
     owner_id TEXT REFERENCES users(id) ON DELETE SET NULL,

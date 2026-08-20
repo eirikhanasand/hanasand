@@ -3,11 +3,13 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { requestGptCompletion } from '#utils/ws/handleGptMessage.ts'
+import { queryOnce } from '#db'
 
 const STATE_PATH = process.env.WEB_SCAN_STATE_PATH || '/var/lib/hanasand/web-scan.json'
 const LOCK_PATH = `${STATE_PATH}.lock`
 const RECOVERY_LOCK_PATH = `${LOCK_PATH}.recovery`
-const TARGET = 'https://hanasand.com'
+const DEFAULT_TARGET = 'https://hanasand.com'
+const TARGET_ID = 'primary'
 const PORTS = [80, 443, 8080, 8443]
 const DEFAULT_INTERVAL_MINUTES = normalizeIntervalMinutes(process.env.WEB_SCAN_INTERVAL_MINUTES, 60)
 const MAX_HISTORY = 100
@@ -22,7 +24,7 @@ export type WebScanReport = { current: WebScanRun | null, history: WebScanRun[],
 
 let active: Promise<WebScanRun> | null = null
 
-const emptyReport = (): WebScanReport => ({ current: null, history: [], schedule: { enabled: true, intervalMinutes: DEFAULT_INTERVAL_MINUTES, nextRunAt: new Date().toISOString(), lastRunAt: null, target: TARGET, scope: 'global' }, error: null })
+const emptyReport = (target = DEFAULT_TARGET): WebScanReport => ({ current: null, history: [], schedule: { enabled: true, intervalMinutes: DEFAULT_INTERVAL_MINUTES, nextRunAt: new Date().toISOString(), lastRunAt: null, target, scope: 'global' }, error: null })
 
 export async function getWebScanReport() { return hydrateReport(await readState()) }
 
@@ -119,10 +121,10 @@ async function runWebScan(): Promise<WebScanRun> {
         const previous = await readState()
         const scanId = `webscan_${randomUUID()}`
         const startedAt = new Date().toISOString()
-        const current: WebScanRun = { scanId, status: 'running', startedAt, finishedAt: null, durationMs: null, target: TARGET, targets: [], severityCounts: emptySeverityCounts(), error: null }
+        const current: WebScanRun = { scanId, status: 'running', startedAt, finishedAt: null, durationMs: null, target: previous.schedule.target || DEFAULT_TARGET, targets: [], severityCounts: emptySeverityCounts(), error: null }
         await writeState({ ...previous, current, error: null })
         try {
-            const targets = [await scanTarget(TARGET, scanId)]
+            const targets = [await scanTarget(previous.schedule.target || DEFAULT_TARGET, scanId)]
             const finishedAt = new Date().toISOString()
             const completed: WebScanRun = { ...current, status: 'completed', finishedAt, durationMs: Date.parse(finishedAt) - Date.parse(startedAt), targets, severityCounts: countSeverities(targets), error: null }
             return await finishRun(previous, completed)
@@ -216,7 +218,7 @@ export function fallbackExplanation(check: WebScanCheck): string {
 }
 
 function hydrateReport(report: WebScanReport): WebScanReport {
-    const hydrateRun = (run: WebScanRun | null) => run ? { ...run, targets: run.targets.map(target => ({ ...target, checks: target.checks.map(check => ({ ...check, explanation: isUsefulExplanation(check.explanation) ? check.explanation : fallbackExplanation(check) })) })) } : null
+    const hydrateRun = (run: WebScanRun | null): WebScanRun | null => run ? { ...run, targets: run.targets.map(target => ({ ...target, checks: target.checks.map(check => ({ ...check, explanation: isUsefulExplanation(check.explanation) ? check.explanation : fallbackExplanation(check) })) })) } : null
     return { ...report, current: hydrateRun(report.current), history: report.history.map(hydrateRun).filter((run): run is WebScanRun => Boolean(run)) }
 }
 
@@ -239,12 +241,33 @@ function checkPort(host: string, port: number): Promise<{ port: number, open: bo
 }
 
 async function readState(): Promise<WebScanReport> {
+    const target = await getConfiguredTarget()
     try {
         const parsed = JSON.parse(await readFile(STATE_PATH, 'utf8')) as Partial<WebScanReport> & { scanId?: string, startedAt?: string, finishedAt?: string, running?: boolean, targets?: WebScanTargetResult[], error?: string | null }
-        if (parsed.current || parsed.history || parsed.schedule) return { ...emptyReport(), ...parsed, schedule: { ...emptyReport().schedule, ...(parsed.schedule || {}), target: TARGET, scope: 'global' } }
-        if (parsed.scanId) return { ...emptyReport(), history: [{ scanId: parsed.scanId, status: parsed.running ? 'running' : 'completed', startedAt: parsed.startedAt || new Date().toISOString(), finishedAt: parsed.finishedAt || null, durationMs: null, target: TARGET, targets: parsed.targets || [], severityCounts: countSeverities(parsed.targets || []), error: parsed.error || null }] }
-        return emptyReport()
-    } catch { return emptyReport() }
+        if (parsed.current || parsed.history || parsed.schedule) return { ...emptyReport(target), ...parsed, schedule: { ...emptyReport(target).schedule, ...(parsed.schedule || {}), target, scope: 'global' } }
+        if (parsed.scanId) return { ...emptyReport(target), history: [{ scanId: parsed.scanId, status: parsed.running ? 'running' : 'completed', startedAt: parsed.startedAt || new Date().toISOString(), finishedAt: parsed.finishedAt || null, durationMs: null, target, targets: parsed.targets || [], severityCounts: countSeverities(parsed.targets || []), error: parsed.error || null }] }
+        return emptyReport(target)
+    } catch { return emptyReport(target) }
+}
+
+async function getConfiguredTarget() {
+    try {
+        const result = await queryOnce('SELECT target_url FROM web_scan_targets WHERE id = $1 AND enabled = TRUE', [TARGET_ID])
+        return normalizeTarget(result.rows[0]?.target_url) || DEFAULT_TARGET
+    } catch {
+        return DEFAULT_TARGET
+    }
+}
+
+export function normalizeTarget(value: unknown) {
+    if (typeof value !== 'string' || !value.trim()) return null
+    try {
+        const url = new URL(value.trim())
+        if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) return null
+        return url.toString().replace(/\/$/, '')
+    } catch {
+        return null
+    }
 }
 
 async function writeState(report: WebScanReport) {

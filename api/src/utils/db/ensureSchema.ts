@@ -455,6 +455,20 @@ export default async function ensureSchema() {
         )
     `)
     await run(`
+        CREATE TABLE IF NOT EXISTS web_scan_targets (
+            id TEXT PRIMARY KEY,
+            target_url TEXT NOT NULL,
+            enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run(`
+        INSERT INTO web_scan_targets (id, target_url)
+        VALUES ('primary', 'https://hanasand.com')
+        ON CONFLICT (id) DO NOTHING
+    `)
+    await run(`
         CREATE TABLE IF NOT EXISTS ti_actor_enrichment_runs (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             actor_key TEXT NOT NULL,
