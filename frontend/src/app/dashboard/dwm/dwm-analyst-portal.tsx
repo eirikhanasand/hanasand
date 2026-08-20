@@ -670,19 +670,45 @@ async function refreshCases(
     setCasesState: Dispatch<SetStateAction<CasesState>>,
 ) {
     setCasesState(current => ({ status: 'loading', rows: current.rows }))
-    try {
-        const response = await fetch(`/api/cases?${params.toString()}`, { cache: 'no-store', signal })
-        if (!response.ok) {
-            const error = await responseProblem(response)
-            setCasesState(current => ({ status: 'error', rows: current.rows, error }))
+    for (const delayMs of [0, 2000, 5000, 10000, 20000, 30000]) {
+        try {
+            if (delayMs) await waitForRetry(delayMs, signal)
+            const response = await fetch(`/api/cases?${params.toString()}`, { cache: 'no-store', signal })
+            if (response.status >= 500) {
+                if (delayMs < 30000) continue
+            }
+            if (!response.ok) {
+                const error = await responseProblem(response)
+                setCasesState(current => ({ status: 'error', rows: current.rows, error }))
+                return
+            }
+            const payload = await response.json() as { items?: CaseListItem[], cases?: CaseListItem[] }
+            const rows = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.cases) ? payload.cases : []
+            setCasesState({ status: 'ready', rows })
             return
+        } catch (error) {
+            if (isAbortError(error)) return
+            if (delayMs === 30000) {
+                setCasesState(current => ({ status: 'error', rows: current.rows, error: requestFailureDetail(error) }))
+                return
+            }
         }
-        const payload = await response.json() as { items?: CaseListItem[], cases?: CaseListItem[] }
-        const rows = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.cases) ? payload.cases : []
-        setCasesState({ status: 'ready', rows })
-    } catch (error) {
-        if (!isAbortError(error)) setCasesState(current => ({ status: 'error', rows: current.rows, error: requestFailureDetail(error) }))
     }
+}
+
+function waitForRetry(delayMs: number, signal: AbortSignal) {
+    return new Promise<void>((resolve, reject) => {
+        const onAbort = () => {
+            clearTimeout(timer)
+            reject(new DOMException('The request was aborted.', 'AbortError'))
+        }
+        const timer = setTimeout(() => {
+            signal.removeEventListener('abort', onAbort)
+            resolve()
+        }, delayMs)
+        signal.addEventListener('abort', onAbort, { once: true })
+        if (signal.aborted) onAbort()
+    })
 }
 
 async function refreshDwmDeliveries(
