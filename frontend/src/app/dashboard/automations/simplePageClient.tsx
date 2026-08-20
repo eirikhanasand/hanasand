@@ -148,17 +148,14 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
 function WelcomeState({ onCreate, compact = false }: { onCreate: () => void, compact?: boolean }) {
     if (compact) return <div className='grid min-h-72 place-items-center text-center'><div><Clock3 className='mx-auto h-8 w-8 text-ui-primary' /><h2 className='mt-3 text-lg font-semibold text-ui-text'>Nothing selected</h2><p className='mt-1 text-sm text-ui-muted'>Choose an automation to see its latest checks.</p></div></div>
     return <section className='relative isolate grid min-h-[40rem] overflow-hidden px-4 py-10 text-center sm:px-8'>
-        <svg viewBox='0 0 280 210' preserveAspectRatio='none' aria-hidden='true' className='absolute left-1/2 top-4 z-0 h-[calc(100%-2rem)] w-[min(80%,96rem)] -translate-x-1/2'>
-            <g fill='var(--automation-cloud)'>
-                <rect x='22' y='90' width='236' height='88' rx='44' />
-                <circle cx='62' cy='124' r='42' />
-                <circle cx='112' cy='67' r='55' />
-                <circle cx='172' cy='69' r='54' />
-                <circle cx='225' cy='122' r='42' />
-                <circle cx='90' cy='158' r='42' />
-                <circle cx='140' cy='174' r='34' />
-                <circle cx='190' cy='158' r='42' />
-            </g>
+        <svg viewBox='0 0 1000 700' preserveAspectRatio='none' aria-hidden='true' className='absolute left-1/2 top-4 z-0 h-[calc(100%-2rem)] w-[min(80%,96rem)] -translate-x-1/2'>
+            <defs>
+                <clipPath id='automation-cloud-shape'>
+                    <path d='M80 600C48 574 43 523 61 477C79 431 121 409 171 414C182 358 220 310 276 293C315 281 350 288 378 305C392 248 439 201 501 190C558 180 608 198 642 232C683 200 741 183 796 199C858 217 893 260 901 309C945 318 972 353 968 397C1002 421 1005 467 983 504C1002 546 977 596 931 616C861 647 778 629 724 638C670 648 625 638 573 648C515 661 455 645 414 635C350 650 292 641 255 628C201 639 131 632 80 600Z' />
+                </clipPath>
+            </defs>
+            <path fill='var(--automation-cloud)' fillOpacity='0.76' d='M80 600C48 574 43 523 61 477C79 431 121 409 171 414C182 358 220 310 276 293C315 281 350 288 378 305C392 248 439 201 501 190C558 180 608 198 642 232C683 200 741 183 796 199C858 217 893 260 901 309C945 318 972 353 968 397C1002 421 1005 467 983 504C1002 546 977 596 931 616C861 647 778 629 724 638C670 648 625 638 573 648C515 661 455 645 414 635C350 650 292 641 255 628C201 639 131 632 80 600Z' />
+            <path fill='var(--automation-cloud-detail)' fillOpacity='0.44' clipPath='url(#automation-cloud-shape)' d='M25 480C82 445 143 443 191 461C242 481 284 472 325 451C366 430 408 438 443 464C470 485 486 508 500 529C484 551 463 571 437 582C392 601 362 589 322 601C278 614 237 596 196 603C144 612 94 600 55 578C28 563 14 526 25 480Z' />
         </svg>
         <div className='relative z-10 mx-auto flex max-w-2xl flex-col items-center justify-center'>
             <div className='relative mb-3 h-72 w-[min(32rem,92%)]'>
