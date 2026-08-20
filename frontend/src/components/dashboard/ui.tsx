@@ -8,7 +8,7 @@ type DashboardPageProps = {
 type DashboardHeaderProps = {
     title: string
     description?: string
-    eyebrow?: string
+    eyebrow?: string | null
     actions?: ReactNode
 }
 
@@ -34,7 +34,7 @@ export function DashboardHeader({
         <section className='overflow-hidden pt-1'>
             <div className='flex flex-col gap-3 md:flex-row md:items-start md:justify-between'>
                 <div className='min-w-0'>
-                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>{eyebrow}</p>
+                    {eyebrow && <p className='text-[10px] font-semibold uppercase text-ui-primary'>{eyebrow}</p>}
                     <h1 className='mt-1.5 max-w-5xl text-xl font-semibold text-ui-text sm:text-2xl'>{title}</h1>
                     {description && <p className='mt-2 max-w-2xl text-sm leading-6 text-ui-muted'>{description}</p>}
                 </div>

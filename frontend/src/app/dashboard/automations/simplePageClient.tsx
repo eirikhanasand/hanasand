@@ -147,16 +147,20 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
 
 function WelcomeState({ onCreate, compact = false }: { onCreate: () => void, compact?: boolean }) {
     if (compact) return <div className='grid min-h-72 place-items-center text-center'><div><Clock3 className='mx-auto h-8 w-8 text-ui-primary' /><h2 className='mt-3 text-lg font-semibold text-ui-text'>Nothing selected</h2><p className='mt-1 text-sm text-ui-muted'>Choose an automation to see its latest checks.</p></div></div>
-    return <section className='relative isolate grid min-h-[32rem] overflow-hidden rounded-2xl border border-ui-border bg-ui-panel px-6 py-10 text-center shadow-sm sm:px-12'>
-        <div className='mx-auto flex max-w-xl flex-col items-center justify-center'>
-            <div className='relative mb-7 h-64 w-[min(34rem,100%)]'>
-                <svg viewBox='0 0 280 100' aria-hidden='true' className='absolute bottom-0 left-1/2 z-0 h-24 w-64 -translate-x-1/2'>
-                    <path d='M31 72c-15 0-27-10-27-24s12-25 27-25c4 0 8 1 12 2C49 10 63 2 79 2c21 0 38 13 44 31 7-6 17-10 27-10 16 0 30 9 36 23 4-2 9-3 14-3 15 0 27 11 27 25s-12 24-27 24H31Z' fill='#fff' />
-                </svg>
+    return <section className='relative isolate grid min-h-[38rem] overflow-hidden px-4 py-10 text-center sm:px-8'>
+        <svg viewBox='0 0 280 180' aria-hidden='true' className='absolute inset-0 z-0 h-full w-full'>
+            <rect x='26' y='68' width='228' height='86' rx='43' fill='#fff' />
+            <circle cx='66' cy='83' r='42' fill='#fff' />
+            <circle cx='111' cy='60' r='59' fill='#fff' />
+            <circle cx='169' cy='64' r='56' fill='#fff' />
+            <circle cx='216' cy='84' r='40' fill='#fff' />
+        </svg>
+        <div className='relative z-10 mx-auto flex max-w-2xl flex-col items-center justify-center'>
+            <div className='relative mb-4 h-56 w-[min(26rem,80%)]'>
                 <img src='/images/empty-states/automations-barn.png' alt='A maintained red barn with its doors open and the inside empty' className='relative z-10 h-full w-full object-contain' />
             </div>
-            <h2 className='text-3xl font-semibold text-ui-text'>Create automation</h2>
-            <p className='mx-auto mt-3 max-w-lg text-base leading-7 text-ui-muted'>Check that everything is working as it should, and get alerted if something is wrong.</p>
+            <h2 className='text-3xl font-semibold text-ui-canvas'>Create automation</h2>
+            <p className='mx-auto mt-3 max-w-lg text-base leading-7 text-slate-600'>Check that everything is working as it should, and get alerted if something is wrong.</p>
             <button type='button' onClick={onCreate} className='mt-7 inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-5 text-sm font-semibold text-ui-canvas shadow-lg shadow-ui-primary/20 hover:opacity-90'><Plus className='h-4 w-4' />Create your first automation</button>
         </div>
     </section>

@@ -18,9 +18,8 @@ export default async function Page({
     return (
         <DashboardPage>
             <DashboardHeader
-                eyebrow='Monitoring'
+                eyebrow={null}
                 title='Automations'
-                description='Check that everything is working as it should, and get alerted if something is wrong.'
             />
             <AutomationsClient setup={setup === 'dwm' ? 'dwm' : undefined} />
         </DashboardPage>
