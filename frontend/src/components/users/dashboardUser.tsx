@@ -96,7 +96,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
 
     return (
         <div className='group relative h-10 min-h-10 max-h-10'>
-            <div onClick={handleClick} className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px] items-center gap-3 rounded-lg p-2 ${keys['shift'] ? 'hover:bg-ui-danger/10 hover:outline hover:outline-ui-danger/30' : 'hover:bg-ui-raised'} cursor-pointer hover:scale-[1.005]`}>
+            <div onClick={handleClick} className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px] items-center gap-3 rounded-lg py-2 ${keys['shift'] ? 'hover:bg-ui-danger/10 hover:outline hover:outline-ui-danger/30' : 'hover:bg-ui-raised'} cursor-pointer hover:scale-[1.005]`}>
                 <h1 className={`min-w-0 truncate ${user.active === false ? 'text-ui-muted line-through' : ''}`} key={user.id}>{user.name}</h1>
                 <span className={`min-w-0 truncate text-sm text-ui-muted ${user.active === false ? 'line-through' : ''}`}>{user.id}</span>
                 {keys['shift'] && <Trash2 className='hidden h-5 w-5 stroke-ui-danger group-hover:block' />}
