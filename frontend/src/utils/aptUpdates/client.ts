@@ -2,7 +2,7 @@
 
 import { getCookie } from '@/utils/cookies/cookies'
 
-export type AptUpdate = { package: string, version: string, repo: string, origin: string, security: boolean, first_seen: number }
+export type AptUpdate = { package: string, version: string, repo: string, origin: string, security: boolean, first_seen: number, installed_at?: number }
 export type AptUpdateStatus = {
     schema_version?: number
     host?: string

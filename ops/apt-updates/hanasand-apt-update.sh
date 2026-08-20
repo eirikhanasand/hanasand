@@ -44,7 +44,7 @@ apt-get -s -o Debug::NoLocking=true upgrade >"$sim"
 
 plan=$(mktemp "$STATE_DIR/plan.XXXXXX")
 /usr/bin/python3 - "$TRACK_FILE" "$sim" "$plan" "$now" <<'PY'
-import json, re, sys
+import json, re, subprocess, sys
 from pathlib import Path
 
 track, sim, plan, now = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]), int(sys.argv[4])
@@ -55,6 +55,13 @@ for line in track.read_text().splitlines():
         old[(parts[0], parts[1])] = {'first_seen': int(parts[2]), 'security': parts[3] == 'security', 'origin': parts[4]}
 
 updates = []
+def installed_at(package):
+    path = f'/var/lib/dpkg/info/{package}.list'
+    try:
+        result = subprocess.run(['stat', '-c', '%Y', path], capture_output=True, text=True, check=True)
+        return int(result.stdout.strip())
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        return now
 for line in sim.read_text(errors='replace').splitlines():
     # Ubuntu 24.04 emits: Inst pkg [installed] (candidate Ubuntu:24.04/noble-updates [amd64])
     match = re.match(r'^Inst\s+(\S+)(?:\s+\[[^\]]+\])?\s+\((\S+)\s+([^\s\[]+)(?:\s+\[[^\]]+\])?\)', line)
@@ -66,7 +73,8 @@ for line in sim.read_text(errors='replace').splitlines():
     key = (package, version)
     prior = old.get(key)
     updates.append({'package': package, 'version': version, 'repo': repo, 'origin': origin.strip(),
-                    'security': security, 'first_seen': prior['first_seen'] if prior else now})
+                    'security': security, 'first_seen': prior['first_seen'] if prior else now,
+                    'installed_at': installed_at(package)})
 
 track.write_text(''.join(f"{u['package']}\t{u['version']}\t{u['first_seen']}\t{'security' if u['security'] else 'regular'}\t{u['origin']}\n" for u in updates))
 json.dump({'updates': updates}, plan.open('w'), indent=2); plan.open('a').write('\n')
@@ -81,7 +89,7 @@ PY
 regular_packages=$(/usr/bin/python3 - "$plan" "$now" <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1])); now = int(sys.argv[2])
-print(' '.join(u['package'] for u in data['updates'] if not u['security'] and now - u['first_seen'] >= 72 * 60 * 60 and u['origin'].lower() == 'ubuntu'))
+print(' '.join(u['package'] for u in data['updates'] if not u['security'] and now - u['installed_at'] >= 72 * 60 * 60 and u['origin'].lower() == 'ubuntu'))
 PY
 )
 
