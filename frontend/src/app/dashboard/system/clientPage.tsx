@@ -214,6 +214,7 @@ export default function SystemDashboard({
 
     const refreshAll = useCallback(async () => {
         setRefreshing(true)
+        let refreshedAt = new Date().toISOString()
         try {
             const [metricsResponse, dockerResponse] = await Promise.all([
                 fetch(`${config.url.api}/metrics`, {
@@ -244,7 +245,8 @@ export default function SystemDashboard({
                 const raw = await dockerResponse.json()
                 const telemetry = normalizeDockerTelemetry(raw)
                 setDockerTelemetry(telemetry)
-                setLastUpdated(telemetry.generated_at || new Date().toISOString())
+                refreshedAt = telemetry.generated_at || refreshedAt
+                setLastUpdated(refreshedAt)
                 if (!selectedContainerId && telemetry.containers[0]?.id) {
                     setSelectedContainerId(telemetry.containers[0].id)
                 }
@@ -259,7 +261,7 @@ export default function SystemDashboard({
                 setLastUpdated(new Date().toISOString())
             }
 
-            setMessage('System telemetry refreshed.')
+            setMessage(`Refreshed ${formatDateTime(refreshedAt)}`)
         } catch (error) {
             setMessage(error instanceof Error ? error.message : 'Unable to refresh system telemetry.')
         } finally {
@@ -310,8 +312,10 @@ export default function SystemDashboard({
     }
 
     return (
-        <div className='grid gap-4'>
-            <ErrorNotice compact variant='info' className='max-w-3xl' message={message as string | null} />
+        <div className='relative grid gap-4'>
+            <div className='pointer-events-none absolute left-0 top-0 z-20 max-w-3xl'>
+                <ErrorNotice compact variant='info' message={message as string | null} />
+            </div>
             <AppConfirmDialog
                 open={Boolean(restartContainer)}
                 title={restartContainer ? `Restart ${restartContainer.name}?` : 'Restart container?'}

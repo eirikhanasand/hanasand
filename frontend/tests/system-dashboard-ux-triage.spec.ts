@@ -21,6 +21,9 @@ test('system dashboard focuses operator triage while preserving live controls', 
     expect(page).toContain('const primaryHref')
     expect(page).toContain('href={primaryHref}')
     expect(page).toContain('data-system-primary-action')
+    expect(page).toContain('setMessage(`Refreshed ${formatDateTime(refreshedAt)}`)')
+    expect(page).toContain('<div className=\'pointer-events-none absolute left-0 top-0 z-20 max-w-3xl\'>')
+    expect(page).not.toContain('<ErrorNotice compact variant=\'info\' className=\'max-w-3xl\'')
 
     expect(page).toContain('id=\'system-telemetry\'')
     expect(page).toContain('id=\'system-containers\'')
