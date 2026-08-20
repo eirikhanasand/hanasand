@@ -402,7 +402,7 @@ function CatalogOnlyActorResult({ result, identity }: { result: TiSearchResponse
     const actionability = buildTiActionability(result, actor, victims)
     return (
         <section data-ti-catalog-only='true' className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-            <div className='grid gap-4 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)] xl:items-start'>
+            <div className='grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(24rem,0.85fr)] xl:items-start'>
                 <ActorProfileHeader result={result} title={title} actor={actor} aliases={result.aliases} summary={candidate?.description} references={candidate?.referenceSources} />
                 <ThreatActorMap actor={actor} result={result} actionability={actionability} compact />
             </div>

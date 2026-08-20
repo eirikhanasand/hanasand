@@ -133,8 +133,9 @@ export function victimObservationsFor(result: TiSearchResponse): VictimObservati
 }
 
 function operatorOriginFor(result: TiSearchResponse) {
-    if (!result.actorIntelligence?.attributionEvidence) return null
-    const sourceText = result.actorIntelligence?.attribution?.toLowerCase() ?? ''
+    const catalogDescription = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0]?.description ?? '' : ''
+    const sourceText = `${result.actorIntelligence?.attribution ?? ''} ${catalogDescription}`.toLowerCase()
+    if (!result.actorIntelligence?.attributionEvidence && !catalogDescription) return null
     if (/\brussian\b|\brussia\b|\bsvr\b/.test(sourceText)) return countries.russia
     return null
 }

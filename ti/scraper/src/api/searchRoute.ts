@@ -133,12 +133,14 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     confidence: Math.min(assessment.confidence, 0.69)
     }))
   ], (candidate) => `${candidate.kind}:${candidate.value.toLowerCase()}`);
-  const missing = missingFields({ query, entityType, actor, victims, sectors, countries, ttps, records, generatedAt });
+  const catalogAttribution = actorQuery ? catalogActorAttribution(identity, actor) : undefined;
+  const catalogGeographies = catalogAttribution ? ["Russia"] : [];
+  const missing = missingFields({ query, entityType, actor, victims, sectors, countries: unique([...countries, ...catalogGeographies]), ttps, records, generatedAt });
   const actorBusinessEvidence = actorQuery ? await actorBusinessEvidenceCatalog(options.store, scope.tenantId, query, generatedAt, new Set(rows.map((row) => row.id))) : undefined;
   const businessModel = actorQuery ? businessModelAssessment(options.store, actorBusinessEvidence?.reviewedFindings ?? [], actorBusinessEvidence?.pendingFindings ?? []) : undefined;
   const actorCaseStudies = actorBusinessEvidence?.catalog;
-  const attributionEvidence = actor ? actorAttribution(rows, unique([actor, ...aliases, ...identity.terms])) : undefined;
-  const attribution = attributionEvidence?.statement;
+  const capturedAttribution = actor ? actorAttribution(rows, unique([actor, ...aliases, ...identity.terms])) : undefined;
+  const attribution = capturedAttribution?.statement ?? catalogAttribution?.statement;
   const updateTimeline = actorQuery ? records.actorProfileDeltas
     .filter((delta: any) => !profile?.id || delta.subjectId === profile.id)
     .sort((a: any, b: any) => Date.parse(String(b.observedAt ?? "")) - Date.parse(String(a.observedAt ?? "")))
@@ -169,18 +171,21 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     infrastructure,
     indicators,
     targetSectors: victimTargetSectors,
-    geographies: victimGeographies,
+    geographies: unique([...victimGeographies, ...catalogGeographies]),
     confidence: assessment.confidence,
     confidenceReasoning: assessment.reasons,
     sourceProvenance: sources.map((source) => source.provenance),
     structuredProvenance,
     businessModel,
-    attributionEvidence: attributionEvidence ? {
-      sourceId: attributionEvidence.row.sourceId,
-      sourceName: attributionEvidence.row.sourceName,
-      provenance: attributionEvidence.row.url ?? attributionEvidence.row.sourceName,
-      reportDate: attributionEvidence.row.publishedAt,
-      captureId: attributionEvidence.row.id,
+    attributionEvidence: capturedAttribution ? {
+      sourceId: capturedAttribution.row.sourceId,
+      sourceName: capturedAttribution.row.sourceName,
+      provenance: capturedAttribution.row.url ?? capturedAttribution.row.sourceName,
+      reportDate: capturedAttribution.row.publishedAt,
+      captureId: capturedAttribution.row.id,
+    } : catalogAttribution ? {
+      sourceName: catalogAttribution.sourceName,
+      provenance: catalogAttribution.provenance,
     } : undefined,
     updateTimeline,
     missingFields: missing
@@ -1219,6 +1224,22 @@ function actorAttribution(rows: any[], names: string[]) {
       }
     }
   }
+}
+
+function catalogActorAttribution(identity: ReturnType<typeof actorIdentity>, actor?: string) {
+  const candidate = identity.catalogCandidates.find((item: any) => !actor || normalizeActorName(item.canonicalName) === normalizeActorName(actor));
+  const description = String(candidate?.description ?? "");
+  if (!description || !/\b(?:russia|russian|svr)\b/i.test(description)) return undefined;
+  const statement = description
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((sentence) => sentence.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/\(Citation:[^)]+\)/g, "").trim())
+    .find((sentence) => /\b(?:russia|russian|svr)\b/i.test(sentence));
+  if (!statement) return undefined;
+  return {
+    statement: safeText(statement, 320),
+    sourceName: `MITRE ATT&CK ${candidate?.canonicalName ?? actor ?? "actor"} Group`,
+    provenance: String(candidate?.sourceUrl ?? "https://attack.mitre.org/")
+  };
 }
 
 function normalizeActorName(value: unknown) {
