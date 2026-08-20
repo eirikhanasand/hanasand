@@ -21,7 +21,7 @@ export default function ImpersonationError({ reset }: { error: Error & { digest?
                         <div>
                             <h2 className='text-base font-semibold text-ui-text'>Helpdesk unavailable</h2>
                             <p className='mt-2 max-w-2xl text-sm leading-6 text-ui-muted'>
-                                Retry Helpdesk, or continue to another part of Hanasand while this service recovers.
+                                The Helpdesk page hit an unexpected problem. Retry to reconnect to the support console; if it continues to fail, contact your Hanasand administrator.
                             </p>
                         </div>
                     </div>
@@ -37,10 +37,9 @@ export default function ImpersonationError({ reset }: { error: Error & { digest?
                     </div>
                 </div>
                 <div className='mt-5 flex flex-wrap gap-x-4 gap-y-2 border-t border-ui-danger/20 pt-4 text-sm'>
-                    <Link href='/dashboard/system' className='inline-flex items-center gap-1 font-semibold text-ui-text hover:text-ui-primary'><ArrowLeft className='h-4 w-4' />System tools</Link>
-                    <Link href='/dashboard/dwm' className='font-semibold text-ui-text hover:text-ui-primary'>Monitoring</Link>
-                    <Link href='/ti' className='font-semibold text-ui-text hover:text-ui-primary'>Threat search</Link>
-                    <Link href='/support' className='font-semibold text-ui-text hover:text-ui-primary'>Support</Link>
+                    <Link href='/dashboard/system' className='inline-flex h-9 items-center gap-1 rounded-md border border-ui-border bg-ui-panel px-3 font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised'><ArrowLeft className='h-4 w-4' />System tools</Link>
+                    <Link href='/dashboard/dwm' className='inline-flex h-9 items-center rounded-md border border-ui-border bg-ui-panel px-3 font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised'>Monitoring</Link>
+                    <Link href='/support' className='inline-flex h-9 items-center rounded-md border border-ui-border bg-ui-panel px-3 font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised'>Support</Link>
                 </div>
             </section>
         </DashboardPage>
