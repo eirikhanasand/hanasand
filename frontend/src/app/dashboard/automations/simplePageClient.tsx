@@ -148,19 +148,12 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
 function WelcomeState({ onCreate, compact = false }: { onCreate: () => void, compact?: boolean }) {
     if (compact) return <div className='grid min-h-72 place-items-center text-center'><div><Clock3 className='mx-auto h-8 w-8 text-ui-primary' /><h2 className='mt-3 text-lg font-semibold text-ui-text'>Nothing selected</h2><p className='mt-1 text-sm text-ui-muted'>Choose an automation to see its latest checks.</p></div></div>
     return <section className='relative isolate grid min-h-[40rem] overflow-hidden px-4 py-10 text-center sm:px-8'>
-        <svg viewBox='0 0 280 180' aria-hidden='true' className='absolute inset-0 z-0 h-full w-full'>
-            <defs>
-                <linearGradient id='automation-cloud' x1='0' y1='0' x2='0' y2='1'>
-                    <stop offset='0%' stopColor='var(--automation-cloud-top)' />
-                    <stop offset='100%' stopColor='var(--automation-cloud-bottom)' />
-                </linearGradient>
-            </defs>
-            <path d='M26 78c0-24 18-43 42-43 8-22 25-35 47-35 17 0 32 7 43 20 11-10 25-16 41-16 23 0 43 14 51 35 24 1 42 20 42 44 0 25-20 45-45 45H71c-25 0-45-20-45-45Z' fill='var(--automation-cloud-depth)' opacity='.65' transform='translate(0 5)' />
-            <path d='M26 78c0-24 18-43 42-43 8-22 25-35 47-35 17 0 32 7 43 20 11-10 25-16 41-16 23 0 43 14 51 35 24 1 42 20 42 44 0 25-20 45-45 45H71c-25 0-45-20-45-45Z' fill='url(#automation-cloud)' />
+        <svg viewBox='0 0 280 210' preserveAspectRatio='none' aria-hidden='true' className='absolute inset-0 z-0 h-full w-full'>
+            <path d='M16 132c0-26 21-47 47-47 7-25 30-43 57-43 20 0 38 9 49 24 12-13 30-21 49-21 29 0 54 18 63 44 25 2 43 23 43 49 0 18-9 34-23 43 11 8 18 17 22 29H7c3-12 10-22 21-30-8-8-12-19-12-31Z' fill='var(--automation-cloud)' />
         </svg>
         <div className='relative z-10 mx-auto flex max-w-2xl flex-col items-center justify-center'>
-            <div className='relative mb-3 h-64 w-[min(30rem,88%)]'>
-                <img src='/images/empty-states/automations-barn.png' alt='A maintained red barn with its doors open and the inside empty' className='relative z-10 h-full w-full object-contain' />
+            <div className='relative mb-3 h-72 w-[min(32rem,92%)]'>
+                <img src='/images/empty-states/automations-barn-draft.png' alt='A simple open barn with an empty interior' className='relative z-10 h-full w-full object-contain' />
             </div>
             <h2 className='text-3xl font-semibold text-(--automation-cloud-ink)'>Create automation</h2>
             <p className='mx-auto mt-3 max-w-lg text-base leading-7 text-(--automation-cloud-ink)/70'>Check that everything is working as it should, and get alerted if something is wrong.</p>

@@ -70,10 +70,8 @@
   --landing-surface-border: #26364f;
   --landing-surface-border-hover: #34445f;
   --soft-shadow: rgba(0, 0, 0, 0.34);
-  --automation-cloud-top: #294c72;
-  --automation-cloud-bottom: #1b3858;
-  --automation-cloud-depth: #102b48;
-  --automation-cloud-ink: #07101d;
+  --automation-cloud: #8dbce8;
+  --automation-cloud-ink: #17304a;
 }
 
 .light {
@@ -111,9 +109,7 @@
   --landing-surface-border: #d9e2ef;
   --landing-surface-border-hover: #c9d2df;
   --soft-shadow: rgba(26, 35, 55, 0.12);
-  --automation-cloud-top: #edf7ff;
-  --automation-cloud-bottom: #d5eaff;
-  --automation-cloud-depth: #c0dcf5;
+  --automation-cloud: #d9edff;
   --automation-cloud-ink: #17304a;
 }
 
