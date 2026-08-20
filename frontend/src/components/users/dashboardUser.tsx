@@ -101,7 +101,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                 <span className={`min-w-0 truncate text-sm text-ui-muted ${user.active === false ? 'line-through' : ''}`}>{user.id}</span>
                 {keys['shift'] && <Trash2 className='hidden h-5 w-5 stroke-ui-danger group-hover:block' />}
                 {!keys['shift'] && <div className='group flex items-center gap-2'>
-                    <div className='hidden h-7 w-7 place-items-center group-hover:grid'>
+                    <div className='pointer-events-none grid h-7 w-7 place-items-center opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100'>
                         <Tooltip content={`${user.active === false ? 'Activate' : 'Deactivate'} ${user.id}`}>
                             <button
                                 type='button'
@@ -128,7 +128,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                     >
                         {impersonationPending ? 'Checking' : 'Impersonate'}
                     </button>
-                    <div className='hidden h-7 w-7 place-items-center group-hover:grid'>
+                    <div className='pointer-events-none grid h-7 w-7 place-items-center opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100'>
                         <Tooltip content={displayRoles ? 'Cancel role editing' : 'Edit roles'}>
                             <button
                                 type='button'
