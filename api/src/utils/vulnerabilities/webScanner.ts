@@ -144,7 +144,7 @@ async function insertRun(run: WebScanRun) {
         ON CONFLICT (scan_id) DO NOTHING`, [run.scanId, TARGET_ID, run.target, run.status, run.targets[0]?.status || 'pending', run.startedAt, run.finishedAt, run.durationMs, JSON.stringify(run.severityCounts), run.error])
 }
 
-async function finishRun(previousSchedule: WebScanSchedule, run: WebScanRun) {
+async function finishRun(previousSchedule: WebScanSchedule, run: WebScanRun, updateSchedule = true) {
     const schedule = { ...previousSchedule, lastRunAt: run.finishedAt, nextRunAt: previousSchedule.enabled ? new Date(Date.now() + previousSchedule.intervalMinutes * 60_000).toISOString() : null }
     await withTransaction(async query => {
         await query('UPDATE web_scan_runs SET status = $2, target_status = $3, finished_at = $4, duration_ms = $5, severity_counts = $6::jsonb, error = $7 WHERE scan_id = $1', [run.scanId, run.status, run.targets[0]?.status || 'error', run.finishedAt, run.durationMs, JSON.stringify(run.severityCounts), run.error])
@@ -157,7 +157,7 @@ async function finishRun(previousSchedule: WebScanSchedule, run: WebScanRun) {
             }
         }
     })
-    await writeSchedule(schedule, run.error)
+    if (updateSchedule) await writeSchedule(schedule, run.error)
     return run
 }
 
@@ -340,7 +340,7 @@ async function migrateLegacyHistory(target: string) {
     for (const run of (parsed.history || []).slice(0, MAX_HISTORY)) {
         const migrated = { ...run, target, targets: run.targets.map(item => ({ ...item, target })) }
         await insertRun(migrated)
-        await finishRun({ enabled: false, intervalMinutes: DEFAULT_INTERVAL_MINUTES, nextRunAt: null, lastRunAt: run.finishedAt, target, scope: 'global' }, migrated)
+        await finishRun({ enabled: false, intervalMinutes: DEFAULT_INTERVAL_MINUTES, nextRunAt: null, lastRunAt: run.finishedAt, target, scope: 'global' }, migrated, false)
     }
 }
 
