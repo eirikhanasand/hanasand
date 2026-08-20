@@ -21,7 +21,7 @@ export default function ImpersonationError({ reset }: { error: Error & { digest?
                         <div>
                             <h2 className='text-base font-semibold text-ui-text'>Helpdesk unavailable</h2>
                             <p className='mt-2 max-w-2xl text-sm leading-6 text-ui-muted'>
-                                The Helpdesk page hit an unexpected problem. Retry to reconnect to the support console; if it continues to fail, contact your Hanasand administrator.
+                                Try again. If it still doesn’t work, contact support.
                             </p>
                         </div>
                     </div>
