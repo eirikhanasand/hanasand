@@ -148,9 +148,9 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
 function WelcomeState({ onCreate, compact = false }: { onCreate: () => void, compact?: boolean }) {
     if (compact) return <div className='grid min-h-72 place-items-center text-center'><div><Clock3 className='mx-auto h-8 w-8 text-ui-primary' /><h2 className='mt-3 text-lg font-semibold text-ui-text'>Nothing selected</h2><p className='mt-1 text-sm text-ui-muted'>Choose an automation to see its latest checks.</p></div></div>
     return <section className='relative isolate grid min-h-[40rem] overflow-hidden px-4 py-10 text-center sm:px-8'>
-        <svg viewBox='0 0 280 210' preserveAspectRatio='none' aria-hidden='true' className='absolute left-1/2 top-[-3rem] z-0 h-[calc(100%+3rem)] w-[min(92%,76rem)] -translate-x-1/2'>
+        <svg viewBox='0 0 280 210' preserveAspectRatio='none' aria-hidden='true' className='absolute inset-x-0 top-[-3rem] z-0 h-[calc(100%+3rem)] w-full'>
             <path
-                d='M22 145 C22 119 42 99 68 99 C68 75 88 58 114 58 C133 58 149 66 159 79 C171 66 187 58 207 58 C235 58 256 78 259 104 C258 111 258 118 258 125 C258 145 244 162 225 169 C215 187 197 198 178 198 C161 198 146 192 136 182 C124 193 108 198 91 198 C69 198 50 188 40 173 C29 166 22 157 22 145 Z'
+                d='M0 148 C0 113 28 88 64 88 C74 48 109 22 150 22 C182 22 209 36 227 61 C242 45 260 38 280 38 C280 38 280 148 280 148 L280 210 L0 210 Z'
                 fill='var(--automation-cloud)'
             />
         </svg>
@@ -160,7 +160,7 @@ function WelcomeState({ onCreate, compact = false }: { onCreate: () => void, com
             </div>
             <h2 className='text-3xl font-semibold text-(--automation-cloud-ink)'>Create automation</h2>
             <p className='mx-auto mt-3 max-w-lg text-base leading-7 text-(--automation-cloud-ink)/70'>Check that everything is working as it should, and get alerted if something is wrong.</p>
-            <button type='button' onClick={onCreate} className='mt-7 inline-flex h-11 items-center gap-2 rounded-lg bg-(--automation-cloud-ink) px-5 text-sm font-semibold text-white shadow-lg shadow-black/20 hover:opacity-90'><Plus className='h-4 w-4' />Create</button>
+            <button type='button' onClick={onCreate} className='mt-7 inline-flex h-11 min-w-32 items-center justify-center gap-2 rounded-lg bg-(--automation-cloud-ink) px-5 text-sm font-semibold text-white shadow-lg shadow-black/20 hover:opacity-90'><Plus className='h-4 w-4' />Create</button>
         </div>
     </section>
 }
