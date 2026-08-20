@@ -175,7 +175,6 @@ export default function DashboardSidebar({
                 ) : (
                     <>
                         <div>
-                            <p className='text-[0.62rem] font-semibold uppercase text-ui-primary'>Dashboard</p>
                             <h2 className='mt-1 text-sm font-semibold text-ui-text'>Monitoring</h2>
                         </div>
                         <button

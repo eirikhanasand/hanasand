@@ -53,7 +53,6 @@ export default function DwmOverviewPanel({ organizationId }: { organizationId?: 
                     <Radar className='h-7 w-7' />
                 </span>
                 <div>
-                    <p className='text-xs font-semibold uppercase tracking-[0.12em] text-ui-primary'>{scopeLabel}</p>
                     <h2 className='mt-2 text-2xl font-semibold text-ui-text'>Welcome to Hanasand</h2>
                     <p className='mt-2 text-sm leading-6 text-ui-muted'>Create your first watchlist to start monitoring companies, domains, brands, and vendors.</p>
                 </div>
