@@ -9,11 +9,11 @@ ExecStart=/usr/local/sbin/hanasand-apt-update
 User=root
 # APT needs to drop to its _apt sandbox user; NoNewPrivileges would block it.
 PrivateTmp=true
-ProtectSystem=full
+# APT/dpkg must replace files across the OS filesystem; a read-only system
+# mount prevents package installation even when individual paths are allowed.
+ProtectSystem=off
 ProtectHome=read-only
-# APT/dpkg must replace files in the system package roots while the rest of the
-# service remains sandboxed.
-ReadWritePaths=/var/lib/hanasand/apt-updates /var/log /etc /usr /lib /boot
+ReadWritePaths=/var/lib/hanasand/apt-updates /var/log
 LockPersonality=true
 MemoryDenyWriteExecute=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
