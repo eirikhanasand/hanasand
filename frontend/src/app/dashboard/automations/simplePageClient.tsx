@@ -148,9 +148,9 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
 function WelcomeState({ onCreate, compact = false }: { onCreate: () => void, compact?: boolean }) {
     if (compact) return <div className='grid min-h-72 place-items-center text-center'><div><Clock3 className='mx-auto h-8 w-8 text-ui-primary' /><h2 className='mt-3 text-lg font-semibold text-ui-text'>Nothing selected</h2><p className='mt-1 text-sm text-ui-muted'>Choose an automation to see its latest checks.</p></div></div>
     return <section className='relative isolate grid min-h-[40rem] overflow-hidden px-4 py-10 text-center sm:px-8'>
-        <svg viewBox='0 0 280 210' preserveAspectRatio='none' aria-hidden='true' className='absolute inset-x-0 top-[-3rem] z-0 h-[calc(100%+3rem)] w-full'>
+        <svg viewBox='0 0 280 210' preserveAspectRatio='none' aria-hidden='true' className='absolute left-1/2 top-4 z-0 h-[calc(100%-2rem)] w-[min(80%,96rem)] -translate-x-1/2'>
             <path
-                d='M0 148 C0 113 28 88 64 88 C74 48 109 22 150 22 C182 22 209 36 227 61 C242 45 260 38 280 38 C280 38 280 148 280 148 L280 210 L0 210 Z'
+                d='M10 145 C10 115 32 92 62 92 C70 54 104 26 143 26 C177 26 206 41 224 68 C238 51 253 43 270 43 C270 70 270 96 270 112 C270 128 266 140 257 149 C256 169 244 181 223 187 C211 196 197 201 183 201 C165 201 149 196 137 186 C124 196 108 201 91 201 C66 201 45 188 34 169 C20 161 10 154 10 145 Z'
                 fill='var(--automation-cloud)'
             />
         </svg>
