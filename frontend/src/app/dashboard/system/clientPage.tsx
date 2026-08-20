@@ -23,7 +23,7 @@ import {
     Timer,
     Workflow,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import ErrorNotice from '@/components/error/errorNotice'
 import { DashboardPanel } from '@/components/dashboard/ui'
 import { AppConfirmDialog } from '@/components/ui/appDialog'
@@ -97,6 +97,7 @@ export default function SystemDashboard({
     const [logs, setLogs] = useState<RuntimeLog[]>([])
     const [logsReason, setLogsReason] = useState('')
     const [logsLoading, setLogsLoading] = useState(false)
+    const logsAbortController = useRef<AbortController | null>(null)
 
     const containers = useMemo(
         () => dockerTelemetry.containers.filter((container): container is DockerContainer => Boolean(container)),
@@ -177,12 +178,15 @@ export default function SystemDashboard({
     }, [containers.length, normalizedVms.length, runningContainers, runningVms, stoppedVms, systemSnapshot, systemUnavailableReason, unavailableStats])
 
     const loadContainerLogs = useCallback(async (container: DockerContainer | null) => {
+        logsAbortController.current?.abort()
         if (!container) {
             setLogs([])
             setLogsReason('')
             return
         }
 
+        const abortController = new AbortController()
+        logsAbortController.current = abortController
         setLogsLoading(true)
         setLogsReason('')
         const params = new URLSearchParams({ limit: '120', service: container.name })
@@ -190,6 +194,7 @@ export default function SystemDashboard({
             const response = await fetch(`${config.url.api}/logs/realtime?${params.toString()}`, {
                 cache: 'no-store',
                 headers: { id, Authorization: `Bearer ${token}` },
+                signal: abortController.signal,
             })
 
             if (response.status === 401) {
@@ -205,10 +210,11 @@ export default function SystemDashboard({
             setLogs(Array.isArray(body.logs) ? body.logs as RuntimeLog[] : [])
             setLogsReason(typeof body.unavailable_reason === 'string' ? body.unavailable_reason : '')
         } catch (error) {
+            if (abortController.signal.aborted) return
             setLogs([])
             setLogsReason(error instanceof Error ? error.message : 'Unable to load container logs.')
         } finally {
-            setLogsLoading(false)
+            if (!abortController.signal.aborted) setLogsLoading(false)
         }
     }, [id, router, token])
 
@@ -281,7 +287,9 @@ export default function SystemDashboard({
 
     function inspectContainer(container: DockerContainer) {
         setSelectedContainerId(container.id)
-        window.requestAnimationFrame(() => document.getElementById('system-container-details')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+        if (window.matchMedia('(max-width: 1279px)').matches) {
+            window.requestAnimationFrame(() => document.getElementById('system-container-details')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+        }
     }
 
     async function handleRestartContainer(container: DockerContainer) {
