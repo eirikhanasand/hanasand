@@ -400,18 +400,22 @@ function CatalogOnlyActorResult({ result, identity }: { result: TiSearchResponse
     const victims = victimObservationsFor(result)
     const actor = buildActorIntelligence(result, victims)
     const actionability = buildTiActionability(result, actor, victims)
+    const [activeCitation, setActiveCitation] = useState<number | null>(null)
+    const description = usefulActorSummary(candidate?.description) || `${title} is a tracked threat actor.`
+    const citations = citationNames(description)
     return (
         <section data-ti-catalog-only='true' className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <div className='grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(24rem,0.85fr)] xl:items-start'>
-                <ActorProfileHeader result={result} title={title} actor={actor} aliases={result.aliases} summary={candidate?.description} references={candidate?.referenceSources} />
+                <ActorProfileHeader result={result} title={title} actor={actor} aliases={result.aliases} summary={candidate?.description} references={candidate?.referenceSources} activeCitation={activeCitation} onCitationClick={setActiveCitation} />
                 <ThreatActorMap actor={actor} result={result} actionability={actionability} compact />
             </div>
             <ActorProfileSections result={result} actor={actor} victims={victims} />
+            <ActorReferences citations={citations} references={candidate?.referenceSources} activeCitation={activeCitation} />
         </section>
     )
 }
 
-function ActorProfileHeader({ result, title, actor, aliases, summary, references, actorQuery = true }: {
+function ActorProfileHeader({ result, title, actor, aliases, summary, references, actorQuery = true, activeCitation, onCitationClick }: {
     result: TiSearchResponse
     title: string
     actor: TiActorIntelligenceProfile
@@ -419,6 +423,8 @@ function ActorProfileHeader({ result, title, actor, aliases, summary, references
     summary?: string
     references?: Array<{ name: string; url?: string }>
     actorQuery?: boolean
+    activeCitation?: number | null
+    onCitationClick?: (number: number) => void
 }) {
     const externalId = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0]?.externalId : undefined
     const catalogCandidate = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0] : undefined
@@ -438,6 +444,7 @@ function ActorProfileHeader({ result, title, actor, aliases, summary, references
         aliases.length ? { label: 'Also known as', value: aliases.slice(0, 4).join(', ') } : null,
         actor.lastSeen ? { label: 'Last seen', value: formatDate(actor.lastSeen) } : null,
     ].filter((fact): fact is { label: string; value: string } => Boolean(fact))
+    const citations = citationNames(description)
     return <section data-ti-actor-info='true' className='grid gap-4'>
         <div>
             <div className='flex items-center gap-3'>
@@ -447,7 +454,7 @@ function ActorProfileHeader({ result, title, actor, aliases, summary, references
                     {catalogCandidate ? <span className='text-[11px] font-medium text-ui-primary/70 dark:text-ui-primary/70'>Created {formatDate(catalogCandidate.createdAt)} · Updated {formatDate(catalogCandidate.modifiedAt)}</span> : null}
                 </div>
             </div>
-            <ActorDescription description={description} references={references} />
+            <ActorDescription description={description} citations={citations} activeCitation={activeCitation ?? null} onCitationClick={onCitationClick ?? (() => undefined)} />
         </div>
         {facts.length ? <div className='grid gap-3 sm:grid-cols-2'>
             {facts.map(fact => <EvidenceMetric key={fact.label} label={fact.label} value={fact.value} />)}
@@ -474,18 +481,25 @@ const actorReferenceMetadata: Record<string, Omit<ActorReference, 'name'>> = {
     'unit 42 solarstorm december 2020': { author: 'Unit 42, Palo Alto Networks', year: '2020', url: 'https://unit42.paloaltonetworks.com/solarstorm-supernova/' }
 }
 
-function ActorDescription({ description, references }: { description: string; references?: Array<{ name: string; url?: string }> }) {
+function citationNames(description: string) {
     const citationPattern = new RegExp('\\(Citation:\\s*([^)]+)\\)', 'g')
     const citations: string[] = []
-    const renderedDescription = description.replace(citationPattern, (_match, rawName: string) => {
+    description.replace(citationPattern, (_match, rawName: string) => {
         const name = rawName.trim()
         if (!name) return _match
         const existing = citations.indexOf(name)
-        const citationNumber = existing >= 0 ? existing + 1 : citations.push(name)
-        return `[${citationNumber}](#ti-reference-${citationNumber})`
+        if (existing < 0) citations.push(name)
+        return _match
     })
-    const [activeCitation, setActiveCitation] = useState<number | null>(null)
-    const [copiedCitation, setCopiedCitation] = useState<string | null>(null)
+    return citations
+}
+
+function ActorDescription({ description, citations, activeCitation, onCitationClick }: { description: string; citations: string[]; activeCitation: number | null; onCitationClick: (number: number) => void }) {
+    const citationPattern = new RegExp('\\(Citation:\\s*([^)]+)\\)', 'g')
+    const renderedDescription = description.replace(citationPattern, (_match, rawName: string) => {
+        const citationNumber = citations.indexOf(rawName.trim()) + 1
+        return citationNumber > 0 ? `[${citationNumber}](#ti-reference-${citationNumber})` : _match
+    })
     if (!citations.length) return <div className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'><MarkdownRender MDstr={displayRequirementText(description)} /></div>
     const handleCitationClick = (event: MouseEvent<HTMLDivElement>) => {
         const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href^="#ti-reference-"]')
@@ -494,9 +508,16 @@ function ActorDescription({ description, references }: { description: string; re
         if (!match) return
         event.preventDefault()
         const number = Number(match[1])
-        setActiveCitation(number)
+        onCitationClick(number)
         document.getElementById(match[0].slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
+    return <div onClick={handleCitationClick} className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
+        <MarkdownRender MDstr={displayRequirementText(renderedDescription)} />
+    </div>
+}
+
+function ActorReferences({ citations, references, activeCitation }: { citations: string[]; references?: Array<{ name: string; url?: string }>; activeCitation: number | null }) {
+    const [copiedCitation, setCopiedCitation] = useState<string | null>(null)
     const sourceByName = new Map((references ?? []).map(source => [source.name.trim().toLocaleLowerCase(), source]))
     const actorReferences: ActorReference[] = citations.map(name => {
         const key = name.toLocaleLowerCase()
@@ -516,31 +537,28 @@ function ActorDescription({ description, references }: { description: string; re
             window.setTimeout(() => setCopiedCitation(current => current === copiedKey ? null : current), 1000)
         } catch { setCopiedCitation(null) }
     }
-    return <div onClick={handleCitationClick} className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
-        <MarkdownRender MDstr={displayRequirementText(renderedDescription)} />
-        <section className='mt-4 border-t border-ui-border pt-3 dark:border-ui-border'>
-            <h2 className='text-xs font-semibold uppercase tracking-wide text-ui-muted dark:text-ui-muted'>References ({actorReferences.length})</h2>
-            <div className='mt-2 overflow-x-auto rounded-md border border-ui-border dark:border-ui-border'>
-                <table className='min-w-full text-left text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                    <thead className='border-b border-ui-border bg-ui-panel/60 text-[10px] uppercase tracking-wide text-ui-muted dark:border-ui-border dark:bg-ui-panel/60 dark:text-ui-muted'>
-                        <tr><th className='px-3 py-2 font-semibold'>#</th><th className='px-3 py-2 font-semibold'>Title</th><th className='px-3 py-2 font-semibold'>Author</th><th className='px-3 py-2 font-semibold'>Year</th><th className='px-3 py-2 font-semibold'>Cite</th></tr>
-                    </thead>
-                    <tbody>
-                        {actorReferences.map((reference, index) => {
-                            const number = index + 1
-                            return <tr key={reference.name} id={`ti-reference-${number}`} aria-current={activeCitation === number ? 'location' : undefined} className={`border-b border-ui-border last:border-b-0 transition-colors dark:border-ui-border ${activeCitation === number ? 'bg-ui-primary/15 text-ui-text ring-1 ring-inset ring-ui-primary/45 dark:bg-ui-primary/15 dark:text-ui-text' : ''}`}>
-                                <td className='whitespace-nowrap px-3 py-2 align-top font-normal text-ui-muted dark:text-ui-muted'>{number}.</td>
-                                <td className='min-w-72 px-3 py-2 align-top'>{reference.url ? <a href={reference.url} target='_blank' rel='noopener noreferrer' className='text-ui-text hover:text-ui-primary hover:underline dark:text-ui-text'>{reference.name}</a> : <span className='text-ui-text dark:text-ui-text'>{reference.name}</span>}</td>
-                                <td className='min-w-48 px-3 py-2 align-top'>{reference.author}</td>
-                                <td className='whitespace-nowrap px-3 py-2 align-top'>{reference.year}</td>
-                                <td className='whitespace-nowrap px-3 py-2 align-top'><button type='button' onClick={event => { event.stopPropagation(); void copyCitation(reference, 'apa', number) }} className='mr-1 rounded border border-ui-border px-2 py-1 text-[10px] hover:border-ui-primary hover:text-ui-primary dark:border-ui-border' aria-label={`Copy APA citation for reference ${number}`}>{copiedCitation === `${number}-apa` ? 'Copied' : 'APA'}</button><button type='button' onClick={event => { event.stopPropagation(); void copyCitation(reference, 'latex', number) }} className='rounded border border-ui-border px-2 py-1 text-[10px] hover:border-ui-primary hover:text-ui-primary dark:border-ui-border' aria-label={`Copy LaTeX citation for reference ${number}`}>{copiedCitation === `${number}-latex` ? 'Copied' : 'LaTeX'}</button></td>
-                            </tr>
-                        })}
-                    </tbody>
-                </table>
-            </div>
-        </section>
-    </div>
+    return <section className='border-t border-ui-border pt-4 dark:border-ui-border'>
+        <h2 className='text-xs font-semibold uppercase tracking-wide text-ui-muted dark:text-ui-muted'>References ({actorReferences.length})</h2>
+        <div className='mt-2 overflow-x-auto rounded-md border border-ui-border dark:border-ui-border'>
+            <table className='min-w-full text-left text-xs leading-5 text-ui-muted dark:text-ui-muted'>
+                <thead className='border-b border-ui-border bg-ui-panel/60 text-[10px] uppercase tracking-wide text-ui-muted dark:border-ui-border dark:bg-ui-panel/60 dark:text-ui-muted'>
+                    <tr><th className='px-3 py-2 font-semibold'>#</th><th className='px-3 py-2 font-semibold'>Title</th><th className='px-3 py-2 font-semibold'>Author</th><th className='px-3 py-2 font-semibold'>Year</th><th className='px-3 py-2 font-semibold'>Cite</th></tr>
+                </thead>
+                <tbody>
+                    {actorReferences.map((reference, index) => {
+                        const number = index + 1
+                        return <tr key={reference.name} id={`ti-reference-${number}`} aria-current={activeCitation === number ? 'location' : undefined} className={`border-b border-ui-border last:border-b-0 transition-colors dark:border-ui-border ${activeCitation === number ? 'bg-ui-primary/15 text-ui-text ring-1 ring-inset ring-ui-primary/45 dark:bg-ui-primary/15 dark:text-ui-text' : ''}`}>
+                            <td className='whitespace-nowrap px-3 py-2 align-top font-normal text-ui-muted dark:text-ui-muted'>{number}.</td>
+                            <td className='min-w-72 px-3 py-2 align-top'>{reference.url ? <a href={reference.url} target='_blank' rel='noopener noreferrer' className='text-ui-text hover:text-ui-primary hover:underline dark:text-ui-text'>{reference.name}</a> : <span className='text-ui-text dark:text-ui-text'>{reference.name}</span>}</td>
+                            <td className='min-w-48 px-3 py-2 align-top'>{reference.author}</td>
+                            <td className='whitespace-nowrap px-3 py-2 align-top'>{reference.year}</td>
+                            <td className='whitespace-nowrap px-3 py-2 align-top'><button type='button' onClick={event => { event.stopPropagation(); void copyCitation(reference, 'apa', number) }} className='mr-1 rounded border border-ui-border px-2 py-1 text-[10px] hover:border-ui-primary hover:text-ui-primary dark:border-ui-border' aria-label={`Copy APA citation for reference ${number}`}>{copiedCitation === `${number}-apa` ? 'Copied' : 'APA'}</button><button type='button' onClick={event => { event.stopPropagation(); void copyCitation(reference, 'latex', number) }} className='rounded border border-ui-border px-2 py-1 text-[10px] hover:border-ui-primary hover:text-ui-primary dark:border-ui-border' aria-label={`Copy LaTeX citation for reference ${number}`}>{copiedCitation === `${number}-latex` ? 'Copied' : 'LaTeX'}</button></td>
+                        </tr>
+                    })}
+                </tbody>
+            </table>
+        </div>
+    </section>
 }
 
 function ActorProfileSections({ result, actor, victims }: { result: TiSearchResponse; actor: TiActorIntelligenceProfile; victims: ReturnType<typeof victimObservationsFor> }) {
@@ -632,6 +650,9 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
             heroVictimContext.length ? `Victim context: ${heroVictimContext.join('; ')}.` : '',
         ].filter(Boolean).join(' '))
         : displayRequirementText(result.summary)
+    const actorReferences = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0]?.referenceSources : undefined
+    const citations = citationNames(actorProfileSummary)
+    const [activeCitation, setActiveCitation] = useState<number | null>(null)
     useEffect(() => {
         if (!recentItems.length) return
         if (!recentItems.some(item => item.id === selectedId)) setSelectedId(recentItems[0]?.id ?? '')
@@ -673,7 +694,7 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
             <section data-ti-workspace='true' className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
                 <div className={`grid gap-4 ${actorQuery ? 'xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)]' : ''} xl:items-start`}>
                     <div className='grid gap-4'>
-                        <ActorProfileHeader result={result} title={humanizeSlug(result.query)} actor={actorIntel} aliases={result.aliases} summary={actorProfileSummary} actorQuery={actorQuery} />
+                        <ActorProfileHeader result={result} title={humanizeSlug(result.query)} actor={actorIntel} aliases={result.aliases} summary={actorProfileSummary} references={actorReferences} actorQuery={actorQuery} activeCitation={activeCitation} onCitationClick={setActiveCitation} />
                     </div>
                     {actorQuery ? <section data-ti-map='true' className='min-w-0'>
                         <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
@@ -726,6 +747,7 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
                         </section>
                     ) : null}
                 </section> : null}
+                {actorQuery ? <ActorReferences citations={citations} references={actorReferences} activeCitation={activeCitation} /> : null}
             </section>
         </div>
     )
