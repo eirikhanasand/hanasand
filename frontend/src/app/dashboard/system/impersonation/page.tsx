@@ -91,6 +91,14 @@ function buildApiQuery(params: AuditSearchParams) {
     return query.toString()
 }
 
+function decodeAccessToken(value: string) {
+    try {
+        return decodeURIComponent(value)
+    } catch {
+        return value
+    }
+}
+
 function contextText(value: Record<string, unknown> | null | undefined) {
     if (!value || typeof value !== 'object') return ''
     const entries = Object.entries(value)
@@ -184,7 +192,7 @@ export default async function ImpersonationAuditPage({
     const query = buildApiQuery(params)
     const response = await fetch(`${config.url.api}/admin/audit-events${query ? `?${query}` : ''}`, {
         headers: {
-            Authorization: `Bearer ${decodeURIComponent(token)}`,
+            Authorization: `Bearer ${decodeAccessToken(token)}`,
             id,
         },
         next: { revalidate: 5 },
