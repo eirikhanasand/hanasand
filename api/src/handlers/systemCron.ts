@@ -19,7 +19,7 @@ async function requireSystemAdmin(req: FastifyRequest, res: FastifyReply) {
 
 export async function getSystemCronJobs(req: FastifyRequest, res: FastifyReply) {
     if (!await requireSystemAdmin(req, res)) return
-    const jobs = await listUnifiedScheduledJobs()
+    const jobs = await listUnifiedScheduledJobs({ fast: true })
     return res.send({ jobs, ready: jobs.length > 0 })
 }
 
