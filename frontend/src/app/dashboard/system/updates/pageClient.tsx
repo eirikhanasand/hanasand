@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { AlertTriangle, CheckCircle2, CircleCheck, CircleX, Clock3, RefreshCcw, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, CircleAlert, CircleCheck, CircleX, Clock3, RefreshCcw, ShieldCheck } from 'lucide-react'
 import { DashboardPanel } from '@/components/dashboard/ui'
 import { fetchAptUpdates, type AptUpdateStatus, type AptUpdateHistory } from '@/utils/aptUpdates/client'
 
@@ -42,7 +42,7 @@ export default function AptUpdatesClient() {
             {status?.last_error ? <p className='rounded-lg border border-ui-danger bg-ui-danger/10 p-3 text-sm text-ui-danger'>{status.last_error}</p> : null}
         </DashboardPanel>
         <DashboardPanel className='grid gap-3 p-4'><h2 className='text-base font-semibold'>Pending packages</h2>{pending.length ? <div className='overflow-x-auto'><table className='w-full min-w-[760px] text-left text-sm'><thead className='text-xs text-ui-muted'><tr><th className='pb-2'>Package</th><th className='pb-2'>Version</th><th className='pb-2'>Type</th><th className='pb-2'>Age</th><th className='pb-2'>First seen</th></tr></thead><tbody>{pending.map(item => { const ageHours = updateAgeHours(item.first_seen); const ready = item.security || ageHours >= 72; return <tr key={`${item.package}-${item.version}`} className='border-t border-ui-border'><td className='py-2 font-mono'>{item.package}</td><td className='py-2 font-mono'>{item.version}</td><td className='py-2'>{item.security ? 'Security' : 'Regular'}</td><td className={`py-2 font-semibold ${ready ? 'text-ui-success' : 'text-ui-danger'}`}><span className='inline-flex items-center gap-1.5'>{ready ? <CircleCheck className='h-4 w-4' aria-hidden='true' /> : <CircleX className='h-4 w-4' aria-hidden='true' />}<span>{ready ? 'Ready' : `${ageHours}/72 hours`}</span></span></td><td className='py-2 text-ui-muted'>{new Date(item.first_seen * 1000).toLocaleString()}</td></tr> })}</tbody></table></div> : <p className='text-sm text-ui-muted'>No pending packages reported.</p>}</DashboardPanel>
-        <DashboardPanel className='grid gap-3 p-4'><h2 className='text-base font-semibold'>Update history</h2>{history.length ? <div className='grid gap-2'>{history.map(item => <div key={item.run_id} className='grid gap-1 rounded-lg border border-ui-border bg-ui-raised p-3 text-sm md:grid-cols-[180px_90px_minmax(0,1fr)]'><span className='text-ui-muted'>{formatDate(item.occurred_at)}</span><span className='font-semibold'>{item.status}</span><span>{item.error || (item.packages?.length ? `Installed: ${item.packages.join(', ')}` : 'Check completed; no packages installed.')}</span></div>)}</div> : <p className='text-sm text-ui-muted'>No host check-in has been persisted yet.</p>}</DashboardPanel>
+        <DashboardPanel className='grid gap-3 p-4'><h2 className='text-base font-semibold'>History</h2>{history.length ? <div className='grid gap-2'>{history.map(item => <div key={item.run_id} className='grid gap-1 rounded-lg border border-ui-border bg-ui-raised p-3 text-sm md:grid-cols-[180px_24px_minmax(0,1fr)]'><span className='text-ui-muted'>{formatDate(item.occurred_at)}</span><span className='flex items-center'>{historyStatusIcon(item.status)}</span><span>{item.error || (item.packages?.length ? `Installed: ${item.packages.join(', ')}` : 'No packages installed.')}</span></div>)}</div> : <p className='text-sm text-ui-muted'>No host check-in has been persisted yet.</p>}</DashboardPanel>
     </div>
 }
 
@@ -51,3 +51,9 @@ function Detail({ label, value }: { label: string, value: string }) { return <di
 function label(value?: string) { return value === 'ok' ? 'Healthy' : value === 'pending' ? 'Updates pending' : value === 'failed' ? 'Update failed' : 'Waiting for host check-in' }
 function formatDate(value?: string | null) { return value ? new Date(value).toLocaleString() : 'Not reported' }
 function updateAgeHours(firstSeen: number) { return Math.max(0, Math.floor((Date.now() - firstSeen * 1000) / 3600000)) }
+function historyStatusIcon(status: string) {
+    const normalized = status.toLowerCase()
+    if (normalized === 'ok' || normalized === 'success' || normalized === 'healthy') return <CircleCheck className='h-4 w-4 text-ui-success' aria-label='Healthy' title='Healthy' />
+    if (normalized === 'pending' || normalized === 'running') return <CircleAlert className='h-4 w-4 text-ui-warning' aria-label='Pending' title='Pending' />
+    return <CircleX className='h-4 w-4 text-ui-danger' aria-label='Failed' title='Failed' />
+}
