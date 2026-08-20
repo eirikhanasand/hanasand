@@ -53,7 +53,7 @@ function formatDate(value?: string | null) { return value ? new Date(value).toLo
 function updateAgeHours(firstSeen: number) { return Math.max(0, Math.floor((Date.now() - firstSeen * 1000) / 3600000)) }
 function historyStatusIcon(status: string) {
     const normalized = status.toLowerCase()
-    if (normalized === 'ok' || normalized === 'success' || normalized === 'healthy') return <CircleCheck className='h-4 w-4 text-ui-success' aria-label='Healthy' title='Healthy' />
-    if (normalized === 'pending' || normalized === 'running') return <CircleAlert className='h-4 w-4 text-ui-warning' aria-label='Pending' title='Pending' />
-    return <CircleX className='h-4 w-4 text-ui-danger' aria-label='Failed' title='Failed' />
+    if (normalized === 'ok' || normalized === 'success' || normalized === 'healthy') return <CircleCheck className='h-4 w-4 text-ui-success' aria-label='Healthy' />
+    if (normalized === 'pending' || normalized === 'running') return <CircleAlert className='h-4 w-4 text-ui-warning' aria-label='Pending' />
+    return <CircleX className='h-4 w-4 text-ui-danger' aria-label='Failed' />
 }
