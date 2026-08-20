@@ -28,7 +28,7 @@ type Interval = { lower: number | null, upper: number | null, sampleSize: number
 type Breakdown = Score & { name: string, sampleSize: number }
 type ExactMatch = { sampleSize: number, exactMatchCount: number, errorCount: number, exactMatchRate: number | null, confidenceInterval: Interval }
 
-type Benchmark = {
+export type Benchmark = {
     id: string
     tenantId?: string
     name: string
@@ -111,14 +111,14 @@ type CreateFormState = { name: string, sampleSize: number, datasetSplit: 'valida
 const LABEL_TYPES = ['actor', 'alias', 'ransomware', 'victim', 'incident', 'cve', 'malware', 'tool', 'campaign', 'ttp', 'country', 'sector', 'indicator', 'impact', 'vulnerability', 'incident_date', 'publication_date', 'source_url', 'duplicate_article', 'contradictory_claim', 'irrelevant_page', 'dynamic_page', 'dataset', 'business_mechanism'] as const
 const FILTERS = ['active', 'retry', 'dead_letter', 'complete'] as const
 
-export default function EvaluationBenchmarkClient() {
-    const [benchmarks, setBenchmarks] = useState<Benchmark[]>([])
-    const [selectedBenchmarkId, setSelectedBenchmarkId] = useState('')
+export default function EvaluationBenchmarkClient({ initialBenchmarks }: { initialBenchmarks?: Benchmark[] }) {
+    const [benchmarks, setBenchmarks] = useState<Benchmark[]>(initialBenchmarks ?? [])
+    const [selectedBenchmarkId, setSelectedBenchmarkId] = useState(() => initialBenchmarks?.find(item => item.reviewMode === 'automatic_model')?.id || initialBenchmarks?.[0]?.id || '')
     const [tasks, setTasks] = useState<Task[]>([])
     const [selectedTaskId, setSelectedTaskId] = useState('')
     const [filter, setFilter] = useState<(typeof FILTERS)[number]>('active')
     const [metrics, setMetrics] = useState<EvaluationMetrics | null>(null)
-    const [loading, setLoading] = useState(true)
+    const [loading, setLoading] = useState(initialBenchmarks === undefined)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
     const [showCreate, setShowCreate] = useState(false)
@@ -162,7 +162,7 @@ export default function EvaluationBenchmarkClient() {
         finally { setLoading(false) }
     }, [loadBenchmarks])
 
-    useEffect(() => { void refresh() }, [refresh])
+    useEffect(() => { if (initialBenchmarks === undefined) void refresh() }, [initialBenchmarks, refresh])
     useEffect(() => { void Promise.all([loadTasks(selectedBenchmarkId), loadMetrics(selectedBenchmark)]).catch(cause => setError(message(cause))) }, [loadMetrics, loadTasks, selectedBenchmark, selectedBenchmarkId])
     useEffect(() => { if (!visibleTasks.some(item => item.id === selectedTaskId)) setSelectedTaskId(visibleTasks[0]?.id || '') }, [selectedTaskId, visibleTasks])
 
