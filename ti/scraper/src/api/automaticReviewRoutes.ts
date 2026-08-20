@@ -1512,6 +1512,10 @@ function buildReviewIndex(store: any): ReviewIndex {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 async function buildReviewIndexAsync(store: any, tenantId?: string, allTenants = false, query?: { taskLimit?: number; modelVersion?: string }): Promise<ReviewIndex> {
   if (typeof store.queryAutomaticReviewRecords === "function") {
     const collections = await store.queryAutomaticReviewRecords({ tenantId, allTenants, ...query });
