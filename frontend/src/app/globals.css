@@ -336,8 +336,7 @@ button:not(:disabled),
 @media (min-width: 1024px) {
   .dashboard-sidebar-sticky {
     top: 0.5rem;
-    height: 100%;
-    max-height: calc(100% - 0.5rem);
+    max-height: calc(100dvh - 5.5rem);
   }
 }
 
