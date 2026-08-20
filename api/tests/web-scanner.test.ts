@@ -6,7 +6,7 @@ const stateDir = await mkdtemp(path.join('/tmp', 'hanasand-web-scan-'))
 process.env.WEB_SCAN_STATE_PATH = path.join(stateDir, 'web-scan.json')
 process.env.WEB_SCAN_INTERVAL_MINUTES = 'not-a-number'
 
-const { countSeverities, fallbackExplanation, headerChecks, normalizeIntervalMinutes, normalizeTarget, setWebScanSchedule, withWebScanLock } = await import('../src/utils/vulnerabilities/webScanner.ts')
+const { cookieChecks, countSeverities, fallbackExplanation, headerChecks, normalizeIntervalMinutes, normalizeTarget, redirectChecks, setWebScanSchedule, withWebScanLock } = await import('../src/utils/vulnerabilities/webScanner.ts')
 
 afterAll(async() => {
     await rm(stateDir, { recursive: true, force: true })
@@ -33,7 +33,8 @@ describe('Hanasand safe web scanner', () => {
         expect(normalizeIntervalMinutes(2000)).toBe(1440)
         const report = await setWebScanSchedule({ enabled: true, intervalMinutes: 1 })
         expect(report.schedule.intervalMinutes).toBe(5)
-        expect(report.schedule.target).toBe('https://hanasand.com')
+        expect(report.schedule.target).toBeNull()
+        expect(report.error).toContain('target configuration is unavailable')
         expect(report.schedule.scope).toBe('global')
     })
 
@@ -42,6 +43,12 @@ describe('Hanasand safe web scanner', () => {
         expect(normalizeTarget('http://example.com')).toBeNull()
         expect(normalizeTarget('https://user:password@example.com')).toBeNull()
         expect(normalizeTarget('https://example.com?token=secret')).toBeNull()
+    })
+
+    test('flags insecure redirects and cookie attributes', () => {
+        expect(redirectChecks(302, 'http://example.com/login', new URL('https://example.com')).at(0)?.status).toBe('fail')
+        expect(cookieChecks('session=abc; Path=/').at(0)?.status).toBe('fail')
+        expect(cookieChecks('session=abc; Secure; HttpOnly; SameSite=Lax').at(0)?.status).toBe('pass')
     })
 
     test('aggregates actionable severities', () => {
