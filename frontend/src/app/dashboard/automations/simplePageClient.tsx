@@ -155,7 +155,9 @@ function WelcomeState({ onCreate, compact = false }: { onCreate: () => void, com
                 </clipPath>
             </defs>
             <path fill='var(--automation-cloud)' fillOpacity='0.76' d='M80 600C48 574 43 523 61 477C79 431 121 409 171 414C182 358 220 310 276 293C315 281 350 288 378 305C392 248 439 201 501 190C558 180 608 198 642 232C683 200 741 183 796 199C858 217 893 260 901 309C945 318 972 353 968 397C1002 421 1005 467 983 504C1002 546 977 596 931 616C861 647 778 629 724 638C670 648 625 638 573 648C515 661 455 645 414 635C350 650 292 641 255 628C201 639 131 632 80 600Z' />
-            <path fill='var(--automation-cloud-detail)' fillOpacity='0.44' clipPath='url(#automation-cloud-shape)' d='M25 480C82 445 143 443 191 461C242 481 284 472 325 451C366 430 408 438 443 464C470 485 486 508 500 529C484 551 463 571 437 582C392 601 362 589 322 601C278 614 237 596 196 603C144 612 94 600 55 578C28 563 14 526 25 480Z' />
+            <path fill='var(--automation-cloud-detail)' fillOpacity='0.34' clipPath='url(#automation-cloud-shape)' d='M25 480C82 445 143 443 191 461C242 481 284 472 325 451C366 430 408 438 443 464C470 485 486 508 500 529C484 551 463 571 437 582C392 601 362 589 322 601C278 614 237 596 196 603C144 612 94 600 55 578C28 563 14 526 25 480Z' />
+            <path fill='var(--automation-cloud-detail)' fillOpacity='0.25' clipPath='url(#automation-cloud-shape)' d='M613 300C650 276 694 274 731 292C764 308 788 337 792 370C765 382 736 382 710 370C678 355 647 355 620 365C604 343 601 321 613 300Z' />
+            <path fill='var(--automation-cloud-detail)' fillOpacity='0.22' clipPath='url(#automation-cloud-shape)' d='M350 568C388 548 424 548 458 564C488 578 519 579 547 565C572 553 601 557 623 575C602 602 572 616 536 616C502 616 474 605 443 614C408 625 375 612 350 592C340 584 340 576 350 568Z' />
         </svg>
         <div className='relative z-10 mx-auto flex max-w-2xl flex-col items-center justify-center'>
             <div className='relative mb-3 h-72 w-[min(32rem,92%)]'>
