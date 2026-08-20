@@ -519,7 +519,7 @@ function ActorDescription({ description, references }: { description: string; re
     return <div onClick={handleCitationClick} className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
         <MarkdownRender MDstr={displayRequirementText(renderedDescription)} />
         <section className='mt-4 border-t border-ui-border pt-3 dark:border-ui-border'>
-            <h2 className='text-xs font-semibold uppercase tracking-wide text-ui-muted dark:text-ui-muted'>References</h2>
+            <h2 className='text-xs font-semibold uppercase tracking-wide text-ui-muted dark:text-ui-muted'>References ({actorReferences.length})</h2>
             <div className='mt-2 overflow-x-auto rounded-md border border-ui-border dark:border-ui-border'>
                 <table className='min-w-full text-left text-xs leading-5 text-ui-muted dark:text-ui-muted'>
                     <thead className='border-b border-ui-border bg-ui-panel/60 text-[10px] uppercase tracking-wide text-ui-muted dark:border-ui-border dark:bg-ui-panel/60 dark:text-ui-muted'>
