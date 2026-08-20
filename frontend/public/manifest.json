@@ -3,15 +3,15 @@
   "name": "Hanasand",
   "icons": [
     {
-      "src": "/favicon-light.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/hanasand-logo.png",
+      "sizes": "1254x1254",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/favicon.ico",
+      "sizes": "16x16 32x32 48x48",
+      "type": "image/x-icon",
       "purpose": "any"
     },
     {
