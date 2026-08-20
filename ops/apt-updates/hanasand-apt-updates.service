@@ -11,7 +11,9 @@ User=root
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=read-only
-ReadWritePaths=/var/lib/hanasand/apt-updates /var/log
+# APT/dpkg must replace files in the system package roots while the rest of the
+# service remains sandboxed.
+ReadWritePaths=/var/lib/hanasand/apt-updates /var/log /etc /usr /lib /boot
 LockPersonality=true
 MemoryDenyWriteExecute=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
