@@ -147,20 +147,23 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
 
 function WelcomeState({ onCreate, compact = false }: { onCreate: () => void, compact?: boolean }) {
     if (compact) return <div className='grid min-h-72 place-items-center text-center'><div><Clock3 className='mx-auto h-8 w-8 text-ui-primary' /><h2 className='mt-3 text-lg font-semibold text-ui-text'>Nothing selected</h2><p className='mt-1 text-sm text-ui-muted'>Choose an automation to see its latest checks.</p></div></div>
-    return <section className='relative isolate grid min-h-[38rem] overflow-hidden px-4 py-10 text-center sm:px-8'>
+    return <section className='relative isolate grid min-h-[40rem] overflow-hidden px-4 py-10 text-center sm:px-8'>
         <svg viewBox='0 0 280 180' aria-hidden='true' className='absolute inset-0 z-0 h-full w-full'>
-            <rect x='26' y='68' width='228' height='86' rx='43' fill='#fff' />
-            <circle cx='66' cy='83' r='42' fill='#fff' />
-            <circle cx='111' cy='60' r='59' fill='#fff' />
-            <circle cx='169' cy='64' r='56' fill='#fff' />
-            <circle cx='216' cy='84' r='40' fill='#fff' />
+            <defs>
+                <linearGradient id='automation-cloud' x1='0' y1='0' x2='0' y2='1'>
+                    <stop offset='0%' stopColor='var(--automation-cloud-top)' />
+                    <stop offset='100%' stopColor='var(--automation-cloud-bottom)' />
+                </linearGradient>
+            </defs>
+            <path d='M26 78c0-24 18-43 42-43 8-22 25-35 47-35 17 0 32 7 43 20 11-10 25-16 41-16 23 0 43 14 51 35 24 1 42 20 42 44 0 25-20 45-45 45H71c-25 0-45-20-45-45Z' fill='var(--automation-cloud-depth)' opacity='.65' transform='translate(0 5)' />
+            <path d='M26 78c0-24 18-43 42-43 8-22 25-35 47-35 17 0 32 7 43 20 11-10 25-16 41-16 23 0 43 14 51 35 24 1 42 20 42 44 0 25-20 45-45 45H71c-25 0-45-20-45-45Z' fill='url(#automation-cloud)' />
         </svg>
         <div className='relative z-10 mx-auto flex max-w-2xl flex-col items-center justify-center'>
-            <div className='relative mb-4 h-56 w-[min(26rem,80%)]'>
+            <div className='relative mb-3 h-64 w-[min(30rem,88%)]'>
                 <img src='/images/empty-states/automations-barn.png' alt='A maintained red barn with its doors open and the inside empty' className='relative z-10 h-full w-full object-contain' />
             </div>
-            <h2 className='text-3xl font-semibold text-ui-canvas'>Create automation</h2>
-            <p className='mx-auto mt-3 max-w-lg text-base leading-7 text-slate-600'>Check that everything is working as it should, and get alerted if something is wrong.</p>
+            <h2 className='text-3xl font-semibold text-(--automation-cloud-ink)'>Create automation</h2>
+            <p className='mx-auto mt-3 max-w-lg text-base leading-7 text-(--automation-cloud-ink)/70'>Check that everything is working as it should, and get alerted if something is wrong.</p>
             <button type='button' onClick={onCreate} className='mt-7 inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-5 text-sm font-semibold text-ui-canvas shadow-lg shadow-ui-primary/20 hover:opacity-90'><Plus className='h-4 w-4' />Create your first automation</button>
         </div>
     </section>
