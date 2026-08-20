@@ -575,7 +575,7 @@ function ContainerRow({
             <td className='px-3 py-3'><HealthPill health={health} /></td>
             <td className='px-3 py-3'><MetricText metric={cpu} /></td>
             <td className='px-3 py-3'><MetricText metric={memory} /></td>
-            <td className='px-3 py-3'>{portLabel(container.ports)}</td>
+            <td className='px-3 py-3'><PortList ports={container.ports} /></td>
             <td className='py-3 pl-3'>
                 <div className='flex justify-end gap-1'>
                     <IconButton label={`Inspect ${containerDisplayName(container.name)}`} onClick={onSelect}><ExternalLink className='h-4 w-4' /></IconButton>
@@ -640,7 +640,7 @@ function ContainerDetails({
 
             <div className='mt-3 rounded-md border border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>
                 <p className='font-semibold text-ui-text'>Ports</p>
-                <p className='mt-1'>{portLabel(container.ports)}</p>
+                <PortList ports={container.ports} className='mt-1' />
             </div>
 
             <div className='mt-3 flex flex-wrap gap-2'>
@@ -728,6 +728,11 @@ function MetricText({ metric }: { metric: MetricState }) {
             {metric.value}
         </span>
     )
+}
+
+function PortList({ ports, className = '' }: { ports?: DockerContainerPort[], className?: string }) {
+    const value = portLabel(ports)
+    return <div className={`max-w-64 overflow-x-auto whitespace-nowrap [scrollbar-width:thin] ${className}`} title={value}>{value}</div>
 }
 
 function Fact({ label, value, reason }: { label: string, value: string, reason?: string }) {
