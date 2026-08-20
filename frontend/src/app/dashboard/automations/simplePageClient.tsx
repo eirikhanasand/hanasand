@@ -18,7 +18,7 @@ import ErrorNotice from '@/components/error/errorNotice'
 const inputClass = 'h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
 const defaultDraft = (): AutomationPayload => ({
     name: 'Website health check',
-    prompt: 'Check that the website and API endpoint are working as expected. Alert me when the check fails or needs attention.',
+    prompt: 'Monitor the website and API endpoint for availability and response errors.',
     scheduleKind: 'interval',
     intervalMinutes: 15,
     runAt: '',
@@ -130,8 +130,8 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
         <div className='grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.72fr)]'>
             <section className='rounded-xl border border-ui-border bg-ui-panel shadow-sm'>
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
-                    <div><p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Monitoring</p><h2 className='mt-1 text-lg font-semibold text-ui-text'>Your automations</h2><p className='mt-1 text-sm text-ui-muted'>{automations.length} check{automations.length === 1 ? '' : 's'} configured</p></div>
-                    <button type='button' onClick={beginCreate} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90'><Plus className='h-4 w-4' />Create automation</button>
+                    <div><h2 className='text-lg font-semibold text-ui-text'>Your automations</h2><p className='mt-1 text-sm text-ui-muted'>{automations.length} check{automations.length === 1 ? '' : 's'} configured</p></div>
+                    {!editing ? <button type='button' onClick={beginCreate} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90'><Plus className='h-4 w-4' />Create automation</button> : null}
                 </div>
                 <div className='divide-y divide-ui-border'>
                     {automations.map(automation => <AutomationRow key={automation.id} automation={automation} selected={selected?.id === automation.id} onClick={() => void select(automation)} />)}
@@ -174,19 +174,19 @@ function AutomationRow({ automation, selected, onClick }: { automation: AgentAut
     const failed = Boolean(automation.consecutiveFailures || automation.lastStatus === 'failed')
     return <button type='button' onClick={onClick} className={`grid w-full gap-3 p-4 text-left transition hover:bg-ui-raised ${selected ? 'bg-ui-primary/5' : ''}`}>
         <div className='flex flex-wrap items-center justify-between gap-3'><span className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text'><span className={`h-2.5 w-2.5 rounded-full ${failed ? 'bg-ui-danger' : automation.status === 'active' ? 'bg-ui-success' : 'bg-ui-muted'}`} />{automation.name}</span><span className={`rounded-full px-2 py-1 text-xs font-semibold ${failed ? 'bg-ui-danger/10 text-ui-danger' : automation.status === 'active' ? 'bg-ui-success/10 text-ui-success' : 'bg-ui-raised text-ui-muted'}`}>{failed ? 'Needs attention' : automation.status === 'active' ? 'Healthy' : 'Paused'}</span></div>
-        <div className='grid gap-2 text-xs text-ui-muted sm:grid-cols-3'><span>{automation.actionType === 'agent_prompt' ? 'Monitoring check' : labelForType(automation.actionType)}</span><span>Every {automation.intervalMinutes || 1} minutes</span><span className='sm:text-right'>Last: {automation.lastStatus || 'Not checked'}</span></div>
+        <div className='grid gap-2 text-xs text-ui-muted sm:grid-cols-3'><span>{automation.actionType === 'agent_prompt' ? 'Monitoring' : labelForType(automation.actionType)}</span><span>Every {automation.intervalMinutes || 1} minutes</span><span className='sm:text-right'>Last: {automation.lastStatus || 'Not checked'}</span></div>
     </button>
 }
 
 function AutomationForm({ draft, selected, busy, message, onChange, onSave, onCancel }: { draft: AutomationPayload, selected: AgentAutomation | null, busy: string, message: string, onChange: (draft: AutomationPayload) => void, onSave: () => void, onCancel: () => void }) {
-    return <div className='grid gap-4'><div><p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>{selected ? 'Edit automation' : 'New automation'}</p><h2 className='mt-1 text-xl font-semibold text-ui-text'>{selected?.name || 'Create an automation'}</h2><p className='mt-1 text-sm text-ui-muted'>Choose what to check and where to send an alert.</p></div>
+    return <div className='grid gap-4'><div><h2 className='text-xl font-semibold text-ui-text'>{selected?.name || 'Create an automation'}</h2><p className='mt-1 text-sm text-ui-muted'>Define a monitoring job and where to send its alerts.</p></div>
         <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Name</span><input className={inputClass} value={draft.name} onChange={event => onChange({ ...draft, name: event.target.value })} placeholder='Website health' /></label>
-        <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Automation type</span><select className={inputClass} value={draft.actionType} onChange={event => onChange({ ...draft, actionType: event.target.value as AutomationPayload['actionType'] })}><option value='agent_prompt'>Monitoring check</option><option value='mail_health_check'>Mail health</option><option value='system_alert'>System alert</option></select></label>
-        <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>What should it check?</span><textarea className='min-h-28 w-full rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm leading-6 text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20' value={draft.prompt} onChange={event => onChange({ ...draft, prompt: event.target.value })} placeholder='Check https://example.com and alert me if it is unavailable.' /></label>
+        <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Automation type</span><select className={inputClass} value={draft.actionType} onChange={event => onChange({ ...draft, actionType: event.target.value as AutomationPayload['actionType'] })}><option value='agent_prompt'>Monitoring</option><option value='mail_health_check'>Mail health</option><option value='system_alert'>System alert</option></select></label>
+        <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Description</span><textarea className='min-h-28 w-full rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm leading-6 text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20' value={draft.prompt} onChange={event => onChange({ ...draft, prompt: event.target.value })} placeholder='Monitor https://example.com for availability and response errors.' /></label>
         <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Notification destination</span><input className={inputClass} value={draft.modelName || ''} onChange={event => onChange({ ...draft, modelName: event.target.value.trim() || null })} placeholder='Webhook or notification destination' /></label>
         <div className='grid gap-3 sm:grid-cols-2'><label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Check every</span><div className='flex items-center gap-2'><input className={inputClass} type='number' min={1} value={draft.intervalMinutes || ''} onChange={event => onChange({ ...draft, intervalMinutes: Number(event.target.value) || null })} /><span className='text-sm text-ui-muted'>minutes</span></div></label><label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Notify me</span><select className={inputClass} value={draft.notifyOn || 'failure'} onChange={event => onChange({ ...draft, notifyOn: event.target.value as AutomationPayload['notifyOn'] })}><option value='failure'>When something fails</option><option value='always'>After every check</option><option value='never'>Never</option></select></label></div>
         <label className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-2.5'><span><span className='block text-sm font-semibold text-ui-text'>Automation active</span><span className='text-xs text-ui-muted'>Start checking as soon as it is saved.</span></span><input type='checkbox' checked={draft.status === 'active'} onChange={event => onChange({ ...draft, status: event.target.checked ? 'active' : 'paused' })} className='h-4 w-4 accent-(--ui-primary)' /></label>
-        <div className='flex flex-wrap items-center gap-2 border-t border-ui-border pt-4'><button type='button' onClick={onSave} disabled={busy === 'save'} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:opacity-50'>{selected ? <Check className='h-4 w-4' /> : <Plus className='h-4 w-4' />}{selected ? 'Save changes' : 'Create automation'}</button><button type='button' onClick={onCancel} className='h-10 rounded-lg border border-ui-border px-4 text-sm font-semibold text-ui-muted hover:text-ui-text'>Cancel</button>{message ? <span className='text-sm text-ui-muted'>{message}</span> : null}</div>
+        <div className='flex items-center justify-between gap-3 border-t border-ui-border pt-4'><button type='button' onClick={onCancel} className='h-10 rounded-lg border border-ui-border px-4 text-sm font-semibold text-ui-muted hover:text-ui-text'>Cancel</button><div className='flex min-w-0 items-center justify-end gap-3'>{message ? <span className='truncate text-sm text-ui-muted'>{message}</span> : null}<button type='button' onClick={onSave} disabled={busy === 'save'} className='inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:opacity-50'>{selected ? <Check className='h-4 w-4' /> : <Plus className='h-4 w-4' />}{selected ? 'Save changes' : 'Create automation'}</button></div></div>
     </div>
 }
 
@@ -208,7 +208,7 @@ function labelForType(type: AgentAutomation['actionType']) {
     if (type === 'system_alert') return 'System alert'
     if (type === 'organization_report') return 'Organization report'
     if (type === 'echo') return 'Delivery test'
-    return 'Monitoring check'
+    return 'Monitoring'
 }
 
 function formatDate(value?: string | null) {
