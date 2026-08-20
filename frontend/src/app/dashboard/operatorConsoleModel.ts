@@ -661,7 +661,7 @@ function unavailableHelpdesk(source: string, checkedAt: string): HelpdeskAuditRe
         status: 'unavailable',
         checkedAt,
         source,
-        href: '/dashboard/system/impersonation',
+        href: '/dashboard/helpdesk',
         detail: 'Helpdesk and structured audit state is updating for recovery and audit status.',
         blockers: ['Helpdesk and audit needs a live readiness snapshot.'],
         ownerLane: 'helpdesk',
@@ -1994,7 +1994,7 @@ function buildProductReadiness(input: {
                 ? helpdeskAudit.detail || helpdeskAuditDetail(helpdeskAudit)
                 : 'Support and audit state is loading to the dashboard.',
             source: helpdeskAudit?.source || 'dashboard support',
-            href: '/dashboard/system/impersonation',
+            href: '/dashboard/helpdesk',
             checkedAt: helpdeskAudit?.checkedAt || helpdeskAudit?.latestAuditEventAt,
             staleAfterSeconds: helpdeskAudit?.staleAfterSeconds,
             proofTimestamp: helpdeskAudit?.proofTimestamp,
@@ -3044,14 +3044,14 @@ export function buildReadinessCases(input: {
                 ? ['Owner: support ops. Review recovery requests that need approval.', 'Open the admin audit export before closing customer access issues.', 'Keep support actions auditable before customer rollout.']
                 : ['Owner: support ops. Open the helpdesk workbench.', 'Verify recovery queue state from the backed support route.', 'Confirm admin audit export before marking support access ready.'],
             relatedLinks: [
-                { href: '/dashboard/system/impersonation', label: 'Helpdesk workbench' },
+                { href: '/dashboard/helpdesk', label: 'Helpdesk workbench' },
                 { href: '/api/backend/admin/support/access-recovery', label: 'Recovery queue' },
                 { href: '/api/backend/admin/audit-events?limit=50', label: 'Admin audit' },
             ],
             workflowPath: path,
             missingDependency: helpdeskReady ? undefined : visibleChecks(helpdeskBlockers) || helpdeskAudit?.unavailableReason || 'Support recovery and admin audit data are syncing.',
             actions: [
-                { id: 'open_helpdesk_workbench', label: 'Open helpdesk', method: 'GET', href: '/dashboard/system/impersonation' },
+                { id: 'open_helpdesk_workbench', label: 'Open helpdesk', method: 'GET', href: '/dashboard/helpdesk' },
                 { id: 'inspect_support_recovery', label: 'Inspect recovery', method: 'GET', href: '/api/backend/admin/support/access-recovery' },
                 { id: 'inspect_admin_audit', label: 'Inspect audit', method: 'GET', href: '/api/backend/admin/audit-events?limit=50' },
             ],

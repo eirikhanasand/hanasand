@@ -1740,7 +1740,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             label: 'Open helpdesk',
             detail: selected.missingDependency || 'Review recovery requests and admin audit export from the support workbench.',
             tone: selected.missingDependency ? 'needs_action' : 'ready',
-            href: '/dashboard/system/impersonation',
+            href: '/dashboard/helpdesk',
         })
         rows.push({
             id: 'support_recovery_api',

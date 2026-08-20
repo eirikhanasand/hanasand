@@ -42,7 +42,7 @@ export default async function Page() {
             </section>
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='grid divide-y divide-ui-border md:grid-cols-3 md:divide-x md:divide-y-0'>
-                    <AdminAction href='/dashboard/system/impersonation' label='Support access' value='audit trail' />
+                    <AdminAction href='/dashboard/helpdesk' label='Support access' value='audit trail' />
                     <AdminAction href='/dashboard/system/rate-limits' label='API tokens' value='scoped keys' />
                     <AdminAction href='/dashboard/content' label='Content management' value='articles and thoughts' />
                 </div>

@@ -10,7 +10,7 @@ export default function ImpersonationError({ reset }: { error: Error & { digest?
             <DashboardHeader
                 eyebrow='Support'
                 title='Helpdesk operations'
-                description='The support workspace could not be loaded.'
+                description='The Helpdesk could not be loaded.'
             />
             <section className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-5'>
                 <div className='flex flex-col gap-4 md:flex-row md:items-start md:justify-between'>
@@ -19,7 +19,7 @@ export default function ImpersonationError({ reset }: { error: Error & { digest?
                             <AlertTriangle className='h-5 w-5' />
                         </span>
                         <div>
-                            <h2 className='text-base font-semibold text-ui-text'>Support workspace unavailable</h2>
+                            <h2 className='text-base font-semibold text-ui-text'>Helpdesk unavailable</h2>
                             <p className='mt-2 max-w-2xl text-sm leading-6 text-ui-muted'>
                                 Retry the workspace, or continue to another part of Hanasand while support services recover.
                             </p>

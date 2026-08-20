@@ -929,7 +929,7 @@ function helpdeskAuditReadiness(input: {
         status: blockers.length ? 'needs_action' : 'ready',
         checkedAt: input.generatedAt,
         source: `${input.recoveryRoute} + ${input.auditRoute}`,
-        href: '/dashboard/system/impersonation',
+        href: '/dashboard/helpdesk',
         auditedActions,
         openRecoveryRequests,
         supportQueueDepth,

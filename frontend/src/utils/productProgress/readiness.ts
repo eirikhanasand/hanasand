@@ -195,7 +195,7 @@ function actionNeededHelpdesk(source: string, checkedAt: string): HelpdeskAuditR
         status: 'needs_action',
         checkedAt,
         source,
-        href: '/dashboard/system/impersonation',
+        href: '/dashboard/helpdesk',
         detail: 'Support action and audit history need to be connected to this console summary.',
         blockers: ['Connect support action history and recovery queue audit data before treating this as enterprise-ready.'],
         ownerLane: 'helpdesk',

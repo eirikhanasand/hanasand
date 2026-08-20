@@ -450,7 +450,7 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
             id: 'support_admin_audit',
             label: 'Support and admin audit',
             snapshot: external.helpdeskAudit,
-            fallbackHref: '/dashboard/system/impersonation',
+            fallbackHref: '/dashboard/helpdesk',
             fallbackOwner: 'helpdesk',
             fallbackExpectedDashboardRowId: 'helpdesk_audit',
             fallbackContract: 'support.audit.readiness.v1',
