@@ -82,11 +82,11 @@ type LocalControl = {
 
 const defaultQuery = ''
 
-export default function TiScraperControlClient() {
+export default function TiScraperControlClient({ initialWatchlistState }: { initialWatchlistState: 'empty' | 'populated' | 'unknown' }) {
     const [query, setQuery] = useState(defaultQuery)
     const [snapshot, setSnapshot] = useState<ControlSnapshot | null>(null)
     const [selectedWorkId, setSelectedWorkId] = useState('')
-    const [loading, setLoading] = useState(true)
+    const [loading, setLoading] = useState(initialWatchlistState !== 'empty')
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [actionResult, setActionResult] = useState<ActionResult | null>(null)
     const [error, setError] = useState('')
@@ -110,7 +110,7 @@ export default function TiScraperControlClient() {
     }
 
     useEffect(() => {
-        void load(defaultQuery)
+        void load(defaultQuery, initialWatchlistState === 'empty')
         const interval = window.setInterval(() => void load(query, true), 15000)
         return () => window.clearInterval(interval)
     }, [])
@@ -188,7 +188,7 @@ export default function TiScraperControlClient() {
         sourceCount={sourceCount}
         endpointRows={endpointRows}
         workItems={workItems.filter(item => ['run', 'frontier_task', 'platform'].includes(item.kind) && ['queued', 'degraded', 'failed', 'connecting'].includes(item.status))}
-        firstUse={!loading && serviceReady && sourceGrowth.watchlists === 0}
+        firstUse={initialWatchlistState === 'empty' || (!loading && serviceReady && sourceGrowth.watchlists === 0)}
         busyAction={busyAction}
         load={() => void load(query)}
         runDue={() => void runAction('scheduler_run_now')}

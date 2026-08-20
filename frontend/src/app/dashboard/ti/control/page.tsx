@@ -1,11 +1,16 @@
 import Link from 'next/link'
+import { cookies } from 'next/headers'
+import { NextRequest } from 'next/server'
 import { Activity, ArrowLeft, DatabaseZap, ExternalLink } from 'lucide-react'
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
+import { proxyTiRequest } from '@/app/api/dwm/_tiProxy'
 import TiScraperControlClient from './scraperControlClient'
 
 export const dynamic = 'force-dynamic'
 
-export default function TiScraperControlPage() {
+export default async function TiScraperControlPage() {
+    const initialWatchlistState = await getInitialWatchlistState()
+
     return (
         <DashboardPage>
             <DashboardHeader
@@ -30,7 +35,24 @@ export default function TiScraperControlPage() {
                     </div>
                 )}
             />
-            <TiScraperControlClient />
+            <TiScraperControlClient initialWatchlistState={initialWatchlistState} />
         </DashboardPage>
     )
+}
+
+async function getInitialWatchlistState(): Promise<'empty' | 'populated' | 'unknown'> {
+    const cookieStore = await cookies()
+    const request = new NextRequest('http://localhost/api/dwm/watchlists', {
+        headers: { cookie: cookieStore.toString() },
+    })
+    const response = await proxyTiRequest(request, '/v1/dwm/watchlists', { method: 'GET' })
+    if (!response.ok) return 'unknown'
+
+    try {
+        const payload = await response.json() as { watchlists?: unknown[] }
+        if (!Array.isArray(payload.watchlists)) return 'unknown'
+        return payload.watchlists.length ? 'populated' : 'empty'
+    } catch {
+        return 'unknown'
+    }
 }
