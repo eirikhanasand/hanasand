@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import ErrorNotice from '../error/errorNotice'
 import UserRoleHandler from '../roles/userRoleHandler'
+import Tooltip from '../tooltip/tooltip'
 
 export default function DashboardUser({ user, roles }: { user: UserWithRole, roles: Role[] }) {
     const { condition: deleted, setCondition: setDeleted } = useClearStateAfter()
@@ -22,13 +23,13 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
     const [impersonationReason, setImpersonationReason] = useState('')
     const [impersonationReasonError, setImpersonationReasonError] = useState('')
 
-    async function handleRoles(e: React.MouseEvent<HTMLDivElement, MouseEvent>) {
+    async function handleRoles(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
         e.stopPropagation()
         e.preventDefault()
         setDisplayRoles(!displayRoles)
     }
 
-    async function handleActive(e: React.MouseEvent<HTMLDivElement, MouseEvent>) {
+    async function handleActive(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
         e.stopPropagation()
         e.preventDefault()
         const result = await setUserActive(user.id, user.active === false)
@@ -95,21 +96,26 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
 
     return (
         <div className='group relative h-10 min-h-10 max-h-10'>
-            <div onClick={handleClick} className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-3 rounded-lg p-2 ${keys['shift'] ? 'hover:bg-ui-danger/10 hover:outline hover:outline-ui-danger/30' : 'hover:bg-ui-raised'} cursor-pointer hover:scale-[1.005]`}>
+            <div onClick={handleClick} className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px] items-center gap-3 rounded-lg p-2 ${keys['shift'] ? 'hover:bg-ui-danger/10 hover:outline hover:outline-ui-danger/30' : 'hover:bg-ui-raised'} cursor-pointer hover:scale-[1.005]`}>
                 <h1 className={`min-w-0 truncate ${user.active === false ? 'text-ui-muted line-through' : ''}`} key={user.id}>{user.name}</h1>
                 <span className={`min-w-0 truncate text-sm text-ui-muted ${user.active === false ? 'line-through' : ''}`}>{user.id}</span>
                 {keys['shift'] && <Trash2 className='hidden h-5 w-5 stroke-ui-danger group-hover:block' />}
                 {!keys['shift'] && <div className='group flex items-center gap-2'>
-                    <div
-                        aria-label={`${user.active === false ? 'Activate' : 'Deactivate'} ${user.id}`}
-                        onClick={handleActive}
-                        role='button'
-                        className={`hidden h-7 w-7 cursor-pointer place-items-center rounded-lg group-hover:grid ${user.active === false ? 'hover:bg-ui-success/10' : 'hover:bg-ui-danger/10'}`}
-                    >
-                        {user.active === false
-                            ? <CheckCircle2 className='h-4 w-4 self-center stroke-ui-success' />
-                            : <Ban className='h-4 w-4 self-center stroke-ui-danger' />
-                        }
+                    <div className='hidden h-7 w-7 place-items-center group-hover:grid'>
+                        <Tooltip content={`${user.active === false ? 'Activate' : 'Deactivate'} ${user.id}`}>
+                            <button
+                                type='button'
+                                aria-label={`${user.active === false ? 'Activate' : 'Deactivate'} ${user.id}`}
+                                title={`${user.active === false ? 'Activate' : 'Deactivate'} ${user.id}`}
+                                onClick={handleActive}
+                                className={`grid h-7 w-7 place-items-center rounded-lg ${user.active === false ? 'hover:bg-ui-success/10' : 'hover:bg-ui-danger/10'}`}
+                            >
+                                {user.active === false
+                                    ? <CheckCircle2 className='h-4 w-4 stroke-ui-success' />
+                                    : <Ban className='h-4 w-4 stroke-ui-danger' />
+                                }
+                            </button>
+                        </Tooltip>
                     </div>
                     {user.highest_role_priority === 0 && <Crown className='h-5 w-5 stroke-ui-warning' />}
                     <button
@@ -122,17 +128,21 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                     >
                         {impersonationPending ? 'Checking' : 'Impersonate'}
                     </button>
-                    <div
-                        aria-label={`Manage roles for ${user.id}`}
-                        title={displayRoles ? 'Cancel role editing' : 'Edit roles'}
-                        onClick={handleRoles}
-                        role='button'
-                        className='hidden h-7 w-7 cursor-pointer place-items-center rounded-lg transition hover:bg-ui-raised group-hover:grid'
-                    >
-                        {displayRoles
-                            ? <X className='w-4 h-4 self-center stroke-ui-muted' />
-                            : <Pencil className='w-4 h-4 self-center stroke-ui-muted' />
-                        }
+                    <div className='hidden h-7 w-7 place-items-center group-hover:grid'>
+                        <Tooltip content={displayRoles ? 'Cancel role editing' : 'Edit roles'}>
+                            <button
+                                type='button'
+                                aria-label={displayRoles ? `Cancel role editing for ${user.id}` : `Edit roles for ${user.id}`}
+                                title={displayRoles ? 'Cancel role editing' : 'Edit roles'}
+                                onClick={handleRoles}
+                                className='grid h-7 w-7 place-items-center rounded-lg transition hover:bg-ui-raised'
+                            >
+                                {displayRoles
+                                    ? <X className='h-4 w-4 stroke-ui-muted' />
+                                    : <Pencil className='h-4 w-4 stroke-ui-muted' />
+                                }
+                            </button>
+                        </Tooltip>
                     </div>
                 </div>}
             </div>
