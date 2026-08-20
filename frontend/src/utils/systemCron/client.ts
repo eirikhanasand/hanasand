@@ -77,7 +77,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function fetchManagedCronJobs() {
-    return request<{ jobs: ManagedCronJob[] }>('/system/cron')
+    return request<{ jobs: ManagedCronJob[], ready?: boolean }>('/system/cron')
 }
 
 export function updateManagedCronJob(id: string, payload: { schedule?: string, enabled?: boolean, action?: 'run_now' }) {

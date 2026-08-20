@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Activity, AlertTriangle, CalendarClock, ChevronDown, Clock3, Cpu, FileText, Maximize2, Minimize2, PauseCircle, PlayCircle, RefreshCcw, Save, ServerCog, TerminalSquare, Zap } from 'lucide-react'
 import { DashboardPanel } from '@/components/dashboard/ui'
 import { fetchManagedCronJobs, updateManagedCronJob, type ManagedCronJob } from '@/utils/systemCron/client'
@@ -9,26 +9,31 @@ const categories: ManagedCronJob['category'][] = ['TI / Exposure', 'Alerts', 'Ma
 const densityStorageKey = 'dashboard-cron-density'
 
 export default function CronJobsClient() {
-    const [jobs, setJobs] = useState<ManagedCronJob[]>([])
+    const [jobs, setJobs] = useState<ManagedCronJob[] | null>(null)
     const [drafts, setDrafts] = useState<Record<string, string>>({})
     const [busy, setBusy] = useState('')
     const [message, setMessage] = useState('')
     const [compact, setCompact] = useState(false)
+    const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const loadedJobs = jobs || []
 
     const summary = useMemo(() => {
-        const enabled = jobs.filter(job => job.enabled).length
-        const running = jobs.filter(job => job.running || job.status === 'running').length
-        const failed = jobs.filter(job => job.status === 'failed' || job.status === 'blocked' || job.failureCount > 0).length
-        const hourly = sumMoney(jobs.map(job => job.costEstimate.hourlyUsd))
-        const daily = sumMoney(jobs.map(job => job.costEstimate.dailyUsd))
-        return { total: jobs.length, enabled, running, failed, hourly, daily }
-    }, [jobs])
-    const attentionJobs = useMemo(() => jobs.filter(needsAttention), [jobs])
-    const runnableJobs = useMemo(() => jobs.filter(job => job.controls.includes('run_now') && !needsAttention(job)).slice(0, 3), [jobs])
+        const enabled = loadedJobs.filter(job => job.enabled).length
+        const running = loadedJobs.filter(job => job.running || job.status === 'running').length
+        const failed = loadedJobs.filter(job => job.status === 'failed' || job.status === 'blocked' || job.failureCount > 0).length
+        const hourly = sumMoney(loadedJobs.map(job => job.costEstimate.hourlyUsd))
+        const daily = sumMoney(loadedJobs.map(job => job.costEstimate.dailyUsd))
+        return { total: loadedJobs.length, enabled, running, failed, hourly, daily }
+    }, [loadedJobs])
+    const attentionJobs = useMemo(() => loadedJobs.filter(needsAttention), [loadedJobs])
+    const runnableJobs = useMemo(() => loadedJobs.filter(job => job.controls.includes('run_now') && !needsAttention(job)).slice(0, 3), [loadedJobs])
 
     useEffect(() => {
         void load()
         setCompact(localStorage.getItem(densityStorageKey) === 'compact')
+        return () => {
+            if (retryTimer.current) clearTimeout(retryTimer.current)
+        }
     }, [])
 
     function setDensity(nextCompact: boolean) {
@@ -40,6 +45,10 @@ export default function CronJobsClient() {
         setBusy('load')
         try {
             const payload = await fetchManagedCronJobs()
+            if (payload.ready === false || !payload.jobs.length) {
+                retryTimer.current = setTimeout(() => void load(), 250)
+                return
+            }
             setJobs(payload.jobs)
             setDrafts(Object.fromEntries(payload.jobs.map(job => [job.id, job.schedule])))
             setMessage('Background jobs streaming.')
@@ -66,6 +75,8 @@ export default function CronJobsClient() {
             setBusy('')
         }
     }
+
+    if (!jobs) return <LoadingState message={message} onRetry={() => void load()} />
 
     return (
         <div className='grid gap-3'>
@@ -234,6 +245,17 @@ export default function CronJobsClient() {
             })}
         </div>
     )
+}
+
+function LoadingState({ message, onRetry }: { message: string, onRetry: () => void }) {
+    return <div className='grid min-h-80 place-items-center rounded-xl border border-ui-border bg-ui-panel p-8 text-center'>
+        <div role='status' aria-live='polite'>
+            {message ? <AlertTriangle className='mx-auto h-8 w-8 text-ui-danger' /> : <RefreshCcw className='mx-auto h-8 w-8 animate-spin text-ui-primary' />}
+            <p className='mt-3 text-sm font-semibold text-ui-text'>{message ? 'Unable to load scheduled work' : 'Loading scheduled work'}</p>
+            <p className='mt-1 text-sm text-ui-muted'>{message || 'Collecting the latest job inventory.'}</p>
+            {message ? <button type='button' onClick={onRetry} className='mt-4 inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text hover:border-ui-primary'><RefreshCcw className='h-4 w-4' />Try again</button> : null}
+        </div>
+    </div>
 }
 
 function primaryHeadline(summary: { failed: number, running: number, total: number }) {

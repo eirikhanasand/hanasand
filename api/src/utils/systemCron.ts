@@ -99,6 +99,10 @@ const MANAGED_LOG_ROOT = process.env.MANAGED_CRON_LOG_ROOT || ''
 const CRON_WRITE_USER = process.env.MANAGED_CRON_WRITE_USER || 'bun'
 const ELECTRICITY_USD_PER_KWH = Number(process.env.BACKGROUND_JOB_ELECTRICITY_USD_PER_KWH || '0.05')
 const API_CRON_CADENCE_SECONDS = 60
+const UNIFIED_CRON_CACHE_TTL_MS = 5_000
+
+let unifiedCronCache: { jobs: UnifiedScheduledJob[], expiresAt: number } | null = null
+let unifiedCronRefresh: Promise<UnifiedScheduledJob[]> | null = null
 
 export const managedCronDefinitions: ManagedCronDefinition[] = [
     {
@@ -341,6 +345,20 @@ export async function listManagedCronJobs(): Promise<ManagedCronJob[]> {
 }
 
 export async function listUnifiedScheduledJobs(): Promise<UnifiedScheduledJob[]> {
+    const now = Date.now()
+    if (unifiedCronCache && unifiedCronCache.expiresAt > now) return unifiedCronCache.jobs
+    if (unifiedCronRefresh) return unifiedCronCache?.jobs || []
+
+    unifiedCronRefresh = refreshUnifiedScheduledJobs()
+    void unifiedCronRefresh.catch(error => {
+        console.error('Failed to refresh unified cron inventory', error)
+    }).finally(() => {
+        unifiedCronRefresh = null
+    })
+    return unifiedCronCache?.jobs || []
+}
+
+async function refreshUnifiedScheduledJobs(): Promise<UnifiedScheduledJob[]> {
     const [forgejoJobs, tiJobs] = await Promise.all([
         listManagedCronJobs(),
         listTiScheduledJobs(),
@@ -350,7 +368,9 @@ export async function listUnifiedScheduledJobs(): Promise<UnifiedScheduledJob[]>
     const apiJobs = await Promise.all(apiDefinitions.map(job => job.id === VULNERABILITY_SCAN_JOB_ID
         ? vulnerabilityScannerJob(job)
         : apiBackgroundJob(job)))
-    return [...tiJobs, ...apiJobs, ...forgejoJobs.map(managedHostCronJob)]
+    const jobs = [...tiJobs, ...apiJobs, ...forgejoJobs.map(managedHostCronJob)]
+    unifiedCronCache = { jobs, expiresAt: Date.now() + UNIFIED_CRON_CACHE_TTL_MS }
+    return jobs
 }
 
 export async function updateManagedCronJob(id: string, input: ManagedCronUpdate) {
