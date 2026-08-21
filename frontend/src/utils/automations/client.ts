@@ -8,6 +8,8 @@ export type AgentAutomation = {
     name: string
     prompt: string
     targetUrl: string | null
+    timeoutSeconds: number
+    retryCount: number
     certificateStatus: 'valid' | 'expiring' | 'invalid' | 'not_applicable' | null
     certificateSubject: string | null
     certificateIssuer: string | null
@@ -62,6 +64,8 @@ export type AutomationPayload = {
     name: string
     prompt: string
     targetUrl?: string | null
+    timeoutSeconds?: number | null
+    retryCount?: number | null
     scheduleKind: 'once' | 'interval'
     intervalMinutes?: number | null
     runAt?: string | null

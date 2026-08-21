@@ -13,6 +13,8 @@ export type AutomationRow = {
     name: string
     prompt: string
     target_url: string | null
+    timeout_seconds: number
+    retry_count: number
     certificate_status: 'valid' | 'expiring' | 'invalid' | 'not_applicable' | null
     certificate_subject: string | null
     certificate_issuer: string | null
@@ -67,6 +69,10 @@ export type AutomationInput = {
     prompt?: unknown
     targetUrl?: unknown
     target_url?: unknown
+    timeoutSeconds?: unknown
+    timeout_seconds?: unknown
+    retryCount?: unknown
+    retry_count?: unknown
     scheduleKind?: unknown
     schedule_kind?: unknown
     intervalMinutes?: unknown
@@ -89,6 +95,8 @@ type NormalizedAutomationInput = {
     name: string
     prompt: string
     targetUrl: string | null
+    timeoutSeconds: number
+    retryCount: number
     scheduleKind: AutomationScheduleKind
     intervalMinutes: number | null
     runAt: Date | null
@@ -104,8 +112,7 @@ type NormalizedAutomationInput = {
 const ACTIVE_STATUSES = new Set(['active', 'paused', 'archived'])
 const ACTION_TYPES = new Set(['agent_prompt', 'echo', 'mail_health_check', 'system_alert', 'organization_report'])
 const NOTIFY_OPTIONS = new Set(['never', 'failure', 'always'])
-const MAX_AUTOMATION_RUNTIME_MS = 10 * 60_000
-const STALE_RUNNING_AFTER_MS = MAX_AUTOMATION_RUNTIME_MS + 2 * 60_000
+const STALE_RUNNING_AFTER_MS = 2 * 60_000
 
 export function toAutomation(row: AutomationRow) {
     return {
@@ -114,6 +121,8 @@ export function toAutomation(row: AutomationRow) {
         name: row.name,
         prompt: row.prompt,
         targetUrl: row.target_url,
+        timeoutSeconds: row.timeout_seconds,
+        retryCount: row.retry_count,
         certificateStatus: row.certificate_status,
         certificateSubject: row.certificate_subject,
         certificateIssuer: row.certificate_issuer,
@@ -165,6 +174,8 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
     const name = clean(input.name) || existing?.name || ''
     const prompt = clean(input.prompt) || existing?.prompt || ''
     const targetUrl = normalizeTargetUrl(clean(input.targetUrl ?? input.target_url ?? existing?.target_url))
+    const timeoutSeconds = parseBoundedInteger(input.timeoutSeconds ?? input.timeout_seconds ?? existing?.timeout_seconds, 1, 120, 1)
+    const retryCount = parseBoundedInteger(input.retryCount ?? input.retry_count ?? existing?.retry_count, 0, 5, 1)
     const scheduleKind = parseScheduleKind(input.scheduleKind ?? input.schedule_kind ?? existing?.schedule_kind)
     const intervalMinutes = parseIntervalMinutes(input.intervalMinutes ?? input.interval_minutes ?? existing?.interval_minutes, scheduleKind)
     const runAt = parseRunAt(input.runAt ?? input.run_at ?? existing?.run_at, scheduleKind)
@@ -205,7 +216,12 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
         throw new Error('Organization reports need a delivery destination before activation.')
     }
 
-    return { name, prompt, targetUrl, scheduleKind, intervalMinutes, runAt, status, actionType, timezone, modelName, notifyOn, organizationId, nextRunAt }
+    return { name, prompt, targetUrl, timeoutSeconds, retryCount, scheduleKind, intervalMinutes, runAt, status, actionType, timezone, modelName, notifyOn, organizationId, nextRunAt }
+}
+
+function parseBoundedInteger(value: unknown, min: number, max: number, fallback: number) {
+    const parsed = Number(value)
+    return Number.isInteger(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback
 }
 
 export function computeNextRunAt({
@@ -370,9 +386,13 @@ export async function executeAutomation(automation: AutomationRow) {
                    consecutive_failures = consecutive_failures + 1,
                    paused_reason = CASE WHEN consecutive_failures + 1 >= 3 AND schedule_kind = 'interval' THEN 'Paused after 3 consecutive failures.' ELSE paused_reason END,
                    run_count = run_count + 1,
+                   certificate_status = COALESCE($4, certificate_status),
+                   certificate_subject = COALESCE($5, certificate_subject),
+                   certificate_issuer = COALESCE($6, certificate_issuer),
+                   certificate_expires_at = COALESCE($7, certificate_expires_at),
                    updated_at = NOW()
              WHERE id = $1
-        `, [automation.id, nextRunAt, message])
+        `, [automation.id, nextRunAt, message, getCertificateFromError(error)?.status || null, getCertificateFromError(error)?.subject || null, getCertificateFromError(error)?.issuer || null, getCertificateFromError(error)?.expiresAt || null])
     }
 }
 
@@ -441,26 +461,34 @@ async function runAutomationAction(automation: AutomationRow) {
 
 async function runMonitoringCheck(automation: AutomationRow) {
     if (!automation.target_url) throw new Error('Monitoring is missing the URL to check.')
-    try {
-        const target = new URL(automation.target_url)
-        const certificate = target.protocol === 'https:' ? await checkCertificate(target) : { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null }
-        const response = await fetch(target, { signal: AbortSignal.timeout(10_000) })
-        const message = `Monitoring check ${response.ok ? 'passed' : 'failed'}: ${automation.target_url} returned HTTP ${response.status}.`
-        if (!response.ok) throw new Error(message)
-        if (automation.notify_on === 'always' && automation.model_name) await deliverDiscordIfConfigured(automation, message)
-        return { provider: 'hanasand-monitoring', model: 'http', message, certificate }
-    } catch (error) {
-        const message = error instanceof Error ? error.message : 'Monitoring request failed.'
-        if (automation.notify_on !== 'never' && automation.model_name) await deliverDiscordIfConfigured(automation, `Hanasand monitoring alert: ${message}`)
-        throw new Error(message, { cause: error })
+    const target = new URL(automation.target_url)
+    let certificate: Awaited<ReturnType<typeof checkCertificate>> | { status: 'not_applicable', subject: null, issuer: null, expiresAt: null } | null = target.protocol === 'https:' ? null : { status: 'not_applicable', subject: null, issuer: null, expiresAt: null }
+    let lastError: unknown
+    for (let attempt = 0; attempt <= automation.retry_count; attempt += 1) {
+        try {
+            certificate = target.protocol === 'https:' ? await checkCertificate(target, automation.timeout_seconds * 1000) : certificate
+            const response = await fetch(target, { signal: AbortSignal.timeout(automation.timeout_seconds * 1000) })
+            const message = `Monitoring check ${response.ok ? 'passed' : 'failed'}: ${automation.target_url} returned HTTP ${response.status}.`
+            if (!response.ok) throw new Error(message)
+            if (automation.notify_on === 'always' && automation.model_name) await deliverDiscordIfConfigured(automation, message)
+            return { provider: 'hanasand-monitoring', model: 'http', message, certificate: certificate! }
+        } catch (error) {
+            lastError = error instanceof DOMException && error.name === 'TimeoutError'
+                ? new Error(`Monitoring request timed out after ${automation.timeout_seconds} second${automation.timeout_seconds === 1 ? '' : 's'}.`)
+                : error
+        }
     }
+    const message = lastError instanceof Error ? lastError.message : 'Monitoring request failed.'
+    if (automation.notify_on !== 'never' && automation.model_name) await deliverDiscordIfConfigured(automation, `Hanasand monitoring alert: ${message}`)
+    const failure = Object.assign(new Error(`${message} Failed after ${automation.retry_count + 1} attempt${automation.retry_count ? 's' : ''}.`), { certificate })
+    throw failure
 }
 
-function checkCertificate(target: URL) {
+function checkCertificate(target: URL, timeoutMs: number) {
     return new Promise<{ status: 'valid' | 'expiring' | 'invalid', subject: string | null, issuer: string | null, expiresAt: string | null }>((resolve, reject) => {
         const socket = connect({ host: target.hostname, port: Number(target.port) || 443, servername: target.hostname, rejectUnauthorized: false })
         const finish = (value: { status: 'valid' | 'expiring' | 'invalid', subject: string | null, issuer: string | null, expiresAt: string | null }) => { socket.destroy(); resolve(value) }
-        socket.setTimeout(10_000, () => { socket.destroy(); reject(new Error('Certificate check timed out.')) })
+        socket.setTimeout(timeoutMs, () => { socket.destroy(); reject(new Error(`Certificate check timed out after ${timeoutMs / 1000} second${timeoutMs === 1000 ? '' : 's'}.`)) })
         socket.once('error', error => { socket.destroy(); reject(new Error(`Certificate check failed: ${error.message}`, { cause: error })) })
         socket.once('secureConnect', () => {
             const certificate = socket.getPeerCertificate()
@@ -469,6 +497,10 @@ function checkCertificate(target: URL) {
             finish({ status: daysRemaining < 0 ? 'invalid' : daysRemaining <= 30 ? 'expiring' : 'valid', subject: certificate.subject?.CN || null, issuer: certificate.issuer?.O || certificate.issuer?.CN || null, expiresAt })
         })
     })
+}
+
+function getCertificateFromError(error: unknown) {
+    return error && typeof error === 'object' && 'certificate' in error ? error.certificate as { status: string, subject: string | null, issuer: string | null, expiresAt: string | null } : null
 }
 
 async function deliverDiscordIfConfigured(automation: AutomationRow, content: string) {

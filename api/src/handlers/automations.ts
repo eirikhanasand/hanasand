@@ -79,6 +79,8 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
             name,
             prompt,
             target_url,
+            timeout_seconds,
+            retry_count,
             schedule_kind,
             interval_minutes,
             run_at,
@@ -90,7 +92,7 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
             notify_on,
             next_run_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         RETURNING *
     `, [
         id,
@@ -98,6 +100,8 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
         input.name,
         input.prompt,
         input.targetUrl,
+        input.timeoutSeconds,
+        input.retryCount,
         input.scheduleKind,
         input.intervalMinutes,
         input.runAt,
@@ -147,22 +151,24 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
            SET name = $3,
                prompt = $4,
                target_url = $5,
-               schedule_kind = $6,
-               interval_minutes = $7,
-               run_at = $8,
-               status = $9,
-               action_type = $10,
-               organization_id = $11,
-               timezone = $12,
-               model_name = $13,
-               notify_on = $14,
-               next_run_at = $15,
-               consecutive_failures = CASE WHEN $9 = 'active' THEN 0 ELSE consecutive_failures END,
-               paused_reason = CASE WHEN $9 = 'active' THEN NULL ELSE paused_reason END,
+               timeout_seconds = $6,
+               retry_count = $7,
+               schedule_kind = $8,
+               interval_minutes = $9,
+               run_at = $10,
+               status = $11,
+               action_type = $12,
+               organization_id = $13,
+               timezone = $14,
+               model_name = $15,
+               notify_on = $16,
+               next_run_at = $17,
+               consecutive_failures = CASE WHEN $11 = 'active' THEN 0 ELSE consecutive_failures END,
+               paused_reason = CASE WHEN $11 = 'active' THEN NULL ELSE paused_reason END,
                last_status = CASE WHEN last_status = 'running' THEN NULL ELSE last_status END,
                updated_at = NOW()
          WHERE id = $1
-           AND ($2::BOOLEAN OR owner_id = $16)
+           AND ($2::BOOLEAN OR owner_id = $18)
          RETURNING *
     `, [
         req.params.id,
@@ -170,6 +176,8 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
         input.name,
         input.prompt,
         input.targetUrl,
+        input.timeoutSeconds,
+        input.retryCount,
         input.scheduleKind,
         input.intervalMinutes,
         input.runAt,
@@ -221,15 +229,18 @@ export async function postAutomationRunNow(req: FastifyRequest<{ Params: { id: s
         return res.status(404).send({ error: 'Automation not found.' })
     }
 
-    await run(`
+    const claim = await run(`
         UPDATE agent_automations
            SET last_status = 'running',
                last_run_at = NOW(),
                last_error = NULL,
                updated_at = NOW()
          WHERE id = $1
+           AND last_status IS DISTINCT FROM 'running'
+         RETURNING *
     `, [automation.id])
-    void executeAutomation(automation)
+    if (!claim.rows.length) return res.status(409).send({ error: 'This check is already running.' })
+    void executeAutomation(claim.rows[0] as AutomationRow)
 
     return res.status(202).send({ ok: true, message: 'Automation run queued.' })
 }

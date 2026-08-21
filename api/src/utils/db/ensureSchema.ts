@@ -728,6 +728,8 @@ export default async function ensureSchema() {
     `)
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS organization_id TEXT')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS target_url TEXT')
+    await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS timeout_seconds INT NOT NULL DEFAULT 1')
+    await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS retry_count INT NOT NULL DEFAULT 1')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS certificate_status TEXT')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS certificate_subject TEXT')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS certificate_issuer TEXT')
