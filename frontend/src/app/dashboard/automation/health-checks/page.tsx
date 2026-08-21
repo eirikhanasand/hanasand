@@ -1,1 +1,5 @@
-export { default } from '../../automations/health-checks/page'
+import { redirect } from 'next/navigation'
+
+export default function Page() {
+    redirect('/dashboard/automation/health')
+}

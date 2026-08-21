@@ -57,7 +57,7 @@ export default function DashboardSidebar({
         ] },
         { href: '/dashboard/mill', label: 'Security Monitoring', icon: <ShieldAlert className='h-4 w-4' /> },
         { href: '/dashboard/automation', label: 'Automation', icon: <AlarmClockCheck className='h-4 w-4' />, subItems: [
-            { href: '/dashboard/automation/health-checks', label: 'Health checks' },
+            { href: '/dashboard/automation/health', label: 'Health checks' },
             { href: '/dashboard/automation/monitoring', label: 'Monitoring' },
             { href: '/dashboard/automation/cron', label: 'Cron jobs' },
         ] },
