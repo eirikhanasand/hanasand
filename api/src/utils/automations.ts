@@ -152,9 +152,9 @@ export function toAutomationRun(row: AutomationRunRow) {
 }
 
 export function normalizeAutomationInput(input: AutomationInput, existing?: AutomationRow): NormalizedAutomationInput {
-    const name = clean(input.name) || existing?.name || 'Agent automation'
+    const name = clean(input.name) || existing?.name || ''
     const prompt = clean(input.prompt) || existing?.prompt || ''
-    const targetUrl = clean(input.targetUrl ?? input.target_url ?? existing?.target_url) || null
+    const targetUrl = normalizeTargetUrl(clean(input.targetUrl ?? input.target_url ?? existing?.target_url))
     const scheduleKind = parseScheduleKind(input.scheduleKind ?? input.schedule_kind ?? existing?.schedule_kind)
     const intervalMinutes = parseIntervalMinutes(input.intervalMinutes ?? input.interval_minutes ?? existing?.interval_minutes, scheduleKind)
     const runAt = parseRunAt(input.runAt ?? input.run_at ?? existing?.run_at, scheduleKind)
@@ -166,6 +166,9 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
     const organizationId = clean(input.organizationId ?? input.organization_id ?? existing?.organization_id) || null
     const nextRunAt = status === 'active' ? computeNextRunAt({ scheduleKind, intervalMinutes, runAt, from: new Date() }) : null
 
+    if (!name) {
+        throw new Error('Name is required.')
+    }
     if (!prompt) {
         throw new Error('Prompt is required.')
     }
@@ -499,6 +502,10 @@ async function fetchOrganizationProduct(organizationId: string) {
 
 function clean(value: unknown) {
     return typeof value === 'string' ? value.trim() : ''
+}
+
+function normalizeTargetUrl(value: string) {
+    return value && !/^[a-z][a-z\d+.-]*:\/\//i.test(value) ? `https://${value}` : value || null
 }
 
 function parseScheduleKind(value: unknown): AutomationScheduleKind {

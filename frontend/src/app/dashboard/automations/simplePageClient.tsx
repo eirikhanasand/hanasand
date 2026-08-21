@@ -80,8 +80,9 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
     }
 
     async function save() {
-        if (!draft.name.trim() || !draft.prompt.trim() || (draft.actionType === 'agent_prompt' && !draft.targetUrl?.trim())) {
-            setMessage(draft.actionType === 'agent_prompt' ? 'Add a name, URL, and description.' : 'Add a name and description.')
+        const validation = validateDraft(draft)
+        if (validation) {
+            setMessage(validation.message)
             return
         }
         setBusy('save')
@@ -182,23 +183,24 @@ function AutomationRow({ automation, selected, onClick }: { automation: AgentAut
 }
 
 function AutomationForm({ draft, selected, busy, message, onChange, onSave, onCancel }: { draft: AutomationPayload, selected: AgentAutomation | null, busy: string, message: string, onChange: (draft: AutomationPayload) => void, onSave: () => void, onCancel: () => void }) {
+    const validation = validateDraft(draft)
     return <div className='grid gap-4'><div><h2 className='text-xl font-semibold text-ui-text'>{selected?.name || 'Create an automation'}</h2><p className='mt-1 text-sm text-ui-muted'>Define a monitoring job and where to send its alerts.</p></div>
-        <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Name</span><input className={inputClass} required value={draft.name} onChange={event => onChange({ ...draft, name: event.target.value })} placeholder='Website health' /></label>
+        <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Name</span><input className={inputClass} required value={draft.name} onChange={event => onChange({ ...draft, name: event.target.value })} placeholder='Website health' />{validation?.field === 'name' ? <span className='text-sm text-ui-danger'>{validation.message}</span> : null}</label>
         <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Automation type</span><select className={inputClass} value={draft.actionType} onChange={event => onChange({ ...draft, actionType: event.target.value as AutomationPayload['actionType'] })}><option value='agent_prompt'>Monitoring</option><option value='mail_health_check'>Mail health</option><option value='system_alert'>System alert</option></select></label>
-        {draft.actionType === 'agent_prompt' ? <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>URL to check</span><input className={inputClass} required type='url' value={draft.targetUrl || ''} onChange={event => onChange({ ...draft, targetUrl: event.target.value })} placeholder='https://example.com/health' /></label> : null}
-        <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Description</span><textarea className='min-h-28 w-full rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm leading-6 text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20' required value={draft.prompt} onChange={event => onChange({ ...draft, prompt: event.target.value })} placeholder='Monitor the service for availability and response errors.' /></label>
+        {draft.actionType === 'agent_prompt' ? <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>URL to check</span><input className={inputClass} required type='url' value={draft.targetUrl || ''} onChange={event => onChange({ ...draft, targetUrl: event.target.value })} placeholder='https://example.com/health' />{draft.targetUrl && normalizeMonitoringUrl(draft.targetUrl) !== draft.targetUrl ? <span className='text-xs text-ui-muted'>Will use {normalizeMonitoringUrl(draft.targetUrl)}</span> : null}{validation?.field === 'url' ? <span className='text-sm text-ui-danger'>{validation.message}</span> : null}</label> : null}
+        <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Description</span><textarea className='min-h-28 w-full rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm leading-6 text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20' required value={draft.prompt} onChange={event => onChange({ ...draft, prompt: event.target.value })} placeholder='Monitor the service for availability and response errors.' />{validation?.field === 'prompt' ? <span className='text-sm text-ui-danger'>{validation.message}</span> : null}</label>
         <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Notification destination</span><input className={inputClass} value={draft.modelName || ''} onChange={event => onChange({ ...draft, modelName: event.target.value.trim() || null })} placeholder='Webhook or notification destination' /></label>
         {!draft.modelName?.trim() && draft.notifyOn !== 'never' ? <span className='-mt-2 inline-flex w-fit text-ui-warning' title='No delivery destination configured' aria-label='No delivery destination configured'><AlertTriangle className='h-5 w-5' /></span> : null}
         <div className='grid gap-3 sm:grid-cols-2'><label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Check every</span><div className='flex items-center gap-2'><input className={inputClass} type='number' min={1} value={draft.intervalMinutes || ''} onChange={event => onChange({ ...draft, intervalMinutes: Number(event.target.value) || null })} /><span className='text-sm text-ui-muted'>minutes</span></div></label><label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Notify me</span><select className={inputClass} value={draft.notifyOn || 'failure'} onChange={event => onChange({ ...draft, notifyOn: event.target.value as AutomationPayload['notifyOn'] })}><option value='failure'>When something fails</option><option value='always'>After every check</option><option value='never'>Never</option></select></label></div>
         <label className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-2.5'><span><span className='block text-sm font-semibold text-ui-text'>Automation active</span><span className='text-xs text-ui-muted'>Start checking as soon as it is saved.</span></span><input type='checkbox' checked={draft.status === 'active'} onChange={event => onChange({ ...draft, status: event.target.checked ? 'active' : 'paused' })} className='h-4 w-4 accent-(--ui-primary)' /></label>
-        <div className='flex items-center justify-between gap-3 border-t border-ui-border pt-4'><button type='button' onClick={onCancel} className='h-10 rounded-lg border border-ui-border px-4 text-sm font-semibold text-ui-muted hover:text-ui-text'>Cancel</button><div className='flex min-w-0 items-center justify-end gap-3'>{message ? <span className='truncate text-sm text-ui-muted'>{message}</span> : null}<button type='button' onClick={onSave} disabled={busy === 'save'} className='inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:opacity-50'>{selected ? <Check className='h-4 w-4' /> : <Plus className='h-4 w-4' />}{selected ? 'Save changes' : 'Create automation'}</button></div></div>
+        <div className='grid gap-3 border-t border-ui-border pt-4'><p className='min-h-5 break-words text-sm text-ui-danger'>{message}</p><div className='flex items-center justify-between gap-3'><button type='button' onClick={onCancel} className='h-10 rounded-lg border border-ui-border px-4 text-sm font-semibold text-ui-muted hover:text-ui-text'>Cancel</button><button type='button' onClick={onSave} disabled={busy === 'save' || Boolean(validation)} className='inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:opacity-50'>{selected ? <Check className='h-4 w-4' /> : <Plus className='h-4 w-4' />}{selected ? 'Save changes' : 'Create automation'}</button></div></div>
     </div>
 }
 
 function AutomationDetails({ automation, runs, busy, message, onRun, onEdit, onDelete, onRefresh }: { automation: AgentAutomation, runs: AgentAutomationRun[], busy: string, message: string, onRun: () => void, onEdit: () => void, onDelete: () => void, onRefresh: () => void }) {
     const missingUrl = automation.actionType === 'agent_prompt' && !automation.targetUrl
     const failed = Boolean(automation.consecutiveFailures || automation.lastStatus === 'failed' || missingUrl)
-    const state = missingUrl ? 'Needs setup' : failed ? 'Needs attention' : automation.status === 'active' ? 'Healthy' : 'Paused'
+    const state = missingUrl ? 'Missing URL' : failed ? 'Needs attention' : automation.status === 'active' ? 'Healthy' : 'Paused'
     return <div className='grid gap-4'><div className='flex flex-wrap items-start justify-between gap-3'><div><p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Automation</p><h2 className='mt-1 text-xl font-semibold text-ui-text'>{automation.name}</h2><p className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${failed ? 'bg-ui-danger/10 text-ui-danger' : automation.status === 'active' ? 'bg-ui-success/10 text-ui-success' : 'bg-ui-raised text-ui-muted'}`}>{state}</p></div><div className='flex gap-2'><button type='button' onClick={onRun} disabled={busy === 'run' || missingUrl} className='inline-flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:opacity-50' title={missingUrl ? 'Add a URL before checking' : undefined}><Play className='h-4 w-4' />Check now</button><button type='button' onClick={onEdit} className='h-9 rounded-lg border border-ui-border px-3 text-sm font-semibold text-ui-text'>Edit</button></div></div>
         <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 text-sm'><p className='leading-6 text-ui-text'>{automation.prompt}</p><div className='grid gap-3 border-t border-ui-border pt-3 text-xs text-ui-muted sm:grid-cols-2'>{automation.actionType === 'agent_prompt' ? <span className={`break-all ${missingUrl ? 'font-semibold text-ui-danger' : ''}`}>{missingUrl ? 'Missing URL' : `URL: ${automation.targetUrl}`}</span> : null}<span>Every {automation.intervalMinutes || 1} minutes</span><span>{automation.modelName || 'No notification destination'}{!automation.modelName && automation.notifyOn !== 'never' ? <span className='ml-1 inline-flex align-text-bottom text-ui-warning' title='No delivery destination configured' aria-label='No delivery destination configured'><AlertTriangle className='h-4 w-4' /></span> : null}</span></div></div>
         <div><div className='mb-2 flex items-center justify-between'><h3 className='text-sm font-semibold text-ui-text'>Recent checks</h3><button type='button' onClick={onRefresh} className='text-ui-muted hover:text-ui-text' aria-label='Refresh checks'><RefreshCw className='h-4 w-4' /></button></div><div className='grid gap-2'>{runs.slice(0, 5).map(run => <div key={run.id} className='rounded-lg border border-ui-border bg-ui-raised p-3'><div className='flex justify-between gap-2 text-xs text-ui-muted'><span>{formatDate(run.startedAt)}</span><span className={run.status === 'failed' ? 'font-semibold text-ui-danger' : 'font-semibold text-ui-success'}>{run.status}</span></div>{run.status === 'failed' ? <ErrorNotice compact className='mt-2' message={run.error || 'Check failed.'} /> : <p className='mt-2 whitespace-pre-wrap text-sm leading-6 text-ui-muted'>{run.result || 'Check completed.'}</p>}</div>)}{!runs.length ? <p className='rounded-lg border border-dashed border-ui-border p-4 text-sm text-ui-muted'>No checks yet. Run it now or wait for the next check.</p> : null}</div></div>
@@ -207,7 +209,28 @@ function AutomationDetails({ automation, runs, busy, message, onRun, onEdit, onD
 }
 
 function toDraft(automation: AgentAutomation): AutomationPayload {
-    return { name: automation.name, prompt: automation.prompt, targetUrl: automation.targetUrl || '', scheduleKind: automation.scheduleKind, intervalMinutes: automation.intervalMinutes || 15, runAt: automation.runAt || '', status: automation.status === 'paused' ? 'paused' : 'active', actionType: automation.actionType, organizationId: automation.organizationId, timezone: automation.timezone, modelName: automation.modelName, notifyOn: automation.notifyOn || 'failure' }
+    return { name: automation.name, prompt: automation.prompt, targetUrl: normalizeMonitoringUrl(automation.targetUrl || ''), scheduleKind: automation.scheduleKind, intervalMinutes: automation.intervalMinutes || 15, runAt: automation.runAt || '', status: automation.status === 'paused' ? 'paused' : 'active', actionType: automation.actionType, organizationId: automation.organizationId, timezone: automation.timezone, modelName: automation.modelName, notifyOn: automation.notifyOn || 'failure' }
+}
+
+function normalizeMonitoringUrl(value: string) {
+    const trimmed = value.trim()
+    return trimmed && !/^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? `https://${trimmed}` : trimmed
+}
+
+function validateDraft(draft: AutomationPayload) {
+    if (!draft.name.trim()) return { field: 'name' as const, message: 'Name is required.' }
+    if (draft.actionType === 'agent_prompt') {
+        const targetUrl = normalizeMonitoringUrl(draft.targetUrl || '')
+        if (!targetUrl) return { field: 'url' as const, message: 'URL is required.' }
+        try {
+            const parsed = new URL(targetUrl)
+            if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error()
+        } catch {
+            return { field: 'url' as const, message: 'Enter a valid HTTP or HTTPS URL.' }
+        }
+    }
+    if (!draft.prompt.trim()) return { field: 'prompt' as const, message: 'Description is required.' }
+    return null
 }
 
 function labelForType(type: AgentAutomation['actionType']) {
