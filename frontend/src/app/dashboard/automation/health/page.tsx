@@ -1,1 +1,1 @@
-export { default } from '../../automations/health-checks/page'
+export { default } from '../page'
