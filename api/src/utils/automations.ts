@@ -1,4 +1,5 @@
 import run from '#db'
+import { connect } from 'node:tls'
 import { deliverDiscordWebhookFile, discordWebhookFileModelLabel, redactSecretBearingText } from '#utils/alerts/discordWebhookFile.ts'
 import { getMailHealth } from '#utils/mail/health.ts'
 
@@ -12,6 +13,10 @@ export type AutomationRow = {
     name: string
     prompt: string
     target_url: string | null
+    certificate_status: 'valid' | 'expiring' | 'invalid' | 'not_applicable' | null
+    certificate_subject: string | null
+    certificate_issuer: string | null
+    certificate_expires_at: string | null
     schedule_kind: AutomationScheduleKind
     interval_minutes: number | null
     run_at: string | null
@@ -108,6 +113,11 @@ export function toAutomation(row: AutomationRow) {
         ownerId: row.owner_id,
         name: row.name,
         prompt: row.prompt,
+        targetUrl: row.target_url,
+        certificateStatus: row.certificate_status,
+        certificateSubject: row.certificate_subject,
+        certificateIssuer: row.certificate_issuer,
+        certificateExpiresAt: row.certificate_expires_at,
         scheduleKind: row.schedule_kind,
         intervalMinutes: row.interval_minutes,
         runAt: row.run_at,
@@ -323,9 +333,13 @@ export async function executeAutomation(automation: AutomationRow) {
                    consecutive_failures = 0,
                    paused_reason = NULL,
                    run_count = run_count + 1,
-                   updated_at = NOW()
+                   updated_at = NOW(),
+                   certificate_status = $4,
+                   certificate_subject = $5,
+                   certificate_issuer = $6,
+                   certificate_expires_at = $7
              WHERE id = $1
-        `, [automation.id, nextRunAt, result.message])
+        `, [automation.id, nextRunAt, result.message, 'certificate' in result ? result.certificate.status : automation.certificate_status, 'certificate' in result ? result.certificate.subject : automation.certificate_subject, 'certificate' in result ? result.certificate.issuer : automation.certificate_issuer, 'certificate' in result ? result.certificate.expiresAt : automation.certificate_expires_at])
     } catch (error) {
         const durationMs = Date.now() - startedAt
         const message = error instanceof Error ? error.message : 'Automation run failed.'
@@ -428,16 +442,33 @@ async function runAutomationAction(automation: AutomationRow) {
 async function runMonitoringCheck(automation: AutomationRow) {
     if (!automation.target_url) throw new Error('Monitoring is missing the URL to check.')
     try {
-        const response = await fetch(automation.target_url, { signal: AbortSignal.timeout(10_000) })
+        const target = new URL(automation.target_url)
+        const certificate = target.protocol === 'https:' ? await checkCertificate(target) : { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null }
+        const response = await fetch(target, { signal: AbortSignal.timeout(10_000) })
         const message = `Monitoring check ${response.ok ? 'passed' : 'failed'}: ${automation.target_url} returned HTTP ${response.status}.`
         if (!response.ok) throw new Error(message)
         if (automation.notify_on === 'always' && automation.model_name) await deliverDiscordIfConfigured(automation, message)
-        return { provider: 'hanasand-monitoring', model: 'http', message }
+        return { provider: 'hanasand-monitoring', model: 'http', message, certificate }
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Monitoring request failed.'
         if (automation.notify_on !== 'never' && automation.model_name) await deliverDiscordIfConfigured(automation, `Hanasand monitoring alert: ${message}`)
         throw new Error(message, { cause: error })
     }
+}
+
+function checkCertificate(target: URL) {
+    return new Promise<{ status: 'valid' | 'expiring' | 'invalid', subject: string | null, issuer: string | null, expiresAt: string | null }>((resolve, reject) => {
+        const socket = connect({ host: target.hostname, port: Number(target.port) || 443, servername: target.hostname, rejectUnauthorized: false })
+        const finish = (value: { status: 'valid' | 'expiring' | 'invalid', subject: string | null, issuer: string | null, expiresAt: string | null }) => { socket.destroy(); resolve(value) }
+        socket.setTimeout(10_000, () => { socket.destroy(); reject(new Error('Certificate check timed out.')) })
+        socket.once('error', error => { socket.destroy(); reject(new Error(`Certificate check failed: ${error.message}`, { cause: error })) })
+        socket.once('secureConnect', () => {
+            const certificate = socket.getPeerCertificate()
+            const expiresAt = certificate.valid_to ? new Date(certificate.valid_to).toISOString() : null
+            const daysRemaining = expiresAt ? (Date.parse(expiresAt) - Date.now()) / 86_400_000 : -1
+            finish({ status: daysRemaining < 0 ? 'invalid' : daysRemaining <= 30 ? 'expiring' : 'valid', subject: certificate.subject?.CN || null, issuer: certificate.issuer?.O || certificate.issuer?.CN || null, expiresAt })
+        })
+    })
 }
 
 async function deliverDiscordIfConfigured(automation: AutomationRow, content: string) {

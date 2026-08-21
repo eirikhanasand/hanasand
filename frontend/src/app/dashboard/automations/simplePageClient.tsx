@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Check, Clock3, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, Clock3, Play, Plus, RefreshCw, ShieldCheck, ShieldX, Trash2 } from 'lucide-react'
 import {
     createAutomation,
     deleteAutomation,
@@ -129,22 +129,35 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
     if (!automations.length && !editing) return <WelcomeState onCreate={beginCreate} />
 
     return (
-        <div className='grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.72fr)]'>
-            <section className='rounded-xl border border-ui-border bg-ui-panel shadow-sm'>
-                <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
-                    <div><h2 className='text-lg font-semibold text-ui-text'>Your automations</h2><p className='mt-1 text-sm text-ui-muted'>{automations.length} check{automations.length === 1 ? '' : 's'} configured</p></div>
-                    {!editing ? <button type='button' onClick={beginCreate} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90'><Plus className='h-4 w-4' />Create automation</button> : null}
-                </div>
-                <div className='divide-y divide-ui-border'>
-                    {automations.map(automation => <AutomationRow key={automation.id} automation={automation} selected={selected?.id === automation.id} onClick={() => void select(automation)} />)}
-                </div>
-            </section>
+        <div className='grid gap-4'>
+            <StatusSummary automations={automations} />
+            <div className='grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.72fr)]'>
+                <section className='rounded-xl border border-ui-border bg-ui-panel shadow-sm'>
+                    <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
+                        <div><h2 className='text-lg font-semibold text-ui-text'>Your automations</h2><p className='mt-1 text-sm text-ui-muted'>{automations.length} check{automations.length === 1 ? '' : 's'} configured</p></div>
+                        {!editing ? <button type='button' onClick={beginCreate} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90'><Plus className='h-4 w-4' />Create automation</button> : null}
+                    </div>
+                    <div className='hidden grid-cols-2 gap-3 border-b border-ui-border px-4 py-2 text-xs text-ui-muted md:grid md:grid-cols-[minmax(9rem,1.3fr)_minmax(7rem,0.8fr)_minmax(6rem,0.7fr)_minmax(8rem,1fr)_minmax(5rem,0.6fr)_minmax(5rem,0.6fr)]'><span>Name</span><span>Status</span><span>Cert</span><span>History</span><span>Uptime</span><span>Tags</span></div>
+                    <div className='divide-y divide-ui-border'>
+                        {automations.map(automation => <AutomationRow key={automation.id} automation={automation} selected={selected?.id === automation.id} onClick={() => void select(automation)} />)}
+                    </div>
+                </section>
 
-            <section className='rounded-xl border border-ui-border bg-ui-panel p-4 shadow-sm'>
-                {editing ? <AutomationForm draft={draft} selected={selected} busy={busy} message={message} onChange={setDraft} onSave={() => void save()} onCancel={() => { setEditing(false); setMessage('') }} /> : selected ? <AutomationDetails automation={selected} runs={runs} busy={busy} message={message} onRun={() => void runNow()} onEdit={() => setEditing(true)} onDelete={() => void remove()} onRefresh={() => void select(selected, false)} /> : <WelcomeState onCreate={beginCreate} compact />}
-            </section>
+                <section className='rounded-xl border border-ui-border bg-ui-panel p-4 shadow-sm'>
+                    {editing ? <AutomationForm draft={draft} selected={selected} busy={busy} message={message} onChange={setDraft} onSave={() => void save()} onCancel={() => { setEditing(false); setMessage('') }} /> : selected ? <AutomationDetails automation={selected} runs={runs} busy={busy} message={message} onRun={() => void runNow()} onEdit={() => setEditing(true)} onDelete={() => void remove()} onRefresh={() => void select(selected, false)} /> : <WelcomeState onCreate={beginCreate} compact />}
+                </section>
+            </div>
         </div>
     )
+}
+
+function StatusSummary({ automations }: { automations: AgentAutomation[] }) {
+    const counts = automations.reduce((result, automation) => {
+        const key = automation.status === 'paused' ? 'maintenance' : !automation.lastStatus || automation.lastStatus === 'running' ? 'pending' : automation.lastStatus === 'failed' ? 'down' : 'up'
+        result[key] += 1
+        return result
+    }, { up: 0, down: 0, maintenance: 0, pending: 0 })
+    return <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>{(['up', 'down', 'maintenance', 'pending'] as const).map(key => <div key={key} className='rounded-xl border border-ui-border bg-ui-panel px-4 py-3'><div className='flex items-center gap-2 text-sm text-ui-muted'><span className={`h-2.5 w-2.5 rounded-full ${key === 'up' ? 'bg-ui-success' : key === 'down' ? 'bg-ui-danger' : key === 'maintenance' ? 'bg-ui-primary' : 'bg-ui-warning'}`} />{key[0].toUpperCase() + key.slice(1)}</div><p className='mt-2 text-2xl font-semibold text-ui-text'>{counts[key]}</p></div>)}</div>
 }
 
 function WelcomeState({ onCreate, compact = false }: { onCreate: () => void, compact?: boolean }) {
@@ -176,10 +189,32 @@ function AutomationRow({ automation, selected, onClick }: { automation: AgentAut
     const missingUrl = automation.actionType === 'agent_prompt' && !automation.targetUrl
     const failed = Boolean(automation.consecutiveFailures || automation.lastStatus === 'failed' || missingUrl)
     const state = missingUrl ? 'Missing URL' : failed ? 'Needs attention' : automation.status === 'active' ? 'Healthy' : 'Paused'
-    return <button type='button' onClick={onClick} className={`grid w-full gap-3 p-4 text-left transition hover:bg-ui-raised ${selected ? 'bg-ui-primary/5' : ''}`}>
-        <div className='flex flex-wrap items-center justify-between gap-3'><span className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text'><span className={`h-2.5 w-2.5 rounded-full ${failed ? 'bg-ui-danger' : automation.status === 'active' ? 'bg-ui-success' : 'bg-ui-muted'}`} />{automation.name}</span><span className={`rounded-full px-2 py-1 text-xs font-semibold ${failed ? 'bg-ui-danger/10 text-ui-danger' : automation.status === 'active' ? 'bg-ui-success/10 text-ui-success' : 'bg-ui-raised text-ui-muted'}`}>{state}</span></div>
-        <div className='grid gap-2 text-xs text-ui-muted sm:grid-cols-3'><span>{missingUrl ? 'URL required' : automation.actionType === 'agent_prompt' ? 'Monitoring' : labelForType(automation.actionType)}</span><span>Every {automation.intervalMinutes || 1} minutes</span><span className='sm:text-right'>Last: {automation.lastStatus || 'Not checked'}</span></div>
+    return <button type='button' onClick={onClick} className={`grid w-full grid-cols-2 items-center gap-3 border-t border-ui-border px-4 py-3 text-left transition hover:bg-ui-raised md:grid-cols-[minmax(9rem,1.3fr)_minmax(7rem,0.8fr)_minmax(6rem,0.7fr)_minmax(8rem,1fr)_minmax(5rem,0.6fr)_minmax(5rem,0.6fr)] ${selected ? 'bg-ui-primary/5' : ''}`}>
+        <span className='min-w-0 truncate text-sm font-semibold text-ui-text'>{automation.name}</span>
+        <span className={`w-fit rounded-full px-2 py-1 text-xs font-semibold ${failed ? 'bg-ui-danger/10 text-ui-danger' : automation.status === 'active' ? 'bg-ui-success/10 text-ui-success' : 'bg-ui-raised text-ui-muted'}`}>{state}</span>
+        <span className='flex items-center gap-1 text-xs text-ui-muted'>{automation.certificateStatus === 'valid' ? <ShieldCheck className='h-4 w-4 text-ui-success' /> : automation.certificateStatus === 'invalid' ? <ShieldX className='h-4 w-4 text-ui-danger' /> : automation.certificateStatus === 'expiring' ? <ShieldX className='h-4 w-4 text-ui-warning' /> : <span>—</span>}{certLabel(automation)}</span>
+        <span className='flex items-center gap-1' aria-label='History'>{historyBars(automation)}</span>
+        <span className='text-xs text-ui-muted'>{uptimeLabel(automation)}</span>
+        <span className='text-xs text-ui-muted'>{automation.actionType === 'agent_prompt' ? 'Monitoring' : labelForType(automation.actionType)}</span>
     </button>
+}
+
+function historyBars(automation: AgentAutomation) {
+    const color = automation.lastStatus === 'failed' ? 'bg-ui-danger' : automation.lastStatus === 'completed' ? 'bg-ui-success' : 'bg-ui-muted/40'
+    return <span className='flex gap-0.5'>{Array.from({ length: 12 }, (_, index) => <span key={index} className={`h-4 w-1 rounded-sm ${color}`} />)}</span>
+}
+
+function uptimeLabel(automation: AgentAutomation) {
+    if (!automation.runCount) return '—'
+    return automation.lastStatus === 'failed' ? '0%' : '100%'
+}
+
+function certLabel(automation: AgentAutomation) {
+    if (automation.actionType !== 'agent_prompt') return '—'
+    if (automation.certificateStatus === 'valid') return 'Valid'
+    if (automation.certificateStatus === 'expiring') return 'Expiring'
+    if (automation.certificateStatus === 'invalid') return 'Invalid'
+    return 'Pending'
 }
 
 function AutomationForm({ draft, selected, busy, message, onChange, onSave, onCancel }: { draft: AutomationPayload, selected: AgentAutomation | null, busy: string, message: string, onChange: (draft: AutomationPayload) => void, onSave: () => void, onCancel: () => void }) {
@@ -202,7 +237,7 @@ function AutomationDetails({ automation, runs, busy, message, onRun, onEdit, onD
     const failed = Boolean(automation.consecutiveFailures || automation.lastStatus === 'failed' || missingUrl)
     const state = missingUrl ? 'Missing URL' : failed ? 'Needs attention' : automation.status === 'active' ? 'Healthy' : 'Paused'
     return <div className='grid gap-4'><div className='flex flex-wrap items-start justify-between gap-3'><div><p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Automation</p><h2 className='mt-1 text-xl font-semibold text-ui-text'>{automation.name}</h2><p className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${failed ? 'bg-ui-danger/10 text-ui-danger' : automation.status === 'active' ? 'bg-ui-success/10 text-ui-success' : 'bg-ui-raised text-ui-muted'}`}>{state}</p></div><div className='flex gap-2'><button type='button' onClick={onRun} disabled={busy === 'run' || missingUrl} className='inline-flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:opacity-50' title={missingUrl ? 'Add a URL before checking' : undefined}><Play className='h-4 w-4' />Check now</button><button type='button' onClick={onEdit} className='h-9 rounded-lg border border-ui-border px-3 text-sm font-semibold text-ui-text'>Edit</button></div></div>
-        <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 text-sm'><p className='leading-6 text-ui-text'>{automation.prompt}</p><div className='grid gap-3 border-t border-ui-border pt-3 text-xs text-ui-muted sm:grid-cols-2'>{automation.actionType === 'agent_prompt' ? <span className={`break-all ${missingUrl ? 'font-semibold text-ui-danger' : ''}`}>{missingUrl ? 'Missing URL' : `URL: ${automation.targetUrl}`}</span> : null}<span>Every {automation.intervalMinutes || 1} minutes</span><span>{automation.modelName || 'No notification destination'}{!automation.modelName && automation.notifyOn !== 'never' ? <span className='ml-1 inline-flex align-text-bottom text-ui-warning' title='No delivery destination configured' aria-label='No delivery destination configured'><AlertTriangle className='h-4 w-4' /></span> : null}</span></div></div>
+        <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 text-sm'><div className='flex items-center justify-between gap-3'><p className='leading-6 text-ui-text'>{automation.prompt}</p>{automation.certificateStatus === 'valid' ? <span className='inline-flex items-center gap-1 rounded-full bg-ui-success/10 px-2 py-1 text-xs font-semibold text-ui-success'><ShieldCheck className='h-4 w-4' />Valid certificate</span> : null}</div><div className='grid gap-3 border-t border-ui-border pt-3 text-xs text-ui-muted sm:grid-cols-2'>{automation.actionType === 'agent_prompt' ? <span className={`break-all ${missingUrl ? 'font-semibold text-ui-danger' : ''}`}>{missingUrl ? 'Missing URL' : `URL: ${automation.targetUrl}`}</span> : null}<span>Every {automation.intervalMinutes || 1} minutes</span><span>{automation.certificateStatus === 'not_applicable' ? 'Certificate: HTTP' : automation.certificateSubject ? `Certificate: ${automation.certificateSubject}${automation.certificateIssuer ? ` · ${automation.certificateIssuer}` : ''}` : 'Certificate: Pending'}</span><span>{automation.certificateExpiresAt ? `Expires ${formatDate(automation.certificateExpiresAt)}` : ''}</span><span>{automation.modelName || 'No notification destination'}{!automation.modelName && automation.notifyOn !== 'never' ? <span className='ml-1 inline-flex align-text-bottom text-ui-warning' title='No delivery destination configured' aria-label='No delivery destination configured'><AlertTriangle className='h-4 w-4' /></span> : null}</span></div></div>
         <div><div className='mb-2 flex items-center justify-between'><h3 className='text-sm font-semibold text-ui-text'>Recent checks</h3><button type='button' onClick={onRefresh} className='text-ui-muted hover:text-ui-text' aria-label='Refresh checks'><RefreshCw className='h-4 w-4' /></button></div><div className='grid gap-2'>{runs.slice(0, 5).map(run => <div key={run.id} className='rounded-lg border border-ui-border bg-ui-raised p-3'><div className='flex justify-between gap-2 text-xs text-ui-muted'><span>{formatDate(run.startedAt)}</span><span className={run.status === 'failed' ? 'font-semibold text-ui-danger' : 'font-semibold text-ui-success'}>{run.status}</span></div>{run.status === 'failed' ? <ErrorNotice compact className='mt-2' message={run.error || 'Check failed.'} /> : <p className='mt-2 whitespace-pre-wrap text-sm leading-6 text-ui-muted'>{run.result || 'Check completed.'}</p>}</div>)}{!runs.length ? <p className='rounded-lg border border-dashed border-ui-border p-4 text-sm text-ui-muted'>No checks yet. Run it now or wait for the next check.</p> : null}</div></div>
         <div className='flex items-center justify-between border-t border-ui-border pt-3'><span className='text-sm text-ui-muted'>{message}</span><button type='button' onClick={onDelete} disabled={busy === 'delete'} className='inline-flex items-center gap-2 text-sm font-semibold text-ui-danger hover:underline'><Trash2 className='h-4 w-4' />Delete</button></div>
     </div>

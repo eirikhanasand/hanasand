@@ -8,6 +8,10 @@ export type AgentAutomation = {
     name: string
     prompt: string
     targetUrl: string | null
+    certificateStatus: 'valid' | 'expiring' | 'invalid' | 'not_applicable' | null
+    certificateSubject: string | null
+    certificateIssuer: string | null
+    certificateExpiresAt: string | null
     scheduleKind: 'once' | 'interval'
     intervalMinutes: number | null
     runAt: string | null
