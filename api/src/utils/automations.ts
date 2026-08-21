@@ -1,5 +1,6 @@
 import run from '#db'
-import { connect } from 'node:tls'
+import { connect as connectTcp } from 'node:net'
+import { connect as connectTls } from 'node:tls'
 import { deliverDiscordWebhookFile, discordWebhookFileModelLabel, redactSecretBearingText } from '#utils/alerts/discordWebhookFile.ts'
 import { getMailHealth } from '#utils/mail/health.ts'
 
@@ -13,6 +14,11 @@ export type AutomationRow = {
     name: string
     prompt: string
     target_url: string | null
+    monitoring_type: 'fetch' | 'post' | 'tcp' | 'ssh'
+    follow_redirects: boolean
+    user_agent: string | null
+    expected_down: boolean
+    upside_down: boolean
     timeout_seconds: number
     retry_count: number
     notify_warnings: boolean
@@ -71,6 +77,16 @@ export type AutomationInput = {
     prompt?: unknown
     targetUrl?: unknown
     target_url?: unknown
+    monitoringType?: unknown
+    monitoring_type?: unknown
+    followRedirects?: unknown
+    follow_redirects?: unknown
+    userAgent?: unknown
+    user_agent?: unknown
+    expectedDown?: unknown
+    expected_down?: unknown
+    upsideDown?: unknown
+    upside_down?: unknown
     timeoutSeconds?: unknown
     timeout_seconds?: unknown
     retryCount?: unknown
@@ -99,6 +115,11 @@ type NormalizedAutomationInput = {
     name: string
     prompt: string
     targetUrl: string | null
+    monitoringType: 'fetch' | 'post' | 'tcp' | 'ssh'
+    followRedirects: boolean
+    userAgent: string | null
+    expectedDown: boolean
+    upsideDown: boolean
     timeoutSeconds: number
     retryCount: number
     notifyWarnings: boolean
@@ -126,6 +147,11 @@ export function toAutomation(row: AutomationRow) {
         name: row.name,
         prompt: row.prompt,
         targetUrl: row.target_url,
+        monitoringType: row.monitoring_type,
+        followRedirects: row.follow_redirects,
+        userAgent: row.user_agent,
+        expectedDown: row.expected_down,
+        upsideDown: row.upside_down,
         timeoutSeconds: row.timeout_seconds,
         retryCount: row.retry_count,
         notifyWarnings: row.notify_warnings,
@@ -180,7 +206,13 @@ export function toAutomationRun(row: AutomationRunRow) {
 export function normalizeAutomationInput(input: AutomationInput, existing?: AutomationRow): NormalizedAutomationInput {
     const name = clean(input.name) || existing?.name || ''
     const prompt = clean(input.prompt) || existing?.prompt || ''
-    const targetUrl = normalizeTargetUrl(clean(input.targetUrl ?? input.target_url ?? existing?.target_url))
+    const monitoringType = parseMonitoringType(input.monitoringType ?? input.monitoring_type ?? existing?.monitoring_type)
+    const rawTarget = clean(input.targetUrl ?? input.target_url ?? existing?.target_url)
+    const targetUrl = monitoringType === 'tcp' || monitoringType === 'ssh' ? rawTarget : normalizeTargetUrl(rawTarget)
+    const followRedirects = parseBoolean(input.followRedirects ?? input.follow_redirects ?? existing?.follow_redirects, true)
+    const userAgent = clean(input.userAgent ?? input.user_agent ?? existing?.user_agent) || null
+    const expectedDown = parseBoolean(input.expectedDown ?? input.expected_down ?? existing?.expected_down, false)
+    const upsideDown = parseBoolean(input.upsideDown ?? input.upside_down ?? existing?.upside_down, false)
     const timeoutSeconds = parseBoundedInteger(input.timeoutSeconds ?? input.timeout_seconds ?? existing?.timeout_seconds, 1, 120, 1)
     const retryCount = parseBoundedInteger(input.retryCount ?? input.retry_count ?? existing?.retry_count, 0, 5, 1)
     const notifyWarnings = parseBoolean(input.notifyWarnings ?? input.notify_warnings ?? existing?.notify_warnings, false)
@@ -204,9 +236,13 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
 
     if (actionType === 'agent_prompt') {
         if (!targetUrl) throw new Error('Monitoring needs a URL to check.')
-        let parsedUrl: URL
-        try { parsedUrl = new URL(targetUrl) } catch { throw new Error('Monitoring URL must be a valid HTTP or HTTPS URL.') }
-        if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Monitoring URL must use HTTP or HTTPS.')
+        if (monitoringType === 'tcp' || monitoringType === 'ssh') {
+            if (!/^[^:/\s]+(?::\d+)?$/.test(targetUrl)) throw new Error(`${monitoringType.toUpperCase()} checks need a host and optional port.`)
+        } else {
+            let parsedUrl: URL
+            try { parsedUrl = new URL(targetUrl) } catch { throw new Error('Monitoring URL must be a valid HTTP or HTTPS URL.') }
+            if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Monitoring URL must use HTTP or HTTPS.')
+        }
     }
 
     if (status === 'active' && actionType === 'system_alert' && !modelName) {
@@ -224,7 +260,7 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
         throw new Error('Organization reports need a delivery destination before activation.')
     }
 
-    return { name, prompt, targetUrl, timeoutSeconds, retryCount, notifyWarnings, scheduleKind, intervalMinutes, runAt, status, actionType, timezone, modelName, notifyOn, organizationId, nextRunAt }
+    return { name, prompt, targetUrl, monitoringType, followRedirects, userAgent, expectedDown, upsideDown, timeoutSeconds, retryCount, notifyWarnings, scheduleKind, intervalMinutes, runAt, status, actionType, timezone, modelName, notifyOn, organizationId, nextRunAt }
 }
 
 function parseBoundedInteger(value: unknown, min: number, max: number, fallback: number) {
@@ -474,19 +510,20 @@ async function runAutomationAction(automation: AutomationRow) {
 
 async function runMonitoringCheck(automation: AutomationRow) {
     if (!automation.target_url) throw new Error('Monitoring is missing the URL to check.')
-    const target = new URL(automation.target_url)
+    const target = automation.monitoring_type === 'tcp' || automation.monitoring_type === 'ssh' ? null : new URL(automation.target_url)
     const startedAt = Date.now()
-    let certificate: Awaited<ReturnType<typeof checkCertificate>> | { status: 'not_applicable', subject: null, issuer: null, expiresAt: null } | null = target.protocol === 'https:' ? null : { status: 'not_applicable', subject: null, issuer: null, expiresAt: null }
+    let certificate: Awaited<ReturnType<typeof checkCertificate>> | { status: 'not_applicable', subject: null, issuer: null, expiresAt: null } | null = target?.protocol === 'https:' ? null : { status: 'not_applicable', subject: null, issuer: null, expiresAt: null }
     let lastError: unknown
     for (let attempt = 0; attempt <= automation.retry_count; attempt += 1) {
         try {
-            certificate = target.protocol === 'https:' ? await checkCertificate(target, automation.timeout_seconds * 1000) : certificate
-            const response = await fetch(target, { signal: AbortSignal.timeout(automation.timeout_seconds * 1000) })
-            const message = `Monitoring check ${response.ok ? 'passed' : 'failed'}: ${automation.target_url} returned HTTP ${response.status}.`
-            if (!response.ok) throw new Error(message)
+            if (target?.protocol === 'https:') certificate = await checkCertificate(target, automation.timeout_seconds * 1000)
+            const result = target ? await runHttpCheck(target, automation) : await runSocketCheck(automation)
+            const healthy = automation.upside_down ? !result.up : automation.expected_down ? !result.up : result.up
+            const message = `${automation.monitoring_type.toUpperCase()} check ${healthy ? 'passed' : 'failed'}: ${automation.target_url} ${result.detail}.`
+            if (!healthy) throw new Error(message)
             const warning = Date.now() - startedAt >= 1000
             if ((automation.notify_on === 'always' || warning && automation.notify_warnings) && automation.model_name) await deliverDiscordIfConfigured(automation, warning ? `Hanasand monitoring warning: ${message}` : message)
-            return { provider: 'hanasand-monitoring', model: 'http', message, certificate: certificate!, warning }
+            return { provider: 'hanasand-monitoring', model: automation.monitoring_type, message, certificate: certificate!, warning }
         } catch (error) {
             lastError = error instanceof DOMException && error.name === 'TimeoutError'
                 ? new Error(`Monitoring request timed out after ${automation.timeout_seconds} second${automation.timeout_seconds === 1 ? '' : 's'}.`)
@@ -499,9 +536,31 @@ async function runMonitoringCheck(automation: AutomationRow) {
     throw failure
 }
 
+async function runHttpCheck(target: URL, automation: AutomationRow) {
+    const response = await fetch(target, { method: automation.monitoring_type === 'post' ? 'POST' : 'GET', redirect: automation.follow_redirects ? 'follow' : 'manual', headers: automation.user_agent ? { 'user-agent': automation.user_agent } : undefined, signal: AbortSignal.timeout(automation.timeout_seconds * 1000) })
+    return { up: response.ok, detail: `returned HTTP ${response.status}` }
+}
+
+async function runSocketCheck(automation: AutomationRow) {
+    const raw = automation.target_url || ''
+    const [host, portText] = raw.split(':')
+    const port = Number(portText) || (automation.monitoring_type === 'ssh' ? 22 : 80)
+    return new Promise<{ up: boolean, detail: string }>((resolve, reject) => {
+        const socket = connectTcp({ host, port, timeout: automation.timeout_seconds * 1000 })
+        let settled = false
+        const finish = (value: { up: boolean, detail: string }) => { if (!settled) { settled = true; socket.destroy(); resolve(value) } }
+        socket.setTimeout(automation.timeout_seconds * 1000, () => reject(new Error(`Connection timed out after ${automation.timeout_seconds} second${automation.timeout_seconds === 1 ? '' : 's'}.`)))
+        socket.once('connect', () => {
+            if (automation.monitoring_type === 'ssh') socket.once('data', data => finish({ up: /^SSH-/.test(data.toString()), detail: 'accepted an SSH connection' }))
+            else finish({ up: true, detail: `accepted a TCP connection on port ${port}` })
+        })
+        socket.once('error', error => reject(new Error(`Connection failed: ${error.message}`)))
+    })
+}
+
 function checkCertificate(target: URL, timeoutMs: number) {
     return new Promise<{ status: 'valid' | 'expiring' | 'invalid', subject: string | null, issuer: string | null, expiresAt: string | null }>((resolve, reject) => {
-        const socket = connect({ host: target.hostname, port: Number(target.port) || 443, servername: target.hostname, rejectUnauthorized: false })
+        const socket = connectTls({ host: target.hostname, port: Number(target.port) || 443, servername: target.hostname, rejectUnauthorized: false })
         const finish = (value: { status: 'valid' | 'expiring' | 'invalid', subject: string | null, issuer: string | null, expiresAt: string | null }) => { socket.destroy(); resolve(value) }
         socket.setTimeout(timeoutMs, () => { socket.destroy(); reject(new Error(`Certificate check timed out after ${timeoutMs / 1000} second${timeoutMs === 1000 ? '' : 's'}.`)) })
         socket.once('error', error => { socket.destroy(); reject(new Error(`Certificate check failed: ${error.message}`, { cause: error })) })
@@ -617,6 +676,10 @@ function parseStatus(value: unknown): AutomationStatus {
 function parseActionType(value: unknown): AutomationActionType {
     const actionType = clean(value)
     return ACTION_TYPES.has(actionType) ? actionType as AutomationActionType : 'agent_prompt'
+}
+
+function parseMonitoringType(value: unknown): 'fetch' | 'post' | 'tcp' | 'ssh' {
+    return value === 'post' || value === 'tcp' || value === 'ssh' ? value : 'fetch'
 }
 
 function parseNotifyOn(value: unknown): 'never' | 'failure' | 'always' {

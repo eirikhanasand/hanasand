@@ -8,6 +8,11 @@ export type AgentAutomation = {
     name: string
     prompt: string
     targetUrl: string | null
+    monitoringType: 'fetch' | 'post' | 'tcp' | 'ssh'
+    followRedirects: boolean
+    userAgent: string | null
+    expectedDown: boolean
+    upsideDown: boolean
     timeoutSeconds: number
     retryCount: number
     certificateStatus: 'valid' | 'expiring' | 'invalid' | 'not_applicable' | null
@@ -66,6 +71,11 @@ export type AutomationPayload = {
     name: string
     prompt: string
     targetUrl?: string | null
+    monitoringType?: 'fetch' | 'post' | 'tcp' | 'ssh'
+    followRedirects?: boolean
+    userAgent?: string | null
+    expectedDown?: boolean
+    upsideDown?: boolean
     timeoutSeconds?: number | null
     retryCount?: number | null
     scheduleKind: 'once' | 'interval'

@@ -714,6 +714,11 @@ export default async function ensureSchema() {
             model_name TEXT,
             notify_on TEXT NOT NULL DEFAULT 'failure' CHECK (notify_on IN ('never', 'failure', 'always')),
             notify_warnings BOOLEAN NOT NULL DEFAULT FALSE,
+            monitoring_type TEXT NOT NULL DEFAULT 'fetch',
+            follow_redirects BOOLEAN NOT NULL DEFAULT TRUE,
+            user_agent TEXT,
+            expected_down BOOLEAN NOT NULL DEFAULT FALSE,
+            upside_down BOOLEAN NOT NULL DEFAULT FALSE,
             next_run_at TIMESTAMPTZ,
             last_run_at TIMESTAMPTZ,
             last_completed_at TIMESTAMPTZ,
@@ -739,6 +744,11 @@ export default async function ensureSchema() {
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS model_name TEXT')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS notify_on TEXT NOT NULL DEFAULT \'failure\'')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS notify_warnings BOOLEAN NOT NULL DEFAULT FALSE')
+    await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS monitoring_type TEXT NOT NULL DEFAULT \'fetch\'')
+    await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS follow_redirects BOOLEAN NOT NULL DEFAULT TRUE')
+    await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS user_agent TEXT')
+    await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS expected_down BOOLEAN NOT NULL DEFAULT FALSE')
+    await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS upside_down BOOLEAN NOT NULL DEFAULT FALSE')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS consecutive_failures INT NOT NULL DEFAULT 0')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS paused_reason TEXT')
     await run('ALTER TABLE agent_automations DROP CONSTRAINT IF EXISTS agent_automations_action_type_check')
