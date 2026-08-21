@@ -671,14 +671,14 @@ function ContainerDetails({
                 </button>
             </div>
 
-            <details className='mt-4 overflow-hidden rounded-md border border-ui-border bg-ui-canvas' data-system-container-logs-disclosure>
-                <summary className='flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/35 [&::-webkit-details-marker]:hidden'>
+            <div className='mt-4 overflow-hidden rounded-md border border-ui-border bg-ui-canvas' data-system-container-logs-disclosure>
+                <div className='flex items-center justify-between gap-2 px-3 py-2 text-sm font-semibold text-ui-text'>
                     <span>Recent logs</span>
                     <Link href={`/dashboard/logs?service=${encodeURIComponent(container.name)}`} className='inline-flex items-center gap-1 text-xs font-semibold text-ui-primary hover:underline'>
-                        Open feed
+                        Open full logs
                         <ExternalLink className='h-3.5 w-3.5' />
                     </Link>
-                </summary>
+                </div>
                 {logsReason && (
                     <p className='mx-3 mt-2 rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>{logsReason}</p>
                 )}
@@ -693,7 +693,7 @@ function ContainerDetails({
                         <p className='text-ui-muted'>{logsLoading ? 'Loading logs...' : 'Log stream is live; no recent line for this container.'}</p>
                     )}
                 </div>
-            </details>
+            </div>
         </DashboardPanel>
     )
 }

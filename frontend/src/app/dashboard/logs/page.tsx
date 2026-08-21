@@ -1,4 +1,4 @@
-import { getErrorEvents, getLogs, getLogServices, getRealtimeLogs } from '@/utils/logs/getLogs'
+import { getErrorEvents, getLogs, getLogServices } from '@/utils/logs/getLogs'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
@@ -20,10 +20,9 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard/logs%26expired=true')
     }
 
-    const [services, logs, realtime, errors] = await Promise.all([
+    const [services, logs, errors] = await Promise.all([
         getLogServices({ token, id }),
         getLogs({ token, id, level: 'error' }),
-        getRealtimeLogs({ token, id }),
         getErrorEvents({ token, id }),
     ])
 
@@ -40,7 +39,12 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
                     token={token}
                     initialServices={services}
                     initialStoredLogs={logs}
-                    initialRealtime={realtime}
+                    initialRealtime={{
+                        logs: [],
+                        containers: [],
+                        runtime_available: false,
+                        generated_at: new Date().toISOString(),
+                    }}
                     initialErrors={errors}
                     initialServiceFilter={serviceParam || 'all'}
                 />

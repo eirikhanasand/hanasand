@@ -45,6 +45,7 @@ test('system dashboard focuses operator triage while preserving live controls', 
     expect(page).toContain('data-system-related-links')
     expect(page).toContain('data-system-container-logs-disclosure')
     expect(page).toContain('data-system-container-log-tail')
+    expect(page).toContain('Open full logs')
     expect(page).toContain('data-system-vm-danger-actions')
     expect(page).toContain('data-system-stop-all-vms')
     expect(page).toContain('VM danger actions')
