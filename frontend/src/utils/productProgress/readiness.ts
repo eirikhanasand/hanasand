@@ -296,7 +296,7 @@ function webhookHealthFromDeliveries(source: string, checkedAt: string, deliveri
         status: 'needs_action',
         checkedAt,
         source,
-        href: '/dashboard/automations?setup=dwm',
+        href: '/dashboard/automation?setup=dwm',
         destinationCount: undefined,
         activeDestinationCount: undefined,
         deliveryReadyCount,

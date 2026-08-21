@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
 export default function LegacyCronJobsPage() {
-    redirect('/dashboard/automations/cron')
+    redirect('/dashboard/automation/cron')
 }

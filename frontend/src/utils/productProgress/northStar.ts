@@ -720,7 +720,7 @@ function webhookDeliveryRow(external: ProductReadinessExternalState, generatedAt
         state,
         ownerLane: health?.ownerLane || 'webhook',
         detail: state === 'ready' ? 'Webhook lifecycle and matched delivery data are connected.' : 'Webhook delivery needs lifecycle data and a delivery matched to a dashboard alert.',
-        href: health?.href || '/dashboard/automations?setup=dwm',
+        href: health?.href || '/dashboard/automation?setup=dwm',
         proofSource: health?.source || 'DWM webhook health source not connected',
         proofTimestamp: latestTimestamp([health?.proofTimestamp, dashboard?.proofTimestamp, generatedAt]) || generatedAt,
         staleAfterSeconds: Math.min(health?.staleAfterSeconds || 900, dashboard?.staleAfterSeconds || 600),

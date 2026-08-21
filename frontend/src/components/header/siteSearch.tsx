@@ -38,7 +38,7 @@ const dashboardRouteItems: SearchItem[] = [
     route('DWM delivery', 'Webhook attempts and customer delivery', '/dashboard/dwm/delivery'),
     route('DWM actors', 'Actor context and coverage', '/dashboard/dwm/actors'),
     route('DWM actions', 'Watchlist, source, case, and webhook controls', '/dashboard/dwm/actions'),
-    route('Automations', 'Webhook and automation setup', '/dashboard/automations'),
+    route('Automation', 'Webhook and automation setup', '/dashboard/automation'),
     route('Subscription', 'Billing and plan controls', '/dashboard/subscription'),
 ]
 

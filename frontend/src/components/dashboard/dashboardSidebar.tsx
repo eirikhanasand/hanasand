@@ -56,10 +56,10 @@ export default function DashboardSidebar({
             { href: '/dashboard/dwm/actions', label: 'Actions' },
         ] },
         { href: '/dashboard/mill', label: 'Security Monitoring', icon: <ShieldAlert className='h-4 w-4' /> },
-        { href: '/dashboard/automations', label: 'Automations', icon: <AlarmClockCheck className='h-4 w-4' />, subItems: [
-            { href: '/dashboard/automations/health-checks', label: 'Health checks' },
-            { href: '/dashboard/automations/monitoring', label: 'Monitoring' },
-            { href: '/dashboard/automations/cron', label: 'Cron jobs' },
+        { href: '/dashboard/automation', label: 'Automation', icon: <AlarmClockCheck className='h-4 w-4' />, subItems: [
+            { href: '/dashboard/automation/health-checks', label: 'Health checks' },
+            { href: '/dashboard/automation/monitoring', label: 'Monitoring' },
+            { href: '/dashboard/automation/cron', label: 'Cron jobs' },
         ] },
         { href: '/dashboard/scanner', label: 'Scanner', icon: <ScanSearch className='h-4 w-4' /> },
         { href: '/api', label: 'API docs', icon: <Code2 className='h-4 w-4' /> },

@@ -12101,7 +12101,7 @@ function webhookProductProgressSummary(
         retryEligibleCount: proofs.filter(proof => proof.retry.retryable).length,
         liveDeliveryEnabled,
         blockerCodes,
-        href: '/dashboard/automations?setup=dwm',
+        href: '/dashboard/automation?setup=dwm',
     }
 }
 

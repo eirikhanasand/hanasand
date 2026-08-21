@@ -80,7 +80,7 @@ const workflowShortcuts = [
     { label: 'Watch companies', href: '/organizations', detail: 'Companies, vendors, domains' },
     { label: 'Catch breaches', href: '/dashboard/dwm', detail: 'New exposure mentions' },
     { label: 'Review severity', href: '/dashboard/dwm', detail: 'Evidence, confidence, action' },
-    { label: 'Route alerts', href: '/dashboard/automations?setup=dwm', detail: 'Webhooks, cases, API' },
+    { label: 'Route alerts', href: '/dashboard/automation?setup=dwm', detail: 'Webhooks, cases, API' },
 ]
 
 const operatorPaths = [
@@ -106,7 +106,7 @@ const operatorPaths = [
         label: 'Route notifications',
         state: 'Delivery',
         value: 'Send reviewed alerts to configured webhooks, cases, and the analyst console.',
-        href: '/dashboard/automations?setup=dwm',
+        href: '/dashboard/automation?setup=dwm',
     },
 ]
 

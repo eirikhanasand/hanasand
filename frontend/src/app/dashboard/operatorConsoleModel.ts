@@ -737,7 +737,7 @@ function unavailableWebhookHealth(source: string, checkedAt: string): WebhookHea
         status: 'unavailable',
         checkedAt,
         source,
-        href: '/dashboard/automations?setup=dwm',
+        href: '/dashboard/automation?setup=dwm',
         detail: 'Webhook health state is updating for destinations, tests, and deliveries.',
         blockers: ['Webhook health needs destination and delivery status.'],
         ownerLane: 'webhook',
@@ -965,7 +965,7 @@ function normalizeWebhookHealthReadiness(input: WebhookHealthReadiness | undefin
         status: blockers.length ? 'needs_action' : input.status === 'ready' ? 'ready' : 'needs_action',
         checkedAt: input.checkedAt || input.latestDeliveryAt || input.latestAuditEventAt || checkedAt,
         source: input.source || source,
-        href: input.href || '/dashboard/automations?setup=dwm',
+        href: input.href || '/dashboard/automation?setup=dwm',
         blockers,
         ownerLane: input.ownerLane || 'webhook',
         unavailableReason: blockers.length ? input.unavailableReason || 'missing_webhook_lifecycle_health_api' : undefined,
@@ -1540,7 +1540,7 @@ export function buildPublicTiHandoffCase(input: {
             { href: '/ti', label: 'Public TI' },
             { href: '/dashboard/dwm', label: 'DWM console' },
             { href: '/dashboard/ti/sources', label: 'Source ops' },
-            { href: '/dashboard/automations?setup=dwm', label: 'Delivery routes' },
+            { href: '/dashboard/automation?setup=dwm', label: 'Delivery routes' },
         ],
     })]
 }
@@ -1812,7 +1812,7 @@ function buildProductReadiness(input: {
                 ? `${input.dashboardAlertDelivery.status} delivery ${input.dashboardAlertDelivery.id} for surfaced alert ${input.dashboardAlertDelivery.alertId}.`
                 : input.latestDelivery ? `Latest delivery ${input.latestDelivery.id} is for ${input.latestDelivery.alertId}, but not for a dashboard-surfaced alert.` : 'Delivery ledger is syncing to a dashboard-surfaced alert.',
             source: 'Webhook delivery ledger',
-            href: '/dashboard/automations?setup=dwm',
+        href: '/dashboard/automation?setup=dwm',
             checkedAt: input.dashboardAlertDelivery?.attemptedAt || input.latestDelivery?.attemptedAt || readinessCheckedAt,
             backendProofContractVersion: 'dwm.webhook.delivery_ledger.v1',
         },
@@ -1847,7 +1847,7 @@ function buildProductReadiness(input: {
                 ? webhookHealth.detail || webhookHealthDetail(webhookHealth)
                 : 'Webhook health state is loading.',
             source: webhookHealth?.source || 'DWM webhook health',
-            href: webhookHealth?.href || '/dashboard/automations?setup=dwm',
+        href: webhookHealth?.href || '/dashboard/automation?setup=dwm',
             checkedAt: webhookHealth?.checkedAt || webhookHealth?.latestDeliveryAt || webhookHealth?.latestAuditEventAt || input.latestWebhookAt,
             staleAfterSeconds: webhookHealth?.staleAfterSeconds,
             proofTimestamp: webhookHealth?.proofTimestamp,
@@ -2986,7 +2986,7 @@ export function buildReadinessCases(input: {
             }],
             timeline: [{ id: 'webhook_route_at', at: orgWebhooks[0]?.lastTestedAt || latestDelivery?.attemptedAt || now, title: hasWebhookDestination ? 'Webhook lane active' : 'Webhook lane checking', body: orgWebhooks[0]?.lastTestStatus ? `${orgWebhooks[0].id} last test ${orgWebhooks[0].lastTestStatus}.` : latestDelivery ? `${latestDelivery.id}: ${latestDelivery.status}${latestDelivery.error ? `: ${latestDelivery.error}` : ''}` : 'Delivery destination is syncing for organization or watchlist routing.' }],
             nextTasks: hasWebhookDestination ? [`Owner: operator. Destination IDs: ${orgWebhooks.map(item => item.id).join(', ') || webhookWatchlists.map(item => item.webhookDestinationId || item.id).join(', ')}.`, 'Run a webhook test.', 'Send queued alerts and inspect delivery failures.'] : ['Owner: operator. Create a Discord or generic organization webhook destination.', 'Run webhook test.', 'Send queued alerts and inspect delivery failures.'],
-            relatedLinks: organization ? [{ href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Org webhooks' }, { href: deliveryLedgerHref(input.scope, latestDelivery), label: 'Delivery history' }, { href: '/dashboard/dwm', label: 'Configure watchlist webhook' }, { href: '/dashboard/automations?setup=dwm', label: 'Delivery routes' }] : [{ href: deliveryLedgerHref(input.scope, latestDelivery), label: 'Delivery history' }, { href: '/dashboard/dwm', label: 'Configure webhook' }, { href: '/dashboard/automations?setup=dwm', label: 'Delivery routes' }],
+            relatedLinks: organization ? [{ href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Org webhooks' }, { href: deliveryLedgerHref(input.scope, latestDelivery), label: 'Delivery history' }, { href: '/dashboard/dwm', label: 'Configure watchlist webhook' }, { href: '/dashboard/automation?setup=dwm', label: 'Delivery routes' }] : [{ href: deliveryLedgerHref(input.scope, latestDelivery), label: 'Delivery history' }, { href: '/dashboard/dwm', label: 'Configure webhook' }, { href: '/dashboard/automation?setup=dwm', label: 'Delivery routes' }],
             workflowPath: path,
             deliveryEvidence: input.deliveries.map(delivery => ({
                 id: delivery.id,

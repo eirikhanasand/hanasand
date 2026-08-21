@@ -1618,7 +1618,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             },
         })
     } else {
-        rows.push({ id: 'configure_webhook', label: 'Configure webhook', detail: 'Add an active organization destination before sending alerts.', tone: 'needs_action', href: '/dashboard/automations?setup=dwm' })
+        rows.push({ id: 'configure_webhook', label: 'Configure webhook', detail: 'Add an active organization destination before sending alerts.', tone: 'needs_action', href: '/dashboard/automation?setup=dwm' })
     }
     if (selected.kind === 'webhook_readiness') {
         rows.push({
@@ -1633,7 +1633,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             label: 'Delivery setup',
             detail: activeWebhook && orgContext?.organization ? 'Open the organization webhook route used by Test webhook and Send alerts.' : 'Open delivery setup before sending alerts.',
             tone: activeWebhook ? 'ready' : 'needs_action',
-            href: orgContext?.organization ? `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/webhooks` : '/dashboard/automations?setup=dwm',
+            href: orgContext?.organization ? `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/webhooks` : '/dashboard/automation?setup=dwm',
         })
     }
     if (sourceCoverage) {
@@ -1905,7 +1905,7 @@ function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrg
         label: 'Configure/test webhook',
         detail: 'Add an active organization webhook destination before sending alerts.',
         tone: 'needs_action',
-        href: '/dashboard/automations?setup=dwm',
+        href: '/dashboard/automation?setup=dwm',
     })
     rows.push({
         id: 'handoff_source',
@@ -2339,7 +2339,7 @@ function EmptyWorkspace() {
                 <div className='mt-4 flex flex-wrap gap-2'>
                     <Link href='/dashboard/dwm' className='inline-flex h-9 items-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary'>Open dark web cases</Link>
                     <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>Review sources</Link>
-                    <Link href='/dashboard/automations?setup=dwm' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>Configure delivery</Link>
+                    <Link href='/dashboard/automation?setup=dwm' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>Configure delivery</Link>
                 </div>
             </div>
         </div>
