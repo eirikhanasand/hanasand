@@ -15,6 +15,7 @@ export type AutomationRow = {
     target_url: string | null
     timeout_seconds: number
     retry_count: number
+    notify_warnings: boolean
     certificate_status: 'valid' | 'expiring' | 'invalid' | 'not_applicable' | null
     certificate_subject: string | null
     certificate_issuer: string | null
@@ -46,6 +47,7 @@ export type AutomationRunRow = {
     automation_id: string
     owner_id: string
     status: 'running' | 'completed' | 'failed'
+    warning: boolean
     result: string | null
     error: string | null
     provider: string | null
@@ -87,6 +89,8 @@ export type AutomationInput = {
     model_name?: unknown
     notifyOn?: unknown
     notify_on?: unknown
+    notifyWarnings?: unknown
+    notify_warnings?: unknown
     organizationId?: unknown
     organization_id?: unknown
 }
@@ -97,6 +101,7 @@ type NormalizedAutomationInput = {
     targetUrl: string | null
     timeoutSeconds: number
     retryCount: number
+    notifyWarnings: boolean
     scheduleKind: AutomationScheduleKind
     intervalMinutes: number | null
     runAt: Date | null
@@ -123,6 +128,7 @@ export function toAutomation(row: AutomationRow) {
         targetUrl: row.target_url,
         timeoutSeconds: row.timeout_seconds,
         retryCount: row.retry_count,
+        notifyWarnings: row.notify_warnings,
         certificateStatus: row.certificate_status,
         certificateSubject: row.certificate_subject,
         certificateIssuer: row.certificate_issuer,
@@ -157,6 +163,7 @@ export function toAutomationRun(row: AutomationRunRow) {
         automationId: row.automation_id,
         ownerId: row.owner_id,
         status: row.status,
+        warning: row.warning,
         result: row.result,
         error: row.error,
         provider: row.provider,
@@ -176,6 +183,7 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
     const targetUrl = normalizeTargetUrl(clean(input.targetUrl ?? input.target_url ?? existing?.target_url))
     const timeoutSeconds = parseBoundedInteger(input.timeoutSeconds ?? input.timeout_seconds ?? existing?.timeout_seconds, 1, 120, 1)
     const retryCount = parseBoundedInteger(input.retryCount ?? input.retry_count ?? existing?.retry_count, 0, 5, 1)
+    const notifyWarnings = parseBoolean(input.notifyWarnings ?? input.notify_warnings ?? existing?.notify_warnings, false)
     const scheduleKind = parseScheduleKind(input.scheduleKind ?? input.schedule_kind ?? existing?.schedule_kind)
     const intervalMinutes = parseIntervalMinutes(input.intervalMinutes ?? input.interval_minutes ?? existing?.interval_minutes, scheduleKind)
     const runAt = parseRunAt(input.runAt ?? input.run_at ?? existing?.run_at, scheduleKind)
@@ -216,12 +224,16 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
         throw new Error('Organization reports need a delivery destination before activation.')
     }
 
-    return { name, prompt, targetUrl, timeoutSeconds, retryCount, scheduleKind, intervalMinutes, runAt, status, actionType, timezone, modelName, notifyOn, organizationId, nextRunAt }
+    return { name, prompt, targetUrl, timeoutSeconds, retryCount, notifyWarnings, scheduleKind, intervalMinutes, runAt, status, actionType, timezone, modelName, notifyOn, organizationId, nextRunAt }
 }
 
 function parseBoundedInteger(value: unknown, min: number, max: number, fallback: number) {
     const parsed = Number(value)
     return Number.isInteger(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback
+}
+
+function parseBoolean(value: unknown, fallback: boolean) {
+    return typeof value === 'boolean' ? value : fallback
 }
 
 export function computeNextRunAt({
@@ -336,14 +348,15 @@ export async function executeAutomation(automation: AutomationRow) {
                    model = $4,
                    completed_at = NOW(),
                    duration_ms = $5,
-                   artifacts = $6::jsonb
+                   warning = $6,
+                   artifacts = $7::jsonb
              WHERE id = $1
-        `, [runId, result.message, result.provider, result.model, durationMs, JSON.stringify(runArtifacts(result.message, 'artifacts' in result && Array.isArray(result.artifacts) ? result.artifacts : []))])
+        `, [runId, result.message, result.provider, result.model, durationMs, 'warning' in result && result.warning === true, JSON.stringify(runArtifacts(result.message, 'artifacts' in result && Array.isArray(result.artifacts) ? result.artifacts : []))])
         await run(`
             UPDATE agent_automations
                SET next_run_at = $2,
                    last_completed_at = NOW(),
-                   last_status = 'completed',
+                   last_status = 'warning' in result && result.warning === true ? 'warning' : 'completed',
                    last_result = $3,
                    last_error = NULL,
                    consecutive_failures = 0,
@@ -462,6 +475,7 @@ async function runAutomationAction(automation: AutomationRow) {
 async function runMonitoringCheck(automation: AutomationRow) {
     if (!automation.target_url) throw new Error('Monitoring is missing the URL to check.')
     const target = new URL(automation.target_url)
+    const startedAt = Date.now()
     let certificate: Awaited<ReturnType<typeof checkCertificate>> | { status: 'not_applicable', subject: null, issuer: null, expiresAt: null } | null = target.protocol === 'https:' ? null : { status: 'not_applicable', subject: null, issuer: null, expiresAt: null }
     let lastError: unknown
     for (let attempt = 0; attempt <= automation.retry_count; attempt += 1) {
@@ -470,8 +484,9 @@ async function runMonitoringCheck(automation: AutomationRow) {
             const response = await fetch(target, { signal: AbortSignal.timeout(automation.timeout_seconds * 1000) })
             const message = `Monitoring check ${response.ok ? 'passed' : 'failed'}: ${automation.target_url} returned HTTP ${response.status}.`
             if (!response.ok) throw new Error(message)
-            if (automation.notify_on === 'always' && automation.model_name) await deliverDiscordIfConfigured(automation, message)
-            return { provider: 'hanasand-monitoring', model: 'http', message, certificate: certificate! }
+            const warning = Date.now() - startedAt >= 1000
+            if ((automation.notify_on === 'always' || warning && automation.notify_warnings) && automation.model_name) await deliverDiscordIfConfigured(automation, warning ? `Hanasand monitoring warning: ${message}` : message)
+            return { provider: 'hanasand-monitoring', model: 'http', message, certificate: certificate!, warning }
         } catch (error) {
             lastError = error instanceof DOMException && error.name === 'TimeoutError'
                 ? new Error(`Monitoring request timed out after ${automation.timeout_seconds} second${automation.timeout_seconds === 1 ? '' : 's'}.`)

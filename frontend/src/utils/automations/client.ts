@@ -14,6 +14,7 @@ export type AgentAutomation = {
     certificateSubject: string | null
     certificateIssuer: string | null
     certificateExpiresAt: string | null
+    notifyWarnings: boolean
     scheduleKind: 'once' | 'interval'
     intervalMinutes: number | null
     runAt: string | null
@@ -40,6 +41,7 @@ export type AgentAutomationRun = {
     id: string
     automationId: string
     status: 'running' | 'completed' | 'failed'
+    warning: boolean
     result: string | null
     error: string | null
     provider: string | null
@@ -75,6 +77,7 @@ export type AutomationPayload = {
     timezone?: string
     modelName?: string | null
     notifyOn?: 'never' | 'failure' | 'always'
+    notifyWarnings?: boolean
 }
 
 function authHeaders() {

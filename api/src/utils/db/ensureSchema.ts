@@ -713,6 +713,7 @@ export default async function ensureSchema() {
             timezone TEXT NOT NULL DEFAULT 'UTC',
             model_name TEXT,
             notify_on TEXT NOT NULL DEFAULT 'failure' CHECK (notify_on IN ('never', 'failure', 'always')),
+            notify_warnings BOOLEAN NOT NULL DEFAULT FALSE,
             next_run_at TIMESTAMPTZ,
             last_run_at TIMESTAMPTZ,
             last_completed_at TIMESTAMPTZ,
@@ -737,6 +738,7 @@ export default async function ensureSchema() {
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT \'UTC\'')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS model_name TEXT')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS notify_on TEXT NOT NULL DEFAULT \'failure\'')
+    await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS notify_warnings BOOLEAN NOT NULL DEFAULT FALSE')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS consecutive_failures INT NOT NULL DEFAULT 0')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS paused_reason TEXT')
     await run('ALTER TABLE agent_automations DROP CONSTRAINT IF EXISTS agent_automations_action_type_check')
@@ -749,6 +751,7 @@ export default async function ensureSchema() {
             automation_id TEXT NOT NULL REFERENCES agent_automations(id) ON DELETE CASCADE,
             owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             status TEXT NOT NULL CHECK (status IN ('running', 'completed', 'failed')),
+            warning BOOLEAN NOT NULL DEFAULT FALSE,
             result TEXT,
             error TEXT,
             provider TEXT,
@@ -760,6 +763,7 @@ export default async function ensureSchema() {
         )
     `)
     await run('ALTER TABLE agent_automation_runs ADD COLUMN IF NOT EXISTS artifacts JSONB NOT NULL DEFAULT \'[]\'::jsonb')
+    await run('ALTER TABLE agent_automation_runs ADD COLUMN IF NOT EXISTS warning BOOLEAN NOT NULL DEFAULT FALSE')
     await run('CREATE INDEX IF NOT EXISTS idx_agent_automation_runs_automation_started ON agent_automation_runs(automation_id, started_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_agent_automation_runs_owner_started ON agent_automation_runs(owner_id, started_at DESC)')
     await run(`

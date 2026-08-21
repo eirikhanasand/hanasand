@@ -90,9 +90,10 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
             timezone,
             model_name,
             notify_on,
+            notify_warnings,
             next_run_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
         RETURNING *
     `, [
         id,
@@ -111,6 +112,7 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
         input.timezone,
         input.modelName,
         input.notifyOn,
+        input.notifyWarnings,
         input.nextRunAt,
     ])
 
@@ -162,13 +164,14 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
                timezone = $14,
                model_name = $15,
                notify_on = $16,
-               next_run_at = $17,
+               notify_warnings = $17,
+               next_run_at = $18,
                consecutive_failures = CASE WHEN $11 = 'active' THEN 0 ELSE consecutive_failures END,
                paused_reason = CASE WHEN $11 = 'active' THEN NULL ELSE paused_reason END,
                last_status = CASE WHEN last_status = 'running' THEN NULL ELSE last_status END,
                updated_at = NOW()
          WHERE id = $1
-           AND ($2::BOOLEAN OR owner_id = $18)
+           AND ($2::BOOLEAN OR owner_id = $19)
          RETURNING *
     `, [
         req.params.id,
@@ -187,6 +190,7 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
         input.timezone,
         input.modelName,
         input.notifyOn,
+        input.notifyWarnings,
         input.nextRunAt,
         ownerId,
     ])
