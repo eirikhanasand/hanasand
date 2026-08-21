@@ -94,35 +94,55 @@ PY
 )
 
 installed=()
-errors=()
+failure_messages=()
 install_packages() {
   local kind="$1" packages="$2"
   [[ -n "$packages" ]] || return 0
+  read -r -a batch <<<"$packages"
   log "installing $kind packages: $packages"
   if DEBIAN_FRONTEND=noninteractive apt-get -y --only-upgrade install $packages >>"$LOG_FILE" 2>&1; then
-    read -r -a batch <<<"$packages"
     installed+=("${batch[@]}")
   else
-    errors+=("$kind package installation failed")
+    local count=${#batch[@]} suffix='s'
+    [[ $count -eq 1 ]] && suffix=''
+    failure_messages+=("Failed to install $count $kind update$suffix")
   fi
 }
 install_packages security "$security_packages"
 install_packages regular "$regular_packages"
 
-/usr/bin/python3 - "$tmp_status" "$plan" "$last_status" "$now_iso" "$run_id" "${installed[*]:-}" "${errors[*]:-}" <<'PY'
-import json, sys
+error_text=''
+if ((${#failure_messages[@]})); then
+  error_text=$(printf '%s|' "${failure_messages[@]}")
+  error_text=${error_text%|}
+fi
+
+/usr/bin/python3 - "$tmp_status" "$plan" "$last_status" "$now_iso" "$run_id" "${installed[*]:-}" "$error_text" <<'PY'
+import json, subprocess, sys
 out, plan_path, old_text, now, run_id, installed_text, errors_text = sys.argv[1:]
 plan = json.load(open(plan_path))
 old = json.loads(old_text)
 installed = installed_text.split() if installed_text else []
 errors = errors_text.split('|') if errors_text else []
-remaining = [u for u in plan['updates'] if u['package'] not in installed]
+def candidate_is_installed(update):
+    try:
+        result = subprocess.run(
+            ['dpkg-query', '-W', '-f=${Status}\t${Version}', update['package']],
+            capture_output=True, text=True, check=True,
+        )
+        return result.stdout.strip() == f"install ok installed\t{update['version']}"
+    except (OSError, subprocess.CalledProcessError):
+        return False
+
+installed_updates = [u['package'] for u in plan['updates'] if candidate_is_installed(u)]
+remaining = [u for u in plan['updates'] if u['package'] not in installed_updates]
+failure_details = [error.removeprefix('Failed to install ') for error in errors]
 data = {
   'schema_version': 1, 'host': 'hanasand', 'run_id': run_id, 'checked_at': now,
   'status': 'failed' if errors else ('pending' if remaining else 'ok'),
-  'last_error': '; '.join(errors) or None,
+  'last_error': f"Failed to install {' and '.join(failure_details)}" if failure_details else None,
   'pending_updates': remaining,
-  'installed_packages': [{'package': p} for p in installed],
+  'installed_packages': [{'package': p} for p in installed_updates],
   'last_updated_packages': installed or old.get('last_updated_packages', []),
   'last_update_at': now if installed else old.get('last_update_at'),
   'policy': {'non_security_delay_hours': 72, 'security_install': 'immediate',
@@ -133,5 +153,5 @@ json.dump(data, open(out, 'w'), indent=2); open(out, 'a').write('\n')
 PY
 mv "$tmp_status" "$STATUS_FILE"
 chmod 0644 "$STATUS_FILE"
-log "completed: installed=${installed[*]:-none} pending=$(grep -c . "$TRACK_FILE" || true) errors=${errors[*]:-none}"
-[[ ${#errors[@]} -eq 0 ]]
+log "completed: installed=${installed[*]:-none} pending=$(grep -c . "$TRACK_FILE" || true) errors=${failure_messages[*]:-none}"
+[[ ${#failure_messages[@]} -eq 0 ]]
