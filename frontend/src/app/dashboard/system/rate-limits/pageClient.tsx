@@ -478,27 +478,19 @@ export default function RateLimitsPageClient({
             <DashboardPanel className='p-4 sm:p-5'>
                 <div className='grid gap-4 2xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:items-start'>
                     <div className='max-w-3xl'>
-                        <p className='text-[11px] uppercase tracking-[0.24em] text-ui-muted'>System</p>
-                        <h1 className='mt-1 text-xl font-semibold text-ui-text'>Traffic policy and access keys</h1>
-                        <p className='mt-2 text-sm leading-6 text-ui-muted'>
-                            Control request pressure, route exceptions, and owner-linked integration keys from one console.
-                        </p>
-                        <p className='mt-2 text-xs leading-5 text-ui-muted'>
-                            Saves take effect immediately for live traffic. Route rows below show what is protected and which keys can use it.
-                        </p>
+                        <h1 className='text-xl font-semibold text-ui-text'>Rate Limits</h1>
                     </div>
                     <div className='grid gap-2 sm:grid-cols-2'>
                         <StatChip label='Routes' value={String(routeCount)} />
-                        <StatChip label='Active overrides' value={String(overrideCount)} />
-                        <StatChip label='Issued keys' value={String(apiKeys.length)} />
-                        <StatChip label='Runtime' value={settings.enabled ? 'Enforced' : 'Paused'} />
+                        <StatChip label='Overrides' value={String(overrideCount)} />
+                        <StatChip label='Keys' value={String(apiKeys.length)} />
                     </div>
                 </div>
                 <div className='mt-4 flex flex-wrap items-center gap-2'>
                     <div className='inline-flex rounded-lg border border-ui-border bg-ui-raised p-1' role='group' aria-label='Rate-limit workspace'>
                         {([
-                            ['keys', 'Access keys'],
-                            ['policy', 'Traffic policy'],
+                            ['keys', 'Keys'],
+                            ['policy', 'Policy'],
                         ] as const).map(([key, label]) => (
                             <button
                                 key={key}
@@ -524,7 +516,7 @@ export default function RateLimitsPageClient({
                                 Enabled
                             </label>
                             <div className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs text-ui-muted'>
-                                Global changes apply to new requests immediately.
+                                Changes apply to new requests immediately.
                             </div>
                             <div className='flex flex-wrap items-center gap-2 sm:ml-auto'>
                                 <label className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted'>
@@ -562,7 +554,7 @@ export default function RateLimitsPageClient({
                                 <div className='flex items-start justify-between gap-3'>
                                     <div>
                                         <p className='text-[11px] uppercase tracking-[0.24em] text-ui-muted'>{scope}</p>
-                                        <h2 className='mt-1 text-base font-semibold text-ui-text'>Default policy</h2>
+                                        <h2 className='mt-1 text-base font-semibold text-ui-text'>Default limits</h2>
                                     </div>
                                     <div className='rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-[11px] text-ui-muted'>
                                         all routes
@@ -590,9 +582,9 @@ export default function RateLimitsPageClient({
                         <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
                             <div>
                                 <p className='text-[11px] uppercase tracking-[0.24em] text-ui-muted'>Overrides</p>
-                                <h2 className='mt-1 text-base font-semibold text-ui-text'>Per-endpoint tuning</h2>
+                                <h2 className='mt-1 text-base font-semibold text-ui-text'>Route-specific limits</h2>
                                 <p className='mt-1 text-sm text-ui-muted'>
-                                    Tighten or loosen specific routes without changing the global traffic policy.
+                                    Set different limits for individual routes without changing the defaults.
                                 </p>
                             </div>
                             <button
@@ -648,7 +640,7 @@ export default function RateLimitsPageClient({
                                     <RemoveButton onClick={() => removeOverride(override.id)} />
                                 </div>
                             )) : (
-                                <EmptyState message='No route exceptions. Global policy covers every route.' />
+                                <EmptyState message='No route-specific limits. The defaults apply to every route.' />
                             )}
                         </div>
                         {!overrideValidation.valid ? (
@@ -664,10 +656,9 @@ export default function RateLimitsPageClient({
                 <DashboardPanel className='p-4 sm:p-5'>
                     <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
                         <div>
-                            <p className='text-[11px] uppercase tracking-[0.24em] text-ui-muted'>Access keys</p>
-                            <h2 className='mt-1 text-base font-semibold text-ui-text'>Tiered tokens</h2>
+                            <h2 className='text-base font-semibold text-ui-text'>Create an API key</h2>
                             <p className='mt-1 text-sm text-ui-muted'>
-                                Pick an owner, choose the routes this key can use, and set the budget for each scope.
+                                Choose who will use this key, give it a name, and add the routes it can access. For each route, set the maximum requests per second, minute, hour, and day.
                             </p>
                         </div>
                         {keyMessage ? <div className='text-sm text-ui-warning'>{keyMessage}</div> : null}
@@ -708,18 +699,18 @@ export default function RateLimitsPageClient({
                         <div className='mt-3 flex flex-wrap items-center gap-2 text-xs text-ui-muted'>
                             <span className='rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 uppercase tracking-[0.18em] text-ui-muted'>Preset</span>
                             <span>{draftTierPreset.label}: {draftTierPreset.description}</span>
-                            <span>New scopes inherit this tier. Changing it updates every draft scope.</span>
+                            <span>New routes use these limits. Changing the tier updates every route you add here.</span>
                         </div>
 
                         <div className='mt-4 flex items-center justify-between gap-3'>
-                            <h3 className='text-sm font-medium text-ui-text'>Scoped endpoint limits</h3>
+                            <h3 className='text-sm font-medium text-ui-text'>Allowed routes and limits</h3>
                             <button
                                 type='button'
                                 onClick={addScopeToDraft}
                                 className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted transition-colors hover:bg-ui-raised'
                             >
                                 <Plus className='h-4 w-4' />
-                                Add scope
+                                Add route
                             </button>
                         </div>
                         <div className='mt-3 grid gap-3'>
@@ -728,7 +719,7 @@ export default function RateLimitsPageClient({
                                     key={scope.id}
                                     scope={scope}
                                     routeOptions={routeOptions}
-                                    title={`Draft scope ${index + 1}`}
+                                    title={`Route ${index + 1}`}
                                     onChange={(nextScope) => setDraft((prev) => ({
                                         ...prev,
                                         scopes: prev.scopes.map((entry) => entry.id === nextScope.id ? nextScope : entry),
@@ -737,15 +728,15 @@ export default function RateLimitsPageClient({
                                 />
                             )) : (
                                 <div className='rounded-lg border border-dashed border-ui-border bg-ui-raised px-4 py-5'>
-                                    <p className='text-sm font-medium text-ui-text'>No endpoint scope yet.</p>
-                                    <p className='mt-1 text-sm leading-6 text-ui-muted'>Add the first allowed route before issuing this key.</p>
+                                    <p className='text-sm font-medium text-ui-text'>No route added yet.</p>
+                                    <p className='mt-1 text-sm leading-6 text-ui-muted'>Add at least one allowed route before creating this key.</p>
                                     <button
                                         type='button'
                                         onClick={addScopeToDraft}
                                         className='mt-3 inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted transition-colors hover:bg-ui-raised'
                                     >
                                         <Plus className='h-4 w-4' />
-                                        Add first scope
+                                        Add first route
                                     </button>
                                 </div>
                             )}
@@ -947,7 +938,7 @@ function ApiKeyCard({
 
             <details className='mt-3 rounded-lg border border-ui-border bg-ui-panel'>
                 <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text'>
-                    <span>Endpoint scopes</span>
+                    <span>Allowed routes</span>
                     <span className='text-xs font-medium text-ui-muted'>{apiKey.scopes.length} route{apiKey.scopes.length === 1 ? '' : 's'}</span>
                 </summary>
                 <div className='grid gap-3 border-t border-ui-border p-4'>
@@ -958,7 +949,7 @@ function ApiKeyCard({
                             className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted transition-colors hover:bg-ui-raised'
                         >
                             <Plus className='h-4 w-4' />
-                            Add scope
+                            Add route
                         </button>
                     </div>
                     {apiKey.scopes.length ? apiKey.scopes.map((scope, index) => (
@@ -966,7 +957,7 @@ function ApiKeyCard({
                             key={scope.id}
                             scope={scope}
                             routeOptions={routeOptions}
-                            title={`Scope ${index + 1}`}
+                            title={`Route ${index + 1}`}
                             onChange={(nextScope) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? {
                                 ...entry,
                                 scopes: entry.scopes.map((currentScope) => currentScope.id === nextScope.id ? nextScope : currentScope),
@@ -974,7 +965,7 @@ function ApiKeyCard({
                             onRemove={() => removeKeyScope(apiKey.id, scope.id)}
                         />
                     )) : (
-                        <EmptyState message='Add a scope to set endpoint limits.' />
+                        <EmptyState message='Add a route to set its request limits.' />
                     )}
                 </div>
             </details>
@@ -991,7 +982,7 @@ function validateScopeSet(scopes: ApiKeyScopeRule[]) {
     if (!scopes.length) {
         return {
             valid: false,
-            message: 'Add at least one scoped endpoint before issuing or saving this token.',
+            message: 'Add at least one route before creating or saving this key.',
         }
     }
 
@@ -1001,7 +992,7 @@ function validateScopeSet(scopes: ApiKeyScopeRule[]) {
         if (seen.has(key)) {
             return {
                 valid: false,
-                message: `Duplicate scope detected for ${scope.method} ${scope.route}. Remove or change one of them before saving.`,
+                message: `This route is listed more than once: ${scope.method} ${scope.route}. Remove or change one before saving.`,
             }
         }
         seen.add(key)

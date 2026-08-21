@@ -25,12 +25,12 @@ test.describe('rate-limit owner picker', () => {
         await page.goto('/dashboard/system/rate-limits', { waitUntil: 'domcontentloaded' })
         await usersLoaded
 
-        await expect(page.getByRole('heading', { name: 'Tiered tokens' })).toBeVisible()
+        await expect(page.getByRole('heading', { name: 'Create an API key' })).toBeVisible()
         await expect(page.getByRole('group', { name: 'Rate-limit workspace' })).toBeVisible()
         await expect(page.getByText('Choose an owner')).toHaveCount(0)
         await expect(page.getByText(/Global API pressure|now live in the same surface|Issue owner-linked keys|tuned independently/i)).toHaveCount(0)
         await expect(page.getByText('Owner user ID')).toHaveCount(0)
-        await expect(page.getByText('Add at least one scoped endpoint before issuing or saving this token.')).toHaveCount(0)
+        await expect(page.getByText('Add at least one route before creating or saving this key.')).toHaveCount(0)
 
         await typeOwnerQuery(page, 'no-such-user')
         await expect(page.getByText('No matching users. Paste an exact ID to use it.')).toBeVisible()
@@ -40,7 +40,7 @@ test.describe('rate-limit owner picker', () => {
         await page.getByLabel('Key name').first().fill('Blair integration')
         await page.getByLabel('Expires at').first().fill('2026-12-31')
         await page.getByLabel('Description').first().fill('Blair scoped integration')
-        await page.getByRole('button', { name: 'Add first scope' }).click()
+        await page.getByRole('button', { name: 'Add first route' }).click()
         await expect(page.getByText('Ready to issue')).toBeVisible()
         await page.getByRole('button', { name: 'Create Key' }).click()
         await expect.poll(() => submittedPayloads.length).toBe(1)
@@ -52,7 +52,7 @@ test.describe('rate-limit owner picker', () => {
         await page.getByLabel('Key name').first().fill('Manual integration')
         await page.getByLabel('Expires at').first().fill('2026-12-31')
         await page.getByLabel('Description').first().fill('Manual scoped integration')
-        await page.getByRole('button', { name: 'Add first scope' }).click()
+        await page.getByRole('button', { name: 'Add first route' }).click()
         await page.getByRole('button', { name: 'Create Key' }).click()
         await expect.poll(() => submittedPayloads.length).toBe(2)
         expect(submittedPayloads[1].ownerId).toBe('manual-owner-77')
