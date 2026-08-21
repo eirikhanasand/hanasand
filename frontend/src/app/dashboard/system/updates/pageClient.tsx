@@ -35,7 +35,7 @@ export default function AptUpdatesClient() {
             </div>
             <div className='grid gap-2 md:grid-cols-2'>
                 <Detail label='Last check' value={formatLastCheck(status?.checked_at)} />
-                <Detail label='Last installed' value={`${status?.last_update_at ? formatDate(status.last_update_at) : 'Never'}${status?.last_updated_packages?.length ? ` · ${status.last_updated_packages.join(', ')}` : ''}`} />
+                <Detail label='Last installed' value={`${status?.last_update_at ? formatLastCheck(status.last_update_at) : 'Never'}${status?.last_updated_packages?.length ? ` · ${status.last_updated_packages.join(', ')}` : ''}`} />
                 <Detail label='Policy' value='Security updates immediately; other Ubuntu updates after 72 hours.' />
                 <Detail label='Verification' value={status?.policy?.repository_verification || 'Waiting for the host to report its verification policy.'} />
             </div>
