@@ -16,8 +16,8 @@ export async function deliverDiscordWebhookFile(destination: string | null, cont
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            content: content.slice(0, 1900),
-            allowed_mentions: { parse: [] },
+            content: `@everyone ${content}`.slice(0, 1900),
+            allowed_mentions: { parse: ['everyone'] },
         }),
         signal: AbortSignal.timeout(10_000),
     })

@@ -544,7 +544,10 @@ async function runMonitoringCheck(automation: AutomationRow) {
 
 async function runHttpCheck(target: URL, automation: AutomationRow) {
     const response = await fetch(target, { method: automation.monitoring_type === 'post' ? 'POST' : 'GET', redirect: automation.follow_redirects ? 'follow' : 'manual', headers: automation.user_agent ? { 'user-agent': automation.user_agent } : undefined, signal: AbortSignal.timeout(automation.timeout_seconds * 1000) })
-    return { up: response.ok, detail: `returned HTTP ${response.status}` }
+    const checksGitRefs = target.pathname.endsWith('/info/refs') && target.searchParams.get('service') === 'git-upload-pack'
+    const body = checksGitRefs ? await response.text() : ''
+    const hasMainRef = !checksGitRefs || body.includes('refs/heads/main')
+    return { up: response.ok && hasMainRef, detail: checksGitRefs ? `returned HTTP ${response.status}${hasMainRef ? ' with refs/heads/main' : ' without refs/heads/main'}` : `returned HTTP ${response.status}` }
 }
 
 async function runSocketCheck(automation: AutomationRow) {
