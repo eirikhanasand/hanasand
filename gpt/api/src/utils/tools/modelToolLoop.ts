@@ -794,37 +794,6 @@ export default async function runModelToolLoop(
         }
 
         if (!toolCall) {
-            const toolContents = workingMessages.filter((message) => message.role === 'tool').map((message) => message.content)
-            const hasWrittenFiles = toolContents.some((content) =>
-                content.includes('Tool write_file executed')
-                || content.includes('Tool edit_file executed')
-                || content.includes('Tool generate_nextjs_marketing_site executed')
-                || content.includes('Tool scaffold_nextjs_app executed')
-                || content.includes('Tool scaffold_nextjs_docker_app executed')
-            )
-            const hasVerifiedDockerScaffold = toolContents.some((content) =>
-                content.includes('Tool scaffold_nextjs_docker_app executed')
-                && content.includes('Build exit code: 0')
-                && content.includes('Compose config exit code: 0')
-            )
-            const hasStartedProcess = toolContents.some((content) => content.includes('Tool start_process executed'))
-            const hasBrowserVerification = toolContents.some((content) => content.includes('Tool browser_task executed'))
-            if (autonomousRepoTask && looksLikeProposedPatch(content) && !hasWrittenFiles) {
-                workingMessages.push({
-                    role: 'system',
-                    content: 'Do not stop at a proposal. Apply the changes to the repository using edit_file, write_file, or run_command, then continue.',
-                })
-                continue
-            }
-
-            if (/(website|landing page|next\.?js|app router)/i.test(userMessage) && !hasVerifiedDockerScaffold && (!hasWrittenFiles || !hasStartedProcess || !hasBrowserVerification)) {
-                workingMessages.push({
-                    role: 'system',
-                    content: 'This web-app task is not complete until you have written the files, started the app, verified it in the browser, and fixed any issues you found. Continue using tools now.',
-                })
-                continue
-            }
-
             return {
                 content,
                 timings: completion.timings,
@@ -1495,7 +1464,6 @@ function buildFailedToolResult(
             content: [
                 `Tool ${toolCall.name} failed for ${toolLabel}.`,
                 message,
-                'Do not stop on this failure. Use list_files or grep_repo to find the correct path, then continue.',
             ].join('\n\n'),
         },
     }
