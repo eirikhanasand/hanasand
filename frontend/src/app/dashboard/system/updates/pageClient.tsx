@@ -25,7 +25,7 @@ export default function AptUpdatesClient() {
     return <div className='grid gap-3'>
         <DashboardPanel className='grid gap-4 p-4'>
             <div className='flex flex-wrap items-start justify-between gap-3'>
-                <div><p className='text-xs font-semibold text-ui-muted'>hanasand · Ubuntu 24.04</p><h2 className='mt-1 text-lg font-semibold'>Update control</h2><p className='mt-1 text-sm text-ui-muted'>APT remains responsible for repository signature verification. This policy only installs packages from the Ubuntu origin and does not trust urgency labels by themselves.</p></div>
+                <div><p className='text-xs font-semibold text-ui-muted'>hanasand · Ubuntu 24.04</p><h2 className='mt-1 text-lg font-semibold'>Update control</h2><p className='mt-1 text-sm text-ui-muted'>The server installs updates automatically.</p></div>
                 <button onClick={() => void load()} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold hover:border-ui-primary'><RefreshCcw className='h-4 w-4' />{loading ? 'Checking' : 'Refresh'}</button>
             </div>
             <div className='grid gap-2 sm:grid-cols-3'>
