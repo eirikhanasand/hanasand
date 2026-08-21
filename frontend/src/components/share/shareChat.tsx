@@ -5,7 +5,7 @@ import randomId from '@/utils/random/randomId'
 import { findTreeFileId, listTreePaths } from '@/components/ai/shareTree'
 import { updateShare } from '@/utils/share/put'
 import postShare from '@/utils/share/post'
-import { AlertTriangle, ArrowUp, Check, ChevronRight, ClipboardCheck, ExternalLink, Eye, FileText, Gauge, Globe2, Loader2, RotateCw, ScanSearch, ShieldCheck, Sparkles } from 'lucide-react'
+import { AlertTriangle, ArrowUp, Check, ChevronRight, ClipboardCheck, ExternalLink, Eye, FileText, Globe2, Loader2, RotateCw, ScanSearch, ShieldCheck, Sparkles } from 'lucide-react'
 import { Dispatch, SyntheticEvent, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from 'react'
 import ErrorNotice from '@/components/error/errorNotice'
 
@@ -211,12 +211,12 @@ export default function ShareChat({
         activeProofs: browserProofJobs.filter((job) => job.status === 'queued' || job.status === 'running').length,
     })
     const primaryAction = pendingEdit?.status === 'pending'
-            ? {
-                label: 'Apply',
-                detail: `${pendingEdit.changes.length} reviewed change${pendingEdit.changes.length === 1 ? '' : 's'} ready for you.`,
-                disabled: false,
-                onClick: applyPendingEdit,
-            }
+        ? {
+            label: 'Apply',
+            detail: `${pendingEdit.changes.length} reviewed change${pendingEdit.changes.length === 1 ? '' : 's'} ready for you.`,
+            disabled: false,
+            onClick: applyPendingEdit,
+        }
         : pendingEdit?.status === 'error'
             ? {
                 label: 'Review fix',
@@ -1064,11 +1064,6 @@ function beginnerActionFailure(error?: string) {
 }
 
 function buildPrompt(prompt: string, share: Share, editingContent: string, treePaths: string[], previewUrl: string | null, workflow: ShareChatWorkflow) {
-    const shareEvidenceUrl = buildShareEvidenceUrl(share)
-    const evidenceTargets = [
-        previewUrl ? `Runnable preview: ${previewUrl}` : null,
-        shareEvidenceUrl ? `Current share page: ${shareEvidenceUrl}` : null,
-    ].filter(Boolean)
     if (workflow === 'ask') {
         return [
             'You are the Hanasand workspace assistant in Ask mode for the active /s share.',
@@ -1500,11 +1495,6 @@ function journeyTypeLabels(journey?: BrowserJourneyProof) {
         journey.journeyTypes.contact ? 'contact' : null,
         journey.journeyTypes.dashboardCrud ? 'dashboard' : null,
     ].filter(Boolean) as string[]
-}
-
-function formatRunDuration(durationMs: number) {
-    const seconds = Math.max(0.1, durationMs / 1000)
-    return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`
 }
 
 function normalizeSharePath(path: string) {
