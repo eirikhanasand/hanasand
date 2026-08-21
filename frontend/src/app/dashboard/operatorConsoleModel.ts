@@ -1812,7 +1812,7 @@ function buildProductReadiness(input: {
                 ? `${input.dashboardAlertDelivery.status} delivery ${input.dashboardAlertDelivery.id} for surfaced alert ${input.dashboardAlertDelivery.alertId}.`
                 : input.latestDelivery ? `Latest delivery ${input.latestDelivery.id} is for ${input.latestDelivery.alertId}, but not for a dashboard-surfaced alert.` : 'Delivery ledger is syncing to a dashboard-surfaced alert.',
             source: 'Webhook delivery ledger',
-        href: '/dashboard/automation?setup=dwm',
+            href: '/dashboard/automation?setup=dwm',
             checkedAt: input.dashboardAlertDelivery?.attemptedAt || input.latestDelivery?.attemptedAt || readinessCheckedAt,
             backendProofContractVersion: 'dwm.webhook.delivery_ledger.v1',
         },
@@ -1847,7 +1847,7 @@ function buildProductReadiness(input: {
                 ? webhookHealth.detail || webhookHealthDetail(webhookHealth)
                 : 'Webhook health state is loading.',
             source: webhookHealth?.source || 'DWM webhook health',
-        href: webhookHealth?.href || '/dashboard/automation?setup=dwm',
+            href: webhookHealth?.href || '/dashboard/automation?setup=dwm',
             checkedAt: webhookHealth?.checkedAt || webhookHealth?.latestDeliveryAt || webhookHealth?.latestAuditEventAt || input.latestWebhookAt,
             staleAfterSeconds: webhookHealth?.staleAfterSeconds,
             proofTimestamp: webhookHealth?.proofTimestamp,
