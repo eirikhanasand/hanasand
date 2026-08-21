@@ -288,7 +288,7 @@ async function loadRuns(automationId: string, ownerId: string, includeAll = fals
         WHERE automation_id = $1
           AND ($2::BOOLEAN OR owner_id = $3)
         ORDER BY started_at DESC
-        LIMIT 100
+        LIMIT 50
     `, [automationId, includeAll, ownerId])
 
     return result.rows as AutomationRunRow[]
