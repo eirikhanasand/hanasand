@@ -19,8 +19,11 @@ export default async function Page() {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
 
-    const roles = await getRoles({ id, token })
-    const users = await fetchUsersWithRoles({ id, token }) as UserWithRole[]
+    const [roles, users] = await Promise.all([
+        getRoles({ id, token, cache: 'no-store' }),
+        fetchUsersWithRoles({ id, token, cache: 'no-store' })
+    ])
+    const refreshedAt = new Date()
     void name
     const reservedSet = new Set(reservedUsernames)
     const reservedCount = users.filter((user) => reservedSet.has(user.id.toLowerCase())).length
@@ -38,13 +41,14 @@ export default async function Page() {
                 <AdminMetric icon={<UsersRound className='h-4 w-4' />} label='Users' value={String(users.length)} detail={`${assignedUsers} with roles`} tone={users.length ? 'ok' : 'watch'} />
                 <AdminMetric icon={<Shield className='h-4 w-4' />} label='Roles' value={String(roles.length)} detail={priorityRole ? `Highest: ${priorityRole.name}` : 'roles are ready'} tone={roles.length ? 'ok' : 'watch'} />
                 <AdminMetric icon={<UserRound className='h-4 w-4' />} label='Reserved' value={String(reservedCount)} detail='Reserved accounts' tone={reservedCount ? 'neutral' : 'ok'} />
-                <AdminMetric icon={<Radio className='h-4 w-4' />} label='Admin controls' value='Live' detail='Changes apply immediately' tone='ok' />
+                <AdminMetric icon={<Radio className='h-4 w-4' />} label='Admin controls' value='Connected' detail={`Last refreshed ${formatRefreshTime(refreshedAt)}`} tone='ok' />
             </section>
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                <div className='grid divide-y divide-ui-border md:grid-cols-3 md:divide-x md:divide-y-0'>
+                <div className='grid divide-y divide-ui-border md:grid-cols-4 md:divide-x md:divide-y-0'>
                     <AdminAction href='/dashboard/helpdesk' label='Support access' value='audit trail' />
                     <AdminAction href='/dashboard/system/rate-limits' label='API tokens' value='scoped keys' />
                     <AdminAction href='/dashboard/content' label='Content management' value='articles and thoughts' />
+                    <AdminAction href='/dashboard/ti/audit' label='Audit log' value='admin activity' />
                 </div>
             </DashboardPanel>
             <div className='grid gap-3 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)] xl:items-start'>
@@ -53,6 +57,15 @@ export default async function Page() {
             </div>
         </DashboardPage>
     )
+}
+
+function formatRefreshTime(date: Date) {
+    return new Intl.DateTimeFormat('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short'
+    }).format(date)
 }
 
 function AdminMetric({ icon, label, value, detail, tone }: { icon: ReactNode, label: string, value: string, detail: string, tone: 'ok' | 'watch' | 'neutral' }) {

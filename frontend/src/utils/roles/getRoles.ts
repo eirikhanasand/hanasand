@@ -4,9 +4,10 @@ import { redirect } from 'next/navigation'
 type FetchRoleProps = {
     id: string
     token: string
+    cache?: RequestCache
 }
 
-export default async function getRoles({ id, token }: FetchRoleProps): Promise<Role[]> {
+export default async function getRoles({ id, token, cache }: FetchRoleProps): Promise<Role[]> {
     if (!id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
@@ -21,7 +22,7 @@ export default async function getRoles({ id, token }: FetchRoleProps): Promise<R
                 'id': id,
                 'Authorization': `Bearer ${token}`
             },
-            next: { revalidate: 5 },
+            ...(cache ? { cache } : { next: { revalidate: 5 } }),
             signal: controller.signal
         })
 

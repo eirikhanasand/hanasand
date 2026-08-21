@@ -1,7 +1,7 @@
 import config from '@/config'
 import { redirect } from 'next/navigation'
 
-export default async function fetchUsersWithRoles({ id, token }: { id?: string, token?: string }): Promise<UserWithRole[]> {
+export default async function fetchUsersWithRoles({ id, token, cache }: { id?: string, token?: string, cache?: RequestCache }): Promise<UserWithRole[]> {
     if (!id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
@@ -15,7 +15,7 @@ export default async function fetchUsersWithRoles({ id, token }: { id?: string, 
                 'id': id,
                 'Authorization': `Bearer ${token}`
             },
-            next: { revalidate: 5 },
+            ...(cache ? { cache } : { next: { revalidate: 5 } }),
             signal: controller.signal
         })
 
