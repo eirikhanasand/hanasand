@@ -11,7 +11,6 @@ import { authenticateOperatorRequest, authenticateRequest, authorizeOperatorScop
 import { handleEvaluationBenchmarkRequest } from "./evaluationBenchmarkRoutes.ts";
 import { handleTimelinessRequest } from "./timelinessRoutes.ts";
 import { reconcileActorIdentityCoverage } from "../pipeline/mitreActorCatalog.ts";
-import { handleAutomaticReviewRequest } from "./automaticReviewRoutes.ts";
 import { upsertServiceMonitorIncident } from "./serviceMonitorIncident.ts";
 import { handleActorEnrichmentRequest } from "./actorEnrichmentRoutes.ts";
 import { buildSourceQualityReport } from "../pipeline/sourceQuality.ts";
@@ -55,8 +54,6 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
     const result = await upsertServiceMonitorIncident(options, input);
     return json({ incident: result.incident ? safeIncidentDto(result.incident) : undefined, queued: result.queued }, result.incident ? 201 : 200);
   }
-  const automaticReviewResponse = await handleAutomaticReviewRequest(request, options);
-  if (automaticReviewResponse) return automaticReviewResponse;
   const url = new URL(request.url);
   const actorEnrichmentResponse = await handleActorEnrichmentRequest(request, options);
   if (actorEnrichmentResponse) return actorEnrichmentResponse;

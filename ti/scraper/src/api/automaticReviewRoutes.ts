@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto";
-import { error, json, numberQuery, readJson } from "./http.ts";
-import { authenticateRequest } from "./requestAuthentication.ts";
+import { error } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
-import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
+import { inTenantScope } from "./tenantScope.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { resolveMitreActorIdentity, type ActorIdentityRecord } from "../pipeline/mitreActorCatalog.ts";
 import { sanitizeDwmCustomerEvidenceExcerpt } from "../product/dwmCustomerDisplay.ts";
@@ -172,46 +171,6 @@ type ReviewIndexCollections = {
 };
 
 const MAX_STALE_TASKS_SUPERSEDED_PER_CYCLE = 250;
-
-export async function handleAutomaticReviewRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
-  const url = new URL(request.url);
-  if (url.pathname !== "/v1/intel/automatic-reviews"
-    && url.pathname !== "/v1/intel/automatic-reviews/sync"
-    && url.pathname !== "/v1/intel/automatic-reviews/run"
-    && !/^\/v1\/intel\/automatic-reviews\/[^/]+\/replay$/.test(url.pathname)) return undefined;
-
-  const authentication = await authenticateRequest(request, options);
-  if (authentication.error) return authentication.error;
-  if (!authentication.identity!.roles.some((role) => ["owner", "admin", "administrator", "system_admin", "analyst"].includes(role))) {
-    return error("automatic_review_forbidden", "Automatic intelligence review requires an analyst role", 403);
-  }
-
-  const body = request.method === "GET" ? {} : await readJson<any>(request);
-  const scope = resolveTenantScope(request, url, body.tenantId);
-  if (scope.error) return scope.error;
-
-  if (url.pathname === "/v1/intel/automatic-reviews" && request.method === "GET") {
-    return json(await automaticReviewSnapshot(options.store, scope.tenantId, numberQuery(url.searchParams.get("limit"))));
-  }
-  if (url.pathname === "/v1/intel/automatic-reviews/sync" && request.method === "POST") {
-    const queued = await syncAutomaticReviewQueue(options, { tenantId: scope.tenantId });
-    await (options.store as any).flush?.();
-    return json({ queued, ...(await automaticReviewSnapshot(options.store, scope.tenantId)) }, 201);
-  }
-  if (url.pathname === "/v1/intel/automatic-reviews/run" && request.method === "POST") {
-    const limit = boundedInteger(body.limit, 10, 1, 50);
-    const cycle = await runAutomaticReviewCycle(options, { limit, tenantId: scope.tenantId });
-    return json({ cycle, ...(await automaticReviewSnapshot(options.store, scope.tenantId)) }, 201);
-  }
-  if (request.method === "POST") {
-    const taskId = url.pathname.split("/")[4];
-    const replayed = await replayAutomaticReview(options, taskId, scope.tenantId);
-    if (replayed instanceof Response) return replayed;
-    await (options.store as any).flush?.();
-    return json({ task: replayed }, 201);
-  }
-  return error("automatic_review_method_not_allowed", "The automatic review action is not supported", 405);
-}
 
 export function syncAutomaticReviewQueue(options: ApiServerOptions, input: { tenantId?: string; allTenants?: boolean; now?: string; modelVersion?: string } = {}) {
   const store = options.store as any;

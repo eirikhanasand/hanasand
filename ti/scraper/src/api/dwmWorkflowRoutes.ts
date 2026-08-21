@@ -1079,7 +1079,7 @@ function normalizeWorkflowStatus(value: unknown, fallback: DwmAlertWorkflowStatu
 }
 
 function defaultsForWorkflowStatus(status: DwmAlertWorkflowStatus, existing: any): { reviewState: string; deliveryState: string } {
-  if (status === "new") return { reviewState: existing.reviewState ?? "needs_review", deliveryState: existing.deliveryState ?? "pending_review" };
+  if (status === "new") return { reviewState: existing.reviewState ?? "new", deliveryState: existing.deliveryState ?? "ready_to_send" };
   if (status === "triaged") return { reviewState: "reviewing", deliveryState: existing.deliveryState ?? "pending_review" };
   if (status === "investigating") return { reviewState: "validate_identity", deliveryState: existing.deliveryState ?? "pending_review" };
   if (status === "suppressed") return { reviewState: "false_positive", deliveryState: "muted" };
@@ -1532,8 +1532,8 @@ function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope
     dedupeKey,
     reviewState: claim.status === "needs_review" ? "needs_review" : "new",
     workflowStatus: "new",
-    deliveryState: "pending_review",
-    recommendedAction: "Open the exposure claim, verify the victim match, then assign or route to case/webhook.",
+    deliveryState: "ready_to_send",
+    recommendedAction: "Deliver the alert to the configured customer webhook.",
     recommendedRoute: "exposure_alert",
     evidence: [evidence],
     webhookDelivery: {
@@ -2599,7 +2599,7 @@ function buildDwmAlertDeliveryReadiness(alert: any, deliveries: any[]) {
   return {
     schemaVersion: "dwm.alert_delivery_readiness.v1",
     ready,
-    state: ready ? "ready" : closed ? "closed" : suppressed ? "suppressed" : hasRoute ? "needs_evidence_review" : "missing_route",
+    state: ready ? "ready" : closed ? "closed" : suppressed ? "suppressed" : hasRoute ? "needs_evidence" : "missing_route",
     persistedContext: persisted,
     typedBlockers: persisted?.blockers ?? [],
     blockerCodes: persisted?.blockerCodes ?? [],
@@ -2622,7 +2622,7 @@ function buildDwmAlertDeliveryReadiness(alert: any, deliveries: any[]) {
     deliveryHistoryRefs: persisted?.deliveryHistoryRefs ?? deliveries.map((delivery: any) => delivery.id).filter(Boolean),
     lastDeliveryStatus: lastDelivery?.status,
     lastDeliveryAt: lastDelivery?.attemptedAt,
-    blocker: ready ? null : closed ? "alert_closed" : suppressed ? "alert_suppressed" : hasRoute ? "review_required" : "missing_webhook_route"
+    blocker: ready ? null : closed ? "alert_closed" : suppressed ? "alert_suppressed" : hasRoute ? "missing_evidence" : "missing_webhook_route"
   };
 }
 
