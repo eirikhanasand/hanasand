@@ -28,7 +28,7 @@ type Interval = { lower: number | null, upper: number | null, sampleSize: number
 type Breakdown = Score & { name: string, sampleSize: number }
 type ExactMatch = { sampleSize: number, exactMatchCount: number, errorCount: number, exactMatchRate: number | null, confidenceInterval: Interval }
 
-export type Benchmark = {
+type Benchmark = {
     id: string
     tenantId?: string
     name: string
@@ -111,14 +111,14 @@ type CreateFormState = { name: string, sampleSize: number, datasetSplit: 'valida
 const LABEL_TYPES = ['actor', 'alias', 'ransomware', 'victim', 'incident', 'cve', 'malware', 'tool', 'campaign', 'ttp', 'country', 'sector', 'indicator', 'impact', 'vulnerability', 'incident_date', 'publication_date', 'source_url', 'duplicate_article', 'contradictory_claim', 'irrelevant_page', 'dynamic_page', 'dataset', 'business_mechanism'] as const
 const FILTERS = ['active', 'retry', 'dead_letter', 'complete'] as const
 
-export default function EvaluationBenchmarkClient({ initialBenchmarks }: { initialBenchmarks?: Benchmark[] }) {
-    const [benchmarks, setBenchmarks] = useState<Benchmark[]>(initialBenchmarks ?? [])
-    const [selectedBenchmarkId, setSelectedBenchmarkId] = useState(() => initialBenchmarks?.find(item => item.reviewMode === 'automatic_model')?.id || initialBenchmarks?.[0]?.id || '')
+export default function EvaluationBenchmarkClient() {
+    const [benchmarks, setBenchmarks] = useState<Benchmark[]>([])
+    const [selectedBenchmarkId, setSelectedBenchmarkId] = useState('')
     const [tasks, setTasks] = useState<Task[]>([])
     const [selectedTaskId, setSelectedTaskId] = useState('')
     const [filter, setFilter] = useState<(typeof FILTERS)[number]>('active')
     const [metrics, setMetrics] = useState<EvaluationMetrics | null>(null)
-    const [loading, setLoading] = useState(initialBenchmarks === undefined)
+    const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
     const [showCreate, setShowCreate] = useState(false)
@@ -162,7 +162,7 @@ export default function EvaluationBenchmarkClient({ initialBenchmarks }: { initi
         finally { setLoading(false) }
     }, [loadBenchmarks])
 
-    useEffect(() => { if (initialBenchmarks === undefined) void refresh() }, [initialBenchmarks, refresh])
+    useEffect(() => { void refresh() }, [refresh])
     useEffect(() => { void Promise.all([loadTasks(selectedBenchmarkId), loadMetrics(selectedBenchmark)]).catch(cause => setError(message(cause))) }, [loadMetrics, loadTasks, selectedBenchmark, selectedBenchmarkId])
     useEffect(() => { if (!visibleTasks.some(item => item.id === selectedTaskId)) setSelectedTaskId(visibleTasks[0]?.id || '') }, [selectedTaskId, visibleTasks])
 
@@ -207,8 +207,8 @@ export default function EvaluationBenchmarkClient({ initialBenchmarks }: { initi
 
     return (
         <>
-            {(!loading && (!hasEvaluationTasks || unavailable)) ? <EvaluationWelcome error={unavailable ? error : ''} showCreate={showCreate} onCreate={() => setShowCreate(value => !value)} createForm={createForm} onCreateChange={setCreateForm} onSubmit={() => void createBenchmark()} saving={saving} /> : null}
-            {(loading || (hasEvaluationTasks && !unavailable)) ? <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
+            {(!hasEvaluationTasks || unavailable) ? <EvaluationWelcome loading={loading} error={unavailable ? error : ''} showCreate={showCreate} onCreate={() => setShowCreate(value => !value)} createForm={createForm} onCreateChange={setCreateForm} onSubmit={() => void createBenchmark()} saving={saving} /> : null}
+            {(hasEvaluationTasks && !unavailable) ? <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-3 py-2'>
                     <div className='flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2 text-xs text-ui-muted'>
                         <span className='font-semibold uppercase'>Diagnostic runtime queue</span>
@@ -229,7 +229,7 @@ export default function EvaluationBenchmarkClient({ initialBenchmarks }: { initi
                 {metrics ? <MetricsSummary metrics={metrics} /> : null}
             </DashboardPanel> : null}
 
-            {(loading || (hasEvaluationTasks && !unavailable)) ? <div className='grid min-h-[38rem] gap-3 xl:grid-cols-[22rem_minmax(0,1fr)]'>
+            {(hasEvaluationTasks && !unavailable) ? <div className='grid min-h-[38rem] gap-3 xl:grid-cols-[22rem_minmax(0,1fr)]'>
                 <DashboardPanel className='min-h-0 overflow-hidden border-ui-border bg-ui-panel p-0'>
                     <div className='border-b border-ui-border p-2'>
                         <label className='text-[10px] font-semibold uppercase text-ui-muted' htmlFor='benchmark-select'>Benchmark</label>
@@ -262,12 +262,12 @@ export default function EvaluationBenchmarkClient({ initialBenchmarks }: { initi
     )
 }
 
-function EvaluationWelcome({ error, showCreate, onCreate, createForm, onCreateChange, onSubmit, saving }: { error: string, showCreate: boolean, onCreate: () => void, createForm: CreateFormState, onCreateChange: (value: CreateFormState) => void, onSubmit: () => void, saving: boolean }) {
+function EvaluationWelcome({ loading, error, showCreate, onCreate, createForm, onCreateChange, onSubmit, saving }: { loading: boolean, error: string, showCreate: boolean, onCreate: () => void, createForm: CreateFormState, onCreateChange: (value: CreateFormState) => void, onSubmit: () => void, saving: boolean }) {
     return <DashboardPanel className='mx-auto w-full max-w-3xl border-ui-border bg-ui-panel p-6 text-center'>
         <ShieldCheck className='mx-auto h-10 w-10 text-ui-primary' />
-        <h2 className='mt-3 text-lg font-semibold text-ui-text'>{error ? 'Evaluation service unavailable' : 'Set up extraction evaluation'}</h2>
-        <p className='mx-auto mt-2 max-w-xl text-sm leading-6 text-ui-muted'>{error || 'Evaluation compares extracted threat-intelligence fields with independently retained evidence. No evaluation-ready benchmark tasks are available yet.'}</p>
-        {error ? <button type='button' onClick={() => window.location.reload()} className='mt-5 inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text hover:bg-ui-canvas'><RefreshCw className='h-4 w-4' />Retry</button> : <button type='button' onClick={onCreate} className='mt-5 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-xs font-semibold text-ui-canvas hover:opacity-90'><Plus className='h-4 w-4' />Create automatic benchmark</button>}
+        <h2 className='mt-3 text-lg font-semibold text-ui-text'>{error ? 'Evaluation service unavailable' : loading ? 'Loading extraction evaluation' : 'Set up extraction evaluation'}</h2>
+        <p className='mx-auto mt-2 max-w-xl text-sm leading-6 text-ui-muted'>{error || loading ? (error || 'Checking for saved benchmarks…') : 'Evaluation compares extracted threat-intelligence fields with independently retained evidence. No evaluation-ready benchmark tasks are available yet.'}</p>
+        {error ? <button type='button' onClick={() => window.location.reload()} className='mt-5 inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text hover:bg-ui-canvas'><RefreshCw className='h-4 w-4' />Retry</button> : !loading ? <button type='button' onClick={onCreate} className='mt-5 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-xs font-semibold text-ui-canvas hover:opacity-90'><Plus className='h-4 w-4' />Create automatic benchmark</button> : null}
         {showCreate && !error ? <div className='mt-5 text-left'><CreateForm value={createForm} onChange={onCreateChange} onSubmit={onSubmit} saving={saving} /></div> : null}
     </DashboardPanel>
 }
