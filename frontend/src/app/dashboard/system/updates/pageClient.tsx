@@ -26,7 +26,7 @@ export default function AptUpdatesClient() {
         <DashboardPanel className='grid gap-4 p-4'>
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div><p className='text-xs font-semibold text-ui-muted'>hanasand · Ubuntu 24.04</p><h2 className='mt-1 text-lg font-semibold'>Update control</h2><p className='mt-1 text-sm text-ui-muted'>The server installs updates automatically.</p></div>
-                <button onClick={() => void load()} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold hover:border-ui-primary'><RefreshCcw className='h-4 w-4' />{loading ? 'Checking' : 'Refresh'}</button>
+                <div className='flex items-center gap-3'><span className='text-sm text-ui-muted'>{formatLastCheck(status?.checked_at)}</span><button onClick={() => void load()} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold hover:border-ui-primary'><RefreshCcw className='h-4 w-4' />{loading ? 'Checking' : 'Refresh'}</button></div>
             </div>
             <div className='grid gap-2 sm:grid-cols-3'>
                 <Summary icon={tone === 'danger' ? <AlertTriangle /> : <CheckCircle2 />} label='State' value={error || label(status?.status)} tone={tone} />
@@ -34,8 +34,7 @@ export default function AptUpdatesClient() {
                 <Summary icon={<Clock3 />} label='Updates' value={`${regular.length} package${regular.length === 1 ? '' : 's'}`} tone={regular.length ? 'warning' : 'success'} />
             </div>
             <div className='grid gap-2 md:grid-cols-2'>
-                <Detail label='Last check' value={formatLastCheck(status?.checked_at)} />
-                <div className='rounded-lg border border-ui-border bg-ui-raised p-3'><div className='flex items-center justify-between gap-3'><p className='text-xs font-semibold text-ui-muted'>Last installed</p><p className='text-right text-sm font-semibold'>{status?.last_update_at ? formatLastCheck(status.last_update_at) : 'Never'}</p></div>{status?.last_updated_packages?.length ? <p className='mt-2 wrap-break-word text-sm'>{status.last_updated_packages.join(', ')}</p> : null}</div>
+                <div className='rounded-lg border border-ui-border bg-ui-raised p-3 md:col-span-2'><div className='flex items-center justify-between gap-3'><p className='text-xs font-semibold text-ui-muted'>Last installed</p><p className='text-right text-sm text-ui-muted'>{status?.last_update_at ? formatLastCheck(status.last_update_at) : 'Never'}</p></div>{status?.last_updated_packages?.length ? <p className='mt-2 wrap-break-word text-sm'>{status.last_updated_packages.join(', ')}</p> : null}</div>
                 <Detail label='Policy' value='Security updates immediately; other Ubuntu updates after 72 hours.' />
                 <Detail label='Verification' value={status?.policy?.repository_verification || 'Waiting for the host to report its verification policy.'} />
             </div>
