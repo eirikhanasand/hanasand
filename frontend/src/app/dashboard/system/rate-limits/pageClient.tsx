@@ -658,7 +658,7 @@ export default function RateLimitsPageClient({
                         <div>
                             <h2 className='text-base font-semibold text-ui-text'>Create an API key</h2>
                             <p className='mt-1 text-sm text-ui-muted'>
-                                Choose who will use this key, give it a name, and add the routes it can access. For each route, set the maximum requests per second, minute, hour, and day.
+                                Choose who will use this key, give it a name, and add the routes it can access. For each route, set limits for second, minute, hour, and day windows.
                             </p>
                         </div>
                         {keyMessage ? <div className='text-sm text-ui-warning'>{keyMessage}</div> : null}
