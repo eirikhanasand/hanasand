@@ -480,7 +480,7 @@ export default function RateLimitsPageClient({
                     <div className='max-w-3xl'>
                         <h1 className='text-xl font-semibold text-ui-text'>Rate Limits</h1>
                     </div>
-                    <div className='grid gap-2 sm:grid-cols-2'>
+                    <div className='grid gap-2 sm:grid-cols-3'>
                         <StatChip label='Routes' value={String(routeCount)} />
                         <StatChip label='Overrides' value={String(overrideCount)} />
                         <StatChip label='Keys' value={String(apiKeys.length)} />
