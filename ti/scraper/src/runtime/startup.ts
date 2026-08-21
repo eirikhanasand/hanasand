@@ -113,7 +113,7 @@ export async function startScraperRuntime() {
   const paths = buildRuntimeStores(config);
   startupPhase("runtime_stores_built");
   const runMaintenanceMigrations = Bun.env.TI_RUN_MAINTENANCE_MIGRATIONS === "true";
-  const store = await PostgresScraperStore.create({ runMaintenanceMigrations, hydrate: false, deferHighVolumeHydration: true, onStartupPhase: (phase) => startupPhase(`postgres_${phase}`) });
+  const store = await PostgresScraperStore.create({ runMaintenanceMigrations, hydrate: false, deferHighVolumeHydration: true, deferStartupChecks: true, onStartupPhase: (phase) => startupPhase(`postgres_${phase}`) });
   startupPhase("postgres_maintenance_migrations", { enabled: runMaintenanceMigrations });
   startupPhase("postgres_store_created");
   const frontier = new FocusedFrontier({
@@ -125,8 +125,13 @@ export async function startScraperRuntime() {
   const serverOptions: ApiServerOptions = { port: config.port, store, frontier, config, objectStore };
   const server = startApiServer(serverOptions);
   startupPhase("api_server_started", { port: server.port });
+  const startupChecks = Promise.all([
+    store.databaseHealth(),
+    store.queryExposureQueuePage({ tenantId: "default", filters: {}, limit: 25, offset: 0, global: true })
+  ]).then(() => startupPhase("postgres_health_checked"))
+    .catch((error) => logger.warn("deferred postgres startup checks failed", { event: "postgres.startup_checks_failed", error: error instanceof Error ? error.message : String(error) }));
   const hydration = store.hydrateStartupData((phase) => startupPhase(`postgres_${phase}`));
-  await hydration;
+  await Promise.all([hydration, startupChecks]);
   const legacyImport = await store.importLegacySnapshot(paths.evidenceMetadataPath);
   startupPhase("legacy_snapshot_checked", { imported: legacyImport.imported });
   const parserDiagnosticObjectCleanup = await store.purgeParserDiagnosticArchiveObjects(objectStore);

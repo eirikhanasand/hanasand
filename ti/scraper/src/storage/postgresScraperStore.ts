@@ -90,6 +90,7 @@ export type PostgresScraperStoreOptions = {
   runMaintenanceMigrations?: boolean;
   hydrate?: boolean;
   deferHighVolumeHydration?: boolean;
+  deferStartupChecks?: boolean;
 };
 
 type PendingWrite = { description: string; run: () => Promise<void> };
@@ -148,9 +149,11 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       await store.migrate();
       options.onStartupPhase?.("migrated");
       if (options.hydrate !== false) await store.hydrateStartupData(options.onStartupPhase);
-      await store.databaseHealth();
-      await store.queryExposureQueuePage({ tenantId: "default", filters: {}, limit: 25, offset: 0, global: true });
-      options.onStartupPhase?.("health_checked");
+      if (options.deferStartupChecks !== true) {
+        await store.databaseHealth();
+        await store.queryExposureQueuePage({ tenantId: "default", filters: {}, limit: 25, offset: 0, global: true });
+        options.onStartupPhase?.("health_checked");
+      }
       return store;
     } catch (error) {
       await sql.close({ timeout: 1 }).catch(() => undefined);
