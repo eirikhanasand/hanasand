@@ -727,6 +727,7 @@ export default async function ensureSchema() {
         )
     `)
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS organization_id TEXT')
+    await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS target_url TEXT')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT \'UTC\'')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS model_name TEXT')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS notify_on TEXT NOT NULL DEFAULT \'failure\'')

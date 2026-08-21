@@ -7,6 +7,7 @@ export type AgentAutomation = {
     ownerId?: string
     name: string
     prompt: string
+    targetUrl: string | null
     scheduleKind: 'once' | 'interval'
     intervalMinutes: number | null
     runAt: string | null
@@ -56,6 +57,7 @@ export type AutomationRunArtifact = {
 export type AutomationPayload = {
     name: string
     prompt: string
+    targetUrl?: string | null
     scheduleKind: 'once' | 'interval'
     intervalMinutes?: number | null
     runAt?: string | null

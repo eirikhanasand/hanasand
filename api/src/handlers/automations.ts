@@ -78,6 +78,7 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
             owner_id,
             name,
             prompt,
+            target_url,
             schedule_kind,
             interval_minutes,
             run_at,
@@ -89,13 +90,14 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
             notify_on,
             next_run_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         RETURNING *
     `, [
         id,
         ownerId,
         input.name,
         input.prompt,
+        input.targetUrl,
         input.scheduleKind,
         input.intervalMinutes,
         input.runAt,
@@ -144,28 +146,30 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
         UPDATE agent_automations
            SET name = $3,
                prompt = $4,
-               schedule_kind = $5,
-               interval_minutes = $6,
-               run_at = $7,
-               status = $8,
-               action_type = $9,
-               organization_id = $10,
-               timezone = $11,
-               model_name = $12,
-               notify_on = $13,
-               next_run_at = $14,
-               consecutive_failures = CASE WHEN $8 = 'active' THEN 0 ELSE consecutive_failures END,
-               paused_reason = CASE WHEN $8 = 'active' THEN NULL ELSE paused_reason END,
+               target_url = $5,
+               schedule_kind = $6,
+               interval_minutes = $7,
+               run_at = $8,
+               status = $9,
+               action_type = $10,
+               organization_id = $11,
+               timezone = $12,
+               model_name = $13,
+               notify_on = $14,
+               next_run_at = $15,
+               consecutive_failures = CASE WHEN $9 = 'active' THEN 0 ELSE consecutive_failures END,
+               paused_reason = CASE WHEN $9 = 'active' THEN NULL ELSE paused_reason END,
                last_status = CASE WHEN last_status = 'running' THEN NULL ELSE last_status END,
                updated_at = NOW()
          WHERE id = $1
-           AND ($2::BOOLEAN OR owner_id = $15)
+           AND ($2::BOOLEAN OR owner_id = $16)
          RETURNING *
     `, [
         req.params.id,
         manageAll,
         input.name,
         input.prompt,
+        input.targetUrl,
         input.scheduleKind,
         input.intervalMinutes,
         input.runAt,

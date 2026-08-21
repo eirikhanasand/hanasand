@@ -1,7 +1,6 @@
 import run from '#db'
 import { deliverDiscordWebhookFile, discordWebhookFileModelLabel, redactSecretBearingText } from '#utils/alerts/discordWebhookFile.ts'
 import { getMailHealth } from '#utils/mail/health.ts'
-import { listGptClients, requestGptCompletion } from '#utils/ws/handleGptMessage.ts'
 
 export type AutomationScheduleKind = 'once' | 'interval'
 export type AutomationStatus = 'active' | 'paused' | 'archived'
@@ -12,6 +11,7 @@ export type AutomationRow = {
     owner_id: string
     name: string
     prompt: string
+    target_url: string | null
     schedule_kind: AutomationScheduleKind
     interval_minutes: number | null
     run_at: string | null
@@ -60,6 +60,8 @@ export type AutomationRunArtifact = {
 export type AutomationInput = {
     name?: unknown
     prompt?: unknown
+    targetUrl?: unknown
+    target_url?: unknown
     scheduleKind?: unknown
     schedule_kind?: unknown
     intervalMinutes?: unknown
@@ -81,6 +83,7 @@ export type AutomationInput = {
 type NormalizedAutomationInput = {
     name: string
     prompt: string
+    targetUrl: string | null
     scheduleKind: AutomationScheduleKind
     intervalMinutes: number | null
     runAt: Date | null
@@ -151,6 +154,7 @@ export function toAutomationRun(row: AutomationRunRow) {
 export function normalizeAutomationInput(input: AutomationInput, existing?: AutomationRow): NormalizedAutomationInput {
     const name = clean(input.name) || existing?.name || 'Agent automation'
     const prompt = clean(input.prompt) || existing?.prompt || ''
+    const targetUrl = clean(input.targetUrl ?? input.target_url ?? existing?.target_url) || null
     const scheduleKind = parseScheduleKind(input.scheduleKind ?? input.schedule_kind ?? existing?.schedule_kind)
     const intervalMinutes = parseIntervalMinutes(input.intervalMinutes ?? input.interval_minutes ?? existing?.interval_minutes, scheduleKind)
     const runAt = parseRunAt(input.runAt ?? input.run_at ?? existing?.run_at, scheduleKind)
@@ -164,6 +168,13 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
 
     if (!prompt) {
         throw new Error('Prompt is required.')
+    }
+
+    if (actionType === 'agent_prompt') {
+        if (!targetUrl) throw new Error('Monitoring needs a URL to check.')
+        let parsedUrl: URL
+        try { parsedUrl = new URL(targetUrl) } catch { throw new Error('Monitoring URL must be a valid HTTP or HTTPS URL.') }
+        if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Monitoring URL must use HTTP or HTTPS.')
     }
 
     if (status === 'active' && actionType === 'system_alert' && !modelName) {
@@ -181,7 +192,7 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
         throw new Error('Organization reports need a delivery destination before activation.')
     }
 
-    return { name, prompt, scheduleKind, intervalMinutes, runAt, status, actionType, timezone, modelName, notifyOn, organizationId, nextRunAt }
+    return { name, prompt, targetUrl, scheduleKind, intervalMinutes, runAt, status, actionType, timezone, modelName, notifyOn, organizationId, nextRunAt }
 }
 
 export function computeNextRunAt({
@@ -298,7 +309,7 @@ export async function executeAutomation(automation: AutomationRow) {
                    duration_ms = $5,
                    artifacts = $6::jsonb
              WHERE id = $1
-        `, [runId, result.message, result.provider, result.model, durationMs, JSON.stringify(runArtifacts(result.message, result.artifacts))])
+        `, [runId, result.message, result.provider, result.model, durationMs, JSON.stringify(runArtifacts(result.message, 'artifacts' in result && Array.isArray(result.artifacts) ? result.artifacts : []))])
         await run(`
             UPDATE agent_automations
                SET next_run_at = $2,
@@ -408,40 +419,21 @@ async function runAutomationAction(automation: AutomationRow) {
         }
     }
 
-    const clients = listGptClients('gpt')
-    const availableClients = clients.filter((client) => client.model.status !== 'error')
-    const preferredClient = automation.model_name
-        ? availableClients.find((client) => client.name === automation.model_name)
-        : availableClients
-            .sort((left, right) => (right.model.tps || 0) - (left.model.tps || 0))[0]
+    return runMonitoringCheck(automation)
+}
 
-    if (!preferredClient) {
-        throw new Error('No Hanasand AI model client is connected.')
-    }
-
-    const completion = await withAutomationTimeout(requestGptCompletion('gpt', {
-        conversationId: `automation-${automation.id}-${crypto.randomUUID()}`,
-        clientName: preferredClient.name,
-        maxTokens: 1800,
-        temperature: 0.2,
-        messages: [
-            {
-                role: 'system',
-                content: [
-                    'You are a Hanasand scheduled agent.',
-                    'Run the user automation and return a concise result that can be shown later in the app.',
-                    'The user may not have any app open right now, so include what you checked, changed, or could not do.',
-                ].join(' '),
-            },
-            { role: 'user', content: automation.prompt },
-        ],
-    }))
-
-    return {
-        provider: 'hanasand-ai',
-        model: preferredClient.name,
-        message: completion.content || 'Automation completed without a text result.',
-        artifacts: Array.isArray(completion.artifacts) ? completion.artifacts : [],
+async function runMonitoringCheck(automation: AutomationRow) {
+    if (!automation.target_url) throw new Error('Monitoring is missing the URL to check.')
+    try {
+        const response = await fetch(automation.target_url, { signal: AbortSignal.timeout(10_000) })
+        const message = `Monitoring check ${response.ok ? 'passed' : 'failed'}: ${automation.target_url} returned HTTP ${response.status}.`
+        if (!response.ok) throw new Error(message)
+        if (automation.notify_on === 'always' && automation.model_name) await deliverDiscordIfConfigured(automation, message)
+        return { provider: 'hanasand-monitoring', model: 'http', message }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Monitoring request failed.'
+        if (automation.notify_on !== 'never' && automation.model_name) await deliverDiscordIfConfigured(automation, `Hanasand monitoring alert: ${message}`)
+        throw new Error(message, { cause: error })
     }
 }
 
@@ -503,22 +495,6 @@ async function fetchOrganizationProduct(organizationId: string) {
     const payload = await response.json().catch(() => null) as Record<string, unknown> | null
     if (!response.ok || !payload) throw new Error(`Threat-intelligence report returned ${response.status}.`)
     return payload
-}
-
-async function withAutomationTimeout<T>(promise: Promise<T>) {
-    let timeout: ReturnType<typeof setTimeout> | undefined
-    try {
-        return await Promise.race([
-            promise,
-            new Promise<never>((_, reject) => {
-                timeout = setTimeout(() => {
-                    reject(new Error('Automation exceeded the maximum runtime.'))
-                }, MAX_AUTOMATION_RUNTIME_MS)
-            }),
-        ])
-    } finally {
-        if (timeout) clearTimeout(timeout)
-    }
 }
 
 function clean(value: unknown) {
