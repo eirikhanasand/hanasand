@@ -61,7 +61,7 @@ struct NativeDashboardDetail: View {
             LogsNativePanel()
         case "/dashboard/system/ai":
             AIModelsNativePanel()
-        case "/dashboard/system/rate-limits":
+        case "/dashboard/system/rates":
             RateLimitsNativePanel()
         case "/profile":
             ProfileNativePanel()

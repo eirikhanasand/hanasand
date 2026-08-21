@@ -22,7 +22,7 @@ test.describe('rate-limit owner picker', () => {
 
         await mockClientRateLimitRequests(page, submittedPayloads)
         const usersLoaded = page.waitForResponse((response) => response.url().includes('/api/users'))
-        await page.goto('/dashboard/system/rate-limits', { waitUntil: 'domcontentloaded' })
+        await page.goto('/dashboard/system/rates', { waitUntil: 'domcontentloaded' })
         await usersLoaded
 
         await expect(page.getByRole('heading', { name: 'Create an API key' })).toBeVisible()
@@ -91,7 +91,7 @@ test.describe('rate-limit owner picker', () => {
         })
 
         const usersFailed = page.waitForResponse((response) => response.url().includes('/api/users') && response.status() === 500)
-        await page.goto('/dashboard/system/rate-limits', { waitUntil: 'domcontentloaded' })
+        await page.goto('/dashboard/system/rates', { waitUntil: 'domcontentloaded' })
         await usersFailed
         const owner = page.getByRole('combobox', { name: 'Owner' }).first()
         await owner.click()

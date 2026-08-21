@@ -734,7 +734,7 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
                     <textarea className={textAreaClass} name='reason' placeholder='Audit reason with customer approval and case' minLength={10} required />
                     <button className={primaryButton} disabled={submitting === 'apiUsage'} type='submit'>{submitting === 'apiUsage' ? 'Resetting...' : 'Reset API usage buckets'}</button>
                 </form>
-                <Link className='text-sm font-semibold text-ui-primary hover:opacity-80' href='/dashboard/system/rate-limits'>Open API keys and limit policy</Link>
+                <Link className='text-sm font-semibold text-ui-primary hover:opacity-80' href='/dashboard/system/rates'>Open API keys and limit policy</Link>
                 <Message value={apiUsageResetMessage} tone={apiUsageResetResult?.error ? 'error' : apiUsageResetMessage ? 'success' : 'neutral'} />
                 {apiUsageResetResult?.reset ? (
                     <div className='rounded-md border border-ui-border bg-ui-canvas p-3 text-xs leading-5 text-ui-muted'>

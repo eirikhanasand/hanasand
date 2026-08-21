@@ -59,7 +59,7 @@ extension DesktopAgentModel {
             updateTypedDashboardState(from: text, path: path)
             if path == "/profile" {
                 await loadProfileSecurityData()
-            } else if path == "/dashboard/system/rate-limits" {
+            } else if path == "/dashboard/system/rates" {
                 await loadRateLimitApiKeys()
                 await loadDashboardUsersForOwnerPicker()
             } else if path == "/users" || path == "/dashboard/management" {

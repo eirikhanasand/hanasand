@@ -106,7 +106,7 @@ extension DesktopAgentModel {
             vulnerabilityReport = try? decoder.decode(DashboardVulnerabilityReport.self, from: data)
         case "/dashboard/traffic":
             trafficMetrics = try? decoder.decode(DashboardTrafficMetrics.self, from: data)
-        case "/dashboard/system/rate-limits":
+        case "/dashboard/system/rates":
             rateLimitOverview = try? decoder.decode(DashboardRateLimitOverview.self, from: data)
         default:
             break

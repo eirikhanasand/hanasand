@@ -161,7 +161,7 @@ extension DesktopAgentModel {
             openNativeDashboard(path: "/dashboard/vulnerabilities", label: "Vulnerabilities")
             append(meta: "Dashboard", body: "Opened native Vulnerabilities panel.", kind: .command)
         } else if command == "open_dashboard_rate_limits" {
-            openNativeDashboard(path: "/dashboard/system/rate-limits", label: "Rate limits")
+            openNativeDashboard(path: "/dashboard/system/rates", label: "Rate limits")
             append(meta: "Dashboard", body: "Opened native Rate limits panel.", kind: .command)
         } else if command == "open_dashboard_traffic" {
             openNativeDashboard(path: "/dashboard/traffic", label: "Traffic")

@@ -33,7 +33,7 @@ test('dashboard sidebar keeps internal products admin-only without deleting them
         ['Logs', '/dashboard/logs'],
         ['Database', '/dashboard/db'],
         ['Backup', '/dashboard/db/backups'],
-        ['Rate Limits', '/dashboard/system/rate-limits'],
+        ['Rate Limits', '/dashboard/system/rates'],
         ['Cron Jobs', '/dashboard/cron-jobs'],
         ['Impersonation', '/dashboard/system/impersonation'],
         ['Management', '/dashboard/management'],

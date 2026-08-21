@@ -123,7 +123,7 @@ async function seedAdminUser() {
         `access_token=${token}`,
         `id=${runId}`,
     ].join('; ')
-    const dashboard = await pageRequest('/dashboard/system/rate-limits', cookieHeader)
+    const dashboard = await pageRequest('/dashboard/system/rates', cookieHeader)
     expect(dashboard.response.status === 200, 'Rate-limit dashboard page did not render for authenticated admin.', {
         status: dashboard.response.status,
     })

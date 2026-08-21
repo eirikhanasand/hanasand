@@ -5,7 +5,7 @@ import path from 'node:path'
 const root = process.cwd()
 
 test('rate limits separates policy from key issuance workflow', async () => {
-    const page = await readFile(path.join(root, 'src/app/dashboard/system/rate-limits/pageClient.tsx'), 'utf8')
+    const page = await readFile(path.join(root, 'src/app/dashboard/system/rates/pageClient.tsx'), 'utf8')
 
     expect(page).toContain('const [workspace, setWorkspace] = useState<\'keys\' | \'policy\'>(\'keys\')')
     expect(page).toContain('role=\'group\' aria-label=\'Rate-limit workspace\'')

@@ -100,7 +100,7 @@ extension DesktopAgentModel {
             return NativeEndpoint(label: "docker metrics", baseURL: api, path: "docker", authenticated: auth, userAgent: nil)
         case "dashboard/system/ai":
             return NativeEndpoint(label: "AI models", baseURL: api, path: "ai/models", authenticated: auth, userAgent: nil)
-        case "dashboard/system/rate-limits":
+        case "dashboard/system/rates":
             return NativeEndpoint(label: "rate limits", baseURL: api, path: "rate-limit/settings", authenticated: true, userAgent: nil)
         case "dashboard/vms":
             let userPath = effectiveUserIDForRequests.isEmpty ? "vms" : "vms/access/\(effectiveUserIDForRequests)"

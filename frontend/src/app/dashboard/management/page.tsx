@@ -46,7 +46,7 @@ export default async function Page() {
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='grid divide-y divide-ui-border md:grid-cols-4 md:divide-x md:divide-y-0'>
                     <AdminAction href='/dashboard/helpdesk' label='Support access' value='audit trail' />
-                    <AdminAction href='/dashboard/system/rate-limits' label='API tokens' value='scoped keys' />
+                    <AdminAction href='/dashboard/system/rates' label='API tokens' value='scoped keys' />
                     <AdminAction href='/dashboard/content' label='Content management' value='articles and thoughts' />
                     <AdminAction href='/dashboard/ti/audit' label='Audit log' value='admin activity' />
                 </div>
