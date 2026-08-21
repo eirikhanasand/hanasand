@@ -690,7 +690,7 @@ function ContainerDetails({
                             {log.message}
                         </p>
                     )) : (
-                        <p className='text-ui-muted'>{logsLoading ? 'Loading logs...' : 'Log stream is live; no recent line for this container.'}</p>
+                        <p className='text-ui-muted'>{logsLoading ? 'Loading logs...' : 'No recent logs'}</p>
                     )}
                 </div>
             </div>
