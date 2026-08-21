@@ -96,9 +96,10 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
             model_name,
             notify_on,
             notify_warnings,
-            next_run_at
+            next_run_at,
+            notification_destinations
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
         RETURNING *
     `, [
         id,
@@ -124,6 +125,7 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
         input.notifyOn,
         input.notifyWarnings,
         input.nextRunAt,
+        input.notificationDestinations,
     ])
 
     return res.status(201).send({ automation: toAutomation(result.rows[0] as AutomationRow) })
@@ -181,12 +183,13 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
                notify_on = $21,
                notify_warnings = $22,
                next_run_at = $23,
+               notification_destinations = $24,
                consecutive_failures = CASE WHEN $16 = 'active' THEN 0 ELSE consecutive_failures END,
                paused_reason = CASE WHEN $16 = 'active' THEN NULL ELSE paused_reason END,
                last_status = CASE WHEN last_status = 'running' THEN NULL ELSE last_status END,
                updated_at = NOW()
          WHERE id = $1
-           AND ($2::BOOLEAN OR owner_id = $24)
+           AND ($2::BOOLEAN OR owner_id = $25)
          RETURNING *
     `, [
         req.params.id,
@@ -212,6 +215,7 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
         input.notifyOn,
         input.notifyWarnings,
         input.nextRunAt,
+        input.notificationDestinations,
         ownerId,
     ])
 

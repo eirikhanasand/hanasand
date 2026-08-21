@@ -33,6 +33,7 @@ export type AutomationRow = {
     action_type: AutomationActionType
     timezone: string
     model_name: string | null
+    notification_destinations: string[]
     notify_on: 'never' | 'failure' | 'always'
     organization_id: string | null
     next_run_at: string | null
@@ -102,6 +103,8 @@ export type AutomationInput = {
     action_type?: unknown
     timezone?: unknown
     modelName?: unknown
+    notificationDestinations?: unknown
+    notification_destinations?: unknown
     model_name?: unknown
     notifyOn?: unknown
     notify_on?: unknown
@@ -130,6 +133,7 @@ type NormalizedAutomationInput = {
     actionType: AutomationActionType
     timezone: string
     modelName: string | null
+    notificationDestinations: string[]
     notifyOn: 'never' | 'failure' | 'always'
     organizationId: string | null
     nextRunAt: Date | null
@@ -166,6 +170,7 @@ export function toAutomation(row: AutomationRow) {
         actionType: row.action_type,
         timezone: row.timezone,
         modelName: row.model_name,
+        notificationDestinations: row.notification_destinations || (row.model_name ? [row.model_name] : []),
         notifyOn: row.notify_on,
         organizationId: row.organization_id,
         nextRunAt: row.next_run_at,
@@ -223,6 +228,7 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
     const actionType = parseActionType(input.actionType ?? input.action_type ?? existing?.action_type)
     const timezone = parseTimezone(input.timezone ?? existing?.timezone)
     const modelName = clean(input.modelName ?? input.model_name ?? existing?.model_name) || null
+    const notificationDestinations = parseDestinations(input.notificationDestinations ?? input.notification_destinations ?? existing?.notification_destinations, modelName)
     const notifyOn = parseNotifyOn(input.notifyOn ?? input.notify_on ?? existing?.notify_on)
     const organizationId = clean(input.organizationId ?? input.organization_id ?? existing?.organization_id) || null
     const nextRunAt = status === 'active' ? computeNextRunAt({ scheduleKind, intervalMinutes, runAt, from: new Date() }) : null
@@ -260,7 +266,7 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
         throw new Error('Organization reports need a delivery destination before activation.')
     }
 
-    return { name, prompt, targetUrl, monitoringType, followRedirects, userAgent, expectedDown, upsideDown, timeoutSeconds, retryCount, notifyWarnings, scheduleKind, intervalMinutes, runAt, status, actionType, timezone, modelName, notifyOn, organizationId, nextRunAt }
+    return { name, prompt, targetUrl, monitoringType, followRedirects, userAgent, expectedDown, upsideDown, timeoutSeconds, retryCount, notifyWarnings, scheduleKind, intervalMinutes, runAt, status, actionType, timezone, modelName, notificationDestinations, notifyOn, organizationId, nextRunAt }
 }
 
 function parseBoundedInteger(value: unknown, min: number, max: number, fallback: number) {
@@ -578,7 +584,8 @@ function getCertificateFromError(error: unknown) {
 }
 
 async function deliverDiscordIfConfigured(automation: AutomationRow, content: string) {
-    await deliverDiscordWebhookFile(automation.model_name, content)
+    const destinations = automation.notification_destinations?.length ? automation.notification_destinations : automation.model_name ? [automation.model_name] : []
+    await Promise.all(destinations.map(destination => deliverDiscordWebhookFile(destination, content)))
 }
 
 async function buildOrganizationReport(automation: AutomationRow) {
@@ -680,6 +687,11 @@ function parseActionType(value: unknown): AutomationActionType {
 
 function parseMonitoringType(value: unknown): 'fetch' | 'post' | 'tcp' | 'ssh' {
     return value === 'post' || value === 'tcp' || value === 'ssh' ? value : 'fetch'
+}
+
+function parseDestinations(value: unknown, fallback: string | null) {
+    const destinations = Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string').map(item => item.trim()).filter(Boolean) : []
+    return destinations.length ? destinations : fallback ? [fallback] : []
 }
 
 function parseNotifyOn(value: unknown): 'never' | 'failure' | 'always' {

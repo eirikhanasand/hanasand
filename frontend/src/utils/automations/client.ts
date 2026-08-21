@@ -28,6 +28,7 @@ export type AgentAutomation = {
     organizationId: string | null
     timezone: string
     modelName: string | null
+    notificationDestinations: string[]
     notifyOn: 'never' | 'failure' | 'always'
     nextRunAt: string | null
     lastRunAt: string | null
@@ -86,6 +87,7 @@ export type AutomationPayload = {
     organizationId?: string | null
     timezone?: string
     modelName?: string | null
+    notificationDestinations?: string[]
     notifyOn?: 'never' | 'failure' | 'always'
     notifyWarnings?: boolean
 }

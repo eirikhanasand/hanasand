@@ -714,6 +714,7 @@ export default async function ensureSchema() {
             model_name TEXT,
             notify_on TEXT NOT NULL DEFAULT 'failure' CHECK (notify_on IN ('never', 'failure', 'always')),
             notify_warnings BOOLEAN NOT NULL DEFAULT FALSE,
+            notification_destinations TEXT[] NOT NULL DEFAULT '{}',
             monitoring_type TEXT NOT NULL DEFAULT 'fetch',
             follow_redirects BOOLEAN NOT NULL DEFAULT TRUE,
             user_agent TEXT,
@@ -744,6 +745,7 @@ export default async function ensureSchema() {
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS model_name TEXT')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS notify_on TEXT NOT NULL DEFAULT \'failure\'')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS notify_warnings BOOLEAN NOT NULL DEFAULT FALSE')
+    await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS notification_destinations TEXT[] NOT NULL DEFAULT \'{}\'')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS monitoring_type TEXT NOT NULL DEFAULT \'fetch\'')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS follow_redirects BOOLEAN NOT NULL DEFAULT TRUE')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS user_agent TEXT')
