@@ -147,14 +147,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       options.onStartupPhase?.("connected");
       await store.migrate();
       options.onStartupPhase?.("migrated");
-      if (options.hydrate !== false) {
-        await store.hydrate();
-        options.onStartupPhase?.("hydrated");
-        await store.backfillSourceOperationalKeys();
-        options.onStartupPhase?.("source_keys_backfilled");
-        await store.syncOrganizationWatchlists();
-        options.onStartupPhase?.("organization_watchlists_synced");
-      }
+      if (options.hydrate !== false) await store.hydrateStartupData(options.onStartupPhase);
       await store.databaseHealth();
       await store.queryExposureQueuePage({ tenantId: "default", filters: {}, limit: 25, offset: 0, global: true });
       options.onStartupPhase?.("health_checked");
@@ -163,6 +156,15 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       await sql.close({ timeout: 1 }).catch(() => undefined);
       throw error;
     }
+  }
+
+  async hydrateStartupData(onStartupPhase?: (phase: string) => void): Promise<void> {
+    await this.hydrate();
+    onStartupPhase?.("hydrated");
+    await this.backfillSourceOperationalKeys();
+    onStartupPhase?.("source_keys_backfilled");
+    await this.syncOrganizationWatchlists();
+    onStartupPhase?.("organization_watchlists_synced");
   }
 
   async batch<T>(write: () => T | Promise<T>): Promise<T> {

@@ -14,6 +14,7 @@ import { executeScheduledCollectionRun, recoverCollectionRuns } from "../ops/sch
 import { startAutomaticReviewWorker } from "../api/automaticReviewRoutes.ts";
 import { startAutomaticEvaluationLoop } from "../api/evaluationBenchmarkRoutes.ts";
 import { warmSearchCaptureIndexAsync } from "../api/searchCaptureIndex.ts";
+import type { ApiServerOptions } from "../api/serverTypes.ts";
 
 export function createScheduledRunBoundary(options: {
   execute: (runId: string) => Promise<any>;
@@ -112,22 +113,27 @@ export async function startScraperRuntime() {
   const paths = buildRuntimeStores(config);
   startupPhase("runtime_stores_built");
   const runMaintenanceMigrations = Bun.env.TI_RUN_MAINTENANCE_MIGRATIONS === "true";
-  const store = await PostgresScraperStore.create({ runMaintenanceMigrations, deferHighVolumeHydration: true, onStartupPhase: (phase) => startupPhase(`postgres_${phase}`) });
+  const store = await PostgresScraperStore.create({ runMaintenanceMigrations, hydrate: false, deferHighVolumeHydration: true, onStartupPhase: (phase) => startupPhase(`postgres_${phase}`) });
   startupPhase("postgres_maintenance_migrations", { enabled: runMaintenanceMigrations });
   startupPhase("postgres_store_created");
-  const legacyImport = await store.importLegacySnapshot(paths.evidenceMetadataPath);
-  startupPhase("legacy_snapshot_checked", { imported: legacyImport.imported });
-  const objectStore = new FileObjectEvidenceStore({ rootDir: paths.evidenceObjectDir });
-  const parserDiagnosticObjectCleanup = await store.purgeParserDiagnosticArchiveObjects(objectStore);
-  startupPhase("parser_diagnostic_objects_cleaned", parserDiagnosticObjectCleanup);
-  const retentionAssignments = normalizeDefaultRetentionClasses(store);
-  const retention = await enforceDefaultRetentionPolicies(store, objectStore);
-  startupPhase("retention_enforced", { retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0) });
   const frontier = new FocusedFrontier({
     maxQueueSize: Number(Bun.env.TI_CANARY_MAX_QUEUE_SIZE ?? "500"),
     defaultPerSourceConcurrency: 1,
     crawlBudgetPolicies: { "public-canary": { taskLimit: Number(Bun.env.TI_CANARY_BUDGET_TASKS ?? "1000"), byteLimit: Number(Bun.env.TI_CANARY_BUDGET_BYTES ?? "512000000") } }
   });
+  const objectStore = new FileObjectEvidenceStore({ rootDir: paths.evidenceObjectDir });
+  const serverOptions: ApiServerOptions = { port: config.port, store, frontier, config, objectStore };
+  const server = startApiServer(serverOptions);
+  startupPhase("api_server_started", { port: server.port });
+  const hydration = store.hydrateStartupData((phase) => startupPhase(`postgres_${phase}`));
+  await hydration;
+  const legacyImport = await store.importLegacySnapshot(paths.evidenceMetadataPath);
+  startupPhase("legacy_snapshot_checked", { imported: legacyImport.imported });
+  const parserDiagnosticObjectCleanup = await store.purgeParserDiagnosticArchiveObjects(objectStore);
+  startupPhase("parser_diagnostic_objects_cleaned", parserDiagnosticObjectCleanup);
+  const retentionAssignments = normalizeDefaultRetentionClasses(store);
+  const retention = await enforceDefaultRetentionPolicies(store, objectStore);
+  startupPhase("retention_enforced", { retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0) });
   const sourceBootstrap = await bootstrapRuntimeSources(store as any);
   startupPhase("sources_bootstrapped", { sourceCount: sourceBootstrap.totalSourceCount, importedSourceCount: sourceBootstrap.importedSourceCount });
   const scheduledRuns = createScheduledRunBoundary({
@@ -210,9 +216,9 @@ export async function startScraperRuntime() {
     onCycle: (result) => logger.info("automatic evaluation cycle", { event: "automatic_evaluation.cycle", ...result }),
     onError: (error: unknown) => logger.warn("automatic evaluation cycle failed", { event: "automatic_evaluation.error", error: error instanceof Error ? error.message : String(error) })
   });
+  Object.assign(serverOptions, { canaryLoop: canary, defaultCanaryLoop: defaultCanary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
   // ponytail: warm the common global inventory page once; later reads are served
   // from the bounded five-second backend cache instead of repeating cold joins.
-  const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, defaultCanaryLoop: defaultCanary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
   // ponytail: cache warming must never delay listener startup or make health fail.
   void store.querySourceOperationalPage?.({ generatedAt: new Date().toISOString(), limit: 50, offset: 0, executableOnly: false, sort: "source", direction: "asc" })
     ?.catch((error) => logger.warn("source inventory warm failed", { event: "source_inventory.warm_failed", error: error instanceof Error ? error.message : String(error) }));
@@ -220,7 +226,7 @@ export async function startScraperRuntime() {
   setTimeout(() => void warmSearchCaptureIndexAsync(store)
     .then((result) => startupPhase("search_index_built", result))
     .catch((error) => logger.error("search index warm failed", { event: "search_index.warm_failed", error: error instanceof Error ? error.message : String(error) })), 0);
-  startupPhase("api_server_started", { port: server.port });
+  startupPhase("runtime_workers_started");
   const automaticReview = automaticReviewEnabled()
     ? startAutomaticReviewWorker({ store, frontier, config } as any, {
       intervalMs: Number(Bun.env.HANASAND_AI_REVIEW_INTERVAL_MS ?? "60000"),
