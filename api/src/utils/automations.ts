@@ -392,7 +392,7 @@ export async function executeAutomation(automation: AutomationRow) {
             UPDATE agent_automations
                SET next_run_at = $2,
                    last_completed_at = NOW(),
-                   last_status = 'warning' in result && result.warning === true ? 'warning' : 'completed',
+                   last_status = CASE WHEN $8::BOOLEAN THEN 'warning' ELSE 'completed' END,
                    last_result = $3,
                    last_error = NULL,
                    consecutive_failures = 0,
@@ -404,7 +404,7 @@ export async function executeAutomation(automation: AutomationRow) {
                    certificate_issuer = $6,
                    certificate_expires_at = $7
              WHERE id = $1
-        `, [automation.id, nextRunAt, result.message, 'certificate' in result ? result.certificate.status : automation.certificate_status, 'certificate' in result ? result.certificate.subject : automation.certificate_subject, 'certificate' in result ? result.certificate.issuer : automation.certificate_issuer, 'certificate' in result ? result.certificate.expiresAt : automation.certificate_expires_at])
+        `, [automation.id, nextRunAt, result.message, 'certificate' in result ? result.certificate.status : automation.certificate_status, 'certificate' in result ? result.certificate.subject : automation.certificate_subject, 'certificate' in result ? result.certificate.issuer : automation.certificate_issuer, 'certificate' in result ? result.certificate.expiresAt : automation.certificate_expires_at, 'warning' in result && result.warning === true])
     } catch (error) {
         const durationMs = Date.now() - startedAt
         const message = error instanceof Error ? error.message : 'Automation run failed.'
