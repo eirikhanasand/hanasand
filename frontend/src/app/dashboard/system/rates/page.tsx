@@ -10,7 +10,7 @@ export default async function RateLimitsPage() {
     const token = Cookies.get('access_token')?.value || ''
 
     if (!id || !token) {
-        return redirect('/logout?path=/login%3Fpath%3D/dashboard/system/rate-limits%26expired=true')
+        return redirect('/logout?path=/login%3Fpath%3D/dashboard/system/rates%26expired=true')
     }
 
     const headers = {
