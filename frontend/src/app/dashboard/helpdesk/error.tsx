@@ -37,7 +37,7 @@ export default function ImpersonationError({ reset }: { error: Error & { digest?
                     </div>
                 </div>
                 <div className='mt-5 flex flex-wrap gap-x-4 gap-y-2 border-t border-ui-danger/20 pt-4 text-sm'>
-                    <Link href='/dashboard/system' className='inline-flex h-9 items-center gap-1 rounded-md border border-ui-border bg-ui-panel px-3 font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised'><ArrowLeft className='h-4 w-4' />System tools</Link>
+                    <Link href='/dashboard/system' className='inline-flex h-9 items-center gap-1 rounded-md border border-ui-border bg-ui-panel px-3 font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised'><ArrowLeft className='h-4 w-4' />System</Link>
                     <Link href='/dashboard/dwm' className='inline-flex h-9 items-center rounded-md border border-ui-border bg-ui-panel px-3 font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised'>Monitoring</Link>
                     <Link href='/support' className='inline-flex h-9 items-center rounded-md border border-ui-border bg-ui-panel px-3 font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised'>Support</Link>
                 </div>
