@@ -315,7 +315,7 @@ export async function runDueAutomations() {
               AND next_run_at <= NOW()
               AND COALESCE(last_status, '') <> 'running'
             ORDER BY next_run_at ASC
-            LIMIT 3
+            LIMIT 10
             FOR UPDATE SKIP LOCKED
          )
          RETURNING *
