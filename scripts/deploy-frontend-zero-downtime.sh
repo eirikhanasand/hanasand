@@ -16,6 +16,9 @@ case "$active_port" in
 esac
 
 old_container=$(docker ps -q --filter "publish=$active_port" | head -1)
+if [ -z "$old_container" ] && [ "$active_port" = 3000 ]; then
+    old_container=$(docker ps -q --filter 'name=^/hanasand$' | head -1)
+fi
 test -n "$old_container" || { echo "Could not find the active frontend container" >&2; exit 1; }
 new_container=hanasand-frontend-$new_port
 docker rm -f "$new_container" >/dev/null 2>&1 || true
