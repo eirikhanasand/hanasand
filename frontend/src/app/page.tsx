@@ -124,8 +124,8 @@ const customerSteps = [
         detail: 'Each alert tells you what was found, where it came from, how serious it is, and what to do next.',
     },
     {
-        title: 'Route it to the right team',
-        detail: 'Send the alert through a webhook, case workflow, scoped API, or the analyst console.',
+        title: 'You decide what happens next',
+        detail: 'Send alerts to your team by email, webhook, or your existing tools.',
     },
 ]
 
