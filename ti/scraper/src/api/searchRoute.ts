@@ -373,7 +373,7 @@ function cachedSearchResponse(query: string, entityType: SearchEntityType, ident
     } : undefined,
     actorIntelligence: entityType === "actor" && candidates.length ? {
       actorClass: "cataloged_threat_group",
-      attribution: "Catalog identity match only; activity attribution requires retained evidence.",
+      attribution: "",
       confidence: 1,
       confidenceReasoning: ["The query matched an authoritative actor catalog identity.", "No retained activity evidence has been loaded yet."],
       sourceProvenance: sources.map((source) => source.provenance)
