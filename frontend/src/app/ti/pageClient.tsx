@@ -574,7 +574,7 @@ function ActorProfileSections({ result, actor, victims }: { result: TiSearchResp
         { title: 'Activity', items: [...actor.campaigns, ...result.recentActivity.slice(0, 4).map(item => item.title)], empty: 'No dated activity found in retained sources.' },
         { title: 'Victims and sectors', items: [...actor.targetSectors, ...victims.slice(0, 4).map(item => `${item.victim}${item.country !== 'Country not stated' ? ` · ${item.country}` : ''}`)], empty: 'No victims or sectors found.' },
         { title: 'Malware and tools', items: actor.malwareTools, empty: 'No malware or tools found.' },
-        { title: 'TTPs', items: actor.techniqueCoverage.map(item => item.attackId ? `${item.attackId} · ${item.name}` : item.name), empty: 'No techniques found in retained sources.' },
+        { title: 'TTPs', items: actor.techniqueCoverage.map(item => item.attackId ? `${item.attackId} · ${item.name}` : item.name), empty: 'No techniques found.' },
     ]
     return <section data-ti-actor-profile='true' className='grid gap-4 border-y border-ui-border py-4 dark:border-ui-border'>
         <div className='grid gap-4 md:grid-cols-2'>
