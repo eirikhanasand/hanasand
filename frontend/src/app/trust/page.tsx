@@ -200,7 +200,7 @@ function AlertPathPreview() {
     return <aside className='rounded-xl border border-ui-border bg-ui-raised p-4 shadow-sm'>
         <div className='flex items-center justify-between border-b border-ui-border pb-3'>
             <div>
-        <p className='text-xs font-semibold uppercase tracking-[0.12em] text-ui-primary'>Monitoring</p>
+                <p className='text-xs font-semibold uppercase tracking-[0.12em] text-ui-primary'>Monitoring</p>
                 <p className='mt-1 text-sm font-semibold'>A clear path from match to alert</p>
             </div>
             <Radio className='h-5 w-5 text-ui-success' />
