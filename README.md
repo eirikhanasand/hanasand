@@ -2,13 +2,13 @@
 
 ## Deployment
 
-From the canonical production checkout, deploy with:
+On the production server, from `/home/hanasand/hanasand`, run:
 
 ```sh
 make deploy
 ```
 
-This performs a health-gated blue/green frontend handoff, keeping the current
-instance live until the replacement is ready. Do not use `docker compose up
---build` directly for production: Compose replaces the only frontend container
-before the rebuilt one is ready, which creates a Bad Gateway window.
+The deploy command builds the new frontend, checks that it is working, switches
+traffic to it, and then removes the old container. Do not run `docker compose
+up --build` directly in production. It stops the current frontend before the
+new one is ready and causes a short 502 error.
