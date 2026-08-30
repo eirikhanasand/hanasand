@@ -10,8 +10,8 @@ test "$root" = "/home/hanasand/hanasand" || {
 proxy_conf=/home/hanasand/openresty/nginx/conf.d/default.conf
 active_port=$(sed -n 's/.*proxy_pass http:\/\/localhost:\([0-9][0-9]*\);.*/\1/p' "$proxy_conf" | head -1)
 case "$active_port" in
-    3000) new_port=3001; old_container=hanasand ;;
-    3001) new_port=3000; old_container=hanasand-frontend-3001 ;;
+    3000) new_port=3100; old_container=hanasand ;;
+    3100) new_port=3000; old_container=hanasand-frontend-3100 ;;
     *) echo "Could not determine active frontend port" >&2; exit 1 ;;
 esac
 
