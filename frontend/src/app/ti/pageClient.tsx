@@ -570,7 +570,7 @@ function ActorReferences({ citations, references, activeCitation }: { citations:
 
 function ActorProfileSections({ result, actor, victims }: { result: TiSearchResponse; actor: TiActorIntelligenceProfile; victims: ReturnType<typeof victimObservationsFor> }) {
     const sections = [
-        { title: 'Motivation', items: actor.motivation, empty: 'No motivation found in retained sources.' },
+        { title: 'Motivation', items: actor.motivation, empty: 'Motivation unknown.' },
         { title: 'Activity', items: [...actor.campaigns, ...result.recentActivity.slice(0, 4).map(item => item.title)], empty: 'No dated activity found in retained sources.' },
         { title: 'Victims and sectors', items: [...actor.targetSectors, ...victims.slice(0, 4).map(item => `${item.victim}${item.country !== 'Country not stated' ? ` · ${item.country}` : ''}`)], empty: 'No victims or sectors found in retained sources.' },
         { title: 'Malware and tools', items: actor.malwareTools, empty: 'No malware or tools found in retained sources.' },
