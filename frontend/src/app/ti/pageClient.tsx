@@ -198,7 +198,10 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
         searchThreatIntel(clean, { preferCached: true })
             .then((next) => {
                 if (requestSeqRef.current !== requestSeq || activeQueryRef.current !== cleanKey) return
-                if (next) setResult(next)
+                if (next) {
+                    setError('')
+                    setResult(next)
+                }
                 else setError('Threat intelligence search is temporarily unavailable.')
             })
             .finally(() => {
@@ -310,6 +313,12 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
     }
 
     const visible = result
+    const hasUsableResult = Boolean(visible && visible.status !== 'unavailable' && (
+        visible.actorIdentity?.catalogMatched ||
+        visible.summary.trim() ||
+        visible.sources.length ||
+        visible.recentActivity.length
+    ))
 
     return (
         <div className={visible ? 'mx-auto grid w-full max-w-7xl gap-6' : 'mx-auto grid min-h-[calc(100vh-9rem)] w-full max-w-[45rem] place-content-center gap-5 py-10'}>
@@ -351,7 +360,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                         <span className='hidden sm:inline'>Save</span>
                     </button> : null}
                 </div>
-                {error ? <p className='text-sm text-ui-danger'>{error}</p> : null}
+                {error && !hasUsableResult ? <p className='text-sm text-ui-danger'>{error}</p> : null}
             </form>
 
             {savedSearches.length || savedSearchError ? <section aria-label='Saved searches' className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm'>
