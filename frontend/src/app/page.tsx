@@ -116,7 +116,7 @@ const customerSteps = [
         detail: 'Add company names, domains, subsidiaries, vendors, brands, executives, or portfolio companies.',
     },
     {
-        title: 'We monitor threat actors',
+        title: 'We check',
         detail: 'Hanasand checks leak and extortion sites, Telegram groups, advisories, and dark web forums.',
     },
     {
