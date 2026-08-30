@@ -121,7 +121,7 @@ const customerSteps = [
     },
     {
         title: 'You get notified',
-        detail: 'The alert explains the mention, source, severity, confidence, and the next review step.',
+        detail: 'Each alert tells you what was found, where it came from, how serious it is, and what to do next.',
     },
     {
         title: 'Route it to the right team',
