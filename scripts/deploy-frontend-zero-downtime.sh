@@ -10,11 +10,13 @@ test "$root" = "/home/hanasand/hanasand" || {
 proxy_conf=/home/hanasand/openresty/nginx/conf.d/default.conf
 active_port=$(sed -n 's/.*proxy_pass http:\/\/localhost:\([0-9][0-9]*\);.*/\1/p' "$proxy_conf" | head -1)
 case "$active_port" in
-    3000) new_port=3100; old_container=hanasand ;;
-    3100) new_port=3000; old_container=hanasand-frontend-3100 ;;
+    3000) new_port=3100 ;;
+    3100) new_port=3000 ;;
     *) echo "Could not determine active frontend port" >&2; exit 1 ;;
 esac
 
+old_container=$(docker ps -q --filter "publish=$active_port" | head -1)
+test -n "$old_container" || { echo "Could not find the active frontend container" >&2; exit 1; }
 new_container=hanasand-frontend-$new_port
 docker rm -f "$new_container" >/dev/null 2>&1 || true
 docker compose build frontend
