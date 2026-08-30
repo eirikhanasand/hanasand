@@ -151,7 +151,7 @@ export default function ApiKeyOnboarding({ server }: { server: string }) {
                 <div className='max-w-3xl'>
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Customer onboarding</p>
                     <h2 className='mt-2 text-3xl font-semibold'>Organization, API key, first request.</h2>
-                    <p className='mt-3 text-sm leading-7 text-ui-muted'>Keys are bound to one organization, use fixed read-only v1 scopes, expire after 90 days, and reveal the secret only once. Tenant-scoped alerts cannot be switched with request headers.</p>
+                    <p className='mt-3 text-sm leading-7 text-ui-muted'>Keys are bound to one organization, use fixed read-only v1 scopes, expire after 90 days, and reveal the secret only once. organization-specific alerts cannot be switched with request headers.</p>
                 </div>
 
                 {state === 'loading' ? <StateLine icon={<LoaderCircle className='h-4 w-4 animate-spin' />} text='Checking your signed-in organizations.' /> : null}

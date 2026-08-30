@@ -32,15 +32,15 @@ const examples = [
         title: 'Alerts',
         slug: 'Explains what happened',
         detail: 'Each result says who posted the claim, which company was named, what data was mentioned, how confident the match is, and what to do next.',
-        badge: 'Actor context',
-        action: 'See the context',
+        badge: 'Source details',
+        action: 'See the details',
         icon: Waypoints,
     },
     {
         title: 'Dark web search',
         slug: 'Searches leak and extortion records',
         detail: 'Search company names, domains, vendor names, group names, source notes, risk signals, and timing from monitored public records.',
-        badge: 'Searchable records',
+        badge: 'Search results',
         action: 'Find a company or group',
         icon: ShieldCheck,
     },
@@ -73,14 +73,14 @@ const stats = [
     ['Alert target', 'Company, vendor, domain, and brand mentions'],
     ['What gets sent', 'Group, company, data mentioned, source, time, review status'],
     ['Based on', 'New and changed leak-site posts'],
-    ['Where it goes', 'Webhook, case workflow, and analyst console'],
+    ['Where it goes', 'Email, webhooks, and API'],
 ]
 
 const workflowShortcuts = [
     { label: 'Watch companies', href: '/organizations', detail: 'Companies, vendors, domains' },
     { label: 'Catch breaches', href: '/dashboard/dwm', detail: 'New exposure mentions' },
-    { label: 'Review severity', href: '/dashboard/dwm', detail: 'Evidence, confidence, action' },
-    { label: 'Route alerts', href: '/dashboard/automation?setup=dwm', detail: 'Webhooks, cases, API' },
+    { label: 'Review alerts', href: '/dashboard/dwm', detail: 'Details, severity, next step' },
+    { label: 'Send alerts', href: '/dashboard/automation?setup=dwm', detail: 'Email, webhooks, and API' },
 ]
 
 const operatorPaths = [
@@ -91,21 +91,21 @@ const operatorPaths = [
         href: '/organizations',
     },
     {
-        label: 'Triage exposure',
+        label: 'Review alerts',
         state: 'Review',
-        value: 'Review matched source signals with evidence, freshness, confidence, and case context.',
+        value: 'Review what was found, where it came from, how recent it is, and what to do next.',
         href: '/dashboard/dwm',
     },
     {
-        label: 'Search group intel',
-        state: 'Threat intel',
-        value: 'Inspect group activity, sources, artifacts, watchlist fit, and handoff actions.',
+        label: 'Search groups',
+        state: 'Threat intelligence',
+        value: 'Look up group activity, sources, and related companies.',
         href: '/ti/apt29',
     },
     {
-        label: 'Route notifications',
+        label: 'Send notifications',
         state: 'Delivery',
-        value: 'Send reviewed alerts to configured webhooks, cases, and the analyst console.',
+        value: 'Send reviewed alerts by email, webhook, or API.',
         href: '/dashboard/automation?setup=dwm',
     },
 ]

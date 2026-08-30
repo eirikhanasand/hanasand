@@ -189,7 +189,7 @@ export function dwmAlertToWorkbenchCase(input: DwmAlert): WorkbenchCase {
             },
             {
                 id: 'case_handoff',
-                label: 'Case handoff',
+                label: 'case delivery',
                 status: caseDetailHref ? 'ready' : 'needs_action',
                 owner: 'case',
                 source: 'caseHandoff',
@@ -328,7 +328,7 @@ function nextAlertTasks(alert: RuntimeDwmAlert, blockers: string[]) {
     return [
         alert.nextBestAction?.label || 'Review the persisted evidence and confirm customer impact.',
         'Assign an analyst owner and record the decision rationale.',
-        'Open case handoff or send webhook delivery when evidence is customer-safe.',
+        'Open case delivery or send webhook delivery when evidence is customer-safe.',
     ]
 }
 

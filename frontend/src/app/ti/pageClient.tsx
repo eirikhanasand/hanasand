@@ -1910,8 +1910,8 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
     const selectedArtifactPayload = selectedArtifactPayloadFor(artifact, handoffs)
     const payloadRows = [
         { id: 'watchlist', label: 'Watchlist package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.watchlist], route: bridge.links.watchlist.href, blocked: handoffs.watchlist.blocked, detail: handoffs.watchlist.missing.length ? handoffMissingLabel(handoffs.watchlist.missing) : `${artifact.watchlistTerms.length} watch term${artifact.watchlistTerms.length === 1 ? '' : 's'}` },
-        { id: 'alert', label: 'Alert rebuild', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild], route: bridge.links.alertRebuild.href, blocked: handoffs.alertRebuild.blocked, detail: handoffs.alertRebuild.missing.length ? handoffMissingLabel(handoffs.alertRebuild.missing) : 'Ready to rebuild from this selected artifact.' },
-        { id: 'case', label: 'Case package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case], route: bridge.links.case.href, blocked: handoffs.case.blocked, detail: handoffs.case.missing.length ? handoffMissingLabel(handoffs.case.missing) : 'Ready to open with this selected artifact.' },
+        { id: 'alert', label: 'Alert rebuild', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild], route: bridge.links.alertRebuild.href, blocked: handoffs.alertRebuild.blocked, detail: handoffs.alertRebuild.missing.length ? handoffMissingLabel(handoffs.alertRebuild.missing) : 'Ready to rebuild from this selected record.' },
+        { id: 'case', label: 'Case package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case], route: bridge.links.case.href, blocked: handoffs.case.blocked, detail: handoffs.case.missing.length ? handoffMissingLabel(handoffs.case.missing) : 'Ready to open with this selected record.' },
         { id: 'enrichment', label: 'Source review item', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.enrichment], route: bridge.links.enrichment.href, blocked: handoffs.enrichment.blocked, detail: handoffs.enrichment.missing.length ? handoffMissingLabel(handoffs.enrichment.missing) : `${artifact.enrichmentTasks.length} source review task${artifact.enrichmentTasks.length === 1 ? '' : 's'}` },
     ]
     const workflowRows = payloadRows.map(row => ({
@@ -2220,8 +2220,8 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
             </div>
 
             <div className='mt-3 grid gap-2 md:grid-cols-2'>
-                <SourceDrilldownHandoff label='Alert handoff' ready={drilldown.alertHandoff.ready} endpoint={drilldown.alertHandoff.route || drilldown.alertHandoff.endpoint} missing={drilldown.alertHandoff.missing} />
-                <SourceDrilldownHandoff label='Case handoff' ready={drilldown.caseHandoff.ready} endpoint={drilldown.caseHandoff.route || drilldown.caseHandoff.endpoint} missing={drilldown.caseHandoff.missing} />
+                <SourceDrilldownHandoff label='alert delivery' ready={drilldown.alertHandoff.ready} endpoint={drilldown.alertHandoff.route || drilldown.alertHandoff.endpoint} missing={drilldown.alertHandoff.missing} />
+                <SourceDrilldownHandoff label='case delivery' ready={drilldown.caseHandoff.ready} endpoint={drilldown.caseHandoff.route || drilldown.caseHandoff.endpoint} missing={drilldown.caseHandoff.missing} />
             </div>
             {drilldown.blockers.length ? (
                 <p className='mt-3 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>{displayRequirementList(drilldown.blockers.slice(0, 3))}</p>
@@ -2806,7 +2806,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
 
                 {!casePath && actionability.handoffs.casePayload ? (
                     <PayloadHandoffRow
-                        label='Case handoff'
+                        label='case delivery'
                         detail={actionability.caseHandoff.blocked ? `Waiting on ${displayRequirementList(actionability.caseHandoff.missing.slice(0, 2))}.` : 'Case request is prepared for authenticated review.'}
                         payload={actionability.exportPayloads.case.body}
                         route={actionability.caseHandoff.backedRoute}

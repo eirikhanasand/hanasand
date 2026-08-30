@@ -193,7 +193,7 @@ export default function ShareChat({
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const formRef = useRef<HTMLFormElement | null>(null)
     const treePaths = useMemo(() => listTreePaths(tree || null).slice(0, 80), [tree])
-    const proofTarget = previewUrl
+    const checkTarget = previewUrl
         ? { label: 'Preview target', url: previewUrl }
         : share
             ? { label: 'Current share target', url: buildShareEvidenceUrl(share) }
@@ -328,7 +328,7 @@ export default function ShareChat({
             const requestedBrowserCalls = toolCalls.filter((call) => call.action === 'browser_task' && call.url)
             const browserCalls = requestedBrowserCalls
             const boundedBrowserCalls = browserCalls.slice(0, 3)
-            const proofRunId = randomId()
+            const checkRunId = randomId()
             const visibleContent = buildVisibleBuildReply(rawContent, pendingChanges, boundedBrowserCalls.length, response.ok)
 
             setMessages((current) => [...current, {
@@ -365,7 +365,7 @@ export default function ShareChat({
                     tokenCap,
                     status: 'queued',
                 })
-                void processBrowserProofQueue(proofRunId, boundedBrowserCalls, pendingChanges.length, tokenCap, runStartedAt)
+                void processBrowserChecks(checkRunId, boundedBrowserCalls, pendingChanges.length, tokenCap, runStartedAt)
             } else {
                 setLastRun({
                     durationMs: Date.now() - runStartedAt,
@@ -396,7 +396,7 @@ export default function ShareChat({
         }
     }
 
-    async function processBrowserProofQueue(runId: string, calls: ToolCall[], pendingChanges: number, tokenCap: number, runStartedAt: number) {
+    async function processBrowserChecks(runId: string, calls: ToolCall[], pendingChanges: number, tokenCap: number, runStartedAt: number) {
         const results: BrowserEvidence[] = []
         let hadIssues = calls.length === 0
         for (const call of calls) {
@@ -592,16 +592,16 @@ export default function ShareChat({
                 </div>
             ) : null}
 
-            {showBuilderWorkflow && proofTarget?.url ? (
+            {showBuilderWorkflow && checkTarget?.url ? (
                 <div className='border-b border-ui-border bg-ui-canvas/10 px-3 py-2'>
                     <div className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5 text-[11px] text-ui-text/62'>
                         <div className='flex min-w-0 items-center gap-1.5'>
                             <Globe2 className='h-3.5 w-3.5 shrink-0 text-ui-primary' />
                             <span className='shrink-0 font-semibold text-ui-text/68'>Check target</span>
-                            <span className='truncate text-ui-text/42'>{proofTarget.label}</span>
-                            <span className='truncate text-ui-text/52'>{proofTarget.url}</span>
+                            <span className='truncate text-ui-text/42'>{checkTarget.label}</span>
+                            <span className='truncate text-ui-text/52'>{checkTarget.url}</span>
                         </div>
-                        <a href={proofTarget.url} target='_blank' rel='noopener noreferrer' aria-label='Open check target' className='grid h-7 w-7 shrink-0 place-items-center rounded-md text-ui-text/45 transition hover:bg-ui-panel/8 hover:text-ui-text'>
+                        <a href={checkTarget.url} target='_blank' rel='noopener noreferrer' aria-label='Open check target' className='grid h-7 w-7 shrink-0 place-items-center rounded-md text-ui-text/45 transition hover:bg-ui-panel/8 hover:text-ui-text'>
                             <ExternalLink className='h-3.5 w-3.5' />
                         </a>
                     </div>
@@ -1539,13 +1539,13 @@ function buildVisibleBuildReply(rawContent: string, pendingChanges: PendingShare
     const fallback = pendingChanges.length
         ? `Prepared ${pendingChanges.length} reviewable change${pendingChanges.length === 1 ? '' : 's'}.`
         : 'I checked the request and did not prepare file changes.'
-    const proofNote = browserProofs
+    const checkNote = browserProofs
         ? 'Production check is running, so you can review the summary while Hanasand checks the visible result.'
         : ''
     const reviewNote = pendingChanges.length
         ? 'Open What changed for the summary. Advanced diffs stay collapsed for developers.'
         : ''
-    return [plainReply || fallback, reviewNote, proofNote].filter(Boolean).join('\n\n')
+    return [plainReply || fallback, reviewNote, checkNote].filter(Boolean).join('\n\n')
 }
 
 function hideCodeFromBuildReply(content: string) {

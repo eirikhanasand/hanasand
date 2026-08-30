@@ -18,7 +18,7 @@ export type DwmMatchTimingBasis = {
 export type DwmCustomerState = "newly_collected" | "previously_observed" | "updated" | "stale" | "unavailable" | "blocked";
 export type DwmCustomerStateDetail = {
   state: DwmCustomerState;
-  label: "Newly collected" | "Previously observed" | "Updated" | "Stale" | "Unavailable" | "Blocked";
+  label: "Newly collected" | "Previously observed" | "Updated" | "Stale" | "Unavailable" | "Monitoring stopped";
   reason: string;
 };
 
@@ -249,7 +249,7 @@ export function buildDwmProductSnapshot(input: BuildDwmProductSnapshotInput = {}
       blockers,
       advantages: [
         "Snapshot records are restricted to the resolved tenant.",
-        "Alerts require captured watchlist evidence and retain capture and source provenance.",
+        "Alerts include the captured text, source, and time needed for review.",
         "Restricted dark web evidence is exposed as metadata-only references."
       ],
       nextWorkItem: nextWorkItemFor(sourceInventory)
@@ -565,7 +565,7 @@ export function customerStateForEvidence(input: {
   staleAfterSeconds?: number;
   blocked?: boolean;
 }): DwmCustomerStateDetail {
-  if (input.blocked) return { state: "blocked", label: "Blocked", reason: "The source or policy currently prevents customer-visible monitoring." };
+  if (input.blocked) return { state: "blocked", label: "Monitoring stopped", reason: "The source or its policy currently prevents monitoring." };
   if (!input.evidence.length) return { state: "unavailable", label: "Unavailable", reason: "No retained evidence is available for this monitoring result." };
   const timing = input.matchTiming;
   if (timing?.kind === "unknown" || !timing?.lastObservedAt) return { state: "unavailable", label: "Unavailable", reason: "The retained evidence has no reliable observation timestamp." };

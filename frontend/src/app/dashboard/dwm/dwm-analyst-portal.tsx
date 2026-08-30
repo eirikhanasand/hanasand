@@ -477,7 +477,7 @@ function CaseOverview({ organizationId, state, alerts, operations, isAdmin }: { 
                 {state.status === 'ready' && !state.rows.length && (
                     <div className='flex min-h-56 flex-col items-center justify-center gap-1 px-4 py-16 text-center text-ui-muted' data-dwm-cases-empty='true'>
                         <p className='font-semibold text-ui-text'>No cases.</p>
-                        <p className='max-w-md text-sm leading-6'>No alert is waiting for review. Cases appear after a scoped alert is retained and opened for investigation.</p>
+                        <p className='max-w-md text-sm leading-6'>No alert is waiting for review. Cases appear after an alert is saved and opened for investigation.</p>
                     </div>
                 )}
                 {state.status === 'ready' && state.rows.length > 0 && filteredRows.length === 0 && <div className='px-4 py-10 text-center text-sm text-ui-muted'>No cases match the current filters.</div>}
@@ -932,8 +932,8 @@ function publicTiHandoffTermLabels(payload: Extract<PublicTiHandoffDecodeResult,
 
 function publicTiActionLabel(action: Extract<PublicTiHandoffDecodeResult, { ok: true }>['action']) {
     if (action === 'create_watchlist') return 'Watchlist handoff'
-    if (action === 'rebuild_alerts') return 'Alert handoff'
-    if (action === 'open_case') return 'Case handoff'
+    if (action === 'rebuild_alerts') return 'alert delivery'
+    if (action === 'open_case') return 'case delivery'
     if (action === 'queue_enrichment') return 'Source enrichment'
     return 'Actor evidence handoff'
 }
@@ -1345,7 +1345,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
             id: 'case',
             label: 'Case',
             value: actualCaseId || caseCandidate || 'not opened',
-            detail: actualCaseId ? 'Case file is linked to this alert.' : canOpenCase ? 'Open the case to preserve analyst work.' : 'Evidence is required before case handoff.',
+            detail: actualCaseId ? 'Case file is linked to this alert.' : canOpenCase ? 'Open the case to preserve analyst work.' : 'Evidence is required before case delivery.',
             state: actualCaseId ? 'ready' : canOpenCase ? 'action' : 'blocked',
             action: actualCaseId || !canOpenCase ? undefined : {
                 label: 'Open case',
@@ -2325,7 +2325,7 @@ function DeliveryPanel({ alert, deliveries, busyAction, onTest, onSend }: { aler
                     <div className='grid gap-3 rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center' data-dwm-delivery-empty='true'>
                         <div className='min-w-0'>
                             <p className='text-sm font-semibold text-ui-text'>No delivery attempt yet</p>
-                            <p className='mt-1 text-xs leading-5 text-ui-muted'>Configure or test a destination before sending this alert to a customer workflow.</p>
+                            <p className='mt-1 text-xs leading-5 text-ui-muted'>Configure or test a destination before sending this alert to a customer process.</p>
                         </div>
                         <a href={orgHref} className='inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas'>
                             Configure delivery

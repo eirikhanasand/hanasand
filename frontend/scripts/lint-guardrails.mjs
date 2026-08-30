@@ -7,6 +7,12 @@ const srcRoot = path.join(root, 'src')
 const metadataFile = path.join(srcRoot, 'app', 'metadata.tsx')
 const errors = []
 const bannedPublicCopyPatterns = [
+    /\b(?:customer|analyst|product) (?:workflow|surface|lane|proof|readiness)\b/i,
+    /\b(?:evidence-backed|source-backed|customer-ready) (?:work|outputs?|monitoring|security work)\b/i,
+    /\b(?:operational|workflow|readiness|provenance) (?:record|status|context|controls?|visibility)\b/i,
+    /\b(?:case|alert|source) handoff\b/i,
+    /\b(?:actor|selected|source) artifact\b/i,
+    /\b(?:scoped|tenant-scoped) (?:API|data|alerts?|tokens?)\b/i,
     /\bGlobal API pressure\b/i,
     /\broute overrides\b/i,
     /\bscoped tiered tokens\b/i,
@@ -431,9 +437,11 @@ function validateBannedPublicCopy(filePath, source, node, value, label) {
 
 function shouldValidateVisibleCopy(filePath) {
     const relativePath = relative(filePath)
-    return relativePath.startsWith('src/app/')
+    return (
+        relativePath.startsWith('src/app/')
         || relativePath.startsWith('src/components/')
         || relativePath.startsWith('src/utils/')
+    ) && !relativePath.startsWith('src/components/ai/')
 }
 
 function getCanonicalClassSuggestion(token) {

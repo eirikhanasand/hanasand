@@ -65,7 +65,7 @@ export type PublicTiHandoffPayload = {
     schemaVersion: typeof PUBLIC_TI_HANDOFF_SCHEMA_VERSION
     source: typeof PUBLIC_TI_HANDOFF_SOURCE
     action: PublicTiHandoffAction
-    artifactId: string
+    recordId: string
     query: string
     generatedAt: string
     artifact: PublicTiHandoffArtifact
@@ -117,7 +117,7 @@ export type PublicTiHandoffPayload = {
 
 export type AuthenticatedArtifactBridge = {
     schemaVersion: typeof PUBLIC_TI_HANDOFF_SCHEMA_VERSION
-    artifactId: string
+    recordId: string
     query: string
     orgRequired: boolean
     sourceRequired: boolean
@@ -142,13 +142,13 @@ export function buildActorArtifacts(
     victimObservations: VictimObservation[],
     actionability: TiActionabilityModel
 ): ActorArtifact[] {
-    const provenance = artifactProvenance(actor, actionability)
+    const provenance = recordSourceDetails(actor, actionability)
     const countryArtifacts = actionability.geographyHandoffs.map(item => {
         const victims = victimObservations.filter(observation => countryFromValue(observation.country)?.code === item.code)
         return withReadiness({
             result,
             artifact: {
-                id: artifactId('country', item.code),
+                id: recordId('country', item.code),
                 kind: 'country' as const,
                 label: item.country,
                 subtitle: item.role === 'operator' ? 'Attribution context' : `${item.observationCount} victim or targeting observation${item.observationCount === 1 ? '' : 's'}`,
@@ -179,7 +179,7 @@ export function buildActorArtifacts(
         })
     })
 
-    const toolArtifacts = actor.malwareTools.map(tool => artifactFromActorList({
+    const toolArtifacts = actor.malwareTools.map(tool => recordFromActorList({
         result,
         actor,
         actionability,
@@ -195,7 +195,7 @@ export function buildActorArtifacts(
         enrichmentTask: `Attach source-level evidence for ${tool}, including first/last seen, tool family, and related campaign before using it in alert enrichment.`,
     }))
 
-    const campaignArtifacts = actor.campaigns.map(campaign => artifactFromActorList({
+    const campaignArtifacts = actor.campaigns.map(campaign => recordFromActorList({
         result,
         actor,
         actionability,
@@ -210,7 +210,7 @@ export function buildActorArtifacts(
         enrichmentTask: `Attach campaign source details for ${campaign}, including named victims, timeframe, and capture or advisory reference.`,
     }))
 
-    const infrastructureArtifacts = actor.infrastructure.map(item => artifactFromActorList({
+    const infrastructureArtifacts = actor.infrastructure.map(item => recordFromActorList({
         result,
         actor,
         actionability,
@@ -228,7 +228,7 @@ export function buildActorArtifacts(
     const techniqueArtifacts = result.ttps.map(ttp => withReadiness({
         result,
         artifact: {
-            id: artifactId('technique', ttp.attackId || ttp.name),
+            id: recordId('technique', ttp.attackId || ttp.name),
             kind: 'technique' as const,
             label: ttp.attackId ? `${ttp.attackId} ${ttp.name}` : ttp.name,
             subtitle: ttp.tactic,
@@ -252,7 +252,7 @@ export function buildActorArtifacts(
 
 export function buildActorArtifactHandoffs(result: TiSearchResponse, artifact: ActorArtifact, actionability: TiActionabilityModel): ActorArtifactHandoffs {
     const artifactContext = {
-        artifactId: artifact.id,
+        recordId: artifact.id,
         kind: artifact.kind,
         label: artifact.label,
         confidence: artifact.confidence,
@@ -320,7 +320,7 @@ export function buildActorArtifactHandoffs(result: TiSearchResponse, artifact: A
                 dependency: artifact.provenance.length ? 'sourceProvenance capture id or source URL' : 'sourceProvenance[]',
             })),
         },
-        missing: enrichmentTasks.length ? [] : ['No enrichment task is attached to the selected artifact'],
+        missing: enrichmentTasks.length ? [] : ['No enrichment task is attached to the selected record'],
         blocked: enrichmentTasks.length === 0,
     }
     const authBridge = buildAuthenticatedBridge(result, artifact, {
@@ -418,7 +418,7 @@ function buildAuthenticatedBridge(
     }
     return {
         schemaVersion: PUBLIC_TI_HANDOFF_SCHEMA_VERSION,
-        artifactId: artifact.id,
+        recordId: artifact.id,
         query: result.query,
         orgRequired,
         sourceRequired,
@@ -461,7 +461,7 @@ function buildPublicTiHandoffPayload(
         schemaVersion: PUBLIC_TI_HANDOFF_SCHEMA_VERSION,
         source: PUBLIC_TI_HANDOFF_SOURCE,
         action,
-        artifactId: artifact.id,
+        recordId: artifact.id,
         query: result.query,
         generatedAt: result.generatedAt,
         artifact,
@@ -486,17 +486,17 @@ function normalizePublicTiHandoffPayload(value: unknown, intent?: string | null)
     if (!action) return failure(value.action || intent ? 'invalid_action' : 'missing_action', 'The public TI handoff action is missing or unsupported.')
     const query = typeof value.query === 'string' ? value.query.trim() : ''
     if (!query) return failure('missing_query', 'The public TI handoff payload is missing query.')
-    if (!isRecord(value.artifact)) return failure('missing_artifact', 'The public TI handoff payload is missing selected artifact context.')
+    if (!isRecord(value.artifact)) return failure('missing_artifact', 'The public TI handoff payload is missing selected record context.')
     if (!isRecord(value.selectedPayload) || !isRecord(value.actionPayloads)) return failure('invalid_payload', 'The public TI handoff payload is missing selectedPayload or actionPayloads.')
-    const artifactId = typeof value.artifactId === 'string' && value.artifactId.trim()
-        ? value.artifactId
+    const recordId = typeof value.recordId === 'string' && value.recordId.trim()
+        ? value.recordId
         : typeof value.artifact.id === 'string' ? value.artifact.id : ''
-    if (!artifactId) return failure('missing_artifact', 'The public TI handoff payload is missing artifactId.')
+    if (!recordId) return failure('missing_artifact', 'The public TI handoff payload is missing recordId.')
     const normalized: PublicTiHandoffPayload = {
         schemaVersion: PUBLIC_TI_HANDOFF_SCHEMA_VERSION,
         source: PUBLIC_TI_HANDOFF_SOURCE,
         action,
-        artifactId,
+        recordId,
         query,
         generatedAt: typeof value.generatedAt === 'string' ? value.generatedAt : '',
         artifact: value.artifact as PublicTiHandoffArtifact,
@@ -555,7 +555,7 @@ function normalizeLegacyPublicTiHandoffPayload(value: Record<string, unknown>, i
         schemaVersion: PUBLIC_TI_HANDOFF_SCHEMA_VERSION,
         source: PUBLIC_TI_HANDOFF_SOURCE,
         action,
-        artifactId: artifact.id,
+        recordId: artifact.id,
         query,
         generatedAt: typeof selectedPayload.generatedAt === 'string' ? selectedPayload.generatedAt : '',
         artifact,
@@ -738,7 +738,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-function artifactFromActorList(input: {
+function recordFromActorList(input: {
     result: TiSearchResponse
     actor: TiActorIntelligenceProfile
     actionability: TiActionabilityModel
@@ -749,12 +749,12 @@ function artifactFromActorList(input: {
     watchlistKind: 'company' | 'domain' | 'vendor'
     enrichmentTask: string
 }): ActorArtifact {
-    const provenance = artifactProvenance(input.actor, input.actionability)
+    const provenance = recordSourceDetails(input.actor, input.actionability)
     const matchedWatchTerms = input.actionability.watchlist.payloads.filter(payload => payload.value.toLowerCase() === input.label.toLowerCase())
     return withReadiness({
         result: input.result,
         artifact: {
-            id: artifactId(input.kind, input.label),
+            id: recordId(input.kind, input.label),
             kind: input.kind,
             label: input.label,
             subtitle: input.subtitle,
@@ -779,7 +779,7 @@ function observedFreshnessFor(result: TiSearchResponse, actor: TiActorIntelligen
 
 function withReadiness(input: { result: TiSearchResponse; artifact: Omit<ActorArtifact, 'readiness'> }): ActorArtifact {
     const blockers = [
-        ...(!input.artifact.provenance.length ? ['sourceProvenance[] for the selected artifact'] : []),
+        ...(!input.artifact.provenance.length ? ['sourceProvenance[] for the selected record'] : []),
         ...(!input.artifact.evidence.length ? ['artifact evidence text'] : []),
         ...(isStale(input.artifact.freshness, input.result.generatedAt) ? [`fresh source after ${formatDate(input.artifact.freshness)}`] : []),
         ...(!input.artifact.watchlistTerms.length && input.artifact.kind !== 'technique' ? ['customer watchlist term'] : []),
@@ -795,13 +795,13 @@ function withReadiness(input: { result: TiSearchResponse; artifact: Omit<ActorAr
         ...input.artifact,
         readiness: {
             state,
-            label: readinessLabel(state),
+            label: statusLabel(state),
             blockers,
         },
     }
 }
 
-function readinessLabel(state: ActorArtifactReadiness['state']) {
+function statusLabel(state: ActorArtifactReadiness['state']) {
     if (state === 'ready_for_org_handoff') return 'Ready for org handoff'
     if (state === 'needs_source') return 'Needs source'
     if (state === 'stale') return 'Stale evidence'
@@ -822,7 +822,7 @@ function formatDate(value: string) {
     return parsed.toISOString().slice(0, 10)
 }
 
-function artifactProvenance(actor: TiActorIntelligenceProfile, actionability: TiActionabilityModel) {
+function recordSourceDetails(actor: TiActorIntelligenceProfile, actionability: TiActionabilityModel) {
     return unique([
         ...actionability.sourceProvenance.map(source => source.provenance),
         ...actor.sourceProvenance,
@@ -846,7 +846,7 @@ function matchingTechnique(result: TiSearchResponse, value: string) {
         .slice(0, 3)
 }
 
-function artifactId(kind: ActorArtifactKind, value: string) {
+function recordId(kind: ActorArtifactKind, value: string) {
     return `${kind}:${value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'unknown'}`
 }
 

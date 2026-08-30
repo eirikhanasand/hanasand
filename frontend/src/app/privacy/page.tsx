@@ -27,7 +27,7 @@ export default function PrivacyPage() {
                     title: '3. Monitoring inputs and alert data',
                     body: [
                         'Hanasand processes watchlists, company names, domains, vendor names, actor queries, source selections, alert rules, and related configuration so the service can monitor external risk signals and route alerts.',
-                        'Alert records may include source names, timestamps, confidence signals, matched terms, summaries, metadata, workflow status, delivery status, analyst notes, and customer-selected routing information. Customers should review alerts before taking action because monitored sources can be incomplete, unavailable, stale, or disputed.',
+                        'Alert records may include source names, timestamps, confidence signals, matched terms, summaries, metadata, status, delivery status, notes, and customer-selected routing information. Customers should review alerts before taking action because monitored sources can be incomplete, unavailable, stale, or disputed.',
                     ],
                 },
                 {

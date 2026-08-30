@@ -1908,7 +1908,7 @@ export function selectedCaseActionTrailFor(
         {
             id: `case-handoff:${selected.id}`,
             at: result.generatedAt,
-            label: caseDraft?.ready ? 'Case handoff ready' : 'Case handoff syncing',
+            label: caseDraft?.ready ? 'case delivery ready' : 'case delivery syncing',
             detail: caseDraft?.ready
                 ? 'Selected evidence has the required case link, sources, and watch terms for authenticated review.'
                 : 'Case review needs the missing identifiers or sources listed below before persistence.',
@@ -1939,7 +1939,7 @@ export function selectedCaseActionTrailFor(
             detail: relevance.rationale,
             state: relevance.state === 'not_relevant' ? 'blocked' as const : relevance.state === 'needs_source' ? 'review' as const : 'ready' as const,
             route: caseRoute,
-            blockers: relevance.state === 'needs_source' ? ['Source review required before case handoff.'] : relevance.state === 'not_relevant' ? ['Selected evidence marked not relevant for current customer work.'] : [],
+            blockers: relevance.state === 'needs_source' ? ['Source review required before case delivery.'] : relevance.state === 'not_relevant' ? ['Selected evidence marked not relevant for current customer work.'] : [],
             evidenceRowId: selected.priority?.rowId,
             provenance: {
                 ...baseProvenance,

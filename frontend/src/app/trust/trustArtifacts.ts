@@ -29,19 +29,19 @@ export const trustArtifacts: TrustArtifact[] = [
         status: 'Published',
         updated: 'July 3, 2026',
         summary: [
-            ['Data model', 'Metadata-first alerting; raw leak material is not the normal customer workflow.'],
-            ['Access model', 'Organization membership, role checks, admin workflows, and protected dashboard routes.'],
-            ['Identity', 'Password accounts today; SSO/SAML/OIDC/SCIM is scoped before enterprise rollout.'],
+            ['Data model', 'Alerts use source details and metadata; customers do not need to upload raw leak material.'],
+            ['Access model', 'Accounts, roles, and protected dashboard pages control access.'],
+            ['Identity', 'Password accounts are available today. SSO, SAML, OIDC, and SCIM require separate setup.'],
             ['Certification', 'No SOC 2 or ISO 27001 certificate is claimed.'],
         ],
         sections: [
             {
                 title: 'Customer data handled',
-                body: 'Hanasand stores the information needed to monitor watched companies and route alerts: organization identifiers, watchlist terms, user roles, webhook destinations, alert records, delivery status, and operational audit context.',
+                body: 'Hanasand stores the information needed to monitor companies and send alerts: account details, watchlist terms, user roles, webhook destinations, alert records, delivery status, and audit logs.',
                 items: [
                     'Watch terms can include company names, domains, suppliers, brands, executives, aliases, and portfolio companies.',
-                    'Alert records can include matched term, actor/company fields, source name, timestamps, confidence labels, status, delivery result, and analyst notes.',
-                    'Operational telemetry can include request IDs, route health, error state, rate-limit events, audit events, and service logs.',
+                    'Alert records can include the matched term, company, source, time, confidence, status, delivery result, and notes.',
+                    'Service logs can include request IDs, health checks, errors, rate-limit events, and audit events.',
                 ],
             },
             {
@@ -53,8 +53,8 @@ export const trustArtifacts: TrustArtifact[] = [
                 body: 'Protected dashboard routes require authentication. Organization pages use member/role context for shared watchlists, alert scope, webhook destinations, and admin workflows. Enterprise identity requirements should be raised before purchase so SSO and provisioning scope are explicit.',
             },
             {
-                title: 'Operational controls',
-                body: 'The product exposes status, delivery history, admin/support flows, and operational checks where the backing services are enabled. Security reviewers should verify the exact controls in the target deployment before relying on them for policy.',
+                title: 'Service controls',
+                body: 'The product shows service status, delivery history, admin tools, and support tools where those services are enabled. Check the target deployment before relying on a control.',
             },
         ],
         table: {
@@ -110,7 +110,7 @@ export const trustArtifacts: TrustArtifact[] = [
             rows: [
                 ['Watchlist terms', 'Match company, supplier, domain, brand, and executive exposure', 'Stored as customer monitoring configuration'],
                 ['Alert records', 'Show what matched, source context, status, and delivery result', 'Stored as reviewable product records'],
-                ['Webhook/API data', 'Deliver alerts into customer workflows', 'Scoped to configured destination and delivery history'],
+                ['Webhook/API data', 'Deliver alerts into customer processs', 'Scoped to configured destination and delivery history'],
                 ['Support/procurement data', 'Answer review, onboarding, billing, and security questions', 'Handled through contact/support path'],
                 ['Raw leak material', 'Not required for normal company exposure alerting', 'Excluded unless explicitly approved and scoped'],
             ],

@@ -40,13 +40,13 @@ const replyWindowOptions = [
 
 const intakeSteps = [
     ['Coverage fit', 'Confirm whether the names, domains, suppliers, or actors are sensible to monitor now.'],
-    ['Delivery path', 'Confirm whether first alerts should go to webhook destinations, case queues, or scoped API consumers.'],
+    ['Delivery path', 'Confirm whether first alerts should go to webhook destinations, case queues, or organization API consumers.'],
     ['Security review', 'Package DPA, subprocessors, SLA notes, identity requirements, and current control gaps.'],
 ]
 
 const reviewRows = [
     ['Pilot scope', 'Watched names, domains, suppliers, alert owner, and first-month success criteria.'],
-    ['Delivery setup', 'Webhook, case, or scoped API path with the fields your team needs.'],
+    ['Delivery setup', 'Webhook, case, or organization API path with the fields your team needs.'],
     ['Security review', 'DPA notes, subprocessors, SLA expectations, identity requirements, and current certification limits.'],
 ]
 
@@ -427,7 +427,7 @@ function getContactIntent(plan: string, intent: string): ContactIntent {
     if (normalizedPlan === 'evaluation') {
         return {
             subject: 'Hanasand evaluation request',
-            message: 'I want to evaluate Hanasand before scoping monitored coverage.\n\nProduct workflow to evaluate:\nNames/domains of interest:\nTimeline:',
+            message: 'I want to evaluate Hanasand before scoping monitored coverage.\n\nproduct process to evaluate:\nNames/domains of interest:\nTimeline:',
             eyebrow: 'Evaluation',
             heading: 'Evaluate the product before monitored activation.',
             detail: 'Create a console account for self-serve evaluation, or send the workflow you need to validate before a managed monitoring setup.',

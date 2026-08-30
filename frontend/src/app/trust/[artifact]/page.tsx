@@ -18,8 +18,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const artifact = getTrustArtifact(slug)
     if (!artifact) {
         return buildRouteMetadata({
-            title: 'Trust Artifact',
-            description: 'Hanasand trust center artifact.',
+            title: 'Trust document',
+            description: 'Hanasand trust document.',
             path: '/trust',
         })
     }
@@ -56,7 +56,7 @@ export default async function TrustArtifactPage({ params }: Props) {
                                 <FileText className='h-5 w-5' />
                             </span>
                             <div>
-                                <p className='text-xs font-semibold uppercase text-ui-muted'>Artifact status</p>
+                                <p className='text-xs font-semibold uppercase text-ui-muted'>Document status</p>
                                 <p className='mt-1 text-lg font-semibold'>{artifact.status}</p>
                             </div>
                             <div className='border-t border-ui-border pt-3'>

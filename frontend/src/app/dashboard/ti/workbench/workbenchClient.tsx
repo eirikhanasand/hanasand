@@ -27,7 +27,7 @@ function sanitizeWorkbenchCopy(value: string | undefined) {
         .replace(/hanasand-live-status/gi, 'Hanasand live org')
         .replace(/generation status/gi, 'generation status')
         .replace(/alertability status/gi, 'alertability status')
-        .replace(/customer workflow status/gi, 'customer workflow status')
+        .replace(/customer process status/gi, 'customer process status')
         .replace(/worker status/gi, 'worker status')
         .replace(/audit status/gi, 'audit trail')
         .replace(/status/gi, 'status')
@@ -1486,7 +1486,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             detail: openCaseAction ? 'Create or reuse a case from this alert while preserving evidence, watchlist scope, and delivery context.' : selected.missingDependency || 'Case link is syncing to this alert.',
             tone: openCaseAction ? 'ready' : 'blocked',
             action: openCaseAction,
-            disabledReason: openCaseAction ? undefined : 'Case handoff action is not attached to this alert yet.',
+            disabledReason: openCaseAction ? undefined : 'case delivery action is not attached to this alert yet.',
         })
     }
     if (selected.kind === 'dwm_alert') {
@@ -2090,7 +2090,7 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
 }
 
 function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchProductReadinessItem, actionState: { id: string, status: 'running' | 'ready' | 'blocked', text: string } | null, onRunAction: (item: WorkbenchProductReadinessItem, action: WorkbenchAction) => void | Promise<void> }) {
-    const blocker = readinessBlocker(item)
+    const blocker = statusBlocker(item)
     const statusTime = item.proofTimestamp || item.checkedAt || ''
     const tone = productReadinessTone(item.status)
     const actions = item.actions || []
@@ -2251,7 +2251,7 @@ function ReadinessDetailField({ label: fieldLabel, value }: { label: string, val
     )
 }
 
-function readinessBlocker(item: WorkbenchProductReadinessItem) {
+function statusBlocker(item: WorkbenchProductReadinessItem) {
     if (item.status === 'ready') return ''
     return item.unavailableReason || item.detail || item.source || 'Workflow lane is reading runtime data.'
 }

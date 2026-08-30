@@ -39,8 +39,8 @@ export default function MillSolutionPage() {
                 <div className='grid content-start gap-4 rounded-lg border border-ui-border bg-ui-panel p-5'>
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Security Monitoring scope</p>
                     <h2 className='text-2xl font-semibold'>A working MDR starting point, not a generic log dump.</h2>
-                    <p className='text-sm leading-6 text-ui-muted'>Security Monitoring is built on the existing Hanasand organization, API-key, tenant, and analyst workflows. The Mill ingestion service keeps one stable endpoint while vendor adapters and broader rule families feed the same event model.</p>
-                    <ul className='grid gap-3 text-sm text-ui-text'><li>• Suspicious login findings</li><li>• Impossible-travel evidence</li><li>• Tenant-scoped raw and normalized events</li><li>• Extensible path for Sigma and Hanasand rules</li></ul>
+                    <p className='text-sm leading-6 text-ui-muted'>Security Monitoring is built on the existing Hanasand organization, API-key, tenant, and analyst processs. The Mill ingestion service keeps one stable endpoint while vendor adapters and broader rule families feed the same event model.</p>
+                    <ul className='grid gap-3 text-sm text-ui-text'><li>• Suspicious login findings</li><li>• Impossible-travel evidence</li><li>• organization-specific raw and normalized events</li><li>• Extensible path for Sigma and Hanasand rules</li></ul>
                 </div>
             </section>
         </main>

@@ -192,7 +192,7 @@ function buildProvenanceRows(result: TiSearchResponse): TiActorSourceProvenance[
             parserStatus: source.parserStatus,
             lastCollectedAt: source.lastCollectedAt,
             confidence: source.confidence,
-            shownBecause: 'Evidence used for watchlist, alert, or case handoff.',
+            shownBecause: 'Evidence used for watchlist, alert, or case delivery.',
         })),
         ...sourceRows,
     ].filter(row => row.sourceName && row.provenance), row => `${row.sourceId ?? row.sourceName}:${row.provenance}`).slice(0, 12)

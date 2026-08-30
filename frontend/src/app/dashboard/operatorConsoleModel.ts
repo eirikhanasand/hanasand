@@ -356,7 +356,7 @@ export function sanitizeVisibleOperatorCopy(value: string | undefined) {
         .replace(new RegExp('sources verification pr' + 'oof', 'gi'), 'sources verification status')
         .replace(new RegExp('worker pr' + 'oof', 'gi'), 'worker status')
         .replace(new RegExp('generation pr' + 'oof', 'gi'), 'generation status')
-        .replace(new RegExp('customer workflow pr' + 'oof', 'gi'), 'customer workflow status')
+        .replace(new RegExp('customer process pr' + 'oof', 'gi'), 'customer process status')
         .replace(new RegExp('audit pr' + 'oof', 'gi'), 'audit trail')
         .replace(/readiness queue/gi, 'case list')
         .replace(new RegExp('operations ' + 'queue', 'gi'), 'case list')
@@ -783,7 +783,7 @@ function unavailableAnalystWorkflow(source: string, checkedAt: string): AnalystW
         staleAfterSeconds: 600,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'analyst_workflow',
-        integrationProbeHint: 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst workflow is active.',
+        integrationProbeHint: 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst process is active.',
         backendProofContractVersion: 'analyst.workflow.readiness.v1',
     }
 }
@@ -1164,7 +1164,7 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
     const endToEndWorkflowFromProxy = normalizeEndToEndWorkflowReadiness(input.contracts?.productReadinessEndToEndWorkflowPacket)
     const endToEndWorkflow = input.endpoints?.contracts?.ok === true
         ? endToEndWorkflowFromProxy
-        : { ...endToEndWorkflowFromProxy, status: 'blocked' as const, detail: 'End-to-end workflow status requires the contracts endpoint to be reachable.' }
+        : { ...endToEndWorkflowFromProxy, status: 'blocked' as const, detail: 'End-to-end process status requires the status endpoint to be reachable.' }
     const endToEndWorkflowReady = endToEndWorkflow.status === 'ready'
     const sourceFamilyCount = Object.keys(input.sourcePacks?.sourceFamilyCounts || {}).length
     const parserSourceFamilyNames = Object.keys(input.sourcePacks?.parserSourceFamilyCounts || {}).sort()
@@ -1183,11 +1183,11 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         !(worker && workerFresh && Number(worker.collectionReadyRows ?? 0) === 0) ? '' : 'Source-pack worker is checking collection-ready source rows.',
         sourceOperationsReady ? '' : 'Collection status is syncing.',
         sourceCustomerConfigReady ? '' : 'Source customer configuration and redaction state are syncing.',
-        sourceReadinessArtifactReady ? '' : 'Source status artifact is syncing ledger, trust, and safe-output checks.',
+        sourceReadinessArtifactReady ? '' : 'Source status is syncing checks.',
         sourceProxyVerificationReady ? '' : 'Source reachability checks are syncing.',
         schemaLookupReady ? '' : 'Safe contract schema lookup is syncing from the sources.',
         receiptMatrixReady ? '' : 'Product status delivery-check matrix is syncing from the sources.',
-        endToEndWorkflowReady ? '' : endToEndWorkflow?.detail || 'End-to-end workflow status is syncing from the sources.',
+        endToEndWorkflowReady ? '' : endToEndWorkflow?.detail || 'End-to-end process status is syncing from the sources.',
         sourceFamilyCount > 0 ? '' : 'Source family counts are syncing from the source pack.',
         parserSourceFamilyCount > 0 ? '' : 'Parser family counts are syncing from the source pack.',
         ...(Array.isArray(input.sourcePacks?.readiness?.blockers) ? input.sourcePacks.readiness.blockers.filter(Boolean) : []),
@@ -1268,7 +1268,7 @@ function normalizeEndToEndWorkflowReadiness(input: ProductReadinessEndToEndWorkf
             schemaVersion: 'hanasand.product_readiness.end_to_end_workflow_packet.v1',
             state: 'unsupported',
             status: 'blocked',
-            detail: 'End-to-end customer workflow state is loading through the source API proxy.',
+            detail: 'End-to-end customer process state is loading through the source API proxy.',
             steps: [],
             typedFields: [],
             missingTypedFields: ['end_to_end_workflow_packet'],
@@ -1514,7 +1514,7 @@ export function buildPublicTiHandoffCase(input: {
                 source: 'Shared watchlist',
                 entityId: watchTerms.map(term => term.value).join(', ') || undefined,
                 href: '/api/dwm/watchlists',
-                detail: watchlistCovered ? 'Selected artifact term is already covered by a loaded watchlist.' : watchTerms.length ? 'Add selected artifact terms to an organization watchlist.' : 'No watchlist terms came with this artifact.',
+                detail: watchlistCovered ? 'selected record term is already covered by a loaded watchlist.' : watchTerms.length ? 'Add selected record terms to an organization watchlist.' : 'No watchlist terms came with this artifact.',
             },
             {
                 id: 'public_ti_path_alerts',
@@ -1887,12 +1887,12 @@ function buildProductReadiness(input: {
         },
         {
             id: 'analyst_workflow',
-            label: 'Analyst workflow',
+            label: 'analyst process',
             status: analystWorkflow?.status || 'unavailable',
             detail: analystWorkflow
                 ? analystWorkflow.detail || analystWorkflowDetail(analystWorkflow)
                 : 'Analyst case state is loading to the dashboard alert.',
-            source: analystWorkflow?.source || 'analyst workflow',
+            source: analystWorkflow?.source || 'analyst process',
             href: analystWorkflow?.href || '/dashboard/ti/workbench',
             checkedAt: analystWorkflow?.checkedAt || analystWorkflow?.latestCaseAt,
             staleAfterSeconds: analystWorkflow?.staleAfterSeconds,
@@ -1952,10 +1952,10 @@ function buildProductReadiness(input: {
         },
         {
             id: 'end_to_end_workflow',
-            label: 'Customer workflow',
+            label: 'customer process',
             status: sourceGrowth?.endToEndWorkflow?.status || 'blocked',
-            detail: sourceGrowth?.endToEndWorkflow?.detail || 'End-to-end customer workflow state is loading through the sources.',
-            source: sourceGrowth?.source || 'GET /api/ti/scraper/control workflow status',
+            detail: sourceGrowth?.endToEndWorkflow?.detail || 'End-to-end customer process state is loading through the sources.',
+            source: sourceGrowth?.source || 'GET /api/ti/scraper/control process status',
             href: '/dashboard/ti/sources',
             checkedAt: sourceGrowth?.endToEndWorkflow?.lastVerifiedAt || sourceGrowth?.checkedAt || sourceGrowth?.latestInventoryAt,
             staleAfterSeconds: sourceGrowth?.staleAfterSeconds || 900,
@@ -1975,7 +1975,7 @@ function buildProductReadiness(input: {
             status: publicTiProvenance?.status || 'needs_action',
             detail: publicTiProvenance
                 ? publicTiProvenance.detail || publicTiProvenanceDetail(publicTiProvenance)
-                : 'Actor evidence provenance is checked from the selected artifact.',
+                : 'Actor evidence provenance is checked from the selected record.',
             source: publicTiProvenance?.source || 'Actor evidence bridge data',
             href: '/ti',
             checkedAt: publicTiProvenance?.checkedAt || publicTiProvenance?.latestArtifactAt,
@@ -2169,7 +2169,7 @@ function caseReadinessMutationActions(item: WorkbenchProductReadinessItem): Work
         : item.caseDetailReady
             ? item.caseDetailReadOnly ? 'Case detail is read-only for the current member.' : undefined
             : 'Case mutation requires readable case detail from /api/cases/:id.'
-    const ownerBlockedReason = mutationBlockedReason || (item.assignedOwner ? undefined : 'Assignment requires an owner returned by analyst workflow status.')
+    const ownerBlockedReason = mutationBlockedReason || (item.assignedOwner ? undefined : 'Assignment requires an owner returned by analyst process status.')
     return [
         {
             id: 'assign_case_owner',
@@ -2278,8 +2278,8 @@ function productReadinessBlockerMetadata(item: WorkbenchProductReadinessItem): {
             return {
                 workflowBlocker: 'Shared watchlists',
                 customerImpact: item.status === 'ready'
-                    ? 'Customer terms can feed org-scoped alert generation.'
-                    : 'Customer terms begin producing org-scoped alerts after active watchlists and export data attach.',
+                    ? 'Customer terms can create alerts for the organization.'
+                    : 'Customer terms begin producing organization alerts after active watchlists are saved.',
                 evidenceProvenance,
             }
         case 'source_coverage':
@@ -2293,10 +2293,10 @@ function productReadinessBlockerMetadata(item: WorkbenchProductReadinessItem): {
             }
         case 'end_to_end_workflow':
             return {
-                workflowBlocker: 'Workflow status',
+                workflowBlocker: 'Process status',
                 customerImpact: item.status === 'ready'
-                    ? 'The customer workflow can be traced from organization scope through alert, case, delivery, and support history.'
-                    : 'Operators need every org, watchlist, source, alert, case, webhook, and support step visible before trusting the full customer workflow.',
+                    ? 'The customer process can be traced from organization scope through alert, case, delivery, and support history.'
+                    : 'Operators need the organization, watchlist, source, alert, case, webhook, and support details before trusting the process.',
                 evidenceProvenance,
             }
         case 'dashboard_alert':
@@ -2492,7 +2492,7 @@ function productReadinessProofMetadata(item: WorkbenchProductReadinessItem): {
         case 'analyst_workflow':
             return {
                 backendProofContractVersion: 'analyst.workflow.readiness.v1',
-                integrationProbeHint: 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst workflow is active.',
+                integrationProbeHint: 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst process is active.',
                 staleAfterSeconds: 600,
                 unavailableReason: 'missing_analyst_case_readiness',
             }
@@ -2637,7 +2637,7 @@ function dashboardAlertReadinessDetail(input: DashboardAlertEvidenceReadiness, a
 function analystWorkflowDetail(input: AnalystWorkflowReadiness) {
     if (input.blockers?.length) return visibleChecks(input.blockers)
     if (input.caseId && input.alertId) return `Analyst case ${input.caseId} is linked to alert ${input.alertId}.`
-    return 'Analyst workflow is active.'
+    return 'analyst process is active.'
 }
 
 function entitlementDetail(input: EntitlementReadiness) {
@@ -2740,13 +2740,13 @@ function publicTiEvidence(payload: Extract<PublicTiHandoffDecodeResult, { ok: tr
     const artifactEvidence = (payload.artifact.evidence || []).slice(0, 4).map((excerpt, index) => ({
         id: `ev_public_ti_artifact_${index}`,
         sourceName: 'Public TI artifact',
-        sourceFamily: payload.artifact.kind || 'actor artifact',
+        sourceFamily: payload.artifact.kind || 'actor record',
         captureMode: 'authenticated handoff',
         redactionState: 'customer safe',
         contentHash: `${payload.artifactId}:${index}`,
         excerpt,
         observedAt: payload.artifact.freshness || payload.generatedAt || now,
-        provenance: payload.artifact.provenance?.[index] || 'public TI selected artifact',
+        provenance: payload.artifact.provenance?.[index] || 'public TI selected record',
         confidence: payload.artifact.confidence,
     }))
     const sourceEvidence = payload.sourceRequests.slice(0, 4).map((source, index) => ({
@@ -3071,7 +3071,7 @@ export function buildReadinessCases(input: {
                 : 'Link a readable analyst case to the dashboard-visible alert before treating workflow state as ready.',
             evidence: [{
                 id: 'ev_analyst_workflow_readiness',
-                sourceName: 'Analyst workflow status',
+                sourceName: 'analyst process status',
                 sourceFamily: 'case workflow',
                 captureMode: 'operator view',
                 redactionState: 'customer safe',
@@ -3101,7 +3101,7 @@ export function buildReadinessCases(input: {
             ],
             workflowPath: path,
             caseDetailHref: analystWorkflow.caseDetailRoute,
-            missingDependency: analystWorkflowReady ? undefined : visibleChecks(analystWorkflowBlockers) || analystWorkflow.unavailableReason || 'Live analyst workflow data is syncing.',
+            missingDependency: analystWorkflowReady ? undefined : visibleChecks(analystWorkflowBlockers) || analystWorkflow.unavailableReason || 'Live analyst process data is syncing.',
             actions: [
                 {
                     id: 'open_analyst_case_workflow',
@@ -3228,7 +3228,7 @@ export function buildReadinessCases(input: {
             priority: alertVisibilityBlocked ? 230 : alertGenerationProofReady && input.liveAlertCount ? 238 : input.liveAlertCount ? 240 : 350,
             confidence: alertVisibilityBlocked ? 86 : alertGenerationProof ? alertGenerationProofReady ? 92 : 72 : input.liveAlertCount ? 90 : 58,
             subtitle: alertVisibilityBlocked
-                ? `${alertAccessMessage} Analyst workflow remains inspectable; live customer delivery waits for membership visibility.`
+                ? `${alertAccessMessage} analyst process remains inspectable; live customer delivery waits for membership visibility.`
                 : alertGenerationProof
                     ? alertGenerationProof.detail || alertGenerationDetail(alertGenerationProof)
                     : input.liveAlertCount ? `${input.liveAlertCount} saved DWM alert${input.liveAlertCount === 1 ? '' : 's'} ready.` : 'Alert state is updating to saved DWM alerts and source captures.',
@@ -3258,7 +3258,7 @@ export function buildReadinessCases(input: {
                     : alertGenerationProof ? ['Owner: DWM owner. Open alert generation status.', 'Review candidate, evidence-window, source, and webhook-route checks.', 'Rebuild alerts after customer delivery data is healthy.']
                         : input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.'] : ['Owner: operator. Save watchlist.', 'Run collection.', 'Rebuild alerts.'],
             relatedLinks: alertVisibilityBlocked
-                ? [{ href: '/organizations', label: 'Organization access' }, { href: alertsHref(input.scope), label: 'Scoped alerts' }]
+                ? [{ href: '/organizations', label: 'Organization access' }, { href: alertsHref(input.scope), label: 'organization alerts' }]
                 : [{ href: '/dashboard/dwm', label: 'Rebuild alerts' }, { href: alertsHref(input.scope), label: 'Alerts API' }, { href: '/api/dwm/alerts/generation-readiness', label: 'Generation status' }],
             workflowPath: path,
             missingDependency: alertVisibilityBlocked ? undefined : alertGenerationProofReady && input.liveAlertCount ? undefined : alertGenerationProof ? sanitizeVisibleOperatorCopy(visibleChecks(alertGenerationDashboardBlockers) || alertGenerationProof.unavailableReason || 'Alert generation is checking source evidence and delivery routes.') : input.liveAlertCount ? undefined : 'Alert stream is checking saved DWM alerts before customer delivery.',
@@ -3269,7 +3269,7 @@ export function buildReadinessCases(input: {
                     method: 'GET' as const,
                     href: '/organizations',
                 }] : []),
-                { id: 'open_alert_queue', label: alertVisibilityBlocked ? 'Retry scoped alerts' : 'Open alerts', method: 'GET', href: alertsHref(input.scope) },
+                { id: 'open_alert_queue', label: alertVisibilityBlocked ? 'Retry organization alerts' : 'Open alerts', method: 'GET', href: alertsHref(input.scope) },
                 ...(!alertVisibilityBlocked ? [{ id: 'open_alert_generation_readiness', label: 'Open generation status', method: 'GET' as const, href: '/api/dwm/alerts/generation-readiness' }] : []),
                 ...(!alertVisibilityBlocked && activeWatchlists.length ? [{
                     id: 'rebuild_alerts',

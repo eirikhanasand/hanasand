@@ -6,66 +6,66 @@ import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Trust Center',
-    description: 'See how Hanasand turns public intelligence into evidence-backed alerts and customer-ready security work.',
+    description: 'See how Hanasand turns public intelligence into alerts your team can review and use.',
     path: '/trust',
     keywords: ['hanasand trust center', 'hanasand security', 'threat intelligence', 'security operations'],
 })
 
 const capabilities = [
     {
-        title: 'Monitor relevant public intelligence',
-        detail: 'Governed collection across selected public sources gives teams a focused view of activity that matters to them.',
+        title: 'Monitor useful public sources',
+        detail: 'We check selected public sources and show the activity that matters to your team.',
         icon: Database,
         href: '/coverage',
         link: 'View source coverage',
     },
     {
-        title: 'Match activity to customer terms',
-        detail: 'Customer-specific watchlists connect public activity to companies, domains, vendors, brands, and products.',
+        title: 'Watch the names that matter',
+        detail: 'Add companies, domains, vendors, brands, and products to your watchlist.',
         icon: Eye,
         href: '/dwm',
         link: 'See monitoring workflow',
     },
     {
-        title: 'Turn findings into evidence-backed work',
-        detail: 'Matches retain source, timestamps, provenance, and evidence context so analysts can review the basis for an alert.',
+        title: 'See why an alert was raised',
+        detail: 'Every alert includes the source, time, and details behind the match.',
         icon: FileCheck2,
         href: '/ti/apt29',
         link: 'Inspect intelligence evidence',
     },
     {
-        title: 'Move from alert to action',
-        detail: 'Relevant findings can be reviewed, assigned, linked to cases, and tracked through an operational workflow.',
+        title: 'Take action on alerts',
+        detail: 'Review alerts, assign them, add notes, and send them to your existing tools.',
         icon: Workflow,
         href: '/contact?intent=procurement',
         link: 'Request a workflow review',
     },
 ]
 
-const workflowProof = [
-    ['01', 'Watchlist match', 'A customer term is matched against collected public intelligence.'],
-    ['02', 'Evidence record', 'The alert keeps source, collection time, provenance, and context.'],
-    ['03', 'Alert review', 'Analysts assess relevance, confidence, severity, and recommended action.'],
-    ['04', 'Case handoff', 'The finding can move into an assigned customer workflow.'],
+const alertPath = [
+    ['01', 'Watchlist match', 'A name on your watchlist appears in a public source.'],
+    ['02', 'Alert details', 'The alert shows the source, time, and matching text.'],
+    ['03', 'Review', 'Your team checks the details and decides what to do.'],
+    ['04', 'Next step', 'Send the alert to the right person or tool.'],
 ]
 
 const enterpriseFoundations: Array<[string, string, LucideIcon]> = [
-    ['Tenant-scoped data', 'Customer monitoring, alerts, and evidence stay within the selected customer scope.', LockKeyhole],
-    ['Customer-specific monitoring', 'Watchlists define the terms and entities that matter to each customer.', Eye],
-    ['Evidence provenance', 'Source identity, timestamps, hashes, and collection context travel with the finding.', FileCheck2],
-    ['Freshness visibility', 'Collection health and freshness make the state of monitoring visible to operators.', Gauge],
-    ['Operational workflows', 'Alerts, assignments, notes, delivery, and cases support follow-through.', Waypoints],
-    ['Governed source lifecycle', 'Source activation, health, lifecycle, and collection decisions are tracked explicitly.', BookOpenCheck],
+    ['Separate customer data', 'Each customer sees only their own watchlists and alerts.', LockKeyhole],
+    ['Your watchlists', 'Choose the companies, domains, vendors, and brands to monitor.', Eye],
+    ['Traceable alerts', 'Alerts include the source, time, and details used to create them.', FileCheck2],
+    ['Current information', 'See when a source was last checked and when an alert was found.', Gauge],
+    ['Useful follow-up', 'Assign alerts, add notes, and send them where your team works.', Waypoints],
+    ['Managed sources', 'Sources are monitored and their status is tracked.', BookOpenCheck],
 ]
 
 const trustPractices = [
-    ['Evidence-backed outputs', 'Customer-facing findings are grounded in retained evidence and structured alert records.'],
-    ['Explicit source attribution', 'Reviewers can see where an observation came from and how it entered the monitoring workflow.'],
+    ['Clear alerts', 'Findings include the details your team needs to review them.'],
+    ['Source shown', 'See where each finding came from.'],
     ['Honest freshness indicators', 'Collection and observation timing remain visible so teams can judge how current a finding is.'],
-    ['Collection health visibility', 'Operational status shows whether source collection is working and when it last succeeded.'],
-    ['Governed collection policies', 'Source use, lifecycle, and transport are controlled as operational decisions.'],
-    ['Customer-visible service status', 'Service health is available through a public status path for operational awareness.'],
-    ['Auditable alert workflows', 'Review and delivery events create a clear path from match to customer action.'],
+    ['Collection status', 'See whether sources are being checked and when the last check succeeded.'],
+    ['Source controls', 'Sources can be enabled, disabled, and reviewed.'],
+    ['Public status', 'Check the current status of the service.'],
+    ['Alert history', 'Review what happened from the first match to the alert.'],
 ]
 
 export default function TrustPage() {
@@ -77,7 +77,7 @@ export default function TrustPage() {
                         <p className='text-sm font-semibold uppercase tracking-[0.12em] text-ui-primary'>Trust center</p>
                         <h1 className='max-w-4xl text-4xl font-semibold tracking-tight md:text-6xl'>Threat intelligence your team can act on.</h1>
                         <p className='max-w-3xl text-lg leading-8 text-ui-muted'>
-                            Hanasand collects public intelligence, connects it to customer watchlists, and turns relevant activity into evidence-backed alerts and cases.
+                            Hanasand checks public sources against your watchlists and sends alerts when it finds a match.
                         </p>
                         <div className='flex flex-wrap gap-3'>
                             <Link href='/dwm' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
@@ -90,13 +90,13 @@ export default function TrustPage() {
                         </div>
                     </div>
 
-                    <WorkflowPreview />
+                    <AlertPathPreview />
                 </div>
             </section>
 
             <section id='operational-today' className='scroll-mt-24 border-b border-ui-border bg-ui-canvas'>
                 <div className='mx-auto grid max-w-7xl gap-7 px-4 py-12 md:px-8'>
-                    <SectionIntro eyebrow='Operational today' title='A direct path from public signal to customer action.' detail='The product is organized around useful outcomes: focused monitoring, understandable evidence, and work that can move through a security team.' />
+                    <SectionIntro eyebrow='How it works' title='From a public mention to a useful alert.' detail='Monitor the sources you care about, review what we find, and send alerts to your team.' />
                     <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
                         {capabilities.map((item) => <CapabilityCard key={item.title} {...item} />)}
                     </div>
@@ -105,7 +105,7 @@ export default function TrustPage() {
 
             <section id='enterprise-workflows' className='scroll-mt-24 border-b border-ui-border bg-ui-panel'>
                 <div className='mx-auto grid max-w-7xl gap-7 px-4 py-12 md:px-8'>
-                    <SectionIntro eyebrow='Built for enterprise workflows' title='Practical foundations for security teams.' detail='Hanasand keeps customer monitoring focused, attributable, and connected to the way analysts already review and act on findings.' />
+                    <SectionIntro eyebrow='For security teams' title='The details stay with the alert.' detail='Hanasand keeps monitoring focused and gives your team the information needed to review each finding.' />
                     <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
                         {enterpriseFoundations.map(([title, detail, Icon]) => (
                             <div key={title} className='rounded-lg border border-ui-border bg-ui-canvas p-4'>
@@ -120,7 +120,7 @@ export default function TrustPage() {
 
             <section id='trust-in-practice' className='scroll-mt-24 border-b border-ui-border bg-ui-canvas'>
                 <div className='mx-auto grid max-w-7xl gap-7 px-4 py-12 md:px-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-start'>
-                    <SectionIntro eyebrow='How trust works in practice' title='Confidence comes from seeing the work.' detail='The operational record is part of the product: teams can inspect what was collected, when it was observed, where it came from, and what happened next.' />
+                    <SectionIntro eyebrow='How we build trust' title='You can see what happened.' detail='Check what we found, when we found it, where it came from, and what happened next.' />
                     <div className='grid gap-3 sm:grid-cols-2'>
                         {trustPractices.map(([title, detail]) => (
                             <div key={title} className='flex gap-3 rounded-lg border border-ui-border bg-ui-panel p-4'>
@@ -138,10 +138,10 @@ export default function TrustPage() {
             <section id='product-evidence' className='scroll-mt-24 border-b border-ui-border bg-ui-panel'>
                 <div className='mx-auto grid max-w-7xl gap-7 px-4 py-12 md:px-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-center'>
                     <div className='grid gap-4'>
-                        <p className='text-sm font-semibold uppercase tracking-[0.12em] text-ui-primary'>Product evidence</p>
-                        <h2 className='text-3xl font-semibold'>Review the workflow before the sales call.</h2>
+                        <p className='text-sm font-semibold uppercase tracking-[0.12em] text-ui-primary'>See it for yourself</p>
+                        <h2 className='text-3xl font-semibold'>Review the product before you buy.</h2>
                         <p className='max-w-2xl text-sm leading-6 text-ui-muted'>
-                            Use the live product surfaces to inspect source coverage, intelligence evidence, monitoring workflows, and current service operation.
+                            Open the product to check source coverage, alerts, monitoring, and service status.
                         </p>
                         <div className='flex flex-wrap gap-3'>
                             <Link href='/coverage' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold transition hover:border-ui-primary'>
@@ -155,13 +155,13 @@ export default function TrustPage() {
                     <div className='rounded-xl border border-ui-border bg-ui-canvas p-4 shadow-sm'>
                         <div className='flex items-center justify-between border-b border-ui-border pb-3'>
                             <div>
-                                <p className='text-xs font-semibold uppercase tracking-[0.12em] text-ui-primary'>Workflow evidence</p>
+                                <p className='text-xs font-semibold uppercase tracking-[0.12em] text-ui-primary'>Alert process</p>
                                 <h3 className='mt-1 text-lg font-semibold'>From match to case</h3>
                             </div>
                             <BellRing className='h-5 w-5 text-ui-primary' />
                         </div>
                         <div className='divide-y divide-ui-border'>
-                            {workflowProof.map(([number, title, detail]) => (
+                            {alertPath.map(([number, title, detail]) => (
                                 <div key={number} className='grid grid-cols-[2.25rem_1fr] gap-3 py-4'>
                                     <span className='grid h-8 w-8 place-items-center rounded-md border border-ui-border bg-ui-raised text-xs font-semibold text-ui-primary'>{number}</span>
                                     <div>
@@ -179,7 +179,7 @@ export default function TrustPage() {
                 <div className='mx-auto flex max-w-7xl flex-col gap-5 px-4 py-12 md:px-8 lg:flex-row lg:items-center lg:justify-between'>
                     <div>
                         <p className='text-sm font-semibold uppercase tracking-[0.12em] text-ui-primary'>Security review</p>
-                        <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>See how Hanasand turns public intelligence into customer-ready security work.</h2>
+                        <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>See how Hanasand turns public intelligence into useful alerts.</h2>
                     </div>
                     <div className='flex flex-wrap gap-3 lg:justify-end'>
                         <Link href='/dwm' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
@@ -196,17 +196,17 @@ export default function TrustPage() {
     )
 }
 
-function WorkflowPreview() {
+function AlertPathPreview() {
     return <aside className='rounded-xl border border-ui-border bg-ui-raised p-4 shadow-sm'>
         <div className='flex items-center justify-between border-b border-ui-border pb-3'>
             <div>
-                <p className='text-xs font-semibold uppercase tracking-[0.12em] text-ui-primary'>Customer workflow</p>
-                <p className='mt-1 text-sm font-semibold'>Evidence-backed monitoring</p>
+        <p className='text-xs font-semibold uppercase tracking-[0.12em] text-ui-primary'>Monitoring</p>
+                <p className='mt-1 text-sm font-semibold'>A clear path from match to alert</p>
             </div>
             <Radio className='h-5 w-5 text-ui-success' />
         </div>
         <div className='divide-y divide-ui-border'>
-            {workflowProof.map(([number, title, detail]) => (
+            {alertPath.map(([number, title, detail]) => (
                 <div key={number} className='grid grid-cols-[2.25rem_1fr] gap-3 py-4 last:pb-1'>
                     <span className='grid h-8 w-8 place-items-center rounded-md border border-ui-border bg-ui-panel text-xs font-semibold text-ui-primary'>{number}</span>
                     <div>

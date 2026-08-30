@@ -21,16 +21,16 @@ const productItems = [
     { title: 'Organizations', detail: 'Manage members, shared watchlists, alert scope, and destinations.', href: '/organizations', icon: ShieldCheck },
     { title: 'Dark Web Monitoring', detail: 'Watch companies, vendors, domains, and brands for reviewable exposure alerts.', href: '/dwm', icon: BellRing },
     { title: 'Search', detail: 'Search companies, groups, source changes, and alert context.', href: '/ti', icon: Search },
-    { title: 'API and Webhooks', detail: 'Route reviewed alert fields into customer tools and analyst workflows.', href: '/developers', icon: Code2 },
+    { title: 'API and Webhooks', detail: 'Send reviewed alerts to your tools.', href: '/developers', icon: Code2 },
 ]
 
 const solutionItems = [
-    { title: 'All Solutions', detail: 'Company exposure monitoring, API delivery, and review workflows.', href: '/solutions', icon: ShieldCheck },
+    { title: 'All Solutions', detail: 'Company monitoring, alerts, and integrations.', href: '/solutions', icon: ShieldCheck },
     { title: 'Dark Web Monitoring', detail: 'Company and vendor alerts from watched exposure sources.', href: '/dwm', icon: BellRing },
-    { title: 'Security Monitoring', detail: 'Managed detection from customer security logs, suspicious logins, and analyst evidence.', href: '/solutions/mill', icon: ShieldAlert },
+    { title: 'Security Monitoring', detail: 'Find suspicious logins and other security events.', href: '/solutions/mill', icon: ShieldAlert },
     { title: 'Security Scanner', detail: 'Safe validation scans for approved Hanasand assets.', href: '/solutions/scanner', icon: ShieldAlert },
     { title: 'Threat Search', detail: 'Open the public intelligence workspace for companies and groups.', href: '/ti', icon: Radar },
-    { title: 'Browser', detail: 'Regular and Tor browser runs with isolated capture, profiles, and queueing.', href: '/browser', icon: Network },
+    { title: 'Browser', detail: 'Open suspicious sites in isolated browsers and save the results.', href: '/browser', icon: Network },
 ]
 
 const resourceItems = [

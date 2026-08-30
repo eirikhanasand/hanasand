@@ -66,7 +66,7 @@ if (error) throw new Error(error.error.message)`
                     <CodeBlock title='Authenticated request' code={requestExample} />
                     <div className='rounded-lg border border-ui-border bg-ui-panel p-5'>
                         <div className='flex items-center gap-2'><KeyRound className='h-5 w-5 text-ui-primary' /><h2 className='text-lg font-semibold'>Authentication</h2></div>
-                        <p className='mt-3 text-sm leading-7 text-ui-muted'>Send a provisioned key in <code className='font-semibold text-ui-text'>{apiKeyHeader}</code>. Single search is anonymously rate-limited; batch search and most collection routes accept an exact method-and-route key scope or an authenticated session. Tenant-scoped alerts require an organization API key.</p>
+                        <p className='mt-3 text-sm leading-7 text-ui-muted'>Send a provisioned key in <code className='font-semibold text-ui-text'>{apiKeyHeader}</code>. Single search is anonymously rate-limited; batch search and most collection routes accept an exact method-and-route key scope or an authenticated session. organization-specific alerts require an organization API key.</p>
                         <p className='mt-3 text-sm leading-7 text-ui-muted'>Responses include <code>X-Request-Id</code> and quota headers. API responses are <code>no-store</code>; failures and partial batches keep their real status.</p>
                     </div>
                 </div>

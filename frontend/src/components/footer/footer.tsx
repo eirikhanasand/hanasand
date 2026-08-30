@@ -95,7 +95,7 @@ export default function Footer() {
                 <div className='min-w-0'>
                     <BrandLogo />
                     <p className='mt-4 max-w-md text-sm leading-6 text-ui-muted'>
-                        Monitor company exposure, triage dark web alerts, and give analysts the context they need to open the right case.
+                        Monitor company exposure and review dark web alerts with the details your team needs.
                     </p>
                     <div className='mt-4 flex flex-wrap gap-2'>
                         <span className='inline-flex items-center gap-1.5 rounded-full border border-ui-border bg-ui-panel px-2.5 py-1 text-[11px] text-ui-text'>
@@ -165,7 +165,7 @@ export default function Footer() {
 
 function footerStatusCopy(status: ServiceStatus['overall'] | 'unknown') {
     if (status === 'up') {
-        return { label: 'Monitored services operational', dotClass: 'bg-ui-success' }
+        return { label: 'All services running', dotClass: 'bg-ui-success' }
     }
     if (status === 'down') {
         return { label: 'Service interruption', dotClass: 'bg-ui-danger' }
