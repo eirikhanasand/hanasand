@@ -447,7 +447,6 @@ function ActorProfileHeader({ result, title, actor, aliases, summary, references
         malwareTools: actor.malwareTools,
     }) || `${title} is a tracked threat actor.`
     const facts = [
-        actor.attribution ? { label: 'Attribution', value: actor.attribution } : null,
         actor.motivation.length ? { label: 'Motivation', value: actor.motivation.slice(0, 2).join('; ') } : null,
         aliases.length ? { label: 'Also known as', value: aliases.slice(0, 4).join(', ') } : null,
         actor.lastSeen ? { label: 'Last seen', value: formatDate(actor.lastSeen) } : null,
@@ -571,7 +570,6 @@ function ActorReferences({ citations, references, activeCitation }: { citations:
 
 function ActorProfileSections({ result, actor, victims }: { result: TiSearchResponse; actor: TiActorIntelligenceProfile; victims: ReturnType<typeof victimObservationsFor> }) {
     const sections = [
-        { title: 'Attribution', items: actor.attribution ? [actor.attribution] : [], empty: 'No attribution found in retained sources.' },
         { title: 'Motivation', items: actor.motivation, empty: 'No motivation found in retained sources.' },
         { title: 'Activity', items: [...actor.campaigns, ...result.recentActivity.slice(0, 4).map(item => item.title)], empty: 'No dated activity found in retained sources.' },
         { title: 'Victims and sectors', items: [...actor.targetSectors, ...victims.slice(0, 4).map(item => `${item.victim}${item.country !== 'Country not stated' ? ` · ${item.country}` : ''}`)], empty: 'No victims or sectors found in retained sources.' },
@@ -5090,12 +5088,6 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
             label: 'Actor type',
             value: actor.actorClass || 'Actor class not stated',
             meta: motivation,
-        },
-        {
-            icon: <ShieldCheck className='h-4 w-4' />,
-            label: 'Attribution',
-            value: actor.attribution || 'Attribution not stated',
-            meta: actor.confidenceReasoning[0] ? displayRequirementText(actor.confidenceReasoning[0]) : sourceBasisLabel(actor.confidence),
         },
         {
             icon: <Globe2 className='h-4 w-4' />,
