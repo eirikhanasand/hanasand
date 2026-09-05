@@ -75,7 +75,13 @@ bun run lint
 bun run build
 ```
 
-The API's default tests do not run checks requiring a database, a running server or browser automation. Those are selected in `api/scripts/index.ts`; run them against disposable services. Generated websites also need an actual build and browser check. Source-text assertions alone do not establish that a page works.
+The API command runs the core checks and every unit test in `api/tests`, with each file in a separate process. Database, server, network and browser checks are opt-in through `api/scripts/index.ts`; run them against disposable services. The thesis database check also requires `THESIS_TEST_DATABASE=1`. Automation history requires `DB_HOST=monitor-test-db`; thesis storage requires `DB_HOST=thesis-test-db`.
+
+Generated-project checks cover exported files, TypeScript, API validation and pagination, worker retries and cancellation, and honest website output. Run `bun run test --only=generated-builds` in `api/` to install each generated project's declared dependencies and build all four project types. This requires npm and package-registry access. Set `GENERATED_PROJECTS_DIR` to retain the builds.
+
+The real website browser test is `frontend/tests/generated-website.spec.ts`. Point `GENERATED_WEBSITE_URL` at the generated website you started, then run that file with Playwright. It checks keyboard navigation, mobile layout, zoom, runtime errors and contact configuration. If the website was built with `CONTACT_EMAIL`, supply the same value as `GENERATED_WEBSITE_CONTACT_EMAIL` to the test.
+
+The old share-chat story suites were removed: minimum file counts, required document phrases and test-authored preview pages did not verify generated application behavior.
 
 The collector has its own `bun run test` and `bun run check` commands in `ti/scraper/`.
 
