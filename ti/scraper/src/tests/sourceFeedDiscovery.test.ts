@@ -25,6 +25,18 @@ const generatedAt = "2026-07-23T12:00:00.000Z";
 const nextYear = "2027-07-23T12:00:00.000Z";
 
 describe("scheduled public feed discovery", () => {
+  test("retries persisted public discovery after capture bodies leave the startup snapshot", async () => {
+    const store = new InMemoryScraperStore();
+    usefulCapture(store, "retry-parent", undefined, "retry-run", ["https://retry.example/feed"]);
+    const captureId = store.listCaptures()[0].id;
+    const id = stableId("source-feed-discovery-plan", "https://retry.example/");
+    store.savePlan({ id, requestId: "req_source_feed_discovery", publisherKey: "https://retry.example/", referenceUrl: "https://retry.example/feed", parentSourceId: "retry-parent", evidenceCaptureId: captureId, status: "failed", tasks: [] } as any);
+    store.listCaptures = () => [];
+    const result = await runSourceFeedDiscoveryCycle({ store, sourceFeedDiscoveryFetch: async () => response(rss("CVE-2026-1000", "https://retry.example/report", generatedAt), "https://retry.example/feed", "application/rss+xml") }, generatedAt);
+    expect(result.processedPublisherCount).toBe(1);
+    expect(result.failedPublisherCount).toBe(0);
+    expect(store.getPlan(id)?.status).toBe("completed");
+  });
   test("uses bounded global publisher workflows and remains restart-idempotent", async () => {
     const directory = mkdtempSync(join(tmpdir(), "source-feed-discovery-"));
     const snapshotPath = join(directory, "store.json");

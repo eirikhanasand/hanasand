@@ -306,6 +306,19 @@ function retainedPublisherReferences(store: DiscoveryStore) {
       });
     }
   }
+  // A bounded startup snapshot may omit old capture bodies; persisted retries
+  // retain their original public-source and evidence binding.
+  for (const plan of store.listPlans?.() ?? []) {
+    const referenceUrl = safePublicReference(plan.referenceUrl);
+    if (plan.requestId !== REQUEST_ID || plan.status !== "failed" || !tenantAbsent(plan.tenantId)
+      || !sources.has(String(plan.parentSourceId)) || !plan.evidenceCaptureId || !referenceUrl
+      || publisherOriginKey(referenceUrl) !== plan.publisherKey || plan.id !== planId(String(plan.publisherKey))
+      || byPublisher.has(String(plan.publisherKey))) continue;
+    byPublisher.set(String(plan.publisherKey), {
+      publisherKey: String(plan.publisherKey), referenceUrl,
+      parentSourceId: String(plan.parentSourceId), captureId: String(plan.evidenceCaptureId)
+    });
+  }
   return { references: [...byPublisher.values()].sort((left, right) => left.publisherKey.localeCompare(right.publisherKey)), rejectedReferenceCount };
 }
 
