@@ -910,7 +910,7 @@ function caseDetailPath(caseId: string, alertId: string, organizationId?: string
     if (organizationId) params.set('organizationId', organizationId)
     params.set('alertId', alertId)
     if (route) params.set('route', route)
-    return `/dashboard/dwm/cases/${encodeURIComponent(caseId)}?${params.toString()}`
+    return `/dwm/cases/${encodeURIComponent(caseId)}?${params.toString()}`
 }
 
 function readNestedString(value: unknown, path: string[]) {

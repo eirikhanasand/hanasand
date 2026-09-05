@@ -16,7 +16,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const token = Cookies.get('access_token')?.value
     const userId = Cookies.get('id')?.value
     if (!userId || !token) {
-        return redirect(`/logout?path=/login%3Fpath%3D/dashboard/vms/${id}%26expired=true`)
+        return redirect(`/logout?path=/login%3Fpath%3D/vms/${id}%26expired=true`)
     }
 
     const vmResponse = await getVM(id, token, userId)
@@ -32,7 +32,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                     title='VM detail unavailable'
                     description={`The console could not load "${id}". The machine may have been deleted, renamed, or the VM API may be reconnecting.`}
                     actions={(
-                        <Link href='/dashboard/vms' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                        <Link href='/vms' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
                             <ArrowLeft className='h-4 w-4' />
                             Back to VMs
                         </Link>
@@ -46,11 +46,11 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                         </p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
-                        <Link href='/dashboard/vms' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                        <Link href='/vms' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
                             <ArrowLeft className='h-4 w-4' />
                             Open inventory
                         </Link>
-                        <Link href={`/dashboard/vms/${params.id.map(segment => encodeURIComponent(segment)).join('/')}`} className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                        <Link href={`/vms/${params.id.map(segment => encodeURIComponent(segment)).join('/')}`} className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
                             <RefreshCcw className='h-4 w-4' />
                             Retry detail
                         </Link>

@@ -103,7 +103,7 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
                         <h2 id='backup-files-heading' className='font-semibold text-ui-text'>Backup files</h2>
                         <p className='mt-1 text-sm text-ui-muted'>{files.length} archive{files.length === 1 ? '' : 's'} measured from {service?.storageTarget || 'configured storage'}.</p>
                     </div>
-                    <Link href='/dashboard/db/restore' className='text-sm font-semibold text-ui-primary hover:underline'>Open restore drills</Link>
+                    <Link href='/db/restore' className='text-sm font-semibold text-ui-primary hover:underline'>Open restore drills</Link>
                 </div>
                 <div className='overflow-x-auto'>
                     <table className='min-w-[760px] w-full text-left text-sm'>

@@ -1062,11 +1062,11 @@ export function isPlainRecord(value: unknown): value is Record<string, unknown> 
 }
 
 export function normalizedAuthenticatedRoute(route: string | undefined) {
-    if (!route) return '/dashboard/dwm'
+    if (!route) return '/dwm'
     if (route.startsWith('/v1/cases')) return '/dashboard'
-    if (route.startsWith('/v1/dwm')) return '/dashboard/dwm'
-    if (route.startsWith('/dashboard')) return route
-    return '/dashboard/dwm'
+    if (route.startsWith('/v1/dwm')) return '/dwm'
+    if (route.startsWith('/dwm') || route.startsWith('/ti/') || route === '/dashboard') return route
+    return '/dwm'
 }
 
 export function timelineFor(result: TiSearchResponse, selected?: AnalystWorkItem) {
@@ -1219,7 +1219,7 @@ export function watchlistWorkbenchRowsFor({
             ...intersections.flatMap(item => item.blockers.map(blocker => blocker.handoff)),
         ].map(displayRequirementText)).slice(0, 6)
         const state: WatchlistWorkbenchRow['state'] = matched ? 'ready' : actionability.exportPayloads.watchlist.blocked || blockers.length ? 'blocked' : 'review'
-        const route = intersections[0]?.route || actionability.exportPayloads.watchlist.backedRoute || actionability.exportPayloads.watchlist.route || '/dashboard/dwm'
+        const route = intersections[0]?.route || actionability.exportPayloads.watchlist.backedRoute || actionability.exportPayloads.watchlist.route || '/dwm'
         const casePath = intersections.flatMap(item => [item.casePath, ...item.casePaths]).find((value): value is string => Boolean(value))
         const intersectionDetail = intersections[0] ? `${watchlistIntersectionActionLabel(intersections[0].recommendedAction)} for ${parsed.value}.` : ''
         const payload = {
@@ -2932,7 +2932,7 @@ export function drilldownRow(input: {
         confidence: input.confidence,
         state,
         ownerLane: state === 'ready' ? 'case' : state === 'needs_capture' ? 'source' : 'public-ti',
-        route: state === 'ready' ? '/v1/cases' : '/dashboard/ti/enrichment',
+        route: state === 'ready' ? '/v1/cases' : '/ti/enrichment',
         missing,
         handoff: input.handoff,
     }
@@ -3104,7 +3104,7 @@ export function enrichmentGapWorkbenchRowsFor({
             newestAt: artifact.freshness,
             source: artifact.provenance[0] || 'Detail context',
             impact: artifact.subtitle,
-            route: artifact.readiness.state === 'needs_source' ? '/dashboard/ti/enrichment' : undefined,
+            route: artifact.readiness.state === 'needs_source' ? '/ti/enrichment' : undefined,
             evidenceItems,
             artifactIds: [artifact.id],
             missing: [...artifact.readiness.blockers, ...artifact.enrichmentTasks],
@@ -3128,7 +3128,7 @@ export function enrichmentGapWorkbenchRowsFor({
             newestAt: actor.sourceCoverage.latestReportDate || actor.lastSeen,
             source: 'Actor profile',
             impact: actor.freshness.reason,
-            route: '/dashboard/ti/enrichment',
+            route: '/ti/enrichment',
             evidenceItems: workItems.slice(0, 3),
             artifactIds: artifacts.slice(0, 3).map(item => item.id),
             missing: actor.sourceCoverage.missing,
@@ -4161,7 +4161,7 @@ export function displayRequirementList(values: string[]) {
 }
 
 export function sourceRequestRouteLabel(value: string) {
-    if (value === '/dashboard/ti/enrichment') return 'source review'
+    if (value === '/ti/enrichment') return 'source review'
     return 'review action'
 }
 

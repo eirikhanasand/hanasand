@@ -9,12 +9,12 @@ assert.equal(all.length, new Set(all.map(item => item.href)).size)
 const memberAccess = { ...access, isAdmin: false, canManageSystem: false, canManageContent: false }
 assert.deepEqual(getDashboardNavigation(memberAccess).map(item => item.label), ['Security operations', 'Automation', 'Settings'])
 const reviewer = navigationLinks(getDashboardNavigation({ ...memberAccess, canReviewIntel: true }))
-assert.deepEqual(reviewer.filter(item => item.href.startsWith('/dashboard/ti/')).map(item => item.label), ['Evaluation', 'Timeliness'])
+assert.deepEqual(reviewer.filter(item => item.href.startsWith('/ti/admin/')).map(item => item.label), ['Evaluation', 'Timeliness'])
 const operator = navigationLinks(getDashboardNavigation({ ...memberAccess, canManageSystem: true }))
-assert(operator.some(item => item.href === '/dashboard/system'))
-assert(!operator.some(item => ['/dashboard/db', '/dashboard/logs', '/dashboard/system/updates'].includes(item.href)))
-assert.equal(all.find(item => item.href === '/dashboard/dwm/actors')?.label, 'Monitored actors')
-assert(all.some(item => item.href === '/dashboard/management'))
+assert(operator.some(item => item.href === '/system'))
+assert(!operator.some(item => ['/db', '/logs', '/system/updates'].includes(item.href)))
+assert.equal(all.find(item => item.href === '/dwm/actors')?.label, 'Monitored actors')
+assert(all.some(item => item.href === '/management'))
 
 // Exercise the real component; only Next routing is replaced.
 const build = await Bun.build({ entrypoints: ['sidebar-test-entry'], target: 'browser', plugins: [{ name: 'sidebar-fixture', setup(builder) {

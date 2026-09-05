@@ -99,7 +99,7 @@ struct ControlPlaneWorkspace: View {
                         .disabled(model.isServerBusy)
                         ActionButton(title: "VMs", icon: "cpu") {
                             model.selectedSection = .dashboard
-                            model.openNativeDashboard(path: "/dashboard/vms", label: "VMs")
+                            model.openNativeDashboard(path: "/vms", label: "VMs")
                         }
                         ActionButton(title: "Chat", icon: "sparkles") {
                             model.selectedSection = .command
@@ -119,7 +119,7 @@ struct ControlPlaneWorkspace: View {
                             model.selectedSection = .mail
                         }
                         ActionButton(title: "Notes", icon: "note.text") {
-                            model.openNativeDashboard(path: "/dashboard/notes", label: "Notes")
+                            model.openNativeDashboard(path: "/notes", label: "Notes")
                         }
                         ActionButton(title: "Documents", icon: "doc.viewfinder") {
                             model.selectedSection = .documents

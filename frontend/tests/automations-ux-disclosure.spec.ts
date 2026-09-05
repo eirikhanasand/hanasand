@@ -57,7 +57,7 @@ test('automations keeps the primary route workflow calm and wired', async ({ con
         await route.fulfill({ status: 404, json: { error: `Unhandled automation fixture path: ${path}` } })
     })
 
-    await page.goto('/dashboard/automation', { waitUntil: 'domcontentloaded' })
+    await page.goto('/automation', { waitUntil: 'domcontentloaded' })
 
     await expect(page.getByRole('heading', { name: 'Automations' })).toBeVisible()
     await expect(page.getByRole('heading', { name: '1 route needs attention' })).toBeVisible()

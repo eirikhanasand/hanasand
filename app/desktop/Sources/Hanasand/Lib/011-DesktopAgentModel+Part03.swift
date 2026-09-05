@@ -89,7 +89,7 @@ extension DesktopAgentModel {
                 await self.loadMailOverview()
             }
         } else if lowered.contains("note") {
-            openNativeDashboard(path: "/dashboard/notes", label: "Notes")
+            openNativeDashboard(path: "/notes", label: "Notes")
             finishPromptRun()
         } else if lowered.contains("document") || lowered.contains("pdf") || lowered.contains("scan") {
             selectedSection = .documents
@@ -108,13 +108,13 @@ extension DesktopAgentModel {
             openNativeDashboard(path: "/g", label: "Links")
             finishPromptRun()
         } else if lowered.contains("backup") {
-            openNativeDashboard(path: "/dashboard/db/backups", label: "Backups")
+            openNativeDashboard(path: "/db/backups", label: "Backups")
             finishPromptRun()
         } else if lowered.contains("vulnerabil") || lowered.contains("security scan") {
-            openNativeDashboard(path: "/dashboard/vulnerabilities", label: "Vulnerabilities")
+            openNativeDashboard(path: "/vulnerabilities", label: "Vulnerabilities")
             finishPromptRun()
         } else if lowered.contains("traffic") {
-            openNativeDashboard(path: "/dashboard/traffic", label: "Traffic")
+            openNativeDashboard(path: "/traffic", label: "Traffic")
             finishPromptRun()
         } else if lowered.contains("server") || lowered.contains("logs") {
             Task { [weak self] in

@@ -669,7 +669,7 @@ function publicTiOrgRelevanceFixture() {
       kind: "company" as const,
       value: "Microsoft",
       route: "organization_watchlist",
-      casePath: "/dashboard/dwm?organizationId=org_microsoft&watchlistItemId=watch_microsoft"
+      casePath: "/dwm?organizationId=org_microsoft&watchlistItemId=watch_microsoft"
     }],
     candidateTerms: [{
       kind: "company" as const,
@@ -725,7 +725,7 @@ function publicTiOrgRelevanceFixture() {
       ownerLane: "org",
       label: "Microsoft",
       action: "Open saved watchlist item",
-      route: "/dashboard/dwm",
+      route: "/dwm",
       sourceFamily: "watchlist",
       provenanceRefs: ["watchlist_microsoft", "watch_microsoft"],
       tenantId: "tenant_microsoft",
@@ -742,7 +742,7 @@ function publicTiOrgRelevanceFixture() {
       ownerLane: "source",
       label: "Microsoft",
       action: "Use capture as evidence",
-      route: "/dashboard/ti/enrichment",
+      route: "/ti/enrichment",
       sourceFamily: "vendor_disclosure",
       provenanceRefs: ["microsoft", "capture_microsoft_apt29", "https://www.microsoft.com/en-us/security/blog/"],
       captureIds: ["capture_microsoft_apt29"],

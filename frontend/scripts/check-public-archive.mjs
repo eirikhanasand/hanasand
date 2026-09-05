@@ -17,7 +17,7 @@ for (const route of htmlRoutes) {
 
 const notes = await fetch(`${baseUrl}/notes`, { redirect: 'manual' })
 assert.equal(notes.status, 307, '/notes should redirect to the private dashboard notes app')
-assert.equal(notes.headers.get('location'), '/dashboard/notes', '/notes should redirect to /dashboard/notes')
+assert.equal(notes.headers.get('location'), '/notes', '/notes should redirect to /notes')
 
 const robots = await text('/robots.txt')
 assert.match(robots, /Sitemap:\s*https:\/\/hanasand\.com\/sitemap\.xml/, 'robots.txt should advertise the sitemap')

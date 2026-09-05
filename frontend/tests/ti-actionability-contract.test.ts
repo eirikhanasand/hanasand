@@ -33,7 +33,7 @@ assert(apt29.orgRelevance.watchlistIntersections.some(item =>
     && item.watchlistId === 'watchlist_acme_vendors'
     && item.watchlistItemId === 'item_microsoft'
     && item.alertIds.includes('alert_apt29_microsoft')
-    && item.casePaths.includes('/dashboard/dwm/cases/case_apt29_microsoft')
+    && item.casePaths.includes('/dwm/cases/case_apt29_microsoft')
     && item.captureIds.includes('capture_microsoft_apt29_2024')
     && item.webhookDestinationIds.includes('webhook_security_ops')
     && item.sourceFamilies.includes('vendor_disclosure')
@@ -53,9 +53,9 @@ const alertOnlyCaseContinuity = (() => {
 })()
 assert(alertOnlyCaseContinuity.relatedCases.some(item =>
     item.id === 'case_apt29_microsoft'
-    && item.path === '/dashboard/dwm/cases/case_apt29_microsoft'
+    && item.path === '/dwm/cases/case_apt29_microsoft'
 ), 'Actionability should derive related cases from related alert case context.')
-assert(alertOnlyCaseContinuity.readiness.backedIds.casePaths.includes('/dashboard/dwm/cases/case_apt29_microsoft'), 'Derived related cases should feed readiness case paths.')
+assert(alertOnlyCaseContinuity.readiness.backedIds.casePaths.includes('/dwm/cases/case_apt29_microsoft'), 'Derived related cases should feed readiness case paths.')
 
 const apt29WithHostedCopyResidue = apt29Result()
 apt29WithHostedCopyResidue.claims = [{
@@ -147,7 +147,7 @@ assert(sanitizedApt29Result.actionability?.sourceProvenance?.some(row =>
 assert(sanitizedApt29Result.actionability?.watchlistMatches?.some(match =>
     match.organizationId === 'org_acme'
     && match.watchlistItemId === 'item_microsoft'
-    && match.casePath === '/dashboard/dwm/cases/case_apt29_microsoft'
+    && match.casePath === '/dwm/cases/case_apt29_microsoft'
 ), 'Public /ti result sanitizer should preserve backed watchlist and case routing.')
 assert(sanitizedApt29Result.actionability?.handoffs?.alertRebuild?.endpoint === '/v1/dwm/alerts/rebuild', 'Public /ti result sanitizer should preserve alert rebuild handoff route.')
 const sanitizedVictims = victimObservationsFor(sanitizedApt29Result)
@@ -277,8 +277,8 @@ function apt29Result(): TiSearchResponse {
                 watchlistItemId: 'item_microsoft',
                 kind: 'domain',
                 value: 'microsoft.com',
-                route: '/dashboard/dwm/watchlists/watchlist_acme_vendors',
-                casePath: '/dashboard/dwm/cases/case_apt29_microsoft',
+                route: '/dwm/watchlists/watchlist_acme_vendors',
+                casePath: '/dwm/cases/case_apt29_microsoft',
             }],
             relatedAlerts: [{
                 id: 'alert_apt29_microsoft',
@@ -286,7 +286,7 @@ function apt29Result(): TiSearchResponse {
                 status: 'open',
                 severity: 'high',
                 caseIdCandidate: 'case_apt29_microsoft',
-                casePath: '/dashboard/dwm/cases/case_apt29_microsoft',
+                casePath: '/dwm/cases/case_apt29_microsoft',
                 tenantId: 'tenant_acme',
                 organizationId: 'org_acme',
                 captureIds: ['capture_microsoft_apt29_2024'],
@@ -297,7 +297,7 @@ function apt29Result(): TiSearchResponse {
                 title: 'APT29 Microsoft vendor exposure review',
                 status: 'open',
                 priority: 'high',
-                path: '/dashboard/dwm/cases/case_apt29_microsoft',
+                path: '/dwm/cases/case_apt29_microsoft',
             }],
             sourceProvenance: [{
                 sourceId: 'src_microsoft_midnight_blizzard',

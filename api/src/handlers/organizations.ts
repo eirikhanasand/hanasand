@@ -2293,7 +2293,7 @@ export async function getOrganizationWatchlist(req: FastifyRequest<{ Params: Wat
                     alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms',
                     alertReadiness: 'GET /api/organizations/:id/alert-readiness',
                     webhookDestinationOrgField: 'destination.org_id',
-                    casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
+                    casePathTemplate: '/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
                 },
                 noLeakFields: [
                     'otherOrg.watchlistItemIds',

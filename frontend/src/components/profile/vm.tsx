@@ -25,7 +25,7 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
             setMessage('This virtual machine is missing its instance name.')
             return
         }
-        router.push(`/dashboard/vm/${vm.name}`)
+        router.push(`/vm/${vm.name}`)
     }
 
     async function handleDelete() {

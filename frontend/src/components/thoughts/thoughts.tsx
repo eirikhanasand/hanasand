@@ -12,7 +12,7 @@ export default async function Thoughts() {
         <DashboardPanel className='grid h-fit min-w-0 w-full gap-2 p-4'>
             <div className='flex items-center justify-between gap-3'>
                 <h1 className='text-base font-medium text-ui-text'>Thoughts</h1>
-                <Link href='/dashboard/thoughts/create' className='flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-medium text-ui-text transition hover:bg-ui-raised'>
+                <Link href='/content/thoughts/create' className='flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-medium text-ui-text transition hover:bg-ui-raised'>
                     <Plus className='h-4 w-4' />
                     Create
                 </Link>

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { canonicalAppPath } from '@/utils/routes/appRoutes'
 import { usePathname } from 'next/navigation'
 import { AlarmClockCheck, ChevronDown, FolderKanban, NotebookText, PanelLeftClose, PanelLeftOpen, Pin, Radar, Search, Server, Settings2, ShieldCheck } from 'lucide-react'
 import { useEffect, useId, useState, useSyncExternalStore } from 'react'
@@ -36,10 +37,10 @@ export default function DashboardSidebar(access: NavigationAccess) {
     const compact = mode === 'compact'
     const sections = getDashboardNavigation(access)
     const links = navigationLinks(sections)
-    const route = pathname === '/dashboard' ? '/dashboard/overview' : pathname === '/dashboard/dwm' ? '/dashboard/dwm/cases' : pathname
+    const route = pathname === '/dwm' ? '/dwm/cases' : pathname
     const active = links.filter(item => route === item.href || route.startsWith(`${item.href}/`))
         .sort((left, right) => right.href.length - left.href.length)[0]
-    const activePath = active?.ancestors.join('/') ?? (pathname.startsWith('/dashboard/automation') ? 'Automation' : '')
+    const activePath = active?.ancestors.join('/') ?? (pathname.startsWith('/automation') ? 'Automation' : '')
 
     useEffect(() => {
         let saved: Preferences = { expanded: {}, pinned: [] }
@@ -47,7 +48,7 @@ export default function DashboardSidebar(access: NavigationAccess) {
             const parsed = JSON.parse(localStorage.getItem(storageKey) || '{}')
             saved = {
                 expanded: Object.fromEntries(Object.entries(parsed.expanded || {}).filter(([, value]) => typeof value === 'boolean')) as Record<string, boolean>,
-                pinned: Array.isArray(parsed.pinned) ? parsed.pinned.filter((href: unknown) => typeof href === 'string') : [],
+                pinned: Array.isArray(parsed.pinned) ? parsed.pinned.filter((href: unknown) => typeof href === 'string').map(canonicalAppPath) : [],
             }
         } catch { /* Navigation still works when browser storage is unavailable. */ }
         const path = activePath.split('/').filter(Boolean)

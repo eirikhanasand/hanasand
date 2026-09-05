@@ -191,7 +191,7 @@ function OperationTab({
 function auditHref(requestId: string, action?: string) {
     const query = new URLSearchParams({ request: requestId, source: 'admin', service: 'hanasand-api' })
     if (action) query.set('action', action)
-    return `/dashboard/helpdesk?${query.toString()}`
+    return `/helpdesk?${query.toString()}`
 }
 
 function supportReasonIsSpecific(reason: string) {
@@ -652,7 +652,7 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
                             <div className='grid gap-1'>
                                 <div className='text-xs font-semibold uppercase tracking-[0.14em] text-ui-muted'>Recent audit</div>
                                 {(inspectionResult.recentAuditEvents || []).slice(0, 4).map((event, index) => (
-                                    <a className='grid gap-1 rounded-md bg-ui-panel px-2 py-1 text-xs text-ui-text hover:bg-ui-raised' href={event.id ? `/dashboard/helpdesk?entity=${encodeURIComponent(String(event.id))}` : '/dashboard/helpdesk'} key={`${event.id || index}`}>
+                                    <a className='grid gap-1 rounded-md bg-ui-panel px-2 py-1 text-xs text-ui-text hover:bg-ui-raised' href={event.id ? `/helpdesk?entity=${encodeURIComponent(String(event.id))}` : '/helpdesk'} key={`${event.id || index}`}>
                                         <span>{event.actionType || event.action_type || 'audit event'} · {event.outcome || 'outcome'}</span>
                                         {event.reason ? <span className='truncate text-ui-muted'>{event.reason}</span> : null}
                                     </a>
@@ -734,7 +734,7 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
                     <textarea className={textAreaClass} name='reason' placeholder='Audit reason with customer approval and case' minLength={10} required />
                     <button className={primaryButton} disabled={submitting === 'apiUsage'} type='submit'>{submitting === 'apiUsage' ? 'Resetting...' : 'Reset API usage buckets'}</button>
                 </form>
-                <Link className='text-sm font-semibold text-ui-primary hover:opacity-80' href='/dashboard/system/rates'>Open API keys and limit policy</Link>
+                <Link className='text-sm font-semibold text-ui-primary hover:opacity-80' href='/system/rates'>Open API keys and limit policy</Link>
                 <Message value={apiUsageResetMessage} tone={apiUsageResetResult?.error ? 'error' : apiUsageResetMessage ? 'success' : 'neutral'} />
                 {apiUsageResetResult?.reset ? (
                     <div className='rounded-md border border-ui-border bg-ui-canvas p-3 text-xs leading-5 text-ui-muted'>

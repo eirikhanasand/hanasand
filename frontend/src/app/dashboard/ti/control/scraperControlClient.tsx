@@ -273,7 +273,7 @@ export default function TiScraperControlClient({ initialWatchlistState }: { init
             )}
 
             <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
-                <div className='flex flex-wrap items-center justify-between gap-2'><div><p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Collection coverage</p><h2 className='mt-1 text-lg font-semibold text-ui-text'>What is being collected</h2></div><Link href='/dashboard/ti/sources' className='text-sm font-semibold text-ui-primary underline underline-offset-4'>Open source inventory</Link></div>
+                <div className='flex flex-wrap items-center justify-between gap-2'><div><p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Collection coverage</p><h2 className='mt-1 text-lg font-semibold text-ui-text'>What is being collected</h2></div><Link href='/ti/sources' className='text-sm font-semibold text-ui-primary underline underline-offset-4'>Open source inventory</Link></div>
                 <div className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4'><Info label='Active sources' value={String(scheduler.activeSources || sourceCount)} /><Info label='Last useful output' value={String(scheduler.usefulSources)} /><Info label='Degraded sources' value={String(sourceGrowth.failingSources)} /><Info label='Customer alerts' value={String(sourceGrowth.alertsGenerated)} /></div>
             </section>
 
@@ -335,7 +335,7 @@ function OperatorCollectionView({
                     <p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Welcome to collection</p>
                     <h2 className='text-2xl font-semibold text-ui-text'>Create your first watchlist</h2>
                     <p className='max-w-lg text-sm leading-6 text-ui-muted'>Add a company, domain, brand, vendor, or keyword to tell Hanasand what matters to you. Collection will then turn relevant source activity into matches and alerts.</p>
-                    <Link href='/dashboard/dwm/watchlists' className='mt-2 inline-flex min-h-10 items-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas hover:opacity-90'>Create your first watchlist <span aria-hidden='true'>→</span></Link>
+                    <Link href='/dwm/watchlists' className='mt-2 inline-flex min-h-10 items-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas hover:opacity-90'>Create your first watchlist <span aria-hidden='true'>→</span></Link>
                     <p className='text-xs text-ui-muted'>Source collection runs automatically after monitoring is configured.</p>
                 </div>
             </section>
@@ -367,7 +367,7 @@ function OperatorCollectionView({
             {unavailable ? <section className='rounded-lg border border-ui-danger/35 bg-ui-danger/10 p-4'><p className='font-semibold text-ui-danger'>Collection data unavailable</p><p className='mt-1 text-sm text-ui-muted'>{error || 'The collector did not return a valid operational snapshot. Counts are not being shown as zero.'}</p></section> : null}
 
             <section className='rounded-lg border border-ui-border bg-ui-panel p-4'>
-                <div className='flex flex-wrap items-center justify-between gap-2'><div><p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Operational work</p><h2 className='mt-1 text-lg font-semibold text-ui-text'>{workItems.length ? 'Work requiring attention' : 'No queued work'}</h2></div><Link href='/dashboard/ti/runs' className='text-sm font-semibold text-ui-primary underline underline-offset-4'>Collection history</Link></div>
+                <div className='flex flex-wrap items-center justify-between gap-2'><div><p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Operational work</p><h2 className='mt-1 text-lg font-semibold text-ui-text'>{workItems.length ? 'Work requiring attention' : 'No queued work'}</h2></div><Link href='/ti/runs' className='text-sm font-semibold text-ui-primary underline underline-offset-4'>Collection history</Link></div>
                 {workItems.length ? <div className='mt-3 divide-y divide-ui-border rounded-md border border-ui-border'>{workItems.slice(0, 12).map(item => <div key={item.id} className='flex flex-wrap items-center justify-between gap-3 bg-ui-canvas px-3 py-3'><div className='min-w-0'><p className='font-semibold text-ui-text'>{item.title}</p><p className='mt-1 text-sm text-ui-muted'>{item.subtitle}</p></div><span className={severityClass(item.severity)}>{item.status}</span></div>)}</div> : <div className='mt-3 rounded-md border border-dashed border-ui-border p-6 text-center'><CheckCircle2 className='mx-auto h-7 w-7 text-ui-success' /><p className='mt-2 font-semibold text-ui-text'>The collector has no queued or failed work.</p><p className='mt-1 text-sm text-ui-muted'>Automatic collection continues according to the next scheduled check.</p></div>}
             </section>
 

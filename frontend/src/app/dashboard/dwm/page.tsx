@@ -16,7 +16,7 @@ export default async function DashboardDwmPage({
     const [params, cookieStore] = await Promise.all([searchParams, cookies()])
     const identityId = cookieStore.get('id')?.value
     const token = cookieStore.get('access_token')?.value
-    if (!identityId || !token) redirect('/login?path=%2Fdashboard%2Fdwm')
+    if (!identityId || !token) redirect('/login?path=%2Fdwm')
 
     const organizationId = firstParam(params?.organizationId)?.trim() || undefined
     const tenantId = organizationId || identityId

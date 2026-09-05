@@ -17,7 +17,7 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
     const token = Cookies.get('access_token')?.value
     const id = Cookies.get('id')?.value
     if (!token || !id) {
-        return redirect('/logout?path=/login%3Fpath%3D/dashboard/logs%26expired=true')
+        return redirect('/logout?path=/login%3Fpath%3D/logs%26expired=true')
     }
 
     const [services, logs, errors] = await Promise.all([

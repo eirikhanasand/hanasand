@@ -1045,12 +1045,12 @@ function actorCoverageForOrgRelevance(orgRelevance: PublicTiOrgRelevanceProofLik
 function actorEnrichmentGapsForOrgRelevance(orgRelevance: PublicTiOrgRelevanceProofLike): ActorOrgRelevanceEnrichmentGap[] {
   const gaps: ActorOrgRelevanceEnrichmentGap[] = [];
   const identity = orgRelevance.actorIdentity;
-  if (!identity?.aliases?.length) gaps.push(actorGap("missing_actor_aliases", "actorIdentity.aliases", "Actor aliases are required for stable lookup and duplicate matching.", "/dashboard/ti/enrichment", "publicTI"));
-  if (!identity?.sectors?.length) gaps.push(actorGap("missing_target_sectors", "actorIdentity.sectors", "Target sectors are required before routing actor relevance by customer exposure.", "/dashboard/ti/enrichment", "publicTI"));
-  if (!identity?.regions?.length && !orgRelevance.affectedEntities?.regions?.length) gaps.push(actorGap("missing_target_regions", "actorIdentity.regions", "Target regions or affected-region evidence are required for geographic relevance.", "/dashboard/ti/enrichment", "publicTI"));
-  if (!orgRelevance.sourceCoverage?.length) gaps.push(actorGap("missing_source_coverage", "sourceCoverage", "Source coverage rows are required to show which collectors back the actor profile.", "/dashboard/ti/enrichment", "source"));
-  if (!orgRelevance.sourceEvidence?.length) gaps.push(actorGap("missing_provenance", "sourceEvidence", "Source evidence is required before actor relevance can be trusted.", "/dashboard/ti/enrichment", "source"));
-  if (orgRelevance.freshness?.stale) gaps.push(actorGap("stale_evidence", "freshness.lastSeen", orgRelevance.freshness.reason || "Actor evidence is stale.", "/dashboard/ti/enrichment", "source"));
+  if (!identity?.aliases?.length) gaps.push(actorGap("missing_actor_aliases", "actorIdentity.aliases", "Actor aliases are required for stable lookup and duplicate matching.", "/ti/enrichment", "publicTI"));
+  if (!identity?.sectors?.length) gaps.push(actorGap("missing_target_sectors", "actorIdentity.sectors", "Target sectors are required before routing actor relevance by customer exposure.", "/ti/enrichment", "publicTI"));
+  if (!identity?.regions?.length && !orgRelevance.affectedEntities?.regions?.length) gaps.push(actorGap("missing_target_regions", "actorIdentity.regions", "Target regions or affected-region evidence are required for geographic relevance.", "/ti/enrichment", "publicTI"));
+  if (!orgRelevance.sourceCoverage?.length) gaps.push(actorGap("missing_source_coverage", "sourceCoverage", "Source coverage rows are required to show which collectors back the actor profile.", "/ti/enrichment", "source"));
+  if (!orgRelevance.sourceEvidence?.length) gaps.push(actorGap("missing_provenance", "sourceEvidence", "Source evidence is required before actor relevance can be trusted.", "/ti/enrichment", "source"));
+  if (orgRelevance.freshness?.stale) gaps.push(actorGap("stale_evidence", "freshness.lastSeen", orgRelevance.freshness.reason || "Actor evidence is stale.", "/ti/enrichment", "source"));
   return gaps;
 }
 
@@ -1089,9 +1089,9 @@ function ownerLaneForBlocker(blocker: AnalystHandoffBlocker): ActorOrgRelevanceR
 
 function routeForBlocker(blocker: AnalystHandoffBlocker) {
   const owner = ownerLaneForBlocker(blocker);
-  if (owner === "org" || owner === "alert" || owner === "webhook") return "/dashboard/dwm";
+  if (owner === "org" || owner === "alert" || owner === "webhook") return "/dwm";
   if (owner === "case") return "/v1/cases";
-  if (owner === "source") return "/dashboard/ti/enrichment";
+  if (owner === "source") return "/ti/enrichment";
   return "/ti";
 }
 

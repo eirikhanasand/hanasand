@@ -51,7 +51,7 @@ test('cron jobs dashboard renders unified scheduled operations and controls', as
         await route.fulfill({ json: { job: nextForgejo, jobs: fixtureJobs.map(job => job.id === 'forgejo-standby-sync' ? nextForgejo : job) } })
     })
 
-    await page.goto('/dashboard/automation/cron', { waitUntil: 'domcontentloaded' })
+    await page.goto('/automation/cron', { waitUntil: 'domcontentloaded' })
 
     await expect(page.getByRole('heading', { name: 'Cron jobs' })).toBeVisible()
     await expect(page.getByRole('heading', { name: '1 job needs review' })).toBeVisible()

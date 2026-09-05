@@ -424,7 +424,7 @@ describe("analyst handoff consumer validation", () => {
         schemaVersion: "ti.public_actor.readiness.v1",
         state: "blocked",
         backedIds: { organizationIds: [], alertIds: [], casePaths: [], webhookDestinationIds: [] },
-        blockers: [{ code: "missing_org", ownerLane: "org", route: "/dashboard/dwm" }]
+        blockers: [{ code: "missing_org", ownerLane: "org", route: "/dwm" }]
       }],
       webhookDestinations: [{
         schemaVersion: "dwm.webhook.destination_admin_proof_row.v1",
@@ -520,7 +520,7 @@ describe("analyst handoff consumer validation", () => {
       && Array.isArray(row.blockerCodes)
       && Array.isArray(row.requiredFields)
     )).toBe(true);
-    expect(report.deployGate.rows.some((row) => row.kind === "public_ti_readiness" && row.ownerLane === "publicTI" && row.blockerCodes.includes("missing_org") && row.route === "/dashboard/dwm")).toBe(true);
+    expect(report.deployGate.rows.some((row) => row.kind === "public_ti_readiness" && row.ownerLane === "publicTI" && row.blockerCodes.includes("missing_org") && row.route === "/dwm")).toBe(true);
     expect(report.deployGate.rows.some((row) =>
       row.kind === "org_alert_watchlist_readiness"
       && row.schemaVersion === "organization.watchlist_alert_readiness.v1"

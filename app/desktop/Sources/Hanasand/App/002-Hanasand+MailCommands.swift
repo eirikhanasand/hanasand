@@ -14,7 +14,7 @@ extension Hanasand {
     @CommandsBuilder var mailCommands: some Commands {
         CommandMenu("Mail") {
         Button("Open Mail") {
-        model.openNativeDashboard(path: "/dashboard/mail", label: "Mail")
+        model.openNativeDashboard(path: "/mail", label: "Mail")
         }
         .keyboardShortcut("1", modifiers: [.command, .shift])
         

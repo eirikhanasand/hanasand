@@ -43,16 +43,16 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
             <TiDataAvailability availability={overview.availability} />
 
             <div className='flex flex-wrap items-center justify-between gap-3'>
-                <Link href='/dashboard/ti/domains' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text hover:border-ui-border hover:bg-ui-raised'>
+                <Link href='/ti/domains' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text hover:border-ui-border hover:bg-ui-raised'>
                     <ArrowLeft className='h-4 w-4' />
                     Entities
                 </Link>
                 <div className='flex flex-wrap gap-2'>
-                    <Link href='/dashboard/dwm' className='inline-flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-text hover:bg-ui-primary'>
+                    <Link href='/dwm' className='inline-flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-text hover:bg-ui-primary'>
                         <ShieldAlert className='h-4 w-4' />
                         Open recent attacks
                     </Link>
-                    <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text hover:border-ui-border hover:bg-ui-raised'>
+                    <Link href='/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text hover:border-ui-border hover:bg-ui-raised'>
                         Source inventory
                     </Link>
                 </div>
@@ -137,7 +137,7 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
                                             </td>
                                             <td className='px-4 py-3 font-semibold text-ui-text'>{capture.actor}</td>
                                             <td className='px-4 py-3'>
-                                                <Link href={`/dashboard/ti/sources/${capture.sourceId}`} className='font-semibold text-ui-primary hover:underline'>{source?.name || capture.sourceId}</Link>
+                                                <Link href={`/ti/sources/${capture.sourceId}`} className='font-semibold text-ui-primary hover:underline'>{source?.name || capture.sourceId}</Link>
                                             </td>
                                             <td className='whitespace-nowrap px-4 py-3 text-ui-muted'>{formatTiDate(capture.capturedAt)}</td>
                                             <td className='px-4 py-3 text-ui-muted'>{capture.metadata.find(item => item.label === 'Collection boundary')?.value || source?.legalNotes || 'metadata only'}</td>
@@ -168,7 +168,7 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
                             const stale = new Date(source.nextRunAt).getTime() < Date.now()
                             const sourceCaptures = captures.filter(capture => capture.sourceId === source.id)
                             return (
-                                <Link key={source.id} href={`/dashboard/ti/sources/${source.id}`} className='rounded-lg border border-ui-border bg-ui-raised p-3 hover:border-ui-border hover:bg-ui-panel'>
+                                <Link key={source.id} href={`/ti/sources/${source.id}`} className='rounded-lg border border-ui-border bg-ui-raised p-3 hover:border-ui-border hover:bg-ui-panel'>
                                     <div className='flex flex-wrap items-start justify-between gap-3'>
                                         <div>
                                             <p className='font-semibold text-ui-text'>{source.name}</p>

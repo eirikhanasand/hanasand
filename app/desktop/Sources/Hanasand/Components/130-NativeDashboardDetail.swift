@@ -51,41 +51,41 @@ struct NativeDashboardDetail: View {
             LinksNativePanel()
         case "/dashboard/tests":
             RecentTestsNativePanel()
-        case "/dashboard/mail":
+        case "/mail":
             MailNativePanel()
-        case "/dashboard/system":
+        case "/system":
             SystemNativePanel()
-        case "/dashboard/vms":
+        case "/vms":
             VMsNativePanel()
-        case "/dashboard/logs":
+        case "/logs":
             LogsNativePanel()
-        case "/dashboard/system/ai":
+        case "/system/ai":
             AIModelsNativePanel()
-        case "/dashboard/system/rates":
+        case "/system/rates":
             RateLimitsNativePanel()
         case "/profile":
             ProfileNativePanel()
-        case "/dashboard/management", "/users":
+        case "/management", "/users":
             UsersNativePanel()
         case "/role":
             RolesNativePanel()
         case "/s":
             SharesNativePanel()
-        case "/dashboard/articles":
+        case "/content/articles":
             ArticlesNativePanel()
-        case "/dashboard/thoughts":
+        case "/content/thoughts":
             ThoughtsNativePanel()
-        case "/dashboard/notes":
+        case "/notes":
             NotesNativePanel()
-        case "/dashboard/db":
+        case "/db":
             DatabaseNativePanel()
-        case "/dashboard/db/backups":
+        case "/db/backups":
             BackupNativePanel()
-        case "/dashboard/db/restore":
+        case "/db/restore":
             RestoreNativePanel()
-        case "/dashboard/vulnerabilities":
+        case "/vulnerabilities":
             VulnerabilityNativePanel()
-        case "/dashboard/traffic":
+        case "/traffic":
             TrafficNativePanel()
         case "/upload", "/dashboard/files":
             UploadNativePanel()

@@ -144,11 +144,11 @@ const payload = buildDwmAlertDeliveryPayload({
         ],
         dedupeKey: 'dwm_dedupe_acme_contract',
         route: 'customer_discord',
-        casePath: '/dashboard/dwm?alert=alert_contract',
-        alertUrl: 'https://app.hanasand.local/dashboard/dwm?alert=alert_contract',
+        casePath: '/dwm?alert=alert_contract',
+        alertUrl: 'https://app.hanasand.local/dwm?alert=alert_contract',
         caseId: 'case_contract',
         caseActionId: 'case_action_contract',
-        caseActionPath: '/dashboard/dwm/cases/case_contract/actions/case_action_contract',
+        caseActionPath: '/dwm/cases/case_contract/actions/case_action_contract',
         provenance: { captureIds: ['capture_contract'], sourceIds: ['source_contract'], primaryCaptureId: 'capture_contract' },
         watchlist: {
             id: 'watchlist_contract',
@@ -181,10 +181,10 @@ expect(serialized.includes('customer_discord'), 'Payload should include route.',
 expect(serialized.includes('dwm_dedupe_acme_contract'), 'Payload should include alert dedupe key.', payload)
 expect(serialized.includes('dwm.alert.replayed:org_contract:destination_contract:dwm_dedupe_acme_contract'), 'Payload should include destination idempotency key.', payload)
 expect(serialized.includes('case_contract'), 'Payload should include case id.', payload)
-expect(serialized.includes('/dashboard/dwm?alert=alert_contract'), 'Payload should include case path.', payload)
-expect(payloadFields.some(field => field.name === 'Case action' && field.value === '/dashboard/dwm/cases/case_contract/actions/case_action_contract'), 'Payload should include case action replay path.', payloadFields)
-expect(serialized.includes('Alert URL') && serialized.includes('https://app.hanasand.local/dashboard/dwm?alert=alert_contract'), 'Payload should include alert URL/deep link.', payload)
-expect(serialized.includes('Analyst link') && ((payloadContext.delivery as Record<string, unknown>).analystLink === 'https://app.hanasand.local/dashboard/dwm?alert=alert_contract'), 'Payload should include a single analyst action/deep link.', payload)
+expect(serialized.includes('/dwm?alert=alert_contract'), 'Payload should include case path.', payload)
+expect(payloadFields.some(field => field.name === 'Case action' && field.value === '/dwm/cases/case_contract/actions/case_action_contract'), 'Payload should include case action replay path.', payloadFields)
+expect(serialized.includes('Alert URL') && serialized.includes('https://app.hanasand.local/dwm?alert=alert_contract'), 'Payload should include alert URL/deep link.', payload)
+expect(serialized.includes('Analyst link') && ((payloadContext.delivery as Record<string, unknown>).analystLink === 'https://app.hanasand.local/dwm?alert=alert_contract'), 'Payload should include a single analyst action/deep link.', payload)
 expect(serialized.includes('capture_contract') && serialized.includes('source_contract'), 'Payload should include provenance summary.', payload)
 expect(serialized.includes('Workflow') && serialized.includes('replayed') && serialized.includes('tenant_contract'), 'Payload should include workflow and tenant routing context.', payload)
 expect(payloadTemplate.schemaVersion === 'dwm.webhook.discord_payload_template.v1' && payloadTemplate.templateId === 'dwm.discord.alert_replay.v1' && payloadTemplate.ready === true, 'Discord payload should include a ready replay template contract.', payloadTemplate)
@@ -219,8 +219,8 @@ const longDiscordPayload = buildDwmAlertDeliveryPayload({
         ],
         dedupeKey: 'dwm_dedupe_long_contract',
         route: 'customer_discord',
-        casePath: '/dashboard/dwm?alert=alert_long_contract',
-        alertUrl: 'https://app.hanasand.local/dashboard/dwm?alert=alert_long_contract&case=case_long_contract',
+        casePath: '/dwm?alert=alert_long_contract',
+        alertUrl: 'https://app.hanasand.local/dwm?alert=alert_long_contract&case=case_long_contract',
         watchlist: {
             id: 'watchlist_long_contract',
             name: 'Long watchlist',
@@ -239,7 +239,7 @@ expect(String(longEmbed.title).length <= 256, 'Discord embed title should respec
 expect(String(longEmbed.description).length <= 4096, 'Discord embed description should respect the 4096 character limit.', longEmbed)
 expect(longFields.length <= 25, 'Discord embed fields should respect the 25 field limit.', longFields)
 expect(longFields.every(field => String(field.name).length <= 256 && String(field.value).length <= 1024), 'Discord embed fields should respect name/value limits.', longFields)
-expect(JSON.stringify(longDiscordPayload).includes('Alert URL') && longAlertContext.alertUrl === 'https://app.hanasand.local/dashboard/dwm?alert=alert_long_contract&case=case_long_contract', 'Long Discord payload should preserve alert deep link context.', longDiscordPayload)
+expect(JSON.stringify(longDiscordPayload).includes('Alert URL') && longAlertContext.alertUrl === 'https://app.hanasand.local/dwm?alert=alert_long_contract&case=case_long_contract', 'Long Discord payload should preserve alert deep link context.', longDiscordPayload)
 expect((longTemplate.limits as Record<string, unknown>)?.fields === 25 && longTemplate.templateId === 'dwm.discord.alert_created.v1', 'Discord template should expose enforced Discord limits for created alerts.', longTemplate)
 
 const dispatchPlan = buildDwmAlertWebhookDispatchPlan({
@@ -252,7 +252,7 @@ const dispatchPlan = buildDwmAlertWebhookDispatchPlan({
         watchlistName: 'Bridge watchlist',
         dedupeKey: 'dwm_dedupe_bridge_contract',
         route: 'customer_discord',
-        casePath: '/dashboard/dwm?alert=alert_bridge_contract',
+        casePath: '/dwm?alert=alert_bridge_contract',
         evidenceCount: 4,
         sourceFamily: 'telegram_public',
     },
@@ -312,7 +312,7 @@ const missingDestinationPlan = buildDwmAlertWebhookDispatchPlan({
         watchlistItemId: 'watchlist_missing_destination_contract',
         dedupeKey: 'dwm_dedupe_missing_destination_contract',
         route: 'customer_discord',
-        casePath: '/dashboard/dwm?alert=alert_missing_destination_contract',
+        casePath: '/dwm?alert=alert_missing_destination_contract',
         evidenceCount: 1,
         sourceFamily: 'telegram_public',
     },
@@ -329,7 +329,7 @@ const missingDestinationReadiness = buildDwmAlertWebhookReadinessHandoff({
         watchlistItemId: 'watchlist_missing_destination_contract',
         dedupeKey: 'dwm_dedupe_missing_destination_contract',
         route: 'customer_discord',
-        casePath: '/dashboard/dwm?alert=alert_missing_destination_contract',
+        casePath: '/dwm?alert=alert_missing_destination_contract',
         evidenceCount: 1,
         sourceFamily: 'telegram_public',
         alert: {
@@ -372,7 +372,7 @@ expect(bridgeSerialized.includes('telegram_public'), 'Dispatch payload should pr
 expect(bridgeSerialized.includes('Evidence count') && bridgeSerialized.includes('4'), 'Dispatch payload should propagate evidence count.', bridgePayload)
 expect(bridgeSerialized.includes('watchlist_bridge_contract'), 'Dispatch payload should propagate watchlist context.', bridgePayload)
 expect(bridgeSerialized.includes('dwm_dedupe_bridge_contract'), 'Dispatch payload should propagate dedupe key.', bridgePayload)
-expect(bridgeSerialized.includes('/dashboard/dwm?alert=alert_bridge_contract'), 'Dispatch payload should propagate case path.', bridgePayload)
+expect(bridgeSerialized.includes('/dwm?alert=alert_bridge_contract'), 'Dispatch payload should propagate case path.', bridgePayload)
 
 const replayWorkflowAlert = {
     id: 'alert_replay_contract',
@@ -481,7 +481,7 @@ const replayAttemptDelivery = {
             title: 'Acme credential dump detected',
             fields: [
                 { name: 'Watchlist', value: 'Replay contract watchlist', inline: true },
-                { name: 'Alert URL', value: '/dashboard/dwm/alerts/alert_replay_contract', inline: false },
+                { name: 'Alert URL', value: '/dwm/alerts/alert_replay_contract', inline: false },
             ],
         }],
         _hanasand: {
@@ -503,7 +503,7 @@ const replayAttemptDelivery = {
     watchlistId: 'watchlist_item_replay_contract',
     watchlistName: 'Replay contract watchlist',
     route: 'review',
-    casePath: '/dashboard/dwm/cases/case_replay_contract',
+    casePath: '/dwm/cases/case_replay_contract',
     attemptedAt: '2026-06-28T12:00:00.000Z',
     createdAt: '2026-06-28T12:00:00.000Z',
 }
@@ -1442,7 +1442,7 @@ const destinationContracts = buildDwmWebhookDestinationContracts({
             watchlistId: 'test-watchlist',
             watchlistName: 'Webhook test watchlist',
             route: 'test_delivery',
-            casePath: '/dashboard/dwm',
+            casePath: '/dwm',
             attemptedAt: '2026-06-28T12:04:00.000Z',
             createdAt: '2026-06-28T12:04:00.000Z',
         },
@@ -1621,7 +1621,7 @@ const readiness = buildDwmWebhookDeliveryReadiness({
             watchlistId: 'test-watchlist',
             watchlistName: 'Webhook test watchlist',
             route: 'test_delivery',
-            casePath: '/dashboard/dwm',
+            casePath: '/dwm',
             attemptedAt: '2026-06-28T12:04:00.000Z',
             createdAt: '2026-06-28T12:04:00.000Z',
         },
@@ -1776,7 +1776,7 @@ const auditDeliveryRows = [
         watchlistId: 'test-watchlist',
         watchlistName: 'Webhook test watchlist',
         route: 'test_delivery',
-        casePath: '/dashboard/dwm',
+        casePath: '/dwm',
         attemptedAt: '2026-06-28T12:04:00.000Z',
         createdAt: '2026-06-28T12:04:00.000Z',
     },
@@ -1803,7 +1803,7 @@ const auditDeliveryRows = [
         watchlistId: 'watchlist_missing_destination_contract',
         watchlistName: 'Missing destination watchlist',
         route: 'customer_discord',
-        casePath: '/dashboard/dwm?alert=alert_missing_destination_contract',
+        casePath: '/dwm?alert=alert_missing_destination_contract',
         attemptedAt: '2026-06-28T12:13:00.000Z',
         createdAt: '2026-06-28T12:13:00.000Z',
         updatedAt: '2026-06-28T12:13:00.000Z',
@@ -1828,7 +1828,7 @@ const auditDeliveryRows = [
         watchlistId: 'test-watchlist',
         watchlistName: 'Webhook test watchlist',
         route: 'test_delivery',
-        casePath: '/dashboard/dwm',
+        casePath: '/dwm',
         attemptedAt: '2026-06-28T12:04:00.000Z',
         createdAt: '2026-06-28T12:04:00.000Z',
     },
@@ -3404,7 +3404,7 @@ expect(replayDestinationTest.schemaVersion === 'dwm.webhook.destination_test.v1'
 expect(replayDestinationTest.preview?.discord.fieldNames.includes('Workflow') && replayDestinationTest.preview.discord.fieldNames.includes('Confidence') && replayDestinationTest.audit.latestAuditEventId === 'audit_delivery_test_contract', 'Destination test contract should include Discord preview fields and audit linkage.', replayDestinationTest)
 expect(replayDestinationTest.blockers.some(item => item.code === 'live_delivery_disabled' && item.blocking === false) && replayDestinationTest.noNetwork === true && replayDestinationTest.externalSendEnabled === false, 'Destination test contract should keep live sends disabled by default.', replayDestinationTest)
 expect(replayDestinationTest.dryRunPayloadPreview?.schemaVersion === 'dwm.webhook.destination_test_payload_preview.v1' && replayDestinationTest.dryRunPayloadPreview.noNetwork === true && replayDestinationTest.dryRunPayloadPreview.discord.fieldNames.includes('Watchlist'), 'Destination test contract should expose the no-network Discord payload preview for setup screens.', replayDestinationTest.dryRunPayloadPreview)
-expect(replayDestinationTest.dryRunPayloadPreview?.context.orgId === 'org_contract' && replayDestinationTest.dryRunPayloadPreview.context.sourceFamily === 'dark_web' && replayDestinationTest.dryRunPayloadPreview.context.analystLink === '/dashboard/dwm' && Boolean(replayDestinationTest.dryRunPayloadPreview.context.matchReason) && Boolean(replayDestinationTest.dryRunPayloadPreview.context.evidenceTimestamp) && replayDestinationTest.dryRunPayloadPreview.context.caseActionPath === null, 'Destination test payload preview should carry org/source/action-link, match-reason, evidence timestamp, and null test case-action context.', replayDestinationTest.dryRunPayloadPreview)
+expect(replayDestinationTest.dryRunPayloadPreview?.context.orgId === 'org_contract' && replayDestinationTest.dryRunPayloadPreview.context.sourceFamily === 'dark_web' && replayDestinationTest.dryRunPayloadPreview.context.analystLink === '/dwm' && Boolean(replayDestinationTest.dryRunPayloadPreview.context.matchReason) && Boolean(replayDestinationTest.dryRunPayloadPreview.context.evidenceTimestamp) && replayDestinationTest.dryRunPayloadPreview.context.caseActionPath === null, 'Destination test payload preview should carry org/source/action-link, match-reason, evidence timestamp, and null test case-action context.', replayDestinationTest.dryRunPayloadPreview)
 expect(replayDestinationTest.dryRunPayloadPreview?.context.discordTemplate?.templateId === 'dwm.discord.destination_test.v1' && replayDestinationTest.dryRunPayloadPreview.context.discordTemplate.noNetworkDefault === true, 'Destination test payload preview should expose the Discord test template summary.', replayDestinationTest.dryRunPayloadPreview?.context.discordTemplate)
 expect(replayDestinationTest.dryRunPayloadPreview?.redaction.safeForCustomerDisplay === true && replayDestinationTest.dryRunPayloadPreview.redaction.endpointExposed === false, 'Destination test payload preview should prove redaction and avoid endpoint leakage.', replayDestinationTest.dryRunPayloadPreview)
 expect(replayDestinationTest.dryRunTestRequest.canSend === true && replayDestinationTest.dryRunTestRequest.route === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test' && replayDestinationTest.dryRunTestRequest.body?.idempotencyKey === 'dwm.alert.test:org_contract:destination_replay_contract:webhook_test', 'Destination test contract should expose the exact no-network dry-run test request.', replayDestinationTest.dryRunTestRequest)

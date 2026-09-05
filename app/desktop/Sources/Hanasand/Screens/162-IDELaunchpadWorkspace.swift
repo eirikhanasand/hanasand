@@ -20,7 +20,7 @@ struct IDELaunchpadWorkspace: View {
                 FeatureCard(title: "Agent", value: model.status.ok ? "Online" : "Offline", icon: "terminal")
             }
             ActionGrid(actions: [
-                .route("AI Workspace", "Models, repositories, conversations, and previews.", "sparkles", "/dashboard/system/ai"),
+                .route("AI Workspace", "Models, repositories, conversations, and previews.", "sparkles", "/system/ai"),
                 .route("Shares", "Shares and hosted files.", "folder.badge.gearshape", "/s"),
                 .route("Links", "Create and inspect /g shortcut links.", "link", "/g"),
                 .route("Load Tests", "Recent public load-test runs.", "speedometer", "/dashboard/tests"),

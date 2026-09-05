@@ -62,7 +62,7 @@ test('DWM case detail exposes webhook delivery traceability', () => {
     assert.match(source, /function deliveryRetryBlockedReason/)
     assert.match(source, /Exact report retry is available at/)
     assert.match(source, /latestDelivery\.requestId \|\| latestDelivery\.auditEventId/)
-    assert.match(source, /\/dashboard\/dwm\$\{queryString\(\{ tenantId, organizationId, alert: alertId \}\)\}/)
+    assert.match(source, /\/dwm\$\{queryString\(\{ tenantId, organizationId, alert: alertId \}\)\}/)
     assert.match(source, /Selected alert/)
     assert.match(source, /const caseMeta = \[/)
     assert.match(source, /compactCaseReference\(caseRecord\.id, 'Case'\)/)

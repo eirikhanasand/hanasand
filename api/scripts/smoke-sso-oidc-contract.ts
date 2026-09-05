@@ -25,7 +25,7 @@ const config: OidcConfig = {
 
 assert.deepEqual(oidcConfigMissing(config), [])
 
-const redirectPath = '/dashboard/dwm?alert=alert_123'
+const redirectPath = '/dwm?alert=alert_123'
 const authorize = new URL(buildOidcAuthorizationUrl(config, redirectPath))
 assert.equal(authorize.origin + authorize.pathname, config.authorizationUrl)
 assert.equal(authorize.searchParams.get('client_id'), config.clientId)

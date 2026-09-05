@@ -26,7 +26,7 @@ test('autosave, idle, WebSocket updates, history restore, closing and draft reco
         const saved = await (await owner.request.get(baseURL + '/api/thesis')).json()
         return { ...saved, body: saved.body.split('\n\n<!-- thesis-sheet:')[0] }
     }
-    await page.goto(baseURL + '/dashboard/thesis')
+    await page.goto(baseURL + '/content/thesis')
     await page.getByRole('button', { name: 'Edit markdown', exact: true }).click()
     await publicPage.goto(baseURL + '/thesis')
     const body = page.getByRole('textbox', { name: 'Description Markdown' })
@@ -74,7 +74,7 @@ test('autosave, idle, WebSocket updates, history restore, closing and draft reco
     await body.fill('Written immediately before leaving')
     await page.goto('about:blank')
     await expect.poll(async() => (await current()).body, { timeout: 7000 }).toBe('Written immediately before leaving')
-    await page.goto(baseURL + '/dashboard/thesis')
+    await page.goto(baseURL + '/content/thesis')
     await page.getByRole('button', { name: 'Edit markdown', exact: true }).click()
     await expect(body).toHaveValue('Written immediately before leaving')
     // A failed close request must leave a draft that survives reload.

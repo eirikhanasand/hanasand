@@ -21,7 +21,7 @@ test('monitoring shows real totals, loads older checks and preserves them on ref
         const filtered = url.searchParams.has('from') ? runs.slice(0, 2) : runs
         await route.fulfill({ json: { automation, runs: filtered.slice(offset, offset + 50), total: filtered.length, nextCursor: offset + 50 < filtered.length ? String(offset + 50) : null } })
     })
-    await page.goto('/dashboard/automation/monitoring')
+    await page.goto('/automation/monitoring')
     await expect(page.getByText('(50/125)')).toBeVisible()
     await expect(page.getByText('99.2%')).toBeVisible()
     await expect(page.locator('[title$=": failed"]')).toHaveCount(1)

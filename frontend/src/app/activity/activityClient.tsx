@@ -123,7 +123,7 @@ export default function ActivityClient({ initialQueue }: Props) {
                             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                             Refresh
                         </button>
-                        <Link href='/dashboard/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-text px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                        <Link href='/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-text px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
                             <ShieldCheck className='h-4 w-4' />
                             Dark web cases
                         </Link>

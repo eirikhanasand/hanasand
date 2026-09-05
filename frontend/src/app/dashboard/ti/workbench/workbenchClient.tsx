@@ -1431,7 +1431,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     const sourceCoverage = orgContext?.readiness.sourceCoverage
     if (selected.kind === 'dwm_alert') {
         const alertDetailHref = `/api/dwm/alerts/${encodeURIComponent(selected.id)}`
-        const dwmWorkspaceHref = relatedLinkHref(selected, 'Open dark web case') || `/dashboard/dwm?alert=${encodeURIComponent(selected.id)}`
+        const dwmWorkspaceHref = relatedLinkHref(selected, 'Open dark web case') || `/dwm?alert=${encodeURIComponent(selected.id)}`
         rows.push({
             id: 'open_dwm_workspace',
             label: 'Open dark web case',
@@ -1529,7 +1529,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             detail: sourceHref ? `${selected.sourceLabel} via ${sourceHref}.` : 'Selected evidence did not include a source profile link.',
             tone: sourceHref ? 'ready' : 'blocked',
             href: sourceHref,
-            disabledReason: sourceHref ? undefined : 'Source capture drill-in requires /dashboard/ti/sources/:id.',
+            disabledReason: sourceHref ? undefined : 'Source capture drill-in requires /ti/sources/:id.',
         })
         rows.push({
             id: 'open_capture_domain',
@@ -1537,7 +1537,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             detail: domainHref ? `${selected.matchedTerm} via ${domainHref}.` : 'Selected evidence did not include a domain context link.',
             tone: domainHref ? 'ready' : 'blocked',
             href: domainHref,
-            disabledReason: domainHref ? undefined : 'Domain drill-in requires /dashboard/ti/domains/:domain.',
+            disabledReason: domainHref ? undefined : 'Domain drill-in requires /ti/domains/:domain.',
         })
     }
     if (selected.kind === 'ti_domain') {
@@ -1549,7 +1549,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             detail: domainHref ? `${selected.matchedTerm || selected.company} via ${domainHref}.` : 'Selected domain item did not include a domain review link.',
             tone: domainHref ? 'ready' : 'blocked',
             href: domainHref,
-            disabledReason: domainHref ? undefined : 'Domain review requires /dashboard/ti/domains/:domain.',
+            disabledReason: domainHref ? undefined : 'Domain review requires /ti/domains/:domain.',
         })
         rows.push({
             id: 'review_domain_sources',
@@ -1557,7 +1557,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             detail: sourcesHref ? `${selected.sourceLabel} via ${sourcesHref}.` : 'Selected domain item did not include a source review link.',
             tone: sourcesHref ? 'ready' : 'blocked',
             href: sourcesHref,
-            disabledReason: sourcesHref ? undefined : 'Source review requires /dashboard/ti/sources.',
+            disabledReason: sourcesHref ? undefined : 'Source review requires /ti/admin/sources.',
         })
     }
     const activeWebhook = orgContext?.webhookDestinations.find(item => item.status === 'active')
@@ -1618,7 +1618,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             },
         })
     } else {
-        rows.push({ id: 'configure_webhook', label: 'Configure webhook', detail: 'Add an active organization destination before sending alerts.', tone: 'needs_action', href: '/dashboard/automation?setup=dwm' })
+        rows.push({ id: 'configure_webhook', label: 'Configure webhook', detail: 'Add an active organization destination before sending alerts.', tone: 'needs_action', href: '/automation?setup=dwm' })
     }
     if (selected.kind === 'webhook_readiness') {
         rows.push({
@@ -1633,7 +1633,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             label: 'Delivery setup',
             detail: activeWebhook && orgContext?.organization ? 'Open the organization webhook route used by Test webhook and Send alerts.' : 'Open delivery setup before sending alerts.',
             tone: activeWebhook ? 'ready' : 'needs_action',
-            href: orgContext?.organization ? `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/webhooks` : '/dashboard/automation?setup=dwm',
+            href: orgContext?.organization ? `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/webhooks` : '/automation?setup=dwm',
         })
     }
     if (sourceCoverage) {
@@ -1642,10 +1642,10 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             label: 'Source health',
             detail: `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources; ${sourceCoverage.watchlistMatchCount} watchlist matches.`,
             tone: sourceCoverage.activeSourceCount ? 'ready' : 'needs_action',
-            href: '/dashboard/ti/sources',
+            href: '/ti/sources',
         })
     } else {
-        rows.push({ id: 'source_unavailable', label: 'Source health', detail: 'Open collection to refresh live source coverage.', tone: 'needs_action', href: '/dashboard/ti/sources' })
+        rows.push({ id: 'source_unavailable', label: 'Source health', detail: 'Open collection to refresh live source coverage.', tone: 'needs_action', href: '/ti/sources' })
     }
     if (selected.kind === 'org_readiness') {
         if (orgContext?.organization) {
@@ -1673,7 +1673,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             label: 'Edit watched terms',
             detail: 'Open dark web cases to create shared terms, attach delivery, and rebuild generated alerts.',
             tone: 'ready',
-            href: '/dashboard/dwm',
+            href: '/dwm',
         })
         rows.push({
             id: 'inspect_watchlists',
@@ -1721,7 +1721,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             label: 'Collection',
             detail: 'Open collection for parser checks, source requests, and canary runs.',
             tone: 'ready',
-            href: '/dashboard/ti/control',
+            href: '/ti/control',
         })
         for (const action of (selected.actions || []).filter(candidate => candidate.id === 'request_source_coverage' || candidate.id === 'run_canary_collection')) {
             rows.push({
@@ -1740,7 +1740,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             label: 'Open helpdesk',
             detail: selected.missingDependency || 'Review recovery requests and admin audit export from the support workbench.',
             tone: selected.missingDependency ? 'needs_action' : 'ready',
-            href: '/dashboard/helpdesk',
+            href: '/helpdesk',
         })
         rows.push({
             id: 'support_recovery_api',
@@ -1777,7 +1777,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             label: 'Open dark web cases',
             detail: 'Open dark web cases to update watched terms, rebuild alerts, and inspect generated alert state.',
             tone: 'ready',
-            href: '/dashboard/dwm',
+            href: '/dwm',
         })
     }
     const handledActionIds = new Set(rows.flatMap(row => [row.id, row.action?.id].filter(Boolean) as string[]))
@@ -1905,14 +1905,14 @@ function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrg
         label: 'Configure/test webhook',
         detail: 'Add an active organization webhook destination before sending alerts.',
         tone: 'needs_action',
-        href: '/dashboard/automation?setup=dwm',
+        href: '/automation?setup=dwm',
     })
     rows.push({
         id: 'handoff_source',
         label: handoff.sourceRequired ? 'Request source pack' : 'Source health',
         detail: readinessDetail(enrichmentReadiness, sourceCoverage ? `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources. ${handoff.sourceRequests.length} source request(s) in handoff.` : 'Open collection to attach source-pack changes for this handoff.'),
         tone: readinessTone(enrichmentReadiness, sourceCoverage?.activeSourceCount ? 'ready' : 'blocked'),
-        href: enrichmentReadiness?.backedRoute || '/dashboard/ti/sources',
+        href: enrichmentReadiness?.backedRoute || '/ti/sources',
         copyPayload: handoff.sourceRequired || !sourceCoverage || enrichmentReadiness?.ready === false ? handoff : undefined,
         disabledReason: readinessDisabledReason(enrichmentReadiness),
     })
@@ -2030,7 +2030,7 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-2'>
-                    <Link href='/dashboard/dwm' className='inline-flex min-h-8 min-w-36 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-raised '>
+                    <Link href='/dwm' className='inline-flex min-h-8 min-w-36 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-raised '>
                         Open DWM queue
                     </Link>
                     <span className={workflowStatusClass(orgContext?.readiness.fullChainReady ? 'ready' : 'needs_action')}>
@@ -2041,7 +2041,7 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
             <div className='mt-3 grid gap-2 sm:grid-cols-3'>
                 <ReadinessDetailField label='Running' value={`${readyCount}/${items.length}`} />
                 <ReadinessDetailField label='Next lane' value={prioritizedItems[0]?.label || 'checking'} />
-                <ReadinessDetailField label='Operations view' value='/dashboard/dwm' />
+                <ReadinessDetailField label='Operations view' value='/dwm' />
             </div>
             <div className='mt-3 grid gap-2'>
                 {prioritizedItems.map((item, index) => {
@@ -2337,9 +2337,9 @@ function EmptyWorkspace() {
                 <h2 className='text-lg font-semibold text-ui-text'>No cases to review</h2>
                 <p className='mt-2 text-sm leading-6 text-ui-muted'>Create watched terms, review source coverage, or run collection to produce the first actionable case.</p>
                 <div className='mt-4 flex flex-wrap gap-2'>
-                    <Link href='/dashboard/dwm' className='inline-flex h-9 items-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary'>Open dark web cases</Link>
-                    <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>Review sources</Link>
-                    <Link href='/dashboard/automation?setup=dwm' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>Configure delivery</Link>
+                    <Link href='/dwm' className='inline-flex h-9 items-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary'>Open dark web cases</Link>
+                    <Link href='/ti/sources' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>Review sources</Link>
+                    <Link href='/automation?setup=dwm' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>Configure delivery</Link>
                 </div>
             </div>
         </div>
@@ -2354,8 +2354,8 @@ function AttackWelcome() {
                 <h2 className='mt-5 text-2xl font-semibold text-ui-text'>Attack monitoring is ready</h2>
                 <p className='mt-3 text-sm leading-6 text-ui-muted'>Actionable cases are created when monitored sources produce a relevant exposure. Start with the source inventory or open the dark web case workspace to configure monitoring.</p>
                 <div className='mt-5 flex flex-wrap justify-center gap-2'>
-                    <Link href='/dashboard/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas'>Open dark web cases</Link>
-                    <Link href='/dashboard/ti/sources' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:bg-ui-panel'>Browse sources</Link>
+                    <Link href='/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas'>Open dark web cases</Link>
+                    <Link href='/ti/sources' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:bg-ui-panel'>Browse sources</Link>
                 </div>
             </div>
         </section>
@@ -2369,7 +2369,7 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
     const blockedDependency = item.missingDependency || (!item.caseDetailHref && item.kind === 'dwm_alert' ? 'Case link is syncing to this alert. Open the dark web case while the live alert record finishes loading.' : '')
     const alertRecord = alertDetail?.status === 'ready' ? alertDetail.detail.alert : undefined
     const alertEvidence = alertRecord?.evidence || []
-    const dwmWorkspaceHref = item.kind === 'dwm_alert' ? relatedLinkHref(item, 'Open dark web case') || `/dashboard/dwm?alert=${encodeURIComponent(item.id)}` : ''
+    const dwmWorkspaceHref = item.kind === 'dwm_alert' ? relatedLinkHref(item, 'Open dark web case') || `/dwm?alert=${encodeURIComponent(item.id)}` : ''
 
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel'>
@@ -3535,7 +3535,7 @@ function alertSourceProfileHref(detail: AlertDetailPayload | undefined) {
 }
 
 function sourceProfileHref(sourceId: string | undefined) {
-    return sourceId ? `/dashboard/ti/sources/${encodeURIComponent(sourceId)}` : undefined
+    return sourceId ? `/ti/sources/${encodeURIComponent(sourceId)}` : undefined
 }
 
 function latestDeliveryForActionRail(selected: WorkbenchCase, caseDetail: CaseDetailState | undefined, actionDeliveries: WorkbenchDeliveryEvidence[], orgContext: WorkbenchOrgContext | undefined) {

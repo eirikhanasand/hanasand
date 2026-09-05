@@ -15,7 +15,7 @@ export default async function Page() {
     const impersonationToken = cookieStore.get('impersonation_token')?.value || headerStore.get('x-impersonation-token') || ''
 
     if (!id || !token) {
-        return redirect('/logout?path=/login%3Fpath%3D/dashboard/vms%26expired=true')
+        return redirect('/logout?path=/login%3Fpath%3D/vms%26expired=true')
     }
 
     const effectiveId = impersonatingId || id

@@ -109,7 +109,7 @@ export async function createBillingPortal(req: FastifyRequest, reply: FastifyRep
     if (!customerId) return reply.status(409).send({ error: 'Complete a purchase before opening billing management.' })
     const body = new URLSearchParams({
         customer: customerId,
-        return_url: process.env.PUBLIC_SITE_URL || 'https://hanasand.com/dashboard/subscription',
+        return_url: process.env.PUBLIC_SITE_URL || 'https://hanasand.com/subscription',
     })
     const response = await stripeRequest('/v1/billing_portal/sessions', secret, body)
     if (!response.ok || typeof response.payload.url !== 'string') return reply.status(502).send({ error: 'Billing management could not be opened.' })

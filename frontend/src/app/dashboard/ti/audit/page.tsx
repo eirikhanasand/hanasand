@@ -51,7 +51,7 @@ export default async function TiAuditPage({ searchParams }: { searchParams?: Pro
             </div>
 
             <DashboardPanel className='p-3'>
-                <form className='grid gap-2 sm:grid-cols-2 lg:grid-cols-7' action='/dashboard/ti/audit'>
+                <form className='grid gap-2 sm:grid-cols-2 lg:grid-cols-7' action='/ti/audit'>
                     <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='actor' defaultValue={param(filters, 'actor')} placeholder='Actor' />
                     <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='action' defaultValue={param(filters, 'action')} placeholder='Action' />
                     <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='target' defaultValue={param(filters, 'target')} placeholder='Target' />
@@ -60,7 +60,7 @@ export default async function TiAuditPage({ searchParams }: { searchParams?: Pro
                     </select>
                     <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='from' defaultValue={param(filters, 'from')} placeholder='From (ISO time)' />
                     <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='to' defaultValue={param(filters, 'to')} placeholder='To (ISO time)' />
-                    <div className='flex gap-2'><button className='h-9 flex-1 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas' type='submit'>Filter</button><Link className='grid h-9 place-items-center rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text' href='/dashboard/ti/audit'>Clear</Link></div>
+                    <div className='flex gap-2'><button className='h-9 flex-1 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas' type='submit'>Filter</button><Link className='grid h-9 place-items-center rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text' href='/ti/audit'>Clear</Link></div>
                 </form>
             </DashboardPanel>
 
@@ -184,7 +184,7 @@ function withCursor(params: AuditSearchParams, cursor: string) {
         if (value) query.set(key, value)
     }
     query.set('cursor', cursor)
-    return `/dashboard/ti/audit?${query.toString()}`
+    return `/ti/audit?${query.toString()}`
 }
 
 function Metric({ title, value, icon, tone = 'neutral' }: { title: string, value: string, icon: ReactNode, tone?: 'neutral' | 'ok' | 'watch' | 'bad' }) {
@@ -206,11 +206,11 @@ function StatusPill({ label, tone }: { label: string, tone: 'neutral' | 'ok' | '
 
 function auditEventHref(event: { action: string, target: string }) {
     const action = event.action.toLowerCase()
-    if (action.includes('source') || event.target.startsWith('source:')) return '/dashboard/ti/sources'
-    if (action.includes('domain') || event.target.includes('.')) return '/dashboard/ti/domains'
-    if (action.includes('actor') || action.includes('profile') || action.includes('enrich')) return '/dashboard/ti/enrichment'
-    if (action.includes('alert') || action.includes('watchlist') || action.includes('webhook')) return '/dashboard/dwm/actions'
-    return '/dashboard/dwm'
+    if (action.includes('source') || event.target.startsWith('source:')) return '/ti/sources'
+    if (action.includes('domain') || event.target.includes('.')) return '/ti/domains'
+    if (action.includes('actor') || action.includes('profile') || action.includes('enrich')) return '/ti/enrichment'
+    if (action.includes('alert') || action.includes('watchlist') || action.includes('webhook')) return '/dwm/actions'
+    return '/dwm'
 }
 
 function toneClass(tone: 'neutral' | 'ok' | 'watch' | 'bad') {

@@ -63,7 +63,7 @@ const sourceBackedFixture: TiSearchResponse = {
             kind: 'company',
             value: 'Microsoft',
             route: 'organization_watchlist',
-            casePath: '/dashboard/dwm?organizationId=org_1&watchlistItemId=watch_1',
+            casePath: '/dwm?organizationId=org_1&watchlistItemId=watch_1',
         }],
         relatedAlerts: [{
             id: 'dwm_alert_1',
@@ -96,7 +96,7 @@ const sourceBackedFixture: TiSearchResponse = {
             priority: 'high',
             path: '/v1/cases/case_1?alertId=dwm_alert_1',
         }],
-        relatedWebhookDestinations: [{ id: 'webhook_1', name: 'SOC intake', status: 'active', path: '/dashboard/dwm' }],
+        relatedWebhookDestinations: [{ id: 'webhook_1', name: 'SOC intake', status: 'active', path: '/dwm' }],
         sourceProvenance: [{
             sourceId: 'microsoft',
             sourceName: 'Microsoft',

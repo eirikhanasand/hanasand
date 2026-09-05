@@ -1,5 +1,1 @@
-import { redirect } from 'next/navigation'
-
-export default function Page() {
-    redirect('/dashboard/overview')
-}
+export { default, dynamic, metadata } from './overview/page'

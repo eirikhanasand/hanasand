@@ -45,10 +45,10 @@ export default async function Page() {
             </section>
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='grid divide-y divide-ui-border md:grid-cols-4 md:divide-x md:divide-y-0'>
-                    <AdminAction href='/dashboard/helpdesk' label='Support access' value='audit trail' />
-                    <AdminAction href='/dashboard/system/rates' label='API tokens' value='scoped keys' />
-                    <AdminAction href='/dashboard/content' label='Content management' value='articles and thoughts' />
-                    <AdminAction href='/dashboard/ti/audit' label='Audit log' value='admin activity' />
+                    <AdminAction href='/helpdesk' label='Support access' value='audit trail' />
+                    <AdminAction href='/system/rates' label='API tokens' value='scoped keys' />
+                    <AdminAction href='/content' label='Content management' value='articles and thoughts' />
+                    <AdminAction href='/ti/audit' label='Audit log' value='admin activity' />
                 </div>
             </DashboardPanel>
             <div className='grid gap-3 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)] xl:items-start'>

@@ -28,7 +28,7 @@ try {
     assert.equal(response.status(), 503)
     await page.getByRole('heading', { name: 'Reconnecting your session' }).waitFor()
     assert.equal(await page.getByRole('heading', { name: 'Verified session restored' }).count(), 0)
-    assert.equal(await page.getByRole('link', { name: 'Try again now' }).getAttribute('href'), '/dashboard/thesis?view=history')
+    assert.equal(await page.getByRole('link', { name: 'Try again now' }).getAttribute('href'), '/content/thesis?view=history')
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     if (process.env.AUTH_RECOVERY_SCREENSHOT) await page.screenshot({ path: process.env.AUTH_RECOVERY_SCREENSHOT })
     healthy = true

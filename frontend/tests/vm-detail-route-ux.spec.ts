@@ -9,7 +9,7 @@ test('vm detail routes use one canonical workflow with a recovery state', async 
     const vmDetail = await readFile(path.join(root, 'src/app/dashboard/vms/[...id]/page.tsx'), 'utf8')
 
     expect(systemAlias).toContain('params.id.map(segment => encodeURIComponent(segment)).join')
-    expect(systemAlias).toContain('redirect(`/dashboard/vms/${id}`)')
+    expect(systemAlias).toContain('redirect(`/vms/${id}`)')
     expect(systemAlias).not.toContain('VMDetailClient')
     expect(systemAlias).not.toContain('getVM(')
 

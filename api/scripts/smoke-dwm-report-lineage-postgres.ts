@@ -411,7 +411,7 @@ function deliveryInput(lineage: string, dryRun: boolean) {
             evidenceCount: 1,
             provenance: { captureIds: [`capture_${lineage}`], sourceIds: [`source_${lineage}`] },
             firstSeenAt: '2026-07-23T10:00:00.000Z',
-            casePath: `/dashboard/dwm/cases/case_${lineage}`,
+            casePath: `/dwm/cases/case_${lineage}`,
             watchlist: { id: `watchlist_${lineage}`, terms: ['example.com'] },
             report,
         },

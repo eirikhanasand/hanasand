@@ -244,7 +244,7 @@ export default function GPT_Page() {
                         <div className='flex flex-wrap items-center justify-end gap-2'>
                             <GPT_Header isConnected={gpt.isConnected} participants={gpt.participants} />
                             <Link
-                                href='/dashboard/system'
+                                href='/system'
                                 className='flex h-9 items-center gap-2 rounded-md bg-ui-raised px-4 text-sm text-ui-text border border-ui-border transition-colors hover:bg-ui-panel'
                             >
                                 <ArrowLeft className='h-4 w-4' />
@@ -355,7 +355,7 @@ function AIContainerHealth({ containers, error }: { containers: DockerContainer[
                 </div>
                 <div className='flex flex-wrap gap-2'>
                     {primary ? (
-                        <Link href={`/dashboard/logs?service=${encodeURIComponent(primary.name)}`} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text hover:border-ui-primary/40'>
+                        <Link href={`/logs?service=${encodeURIComponent(primary.name)}`} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text hover:border-ui-primary/40'>
                             View logs
                         </Link>
                     ) : null}

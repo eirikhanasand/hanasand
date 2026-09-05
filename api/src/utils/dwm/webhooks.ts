@@ -9765,7 +9765,7 @@ function normalizeAlert(alert: Record<string, unknown>) {
     const casePath = clean(alert.casePath)
         || clean(alert.caseUrl)
         || clean(alert.path)
-        || (id === 'webhook_test' ? '/dashboard/dwm' : `/dashboard/dwm?alert=${encodeURIComponent(id)}`)
+        || (id === 'webhook_test' ? '/dwm' : `/dwm?alert=${encodeURIComponent(id)}`)
     const alertUrl = clean(alert.alertUrl)
         || clean(alert.alertURL)
         || clean(alert.deepLink)
@@ -9924,7 +9924,7 @@ function buildTestAlert(destination: Pick<DwmWebhookDestinationRow, 'org_id'>) {
         sourceFamily: 'dark_web',
         artifactType: 'test_notification',
         route: 'test_delivery',
-        casePath: '/dashboard/dwm',
+        casePath: '/dwm',
         watchlist: {
             id: 'test-watchlist',
             name: 'Webhook test watchlist',
@@ -12101,7 +12101,7 @@ function webhookProductProgressSummary(
         retryEligibleCount: proofs.filter(proof => proof.retry.retryable).length,
         liveDeliveryEnabled,
         blockerCodes,
-        href: '/dashboard/automation?setup=dwm',
+        href: '/automation?setup=dwm',
     }
 }
 

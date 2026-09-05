@@ -95,7 +95,7 @@ const fixture: TiSearchResponse = {
             severity: 'high',
             detail: 'Case creation is backed by /v1/cases and requires a DWM alert ID.',
             dependency: '/v1/dwm/alerts or /v1/dwm/alerts/rebuild',
-            route: '/dashboard/dwm',
+            route: '/dwm',
             sourceFamily: 'alert',
             requestedFields: ['relatedAlerts[].id', 'relatedAlerts[].casePath'],
         }],
@@ -237,7 +237,7 @@ assert(actionability.sourceEnrichmentIntake.items.some(item => item.requestedFie
 assert(actionability.actorEnrichmentCoverage.schemaVersion === 'ti.public_actor.actor_enrichment_coverage_export.v1', 'Actor enrichment coverage should expose a versioned public TI export.')
 assert(actionability.actorEnrichmentCoverage.sourceContractSchemaVersion === 'ti.source_provenance_actor_enrichment_coverage_export.v1', 'Actor enrichment coverage should align to the source provenance coverage export contract.')
 assert(actionability.actorEnrichmentCoverage.coverageRows.some(item => item.field === 'sourceProvenance' && item.blockerCodes.includes('coverage_pending')), 'Actor enrichment coverage should preserve source provenance coverage blockers.')
-assert(actionability.actorEnrichmentCoverage.consumers.some(item => item.consumer === 'sourceOps' && item.route.path === '/dashboard/ti/enrichment'), 'Actor enrichment coverage should route source-owned coverage work to enrichment intake.')
+assert(actionability.actorEnrichmentCoverage.consumers.some(item => item.consumer === 'sourceOps' && item.route.path === '/ti/enrichment'), 'Actor enrichment coverage should route source-owned coverage work to enrichment intake.')
 assert(actionability.actorEnrichmentCoverage.safeOutput.liveNetworkScrapeStarted === false, 'Actor enrichment coverage export should be dry-run and safe for public TI.')
 assert(actionability.actorEnrichmentConsumerReadiness.schemaVersion === 'ti.public_actor.actor_enrichment_consumer_readiness_receipt.v1', 'Actor enrichment consumer readiness should expose a versioned public TI receipt.')
 assert(actionability.actorEnrichmentConsumerReadiness.sourceContractSchemaVersion === 'ti.source_provenance_actor_enrichment_consumer_readiness_receipt.v1', 'Actor enrichment consumer readiness should align to the source provenance receipt contract.')
@@ -260,7 +260,7 @@ assert(actionability.caseReplayReadiness.routeTemplate === '/v1/cases/:caseId/ac
 assert(actionability.caseReplayReadiness.rows.some(item => item.blockerCodes.includes('missing_case_route') && item.replayPlan.metadataOnly), 'Case replay readiness should block missing case routes without mutation.')
 assert(actionability.caseReplayReadiness.safeOutput.metadataOnly && !actionability.caseReplayReadiness.safeOutput.liveMutation, 'Case replay readiness should remain metadata-only.')
 assert(actionability.createAlertHandoff.kind === 'create_alert' && actionability.createAlertHandoff.endpoint === '/v1/dwm/alerts/rebuild', 'Actionability should expose explicit alert handoff fields.')
-assert(actionability.createAlertHandoff.backedRoute === '/dashboard/dwm', 'Alert handoff should point to the backed DWM route even when blocked.')
+assert(actionability.createAlertHandoff.backedRoute === '/dwm', 'Alert handoff should point to the backed DWM route even when blocked.')
 assert(actionability.caseHandoff.kind === 'case' && actionability.caseHandoff.endpoint === '/v1/cases', 'Actionability should expose explicit case handoff fields.')
 assert(actionability.caseHandoff.blocked && actionability.caseHandoff.missing.some(item => /DWM alert ID/i.test(item)), 'Blocked case handoff should expose missing alert dependency.')
 assert(actionability.webhookDeliveryHandoff.kind === 'webhook_delivery' && actionability.webhookDeliveryHandoff.endpoint === '/v1/dwm/webhooks/deliver', 'Actionability should expose explicit webhook delivery fields.')
@@ -274,7 +274,7 @@ assert(actionability.consumerReadiness.stages.some(stage => stage.id === 'webhoo
 assert(actionability.consumerReadiness.blockers.some(blocker => blocker.code === 'missing_org'), 'Public APT29 readiness should keep org-required blockers explicit.')
 assert(actionability.readiness.schemaVersion === 'ti.public_actor.readiness.v1', 'Public TI should expose backed readiness metadata.')
 assert(actionability.readiness.state === 'degraded', 'APT29 public result should be usable but degraded until org/capture/alert/case/delivery data is attached.')
-assert(actionability.readiness.blockers.some(blocker => blocker.code === 'missing_org' && blocker.ownerLane === 'org' && blocker.route === '/dashboard/dwm'), 'Readiness blockers should route missing org context to the org lane.')
+assert(actionability.readiness.blockers.some(blocker => blocker.code === 'missing_org' && blocker.ownerLane === 'org' && blocker.route === '/dwm'), 'Readiness blockers should route missing org context to the org lane.')
 assert(actionability.readiness.blockers.some(blocker => blocker.code === 'missing_capture' && blocker.ownerLane === 'source'), 'Readiness blockers should route missing capture evidence to source work.')
 assert(actionability.readiness.blockers.some(blocker => blocker.code === 'missing_webhook_destination' && blocker.ownerLane === 'webhook'), 'Readiness blockers should route missing webhook destinations to webhook work.')
 assert(actionability.readiness.blockers.some(blocker => blocker.code === 'stale_provenance' && blocker.ownerLane === 'public-ti'), 'Stale actor evidence should remain a public TI blocker.')
@@ -294,12 +294,12 @@ assert(JSON.stringify(actionability.actionPayloads.payloads.caseHandoff.body).in
 assert(actionability.actionPayloads.payloads.webhookDelivery.route === '/v1/dwm/webhooks/deliver', 'Webhook action export should point to the delivery route.')
 assert(actionability.actionPayloads.payloads.webhookDelivery.blockedBy.some(blocker => blocker.code === 'missing_webhook_destination' && blocker.ownerLane === 'webhook'), 'Webhook action export should carry destination blockers.')
 assert(actionability.actionPayloads.payloads.analystHandoffBundle.body.schemaVersion === 'hanasand.analyst_handoff.consumer.v1', 'Analyst bundle export should align to the authenticated consumer schema.')
-assert(actionability.actionPayloads.payloads.sourceEnrichment.route === '/dashboard/ti/enrichment', 'Source enrichment action export should point to source enrichment work.')
+assert(actionability.actionPayloads.payloads.sourceEnrichment.route === '/ti/enrichment', 'Source enrichment action export should point to source enrichment work.')
 assert(actionability.actionPayloads.payloads.sourceEnrichment.blockedBy.some(blocker => blocker.code === 'missing_capture' && blocker.ownerLane === 'source'), 'Source enrichment export should carry missing capture blockers.')
 assert(JSON.stringify(actionability.actionPayloads.payloads.sourceEnrichment.body).includes('ti.public_actor.source_health_queue.v1'), 'Source enrichment export should carry the modeled source-health queue.')
 assert(JSON.stringify(actionability.actionPayloads.payloads.sourceEnrichment.body).includes('ti.public_actor.source_enrichment_intake.v1'), 'Source enrichment export should carry the modeled source-enrichment intake.')
-assert(actionability.enrichmentGapQueue.some(item => item.route === '/dashboard/dwm' && item.sourceFamily === 'alert' && item.requestedFields.includes('relatedAlerts[].id')), 'Enrichment gaps should carry route, source family, and requested fields.')
-assert(actionability.exportPayloads.enrichment.backedRoute === '/dashboard/ti/enrichment', 'Enrichment package should point to the backed enrichment route.')
+assert(actionability.enrichmentGapQueue.some(item => item.route === '/dwm' && item.sourceFamily === 'alert' && item.requestedFields.includes('relatedAlerts[].id')), 'Enrichment gaps should carry route, source family, and requested fields.')
+assert(actionability.exportPayloads.enrichment.backedRoute === '/ti/enrichment', 'Enrichment package should point to the backed enrichment route.')
 assert(actionability.alertDisposition === 'watchlist_required', 'APT29 fixture should not alert without a backed watchlist match or alert ID.')
 assert(actionability.handoffs.caseBlockers.some(item => /DWM alert ID/i.test(item)), 'No-alert fixture should explain missing case dependency.')
 assert(actionability.geographyHandoffs.some(item => item.code === 'US' && item.watchlistTerm?.value.includes('SolarWinds')), 'APT29 geography should map country observations to watchlist actions.')
@@ -338,7 +338,7 @@ assert(usArtifact?.readiness.state === 'stale', 'APT29 fixture should gate stale
 assert(usHandoffs?.authBridge.schemaVersion === 'ti.public_actor.authenticated_bridge.v1', 'Selected artifact should export an authenticated bridge contract.')
 assert(usHandoffs?.authBridge.orgRequired, 'Public artifact handoff should keep organization scope explicit.')
 assert(usHandoffs?.authBridge.stale, 'Authenticated bridge should carry stale evidence state.')
-assert(usHandoffs?.authBridge.links.watchlist.href.includes('/dashboard/dwm?handoff=public-ti'), 'Watchlist bridge should deep-link into the authenticated dashboard.')
+assert(usHandoffs?.authBridge.links.watchlist.href.includes('/dwm?handoff=public-ti'), 'Watchlist bridge should deep-link into the authenticated dashboard.')
 assert(usHandoffs?.authBridge.links.watchlist.intent === PUBLIC_TI_HANDOFF_ACTIONS.watchlist, 'Watchlist bridge should use a stable action name.')
 assert(usHandoffs?.authBridge.payload.schemaVersion === PUBLIC_TI_HANDOFF_SCHEMA_VERSION, 'Default bridge payload should carry the exported schema version.')
 assert(usHandoffs?.authBridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case].selectedPayload.route === 'case', 'Case bridge payload should select the case export payload.')
@@ -354,7 +354,7 @@ assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequired, 'Decoded
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.stale, 'Decoded APT29 payload should keep stale-evidence blocker state.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.blockers.some(blocker => blocker.code === 'stale_evidence'), 'Decoded APT29 payload should carry stable blocker codes.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequests.some(source => source.missing.includes('captureId or source request ID')), 'Decoded APT29 payload should expose missing capture/source request IDs.')
-assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequests.every(source => source.ownerLane === 'source' && source.route === '/dashboard/ti/enrichment' && source.sourceFamily === 'source_capture'), 'Decoded APT29 source requests should carry source owner, route, and family.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequests.every(source => source.ownerLane === 'source' && source.route === '/ti/enrichment' && source.sourceFamily === 'source_capture'), 'Decoded APT29 source requests should carry source owner, route, and family.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequests.some(source => source.requestedFields?.includes('sourceProvenance[].captureId') && source.requestedFields?.includes('sourceProvenance[].sourceRequestId')), 'Decoded APT29 source requests should carry requested source/capture fields.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.actionReadiness.length === 4, 'Decoded APT29 payload should expose per-action readiness for watchlist, alert, case, and enrichment.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.actionReadiness.some(item => item.action === PUBLIC_TI_HANDOFF_ACTIONS.watchlist && item.selected && item.ownerLane === 'org' && item.blockerCodes.includes('org_required')), 'Decoded APT29 watchlist readiness should carry selected action, org owner, and blocker code.')
@@ -396,7 +396,7 @@ const backed = buildTiActionability({
             kind: 'company',
             value: 'Microsoft',
             route: 'organization_watchlist',
-            casePath: '/dashboard/dwm?organizationId=org_1&watchlistItemId=watch_1',
+            casePath: '/dwm?organizationId=org_1&watchlistItemId=watch_1',
         }],
         relatedAlerts: [{
             id: 'dwm_alert_1',
@@ -425,7 +425,7 @@ const backed = buildTiActionability({
             id: 'webhook_1',
             name: 'SOC incident intake',
             status: 'active',
-            path: '/dashboard/dwm',
+            path: '/dwm',
         }],
         sourceProvenance: [
             { sourceId: 'microsoft', sourceName: 'Microsoft', provenance: 'https://www.microsoft.com/en-us/security/blog/', confidence: 0.82, captureId: 'capture_1' },

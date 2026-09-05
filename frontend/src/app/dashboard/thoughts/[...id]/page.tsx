@@ -10,7 +10,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const thought = await fetchThought(id)
 
     if (!thought) {
-        return redirect('/dashboard/thoughts')
+        return redirect('/content/thoughts')
     }
 
     return (

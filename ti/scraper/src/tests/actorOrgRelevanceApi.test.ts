@@ -1182,10 +1182,10 @@ describe("actor org relevance API", () => {
       "missing_webhook_destination"
     ]));
     expect(payload.summary.nextActions).toEqual(expect.arrayContaining([
-      expect.objectContaining({ ownerLane: "source", route: "/dashboard/ti/enrichment" }),
-      expect.objectContaining({ ownerLane: "alert", route: "/dashboard/dwm" }),
+      expect.objectContaining({ ownerLane: "source", route: "/ti/enrichment" }),
+      expect.objectContaining({ ownerLane: "alert", route: "/dwm" }),
       expect.objectContaining({ ownerLane: "case", route: "/v1/cases" }),
-      expect.objectContaining({ ownerLane: "webhook", route: "/dashboard/dwm" })
+      expect.objectContaining({ ownerLane: "webhook", route: "/dwm" })
     ]));
     for (const phrase of ["control room", "how this feeds", "signal", "named examples", "dashboard slop", "acceptance criteria"]) {
       expect(JSON.stringify(payload).toLowerCase()).not.toContain(phrase);
@@ -1338,7 +1338,7 @@ function readyRelevance(): PublicTiOrgRelevanceProofLike {
       kind: "company" as const,
       value: "Microsoft",
       route: "organization_watchlist",
-      casePath: "/dashboard/dwm?organizationId=org_microsoft&watchlistItemId=watch_microsoft"
+      casePath: "/dwm?organizationId=org_microsoft&watchlistItemId=watch_microsoft"
     }],
     candidateTerms: [{
       kind: "company" as const,
@@ -1394,7 +1394,7 @@ function readyRelevance(): PublicTiOrgRelevanceProofLike {
       ownerLane: "org",
       label: "Microsoft",
       action: "Open saved watchlist item",
-      route: "/dashboard/dwm",
+      route: "/dwm",
       sourceFamily: "watchlist",
       provenanceRefs: ["watchlist_microsoft", "watch_microsoft"],
       tenantId: "tenant_microsoft",
@@ -1411,7 +1411,7 @@ function readyRelevance(): PublicTiOrgRelevanceProofLike {
       ownerLane: "source",
       label: "Microsoft",
       action: "Use capture as evidence",
-      route: "/dashboard/ti/enrichment",
+      route: "/ti/enrichment",
       sourceFamily: "vendor_disclosure",
       provenanceRefs: ["microsoft", "capture_microsoft_apt29", "https://www.microsoft.com/en-us/security/blog/"],
       captureIds: ["capture_microsoft_apt29"],

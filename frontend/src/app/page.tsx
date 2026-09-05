@@ -78,9 +78,9 @@ const stats = [
 
 const workflowShortcuts = [
     { label: 'Watch companies', href: '/organizations', detail: 'Companies, vendors, domains' },
-    { label: 'Catch breaches', href: '/dashboard/dwm', detail: 'New exposure mentions' },
-    { label: 'Review alerts', href: '/dashboard/dwm', detail: 'Details, severity, next step' },
-    { label: 'Send alerts', href: '/dashboard/automation?setup=dwm', detail: 'Email, webhooks, and API' },
+    { label: 'Catch breaches', href: '/dwm', detail: 'New exposure mentions' },
+    { label: 'Review alerts', href: '/dwm', detail: 'Details, severity, next step' },
+    { label: 'Send alerts', href: '/automation?setup=dwm', detail: 'Email, webhooks, and API' },
 ]
 
 const operatorPaths = [
@@ -94,7 +94,7 @@ const operatorPaths = [
         label: 'Review alerts',
         state: 'Review',
         value: 'Review what was found, where it came from, how recent it is, and what to do next.',
-        href: '/dashboard/dwm',
+        href: '/dwm',
     },
     {
         label: 'Search groups',
@@ -106,7 +106,7 @@ const operatorPaths = [
         label: 'Send notifications',
         state: 'Delivery',
         value: 'Send reviewed alerts by email, webhook, or API.',
-        href: '/dashboard/automation?setup=dwm',
+        href: '/automation?setup=dwm',
     },
 ]
 
@@ -292,7 +292,7 @@ export default function Page() {
                             <p className='text-sm font-semibold uppercase text-ui-primary'>Solutions</p>
                             <h2 className='text-3xl font-semibold text-ui-text'>Monitoring and response tools in one place.</h2>
                         </div>
-                        <Link href='/dashboard/overview' className='landing-primary-action inline-flex w-fit items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold shadow-sm transition'>
+                        <Link href='/dashboard' className='landing-primary-action inline-flex w-fit items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold shadow-sm transition'>
                             Go to Dashboard
                             <ArrowRight className='h-4 w-4' />
                         </Link>

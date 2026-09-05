@@ -20,7 +20,7 @@ test('ti monitored entities keeps review triage primary while totals and coverag
     expect(source.indexOf('Matches to review')).toBeLessThan(source.indexOf('data-ti-domains-source-coverage-disclosure'))
     expect(source.indexOf('data-ti-domains-source-coverage-disclosure')).toBeLessThan(source.indexOf(' data-ti-domains-source-coverage>'))
 
-    expect(source).toContain('href={`/dashboard/ti/domains/${encodeURIComponent(row.domain.domain)}`}')
+    expect(source).toContain('href={`/ti/domains/${encodeURIComponent(row.domain.domain)}`}')
     expect(source).toContain('rows.filter(row => row.domain.status === \'review\')')
     expect(source).toContain('row.domain.matchedTerms.join(\', \')')
     expect(source).toContain('{rows.reduce((sum, row) => sum + row.sources.length, 0)} source links')

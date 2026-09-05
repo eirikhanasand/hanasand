@@ -467,7 +467,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     if (state.error || !state.detail || !caseRecord) {
         return (
             <main className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-5 text-ui-danger'>
-                <Link href='/dashboard/dwm' className='inline-flex items-center gap-2 text-xs font-semibold text-ui-danger'><ArrowLeft className='h-4 w-4' />Back to DWM</Link>
+                <Link href='/dwm' className='inline-flex items-center gap-2 text-xs font-semibold text-ui-danger'><ArrowLeft className='h-4 w-4' />Back to DWM</Link>
                 <h1 className='mt-4 text-xl font-semibold'>Case unavailable</h1>
                 <p className='mt-2 max-w-2xl text-sm leading-6 text-ui-danger'>{state.error || 'The case could not be found for this organization.'}</p>
             </main>
@@ -522,7 +522,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
             <section className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-canvas'>
                 <div className='grid min-w-0 gap-3 border-b border-ui-border px-4 py-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between'>
                     <div className='min-w-0 flex-1'>
-                        <Link href='/dashboard/dwm' className='inline-flex items-center gap-2 text-[11px] font-semibold uppercase text-ui-primary'><ArrowLeft className='h-3.5 w-3.5' />DWM cases</Link>
+                        <Link href='/dwm' className='inline-flex items-center gap-2 text-[11px] font-semibold uppercase text-ui-primary'><ArrowLeft className='h-3.5 w-3.5' />DWM cases</Link>
                         <h1 className='mt-2 min-w-0 wrap-break-word text-xl font-semibold text-ui-text'>{caseRecord.title || caseRecord.id}</h1>
                         <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{caseMeta}</p>
                     </div>
@@ -841,12 +841,12 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
     readOnly: boolean
 }) {
     const dashboardScope = queryString({ tenantId, organizationId, alert: alertId })
-    const currentCaseHref = `/dashboard/dwm/cases/${encodeURIComponent(caseId)}${queryString({ tenantId, organizationId, alertId, route: 'case_detail' })}`
+    const currentCaseHref = `/dwm/cases/${encodeURIComponent(caseId)}${queryString({ tenantId, organizationId, alertId, route: 'case_detail' })}`
     const organizationHref = organizationId
         ? `/organizations${queryString({ organizationId, caseId, alertId, focus: alertId ? 'cases' : 'watchlists' })}`
         : '/organizations'
     const exportHref = `/api/cases/${encodeURIComponent(caseId)}/export${queryString({ tenantId, organizationId, alertId, shape: 'full' })}`
-    const alertHref = alertId ? `/dashboard/dwm${queryString({ tenantId, organizationId, alert: alertId })}` : undefined
+    const alertHref = alertId ? `/dwm${queryString({ tenantId, organizationId, alert: alertId })}` : undefined
     const lastDelivery = latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTime(latestDelivery.attemptedAt)}` : 'not sent'
 
     return (
@@ -862,7 +862,7 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
                     </div>
                 </div>
                 <div className='flex flex-wrap gap-2'>
-                    <CommandLink href={`/dashboard/dwm${dashboardScope}`}>Queue</CommandLink>
+                    <CommandLink href={`/dwm${dashboardScope}`}>Queue</CommandLink>
                     <CommandLink href={organizationHref}>Organization</CommandLink>
                     {alertHref ? <CommandLink href={alertHref}>Selected alert</CommandLink> : null}
                     <CommandLink href={exportHref}>{exportReady ? 'Export case' : 'Check export'}</CommandLink>

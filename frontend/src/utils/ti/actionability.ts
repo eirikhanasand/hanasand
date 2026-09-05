@@ -346,7 +346,7 @@ export type ConsumerReadinessStage = {
 
 export type ConsumerReadinessRequest = {
     method: 'POST'
-    path: '/v1/dwm/watchlists' | '/v1/dwm/alerts/rebuild' | '/v1/cases' | '/v1/dwm/webhooks/deliver' | '/dashboard/ti/enrichment'
+    path: '/v1/dwm/watchlists' | '/v1/dwm/alerts/rebuild' | '/v1/cases' | '/v1/dwm/webhooks/deliver' | '/ti/enrichment'
     body: Record<string, unknown>
 }
 
@@ -404,7 +404,7 @@ export type PublicTiSourceEnrichmentIntake = {
     schemaVersion: 'ti.public_actor.source_enrichment_intake.v1'
     query: string
     generatedAt: string
-    route: '/dashboard/ti/enrichment'
+    route: '/ti/enrichment'
     items: PublicTiSourceEnrichmentIntakeItem[]
     summary: {
         total: number
@@ -1212,8 +1212,8 @@ function buildPublicTiActionPayloads(input: {
                 label: 'Analyst handoff bundle',
                 actorId,
                 result: input.result,
-                route: '/dashboard/dwm',
-                backedRoute: '/dashboard/dwm',
+                route: '/dwm',
+                backedRoute: '/dwm',
                 body: {
                     schemaVersion: input.consumerReadiness.consumerSchemaVersion,
                     ...commonContext,
@@ -1229,7 +1229,7 @@ function buildPublicTiActionPayloads(input: {
                         alertRebuild: '/v1/dwm/alerts/rebuild',
                         case: '/v1/cases',
                         webhookDelivery: '/v1/dwm/webhooks/deliver',
-                        enrichment: '/dashboard/ti/enrichment',
+                        enrichment: '/ti/enrichment',
                     },
                 },
                 provenance: input.exportPayloads.blockers.provenance,
@@ -1240,7 +1240,7 @@ function buildPublicTiActionPayloads(input: {
                 label: 'Source enrichment request',
                 actorId,
                 result: input.result,
-                route: input.exportPayloads.enrichment.backedRoute ?? '/dashboard/ti/enrichment',
+                route: input.exportPayloads.enrichment.backedRoute ?? '/ti/enrichment',
                 backedRoute: input.exportPayloads.enrichment.backedRoute,
                 body: {
                     ...input.exportPayloads.enrichment.body,
@@ -1582,12 +1582,12 @@ function orgRelevanceEnrichmentGaps(input: {
     freshness: TiActorIntelligenceProfile['freshness']
 }): PublicTiOrgRelevanceEnrichmentGap[] {
     const gaps: PublicTiOrgRelevanceEnrichmentGap[] = []
-    if (!input.actorIdentity.aliases.length) gaps.push(orgGap('missing_actor_aliases', 'public-ti', 'actorIdentity.aliases', 'Add known aliases before alert or watchlist handoff.', '/dashboard/ti/enrichment', 'actor_profile'))
-    if (!input.actorIdentity.sectors.length) gaps.push(orgGap('missing_target_sectors', 'public-ti', 'actorIdentity.sectors', 'Attach target-sector evidence before routing this actor to a customer watchlist.', '/dashboard/ti/enrichment', 'actor_profile'))
-    if (!input.actorIdentity.regions.length) gaps.push(orgGap('missing_target_regions', 'public-ti', 'actorIdentity.regions', 'Attach target-region evidence before regional exposure review.', '/dashboard/ti/enrichment', 'geography'))
-    if (!input.sourceCoverage.length) gaps.push(orgGap('missing_source_coverage', 'source', 'sourceCoverage', 'Attach at least one source coverage row for this actor result.', '/dashboard/ti/sources', 'source_capture'))
-    if (!input.sourceEvidence.length) gaps.push(orgGap('missing_provenance', 'source', 'sourceEvidence', 'Source details are required before org relevance can be reviewed.', '/dashboard/ti/enrichment', 'source_capture'))
-    if (input.freshness.stale) gaps.push(orgGap('stale_evidence', 'source', 'freshness.lastSeen', input.freshness.reason, '/dashboard/ti/enrichment', 'source_capture'))
+    if (!input.actorIdentity.aliases.length) gaps.push(orgGap('missing_actor_aliases', 'public-ti', 'actorIdentity.aliases', 'Add known aliases before alert or watchlist handoff.', '/ti/enrichment', 'actor_profile'))
+    if (!input.actorIdentity.sectors.length) gaps.push(orgGap('missing_target_sectors', 'public-ti', 'actorIdentity.sectors', 'Attach target-sector evidence before routing this actor to a customer watchlist.', '/ti/enrichment', 'actor_profile'))
+    if (!input.actorIdentity.regions.length) gaps.push(orgGap('missing_target_regions', 'public-ti', 'actorIdentity.regions', 'Attach target-region evidence before regional exposure review.', '/ti/enrichment', 'geography'))
+    if (!input.sourceCoverage.length) gaps.push(orgGap('missing_source_coverage', 'source', 'sourceCoverage', 'Attach at least one source coverage row for this actor result.', '/ti/sources', 'source_capture'))
+    if (!input.sourceEvidence.length) gaps.push(orgGap('missing_provenance', 'source', 'sourceEvidence', 'Source details are required before org relevance can be reviewed.', '/ti/enrichment', 'source_capture'))
+    if (input.freshness.stale) gaps.push(orgGap('stale_evidence', 'source', 'freshness.lastSeen', input.freshness.reason, '/ti/enrichment', 'source_capture'))
     return uniqueBy(gaps, gap => `${gap.code}:${gap.field}`)
 }
 
@@ -1679,7 +1679,7 @@ function buildOrgRelevanceRows(input: {
             ownerLane: 'org',
             label: match.value,
             action: 'Open saved watchlist item',
-            route: match.casePath ?? match.route ?? '/dashboard/dwm',
+            route: match.casePath ?? match.route ?? '/dwm',
             sourceFamily: 'watchlist',
             provenanceRefs,
             tenantId: match.tenantId,
@@ -1723,7 +1723,7 @@ function buildOrgRelevanceRows(input: {
             ownerLane: 'source',
             label: source.sourceName,
             action: source.captureId ? 'Use capture as evidence' : 'Attach capture ID',
-            route: '/dashboard/ti/enrichment',
+            route: '/ti/enrichment',
             sourceFamily: sourceFamilyForEvidence(source),
             provenanceRefs,
             captureIds: uniqueStrings([source.captureId]),
@@ -1954,34 +1954,34 @@ function buildPublicTiStatus(input: {
     const hasOrgContext = organizationIds.length > 0
     const hasAlertContext = alertIds.length > 0
 
-    if (!hasOrgContext) blockers.push(statusBlocker('missing_org', 'watchlist', 'org', 'watchlistMatches[].organizationId', 'Organization context is required before watchlist, alert, case, or delivery handoff can mutate customer state.', '/dashboard/dwm', 'Open the authenticated console and choose the customer organization before saving watchlist terms.', 'consumer_readiness'))
-    if (!watchlistIds.length || !watchlistItemIds.length) blockers.push(statusBlocker('missing_org_watchlist', 'watchlist', 'org', 'watchlistMatches[].watchlistId', hasWatchlistTerms ? 'Candidate watchlist terms exist, but no persisted organization watchlist item is attached.' : 'No candidate or persisted organization watchlist term is attached to this result.', '/dashboard/dwm', hasWatchlistTerms ? 'Create or select the customer watchlist, then rebuild alerts from the saved items.' : 'Collect a customer-relevant company, domain, vendor, or sector term before rebuilding alerts.', 'consumer_readiness'))
-    if (!input.sourceProvenance.length) blockers.push(statusBlocker('missing_source_provenance', 'source', 'source', 'sourceProvenance[]', 'No source detail row is attached to this result.', '/dashboard/ti/enrichment', 'Attach source name, source ID, source URL, report date, and confidence before using this result for alerting.', 'public_result'))
-    if (input.actor.freshness.stale) blockers.push(statusBlocker('stale_provenance', 'public_ti', 'public-ti', 'actorIntelligence.freshness', input.actor.freshness.reason, '/dashboard/ti/enrichment', 'Refresh the actor profile or attach newer corroborating evidence before sending this to review.', 'public_result'))
-    if (!alertIds.length) blockers.push(statusBlocker('missing_alert', 'alert', 'alert', 'relatedAlerts[].id', 'No generated alert ID is attached to this actor result.', '/dashboard/dwm', 'Rebuild alerts from persisted watchlist items and return the alert ID.', 'consumer_readiness'))
-    if (!captureIds.length) blockers.push(statusBlocker('missing_capture', 'source', 'source', 'sourceProvenance[].captureId', 'No replayable capture ID is attached for case evidence or delivery dry-run.', '/dashboard/ti/enrichment', 'Attach capture IDs or source request IDs to the source rows.', 'consumer_readiness'))
-    if (!casePaths.length) blockers.push(statusBlocker('missing_case_route', 'case', 'case', 'relatedCases[].path', 'No case route or case path is attached to this result.', '/dashboard/ti/workbench', 'Return relatedCases[].path or relatedAlerts[].casePath after case creation is available.', 'consumer_readiness'))
-    if (!webhookDestinationIds.length) blockers.push(statusBlocker('missing_webhook_destination', 'webhook', 'webhook', 'relatedWebhookDestinations[].id', 'No active webhook destination ID is attached for dry-run delivery.', '/dashboard/dwm', 'Attach an active webhook destination before preparing customer delivery.', 'consumer_readiness'))
+    if (!hasOrgContext) blockers.push(statusBlocker('missing_org', 'watchlist', 'org', 'watchlistMatches[].organizationId', 'Organization context is required before watchlist, alert, case, or delivery handoff can mutate customer state.', '/dwm', 'Open the authenticated console and choose the customer organization before saving watchlist terms.', 'consumer_readiness'))
+    if (!watchlistIds.length || !watchlistItemIds.length) blockers.push(statusBlocker('missing_org_watchlist', 'watchlist', 'org', 'watchlistMatches[].watchlistId', hasWatchlistTerms ? 'Candidate watchlist terms exist, but no persisted organization watchlist item is attached.' : 'No candidate or persisted organization watchlist term is attached to this result.', '/dwm', hasWatchlistTerms ? 'Create or select the customer watchlist, then rebuild alerts from the saved items.' : 'Collect a customer-relevant company, domain, vendor, or sector term before rebuilding alerts.', 'consumer_readiness'))
+    if (!input.sourceProvenance.length) blockers.push(statusBlocker('missing_source_provenance', 'source', 'source', 'sourceProvenance[]', 'No source detail row is attached to this result.', '/ti/enrichment', 'Attach source name, source ID, source URL, report date, and confidence before using this result for alerting.', 'public_result'))
+    if (input.actor.freshness.stale) blockers.push(statusBlocker('stale_provenance', 'public_ti', 'public-ti', 'actorIntelligence.freshness', input.actor.freshness.reason, '/ti/enrichment', 'Refresh the actor profile or attach newer corroborating evidence before sending this to review.', 'public_result'))
+    if (!alertIds.length) blockers.push(statusBlocker('missing_alert', 'alert', 'alert', 'relatedAlerts[].id', 'No generated alert ID is attached to this actor result.', '/dwm', 'Rebuild alerts from persisted watchlist items and return the alert ID.', 'consumer_readiness'))
+    if (!captureIds.length) blockers.push(statusBlocker('missing_capture', 'source', 'source', 'sourceProvenance[].captureId', 'No replayable capture ID is attached for case evidence or delivery dry-run.', '/ti/enrichment', 'Attach capture IDs or source request IDs to the source rows.', 'consumer_readiness'))
+    if (!casePaths.length) blockers.push(statusBlocker('missing_case_route', 'case', 'case', 'relatedCases[].path', 'No case route or case path is attached to this result.', '/ti/workbench', 'Return relatedCases[].path or relatedAlerts[].casePath after case creation is available.', 'consumer_readiness'))
+    if (!webhookDestinationIds.length) blockers.push(statusBlocker('missing_webhook_destination', 'webhook', 'webhook', 'relatedWebhookDestinations[].id', 'No active webhook destination ID is attached for dry-run delivery.', '/dwm', 'Attach an active webhook destination before preparing customer delivery.', 'consumer_readiness'))
 
     if (hasOrgContext && !input.contract?.entitlementReadiness) {
-        blockers.push(statusBlocker('unavailable_contract', 'entitlement', 'entitlement', 'actionability.entitlementReadiness', 'Organization access context is not attached to the public TI result.', '/dashboard/dwm', 'Load organization access context before enabling watchlist, alert, case, or delivery mutation.', 'entitlement_readiness'))
+        blockers.push(statusBlocker('unavailable_contract', 'entitlement', 'entitlement', 'actionability.entitlementReadiness', 'Organization access context is not attached to the public TI result.', '/dwm', 'Load organization access context before enabling watchlist, alert, case, or delivery mutation.', 'entitlement_readiness'))
     }
     if (hasAlertContext && input.relatedAlerts.every(alert => !alert.deliveryReadinessContext)) {
-        blockers.push(statusBlocker('unavailable_contract', 'webhook', 'webhook', 'relatedAlerts[].deliveryReadinessContext', 'Alert delivery context is not attached to the related alert.', '/dashboard/dwm', 'Attach delivery context with capture, case, destination, replay, and entitlement fields.', 'delivery_readiness'))
+        blockers.push(statusBlocker('unavailable_contract', 'webhook', 'webhook', 'relatedAlerts[].deliveryReadinessContext', 'Alert delivery context is not attached to the related alert.', '/dwm', 'Attach delivery context with capture, case, destination, replay, and entitlement fields.', 'delivery_readiness'))
     }
 
     const entitlementActions = Object.values(input.contract?.entitlementReadiness?.actions ?? {})
     for (const action of entitlementActions.filter(action => action.status === 'blocked')) {
         const blockerCode = action.blockerCodes?.[0] ?? action.blockers?.[0]?.blockerCode ?? 'entitlement_blocked'
-        blockers.push(statusBlocker('entitlement_blocked', 'entitlement', 'entitlement', `entitlementReadiness.actions.${action.ownerLane ?? 'action'}`, action.dashboardText || action.blockers?.[0]?.dashboardText || `Entitlement blocked ${blockerCode}.`, action.route || action.blockers?.[0]?.route || '/dashboard/dwm', action.helpdeskText || action.blockers?.[0]?.supportText || 'Review organization entitlement limits before retrying this handoff.', 'entitlement_readiness'))
+        blockers.push(statusBlocker('entitlement_blocked', 'entitlement', 'entitlement', `entitlementReadiness.actions.${action.ownerLane ?? 'action'}`, action.dashboardText || action.blockers?.[0]?.dashboardText || `Entitlement blocked ${blockerCode}.`, action.route || action.blockers?.[0]?.route || '/dwm', action.helpdeskText || action.blockers?.[0]?.supportText || 'Review organization entitlement limits before retrying this handoff.', 'entitlement_readiness'))
     }
 
     for (const alert of input.relatedAlerts) {
         for (const code of alert.deliveryReadinessContext?.blockerCodes ?? []) {
-            if (code === 'missing_capture_evidence') blockers.push(statusBlocker('missing_capture', 'source', 'source', `relatedAlerts.${alert.id}.deliveryReadinessContext.selectedCaptureIds`, 'Delivery readiness reports missing capture evidence.', '/dashboard/ti/enrichment', 'Attach capture IDs and evidence count before delivery or replay.', 'delivery_readiness'))
-            if (code === 'case_route_unavailable') blockers.push(statusBlocker('missing_case_route', 'case', 'case', `relatedAlerts.${alert.id}.deliveryReadinessContext.casePath`, 'Delivery readiness reports that the case route is unavailable.', '/dashboard/ti/workbench', 'Return case path and case ID candidate from the case workflow before handoff.', 'delivery_readiness'))
-            if (code === 'delivery_disabled') blockers.push(statusBlocker('missing_webhook_destination', 'webhook', 'webhook', `relatedAlerts.${alert.id}.deliveryReadinessContext.webhookDestinationIds`, 'Delivery readiness reports that webhook delivery is not configured.', '/dashboard/dwm', 'Attach an active webhook destination or mark delivery intentionally disabled.', 'delivery_readiness'))
-            if (code === 'entitlement_denied') blockers.push(statusBlocker('entitlement_blocked', 'entitlement', 'entitlement', `relatedAlerts.${alert.id}.deliveryReadinessContext.entitlement`, 'Delivery readiness reports an entitlement denial.', '/dashboard/dwm', 'Resolve organization entitlement before replay, delivery, or alert rebuild.', 'delivery_readiness'))
+            if (code === 'missing_capture_evidence') blockers.push(statusBlocker('missing_capture', 'source', 'source', `relatedAlerts.${alert.id}.deliveryReadinessContext.selectedCaptureIds`, 'Delivery readiness reports missing capture evidence.', '/ti/enrichment', 'Attach capture IDs and evidence count before delivery or replay.', 'delivery_readiness'))
+            if (code === 'case_route_unavailable') blockers.push(statusBlocker('missing_case_route', 'case', 'case', `relatedAlerts.${alert.id}.deliveryReadinessContext.casePath`, 'Delivery readiness reports that the case route is unavailable.', '/ti/workbench', 'Return case path and case ID candidate from the case workflow before handoff.', 'delivery_readiness'))
+            if (code === 'delivery_disabled') blockers.push(statusBlocker('missing_webhook_destination', 'webhook', 'webhook', `relatedAlerts.${alert.id}.deliveryReadinessContext.webhookDestinationIds`, 'Delivery readiness reports that webhook delivery is not configured.', '/dwm', 'Attach an active webhook destination or mark delivery intentionally disabled.', 'delivery_readiness'))
+            if (code === 'entitlement_denied') blockers.push(statusBlocker('entitlement_blocked', 'entitlement', 'entitlement', `relatedAlerts.${alert.id}.deliveryReadinessContext.entitlement`, 'Delivery readiness reports an entitlement denial.', '/dwm', 'Resolve organization entitlement before replay, delivery, or alert rebuild.', 'delivery_readiness'))
         }
     }
 
@@ -2157,7 +2157,7 @@ function buildPublicTiSourceHealthQueue(input: {
             captureId: source.captureId,
             sourceRequestId: source.sourceRequestId,
             sourceId: source.sourceId,
-            route: matchingGaps[0]?.route || input.exportPayloads.enrichment.backedRoute || '/dashboard/ti/enrichment',
+            route: matchingGaps[0]?.route || input.exportPayloads.enrichment.backedRoute || '/ti/enrichment',
             requestedFields,
             ownerLane: source.status === 'missing_capture' ? 'source' : stale ? 'public-ti' : 'source',
             nextAction: source.status === 'capture_ready'
@@ -2240,7 +2240,7 @@ function buildPublicTiSourceEnrichmentIntake(input: {
         schemaVersion: 'ti.public_actor.source_enrichment_intake.v1',
         query: input.result.query,
         generatedAt: input.result.generatedAt,
-        route: '/dashboard/ti/enrichment',
+        route: '/ti/enrichment',
         items,
         summary: {
             total: items.length,
@@ -2602,7 +2602,7 @@ function buildPublicTiCaseReviewIntake(input: {
             title: row.label,
             score: row.score,
             state,
-            route: row.casePaths[0] || row.route || '/dashboard/ti/workbench',
+            route: row.casePaths[0] || row.route || '/ti/workbench',
             priority: casePriorityForScore(row.score),
             alertIds: row.alertIds,
             casePaths: row.casePaths,
@@ -2865,7 +2865,7 @@ function buildExportPayloads(input: {
             route: 'watchlist',
             method: 'POST',
             endpoint: input.watchlistEndpoint,
-            backedRoute: '/dashboard/dwm',
+            backedRoute: '/dwm',
             blocked: input.watchlistBlockers.length > 0,
             missing: input.watchlistBlockers,
             body: {
@@ -2889,7 +2889,7 @@ function buildExportPayloads(input: {
             route: 'alert_rebuild',
             method: 'POST',
             endpoint: input.alertRebuildEndpoint,
-            backedRoute: '/dashboard/dwm',
+            backedRoute: '/dwm',
             blocked: input.watchlistBlockers.length > 0 || !input.watchlistPayloads.length,
             missing: [
                 ...input.watchlistBlockers,
@@ -2928,7 +2928,7 @@ function buildExportPayloads(input: {
             route: 'webhook_delivery',
             method: 'POST',
             endpoint: input.webhookDeliveryEndpoint,
-            backedRoute: webhookDestinations[0]?.path ?? '/dashboard/dwm',
+            backedRoute: webhookDestinations[0]?.path ?? '/dwm',
             blocked: webhookMissing.length > 0,
             missing: webhookMissing,
             body: input.webhookPayload ?? {
@@ -2951,7 +2951,7 @@ function buildExportPayloads(input: {
             query: input.result.query,
             generatedAt: input.result.generatedAt,
             route: 'enrichment_queue',
-            backedRoute: '/dashboard/ti/enrichment',
+            backedRoute: '/ti/enrichment',
             blocked: enrichmentTasks.length === 0,
             missing: enrichmentTasks.length ? [] : ['No enrichment tasks queued for this actor/query result'],
             body: {
@@ -3066,7 +3066,7 @@ function buildConsumerReadiness(input: {
     }
     const enrichmentRequest: ConsumerReadinessRequest = {
         method: 'POST',
-        path: '/dashboard/ti/enrichment',
+        path: '/ti/enrichment',
         body: input.exportPayloads.enrichment.body,
     }
     const blockers: ConsumerReadinessBlocker[] = [
@@ -3209,7 +3209,7 @@ function normalizeMissingDetails(contractGaps: TiActionabilityContract['enrichme
             severity: 'high',
             detail: 'Source records identify provenance, but no capture IDs are attached for alert replay or case evidence.',
             dependency: 'TI search response sourceProvenance[].captureId or DWM alert evidence provenance',
-            route: '/dashboard/ti/enrichment',
+            route: '/ti/enrichment',
             sourceFamily: 'source_capture',
             requestedFields: ['sourceProvenance[].captureId', 'sourceProvenance[].sourceId', 'sourceProvenance[].provenance'],
         })
@@ -3221,7 +3221,7 @@ function normalizeMissingDetails(contractGaps: TiActionabilityContract['enrichme
             severity: result.recentActivity.length ? 'medium' : 'high',
             detail: 'No related DWM alert IDs are attached, so the public result cannot open or create a backed case yet.',
             dependency: '/v1/dwm/alerts or /v1/dwm/alerts/rebuild alert ID',
-            route: '/dashboard/dwm',
+            route: '/dwm',
             sourceFamily: 'alert',
             requestedFields: ['relatedAlerts[].id', 'relatedAlerts[].casePath', 'handoffs.alertRebuild.endpoint'],
         })
@@ -3233,7 +3233,7 @@ function normalizeMissingDetails(contractGaps: TiActionabilityContract['enrichme
             severity: 'medium',
             detail: 'Actor tools and campaigns are needed to enrich watchlists and explain defensive relevance.',
             dependency: 'TiSearchResponse.actorIntelligence.malwareTools/campaigns',
-            route: '/dashboard/ti/enrichment',
+            route: '/ti/enrichment',
             sourceFamily: 'actor_profile',
             requestedFields: ['actorIntelligence.malwareTools', 'actorIntelligence.campaigns', 'actorIntelligence.sourceProvenance'],
         })
@@ -3262,9 +3262,9 @@ function normalizeRelatedCases(
 }
 
 function routeForGap(gap: NonNullable<TiActionabilityContract['enrichmentGaps']>[number]) {
-    if (/alert|dwm/i.test(`${gap.id} ${gap.dependency}`)) return '/dashboard/dwm'
-    if (/case/i.test(`${gap.id} ${gap.dependency}`)) return '/dashboard/ti/workbench'
-    return '/dashboard/ti/enrichment'
+    if (/alert|dwm/i.test(`${gap.id} ${gap.dependency}`)) return '/dwm'
+    if (/case/i.test(`${gap.id} ${gap.dependency}`)) return '/ti/workbench'
+    return '/ti/enrichment'
 }
 
 function sourceFamilyForGap(gap: NonNullable<TiActionabilityContract['enrichmentGaps']>[number]): EnrichmentGapQueueItem['sourceFamily'] {

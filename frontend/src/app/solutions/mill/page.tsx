@@ -20,7 +20,7 @@ export default function MillSolutionPage() {
                         <h1 className='text-4xl font-semibold md:text-6xl'>Turn security logs into findings your team can investigate.</h1>
                         <p className='max-w-3xl text-lg leading-8 text-ui-muted'>Send JSON events to one Hanasand endpoint. Security Monitoring preserves event context, checks authentication behavior, and gives analysts evidence for suspicious logins, impossible travel, and other threats. Mill is the API service that processes the feed.</p>
                         <div className='flex flex-wrap gap-3'>
-                            <Link href='/dashboard/mill' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas'>Open Security Monitoring <ArrowRight className='h-4 w-4' /></Link>
+                            <Link href='/mill' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas'>Open Security Monitoring <ArrowRight className='h-4 w-4' /></Link>
                             <Link href='/developers' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text'>View API docs</Link>
                         </div>
                     </div>

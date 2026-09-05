@@ -10,7 +10,7 @@ export default async function Page() {
     const token = cookieStore.get('access_token')?.value
 
     if (!token) {
-        redirect('/logout?path=/login%3Fpath%3D/dashboard/notes%26expired=true')
+        redirect('/logout?path=/login%3Fpath%3D/notes%26expired=true')
     }
 
     return (

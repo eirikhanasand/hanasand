@@ -15,7 +15,7 @@ export default async function DwmCaseDetailPage({
     const [{ id }, query, cookieStore] = await Promise.all([params, searchParams, cookies()])
     const identityId = cookieStore.get('id')?.value
     const token = cookieStore.get('access_token')?.value
-    if (!identityId || !token) redirect(`/login?path=${encodeURIComponent(`/dashboard/dwm/cases/${id}`)}`)
+    if (!identityId || !token) redirect(`/login?path=${encodeURIComponent(`/dwm/cases/${id}`)}`)
 
     const organizationId = firstParam(query?.organizationId)?.trim() || undefined
     const tenantId = organizationId || identityId

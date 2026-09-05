@@ -66,11 +66,11 @@ type SystemSummary = {
 }
 
 const relatedLinks = [
-    { href: '/dashboard/logs', label: 'Logs', icon: <TerminalSquare className='h-4 w-4' /> },
-    { href: '/dashboard/automation/cron', label: 'Cron Jobs', icon: <Workflow className='h-4 w-4' /> },
-    { href: '/dashboard/db', label: 'Database', icon: <Database className='h-4 w-4' /> },
-    { href: '/dashboard/mail', label: 'Mail', icon: <Mail className='h-4 w-4' /> },
-    { href: '/dashboard/system/ai', label: 'AI Metrics', icon: <Activity className='h-4 w-4' /> },
+    { href: '/logs', label: 'Logs', icon: <TerminalSquare className='h-4 w-4' /> },
+    { href: '/automation/cron', label: 'Cron Jobs', icon: <Workflow className='h-4 w-4' /> },
+    { href: '/db', label: 'Database', icon: <Database className='h-4 w-4' /> },
+    { href: '/mail', label: 'Mail', icon: <Mail className='h-4 w-4' /> },
+    { href: '/system/ai', label: 'AI Metrics', icon: <Activity className='h-4 w-4' /> },
 ]
 
 export default function SystemDashboard({
@@ -198,7 +198,7 @@ export default function SystemDashboard({
             })
 
             if (response.status === 401) {
-                router.push('/logout?path=/login%3Fpath%3D/dashboard/system%26expired=true')
+                router.push('/logout?path=/login%3Fpath%3D/system%26expired=true')
                 return
             }
 
@@ -234,7 +234,7 @@ export default function SystemDashboard({
             ])
 
             if (metricsResponse.status === 401 || dockerResponse.status === 401) {
-                router.push('/logout?path=/login%3Fpath%3D/dashboard/system%26expired=true')
+                router.push('/logout?path=/login%3Fpath%3D/system%26expired=true')
                 return
             }
 
@@ -303,7 +303,7 @@ export default function SystemDashboard({
         const cookieToken = getCookie('access_token')
         const cookieId = getCookie('id')
         if (!cookieToken || !cookieId) {
-            return router.push('/logout?path=/login%3Fpath%3D/dashboard/system%26expired=true')
+            return router.push('/logout?path=/login%3Fpath%3D/system%26expired=true')
         }
 
         const response = await stopAllVms(cookieToken, cookieId)
@@ -436,7 +436,7 @@ export default function SystemDashboard({
                             <h2 className='text-base font-semibold text-ui-text'>Docker containers</h2>
                             <p className='mt-1 text-sm text-ui-muted'>{containers.length} reporting, {unavailableStats} streaming partial resource stats.</p>
                         </div>
-                        <LinkButton href='/dashboard/logs' icon={<TerminalSquare className='h-4 w-4' />} label='Open Logs' />
+                        <LinkButton href='/logs' icon={<TerminalSquare className='h-4 w-4' />} label='Open Logs' />
                     </div>
                     {containers.length ? (
                         <div className='mt-4 overflow-x-auto'>
@@ -499,7 +499,7 @@ export default function SystemDashboard({
                         <h2 className='text-base font-semibold text-ui-text'>Virtual machines</h2>
                         <p className='mt-1 text-sm text-ui-muted'>{runningVms} running, {stoppedVms} stopped, {normalizedVms.length - runningVms - stoppedVms} checking status.</p>
                     </div>
-                    <Link href='/dashboard/vms' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-raised'>
+                    <Link href='/vms' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-raised'>
                         Open VM inventory
                     </Link>
                 </div>
@@ -674,7 +674,7 @@ function ContainerDetails({
             <div className='mt-4 overflow-hidden rounded-md border border-ui-border bg-ui-canvas' data-system-container-logs-disclosure>
                 <div className='flex items-center justify-between gap-2 px-3 py-2 text-sm font-semibold text-ui-text'>
                     <span>Recent logs</span>
-                    <Link href={`/dashboard/logs?service=${encodeURIComponent(container.name)}`} className='inline-flex items-center gap-1 text-xs font-semibold text-ui-primary hover:underline'>
+                    <Link href={`/logs?service=${encodeURIComponent(container.name)}`} className='inline-flex items-center gap-1 text-xs font-semibold text-ui-primary hover:underline'>
                         Open full logs
                         <ExternalLink className='h-3.5 w-3.5' />
                     </Link>
@@ -708,7 +708,7 @@ function VmTableRow({ vm, metrics }: { vm: VM, metrics?: VMMetrics }) {
             <td className='px-3 py-3'>{metrics ? `${metrics.ram_used_mb}/${metrics.ram_total_mb} MB` : vm.limits_memory || 'checking'}</td>
             <td className='px-3 py-3'>{vm.status || 'Checking'}</td>
             <td className='py-3 pl-3 text-right'>
-                <Link href={`/dashboard/vms/${vm.name}`} className='text-sm font-semibold text-ui-primary hover:underline'>Open</Link>
+                <Link href={`/vms/${vm.name}`} className='text-sm font-semibold text-ui-primary hover:underline'>Open</Link>
             </td>
         </tr>
     )

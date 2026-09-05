@@ -250,7 +250,7 @@ export default async function runSyntheticMonitor() {
             return 'The browser investigation workspace rendered successfully.'
         }),
         check('dark-web-monitoring', 'Monitoring workspace', async () => {
-            const { response, body } = await fetchPage('/dashboard/dwm', {
+            const { response, body } = await fetchPage('/dwm', {
                 Cookie: `id=${encodeURIComponent(runId)}; access_token=${encodeURIComponent(token)}`,
             })
             if (response.status !== 200 || !body.includes('Dark web monitoring')) throw new Error(`Unexpected monitoring workspace response ${response.status}`)

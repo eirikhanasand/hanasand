@@ -255,7 +255,7 @@ test('rejects an undated alert before network or delivery persistence', async ()
         sourceFamily: 'clear_web',
         evidenceCount: 1,
         provenance: { captureIds: ['capture_1'], sourceIds: ['source_1'] },
-        casePath: '/dashboard/dwm?alert=alert_1',
+        casePath: '/dwm?alert=alert_1',
         watchlist: { id: 'watch_1', terms: ['example.com'] },
     }
 
@@ -321,7 +321,7 @@ test('retries a failed report after persistence reload with the exact stored pay
         watchlist_id: null,
         watchlist_name: null,
         route: 'customer_webhook',
-        case_path: '/dashboard/dwm/cases/case_1',
+        case_path: '/dwm/cases/case_1',
         attempted_at: '2026-07-23T10:00:00.000Z',
         completed_at: '2026-07-23T10:00:01.000Z',
         delivered_at: null,
@@ -755,7 +755,7 @@ function deliveryInput(dedupeKey: string, dryRun: boolean) {
             evidenceCount: 1,
             provenance: { captureIds: ['capture_1'], sourceIds: ['source_1'] },
             firstSeenAt: '2026-07-23T10:00:00.000Z',
-            casePath: '/dashboard/dwm?alert=alert_1',
+            casePath: '/dwm?alert=alert_1',
             watchlist: { id: 'watch_1', terms: ['example.com'] },
         },
     }
@@ -827,7 +827,7 @@ function failedDeliveryFixture(nextRetryAt: string) {
         watchlist_id: null,
         watchlist_name: null,
         route: 'customer_webhook',
-        case_path: '/dashboard/dwm/cases/case_1',
+        case_path: '/dwm/cases/case_1',
         attempted_at: '2020-07-23T10:00:00.000Z',
         completed_at: '2020-07-23T10:00:01.000Z',
         delivered_at: null,

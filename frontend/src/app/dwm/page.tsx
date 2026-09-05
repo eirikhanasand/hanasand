@@ -13,8 +13,8 @@ export const metadata: Metadata = buildRouteMetadata({
 export default async function DarkWebMonitoringPage() {
     const cookieStore = await cookies()
     if (cookieStore.get('id')?.value && cookieStore.get('access_token')?.value) {
-        redirect('/dashboard/dwm')
+        redirect('/dwm')
     }
 
-    redirect('/login?path=%2Fdashboard%2Fdwm')
+    redirect('/login?path=%2Fdwm')
 }

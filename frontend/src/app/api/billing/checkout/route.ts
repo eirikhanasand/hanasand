@@ -16,10 +16,10 @@ export async function GET(request: Request) {
     const cookieStore = await cookies()
     const token = cookieStore.get('access_token')?.value
     const id = cookieStore.get('id')?.value
-    if (!token || !id) return NextResponse.redirect(new URL('/login?next=/dashboard/subscription', siteUrl))
+    if (!token || !id) return NextResponse.redirect(new URL('/login?next=/subscription', siteUrl))
 
     const session = await tokenIsValid(token, id)
-    if (!session.valid) return NextResponse.redirect(new URL('/login?next=/dashboard/subscription', siteUrl))
+    if (!session.valid) return NextResponse.redirect(new URL('/login?next=/subscription', siteUrl))
 
     const billingResponse = await fetch(`${authApiUrl().replace(/\/$/, '')}/billing/subscription`, {
         headers: { Authorization: `Bearer ${token}`, id },
@@ -43,8 +43,8 @@ export async function GET(request: Request) {
         'line_items[0][price_data][product_data][name]': plan.name,
         'line_items[0][price_data][product_data][description]': `${plan.quota}. ${plan.summary}`,
         'line_items[0][quantity]': '1',
-        success_url: `${siteUrl}/dashboard/subscription?checkout=success`,
-        cancel_url: `${siteUrl}/dashboard/subscription?checkout=cancelled`,
+        success_url: `${siteUrl}/subscription?checkout=success`,
+        cancel_url: `${siteUrl}/subscription?checkout=cancelled`,
         'metadata[user_id]': id,
         'metadata[plan_id]': plan.id,
         'subscription_data[metadata][user_id]': id,

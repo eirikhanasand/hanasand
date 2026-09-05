@@ -6,6 +6,7 @@ import ThemeSwitch from '@/components/theme/themeSwitch'
 import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, Gauge, LockKeyhole, MenuIcon, Network, Radar, Search, ShieldAlert, ShieldCheck, X } from 'lucide-react'
 import Login from '@/components/login/login'
 import Logout from '@/components/logout/logout'
+import { isInternalAppPath, hasAppSidebar } from '@/utils/routes/appRoutes'
 import Dashboard from '@/components/dashboard/dashboard'
 import Menu from '@/components/menu/menu'
 import Link from 'next/link'
@@ -88,8 +89,8 @@ function PublicMobileMenu({ token }: { token: boolean }) {
     const [open, setOpen] = useState(false)
     const links = token
         ? mobilePublicLinks.map(item => {
-            if (item.href === '/dwm') return { ...item, href: '/dashboard/dwm' }
-            if (item.href === '/pricing') return { ...item, href: '/dashboard/subscription' }
+            if (item.href === '/dwm') return { ...item, href: '/dwm' }
+            if (item.href === '/pricing') return { ...item, href: '/subscription' }
             return item
         })
         : mobilePublicLinks
@@ -130,14 +131,14 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
     const isStatus = pathname.includes('/status')
     const isShare = isSharePath(pathname)
     const isAI = pathname.endsWith('/ai') || pathname.includes('/ai/')
-    const isDashboard = pathname.startsWith('/dashboard')
+    const isDashboard = isInternalAppPath(pathname)
     const isProfile = pathname.startsWith('/profile')
     const isPublicProduct = isPublicProductPath(pathname)
     const isLoggedInConsoleProduct = token && (pathname === '/ti' || pathname.startsWith('/ti/'))
     const isOrganizations = pathname.startsWith('/organizations')
-    const isAppSurface = isLoggedInConsoleProduct || (!isPublicProduct && (isShare || isAI || isDashboard || isProfile || isOrganizations))
-    const darkWebHref = token ? '/dashboard/dwm' : '/dwm'
-    const pricingHref = token ? '/dashboard/subscription' : '/pricing'
+    const isAppSurface = isDashboard || (token && hasAppSidebar(pathname)) || isLoggedInConsoleProduct || (!isPublicProduct && (isShare || isAI || isDashboard || isProfile || isOrganizations))
+    const darkWebHref = token ? '/dwm' : '/dwm'
+    const pricingHref = token ? '/subscription' : '/pricing'
 
     if (!isAppSurface) {
         return (
@@ -146,8 +147,8 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                     <BrandLogo />
 
                     <nav className='hidden items-center gap-5 lg:flex'>
-                        <PublicDropdown label='Product' items={token ? productItems.map(item => item.href === '/dwm' ? { ...item, href: '/dashboard/dwm' } : item) : productItems} />
-                        <PublicDropdown label='Solutions' items={token ? solutionItems.map(item => item.href === '/dwm' ? { ...item, href: '/dashboard/dwm' } : item) : solutionItems} />
+                        <PublicDropdown label='Product' items={token ? productItems.map(item => item.href === '/dwm' ? { ...item, href: '/dwm' } : item) : productItems} />
+                        <PublicDropdown label='Solutions' items={token ? solutionItems.map(item => item.href === '/dwm' ? { ...item, href: '/dwm' } : item) : solutionItems} />
                         <Link href='/developers' className='inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>
                             Developers
                             <Code2 className='h-4 w-4 text-ui-muted' />
@@ -160,7 +161,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                         <SiteSearch token={token} />
                         <ThemeSwitch />
                         <Link href='/support' className='hidden h-10 min-w-20 items-center justify-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text md:inline-flex'>Support</Link>
-                        <Link href={token ? '/dashboard/overview' : '/login'} className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90'>
+                        <Link href={token ? '/dashboard' : '/login'} className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90'>
                             Go to Dashboard
                         </Link>
                         <Link href='/ti' aria-label='Search intelligence' className='hidden h-11 w-11 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-raised hover:text-ui-text sm:grid lg:hidden'>
@@ -182,7 +183,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                     {!isDashboard && !isProfile && !isOrganizations && (
                         <nav className='hidden items-center gap-1 lg:flex'>
                             {token ? (
-                                <Link href='/dashboard/overview' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Dashboard</Link>
+                                <Link href='/dashboard' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Dashboard</Link>
                             ) : null}
                             <Link href='/ti' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Threat search</Link>
                             <Link href='/browser' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Browser</Link>

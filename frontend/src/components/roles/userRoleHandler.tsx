@@ -25,7 +25,7 @@ export default function UserRoleHandler({ displayRoles, roles, user }: UserRoleH
             const token = getCookie('access_token')
 
             if (!id || !token) {
-                return redirect('/logout?path=/login%3Fpath%3D/dashboard/management%26expired=true')
+                return redirect('/logout?path=/login%3Fpath%3D/management%26expired=true')
             }
 
             const response = await getUserRoles({ id, token, target: user.id })
@@ -56,7 +56,7 @@ function Role({ role, user, userRoles }: { role: Role, user: UserWithRole, userR
         const token = getCookie('access_token')
 
         if (!id || !token) {
-            return redirect('/logout?path=/login%3Fpath%3D/dashboard/management%26expired=true')
+            return redirect('/logout?path=/login%3Fpath%3D/management%26expired=true')
         }
 
         if (active) {

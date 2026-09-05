@@ -140,7 +140,7 @@ async function openManagementPage(browser: Browser) {
         { name: 'roles', value: encodeURIComponent(JSON.stringify([{ id: 'administrator' }, { id: 'user_admin' }])), url: appBase, expires: cookieExpiry(), sameSite: 'Lax' },
     ])
     const page = await context.newPage()
-    await page.goto('/dashboard/management', { waitUntil: 'networkidle' })
+    await page.goto('/management', { waitUntil: 'networkidle' })
     await expect(page.getByRole('heading', { name: 'User management', exact: true })).toBeVisible()
     await expect(page.getByText('Target User')).toBeVisible()
     return { context, page }
