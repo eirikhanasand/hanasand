@@ -8,11 +8,29 @@ import { formatTiDate } from '@/utils/tiAdmin/ops'
 export const dynamic = 'force-dynamic'
 
 export default async function TiActivityPage() {
-    const { activity, updatedActors, worker, stats } = await getTiEnrichmentOverview()
+    const { activity, updatedActors, worker, stats, dataAvailable } = await getTiEnrichmentOverview()
     const sortedActivity = [...activity].sort((a, b) => new Date(b.happenedAt).getTime() - new Date(a.happenedAt).getTime())
     const badEvents = sortedActivity.filter(event => event.tone === 'bad')
     const watchEvents = sortedActivity.filter(event => event.tone === 'watch')
     const lastEvent = sortedActivity[0]
+
+    if (!dataAvailable || (!activity.length && !updatedActors.length)) {
+        const unavailable = !dataAvailable
+        const failed = Boolean(worker.lastError)
+        return (
+            <DashboardPage>
+                <DashboardPanel className='overflow-hidden p-0'>
+                    <h1 className='border-b border-ui-border px-4 py-3 text-lg font-semibold text-ui-text'>Latest activity</h1>
+                    <div className='flex min-h-56 flex-col items-center justify-center gap-2 px-4 py-16 text-center text-ui-muted' data-ti-activity-state={unavailable ? 'error' : failed ? 'attention' : 'empty'}>
+                        <Activity className='mb-2 h-6 w-6' aria-hidden='true' />
+                        <p className={`font-semibold ${unavailable || failed ? 'text-ui-danger' : 'text-ui-text'}`} role={unavailable || failed ? 'alert' : undefined}>{unavailable ? 'Activity is temporarily unavailable.' : failed ? 'The latest profile update failed.' : 'Welcome to activity'}</p>
+                        <p className='max-w-md text-sm leading-6'>{unavailable ? 'We could not load the latest observations. Try again to check for updates.' : failed ? 'No observations are available yet. Try again to check whether profile updates have recovered.' : 'No observations yet. This page shows recorded actor profile changes and their linked evidence.'}</p>
+                        <form action='/ti/activity' method='get'><button type='submit' className='mt-3 rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:border-ui-primary'>{unavailable || failed ? 'Try again' : 'Check for updates'}</button></form>
+                    </div>
+                </DashboardPanel>
+            </DashboardPage>
+        )
+    }
 
     return (
         <DashboardPage>
@@ -27,7 +45,7 @@ export default async function TiActivityPage() {
                 <Metric title='Monitoring signals' value={`${badEvents.length + watchEvents.length}`} tone={badEvents.length ? 'bad' : watchEvents.length ? 'watch' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
                 <Metric title='Actors updated' value={`${updatedActors.length}`} icon={<CheckCircle2 className='h-4 w-4' />} />
                 <Metric title='Updated last hour' value={`${stats.updatedLastHour}`} icon={<Radio className='h-4 w-4' />} />
-                <Metric title='Last event' value={lastEvent ? shortTime(lastEvent.happenedAt) : 'Checking'} icon={<Clock3 className='h-4 w-4' />} />
+                <Metric title='Last event' value={lastEvent ? shortTime(lastEvent.happenedAt) : 'No events yet'} icon={<Clock3 className='h-4 w-4' />} />
             </div>
 
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
@@ -39,8 +57,8 @@ export default async function TiActivityPage() {
                         </div>
                         <div className='flex flex-wrap gap-2 text-xs font-semibold'>
                             <StatusPill label={operationalStateLabel(worker.state)} tone={worker.state === 'unavailable' ? 'bad' : worker.state === 'active' ? 'ok' : 'watch'} />
-                            <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-1 text-ui-muted'>last sweep {worker.lastSweepFinishedAt ? shortTime(worker.lastSweepFinishedAt) : 'checking'}</span>
-                            <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-1 text-ui-muted'>{worker.batchSize || 0} actors/pass</span>
+                            <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-1 text-ui-muted'>last sweep {worker.lastSweepFinishedAt ? shortTime(worker.lastSweepFinishedAt) : 'not recorded'}</span>
+                            <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-1 text-ui-muted'>{updatedActors.length} actors loaded</span>
                         </div>
                     </div>
                 </div>
@@ -83,7 +101,7 @@ export default async function TiActivityPage() {
                             ))}
                             {!sortedActivity.length ? (
                                 <tr>
-                                    <td colSpan={6} className='px-4 py-8 text-center text-sm text-ui-muted'>Automated collection is running; new observations are recorded automatically.</td>
+                                    <td colSpan={6} className='px-4 py-8 text-center text-sm text-ui-muted'>No observations recorded yet for these actor profiles.</td>
                                 </tr>
                             ) : null}
                         </tbody>
@@ -96,7 +114,8 @@ export default async function TiActivityPage() {
                     <h2 className='text-base font-semibold text-ui-text'>Monitoring status</h2>
                     <div className='mt-3 grid gap-2'>
                         {[...badEvents, ...watchEvents].slice(0, 6).map(event => <AttentionRow key={event.id} event={event} />)}
-                        {!badEvents.length && !watchEvents.length ? <p className='rounded-md border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>No active monitoring issues.</p> : null}
+                        {worker.lastError ? <p role='alert' className='text-sm text-ui-danger'>The latest profile update failed. Check again for recovery.</p> : null}
+                        {!worker.lastError && !badEvents.length && !watchEvents.length ? <p className='rounded-md border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>No monitoring issues in the latest observations.</p> : null}
                     </div>
                 </DashboardPanel>
 
@@ -116,7 +135,7 @@ export default async function TiActivityPage() {
                                 <p className='mt-1 truncate text-sm text-ui-muted'>{actor.changedFields.length ? actor.changedFields.join(', ') : 'No field changes in the latest refresh'}</p>
                             </Link>
                         ))}
-                        {!updatedActors.length ? <p className='text-sm text-ui-muted'>Actor refresh stream is active; updated profiles stream here.</p> : null}
+                        {!updatedActors.length ? <p className='text-sm text-ui-muted'>No actor profiles recorded yet.</p> : null}
                     </div>
                 </DashboardPanel>
             </div>

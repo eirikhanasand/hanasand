@@ -52,6 +52,7 @@ export type TiManagementAuditEvent = {
 
 export type TiEnrichmentOverview = {
     generatedAt: string
+    dataAvailable: boolean
     worker: {
         state: TiWorkerState
         mode: string
@@ -143,30 +144,14 @@ export type TiPipelineOverview = {
     }>
 }
 
-// ponytail: serve the last snapshot immediately; a slow scraper must not block dashboard navigation.
-const ENRICHMENT_CACHE_TTL_MS = 5_000
-let enrichmentCache: { value: TiEnrichmentOverview, expiresAt: number, refreshing?: Promise<void> } | undefined
-
+// Next's fetch cache handles reuse; await the first snapshot before rendering.
 export async function getTiEnrichmentOverview(): Promise<TiEnrichmentOverview> {
-    const now = Date.now()
-    if (enrichmentCache?.expiresAt && enrichmentCache.expiresAt > now) return enrichmentCache.value
-    if (enrichmentCache?.refreshing) return enrichmentCache.value
-
-    const value = enrichmentCache?.value || passiveOverview([], [], undefined)
-    enrichmentCache = { value, expiresAt: now + ENRICHMENT_CACHE_TTL_MS }
-    enrichmentCache.refreshing = refreshEnrichmentCache().finally(() => {
-        if (enrichmentCache?.refreshing) delete enrichmentCache.refreshing
-    })
-    return value
-}
-
-async function refreshEnrichmentCache() {
     const [profiles, updates, status] = await Promise.all([
         getPersistedActorProfiles(),
         getPersistedProfileUpdates(),
         getPersistedEnrichmentStatus(),
     ])
-    enrichmentCache = { value: passiveOverview(profiles, updates, status), expiresAt: Date.now() + ENRICHMENT_CACHE_TTL_MS }
+    return passiveOverview(profiles ?? [], updates ?? [], status, Boolean(profiles && updates && status))
 }
 
 type PersistedEnrichmentStatus = {
@@ -181,7 +166,8 @@ async function getPersistedEnrichmentStatus(): Promise<PersistedEnrichmentStatus
         const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
         const response = await fetch(target, { cache: 'force-cache', next: { revalidate: 5 }, headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined, signal: AbortSignal.timeout(2_000) })
         if (!response.ok) return undefined
-        return await response.json() as PersistedEnrichmentStatus
+        const payload = await response.json() as PersistedEnrichmentStatus
+        return payload.worker && ['active', 'idle', 'unavailable'].includes(payload.worker.state) ? payload : undefined
     } catch {
         return undefined
     }
@@ -201,7 +187,7 @@ type PersistedActorProfile = {
     actorType: string
 }
 
-async function getPersistedActorProfiles(): Promise<PersistedActorProfile[]> {
+async function getPersistedActorProfiles(): Promise<PersistedActorProfile[] | undefined> {
     try {
         const base = tiScraperApiBase()
         const target = new URL('/v1/intel/actor-profiles', base)
@@ -214,15 +200,15 @@ async function getPersistedActorProfiles(): Promise<PersistedActorProfile[]> {
             headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined,
             signal: AbortSignal.timeout(5_000),
         })
-        if (!response.ok) return []
+        if (!response.ok) return undefined
         const payload = await response.json() as { actorProfiles?: unknown[] }
-        return (payload.actorProfiles || []).map(profile => persistedProfile(profile)).filter((profile): profile is PersistedActorProfile => Boolean(profile))
+        return payload.actorProfiles?.map(profile => persistedProfile(profile)).filter((profile): profile is PersistedActorProfile => Boolean(profile))
     } catch {
-        return []
+        return undefined
     }
 }
 
-async function getPersistedProfileUpdates(): Promise<TiProfileUpdate[]> {
+async function getPersistedProfileUpdates(): Promise<TiProfileUpdate[] | undefined> {
     try {
         const target = new URL('/v1/intel/evidence-deltas', tiScraperApiBase())
         target.searchParams.set('tenantId', 'default')
@@ -230,11 +216,11 @@ async function getPersistedProfileUpdates(): Promise<TiProfileUpdate[]> {
         target.searchParams.set('limit', '100')
         const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
         const response = await fetch(target, { cache: 'force-cache', next: { revalidate: 5 }, headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined, signal: AbortSignal.timeout(5_000) })
-        if (!response.ok) return []
+        if (!response.ok) return undefined
         const payload = await response.json() as { evidenceDeltas?: unknown[] }
-        return (payload.evidenceDeltas || []).map(profileUpdate).filter((update): update is TiProfileUpdate => Boolean(update))
+        return payload.evidenceDeltas?.map(profileUpdate).filter((update): update is TiProfileUpdate => Boolean(update))
     } catch {
-        return []
+        return undefined
     }
 }
 
@@ -273,7 +259,7 @@ function persistedProfile(value: unknown): PersistedActorProfile | undefined {
     }
 }
 
-function passiveOverview(profiles: PersistedActorProfile[], updates: TiProfileUpdate[], status?: PersistedEnrichmentStatus): TiEnrichmentOverview {
+function passiveOverview(profiles: PersistedActorProfile[], updates: TiProfileUpdate[], status: PersistedEnrichmentStatus | undefined, dataAvailable: boolean): TiEnrichmentOverview {
     const actors = new Map<string, TiEnrichedActor>()
     for (const profile of profiles) {
         const links = profile.sourceIds.map(sourceId => ({ name: sourceId, url: '' }))
@@ -309,8 +295,9 @@ function passiveOverview(profiles: PersistedActorProfile[], updates: TiProfileUp
     const updatedLastHour = activity.filter((event) => Date.now() - Date.parse(event.happenedAt) <= 3_600_000).length
     return {
         generatedAt: new Date().toISOString(),
+        dataAvailable,
         worker: {
-            state: status?.worker.state ?? 'unavailable',
+            state: dataAvailable ? status?.worker.state ?? 'unavailable' : 'unavailable',
             mode: 'automated monitoring',
             intervalSeconds: 300,
             batchSize: profiles.length,
