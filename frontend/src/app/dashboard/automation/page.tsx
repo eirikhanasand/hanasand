@@ -1,5 +1,5 @@
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
-import AutomationsClient from '../automations/simplePageClient'
+import AutomationsClient from './simplePageClient'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {

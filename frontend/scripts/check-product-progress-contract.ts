@@ -537,10 +537,10 @@ assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.endToEndWorkflowStepCount, 8)
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.endToEndWorkflowReadyStepCount, 8)
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'entitlement_readiness')?.href, '/dashboard/dwm')
-assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_delivery')?.href, '/dashboard/automations?setup=dwm')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_delivery')?.href, '/dashboard/automation?setup=dwm')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'dwm_product_snapshot')?.href, '/dashboard/dwm')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'org_alert_export')?.href, '/dashboard/dwm')
-assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.href, '/dashboard/automations?setup=dwm')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.href, '/dashboard/automation?setup=dwm')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'helpdesk_audit')?.href, '/dashboard/system/impersonation')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'deploy_probe')?.href, '/status')
 
@@ -611,7 +611,7 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         status: 'ready',
         checkedAt: generatedAt,
         source: '/api/organizations/org_acme/webhooks',
-        href: '/dashboard/automations?setup=dwm',
+        href: '/dashboard/automation?setup=dwm',
         destinationCount: 1,
         activeDestinationCount: 1,
         deliveryReadyCount: 1,

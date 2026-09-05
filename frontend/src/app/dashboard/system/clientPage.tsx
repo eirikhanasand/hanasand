@@ -67,7 +67,7 @@ type SystemSummary = {
 
 const relatedLinks = [
     { href: '/dashboard/logs', label: 'Logs', icon: <TerminalSquare className='h-4 w-4' /> },
-    { href: '/dashboard/cron-jobs', label: 'Cron Jobs', icon: <Workflow className='h-4 w-4' /> },
+    { href: '/dashboard/automation/cron', label: 'Cron Jobs', icon: <Workflow className='h-4 w-4' /> },
     { href: '/dashboard/db', label: 'Database', icon: <Database className='h-4 w-4' /> },
     { href: '/dashboard/mail', label: 'Mail', icon: <Mail className='h-4 w-4' /> },
     { href: '/dashboard/system/ai', label: 'AI Metrics', icon: <Activity className='h-4 w-4' /> },

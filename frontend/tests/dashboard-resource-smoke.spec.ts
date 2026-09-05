@@ -65,7 +65,7 @@ const privilegedDashboardRoutes = [
     { path: '/dashboard/projects', heading: 'Projects' },
     { path: '/dashboard/shares', heading: 'Code shares and projects' },
     { path: '/dashboard/mail', heading: 'Mail' },
-    { path: '/dashboard/automations', heading: 'Automations' },
+    { path: '/dashboard/automation', heading: 'Automations' },
     { path: '/dashboard/notes', heading: 'Notes' },
     { path: '/dashboard/traffic', heading: 'Traffic' },
     { path: '/dashboard/system', heading: 'System metrics' },
@@ -78,20 +78,20 @@ const privilegedDashboardRoutes = [
     { path: '/dashboard/db', heading: 'Database' },
     { path: '/dashboard/db/backups', heading: 'Database backups' },
     { path: '/dashboard/system/rates', heading: 'Rate Limits' },
-    { path: '/dashboard/cron-jobs', heading: 'Cron Jobs' },
+    { path: '/dashboard/automation/cron', heading: 'Cron Jobs' },
     { path: '/dashboard/system/impersonation', heading: /Support access|Impersonation/ },
     { path: '/dashboard/management', heading: 'Admin' },
 ]
 
 const adminOnlyOperationHrefs = [
-    '/dashboard/automations',
+    '/dashboard/automation',
     '/dashboard/projects',
     '/dashboard/shares',
     '/dashboard/logs',
     '/dashboard/mail',
     '/dashboard/db',
     '/dashboard/system/rates',
-    '/dashboard/cron-jobs',
+    '/dashboard/automation/cron',
     '/dashboard/system/impersonation',
     '/dashboard/management',
 ]
@@ -352,7 +352,7 @@ test.describe('dashboard resource routes', () => {
                 response.request().method() === 'GET' &&
                 response.ok()
             )
-            await page.goto('/dashboard/automations', { waitUntil: 'domcontentloaded' })
+            await page.goto('/dashboard/automation', { waitUntil: 'domcontentloaded' })
             await expect(page).toHaveURL(/\/dashboard\/automations$/)
             await automationsLoaded
             await expect(page.getByText('No automations yet.')).toBeVisible()

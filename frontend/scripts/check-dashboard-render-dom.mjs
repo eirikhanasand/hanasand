@@ -9,9 +9,9 @@ const expectedRows = {
     end_to_end_workflow: '/dashboard/ti/sources',
     dwm_product_snapshot: '/dashboard/dwm',
     entitlement_readiness: '/dashboard/dwm',
-    webhook_delivery: '/dashboard/automations?setup=dwm',
+    webhook_delivery: '/dashboard/automation?setup=dwm',
     org_alert_export: '/dashboard/dwm',
-    webhook_health: '/dashboard/automations?setup=dwm',
+    webhook_health: '/dashboard/automation?setup=dwm',
     organization_webhook_settings: '/organizations',
     helpdesk_audit: '/dashboard/system/impersonation',
     deploy_probe: '/status',
@@ -60,7 +60,7 @@ const pageSpecs = [
     },
     {
         id: 'cron_jobs',
-        path: '/dashboard/system/cron',
+        path: '/dashboard/automation/cron',
         requiredSelectors: ['main', 'button'],
     },
     {
@@ -90,7 +90,7 @@ const pageSpecs = [
     },
     {
         id: 'automations',
-        path: '/dashboard/automations',
+        path: '/dashboard/automation',
         requiredSelectors: ['main'],
     },
     {
