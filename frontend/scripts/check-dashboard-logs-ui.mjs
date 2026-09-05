@@ -181,7 +181,7 @@ async function run() {
                     reasons: [],
                 }
                 try {
-                    await gotoLogsPage(page, `${options.baseUrl}/dashboard/logs?service=api`)
+                    await gotoLogsPage(page, `${options.baseUrl}/logs?service=api`)
                     pageResult.reasons.push(...await exerciseLogsInteractions(page))
                     Object.assign(pageResult, await inspectLogsPage(page))
                     await page.screenshot({ path: imagePath, fullPage: true, timeout: 60000 })

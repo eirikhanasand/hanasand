@@ -44,7 +44,7 @@ export default function MonitorClient({ initialRows }: { initialRows: MonitorRow
                         <h1 className='mt-1 text-2xl font-semibold tracking-normal text-ui-text md:text-3xl'>Monitored domains</h1>
                         <p className='mt-1 text-sm text-ui-muted'>{rows.length}/{initialRows.length} shown · {sum(rows, 'breachMentions')} breach mentions · {sum(rows, 'requestsToday')} requests today</p>
                     </div>
-                    <Link href='/dashboard/overview' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                    <Link href='/dashboard' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
                         <ArrowRight className='h-4 w-4 rotate-180' />
                         Overview
                     </Link>

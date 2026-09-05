@@ -52,7 +52,7 @@ test('load testing dashboard renders one primary launch flow and switchable hist
         await route.fulfill({ json: { ...fixtureMineCheck, id: 'new-check-123' } })
     })
 
-    await page.goto('/dashboard/load-testing', { waitUntil: 'domcontentloaded' })
+    await page.goto('/load-testing', { waitUntil: 'domcontentloaded' })
 
     await expect(page.getByRole('heading', { name: 'Load testing and endpoint evidence' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Check an endpoint you control' })).toBeVisible()

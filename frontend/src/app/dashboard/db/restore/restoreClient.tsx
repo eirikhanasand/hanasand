@@ -62,7 +62,7 @@ export default function RestoreClient({ backups, service, loadError = '' }: { ba
             <section className='rounded-xl border border-ui-border bg-ui-panel p-4 sm:p-5' aria-labelledby='restore-controls-heading'>
                 <div className='flex items-center justify-between gap-3'>
                     <h2 id='restore-controls-heading' className='font-semibold text-ui-text'>Drill controls</h2>
-                    <Link href='/dashboard/db/backups' className='text-sm font-semibold text-ui-primary hover:underline'>Back to backups</Link>
+                    <Link href='/db/backups' className='text-sm font-semibold text-ui-primary hover:underline'>Back to backups</Link>
                 </div>
                 <div className='mt-4 grid gap-4'>
                     <label className='grid gap-1.5 text-sm font-medium text-ui-text'>

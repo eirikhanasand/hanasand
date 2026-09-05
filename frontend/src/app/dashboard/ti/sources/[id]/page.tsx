@@ -51,7 +51,7 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
             <TiDataAvailability availability={overview.availability} />
 
             <div className='flex'>
-                <Link href={`/dashboard/ti/sources?scope=${scope}`} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>
+                <Link href={`/ti/sources?scope=${scope}`} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>
                     <ArrowLeft className='h-4 w-4' />
                     Sources
                 </Link>
@@ -135,7 +135,7 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                                     {captureDomains.map(item => (
                                         <div key={item.domain} className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3 sm:grid-cols-[1fr_auto] sm:items-center'>
                                             <div className='min-w-0'>
-                                                <Link href={`/dashboard/ti/domains/${encodeURIComponent(item.domain)}`} className='truncate font-mono text-sm font-semibold text-ui-text hover:text-ui-primary'>{item.domain}</Link>
+                                                <Link href={`/ti/domains/${encodeURIComponent(item.domain)}`} className='truncate font-mono text-sm font-semibold text-ui-text hover:text-ui-primary'>{item.domain}</Link>
                                                 <p className='mt-1 text-xs text-ui-muted'>{item.actors.join(', ') || 'Actor label syncing'}</p>
                                             </div>
                                             <div className='text-right'>
@@ -268,7 +268,7 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                         <SidePanel title='Watched targets' icon={<ExternalLink className='h-4 w-4' />}>
                             <div className='flex flex-wrap gap-2'>
                                 {source.domains.map(domain => (
-                                    <Link key={domain} href={`/dashboard/ti/domains/${encodeURIComponent(domain)}`} className='rounded-full border border-ui-border bg-ui-panel px-2.5 py-1 font-mono text-xs text-ui-text hover:bg-ui-raised'>{domain}</Link>
+                                    <Link key={domain} href={`/ti/domains/${encodeURIComponent(domain)}`} className='rounded-full border border-ui-border bg-ui-panel px-2.5 py-1 font-mono text-xs text-ui-text hover:bg-ui-raised'>{domain}</Link>
                                 ))}
                             </div>
                             <div className='mt-4 flex flex-wrap gap-2'>

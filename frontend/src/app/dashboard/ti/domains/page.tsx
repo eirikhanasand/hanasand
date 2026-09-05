@@ -78,7 +78,7 @@ export default async function TiDomainsPage() {
                         {rows.map(row => (
                             <div key={row.domain.domain} className='grid grid-cols-[1fr_0.9fr_0.7fr_0.75fr_0.8fr_1fr_0.9fr_0.65fr] gap-3 border-t border-ui-border px-4 py-2.5 text-sm hover:bg-ui-raised'>
                                 <div className='min-w-0'>
-                                    <Link href={`/dashboard/ti/domains/${encodeURIComponent(row.domain.domain)}`} className='font-semibold text-ui-text hover:text-ui-primary'>{row.domain.company}</Link>
+                                    <Link href={`/ti/domains/${encodeURIComponent(row.domain.domain)}`} className='font-semibold text-ui-text hover:text-ui-primary'>{row.domain.company}</Link>
                                     <p className='mt-1 truncate font-mono text-xs text-ui-muted'>{row.domain.domain}</p>
                                 </div>
                                 <span className={statusClass(row.domain.status)}>{row.domain.status}</span>
@@ -90,7 +90,7 @@ export default async function TiDomainsPage() {
                                 <span className='font-semibold text-ui-text'>{row.captures.length} captures</span>
                                 <p className='truncate text-ui-muted'>{row.sources.map(source => source?.name).join(', ')}</p>
                                 <p className='truncate font-mono text-xs text-ui-text'>{row.domain.matchedTerms.join(', ')}</p>
-                                <Link href={`/dashboard/ti/domains/${encodeURIComponent(row.domain.domain)}`} className='inline-flex h-8 w-fit items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text hover:border-ui-primary'>
+                                <Link href={`/ti/domains/${encodeURIComponent(row.domain.domain)}`} className='inline-flex h-8 w-fit items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text hover:border-ui-primary'>
                                     Open
                                     <ArrowRight className='h-3.5 w-3.5' />
                                 </Link>
@@ -111,7 +111,7 @@ export default async function TiDomainsPage() {
                     </div>
                     <div className='mt-4 grid gap-2'>
                         {rows.filter(row => row.domain.status === 'review').map(row => (
-                            <Link key={row.domain.domain} href={`/dashboard/ti/domains/${encodeURIComponent(row.domain.domain)}`} className='grid gap-3 rounded-md border border-ui-border bg-ui-raised p-3 md:grid-cols-[1fr_auto] md:items-center hover:border-ui-primary'>
+                            <Link key={row.domain.domain} href={`/ti/domains/${encodeURIComponent(row.domain.domain)}`} className='grid gap-3 rounded-md border border-ui-border bg-ui-raised p-3 md:grid-cols-[1fr_auto] md:items-center hover:border-ui-primary'>
                                 <div>
                                     <p className='font-semibold text-ui-text'>{row.domain.company}</p>
                                     <p className='mt-1 text-sm text-ui-muted'>{row.domain.domain} · {row.domain.resultCount} results · {row.captures.length} captures</p>

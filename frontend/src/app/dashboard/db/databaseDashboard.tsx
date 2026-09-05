@@ -11,7 +11,7 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
     const longRunningQueries = overview.queries.filter(query => query.isLongRunning)
     const activeQueryCount = overview.activeQueries ?? overview.queries.filter(query => query.state === 'active').length
     const databaseRows = overview.clusters.flatMap(cluster => cluster.databases.map(database => ({ cluster, database })))
-    const primaryHref = unavailable ? '/dashboard/logs' : activeQueryCount > 0 ? '#active-queries' : '#storage-inventory'
+    const primaryHref = unavailable ? '/logs' : activeQueryCount > 0 ? '#active-queries' : '#storage-inventory'
     const primaryAction = unavailable ? 'Open logs' : activeQueryCount > 0 ? 'Review queries' : 'Review inventory'
     const primaryTitle = unavailable
         ? 'Restore telemetry'
@@ -68,11 +68,11 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
                     <Link href={primaryHref} className='inline-flex min-h-10 items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40' data-db-primary-action>
                         {primaryAction}
                     </Link>
-                    <Link href='/dashboard/db/backups' className='inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'>
+                    <Link href='/db/backups' className='inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'>
                         <DatabaseBackup className='h-4 w-4' />
                         Backups
                     </Link>
-                    <Link href='/dashboard/db/restore' className='inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'>
+                    <Link href='/db/restore' className='inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'>
                         <ArchiveRestore className='h-4 w-4' />
                         Restore
                     </Link>
@@ -232,8 +232,8 @@ function OperationLane({ icon, title, value, detail, tone }: { icon: ReactNode, 
 export function DatabaseActions() {
     return (
         <div className='flex flex-wrap gap-2'>
-            <ActionLink href='/dashboard/db/backups' icon={<DatabaseBackup className='h-4 w-4' />} label='Backups' />
-            <ActionLink href='/dashboard/db/restore' icon={<ArchiveRestore className='h-4 w-4' />} label='Restore' />
+            <ActionLink href='/db/backups' icon={<DatabaseBackup className='h-4 w-4' />} label='Backups' />
+            <ActionLink href='/db/restore' icon={<ArchiveRestore className='h-4 w-4' />} label='Restore' />
         </div>
     )
 }

@@ -1,3 +1,4 @@
+import { appPagePath, canonicalAppPath } from './utils/routes/appRoutes'
 import { NextRequest, NextResponse } from 'next/server'
 import pathIsAllowedWhileUnauthorized from './utils/proxy/pathIsAllowedWhileUnauthorized'
 import tokenIsValid, { recentlyValidatedSession, tokenValidationOutcome } from './utils/proxy/tokenIsValid'
@@ -6,8 +7,15 @@ import pathToRoleArray from './utils/proxy/pathToRoleArray'
 export async function proxy(req: NextRequest) {
     const tokenCookie = req.cookies.get('access_token')
     const idCookie = req.cookies.get('id')
-    const path = req.nextUrl.pathname
-    const pathWithSearch = `${path}${req.nextUrl.search}`
+    const visiblePath = req.nextUrl.pathname
+    const canonicalPath = canonicalAppPath(visiblePath)
+    if (canonicalPath !== visiblePath) {
+        const url = req.nextUrl.clone()
+        url.pathname = canonicalPath
+        return NextResponse.redirect(url, 308)
+    }
+    const path = appPagePath(visiblePath)
+    const pathWithSearch = `${visiblePath}${req.nextUrl.search}`
     const requestHeaders = new Headers(req.headers)
     const theme = req.cookies.get('theme')?.value || 'dark'
     const impersonationToken = req.cookies.get('impersonation_token')?.value || ''
@@ -22,7 +30,7 @@ export async function proxy(req: NextRequest) {
     }
 
     requestHeaders.set('x-theme', theme)
-    requestHeaders.set('x-current-path', path)
+    requestHeaders.set('x-current-path', visiblePath)
     if (impersonationToken) {
         requestHeaders.set('x-impersonation-token', impersonationToken)
     }
@@ -31,11 +39,11 @@ export async function proxy(req: NextRequest) {
         requestHeaders.set('x-impersonating-name', impersonatingName || impersonatingId)
     }
 
-    const response = NextResponse.next({
-        request: {
-            headers: requestHeaders,
-        },
-    })
+    const destination = req.nextUrl.clone()
+    destination.pathname = path
+    const response = path === visiblePath
+        ? NextResponse.next({ request: { headers: requestHeaders } })
+        : NextResponse.rewrite(destination, { request: { headers: requestHeaders } })
     const refreshedCookieOptions = authCookieOptions(req)
     let refreshedAuth: TokenRefreshCookies | null = null
 
@@ -123,7 +131,7 @@ export async function proxy(req: NextRequest) {
     }
 
     response.headers.set('x-theme', theme)
-    response.headers.set('x-current-path', path)
+    response.headers.set('x-current-path', visiblePath)
     if (requestHeaders.get('x-auth-state')) {
         response.headers.set('x-auth-state', requestHeaders.get('x-auth-state')!)
     }

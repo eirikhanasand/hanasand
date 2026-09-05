@@ -28,8 +28,8 @@ export default async function Page() {
                     count={articles.length}
                     latest={latestArticle ? shortDate(latestArticle.modified || latestArticle.created) : 'Ready'}
                     detail={latestArticle?.title || 'Create the first article'}
-                    href='/dashboard/articles'
-                    createHref='/dashboard/articles/create'
+                    href='/content/articles'
+                    createHref='/content/articles/create'
                     createLabel='Create article'
                 />
                 <ContentLane
@@ -38,8 +38,8 @@ export default async function Page() {
                     count={thoughts.length}
                     latest={latestThought ? shortDate(latestThought.updated_at || latestThought.created_at) : 'Ready'}
                     detail={latestThought?.title || 'Create the first thought'}
-                    href='/dashboard/thoughts'
-                    createHref='/dashboard/thoughts/create'
+                    href='/content/thoughts'
+                    createHref='/content/thoughts/create'
                     createLabel='Create thought'
                 />
             </section>

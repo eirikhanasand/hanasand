@@ -73,7 +73,7 @@ async function main() {
         artifactType: 'victim_claim',
         route: 'customer_discord',
         dedupeKey: `dwm_dedupe_${suffix}`,
-        casePath: `/dashboard/dwm?alert=alert_${suffix}`,
+        casePath: `/dwm?alert=alert_${suffix}`,
         caseId: `case_${suffix}`,
         watchlist: {
             id: 'watchlist-acme',
@@ -91,7 +91,7 @@ async function main() {
             dedupeKey: `dwm_dedupe_${suffix}`,
             recommendedRoute: 'customer_discord',
             caseIdCandidate: `case_${suffix}`,
-            casePath: `/dashboard/dwm?alert=alert_${suffix}`,
+            casePath: `/dwm?alert=alert_${suffix}`,
         },
         webhookContext: {
             alertId: `alert_${suffix}`,
@@ -102,7 +102,7 @@ async function main() {
             dedupeKey: `dwm_dedupe_${suffix}`,
             recommendedRoute: 'customer_discord',
             caseIdCandidate: `case_${suffix}`,
-            casePath: `/dashboard/dwm?alert=alert_${suffix}`,
+            casePath: `/dwm?alert=alert_${suffix}`,
         },
     }
 
@@ -118,7 +118,7 @@ async function main() {
     expect(JSON.stringify(previewContext).includes('acme-security.com'), 'Payload should include watchlist or matched-term context.', previewContext)
     expect(JSON.stringify(previewPayload).includes('Evidence count'), 'Discord payload should expose evidence count.', previewPayload)
     expect(JSON.stringify(previewPayload).includes('customer_discord'), 'Discord payload should expose delivery route.', previewPayload)
-    expect(JSON.stringify(previewPayload).includes('/dashboard/dwm?alert='), 'Discord payload should expose the case path.', previewPayload)
+    expect(JSON.stringify(previewPayload).includes('/dwm?alert='), 'Discord payload should expose the case path.', previewPayload)
     expect(JSON.stringify(previewPayload).includes('dwm.alert.created'), 'Discord payload should expose event type in context.', previewPayload)
     expect(!JSON.stringify(previewPayload).includes(endpointSecret), 'Delivery payload leaked webhook secret.', previewPayload)
 
@@ -141,7 +141,7 @@ async function main() {
     expect(replayDeliveries[0].payload && JSON.stringify(replayDeliveries[0].payload).includes('dwm.alert.replayed'), 'Replay payload should include event type.', replayDeliveries[0])
     expect(replayDeliveries[0].watchlistId === 'watchlist-acme', 'Replay delivery should persist watchlist context.', replayDeliveries[0])
     expect(replayDeliveries[0].route === 'customer_discord', 'Replay delivery should persist route context.', replayDeliveries[0])
-    expect(replayDeliveries[0].casePath?.includes('/dashboard/dwm?alert='), 'Replay delivery should persist case path.', replayDeliveries[0])
+    expect(replayDeliveries[0].casePath?.includes('/dwm?alert='), 'Replay delivery should persist case path.', replayDeliveries[0])
 
     const blockedLive = await deliverDwmAlertNotification(ownerId, {
         orgId,
@@ -180,7 +180,7 @@ async function main() {
     expect(testPreview.discord.embeds.length === 1, 'Dry-run test preview should expose Discord-ready embeds.', testPreview)
     expect(testPreview.context.org.id === orgId, 'Dry-run test preview should expose org context.', testPreview)
     expect(testPreview.context.watchlist.id === 'test-watchlist', 'Dry-run test preview should expose watchlist context.', testPreview)
-    expect(testPreview.context.alert.severity === 'medium' && testPreview.context.alert.casePath === '/dashboard/dwm', 'Dry-run test preview should expose alert severity and case path.', testPreview)
+    expect(testPreview.context.alert.severity === 'medium' && testPreview.context.alert.casePath === '/dwm', 'Dry-run test preview should expose alert severity and case path.', testPreview)
     expect(!JSON.stringify(testPreview).includes(endpointSecret), 'Dry-run test preview leaked Discord endpoint secret.', testPreview)
 
     const deliveryEvidence = buildDwmWebhookDeliveryEvidence({ deliveries, auditEvents })

@@ -186,7 +186,7 @@ export default async function HelpdeskPage({
     const token = Cookies.get('access_token')?.value || ''
 
     if (!id || !token) {
-        return redirect('/logout?path=/login%3Fpath%3D/dashboard/helpdesk%26expired=true')
+        return redirect('/logout?path=/login%3Fpath%3D/helpdesk%26expired=true')
     }
 
     const query = buildApiQuery(params)
@@ -220,19 +220,19 @@ export default async function HelpdeskPage({
                 actions={(
                     <div className='flex flex-wrap gap-2'>
                         <Link className={quietButtonClass} href='/dashboard'>Dashboard</Link>
-                        <Link className='grid h-9 place-items-center rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90' href='/dashboard/helpdesk?support=impersonation#support-actions'>Start session</Link>
+                        <Link className='grid h-9 place-items-center rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90' href='/helpdesk?support=impersonation#support-actions'>Start session</Link>
                     </div>
                 )}
             />
             <section className='grid gap-3 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]'>
                 <div className='grid min-w-0 content-start gap-3'>
                     <DashboardPanel className='p-4'>
-                        <form className='grid gap-3' action='/dashboard/helpdesk'>
+                        <form className='grid gap-3' action='/helpdesk'>
                             <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center'>
                                 <label className='sr-only' htmlFor='audit-search'>Search audit events</label>
                                 <input id='audit-search' className={fieldClass} name='q' defaultValue={primarySearch} placeholder='Search audit events' />
                                 <button className='h-9 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90' type='submit'>Search</button>
-                                <Link className={quietButtonClass} href='/dashboard/helpdesk'>Clear</Link>
+                                <Link className={quietButtonClass} href='/helpdesk'>Clear</Link>
                             </div>
                             <details className='group rounded-lg border border-ui-border bg-ui-raised'>
                                 <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
@@ -318,7 +318,7 @@ export default async function HelpdeskPage({
                                     <p className='font-medium text-ui-text'>Audit stream is clear for the current filters.</p>
                                     <div className='flex flex-wrap gap-2'>
                                         {supportActions.map(({ action, label }) => (
-                                            <Link className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text hover:bg-ui-raised' href={`/dashboard/helpdesk?action=${encodeURIComponent(action)}&source=admin&service=hanasand-api`} key={action}>{label}</Link>
+                                            <Link className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text hover:bg-ui-raised' href={`/helpdesk?action=${encodeURIComponent(action)}&source=admin&service=hanasand-api`} key={action}>{label}</Link>
                                         ))}
                                     </div>
                                 </div>
@@ -347,7 +347,7 @@ export default async function HelpdeskPage({
                                         <div className='text-left text-xs text-ui-muted md:text-right'>
                                             <div>{formatTime(event.created_at)}</div>
                                             <div className='mt-1 max-w-xl truncate'>{event.ip}</div>
-                                            <Link className='mt-2 inline-flex rounded-md border border-ui-border px-2 py-1 font-semibold text-ui-text hover:bg-ui-raised' href={`/dashboard/helpdesk?request=${encodeURIComponent(event.request_id || '')}&entity=${encodeURIComponent(event.entity_id || '')}&source=${encodeURIComponent(event.source)}&service=${encodeURIComponent(event.service)}`}>
+                                            <Link className='mt-2 inline-flex rounded-md border border-ui-border px-2 py-1 font-semibold text-ui-text hover:bg-ui-raised' href={`/helpdesk?request=${encodeURIComponent(event.request_id || '')}&entity=${encodeURIComponent(event.entity_id || '')}&source=${encodeURIComponent(event.source)}&service=${encodeURIComponent(event.service)}`}>
                                                 Focus
                                             </Link>
                                         </div>

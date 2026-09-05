@@ -8,7 +8,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const article = await fetchArticle(id)
 
     if (!article) {
-        return redirect('/dashboard/articles')
+        return redirect('/content/articles')
     }
 
     return (

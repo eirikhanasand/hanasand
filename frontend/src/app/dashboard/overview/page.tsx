@@ -19,7 +19,7 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
     const token = (await cookies()).get('access_token')?.value
 
     if (!token) {
-        redirect('/logout?path=/login%3Fpath%3D/dashboard/overview%26expired=true')
+        redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
 
     const params = searchParams ? await searchParams : {}

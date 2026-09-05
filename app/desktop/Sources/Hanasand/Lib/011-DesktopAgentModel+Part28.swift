@@ -18,9 +18,9 @@ extension DesktopAgentModel {
         switch path {
         case "/dashboard":
             serviceStatus = try? decoder.decode(DashboardServiceStatus.self, from: data)
-        case "/dashboard/db":
+        case "/db":
             databaseOverview = try? decoder.decode(DashboardDatabaseOverview.self, from: data)
-        case "/dashboard/mail":
+        case "/mail":
             if let overview = try? decoder.decode(MailOverviewEnvelope.self, from: data) {
                 mailOverview = overview
                 selectedMailAccountUser = overview.mailboxUser ?? selectedMailAccountUser
@@ -28,11 +28,11 @@ extension DesktopAgentModel {
                 selectedMailMessageID = overview.selectedMessage?.id ?? overview.messages.first?.id ?? selectedMailMessageID
                 mailSummary = "\(overview.messages.count) messages · \(overview.mailboxes.count) mailboxes"
             }
-        case "/dashboard/db/backups":
+        case "/db/backups":
             backupServices = (try? decoder.decode([DashboardBackupService].self, from: data)) ?? []
-        case "/dashboard/db/restore":
+        case "/db/restore":
             backupFiles = (try? decoder.decode([DashboardBackupFile].self, from: data)) ?? []
-        case "/dashboard/notes":
+        case "/notes":
             notes = (try? decoder.decode([DashboardNote].self, from: data)) ?? []
             if selectedNoteID.isEmpty || !notes.contains(where: { $0.id == selectedNoteID }) {
                 selectedNoteID = notes.first?.id ?? ""
@@ -40,7 +40,7 @@ extension DesktopAgentModel {
             loadSelectedNoteIntoDraft()
         case "/s":
             shares = (try? decoder.decode([DashboardShare].self, from: data)) ?? []
-        case "/dashboard/articles":
+        case "/content/articles":
             articles = (try? decoder.decode([DashboardArticle].self, from: data)) ?? []
             if selectedArticleID.isEmpty || !articles.contains(where: { $0.id == selectedArticleID }) {
                 selectedArticleID = articles.first?.id ?? ""
@@ -48,7 +48,7 @@ extension DesktopAgentModel {
                     loadArticleIntoEditor(article)
                 }
             }
-        case "/dashboard/thoughts":
+        case "/content/thoughts":
             thoughts = (try? decoder.decode([DashboardThought].self, from: data)) ?? []
             if selectedThoughtID.isEmpty || !thoughts.contains(where: { $0.id == selectedThoughtID }) {
                 selectedThoughtID = thoughts.first?.id ?? ""
@@ -56,7 +56,7 @@ extension DesktopAgentModel {
                     loadThoughtIntoEditor(thought)
                 }
             }
-        case "/dashboard/system/ai":
+        case "/system/ai":
             if let envelope = try? decoder.decode(AIModelsEnvelope.self, from: data) {
                 aiClients = envelope.connected.map { client in
                     AIConnectedClient(
@@ -69,7 +69,7 @@ extension DesktopAgentModel {
             }
         case "/profile":
             profile = try? decoder.decode(DashboardProfile.self, from: data)
-        case "/users", "/dashboard/management":
+        case "/users", "/management":
             users = (try? decoder.decode([DashboardUser].self, from: data)) ?? []
             if selectedUserID.isEmpty || !users.contains(where: { $0.id == selectedUserID }) {
                 selectedUserID = users.first?.id ?? ""
@@ -82,19 +82,19 @@ extension DesktopAgentModel {
                     loadRoleIntoEditor(role)
                 }
             }
-        case "/dashboard/logs":
+        case "/logs":
             if let envelope = try? decoder.decode(DashboardLogsEnvelope.self, from: data) {
                 logs = envelope.logs
             } else {
                 logs = (try? decoder.decode([DashboardLogEntry].self, from: data)) ?? []
             }
-        case "/dashboard/system":
+        case "/system":
             if let envelope = try? decoder.decode(DashboardDockerEnvelope.self, from: data) {
                 dockerContainers = envelope.resolvedContainers
             } else {
                 dockerContainers = (try? decoder.decode([DashboardDockerContainer].self, from: data)) ?? []
             }
-        case "/dashboard/vms":
+        case "/vms":
             if let envelope = try? decoder.decode(DashboardVMEnvelope.self, from: data) {
                 virtualMachines = envelope.resolvedVMs
             } else {
@@ -102,11 +102,11 @@ extension DesktopAgentModel {
             }
         case "/dashboard/tests":
             recentTests = (try? decoder.decode([DashboardRecentTest].self, from: data)) ?? []
-        case "/dashboard/vulnerabilities":
+        case "/vulnerabilities":
             vulnerabilityReport = try? decoder.decode(DashboardVulnerabilityReport.self, from: data)
-        case "/dashboard/traffic":
+        case "/traffic":
             trafficMetrics = try? decoder.decode(DashboardTrafficMetrics.self, from: data)
-        case "/dashboard/system/rates":
+        case "/system/rates":
             rateLimitOverview = try? decoder.decode(DashboardRateLimitOverview.self, from: data)
         default:
             break

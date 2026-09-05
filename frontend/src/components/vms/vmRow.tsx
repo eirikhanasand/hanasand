@@ -15,7 +15,7 @@ export default function VmRow({ vm, metrics }: { vm: VM; metrics?: VMMetrics }) 
 
     return (
         <Link
-            href={`/dashboard/vms/${vm.name}`}
+            href={`/vms/${vm.name}`}
             className={`
                 group grid min-w-[74rem] items-center gap-2 rounded-md p-2
                 text-ui-text/80 transition hover:bg-ui-panel/3

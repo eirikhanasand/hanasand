@@ -30,17 +30,17 @@ const publicRouteItems: SearchItem[] = [
 ]
 
 const dashboardRouteItems: SearchItem[] = [
-    route('Dashboard overview', 'Customer console overview', '/dashboard/overview'),
-    route('Security overview', 'Suspicious login and security event review', '/dashboard/mill'),
-    route('Detection rules', 'Create and import security detection rules', '/dashboard/mill/rules'),
-    route('Security Scanner', 'Run and schedule approved Hanasand scans', '/dashboard/scanner'),
-    route('DWM cases', 'Dark web monitoring case review', '/dashboard/dwm/cases'),
-    route('DWM watchlists', 'Watched companies, vendors, domains, and brands', '/dashboard/dwm/watchlists'),
-    route('DWM delivery', 'Webhook attempts and customer delivery', '/dashboard/dwm/delivery'),
-    route('DWM actors', 'Actor context and coverage', '/dashboard/dwm/actors'),
-    route('DWM actions', 'Watchlist, source, case, and webhook controls', '/dashboard/dwm/actions'),
-    route('Automation', 'Webhook and automation setup', '/dashboard/automation'),
-    route('Subscription', 'Billing and plan controls', '/dashboard/subscription'),
+    route('Dashboard overview', 'Customer console overview', '/dashboard'),
+    route('Security overview', 'Suspicious login and security event review', '/mill'),
+    route('Detection rules', 'Create and import security detection rules', '/mill/rules'),
+    route('Security Scanner', 'Run and schedule approved Hanasand scans', '/scanner'),
+    route('DWM cases', 'Dark web monitoring case review', '/dwm/cases'),
+    route('DWM watchlists', 'Watched companies, vendors, domains, and brands', '/dwm/watchlists'),
+    route('DWM delivery', 'Webhook attempts and customer delivery', '/dwm/delivery'),
+    route('DWM actors', 'Actor context and coverage', '/dwm/actors'),
+    route('DWM actions', 'Watchlist, source, case, and webhook controls', '/dwm/actions'),
+    route('Automation', 'Webhook and automation setup', '/automation'),
+    route('Subscription', 'Billing and plan controls', '/subscription'),
 ]
 
 export default function SiteSearch({ token }: { token: boolean }) {
@@ -266,7 +266,7 @@ export function caseItem(value: unknown): SearchItem | null {
     if (!id) return null
     const title = stringValue(row.title) || stringValue(row.company) || stringValue(row.organizationName) || id
     const detail = [stringValue(row.status), stringValue(row.organizationName), stringValue(row.summary)].filter(Boolean).join(' · ')
-    const href = stringValue(row.casePath) || `/dashboard/dwm/cases/${encodeURIComponent(id)}`
+    const href = stringValue(row.casePath) || `/dwm/cases/${encodeURIComponent(id)}`
     return { id: `case:${id}`, title, detail, href }
 }
 
@@ -308,7 +308,7 @@ function watchlistTerms(value: unknown): SearchItem[] {
     return terms.flatMap(term => {
         const item = term && typeof term === 'object' ? term as Record<string, unknown> : null
         const value = typeof term === 'string' ? term : stringValue(item?.value || item?.term)
-        return value ? [{ id: `watch:${value}`, title: value, detail: 'Monitored entity', href: '/dashboard/dwm/watchlists' }] : []
+        return value ? [{ id: `watch:${value}`, title: value, detail: 'Monitored entity', href: '/dwm/watchlists' }] : []
     })
 }
 

@@ -104,7 +104,7 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
                                         <p className='truncate font-mono text-xs font-semibold text-ui-text'>{run.id}</p>
                                         <p className='mt-1 line-clamp-1 text-xs text-ui-muted'>{run.message}</p>
                                     </div>
-                                    {run.sourceId ? <Link href={`/dashboard/ti/sources/${run.sourceId}`} className='min-w-0 font-semibold text-ui-text hover:text-ui-primary'>
+                                    {run.sourceId ? <Link href={`/ti/sources/${run.sourceId}`} className='min-w-0 font-semibold text-ui-text hover:text-ui-primary'>
                                         <span className='block truncate'>{run.sourceName}</span>
                                         <span className='mt-1 block truncate text-xs font-normal text-ui-muted'>{run.sourceFamily.replaceAll('_', ' ')}</span>
                                     </Link> : <div className='min-w-0'>
@@ -116,7 +116,7 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
                                     <span className='font-semibold text-ui-text'>{durationLabel(run.startedAt, run.finishedAt)}</span>
                                     <span className='text-ui-primary'>{run.captures} cap · {run.screenshots} shots · {run.rows} rows</span>
                                     <span className='text-ui-muted'>{run.nextRunAt ? relativeUntil(run.nextRunAt) : run.trigger === 'automated' ? 'automated run' : run.trigger === 'manual' ? 'manual run' : 'run origin unavailable'}</span>
-                                    {run.sourceId ? <Link href={`/dashboard/ti/sources/${run.sourceId}`} className='inline-flex h-8 w-fit items-center gap-1.5 rounded-md border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text hover:bg-ui-raised'>
+                                    {run.sourceId ? <Link href={`/ti/sources/${run.sourceId}`} className='inline-flex h-8 w-fit items-center gap-1.5 rounded-md border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text hover:bg-ui-raised'>
                                         Source
                                         <ArrowRight className='h-3.5 w-3.5' />
                                     </Link> : <span className='text-xs text-ui-muted'>Fleet run</span>}
@@ -128,10 +128,10 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
                 <nav className='flex items-center justify-between gap-3 border-t border-ui-border bg-ui-panel px-4 py-3 text-sm' aria-label='Collection run pages'>
                     <span className='text-ui-muted'>{runTotal ? `${runs.length} shown · ${runTotal} total` : '0 runs'}</span>
                     <div className='flex gap-2'>
-                        {nextCursor ? <Link href={`/dashboard/ti/runs?cursor=${nextCursor}`} className='rounded-md border border-ui-border px-3 py-1.5 font-semibold text-ui-text hover:bg-ui-raised'>Next</Link> : null}
+                        {nextCursor ? <Link href={`/ti/runs?cursor=${nextCursor}`} className='rounded-md border border-ui-border px-3 py-1.5 font-semibold text-ui-text hover:bg-ui-raised'>Next</Link> : null}
                     </div>
                 </nav>
-            </DashboardPanel> : <DashboardPanel className='border-ui-border bg-ui-panel p-6'><div className='mx-auto max-w-xl text-center'><div className='mx-auto grid h-12 w-12 place-items-center rounded-full bg-ui-primary/10 text-ui-primary'><PlayCircle className='h-6 w-6' /></div><h2 className='mt-4 text-lg font-semibold text-ui-text'>{runUnavailable ? 'Run history is unavailable' : 'No collection history yet'}</h2><p className='mt-2 text-sm leading-6 text-ui-muted'>{runUnavailable ? 'Retry when the collection service is available.' : sources.length ? 'The collector is configured, but no completed or active run has been recorded for the global source fleet yet.' : 'Add an executable source first. Collection history starts after the first source run.'}</p><div className='mt-4 flex justify-center gap-2'><Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>Open source inventory <ArrowRight className='h-4 w-4' /></Link></div></div></DashboardPanel>}
+            </DashboardPanel> : <DashboardPanel className='border-ui-border bg-ui-panel p-6'><div className='mx-auto max-w-xl text-center'><div className='mx-auto grid h-12 w-12 place-items-center rounded-full bg-ui-primary/10 text-ui-primary'><PlayCircle className='h-6 w-6' /></div><h2 className='mt-4 text-lg font-semibold text-ui-text'>{runUnavailable ? 'Run history is unavailable' : 'No collection history yet'}</h2><p className='mt-2 text-sm leading-6 text-ui-muted'>{runUnavailable ? 'Retry when the collection service is available.' : sources.length ? 'The collector is configured, but no completed or active run has been recorded for the global source fleet yet.' : 'Add an executable source first. Collection history starts after the first source run.'}</p><div className='mt-4 flex justify-center gap-2'><Link href='/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>Open source inventory <ArrowRight className='h-4 w-4' /></Link></div></div></DashboardPanel>}
 
             <div className='grid gap-4 xl:grid-cols-[1fr_0.9fr]'>
                 <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
@@ -151,7 +151,7 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
                     {attentionRuns.length ? (
                         <div className='mt-4 grid gap-2'>
                             {attentionRuns.map(run => (
-                                <Link key={run.id} href={run.sourceId ? `/dashboard/ti/sources/${run.sourceId}` : '/dashboard/ti/sources'} className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3 md:grid-cols-[1fr_auto] md:items-center hover:border-ui-primary/35'>
+                                <Link key={run.id} href={run.sourceId ? `/ti/sources/${run.sourceId}` : '/ti/sources'} className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3 md:grid-cols-[1fr_auto] md:items-center hover:border-ui-primary/35'>
                                     <div>
                                         <p className='font-mono text-xs font-semibold text-ui-text'>{run.id}</p>
                                         <p className='mt-1 text-sm text-ui-muted'>{run.sourceName} · {run.status}{run.nextRunAt ? ` · next ${relativeUntil(run.nextRunAt)}` : ''}</p>

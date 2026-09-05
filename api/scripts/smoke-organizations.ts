@@ -304,7 +304,7 @@ assert.equal(alertTermsExport.alertBridgeContract.supportVisibility.contract, 'a
 assert.ok(alertTermsExport.alertBridgeContract.supportVisibility.safeFields.includes('activeTermCount'))
 assert.ok(alertTermsExport.alertBridgeContract.supportVisibility.redactedFields.includes('activeTerms[].term'))
 assert.equal(alertTermsExport.alertBridgeContract.caseRouteExpectation.route, 'organization_watchlist')
-assert.equal(alertTermsExport.alertBridgeContract.caseRouteExpectation.pathTemplate, '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId')
+assert.equal(alertTermsExport.alertBridgeContract.caseRouteExpectation.pathTemplate, '/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId')
 assert.deepEqual(alertTermsExport.alertBridgeContract.caseRouteExpectation.queryFields, ['organizationId', 'watchlistItemId'])
 assert.equal(alertTermsExport.alertBridgeContract.caseRouteExpectation.blockerCode, 'no_case_route')
 assert.deepEqual(alertTermsExport.alertBridgeContract.redactedSummary, {

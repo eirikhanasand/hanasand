@@ -38,15 +38,15 @@ export default function DwmOverviewPanel({ organizationId }: { organizationId?: 
 
     const scopeLabel = organizationId ? 'Organization monitoring' : 'Personal monitoring'
     if (state.status === 'loading') return <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm' aria-label={scopeLabel}><div className='flex items-center gap-2 text-sm text-ui-muted'><Loader2 className='h-4 w-4 animate-spin text-ui-primary' />Loading {scopeLabel.toLowerCase()}…</div></section>
-    if (state.status === 'error') return <section className='rounded-lg border border-ui-warning/40 bg-ui-panel p-4 shadow-sm' aria-label={scopeLabel}><div className='flex items-center gap-2 text-sm font-semibold text-ui-text'><AlertTriangle className='h-4 w-4 text-ui-warning' />{scopeLabel} needs review</div><p className='mt-2 text-sm text-ui-muted'>{state.message}</p><Link href={organizationId ? `/dashboard/dwm?organizationId=${encodeURIComponent(organizationId)}` : '/dashboard/dwm'} className='mt-3 inline-flex text-sm font-semibold text-ui-primary hover:underline'>Open DWM</Link></section>
+    if (state.status === 'error') return <section className='rounded-lg border border-ui-warning/40 bg-ui-panel p-4 shadow-sm' aria-label={scopeLabel}><div className='flex items-center gap-2 text-sm font-semibold text-ui-text'><AlertTriangle className='h-4 w-4 text-ui-warning' />{scopeLabel} needs review</div><p className='mt-2 text-sm text-ui-muted'>{state.message}</p><Link href={organizationId ? `/dwm?organizationId=${encodeURIComponent(organizationId)}` : '/dwm'} className='mt-3 inline-flex text-sm font-semibold text-ui-primary hover:underline'>Open DWM</Link></section>
 
     const { snapshot, openCases } = state
     const healthySources = snapshot.sourceCoverage.filter(source => source.health === 'healthy').length
     const hasWatchlist = snapshot.watchlist.length > 0
     if (!hasWatchlist) {
         const watchlistHref = organizationId
-            ? `/dashboard/dwm/watchlists?organizationId=${encodeURIComponent(organizationId)}`
-            : '/dashboard/dwm/watchlists'
+            ? `/dwm/watchlists?organizationId=${encodeURIComponent(organizationId)}`
+            : '/dwm/watchlists'
         return <section className='grid min-h-[26rem] place-items-center rounded-lg border border-ui-border bg-ui-panel p-6 text-center shadow-sm' aria-label={scopeLabel}>
             <div className='grid max-w-md justify-items-center gap-4'>
                 <span className='grid h-14 w-14 place-items-center rounded-2xl border border-ui-primary/30 bg-ui-primary/10 text-ui-primary shadow-[0_0_28px_rgba(157,180,255,0.14)]'>
@@ -72,7 +72,7 @@ export default function DwmOverviewPanel({ organizationId }: { organizationId?: 
     })[0]
     const readiness = snapshot.readiness.decision === 'production_ready_with_live_sources' ? 'Collection is active' : 'Collection needs setup'
     const readinessTone = snapshot.readiness.decision === 'production_ready_with_live_sources' ? 'text-ui-success' : 'text-ui-warning'
-    const overviewHref = organizationId ? `/dashboard/dwm?organizationId=${encodeURIComponent(organizationId)}` : '/dashboard/dwm'
+    const overviewHref = organizationId ? `/dwm?organizationId=${encodeURIComponent(organizationId)}` : '/dwm'
 
     return <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm' aria-label={scopeLabel}>
         <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>

@@ -15,17 +15,17 @@ const hasAdminLoginCredentials = Boolean(adminId && adminPassword)
 
 const dashboardRoutes = [
     { path: '/dashboard', heading: /Good|You're|It’s/ },
-    { path: '/dashboard/overview', heading: 'Operations Overview', screenshot: 'dashboard-overview.png' },
-    { path: '/dashboard/dwm', heading: 'Company and vendor exposure alerts' },
-    { path: '/dashboard/subscription', heading: 'Choose what you need' },
+    { path: '/dashboard', heading: 'Operations Overview', screenshot: 'dashboard-overview.png' },
+    { path: '/dwm', heading: 'Company and vendor exposure alerts' },
+    { path: '/subscription', heading: 'Choose what you need' },
 ]
 
 const normalSidebarLinks = [
     { name: 'Console', href: '/dashboard' },
     { name: 'Threat search', href: '/ti' },
-    { name: 'Dark web', href: '/dashboard/dwm' },
+    { name: 'Dark web', href: '/dwm' },
     { name: 'API docs', href: '/developers' },
-    { name: 'Subscription', href: '/dashboard/subscription' },
+    { name: 'Subscription', href: '/subscription' },
 ]
 
 const privilegedSidebarLinks = [
@@ -61,39 +61,39 @@ const privilegedSidebarLinks = [
 ]
 
 const privilegedDashboardRoutes = [
-    { path: '/dashboard/vms', heading: 'Virtual Machines' },
-    { path: '/dashboard/projects', heading: 'Projects' },
-    { path: '/dashboard/shares', heading: 'Code shares and projects' },
-    { path: '/dashboard/mail', heading: 'Mail' },
-    { path: '/dashboard/automation', heading: 'Automations' },
-    { path: '/dashboard/notes', heading: 'Notes' },
-    { path: '/dashboard/traffic', heading: 'Traffic' },
-    { path: '/dashboard/system', heading: 'System metrics' },
-    { path: '/dashboard/system/ai', heading: 'AI Metrics' },
-    { path: '/dashboard/vulnerabilities', heading: 'Vulnerabilities' },
-    { path: '/dashboard/load-testing', heading: 'Load testing and endpoint evidence' },
-    { path: '/dashboard/articles', heading: 'Articles' },
-    { path: '/dashboard/thoughts', heading: 'Thoughts' },
-    { path: '/dashboard/logs', heading: 'Logs' },
-    { path: '/dashboard/db', heading: 'Database' },
-    { path: '/dashboard/db/backups', heading: 'Database backups' },
-    { path: '/dashboard/system/rates', heading: 'Rate Limits' },
-    { path: '/dashboard/automation/cron', heading: 'Cron Jobs' },
-    { path: '/dashboard/system/impersonation', heading: /Support access|Impersonation/ },
-    { path: '/dashboard/management', heading: 'Admin' },
+    { path: '/vms', heading: 'Virtual Machines' },
+    { path: '/projects', heading: 'Projects' },
+    { path: '/shares', heading: 'Code shares and projects' },
+    { path: '/mail', heading: 'Mail' },
+    { path: '/automation', heading: 'Automations' },
+    { path: '/notes', heading: 'Notes' },
+    { path: '/traffic', heading: 'Traffic' },
+    { path: '/system', heading: 'System metrics' },
+    { path: '/system/ai', heading: 'AI Metrics' },
+    { path: '/vulnerabilities', heading: 'Vulnerabilities' },
+    { path: '/load-testing', heading: 'Load testing and endpoint evidence' },
+    { path: '/content/articles', heading: 'Articles' },
+    { path: '/content/thoughts', heading: 'Thoughts' },
+    { path: '/logs', heading: 'Logs' },
+    { path: '/db', heading: 'Database' },
+    { path: '/db/backups', heading: 'Database backups' },
+    { path: '/system/rates', heading: 'Rate Limits' },
+    { path: '/automation/cron', heading: 'Cron Jobs' },
+    { path: '/system/impersonation', heading: /Support access|Impersonation/ },
+    { path: '/management', heading: 'Admin' },
 ]
 
 const adminOnlyOperationHrefs = [
-    '/dashboard/automation',
-    '/dashboard/projects',
-    '/dashboard/shares',
-    '/dashboard/logs',
-    '/dashboard/mail',
-    '/dashboard/db',
-    '/dashboard/system/rates',
-    '/dashboard/automation/cron',
-    '/dashboard/system/impersonation',
-    '/dashboard/management',
+    '/automation',
+    '/projects',
+    '/shares',
+    '/logs',
+    '/mail',
+    '/db',
+    '/system/rates',
+    '/automation/cron',
+    '/system/impersonation',
+    '/management',
 ]
 
 test.describe('dashboard resource routes', () => {
@@ -147,11 +147,11 @@ test.describe('dashboard resource routes', () => {
                     await expectNormalUserSidebar(page, userId)
                 }
 
-                if (route.path === '/dashboard/overview') {
+                if (route.path === '/dashboard') {
                     await expectNormalUserOverviewActions(page)
                 }
 
-                if (route.path === '/dashboard/vms') {
+                if (route.path === '/vms') {
                     await expect(page.getByText('Create a project')).toBeVisible()
                     await expect(page.getByText(/Click here/i)).toHaveCount(0)
                 }
@@ -223,14 +223,14 @@ test.describe('dashboard resource routes', () => {
         try {
             await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
-            const routes = ['/dashboard/overview', '/dashboard/dwm', '/dashboard/subscription', '/ti/apt42']
+            const routes = ['/dashboard', '/dwm', '/subscription', '/ti/apt42']
 
             for (const route of routes) {
                 await page.goto(route, { waitUntil: 'domcontentloaded' })
                 await expect(page.locator('aside')).toBeVisible()
                 await expect(page.locator('aside').getByRole('button', { name: 'Collapse sidebar' })).toBeVisible()
-                await expect(page.locator('aside nav').getByRole('link', { name: 'Dark web', exact: true })).toHaveAttribute('href', '/dashboard/dwm')
-                await expect(page.locator('aside nav').getByRole('link', { name: 'Subscription', exact: true })).toHaveAttribute('href', '/dashboard/subscription')
+                await expect(page.locator('aside nav').getByRole('link', { name: 'Dark web', exact: true })).toHaveAttribute('href', '/dwm')
+                await expect(page.locator('aside nav').getByRole('link', { name: 'Subscription', exact: true })).toHaveAttribute('href', '/subscription')
                 await expect(page.locator('aside nav').getByRole('link', { name: 'Webhooks', exact: true })).toHaveCount(0)
                 await expect(page.locator('aside nav').getByRole('link', { name: 'Pricing', exact: true })).toHaveCount(0)
                 await expect(page.locator('aside nav').getByRole('link', { name: 'Articles', exact: true })).toHaveCount(0)
@@ -268,11 +268,11 @@ test.describe('dashboard resource routes', () => {
             await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
-            await page.goto('/dashboard/vm', { waitUntil: 'domcontentloaded' })
-            await expect(page).toHaveURL(/\/dashboard\/vms$/)
+            await page.goto('/vm', { waitUntil: 'domcontentloaded' })
+            await expect(page).toHaveURL(/\/vms$/)
 
-            await page.goto('/dashboard/vm/folder/test%20vm', { waitUntil: 'domcontentloaded' })
-            expect(new URL(page.url()).pathname).toBe('/dashboard/vms/folder/test%20vm')
+            await page.goto('/vm/folder/test%20vm', { waitUntil: 'domcontentloaded' })
+            expect(new URL(page.url()).pathname).toBe('/vms/folder/test%20vm')
         } finally {
             await context.close()
             await deleteUser(request, userId, password)
@@ -295,8 +295,8 @@ test.describe('dashboard resource routes', () => {
                 response.request().method() === 'GET' &&
                 response.ok()
             )
-            await page.goto('/dashboard/notes', { waitUntil: 'domcontentloaded' })
-            await expect(page).toHaveURL(/\/dashboard\/notes$/)
+            await page.goto('/notes', { waitUntil: 'domcontentloaded' })
+            await expect(page).toHaveURL(/\/notes$/)
             await notesLoaded
             await expect(page.getByText('No private notes yet.')).toBeVisible()
 
@@ -352,8 +352,8 @@ test.describe('dashboard resource routes', () => {
                 response.request().method() === 'GET' &&
                 response.ok()
             )
-            await page.goto('/dashboard/automation', { waitUntil: 'domcontentloaded' })
-            await expect(page).toHaveURL(/\/dashboard\/automations$/)
+            await page.goto('/automation', { waitUntil: 'domcontentloaded' })
+            await expect(page).toHaveURL(/\/automations$/)
             await automationsLoaded
             await expect(page.getByText('No automations yet.')).toBeVisible()
 
@@ -421,8 +421,8 @@ test.describe('dashboard resource routes', () => {
             await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
-            await page.goto('/dashboard/projects', { waitUntil: 'networkidle' })
-            await expect(page).toHaveURL(/\/dashboard\/projects$/)
+            await page.goto('/projects', { waitUntil: 'networkidle' })
+            await expect(page).toHaveURL(/\/projects$/)
             await expect(page.getByRole('link', { name: 'Open' })).toHaveAttribute('href', `/p/${projectId}`)
             await expect(page.getByText(projectId).first()).toBeVisible()
 
@@ -463,8 +463,8 @@ test.describe('dashboard resource routes', () => {
             await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
-            await page.goto('/dashboard/shares', { waitUntil: 'networkidle' })
-            await expect(page).toHaveURL(/\/dashboard\/shares$/)
+            await page.goto('/shares', { waitUntil: 'networkidle' })
+            await expect(page).toHaveURL(/\/shares$/)
             await expect(page.getByRole('link', { name: 'Open' })).toHaveAttribute('href', `/s/${shareId}`)
             await expect(page.getByText(shareId).first()).toBeVisible()
 

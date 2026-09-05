@@ -46,11 +46,11 @@ export default async function TiAnalystWorkbenchPage({
                 description='Triage active exposure cases, inspect evidence, assign owners, and send findings when they are ready.'
                 actions={(
                     <div className='flex flex-wrap gap-2'>
-                        <Link href='/dashboard/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel'>
+                        <Link href='/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel'>
                             <Radar className='h-4 w-4' />
                             Dark web cases
                         </Link>
-                        <Link href='/dashboard/ti/sources' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                        <Link href='/ti/sources' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
                             <Inbox className='h-4 w-4' />
                             Sources
                             <ArrowUpRight className='h-4 w-4' />
@@ -111,8 +111,8 @@ function workbenchCaseReferenceRows(item: WorkbenchCase) {
 function scopeRefsFromHref(href: string) {
     const refs: Array<{ kind: string, value: string }> = []
     const [path, query = ''] = href.split('?')
-    if (path.includes('/dashboard/dwm/cases/')) {
-        const caseId = path.split('/dashboard/dwm/cases/')[1]
+    if (path.includes('/dwm/cases/')) {
+        const caseId = path.split('/dwm/cases/')[1]
         if (caseId) refs.push({ kind: 'case', value: decodeURIComponent(caseId) })
     }
     const params = new URLSearchParams(query)
@@ -389,7 +389,7 @@ function caseDashboardHref(row: WorkbenchDwmCaseListItem) {
     if (row.alertId) params.set('alertId', row.alertId)
     params.set('route', 'ti_workbench')
     const query = params.toString()
-    return `/dashboard/dwm/cases/${encodeURIComponent(caseId || 'case')}${query ? `?${query}` : ''}`
+    return `/dwm/cases/${encodeURIComponent(caseId || 'case')}${query ? `?${query}` : ''}`
 }
 
 function severityPriority(severity: WorkbenchCase['severity']) {

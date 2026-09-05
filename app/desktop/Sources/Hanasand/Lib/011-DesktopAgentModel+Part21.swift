@@ -34,7 +34,7 @@ extension DesktopAgentModel {
 
     func loadNativeDashboardData() async {
         guard let path = selectedDashboardPath else { return }
-        if path == "/dashboard/traffic" {
+        if path == "/traffic" {
             await loadHanasandTrafficMetrics()
             return
         }
@@ -59,10 +59,10 @@ extension DesktopAgentModel {
             updateTypedDashboardState(from: text, path: path)
             if path == "/profile" {
                 await loadProfileSecurityData()
-            } else if path == "/dashboard/system/rates" {
+            } else if path == "/system/rates" {
                 await loadRateLimitApiKeys()
                 await loadDashboardUsersForOwnerPicker()
-            } else if path == "/users" || path == "/dashboard/management" {
+            } else if path == "/users" || path == "/management" {
                 await loadDashboardRolesForUserManagement()
                 await loadSelectedUserRoles()
             }

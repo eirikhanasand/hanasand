@@ -129,7 +129,7 @@ extension DesktopAgentModel {
             append(meta: "Opened logs", body: url.absoluteString, kind: .command)
             return
         }
-        openWebsite(path: "/dashboard/logs", label: "Logs")
+        openWebsite(path: "/logs", label: "Logs")
     }
 
     func configureMacMiniRemoteDesktop() {

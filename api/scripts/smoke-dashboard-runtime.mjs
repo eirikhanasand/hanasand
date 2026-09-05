@@ -133,20 +133,20 @@ async function main() {
     ].join('; ')
 
     const pages = [
-        '/dashboard/overview',
-        '/dashboard/logs',
-        '/dashboard/backup',
-        '/dashboard/management',
-        `/dashboard/management/${vmName}`,
-        '/dashboard/system',
-        `/dashboard/system/${vmName}`,
+        '/dashboard',
+        '/logs',
+        '/backup',
+        '/management',
+        `/management/${vmName}`,
+        '/system',
+        `/system/${vmName}`,
         '/status',
     ]
 
     const pageResults = []
     for (const path of pages) {
         const result = await pageRequest(path, cookieHeader)
-        const expectedRedirect = path === '/dashboard/backup' ? '/dashboard/db' : null
+        const expectedRedirect = path === '/backup' ? '/db' : null
         pageResults.push({
             path,
             status: result.response.status,

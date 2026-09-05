@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
 export default function page() {
-    redirect('/dashboard/thoughts/create')
+    redirect('/content/thoughts/create')
 }

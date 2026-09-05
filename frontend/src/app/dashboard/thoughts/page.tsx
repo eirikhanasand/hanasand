@@ -19,7 +19,7 @@ export default async function Page() {
                 title='Thoughts'
                 description='Working observations, recent movement, and real note rows.'
                 actions={
-                    <Link href='/dashboard/thoughts/create' className='flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3.5 text-sm font-medium text-ui-text transition hover:opacity-90'>
+                    <Link href='/content/thoughts/create' className='flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3.5 text-sm font-medium text-ui-text transition hover:opacity-90'>
                         <Plus className='h-4 w-4' />
                         <span>Create</span>
                     </Link>
@@ -34,11 +34,11 @@ export default async function Page() {
                     <h2 className='mt-4 text-xl font-semibold text-ui-text'>Start your notebook</h2>
                     <p className='mt-2 text-sm leading-6 text-ui-muted'>Capture an observation, decision, or research note to start your notebook.</p>
                     <div className='mt-5 flex justify-center gap-2'>
-                        <Link href='/dashboard/thoughts/create' className='inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>
+                        <Link href='/content/thoughts/create' className='inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>
                             <Plus className='h-4 w-4' />
                             Create your first thought
                         </Link>
-                        <Link href='/dashboard/notes' className='inline-flex h-9 items-center rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text'>
+                        <Link href='/notes' className='inline-flex h-9 items-center rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text'>
                             Open notes
                         </Link>
                     </div>

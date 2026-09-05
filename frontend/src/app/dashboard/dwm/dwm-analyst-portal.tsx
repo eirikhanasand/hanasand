@@ -359,7 +359,7 @@ export function DwmAnalystPortal({
                         <div className='grid gap-2 px-4 py-8 text-center'>
                             <h2 className='text-base font-semibold text-ui-text'>Create your first watchlist</h2>
                             <p className='mx-auto max-w-md text-sm leading-6 text-ui-muted'>Add a company, domain, vendor, brand, or product to start monitoring.</p>
-                            <div><Link href='/dashboard/dwm/actions?focus=watchlist' className='inline-flex min-h-9 items-center rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>Create watchlist</Link></div>
+                            <div><Link href='/dwm/actions?focus=watchlist' className='inline-flex min-h-9 items-center rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>Create watchlist</Link></div>
                         </div>
                     ) : <div className='p-3'>{workflowActions}</div>}
                 </section>
@@ -548,7 +548,7 @@ function DwmSourceCoverageSummary({ operations, isAdmin }: { operations: Operati
                     <h2 className='text-sm font-semibold text-ui-text'>Source coverage</h2>
                     <p className='mt-0.5 text-xs text-ui-muted'>Collection status behind your monitoring.</p>
                 </div>
-                {isAdmin && <Link href='/dashboard/ti/sources' className='text-xs font-semibold text-ui-primary underline-offset-2 hover:underline'>Open source inventory</Link>}
+                {isAdmin && <Link href='/ti/sources' className='text-xs font-semibold text-ui-primary underline-offset-2 hover:underline'>Open source inventory</Link>}
             </div>
             <div className='mt-3 grid gap-2 sm:grid-cols-4'>
                 <CoverageFact label='Active sources' value={unavailable ? 'Loading' : `${activeSources}/${sourceCount}`} />
@@ -786,7 +786,7 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
             <div className='border-t border-ui-border px-4 py-3'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                     <p className='text-xs leading-5 text-ui-muted'>Use this workflow when a source match needs to become a customer case and delivery.</p>
-                    <Link href='/dashboard/dwm/actions' className='inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
+                    <Link href='/dwm/actions' className='inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
                         Run workflow
                     </Link>
                 </div>
@@ -824,10 +824,10 @@ function PublicTiDwmIntake({ handoff, tenantId, organizationId, activeSourceCoun
     sourceCount: number
     caseCount: number
 }) {
-    const sourceHref = '/dashboard/ti/sources'
+    const sourceHref = '/ti/sources'
     const orgHref = organizationId ? `/organizations?organizationId=${encodeURIComponent(organizationId)}` : `/organizations?tenantId=${encodeURIComponent(tenantId)}`
-    const actionsHref = organizationId ? `/dashboard/dwm/actions?organizationId=${encodeURIComponent(organizationId)}#dwm-alert-review` : '/dashboard/dwm/actions#dwm-alert-review'
-    const casesHref = organizationId ? `/dashboard/dwm/cases?organizationId=${encodeURIComponent(organizationId)}` : '/dashboard/dwm/cases'
+    const actionsHref = organizationId ? `/dwm/actions?organizationId=${encodeURIComponent(organizationId)}#dwm-alert-review` : '/dwm/actions#dwm-alert-review'
+    const casesHref = organizationId ? `/dwm/cases?organizationId=${encodeURIComponent(organizationId)}` : '/dwm/cases'
 
     if (!handoff.ok) {
         return (
@@ -1377,7 +1377,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
                     <p className='text-xs font-semibold uppercase text-ui-primary'>Workflow</p>
                     <h3 className='mt-0.5 text-base font-semibold text-ui-text'>Watchlist match to customer handoff</h3>
                 </div>
-                <Link href='/dashboard/dwm/actions' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
+                <Link href='/dwm/actions' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
                     {routeControlLabel}
                 </Link>
             </div>
@@ -2127,7 +2127,7 @@ function NoCaseWorkspace({ latestCaptures, workflowActions, watchTermCount, data
                                     <td className='px-4 py-3 text-sm font-semibold text-ui-text'>{row.stage}</td>
                                     <td className='px-4 py-3 text-sm text-ui-text'>{row.state}</td>
                                     <td className='px-4 py-3'>
-                                        <Link href='/dashboard/dwm/actions' className='inline-flex rounded-lg border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-ui-primary transition hover:border-ui-primary hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
+                                        <Link href='/dwm/actions' className='inline-flex rounded-lg border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-ui-primary transition hover:border-ui-primary hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
                                             {row.action}
                                         </Link>
                                     </td>
@@ -2890,7 +2890,7 @@ function caseDetailHref(caseId: string, alertId?: string, organizationId?: strin
     if (alertId) params.set('alertId', alertId)
     if (route) params.set('route', route)
     const query = params.toString()
-    return `/dashboard/dwm/cases/${encodeURIComponent(caseId)}${query ? `?${query}` : ''}`
+    return `/dwm/cases/${encodeURIComponent(caseId)}${query ? `?${query}` : ''}`
 }
 
 function severityClass(severity: string) {

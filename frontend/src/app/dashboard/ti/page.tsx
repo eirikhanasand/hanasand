@@ -44,7 +44,7 @@ export default async function TiAdminPage() {
             <section className='grid gap-3 xl:grid-cols-[1.1fr_1fr_1fr]'>
                 <LiveLane
                     title='Collection'
-                    href='/dashboard/ti/control'
+                    href='/ti/control'
                     icon={<DatabaseZap className='h-4 w-4' />}
                     state={operationalStateLabel(latestRun?.status || 'scheduled')}
                     stateTone={latestRun?.status === 'failed' ? 'bad' : latestRun?.status === 'running' || latestRun?.status === 'queued' ? 'watch' : 'ok'}
@@ -54,7 +54,7 @@ export default async function TiAdminPage() {
                 />
                 <LiveLane
                     title='Actor profiles'
-                    href='/dashboard/ti/enrichment'
+                    href='/ti/enrichment'
                     icon={<Radar className='h-4 w-4' />}
                     state={operationalStateLabel(enrichment.worker.state)}
                     stateTone={enrichment.worker.state === 'active' ? 'ok' : enrichment.worker.state === 'unavailable' ? 'bad' : 'watch'}
@@ -64,7 +64,7 @@ export default async function TiAdminPage() {
                 />
                 <LiveLane
                     title='Recent evidence'
-                    href='/dashboard/ti/activity'
+                    href='/ti/activity'
                     icon={<Camera className='h-4 w-4' />}
                     state={latestCapture ? 'captured' : 'watching'}
                     stateTone={latestCapture ? 'ok' : 'neutral'}
@@ -135,7 +135,7 @@ export default async function TiAdminPage() {
 
             <div className='grid gap-4 xl:grid-cols-[1.15fr_0.85fr]'>
                 <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                    <PanelTitle title='Sources being checked' actionHref='/dashboard/ti/sources' actionLabel='Sources' />
+                    <PanelTitle title='Sources being checked' actionHref='/ti/sources' actionLabel='Sources' />
                     <div className='overflow-x-auto'>
                         <table className='min-w-full divide-y divide-ui-border text-sm'>
                             <thead className='bg-ui-canvas text-left text-xs font-semibold uppercase text-ui-muted'>
@@ -156,7 +156,7 @@ export default async function TiAdminPage() {
                                     return (
                                         <tr key={source.id} className='hover:bg-ui-panel'>
                                             <td className='px-4 py-4'>
-                                                <Link href={`/dashboard/ti/sources/${source.id}`} className='font-semibold text-ui-text hover:text-ui-primary'>{source.name}</Link>
+                                                <Link href={`/ti/sources/${source.id}`} className='font-semibold text-ui-text hover:text-ui-primary'>{source.name}</Link>
                                                 <p className='mt-1 text-xs text-ui-muted'>{source.family}</p>
                                             </td>
                                             <td className='px-4 py-4'><StatusPill label={stale ? 'stale' : operationalStateLabel(source.status)} tone={stale ? 'bad' : source.status === 'active' ? 'ok' : 'watch'} /></td>
@@ -173,7 +173,7 @@ export default async function TiAdminPage() {
                 </DashboardPanel>
 
                 <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                    <PanelTitle title='Delivery state' actionHref='/dashboard/dwm' actionLabel='Dark web cases' />
+                    <PanelTitle title='Delivery state' actionHref='/dwm' actionLabel='Dark web cases' />
                     <div className='grid gap-3 p-4'>
                         <DeliveryRow icon={<ShieldCheck className='h-4 w-4' />} title='Matches detected' value={`${reviewDomains.length} entity matches`} tone={reviewDomains.length ? 'watch' : 'ok'} />
                         <DeliveryRow icon={<Webhook className='h-4 w-4' />} title='Webhook delivery' value='Delivery records are linked to dark web alerts' tone='neutral' />
@@ -185,7 +185,7 @@ export default async function TiAdminPage() {
 
             <div className='grid gap-4 xl:grid-cols-2'>
                 <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                    <PanelTitle title='Monitored entities' actionHref='/dashboard/ti/domains' actionLabel='Entities' />
+                    <PanelTitle title='Monitored entities' actionHref='/ti/domains' actionLabel='Entities' />
                     <div className='overflow-x-auto'>
                         <table className='min-w-full divide-y divide-ui-border text-sm'>
                             <thead className='bg-ui-canvas text-left text-xs font-semibold uppercase text-ui-muted'>
@@ -201,7 +201,7 @@ export default async function TiAdminPage() {
                                 {domains.map(domain => (
                                     <tr key={domain.domain} className='hover:bg-ui-panel'>
                                         <td className='px-4 py-4'>
-                                            <Link href={`/dashboard/ti/domains/${encodeURIComponent(domain.domain)}`} className='font-semibold text-ui-text hover:text-ui-primary'>{domain.company}</Link>
+                                            <Link href={`/ti/domains/${encodeURIComponent(domain.domain)}`} className='font-semibold text-ui-text hover:text-ui-primary'>{domain.company}</Link>
                                             <p className='mt-1 font-mono text-xs text-ui-muted'>{domain.domain}</p>
                                         </td>
                                         <td className='px-4 py-4'><StatusPill label={operationalStateLabel(domain.status)} tone={domain.status === 'review' ? 'watch' : domain.status === 'watching' ? 'ok' : 'neutral'} /></td>
@@ -216,7 +216,7 @@ export default async function TiAdminPage() {
                 </DashboardPanel>
 
                 <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                    <PanelTitle title='Recent evidence' actionHref='/dashboard/ti/sources' actionLabel='Evidence' />
+                    <PanelTitle title='Recent evidence' actionHref='/ti/sources' actionLabel='Evidence' />
                     <div className='overflow-x-auto'>
                         <table className='min-w-full divide-y divide-ui-border text-sm'>
                             <thead className='bg-ui-canvas text-left text-xs font-semibold uppercase text-ui-muted'>
@@ -231,7 +231,7 @@ export default async function TiAdminPage() {
                                 {captures.map(capture => (
                                     <tr key={capture.id} className='hover:bg-ui-panel'>
                                         <td className='px-4 py-4'>
-                                            <Link href={`/dashboard/ti/sources/${capture.sourceId}#${capture.id}`} className='font-semibold text-ui-text hover:text-ui-primary'>{capture.title}</Link>
+                                            <Link href={`/ti/sources/${capture.sourceId}#${capture.id}`} className='font-semibold text-ui-text hover:text-ui-primary'>{capture.title}</Link>
                                             <p className='mt-1 text-xs text-ui-muted'>{capture.domain}</p>
                                         </td>
                                         <td className='px-4 py-3 font-semibold text-ui-text'>{capture.actor}</td>
@@ -251,7 +251,7 @@ export default async function TiAdminPage() {
             </div>
 
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                <PanelTitle title='Actors being enriched' actionHref='/dashboard/ti/enrichment' actionLabel='Enrichment' />
+                <PanelTitle title='Actors being enriched' actionHref='/ti/enrichment' actionLabel='Enrichment' />
                 <div className='overflow-x-auto'>
                     <table className='min-w-full divide-y divide-ui-border text-sm'>
                         <thead className='bg-ui-canvas text-left text-xs font-semibold uppercase text-ui-muted'>
@@ -306,7 +306,7 @@ function buildActionItems({ reviewDomains, candidateSources, staleSources, faile
             title: domain.company,
             reason: `${domain.resultCount} result${domain.resultCount === 1 ? '' : 's'} with linked sources for ${domain.domain}`,
             state: `Last seen ${formatTiDate(domain.lastSeenAt)}`,
-            href: `/dashboard/ti/domains/${encodeURIComponent(domain.domain)}`,
+            href: `/ti/domains/${encodeURIComponent(domain.domain)}`,
         })),
         ...failedRuns.map(run => ({
             kind: 'run',
@@ -315,7 +315,7 @@ function buildActionItems({ reviewDomains, candidateSources, staleSources, faile
             title: run.id,
             reason: run.message,
             state: `Started ${formatTiDate(run.startedAt)}`,
-            href: '/dashboard/ti/runs',
+            href: '/ti/runs',
         })),
         ...staleSources.map(source => ({
             kind: 'source',
@@ -324,7 +324,7 @@ function buildActionItems({ reviewDomains, candidateSources, staleSources, faile
             title: source.name,
             reason: `Last collected ${formatTiDate(source.lastRunAt)}`,
             state: `${source.cadenceMinutes}m cadence`,
-            href: `/dashboard/ti/sources/${source.id}`,
+            href: `/ti/sources/${source.id}`,
         })),
         ...candidateSources.map(source => ({
             kind: 'source',
@@ -333,7 +333,7 @@ function buildActionItems({ reviewDomains, candidateSources, staleSources, faile
             title: source.name,
             reason: `Approve ${source.accessMethod}; risk ${source.risk}; ${source.resultTypes.length} result types.`,
             state: `Last ${formatTiDate(source.lastRunAt)} · next ${formatTiDate(source.nextRunAt)} · ${source.cadenceMinutes}m cadence`,
-            href: `/dashboard/ti/sources/${source.id}`,
+            href: `/ti/sources/${source.id}`,
         })),
         ...(latestCapture ? [{
             kind: 'capture',
@@ -342,7 +342,7 @@ function buildActionItems({ reviewDomains, candidateSources, staleSources, faile
             title: latestCapture.title,
             reason: latestCapture.resultSummary,
             state: `Captured ${formatTiDate(latestCapture.capturedAt)}`,
-            href: `/dashboard/ti/sources/${latestCapture.sourceId}#${latestCapture.id}`,
+            href: `/ti/sources/${latestCapture.sourceId}#${latestCapture.id}`,
         }] : []),
     ].slice(0, 10)
 }

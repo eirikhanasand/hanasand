@@ -34,13 +34,13 @@ final class BrowserWorkspaceModel: ObservableObject {
             icon: "gauge.with.dots.needle",
             tabs: [
                 BrowserTabState(label: "Dashboard", url: base.appendingPathComponent("dashboard").absoluteString),
-                BrowserTabState(label: "System", url: base.appendingPathComponent("dashboard/system").absoluteString),
+                BrowserTabState(label: "System", url: base.appendingPathComponent("system").absoluteString),
             ],
             destinations: [
                 BrowserDestination(title: "Dashboard", subtitle: "Overview", icon: "square.grid.2x2", url: base.appendingPathComponent("dashboard").absoluteString),
-                BrowserDestination(title: "Logs", subtitle: "Runtime", icon: "doc.text.magnifyingglass", url: base.appendingPathComponent("dashboard/logs").absoluteString),
-                BrowserDestination(title: "Database", subtitle: "Storage", icon: "externaldrive.connected.to.line.below", url: base.appendingPathComponent("dashboard/db").absoluteString),
-                BrowserDestination(title: "VMs", subtitle: "Machines", icon: "display.2", url: base.appendingPathComponent("dashboard/vms").absoluteString),
+                BrowserDestination(title: "Logs", subtitle: "Runtime", icon: "doc.text.magnifyingglass", url: base.appendingPathComponent("logs").absoluteString),
+                BrowserDestination(title: "Database", subtitle: "Storage", icon: "externaldrive.connected.to.line.below", url: base.appendingPathComponent("db").absoluteString),
+                BrowserDestination(title: "VMs", subtitle: "Machines", icon: "display.2", url: base.appendingPathComponent("vms").absoluteString),
             ]
         )
         let communication = BrowserTabGroup(
@@ -49,13 +49,13 @@ final class BrowserWorkspaceModel: ObservableObject {
             icon: "bubble.left.and.bubble.right",
             tabs: [
                 BrowserTabState(label: "Mail", url: "https://mail.hanasand.com"),
-                BrowserTabState(label: "Notes", url: base.appendingPathComponent("dashboard/notes").absoluteString),
+                BrowserTabState(label: "Notes", url: base.appendingPathComponent("notes").absoluteString),
             ],
             destinations: [
                 BrowserDestination(title: "Mail", subtitle: "Inbox", icon: "envelope", url: "https://mail.hanasand.com"),
-                BrowserDestination(title: "Notes", subtitle: "Shared memory", icon: "note.text", url: base.appendingPathComponent("dashboard/notes").absoluteString),
-                BrowserDestination(title: "Articles", subtitle: "Writing", icon: "text.alignleft", url: base.appendingPathComponent("dashboard/articles").absoluteString),
-                BrowserDestination(title: "Thoughts", subtitle: "Ideas", icon: "brain.head.profile", url: base.appendingPathComponent("dashboard/thoughts").absoluteString),
+                BrowserDestination(title: "Notes", subtitle: "Shared memory", icon: "note.text", url: base.appendingPathComponent("notes").absoluteString),
+                BrowserDestination(title: "Articles", subtitle: "Writing", icon: "text.alignleft", url: base.appendingPathComponent("content/articles").absoluteString),
+                BrowserDestination(title: "Thoughts", subtitle: "Ideas", icon: "brain.head.profile", url: base.appendingPathComponent("content/thoughts").absoluteString),
             ]
         )
         let research = BrowserTabGroup(

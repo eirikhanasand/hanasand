@@ -25,7 +25,7 @@ try {
     const page = await context.newPage()
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
-    await page.goto(`${base}/dashboard/mill?organizationId=beta`)
+    await page.goto(`${base}/mill?organizationId=beta`)
     await page.getByRole('heading', { name: 'Findings queue' }).waitFor()
     await page.getByRole('button', { name: /Suspicious login activity/ }).waitFor()
     assert.equal(await page.getByLabel('Organization', { exact: true }).inputValue(), 'beta')

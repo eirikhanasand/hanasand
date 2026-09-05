@@ -31,6 +31,6 @@ test('database overview focuses operator triage without removing telemetry actio
 
     expect(page).toContain('id=\'active-queries\'')
     expect(page).toContain('id=\'storage-inventory\'')
-    expect(page).toContain('href=\'/dashboard/db/backups\'')
-    expect(page).toContain('href=\'/dashboard/db/restore\'')
+    expect(page).toContain('href=\'/db/backups\'')
+    expect(page).toContain('href=\'/db/restore\'')
 })

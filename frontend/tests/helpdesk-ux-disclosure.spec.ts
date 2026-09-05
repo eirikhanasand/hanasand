@@ -11,7 +11,7 @@ test('helpdesk audit keeps advanced controls behind explicit disclosures', async
     expect(page).toContain('<details className=\'group rounded-lg border border-ui-border bg-ui-raised\'>')
     expect(page).toContain('Show filters')
     expect(page).toContain('aria-label=\'Active audit filters\'')
-    expect(page).toContain('href=\'/dashboard/system/impersonation?support=impersonation#support-actions\'')
+    expect(page).toContain('href=\'/system/impersonation?support=impersonation#support-actions\'')
     expect(page).toContain('const supportMode = resolveSupportMode(param(params, \'support\'))')
     expect(page).toContain('placeholder=\'Search audit events\'')
     expect(page).toContain('Audit snapshot')
@@ -90,7 +90,7 @@ test('helpdesk renders search first with filters and support actions collapsed',
         { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), domain: '127.0.0.1', path: '/' },
     ])
 
-    await page.goto('/dashboard/system/impersonation', { waitUntil: 'domcontentloaded' })
+    await page.goto('/system/impersonation', { waitUntil: 'domcontentloaded' })
 
     await expect(page.getByRole('heading', { name: 'Helpdesk operations' })).toBeVisible()
     await expect(page.getByPlaceholder('Search audit events')).toBeVisible()
@@ -138,7 +138,7 @@ test('start session CTA opens the support panel on the scoped session flow', asy
         { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), domain: '127.0.0.1', path: '/' },
     ])
 
-    await page.goto('/dashboard/system/impersonation?support=impersonation#support-actions', { waitUntil: 'domcontentloaded' })
+    await page.goto('/system/impersonation?support=impersonation#support-actions', { waitUntil: 'domcontentloaded' })
 
     await expect(page.getByText('Advanced support actions')).toBeVisible()
     await expect(page.getByTestId('support-primary-operation')).toBeVisible()

@@ -32,8 +32,8 @@ export default async function TiEnrichmentPage() {
                         <p className='mt-2 text-xs text-ui-muted'>{worker.state === 'unavailable' ? 'The enrichment status service could not be reached.' : worker.lastSuccessfulRunAt ? `Last successful run ${formatTiDate(worker.lastSuccessfulRunAt)}${worker.snapshotFresh === false ? ' · snapshot is stale' : ''}.` : 'No enrichment run has been recorded yet.'}</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
-                        <Link href='/dashboard/ti/control' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>Collection control</Link>
-                        <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>View sources <ArrowRight className='h-4 w-4' /></Link>
+                        <Link href='/ti/control' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>Collection control</Link>
+                        <Link href='/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>View sources <ArrowRight className='h-4 w-4' /></Link>
                     </div>
                 </div>
                 <div className='mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4'>
@@ -52,7 +52,7 @@ export default async function TiEnrichmentPage() {
                     <Users className='mx-auto h-8 w-8 text-ui-primary' />
                     <h2 className='mt-3 text-lg font-semibold text-ui-text'>No actor profiles yet</h2>
                     <p className='mx-auto mt-1 max-w-md text-sm leading-6 text-ui-muted'>Actor profiles appear automatically when collected public intelligence identifies a named actor or group. Start with the source inventory to see what is connected.</p>
-                    <Link href='/dashboard/ti/sources' className='mt-5 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90'>
+                    <Link href='/ti/sources' className='mt-5 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90'>
                         Open source inventory
                         <ArrowRight className='h-4 w-4' />
                     </Link>

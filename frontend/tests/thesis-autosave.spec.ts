@@ -23,7 +23,7 @@ test('autosave, idle, WebSocket updates, history restore, closing and draft reco
     const page = await owner.newPage()
     const publicPage = await reader.newPage()
     const current = async() => (await owner.request.get(baseURL + '/api/thesis')).json()
-    await page.goto(baseURL + '/dashboard/thesis')
+    await page.goto(baseURL + '/content/thesis')
     await publicPage.goto(baseURL + '/thesis')
     const body = page.getByRole('textbox', { name: 'Description Markdown' })
     await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0)
@@ -70,7 +70,7 @@ test('autosave, idle, WebSocket updates, history restore, closing and draft reco
     await body.fill('Written immediately before leaving')
     await page.goto('about:blank')
     await expect.poll(async() => (await current()).body, { timeout: 7000 }).toBe('Written immediately before leaving')
-    await page.goto(baseURL + '/dashboard/thesis')
+    await page.goto(baseURL + '/content/thesis')
     await expect(body).toHaveValue('Written immediately before leaving')
     // A failed close request must leave a draft that survives reload.
     await page.route('**/api/thesis', route => route.request().method() === 'GET' ? route.continue() : route.abort())

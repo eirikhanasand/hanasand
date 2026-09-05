@@ -368,7 +368,7 @@ function dashboardCaseHref(input: { caseId?: string, casePath?: string, alertId:
     if (input.tenantId) params.set('tenantId', input.tenantId)
     params.set('alertId', input.alertId)
     params.set('route', 'ti_workbench')
-    return `/dashboard/dwm/cases/${encodeURIComponent(caseId)}?${params.toString()}`
+    return `/dwm/cases/${encodeURIComponent(caseId)}?${params.toString()}`
 }
 
 function caseIdFromPath(path?: string) {

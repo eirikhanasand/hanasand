@@ -52,7 +52,7 @@ test('system dashboard focuses operator triage while preserving live controls', 
     expect(page).toContain('Open VM inventory')
     expect(page.indexOf('data-system-container-logs-disclosure')).toBeLessThan(page.indexOf('data-system-container-log-tail'))
     expect(page.indexOf('data-system-vm-danger-actions')).toBeLessThan(page.indexOf('data-system-stop-all-vms'))
-    expect(page).toContain('href={`/dashboard/logs?service=${encodeURIComponent(container.name)}`')
+    expect(page).toContain('href={`/logs?service=${encodeURIComponent(container.name)}`')
     expect(page.indexOf('data-system-summary-disclosure')).toBeLessThan(page.indexOf('data-system-summary-metrics'))
     expect(page.indexOf('data-system-related-disclosure')).toBeLessThan(page.indexOf('data-system-related-links'))
     expect(page).not.toContain(' returned ${status}')

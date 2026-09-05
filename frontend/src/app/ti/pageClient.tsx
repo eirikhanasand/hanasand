@@ -1642,7 +1642,7 @@ function techniqueCoveragePayloadFor(item: TiActorIntelligenceProfile['technique
         sourceIds: item.sourceIds,
         captureIds: item.captureIds,
         provenanceRefs: item.provenanceRefs,
-        route: missing.length ? '/dashboard/ti/enrichment' : '/dashboard/ti/workbench',
+        route: missing.length ? '/ti/enrichment' : '/ti/workbench',
         recommendedAction: missing.length ? 'queue_enrichment' : 'attach_to_case_review',
         blockedBy: missing.map(field => ({
             ownerLane: /capture|source|provenance/i.test(field) ? 'source' : 'public-ti',
@@ -1713,7 +1713,7 @@ function campaignActivityPayloadFor(item: TiActorIntelligenceProfile['campaignTi
         countries: item.countries,
         sourceIds: item.sourceIds,
         provenanceRefs: item.provenanceRefs,
-        route: missing.length ? '/dashboard/ti/enrichment' : '/dashboard/ti/workbench',
+        route: missing.length ? '/ti/enrichment' : '/ti/workbench',
         recommendedAction: missing.length ? 'queue_enrichment' : 'attach_to_case_review',
         blockedBy: missing.map(field => ({
             ownerLane: /source|provenance/i.test(field) ? 'source' : 'public-ti',
@@ -1996,7 +1996,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                                             {sourceRequestFamilyLabel(request.sourceFamily ?? 'source_capture')}
                                         </span>
                                         <span className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                                            {sourceRequestRouteLabel(request.route ?? '/dashboard/ti/enrichment')}
+                                            {sourceRequestRouteLabel(request.route ?? '/ti/enrichment')}
                                         </span>
                                     </div>
                                 </div>
@@ -2787,7 +2787,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 </div>
 
                 <div className='grid min-w-0 gap-2'>
-                    <Link href='/dashboard/dwm' className='inline-flex min-h-9 w-fit max-w-full items-center justify-center gap-2 justify-self-start whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
+                    <Link href='/dwm' className='inline-flex min-h-9 w-fit max-w-full items-center justify-center gap-2 justify-self-start whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
                         <ExternalLink className='h-3.5 w-3.5' />
                         Open console
                     </Link>
@@ -2981,7 +2981,7 @@ function relatedRecordHandoffPayloadFor(record: RelatedRecordRow, actionability:
                     ownerLane: 'webhook' as const,
                     field: `relatedAlerts.${record.recordId}.deliveryReadinessContext`,
                     detail: `Delivery status blocker: ${code}.`,
-                    route: '/dashboard/dwm',
+                    route: '/dwm',
                     handoff: 'Resolve delivery status before sending or replaying this alert.',
                     source: 'delivery_readiness' as const,
                 })),
@@ -5414,7 +5414,7 @@ function EmptyState() {
                     Search help
                 </button>
             </div>
-            <p className='text-sm text-ui-muted dark:text-ui-muted'>No new <Link href='/dashboard/dwm' className='font-semibold text-ui-primary underline decoration-ui-primary/60 underline-offset-2 hover:decoration-ui-primary focus:outline-none focus:ring-2 focus:ring-ui-primary/35'>alerts</Link>.</p>
+            <p className='text-sm text-ui-muted dark:text-ui-muted'>No new <Link href='/dwm' className='font-semibold text-ui-primary underline decoration-ui-primary/60 underline-offset-2 hover:decoration-ui-primary focus:outline-none focus:ring-2 focus:ring-ui-primary/35'>alerts</Link>.</p>
             {showSearchHelp ? (
                 <div className='fixed inset-0 z-1100 grid place-items-center bg-black/45 px-4 py-6' role='dialog' aria-modal='true' aria-labelledby='ti-search-help-title'>
                     <div className='absolute inset-0' onClick={() => setShowSearchHelp(false)} aria-hidden='true' />
@@ -5873,7 +5873,7 @@ function geographyContextPayloadFor(point: ReturnType<typeof actorGeoProfile>['p
             reportDate: row.reportDate,
             confidence: row.confidence,
         })) ?? [],
-        route: handoff?.watchlistTerm ? '/dashboard/ti/watchlists' : '/dashboard/ti/enrichment',
+        route: handoff?.watchlistTerm ? '/dwm/watchlists' : '/ti/enrichment',
         blockedBy: handoff ? [] : [{
             ownerLane: 'source',
             reason: 'Country row needs source evidence before it can be routed.',

@@ -12,7 +12,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const token = Cookies.get('access_token')?.value
     const userId = Cookies.get('id')?.value
     if (!userId || !token) {
-        return redirect(`/logout?path=/login%3Fpath%3D/dashboard/management/${id}%26expired=true`)
+        return redirect(`/logout?path=/login%3Fpath%3D/management/${id}%26expired=true`)
     }
 
     const vmResponse = await getVM(id, token, userId)

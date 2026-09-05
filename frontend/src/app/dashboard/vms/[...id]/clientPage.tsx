@@ -36,7 +36,7 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
         const token = getCookie('access_token')
         const id = getCookie('id')
         if (!id || !token) {
-            return router.push(`/logout?path=/login%3Fpath%3D/dashboard/vms/${id}%26expired=true`)
+            return router.push(`/logout?path=/login%3Fpath%3D/vms/${id}%26expired=true`)
         }
 
         const vmResponse = await getVM(serverVM.name)

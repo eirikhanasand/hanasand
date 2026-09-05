@@ -531,17 +531,17 @@ for (const row of partialContext.readiness.productReadiness) {
     assertProductReadinessRowProof(row)
 }
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'dashboard_evidence')?.href, '/dashboard')
-assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.href, '/dashboard/ti/sources')
-assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.href, '/dashboard/ti/sources')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.href, '/ti/sources')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.href, '/ti/sources')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.status, 'ready')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.endToEndWorkflowStepCount, 8)
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.endToEndWorkflowReadyStepCount, 8)
-assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'entitlement_readiness')?.href, '/dashboard/dwm')
-assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_delivery')?.href, '/dashboard/automation?setup=dwm')
-assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'dwm_product_snapshot')?.href, '/dashboard/dwm')
-assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'org_alert_export')?.href, '/dashboard/dwm')
-assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.href, '/dashboard/automation?setup=dwm')
-assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'helpdesk_audit')?.href, '/dashboard/system/impersonation')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'entitlement_readiness')?.href, '/dwm')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_delivery')?.href, '/automation?setup=dwm')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'dwm_product_snapshot')?.href, '/dwm')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'org_alert_export')?.href, '/dwm')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.href, '/automation?setup=dwm')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'helpdesk_audit')?.href, '/system/impersonation')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'deploy_probe')?.href, '/status')
 
 const degradedReadinessCases = buildReadinessCases({
@@ -558,17 +558,17 @@ const degradedReadinessCases = buildReadinessCases({
 const supportReadinessCase = degradedReadinessCases.find(item => item.id === 'support_admin_readiness')
 assert.equal(supportReadinessCase?.kind, 'support_readiness')
 assert.equal(supportReadinessCase?.queue, 'Support ops')
-assert.equal(supportReadinessCase?.relatedLinks.some(link => link.href === '/dashboard/system/impersonation'), true)
+assert.equal(supportReadinessCase?.relatedLinks.some(link => link.href === '/system/impersonation'), true)
 assert.equal(supportReadinessCase?.relatedLinks.some(link => link.href === '/api/backend/admin/support/access-recovery'), true)
 assert.equal(supportReadinessCase?.relatedLinks.some(link => link.href === '/api/backend/admin/audit-events?limit=50'), true)
 assert.ok(supportReadinessCase?.missingDependency, 'Support readiness case should expose unavailable proof as a blocker.')
-assert.equal(supportReadinessCase?.actions?.[0]?.href, '/dashboard/system/impersonation')
+assert.equal(supportReadinessCase?.actions?.[0]?.href, '/system/impersonation')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'public_ti_provenance')?.href, '/ti')
 
 const readyPayload = {
     ...partialPayload,
     publicTiProvenance: { ...partialPayload.publicTiProvenance!, status: 'ready' as const, blockers: [], sourceCount: 3, evidenceCount: 5 },
-    entitlement: { ...partialPayload.entitlement!, status: 'ready' as const, blockers: [], allowed: true, policy: 'shared_watchlist', checkedRole: 'analyst', source: routes.entitlement, href: '/dashboard/dwm', unavailableReason: undefined },
+    entitlement: { ...partialPayload.entitlement!, status: 'ready' as const, blockers: [], allowed: true, policy: 'shared_watchlist', checkedRole: 'analyst', source: routes.entitlement, href: '/dwm', unavailableReason: undefined },
     helpdeskAudit: { ...partialPayload.helpdeskAudit!, status: 'ready' as const, blockers: [], auditedActions: 2, openRecoveryRequests: 0 },
     orgAlertExport: { ...partialPayload.orgAlertExport!, status: 'ready' as const, blockers: [], activeTermCount: 1, canGenerateAlerts: true },
     webhookHealth: { ...partialPayload.webhookHealth!, status: 'ready' as const, blockers: [], destinationCount: 1, activeDestinationCount: 1, deliveryReadyCount: 1 },
@@ -591,7 +591,7 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         status: 'ready',
         checkedAt: generatedAt,
         source: routes.organizationReadiness,
-        href: '/dashboard/dwm',
+        href: '/dwm',
         organizationId: 'org_acme',
         activeTermCount: 2,
         pausedCount: 0,
@@ -611,7 +611,7 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         status: 'ready',
         checkedAt: generatedAt,
         source: '/api/organizations/org_acme/webhooks',
-        href: '/dashboard/automation?setup=dwm',
+        href: '/automation?setup=dwm',
         destinationCount: 1,
         activeDestinationCount: 1,
         deliveryReadyCount: 1,
@@ -630,7 +630,7 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         status: 'ready',
         checkedAt: generatedAt,
         source: '/api/backend/admin/support/access-recovery + /api/backend/admin/audit-events?limit=50',
-        href: '/dashboard/system/impersonation',
+        href: '/system/impersonation',
         auditedActions: 2,
         openRecoveryRequests: 1,
         supportQueueDepth: 1,
@@ -648,7 +648,7 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         status: 'ready',
         checkedAt: generatedAt,
         source: '/api/dwm/product',
-        href: '/dashboard/dwm',
+        href: '/dwm',
         tenantId: 'org_acme',
         watchlistTermCount: 1,
         alertCount: 1,
@@ -710,7 +710,7 @@ const organizationProofBackedPayload = buildProductProgressPayload({
         status: 'ready',
         checkedAt: generatedAt,
         source: routes.organizationReadiness,
-        href: '/dashboard/dwm',
+        href: '/dwm',
         organizationId: 'org_acme',
         policy: 'organization_readiness',
         allowed: true,
@@ -728,7 +728,7 @@ const organizationProofBackedPayload = buildProductProgressPayload({
         status: 'ready',
         checkedAt: generatedAt,
         source: routes.organizationReadiness,
-        href: '/dashboard/dwm',
+        href: '/dwm',
         organizationId: 'org_acme',
         activeTermCount: organizationReadinessProof.counts.activeWatchlistTermCount,
         pausedCount: organizationReadinessProof.counts.pausedWatchlistCount,
@@ -800,7 +800,7 @@ const degradedPayload = {
         status: 'blocked' as const,
         checkedAt: generatedAt,
         source: routes.entitlement,
-        href: '/dashboard/dwm',
+        href: '/dwm',
         organizationId: 'org_acme',
         policy: 'shared_watchlist',
         allowed: false,
@@ -1008,7 +1008,7 @@ assert.ok(workbenchSource.includes('inspect_alert_source_health'), 'Selected ale
 assert.ok(workbenchSource.includes('alertSourceProfileHref'), 'Alert source-health action should derive source profile links from backed alert evidence provenance.')
 assert.ok(workbenchSource.includes('sourceProfileHref(item.provenance.sourceId)'), 'Alert evidence rows should deep-link individual evidence provenance to source profiles.')
 assert.ok(workbenchSource.includes('sourceProfileHref(sourceId)'), 'Alert source-health rail and evidence rows should share source profile URL construction.')
-assert.ok(workbenchSource.includes('/dashboard/ti/sources/${encodeURIComponent(sourceId)}'), 'Alert source-health drill-in should deep-link to the source inventory profile.')
+assert.ok(workbenchSource.includes('/ti/sources/${encodeURIComponent(sourceId)}'), 'Alert source-health drill-in should deep-link to the source inventory profile.')
 assert.ok(workbenchSource.includes('replay_alert'), 'Operator action rail should expose backed DWM alert replay.')
 assert.ok(workbenchSource.includes('/api/dwm/alerts/${encodeURIComponent(selected.id)}/replay'), 'Replay action should call the selected alert replay endpoint.')
 assert.ok(workbenchSource.includes('alertReplayResultMessage'), 'Replay actions should report backed alert replay workflow results.')
@@ -1048,15 +1048,15 @@ assert.ok(workbenchSource.includes('active sources, ${sourceCoverage.captureCoun
 assert.ok(workbenchSource.includes('inspect_source_inventory'), 'Source readiness should expose the backed source inventory drill-in.')
 assert.ok(workbenchSource.includes('/api/ti/scraper/control'), 'Source readiness should link to the backed scraper control source inventory proxy.')
 assert.ok(workbenchSource.includes('open_source_operations'), 'Source readiness should deep-link to the source operations workspace.')
-assert.ok(workbenchSource.includes('/dashboard/ti/control'), 'Source readiness should expose the backed source operations UI route.')
+assert.ok(workbenchSource.includes('/ti/control'), 'Source readiness should expose the backed source operations UI route.')
 assert.ok(workbenchSource.includes('open_capture_source'), 'Selected source captures should expose the exact source profile drill-in.')
 assert.ok(workbenchSource.includes('open_capture_domain'), 'Selected source captures should expose the exact domain context drill-in.')
 assert.ok(workbenchSource.includes('relatedLinkHref(selected, \'Open source\')'), 'Source capture drill-ins should reuse backed related source links.')
-assert.ok(workbenchSource.includes('Source capture drill-in requires /dashboard/ti/sources/:id.'), 'Missing source profile links should be blocked honestly.')
+assert.ok(workbenchSource.includes('Source capture drill-in requires /ti/sources/:id.'), 'Missing source profile links should be blocked honestly.')
 assert.ok(workbenchSource.includes('open_domain_review'), 'Selected domain reviews should expose the exact domain review route.')
 assert.ok(workbenchSource.includes('review_domain_sources'), 'Selected domain reviews should expose the source review route.')
 assert.ok(workbenchSource.includes('relatedLinkHref(selected, \'Review sources\')'), 'Domain review source actions should reuse backed related source links.')
-assert.ok(workbenchSource.includes('Source review requires /dashboard/ti/sources.'), 'Missing domain source review links should be blocked honestly.')
+assert.ok(workbenchSource.includes('Source review requires /ti/admin/sources.'), 'Missing domain source review links should be blocked honestly.')
 assert.ok(workbenchSource.includes('insertedCaptureCount'), 'Canary collection action should report inserted capture count.')
 assert.ok(workbenchSource.includes('failedTaskCount'), 'Canary collection action should report failed task count.')
 assert.ok(workbenchSource.includes('telegramPublicCreated'), 'Source coverage action should report source request summary fields.')

@@ -882,8 +882,8 @@ function authorizeEntitlementAccess(options: ApiServerOptions, organizationId: s
 function entitlementIntegrationHints(organization: Organization): DwmEntitlementIntegrationHints {
   return {
     dashboard: {
-      summaryRoute: `/dashboard/subscription?organizationId=${encodeURIComponent(organization.id)}`,
-      watchlistRoute: `/dashboard/dwm?organizationId=${encodeURIComponent(organization.id)}`,
+      summaryRoute: `/subscription?organizationId=${encodeURIComponent(organization.id)}`,
+      watchlistRoute: `/dwm?organizationId=${encodeURIComponent(organization.id)}`,
       blockedActionCopy: "This organization has reached its DWM entitlement limit. Review plan limits or remove unused watchlists."
     },
     helpdesk: {

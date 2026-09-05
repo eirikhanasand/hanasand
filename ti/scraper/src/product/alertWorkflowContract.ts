@@ -814,7 +814,7 @@ export function buildAlertProvenanceConsumerPacket(input: {
     caseWorkflow: consumerBlockerCodes(blockers, ["missing_org_scope", "missing_case_route", "missing_source_provenance", "stale_source_provenance", "duplicate_alert_unresolved"])
   };
   const consumers = {
-    dashboard: alertProvenanceConsumerReadiness("dashboard", `/dashboard/dwm/alerts/${encodeURIComponent(contract.alertId)}`, [
+    dashboard: alertProvenanceConsumerReadiness("dashboard", `/dwm/alerts/${encodeURIComponent(contract.alertId)}`, [
       "alertId",
       "organizationId",
       "provenance.captureIds",
@@ -956,7 +956,7 @@ export function buildAlertAnalystWorkflowEvent(input: {
       orgWatchlistScope: after.orgWatchlistScope
     },
     consumers: {
-      dashboard: analystWorkflowConsumerReadiness("dashboard", `/dashboard/dwm/alerts/${encodeURIComponent(after.alertId || before.alertId)}`, ["alertId", "organizationId", "action", "transition.changedFields"], consumerBlockers.dashboard),
+      dashboard: analystWorkflowConsumerReadiness("dashboard", `/dwm/alerts/${encodeURIComponent(after.alertId || before.alertId)}`, ["alertId", "organizationId", "action", "transition.changedFields"], consumerBlockers.dashboard),
       caseWorkflow: analystWorkflowConsumerReadiness("case", after.casePath ?? before.casePath, ["alertId", "caseId", "casePath", "actorId", "rationale", "transition.after"], consumerBlockers.caseWorkflow),
       webhook: analystWorkflowConsumerReadiness("webhook", input.action === "replay_webhook" ? "/v1/dwm/webhooks/deliver" : undefined, ["alertId", "organizationId", "caseId", "provenance.captureIds", "transition.idempotencyKey"], consumerBlockers.webhook),
       audit: analystWorkflowConsumerReadiness("audit", "/api/admin/support/inspect", ["alertId", "organizationId", "actorId", "action", "rationale", "transition.idempotencyKey"], consumerBlockers.audit)
@@ -1049,7 +1049,7 @@ export function buildAlertAnalystCaseLedgerAdapter(input: {
     membership: input.membership,
     consumers: {
       caseLedger: caseLedgerConsumerReadiness("case", routePath, ["tenantId", "organizationId", "receipt.workflowEventId", "receipt.action", "receipt.casePaths"], consumerBlockers.caseLedger),
-      dashboard: caseLedgerConsumerReadiness("dashboard", `/dashboard/dwm/alerts/${encodeURIComponent(event.alertId)}`, ["alertId", "caseId", "action", "execution"], consumerBlockers.dashboard),
+      dashboard: caseLedgerConsumerReadiness("dashboard", `/dwm/alerts/${encodeURIComponent(event.alertId)}`, ["alertId", "caseId", "action", "execution"], consumerBlockers.dashboard),
       audit: caseLedgerConsumerReadiness("audit", "/api/admin/support/inspect", ["organizationId", "memberId", "role", "receipt.idempotencyKey"], consumerBlockers.audit)
     },
     blockers

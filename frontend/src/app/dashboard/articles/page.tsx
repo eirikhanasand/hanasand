@@ -18,7 +18,7 @@ export default async function Page() {
                 title='Articles'
                 description='Editorial queue, latest movement, and published research rows.'
                 actions={
-                    <Link href='/dashboard/articles/create' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-text transition hover:opacity-90'>
+                    <Link href='/content/articles/create' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-text transition hover:opacity-90'>
                         <Plus className='h-4 w-4' />
                         Create article
                     </Link>
@@ -32,7 +32,7 @@ export default async function Page() {
                     </div>
                     <h2 className='mt-4 text-xl font-semibold text-ui-text'>Publish your first article</h2>
                     <p className='mt-2 text-sm leading-6 text-ui-muted'>Turn research into a clear public update and start the editorial queue.</p>
-                    <Link href='/dashboard/articles/create' className='mt-5 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>
+                    <Link href='/content/articles/create' className='mt-5 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>
                         <Plus className='h-4 w-4' />
                         Create your first article
                     </Link>

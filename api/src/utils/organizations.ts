@@ -334,7 +334,7 @@ export type OrganizationWatchlistAlertBridgeContract = {
     }
     caseRouteExpectation: {
         route: 'organization_watchlist'
-        pathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
+        pathTemplate: '/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
         queryFields: ['organizationId', 'watchlistItemId']
         blockerCode: 'no_case_route'
     }
@@ -666,7 +666,7 @@ export type OrganizationSharedWatchlistDownstreamProof = {
     }
     caseBridge: {
         route: 'POST /v1/cases'
-        casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
+        casePathTemplate: '/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
         caseWorkflowContract: {
             schemaVersion: 'organization.watchlist_case_workflow_contract.v1'
             organizationId: string
@@ -679,7 +679,7 @@ export type OrganizationSharedWatchlistDownstreamProof = {
                 update: 'PATCH /v1/cases/:id'
             }
             requiredQueryFields: Array<'organizationId'>
-            casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
+            casePathTemplate: '/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
             watchlistScope: {
                 watchlistItemIds: string[]
                 alertGeneratorKeys: string[]
@@ -975,7 +975,7 @@ export type OrganizationSharedWatchlistIntegrationGuardrails = {
         requiredTimelineEvents: Array<'case.opened' | 'case.linked_alert' | 'case.assigned' | 'case.status_changed' | 'case.note_added'>
         requiredEvidenceFields: Array<'alertId' | 'watchlistItemIds' | 'alertGeneratorKeys' | 'matchedTerms' | 'source' | 'capturedAt' | 'casePath'>
         requiredRedactedFields: Array<'activeTerms[].term' | 'case.evidence.rawContent'>
-        casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
+        casePathTemplate: '/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
         actorCanOpenCase: boolean
         actorCanAssignCase: boolean
         blockerCodes: Array<'case_org_scope_missing' | 'case_path_missing' | 'case_fields_missing' | 'case_timeline_missing' | 'case_evidence_missing' | 'case_redaction_missing' | 'case_role_gate_missing'>
@@ -1346,7 +1346,7 @@ export type OrganizationWatchlistAlertTermsExport = {
         alertUpsertFunction: 'upsertDwmAlert'
         alertRoute: 'organization_watchlist'
         caseRoute: 'POST /v1/cases'
-        casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
+        casePathTemplate: '/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
         watchlistScope: {
             watchlistItemIds: string[]
             alertGeneratorKeys: string[]
@@ -1505,7 +1505,7 @@ export type OrganizationWatchlistAlertTermsExport = {
             alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms'
             alertReadiness: 'GET /api/organizations/:id/alert-readiness'
             webhookDestinationOrgField: 'destination.org_id'
-            casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
+            casePathTemplate: '/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
         }
     }
     blockedReasons: string[]
@@ -3730,7 +3730,7 @@ export function organizationSharedWatchlistDownstreamProof(
         },
         caseBridge: {
             route: 'POST /v1/cases',
-            casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
+            casePathTemplate: '/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
             caseWorkflowContract: {
                 schemaVersion: 'organization.watchlist_case_workflow_contract.v1',
                 organizationId: organization.id,
@@ -3743,7 +3743,7 @@ export function organizationSharedWatchlistDownstreamProof(
                     update: 'PATCH /v1/cases/:id',
                 },
                 requiredQueryFields: ['organizationId'],
-                casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
+                casePathTemplate: '/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
                 watchlistScope: {
                     watchlistItemIds: activeTerms.map(term => term.watchlistItemId),
                     alertGeneratorKeys,
@@ -4720,7 +4720,7 @@ function organizationSharedWatchlistCaseWorkflowGuardrails(
     if (workflow.organizationId !== proof.organizationId || workflow.tenantId !== proof.organizationId) {
         blockerCodes.push('case_org_scope_missing')
     }
-    if (workflow.casePathTemplate !== '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId') {
+    if (workflow.casePathTemplate !== '/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId') {
         blockerCodes.push('case_path_missing')
     }
     if (!requiredCaseFields.every(field => workflow.requiredCaseFields.includes(field))) {
@@ -4749,7 +4749,7 @@ function organizationSharedWatchlistCaseWorkflowGuardrails(
         requiredTimelineEvents,
         requiredEvidenceFields,
         requiredRedactedFields,
-        casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
+        casePathTemplate: '/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
         actorCanOpenCase: workflow.actorActions.canOpenCase,
         actorCanAssignCase: workflow.actorActions.canAssignCase,
         blockerCodes: [...new Set(blockerCodes)],
@@ -6735,7 +6735,7 @@ export function buildOrganizationDwmAlertReference(
     item: OrganizationWatchlistRow
 ): OrganizationDwmAlertReference {
     const watchlistName = `${organization.name} ${item.kind} watchlist`
-    const casePath = `/dashboard/dwm?organizationId=${encodeURIComponent(organization.id)}&watchlistItemId=${encodeURIComponent(item.id)}`
+    const casePath = `/dwm?organizationId=${encodeURIComponent(organization.id)}&watchlistItemId=${encodeURIComponent(item.id)}`
     const dedupeKey = `org:${organization.id}:watchlist:${item.id}:${item.kind}:${item.value.toLowerCase()}`
     const bridgeContext = buildOrganizationBridgeContext(organization)
     const status = normalizeWatchlistStatus(item)
@@ -7079,7 +7079,7 @@ export function organizationWatchlistAlertTermsExport(
             alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms',
             alertReadiness: 'GET /api/organizations/:id/alert-readiness',
             webhookDestinationOrgField: 'destination.org_id',
-            casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
+            casePathTemplate: '/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
         },
     }
     const activeAdminCount = Number(organization.admin_count ?? organization.owner_count ?? 0)
@@ -7925,7 +7925,7 @@ export function organizationWatchlistAlertTermsExport(
             },
             caseRouteExpectation: {
                 route: 'organization_watchlist',
-                pathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
+                pathTemplate: '/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
                 queryFields: ['organizationId', 'watchlistItemId'],
                 blockerCode: 'no_case_route',
             },

@@ -1302,7 +1302,7 @@ function auditLink(actionType: string, requestId: string, eventIds: number[] = [
         actionType,
         requestId,
         eventIds,
-        href: `/dashboard/system/impersonation?request=${encodeURIComponent(requestId)}&action=${encodeURIComponent(actionType)}&source=admin&service=hanasand-api`,
+        href: `/system/impersonation?request=${encodeURIComponent(requestId)}&action=${encodeURIComponent(actionType)}&source=admin&service=hanasand-api`,
         api: `/api/admin/audit-events?request=${encodeURIComponent(requestId)}&action=${encodeURIComponent(actionType)}&source=admin&service=hanasand-api`,
     }
 }

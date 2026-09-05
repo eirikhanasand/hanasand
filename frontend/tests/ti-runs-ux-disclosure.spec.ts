@@ -22,7 +22,7 @@ test('ti runs keeps collector activity primary while totals and evidence are dis
 
     expect(source).toContain('actions={<ManualRunButton label=\'Start manual run\' queries={runQueries} />}')
     expect(source).toContain('orderedRuns.map(run =>')
-    expect(source).toContain('href={`/dashboard/ti/sources/${run.sourceId}`}')
+    expect(source).toContain('href={`/ti/sources/${run.sourceId}`}')
     expect(source).toContain('{captureTotal} captures · {screenshotTotal} screenshots')
     expect(source).toContain('sourceRuns.reduce((sum, run) => sum + run.captures, 0)')
 })

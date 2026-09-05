@@ -108,7 +108,7 @@ struct CommandDock: View {
                     Label("Reveal working folder", systemImage: "folder")
                 }
                 Button {
-                    model.openNativeDashboard(path: "/dashboard/system/rates", label: "Rate limits")
+                    model.openNativeDashboard(path: "/system/rates", label: "Rate limits")
                 } label: {
                     Label("Open quota controls", systemImage: "gauge.with.needle")
                 }

@@ -1311,8 +1311,8 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
             generatedAlertReferences: alertReferences,
             links: {
                 api: `/api/organizations/${encodeURIComponent(organization.id)}/alert-readiness`,
-                console: `/dashboard/dwm?organizationId=${encodeURIComponent(organization.id)}`,
-                audit: `/dashboard/system/impersonation?org=${encodeURIComponent(organization.id)}&action=support.organization`,
+                console: `/dwm?organizationId=${encodeURIComponent(organization.id)}`,
+                audit: `/system/impersonation?org=${encodeURIComponent(organization.id)}&action=support.organization`,
             },
             supportTimelineBridge: {
                 schemaVersion: 'support.organization.alert_readiness.audit_bridge.v1',
@@ -12081,7 +12081,7 @@ function auditTimelineLink(input: { org?: string | null, target?: string | null,
     const query = params.toString()
     return {
         api: `/api/admin/audit-events?${query}`,
-        href: `/dashboard/system/impersonation?${query}`,
+        href: `/system/impersonation?${query}`,
     }
 }
 
@@ -13816,7 +13816,7 @@ function supportAuditExportProof(filters: Record<string, unknown>, timeline: Arr
         immutableEventIds: eventIds,
         eventCount: timeline.length,
         route: '/api/admin/audit-events',
-        dashboardRoute: '/dashboard/system/impersonation',
+        dashboardRoute: '/system/impersonation',
         replay: {
             method: 'GET',
             query: replayQuery,

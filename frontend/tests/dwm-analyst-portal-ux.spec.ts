@@ -34,9 +34,9 @@ test('DWM next operator action remains scoped to the available workflow step', (
         suppressReady: false,
     }
 
-    expect(dwmNextOperatorAction({ ...base, caseHref: '/dashboard/dwm/cases/case-1', latestDeliveryStatus: 'delivered', latestDeliverySummary: 'delivered from 2m ago' })).toMatchObject({
+    expect(dwmNextOperatorAction({ ...base, caseHref: '/dwm/cases/case-1', latestDeliveryStatus: 'delivered', latestDeliverySummary: 'delivered from 2m ago' })).toMatchObject({
         kind: 'open_case_link',
-        href: '/dashboard/dwm/cases/case-1',
+        href: '/dwm/cases/case-1',
         label: 'Review case and delivery trail',
     })
 })

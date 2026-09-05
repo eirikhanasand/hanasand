@@ -5,13 +5,13 @@ export default function MobileNav({ id }: { id: string }) {
     return (
         <div className='flex w-full gap-2 md:hidden'>
             <div className='group grid h-fit w-full cursor-pointer gap-2 rounded-lg border border-ui-border px-2 py-1'>
-                <Link href='/dashboard/traffic' className='flex w-full items-center justify-between gap-2'>
+                <Link href='/traffic' className='flex w-full items-center justify-between gap-2'>
                     <Cog className='h-5 w-5 text-ui-muted group-hover:text-ui-text' />
                     <h1 className='font-semibold text-base self-center'>System</h1>
                 </Link>
             </div>
             <div className='group grid h-fit w-full cursor-pointer gap-2 rounded-lg border border-ui-border px-2 py-1'>
-                <Link href='/dashboard/traffic' className='flex w-full items-center justify-between gap-2'>
+                <Link href='/traffic' className='flex w-full items-center justify-between gap-2'>
                     <TrendingUp className='h-5 w-5 text-ui-muted group-hover:text-ui-primary' />
                     <h1 className='font-semibold text-base self-center'>Traffic</h1>
                 </Link>

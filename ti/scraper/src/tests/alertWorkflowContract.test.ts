@@ -154,7 +154,7 @@ describe("alert workflow preservation contract", () => {
         dashboard: {
           ready: true,
           ownerLane: "dashboard",
-          route: "/dashboard/dwm/alerts/alert_acme_lumma",
+          route: "/dwm/alerts/alert_acme_lumma",
           requiredFields: expect.arrayContaining(["alertId", "organizationId", "provenance.captureIds"])
         },
         webhook: {
@@ -316,7 +316,7 @@ describe("alert workflow preservation contract", () => {
         dashboard: {
           ready: true,
           ownerLane: "dashboard",
-          route: "/dashboard/dwm/alerts/alert_acme_lumma",
+          route: "/dwm/alerts/alert_acme_lumma",
           requiredFields: expect.arrayContaining(["alertId", "organizationId", "action", "transition.changedFields"])
         },
         caseWorkflow: {
@@ -496,7 +496,7 @@ describe("alert workflow preservation contract", () => {
         dashboard: {
           ready: true,
           ownerLane: "dashboard",
-          route: "/dashboard/dwm/alerts/alert_acme_lumma"
+          route: "/dwm/alerts/alert_acme_lumma"
         },
         audit: {
           ready: true,

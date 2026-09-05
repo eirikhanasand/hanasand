@@ -24,7 +24,7 @@ test('ti source inventory keeps source health primary while summary and coverage
     expect(source.indexOf('data-ti-source-capture-coverage-disclosure')).toBeLessThan(source.indexOf(' data-ti-source-capture-coverage>'))
 
     expect(source).toContain('<ManualRunButton sourceId={row.source.id} label=\'Run\'')
-    expect(source).toContain('href={`/dashboard/ti/sources/${row.source.id}?scope=${scope}`}')
+    expect(source).toContain('href={`/ti/sources/${row.source.id}?scope=${scope}`}')
     expect(source).toContain('sourceRows.filter(row => row.health.state !== \'healthy\'')
     expect(source).toContain('Bounded recent sample · {overview.sourceTotals.executable} executable sources')
     expect(source).toContain('% AI confidence')

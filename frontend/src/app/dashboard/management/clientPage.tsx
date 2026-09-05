@@ -93,7 +93,7 @@ export default function SystemDashboard({
                                         >
                                             <RefreshCcw className='h-4 w-4' />
                                         </button>
-                                        <Link href={`/dashboard/vm/${vm.name}`} className='inline-flex h-8 items-center rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:text-ui-primary'>Details</Link>
+                                        <Link href={`/vm/${vm.name}`} className='inline-flex h-8 items-center rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:text-ui-primary'>Details</Link>
                                     </div>
                                 </div>
                                 {isExpanded && metrics && (

@@ -20,7 +20,7 @@ test('Cases keeps the empty state modest and workflow-free', async ({ context, p
         await route.fulfill({ json: { alerts: [] } })
     })
 
-    await page.goto('/dashboard/dwm/cases?organizationId=org_acme', { waitUntil: 'domcontentloaded' })
+    await page.goto('/dwm/cases?organizationId=org_acme', { waitUntil: 'domcontentloaded' })
 
     const overview = page.locator('[data-dwm-cases-overview="true"]')
     await expect(overview.getByRole('heading', { name: 'Cases' })).toBeVisible()
@@ -70,7 +70,7 @@ test('Cases renders persisted incidents with their available context', async ({ 
         })
     })
 
-    await page.goto('/dashboard/dwm/cases?organizationId=org_acme', { waitUntil: 'domcontentloaded' })
+    await page.goto('/dwm/cases?organizationId=org_acme', { waitUntil: 'domcontentloaded' })
 
     const overview = page.locator('[data-dwm-cases-overview="true"]')
     await expect(overview.locator('[data-dwm-case-row="true"]')).toHaveCount(1)

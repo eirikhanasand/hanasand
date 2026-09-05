@@ -17,7 +17,7 @@ export default function EditorClient({ thought }: { thought: Thought }) {
     async function handleDelete() {
         const result = await deleteThought(thought.id)
         if (result.status === 200) {
-            router.push(`/dashboard/thoughts?message=${result.message}`)
+            router.push(`/content/thoughts?message=${result.message}`)
         } else {
             setError(result.message)
         }

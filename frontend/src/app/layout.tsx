@@ -1,3 +1,6 @@
+import parseCookie from '@/utils/cookies/parseCookie'
+import DashboardSidebar from '@/components/dashboard/dashboardSidebar'
+import ImpersonationBanner from '@/components/impersonation/impersonationBanner'
 import { ReactNode } from 'react'
 import { cookies, headers } from 'next/headers'
 import './globals.css'
@@ -14,6 +17,19 @@ export default async function layout({ children }: { children: ReactNode }) {
     const themeCookie = Cookies.get('theme')?.value
     const theme = themeCookie === 'dark' ? 'dark' : 'light'
     const path = Headers.get('x-current-path') || ''
+    const id = Cookies.get('id')?.value || ''
+    const roles = parseCookie<Array<Role | string>>(Cookies.get('roles')?.value, [])
+    const roleIds = roles.flatMap(role => {
+        if (typeof role === 'string') return [role]
+        const legacy = role as Role & { role_id?: string, role?: string }
+        return [legacy.id, legacy.role_id, legacy.role].filter(Boolean)
+    })
+    const isAdmin = roleIds.includes('administrator') || roleIds.includes('admin')
+    const canManageSystem = isAdmin || roleIds.includes('system_admin')
+    const canManageContent = isAdmin || roleIds.includes('content_admin')
+    const canReviewIntel = canManageSystem || roleIds.includes('analyst') || roleIds.includes('owner')
+    const impersonatingId = Cookies.get('impersonating_id')?.value || Headers.get('x-impersonating-id') || ''
+    const impersonatingName = Cookies.get('impersonating_name')?.value || Headers.get('x-impersonating-name') || ''
 
     return (
         <html lang='en' className={theme}>
@@ -21,7 +37,11 @@ export default async function layout({ children }: { children: ReactNode }) {
                 <div className='site-atmosphere' />
                 <Header token={token} path={path} />
                 <DetachedBoxHost />
-                <RouteFrame serverPath={path} token={token}>{children}</RouteFrame>
+                <RouteFrame serverPath={path} token={token}
+                    sidebar={id && token ? <DashboardSidebar id={id} isAdmin={isAdmin} canManageSystem={canManageSystem} canManageContent={canManageContent} canReviewIntel={canReviewIntel} /> : null}
+                    banner={impersonatingId ? <ImpersonationBanner id={impersonatingId} name={impersonatingName} /> : null}>
+                    {children}
+                </RouteFrame>
             </body>
         </html>
     )

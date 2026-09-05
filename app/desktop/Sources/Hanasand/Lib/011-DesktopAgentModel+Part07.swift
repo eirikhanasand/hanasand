@@ -104,16 +104,16 @@ extension DesktopAgentModel {
                 await loadNativeDashboardData()
             }
         } else if command == "open_dashboard_mail" {
-            openNativeDashboard(path: "/dashboard/mail", label: "Mail")
+            openNativeDashboard(path: "/mail", label: "Mail")
             append(meta: "Dashboard", body: "Opened native Mail panel.", kind: .command)
         } else if command == "open_dashboard_automations" {
             openNativeDashboard(path: "/dashboard/automations", label: "Automations")
             append(meta: "Dashboard", body: "Opened Automations panel.", kind: .command)
         } else if command == "open_dashboard_articles" {
-            openNativeDashboard(path: "/dashboard/articles", label: "Articles")
+            openNativeDashboard(path: "/content/articles", label: "Articles")
             append(meta: "Dashboard", body: "Opened native Articles panel.", kind: .command)
         } else if command == "open_dashboard_thoughts" {
-            openNativeDashboard(path: "/dashboard/thoughts", label: "Thoughts")
+            openNativeDashboard(path: "/content/thoughts", label: "Thoughts")
             append(meta: "Dashboard", body: "Opened native Thoughts panel.", kind: .command)
         } else if command == "open_dashboard_shares" {
             openNativeDashboard(path: "/s", label: "Shares")
@@ -134,37 +134,37 @@ extension DesktopAgentModel {
             openNativeDashboard(path: "/role", label: "Roles")
             append(meta: "Dashboard", body: "Opened native Roles panel.", kind: .command)
         } else if command == "open_dashboard_logs" {
-            openNativeDashboard(path: "/dashboard/logs", label: "Logs")
+            openNativeDashboard(path: "/logs", label: "Logs")
             append(meta: "Dashboard", body: "Opened native Logs panel.", kind: .command)
         } else if command == "open_dashboard_system" {
-            openNativeDashboard(path: "/dashboard/system", label: "System")
+            openNativeDashboard(path: "/system", label: "System")
             append(meta: "Dashboard", body: "Opened native System panel.", kind: .command)
         } else if command == "open_dashboard_vms" {
-            openNativeDashboard(path: "/dashboard/vms", label: "VMs")
+            openNativeDashboard(path: "/vms", label: "VMs")
             append(meta: "Dashboard", body: "Opened native VMs panel.", kind: .command)
         } else if command == "open_dashboard_ai_models" {
-            openNativeDashboard(path: "/dashboard/system/ai", label: "AI models")
+            openNativeDashboard(path: "/system/ai", label: "AI models")
             append(meta: "Dashboard", body: "Opened native AI models panel.", kind: .command)
         } else if command == "open_dashboard_notes" {
-            openNativeDashboard(path: "/dashboard/notes", label: "Notes")
+            openNativeDashboard(path: "/notes", label: "Notes")
             append(meta: "Dashboard", body: "Opened native Notes panel.", kind: .command)
         } else if command == "open_dashboard_db" {
-            openNativeDashboard(path: "/dashboard/db", label: "Databases")
+            openNativeDashboard(path: "/db", label: "Databases")
             append(meta: "Dashboard", body: "Opened native Databases panel.", kind: .command)
         } else if command == "open_dashboard_backups" {
-            openNativeDashboard(path: "/dashboard/db/backups", label: "Backups")
+            openNativeDashboard(path: "/db/backups", label: "Backups")
             append(meta: "Dashboard", body: "Opened native Backups panel.", kind: .command)
         } else if command == "open_dashboard_restore" {
-            openNativeDashboard(path: "/dashboard/db/restore", label: "Restore")
+            openNativeDashboard(path: "/db/restore", label: "Restore")
             append(meta: "Dashboard", body: "Opened native Restore panel.", kind: .command)
         } else if command == "open_dashboard_vulnerabilities" {
-            openNativeDashboard(path: "/dashboard/vulnerabilities", label: "Vulnerabilities")
+            openNativeDashboard(path: "/vulnerabilities", label: "Vulnerabilities")
             append(meta: "Dashboard", body: "Opened native Vulnerabilities panel.", kind: .command)
         } else if command == "open_dashboard_rate_limits" {
-            openNativeDashboard(path: "/dashboard/system/rates", label: "Rate limits")
+            openNativeDashboard(path: "/system/rates", label: "Rate limits")
             append(meta: "Dashboard", body: "Opened native Rate limits panel.", kind: .command)
         } else if command == "open_dashboard_traffic" {
-            openNativeDashboard(path: "/dashboard/traffic", label: "Traffic")
+            openNativeDashboard(path: "/traffic", label: "Traffic")
             append(meta: "Dashboard", body: "Opened native Traffic panel.", kind: .command)
         } else if command == "server_logs" {
             selectedSection = .server

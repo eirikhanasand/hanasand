@@ -29,7 +29,7 @@ export default function CreateClient() {
 
         const result = await postArticle(id, content)
         if (result.status === 200) {
-            router.push(`/dashboard/articles?message=${result.message}`)
+            router.push(`/content/articles?message=${result.message}`)
         } else {
             setError(result.message)
         }

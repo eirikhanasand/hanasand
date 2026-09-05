@@ -350,7 +350,7 @@ export function buildDwmWatchlistMirrorAlertPreview(payload: JsonRecord): DwmWat
     const matchedTerm = stringValue(matchedTermRecord?.value ?? alert.matchedTerm ?? matchReason?.matchedTerm)
     return {
         id,
-        detailRoute: stringValue(alert.alertDetailPath ?? payload.alertDetailPath) || `/dashboard/dwm?alert=${encodeURIComponent(id)}`,
+        detailRoute: stringValue(alert.alertDetailPath ?? payload.alertDetailPath) || `/dwm?alert=${encodeURIComponent(id)}`,
         sourceFamily: stringValue(alert.sourceFamily ?? sourceFamilies[0] ?? workflowContext?.sourceFamily),
         matchedTerm,
         severity: stringValue(alert.severityOverride ?? alert.severity),

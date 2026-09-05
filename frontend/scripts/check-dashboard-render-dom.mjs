@@ -5,15 +5,15 @@ import { chromium } from '@playwright/test'
 
 const expectedRows = {
     dashboard_evidence: '/dashboard',
-    source_inventory_probe: '/dashboard/ti/sources',
-    end_to_end_workflow: '/dashboard/ti/sources',
-    dwm_product_snapshot: '/dashboard/dwm',
-    entitlement_readiness: '/dashboard/dwm',
-    webhook_delivery: '/dashboard/automation?setup=dwm',
-    org_alert_export: '/dashboard/dwm',
-    webhook_health: '/dashboard/automation?setup=dwm',
+    source_inventory_probe: '/ti/sources',
+    end_to_end_workflow: '/ti/sources',
+    dwm_product_snapshot: '/dwm',
+    entitlement_readiness: '/dwm',
+    webhook_delivery: '/automation?setup=dwm',
+    org_alert_export: '/dwm',
+    webhook_health: '/automation?setup=dwm',
     organization_webhook_settings: '/organizations',
-    helpdesk_audit: '/dashboard/system/impersonation',
+    helpdesk_audit: '/system/impersonation',
     deploy_probe: '/status',
     public_ti_provenance: '/ti',
 }
@@ -33,7 +33,7 @@ const pageSpecs = [
     },
     {
         id: 'dashboard_ti_control',
-        path: '/dashboard/ti/control',
+        path: '/ti/control',
         requiredSelectors: ['.source-ops-workbench', 'button'],
     },
     {
@@ -55,42 +55,42 @@ const pageSpecs = [
     },
     {
         id: 'ti_workbench',
-        path: '/dashboard/ti/workbench',
+        path: '/ti/workbench',
         requiredSelectors: ['main', '[role="listbox"][aria-label="Analyst case list"]'],
     },
     {
         id: 'cron_jobs',
-        path: '/dashboard/automation/cron',
+        path: '/automation/cron',
         requiredSelectors: ['main', 'button'],
     },
     {
         id: 'vulnerabilities',
-        path: '/dashboard/vulnerabilities',
+        path: '/vulnerabilities',
         requiredSelectors: ['main'],
     },
     {
         id: 'traffic',
-        path: '/dashboard/traffic',
+        path: '/traffic',
         requiredSelectors: ['main'],
     },
     {
         id: 'system',
-        path: '/dashboard/system',
+        path: '/system',
         requiredSelectors: ['main'],
     },
     {
         id: 'database',
-        path: '/dashboard/db',
+        path: '/db',
         requiredSelectors: ['main'],
     },
     {
         id: 'logs',
-        path: '/dashboard/logs',
+        path: '/logs',
         requiredSelectors: ['main'],
     },
     {
         id: 'automations',
-        path: '/dashboard/automation',
+        path: '/automation',
         requiredSelectors: ['main'],
     },
     {
@@ -100,37 +100,37 @@ const pageSpecs = [
     },
     {
         id: 'subscription',
-        path: '/dashboard/subscription',
+        path: '/subscription',
         requiredSelectors: ['main'],
     },
     {
         id: 'notes',
-        path: '/dashboard/notes',
+        path: '/notes',
         requiredSelectors: ['main'],
     },
     {
         id: 'ti_activity',
-        path: '/dashboard/ti/activity',
+        path: '/ti/activity',
         requiredSelectors: ['main'],
     },
     {
         id: 'ti_audit',
-        path: '/dashboard/ti/audit',
+        path: '/ti/audit',
         requiredSelectors: ['main'],
     },
     {
         id: 'ti_enrichment',
-        path: '/dashboard/ti/enrichment',
+        path: '/ti/enrichment',
         requiredSelectors: ['main'],
     },
     {
         id: 'ti_sources',
-        path: '/dashboard/ti/sources',
+        path: '/ti/sources',
         requiredSelectors: ['main'],
     },
     {
         id: 'ti_runs',
-        path: '/dashboard/ti/runs',
+        path: '/ti/runs',
         requiredSelectors: ['main'],
     },
 ]

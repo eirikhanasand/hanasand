@@ -39,7 +39,7 @@ globalThis.fetch = async (input: RequestInfo | URL) => {
                     retryEligibleCount: 0,
                     liveDeliveryEnabled: false,
                     blockerCodes: [],
-                    href: '/dashboard/automation?setup=dwm',
+                    href: '/automation?setup=dwm',
                 },
             },
         })

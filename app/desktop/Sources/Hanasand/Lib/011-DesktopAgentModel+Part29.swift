@@ -90,40 +90,40 @@ extension DesktopAgentModel {
         let auth = hasHanasandAuth
 
         switch cleanPath {
-        case "dashboard", "dashboard/overview":
+        case "dashboard":
             return NativeEndpoint(label: "system status", baseURL: api, path: "status", authenticated: auth, userAgent: nil)
-        case "dashboard/mail":
+        case "mail":
             return NativeEndpoint(label: "mail overview", baseURL: api, path: "mail/overview", authenticated: true, userAgent: nil)
-        case "dashboard/notes":
+        case "notes":
             return NativeEndpoint(label: "notes", baseURL: api, path: "notes", authenticated: true, userAgent: nil)
-        case "dashboard/system":
+        case "system":
             return NativeEndpoint(label: "docker metrics", baseURL: api, path: "docker", authenticated: auth, userAgent: nil)
-        case "dashboard/system/ai":
+        case "system/ai":
             return NativeEndpoint(label: "AI models", baseURL: api, path: "ai/models", authenticated: auth, userAgent: nil)
-        case "dashboard/system/rates":
+        case "system/rates":
             return NativeEndpoint(label: "rate limits", baseURL: api, path: "rate-limit/settings", authenticated: true, userAgent: nil)
-        case "dashboard/vms":
+        case "vms":
             let userPath = effectiveUserIDForRequests.isEmpty ? "vms" : "vms/access/\(effectiveUserIDForRequests)"
             return NativeEndpoint(label: "virtual machines", baseURL: api, path: userPath, authenticated: auth, userAgent: nil)
         case "dashboard/tests":
             return NativeEndpoint(label: "recent tests", baseURL: api, path: "tests/recent", authenticated: auth, userAgent: nil)
-        case "dashboard/logs":
+        case "logs":
             return NativeEndpoint(label: "logs", baseURL: api, path: "logs", authenticated: true, userAgent: nil)
-        case "dashboard/db":
+        case "db":
             return NativeEndpoint(label: "database overview", baseURL: internalAPI, path: "db", authenticated: true, userAgent: "hanasand_internal")
-        case "dashboard/db/backups":
+        case "db/backups":
             return NativeEndpoint(label: "backup services", baseURL: internalAPI, path: "backup", authenticated: true, userAgent: "hanasand_internal")
-        case "dashboard/db/restore":
+        case "db/restore":
             return NativeEndpoint(label: "backup files", baseURL: internalAPI, path: "backup/files", authenticated: true, userAgent: "hanasand_internal")
-        case "dashboard/vulnerabilities":
+        case "vulnerabilities":
             return NativeEndpoint(label: "vulnerabilities", baseURL: internalAPI, path: "vulnerabilities", authenticated: true, userAgent: "hanasand_internal")
-        case "dashboard/management", "users":
+        case "management", "users":
             return NativeEndpoint(label: "users", baseURL: api, path: "users", authenticated: true, userAgent: nil)
         case "role":
             return NativeEndpoint(label: "roles", baseURL: api, path: "roles", authenticated: true, userAgent: nil)
-        case "dashboard/articles":
+        case "content/articles":
             return NativeEndpoint(label: "articles", baseURL: api, path: "articles", authenticated: auth, userAgent: nil)
-        case "dashboard/thoughts":
+        case "content/thoughts":
             return NativeEndpoint(label: "thoughts", baseURL: api, path: "thoughts", authenticated: auth, userAgent: nil)
         case "profile":
             guard !effectiveUserIDForRequests.isEmpty else { return nil }
