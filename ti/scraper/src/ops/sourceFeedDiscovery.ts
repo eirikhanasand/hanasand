@@ -272,7 +272,8 @@ async function discoverFeedProofs(input: {
 }
 
 function retainedPublisherReferences(store: DiscoveryStore) {
-  const sources = new Map(store.listSources()
+  const allSources = new Map(store.listSources().map((source) => [source.id, source]));
+  const sources = new Map([...allSources.values()]
     .filter((source) => tenantAbsent(source.tenantId) && sourceCollectionLane(source) === "public")
     .map((source) => [source.id, source]));
   const usefulRuns = new Set(store.listSourceHealthObservations()
@@ -310,13 +311,23 @@ function retainedPublisherReferences(store: DiscoveryStore) {
   // retain their original public-source and evidence binding.
   for (const plan of store.listPlans?.() ?? []) {
     const referenceUrl = safePublicReference(plan.referenceUrl);
+    const parent = allSources.get(String(plan.parentSourceId));
+    // Discovery proves public feeds; it does not activate their parent source.
+    const qualifyingParent = parent?.status === "candidate"
+      && parent.governance?.approvalState === "approved"
+      && parent.metadata?.sourcePortfolioVerification?.outcome === "content_parsed"
+      && parent.metadata?.sourcePortfolioExcluded !== true
+      && sourceCollectionLane({ ...parent, status: "active", metadata: { ...parent.metadata, productionCollection: true } }) === "public";
+    const revalidation = parent && sources.has(parent.id)
+      && plan.publisherKey === `portfolio-revalidation:${parent.id}`
+      && referenceUrl && canonicalFeedKey(referenceUrl) === canonicalFeedKey(parent.url);
     if (plan.requestId !== REQUEST_ID || plan.status !== "failed" || !tenantAbsent(plan.tenantId)
-      || !sources.has(String(plan.parentSourceId)) || !plan.evidenceCaptureId || !referenceUrl
-      || publisherOriginKey(referenceUrl) !== plan.publisherKey || plan.id !== planId(String(plan.publisherKey))
-      || byPublisher.has(String(plan.publisherKey))) continue;
+      || !parent || !tenantAbsent(parent.tenantId) || (!sources.has(parent.id) && !qualifyingParent) || !referenceUrl
+      || (!revalidation && (!plan.evidenceCaptureId || publisherOriginKey(referenceUrl) !== plan.publisherKey))
+      || plan.id !== planId(String(plan.publisherKey)) || byPublisher.has(String(plan.publisherKey))) continue;
     byPublisher.set(String(plan.publisherKey), {
       publisherKey: String(plan.publisherKey), referenceUrl,
-      parentSourceId: String(plan.parentSourceId), captureId: String(plan.evidenceCaptureId)
+      parentSourceId: parent.id, captureId: String(plan.evidenceCaptureId ?? "")
     });
   }
   return { references: [...byPublisher.values()].sort((left, right) => left.publisherKey.localeCompare(right.publisherKey)), rejectedReferenceCount };

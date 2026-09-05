@@ -37,6 +37,31 @@ describe("scheduled public feed discovery", () => {
     expect(result.failedPublisherCount).toBe(0);
     expect(store.getPlan(id)?.status).toBe("completed");
   });
+  test.each(["candidate", "quarantined", "retired"])("persisted discovery respects a %s parent without activating it", async (status) => {
+    const store = new InMemoryScraperStore();
+    const parent = source({ id: "retry-parent", status: status as any, governance: { approvalState: "approved" } as any,
+      metadata: { productionCollection: false, sourcePortfolioVerification: { outcome: "content_parsed" } } });
+    store.saveSource(parent);
+    const id = stableId("source-feed-discovery-plan", "https://retry.example/");
+    store.savePlan({ id, requestId: "req_source_feed_discovery", publisherKey: "https://retry.example/", referenceUrl: "https://retry.example/feed", parentSourceId: parent.id, evidenceCaptureId: "retained-evidence", status: "failed", tasks: [] } as any);
+    const result = await runSourceFeedDiscoveryCycle({ store, sourceFeedDiscoveryFetch: async () => response(rss("CVE-2026-1000", "https://retry.example/report", generatedAt), "https://retry.example/feed", "application/rss+xml") }, generatedAt);
+    expect(result.processedPublisherCount).toBe(status === "candidate" ? 1 : 0);
+    expect(store.getSource(parent.id)).toEqual(parent);
+  });
+
+  test("finishes a retained revalidation by fetching the already active feed again", async () => {
+    const store = new InMemoryScraperStore();
+    const parent = source({ id: "active-parent", url: "https://retry.example/feed" });
+    store.saveSource(parent);
+    const publisherKey = `portfolio-revalidation:${parent.id}`;
+    const id = stableId("source-feed-discovery-plan", publisherKey);
+    store.savePlan({ id, requestId: "req_source_feed_discovery", publisherKey, referenceUrl: parent.url, parentSourceId: parent.id, status: "failed", tasks: [] } as any);
+    const result = await runSourceFeedDiscoveryCycle({ store, sourceFeedDiscoveryFetch: async () => response(rss("CVE-2026-1000", "https://retry.example/report", generatedAt), parent.url, "application/rss+xml") }, generatedAt);
+    expect(result.processedPublisherCount).toBe(1);
+    expect(store.getPlan(id)?.status).toBe("completed");
+    expect(store.getSource(parent.id)).toEqual(parent);
+  });
+
   test("uses bounded global publisher workflows and remains restart-idempotent", async () => {
     const directory = mkdtempSync(join(tmpdir(), "source-feed-discovery-"));
     const snapshotPath = join(directory, "store.json");
