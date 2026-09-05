@@ -3,6 +3,7 @@
 import { getCookie, setCookieWithExpiresAt } from '@/utils/cookies/cookies'
 
 export type AgentAutomation = {
+    caseNumbers?: string[]
     id: string
     history?: Array<{ id: string, status: string, warning: boolean, started_at: string }>
     uptime?: number | null

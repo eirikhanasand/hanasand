@@ -44,6 +44,7 @@ const defaultDraft = (): AutomationPayload => ({
 
 export default function AutomationsClient({ setup, initial }: { setup?: 'dwm', initial: InitialAutomationData }) {
     const [automations, setAutomations] = useState<AgentAutomation[]>(initial.automations)
+    const [caseSearch, setCaseSearch] = useState('')
     const [selected, setSelected] = useState<AgentAutomation | null>(setup ? null : initial.detail?.automation || initial.automations[0] || null)
     const [draft, setDraft] = useState<AutomationPayload>(() => selected ? toDraft(selected) : { ...defaultDraft(), timezone: 'UTC' })
     const [historyFrom, setHistoryFrom] = useState('')
@@ -167,9 +168,10 @@ export default function AutomationsClient({ setup, initial }: { setup?: 'dwm', i
                         <div><h2 className='text-lg font-semibold text-ui-text'>Your automations</h2><p className='mt-1 text-sm text-ui-muted'>{automations.length} check{automations.length === 1 ? '' : 's'} configured</p></div>
                         {!editing ? <button type='button' onClick={beginCreate} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90'><Plus className='h-4 w-4' />Create automation</button> : null}
                     </div>
+                    <label className='grid gap-1.5 border-b border-ui-border p-4 text-xs text-ui-muted'><span>Find a case or monitor</span><input className={inputClass} type='search' placeholder='MON-123 or monitor name' value={caseSearch} onChange={event => setCaseSearch(event.target.value)} /></label>
                     <div className='hidden grid-cols-2 gap-3 border-b border-ui-border px-4 py-2 text-xs text-ui-muted md:grid md:grid-cols-[minmax(9rem,1.3fr)_minmax(7rem,0.8fr)_minmax(6rem,0.7fr)_minmax(8rem,1fr)_minmax(5rem,0.6fr)_minmax(5rem,0.6fr)]'><span>Name</span><span>Status</span><span>Cert</span><span>History</span><span>Uptime</span><span>Tags</span></div>
                     <div className='divide-y divide-ui-border'>
-                        {automations.map(automation => <AutomationRow key={automation.id} automation={automation} selected={selected?.id === automation.id} onClick={() => void select(automation)} />)}
+                        {automations.filter(automation => !caseSearch.trim() || [automation.name, ...(automation.caseNumbers || [])].some(value => value.toLowerCase().includes(caseSearch.trim().toLowerCase()))).map(automation => <AutomationRow key={automation.id} automation={automation} selected={selected?.id === automation.id} onClick={() => void select(automation)} />)}
                     </div>
                 </section>
 

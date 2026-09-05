@@ -7,7 +7,7 @@ test('certificate states are explicit and neutral details open by click and keyb
     }
     const base = { ownerId: 'owner', prompt: 'Check connectivity', status: 'active', actionType: 'agent_prompt', monitoringType: 'tcp', scheduleKind: 'interval', intervalMinutes: 1, lastStatus: 'completed', consecutiveFailures: 0, notifyOn: 'never', history: [], uptime: 100, certificateSubject: null, certificateIssuer: null, certificateExpiresAt: null }
     const rows = [
-        { ...base, id: 'web', name: 'Website TLS', targetUrl: 'example.test:443', certificateStatus: 'valid' },
+        { ...base, id: 'web', name: 'Website TLS', caseNumbers: ['MON-12'], targetUrl: 'example.test:443', certificateStatus: 'valid' },
         { ...base, id: 'ssh', name: 'Git SSH', targetUrl: 'example.test:22', certificateStatus: 'not_applicable' },
         { ...base, id: 'pending', name: 'New HTTPS check', monitoringType: 'fetch', targetUrl: 'https://example.test', certificateStatus: null },
     ]
@@ -32,6 +32,8 @@ test('certificate states are explicit and neutral details open by click and keyb
     await expect(page.getByText('This check tests SSH connectivity.', { exact: false })).toBeVisible()
     await page.getByRole('button', { name: 'Close', exact: true }).filter({ visible: true }).click()
     await expect(page.getByRole('button', { name: 'Certificate: Pending — New HTTPS check' })).toBeVisible()
+    await page.getByRole('searchbox', { name: 'Find a case or monitor' }).fill('MON-12')
+    await expect(page.getByRole('button', { name: 'Git SSH', exact: true })).toHaveCount(0)
     await page.getByRole('button', { name: 'Website TLS', exact: true }).click()
     await expect(page.getByText('MON-12', { exact: true })).toBeVisible()
     await page.getByText('MON-12', { exact: true }).click()

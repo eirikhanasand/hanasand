@@ -23,7 +23,8 @@ export async function getAutomations(req: FastifyRequest, res: FastifyReply) {
 
     const includeAll = await canManageAllAutomations(req, res)
     const result = await run(`
-        SELECT a.*, stats.history, stats.uptime
+        SELECT a.*, stats.history, stats.uptime,
+            ARRAY(SELECT 'MON-' || i.id FROM monitoring_issues i WHERE i.automation_id = a.id ORDER BY i.last_seen_at DESC) AS case_numbers
         FROM agent_automations a
         LEFT JOIN LATERAL (
             SELECT COALESCE(jsonb_agg(item ORDER BY item.started_at), '[]'::jsonb) AS history,

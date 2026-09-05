@@ -10,6 +10,7 @@ export type AutomationStatus = 'active' | 'paused' | 'archived'
 export type AutomationActionType = 'agent_prompt' | 'echo' | 'mail_health_check' | 'system_alert' | 'organization_report'
 
 export type AutomationRow = {
+    case_numbers?: string[]
     id: string
     owner_id: string
     name: string
@@ -150,6 +151,7 @@ export function toAutomation(row: AutomationRow) {
     return {
         id: row.id,
         ownerId: row.owner_id,
+        caseNumbers: row.case_numbers || [],
         name: row.name,
         prompt: row.prompt,
         targetUrl: row.target_url,
@@ -196,6 +198,7 @@ export function toAutomationRun(row: AutomationRunRow) {
         automationId: row.automation_id,
         caseNumber: row.issue_id ? `MON-${row.issue_id}` : null,
         ownerId: row.owner_id,
+        caseNumbers: row.case_numbers || [],
         status: row.status,
         warning: row.warning,
         result: row.result,
