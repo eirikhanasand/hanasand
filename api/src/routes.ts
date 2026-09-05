@@ -114,6 +114,7 @@ import putAiConversation from './handlers/ai/putConversation.ts'
 import deleteAiConversation from './handlers/ai/deleteConversation.ts'
 import upsertAiMessage from './handlers/ai/upsertMessage.ts'
 import postAiRepository from './handlers/ai/postRepository.ts'
+import { getModelHealth, getInferenceHealth } from './handlers/ai/health.ts'
 import getAiModels from './handlers/ai/getModels.ts'
 import importRepository from './handlers/ai/importRepository.ts'
 import { getGitWorkspaceStatus, postGitWorkspaceCommit, postGitWorkspacePull, postGitWorkspacePush } from './handlers/ai/gitWorkspace.ts'
@@ -539,6 +540,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/ai/runtime', getAiRuntime)
     fastify.get('/ai/economics', getAiEconomics)
     fastify.get('/ai/models', getAiModels)
+    fastify.get('/ai/health/models', getModelHealth)
+    fastify.get('/ai/health/inference', getInferenceHealth)
     fastify.get('/ai/previews/:id', getAiPreview)
     fastify.get('/ai/previews/:id/*', getAiPreview)
     fastify.post('/ai/import-repository', importRepository)

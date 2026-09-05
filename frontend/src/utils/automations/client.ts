@@ -4,6 +4,8 @@ import { getCookie, setCookieWithExpiresAt } from '@/utils/cookies/cookies'
 
 export type AgentAutomation = {
     id: string
+    history?: Array<{ id: string, status: string, warning: boolean, started_at: string }>
+    uptime?: number | null
     ownerId?: string
     name: string
     prompt: string
@@ -131,8 +133,12 @@ export function fetchAutomations() {
     return request<{ automations: AgentAutomation[] }>('/automations')
 }
 
-export function fetchAutomation(id: string) {
-    return request<{ automation: AgentAutomation, runs: AgentAutomationRun[] }>(`/automations/${id}`)
+export function fetchAutomation(id: string, options: { cursor?: string, from?: string, to?: string } = {}) {
+    const query = new URLSearchParams()
+    if (options.cursor) query.set('cursor', options.cursor)
+    if (options.from) query.set('from', new Date(options.from).toISOString())
+    if (options.to) query.set('to', new Date(options.to).toISOString())
+    return request<{ automation: AgentAutomation, runs: AgentAutomationRun[], total: number, nextCursor: string | null }>(`/automations/${id}?${query}`)
 }
 
 export function createAutomation(payload: AutomationPayload) {

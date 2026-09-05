@@ -326,7 +326,7 @@ export async function runDueAutomations() {
 
 export async function recoverStaleAutomationRuns() {
     const staleAfter = new Date(Date.now() - STALE_RUNNING_AFTER_MS)
-    const staleRuns = await run(`
+    await run(`
         UPDATE agent_automation_runs
            SET status = 'failed',
                error = 'Automation exceeded the maximum runtime and was recovered by the scheduler.',
@@ -338,7 +338,6 @@ export async function recoverStaleAutomationRuns() {
          RETURNING automation_id
     `, [staleAfter, JSON.stringify(runArtifacts('Automation exceeded the maximum runtime and was recovered by the scheduler.'))])
 
-    if (!staleRuns.rows.length) return
 
     await run(`
         UPDATE agent_automations automation
@@ -352,15 +351,13 @@ export async function recoverStaleAutomationRuns() {
                END,
                consecutive_failures = consecutive_failures + 1,
                updated_at = NOW()
-          FROM (
-              SELECT DISTINCT automation_id
-              FROM agent_automation_runs
-              WHERE status = 'failed'
-                AND error = 'Automation exceeded the maximum runtime and was recovered by the scheduler.'
-                AND completed_at > NOW() - INTERVAL '5 minutes'
-          ) stale
-         WHERE automation.id = stale.automation_id
-    `)
+         WHERE automation.last_status = 'running'
+           AND COALESCE(automation.last_run_at, automation.updated_at) < $1
+           AND NOT EXISTS (
+               SELECT 1 FROM agent_automation_runs live
+               WHERE live.automation_id = automation.id AND live.status = 'running' AND live.started_at >= $1
+           )
+    `, [staleAfter])
 }
 
 export async function executeAutomation(automation: AutomationRow) {
@@ -433,13 +430,13 @@ export async function executeAutomation(automation: AutomationRow) {
         `, [runId, message, durationMs, JSON.stringify(runArtifacts(message))])
         await run(`
             UPDATE agent_automations
-               SET status = CASE WHEN consecutive_failures + 1 >= 3 AND schedule_kind = 'interval' THEN 'paused' ELSE status END,
-                   next_run_at = CASE WHEN consecutive_failures + 1 >= 3 AND schedule_kind = 'interval' THEN NULL ELSE $2 END,
+               SET status = CASE WHEN consecutive_failures + 1 >= 3 AND schedule_kind = 'interval' AND action_type <> 'agent_prompt' THEN 'paused' ELSE status END,
+                   next_run_at = CASE WHEN consecutive_failures + 1 >= 3 AND schedule_kind = 'interval' AND action_type <> 'agent_prompt' THEN NULL ELSE $2::timestamptz END,
                    last_completed_at = NOW(),
                    last_status = 'failed',
                    last_error = $3,
                    consecutive_failures = consecutive_failures + 1,
-                   paused_reason = CASE WHEN consecutive_failures + 1 >= 3 AND schedule_kind = 'interval' THEN 'Paused after 3 consecutive failures.' ELSE paused_reason END,
+                   paused_reason = CASE WHEN consecutive_failures + 1 >= 3 AND schedule_kind = 'interval' AND action_type <> 'agent_prompt' THEN 'Paused after 3 consecutive failures.' ELSE paused_reason END,
                    run_count = run_count + 1,
                    certificate_status = COALESCE($4, certificate_status),
                    certificate_subject = COALESCE($5, certificate_subject),
@@ -528,7 +525,7 @@ async function runMonitoringCheck(automation: AutomationRow) {
             const message = `${automation.monitoring_type.toUpperCase()} check ${healthy ? 'passed' : 'failed'}: ${automation.target_url} ${result.detail}.`
             if (!healthy) throw new Error(message)
             const warning = Date.now() - startedAt >= 1000
-            if ((automation.notify_on === 'always' || warning && automation.notify_warnings) && automation.model_name) await deliverDiscordIfConfigured(automation, warning ? `Hanasand monitoring warning: ${message}` : message)
+            if ((automation.notify_on === 'always' || warning && automation.notify_warnings) && (automation.model_name || automation.notification_destinations?.length)) await deliverDiscordIfConfigured(automation, warning ? `Hanasand monitoring warning: ${message}` : message)
             return { provider: 'hanasand-monitoring', model: automation.monitoring_type, message, certificate: certificate!, warning }
         } catch (error) {
             lastError = error instanceof DOMException && error.name === 'TimeoutError'
@@ -537,7 +534,7 @@ async function runMonitoringCheck(automation: AutomationRow) {
         }
     }
     const message = lastError instanceof Error ? lastError.message : 'Monitoring request failed.'
-    if (automation.notify_on !== 'never' && automation.model_name) await deliverDiscordIfConfigured(automation, `Hanasand monitoring alert: ${message}`)
+    if (automation.notify_on !== 'never' && (automation.model_name || automation.notification_destinations?.length)) await deliverDiscordIfConfigured(automation, `Hanasand monitoring alert: ${message}`)
     const failure = Object.assign(new Error(`${message} Failed after ${automation.retry_count + 1} attempt${automation.retry_count ? 's' : ''}.`), { certificate })
     throw failure
 }
@@ -546,6 +543,7 @@ async function runHttpCheck(target: URL, automation: AutomationRow) {
     const response = await fetch(target, { method: automation.monitoring_type === 'post' ? 'POST' : 'GET', redirect: automation.follow_redirects ? 'follow' : 'manual', headers: automation.user_agent ? { 'user-agent': automation.user_agent } : undefined, signal: AbortSignal.timeout(automation.timeout_seconds * 1000) })
     const checksGitRefs = target.pathname.endsWith('/info/refs') && target.searchParams.get('service') === 'git-upload-pack'
     const body = checksGitRefs ? await response.text() : ''
+    if (!checksGitRefs) await response.body?.cancel()
     const hasMainRef = !checksGitRefs || body.includes('refs/heads/main')
     return { up: response.ok && hasMainRef, detail: checksGitRefs ? `returned HTTP ${response.status}${hasMainRef ? ' with refs/heads/main' : ' without refs/heads/main'}` : `returned HTTP ${response.status}` }
 }

@@ -48,6 +48,16 @@ The model client uses `HANASAND_AI_CLIENT_API_WS`, `HANASAND_AI_OPENAI_BASE` and
 
 Generated projects include source, a README, environment examples, build commands and Docker configuration. Website output includes its page, layout and CSS. These are starting points: API records and worker queues currently use in-memory state, and external integrations require implementation. A generated project or passing source check is not evidence that a production integration works.
 
+
+### AI monitoring
+
+- [Connected models](https://api.hanasand.com/api/ai/health/models): reports the current model connection count; HTTP 503 when none are connected.
+- [Inference](https://api.hanasand.com/api/ai/health/inference): runs a small request through the production WebSocket path; HTTP 503 if it cannot complete. Results are shared for 30 seconds to limit probe traffic.
+
+Both checks run every minute under Dashboard → Automation → Monitoring and use the existing Discord destination. `bun scripts/setup-ai-monitoring.ts` in `api/` configures them from the Hanasand API monitor without exposing its webhook. Failed availability checks keep running.
+
+Monitoring history uses the actual stored check count, supports date filters, and loads older checks on scroll. Graph bars show recorded results; uptime is calculated from completed checks.
+
 ## Tests
 
 Run the checks for the component you change:
