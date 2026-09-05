@@ -512,15 +512,27 @@ async function runAutomationAction(automation: AutomationRow) {
     return runMonitoringCheck(automation)
 }
 
+export function certificateTarget(automation: Pick<AutomationRow, 'monitoring_type' | 'target_url'>): URL | null {
+    if (!automation.target_url || automation.monitoring_type === 'ssh') return null
+    const target = new URL(automation.monitoring_type === 'tcp' ? `tcp://${automation.target_url}` : automation.target_url)
+    if (target.protocol === 'https:') return target
+    if (automation.monitoring_type === 'tcp' && target.port === '443') return new URL(`https://${target.host}`)
+    return null
+}
+
 async function runMonitoringCheck(automation: AutomationRow) {
     if (!automation.target_url) throw new Error('Monitoring is missing the URL to check.')
     const target = automation.monitoring_type === 'tcp' || automation.monitoring_type === 'ssh' ? null : new URL(automation.target_url)
+    const tlsTarget = certificateTarget(automation)
     const startedAt = Date.now()
-    let certificate: Awaited<ReturnType<typeof checkCertificate>> | { status: 'not_applicable', subject: null, issuer: null, expiresAt: null } | null = target?.protocol === 'https:' ? null : { status: 'not_applicable', subject: null, issuer: null, expiresAt: null }
+    let certificate: Awaited<ReturnType<typeof checkCertificate>> | { status: 'not_applicable', subject: null, issuer: null, expiresAt: null } | null = tlsTarget ? null : { status: 'not_applicable', subject: null, issuer: null, expiresAt: null }
     let lastError: unknown
     for (let attempt = 0; attempt <= automation.retry_count; attempt += 1) {
         try {
-            if (target?.protocol === 'https:') certificate = await checkCertificate(target, automation.timeout_seconds * 1000)
+            if (tlsTarget) {
+                certificate = await checkCertificate(tlsTarget, automation.timeout_seconds * 1000)
+                if (certificate.status === 'invalid') throw new Error(`TLS certificate validation failed for ${tlsTarget.hostname}.`)
+            }
             const result = target ? await runHttpCheck(target, automation) : await runSocketCheck(automation)
             const healthy = automation.upside_down ? !result.up : automation.expected_down ? !result.up : result.up
             const message = `${automation.monitoring_type.toUpperCase()} check ${healthy ? 'passed' : 'failed'}: ${automation.target_url} ${result.detail}.`
@@ -566,7 +578,7 @@ async function runSocketCheck(automation: AutomationRow) {
     })
 }
 
-function checkCertificate(target: URL, timeoutMs: number) {
+export function checkCertificate(target: URL, timeoutMs: number) {
     return new Promise<{ status: 'valid' | 'expiring' | 'invalid', subject: string | null, issuer: string | null, expiresAt: string | null }>((resolve, reject) => {
         const socket = connectTls({ host: target.hostname, port: Number(target.port) || 443, servername: target.hostname, rejectUnauthorized: false })
         const finish = (value: { status: 'valid' | 'expiring' | 'invalid', subject: string | null, issuer: string | null, expiresAt: string | null }) => { socket.destroy(); resolve(value) }
@@ -576,7 +588,7 @@ function checkCertificate(target: URL, timeoutMs: number) {
             const certificate = socket.getPeerCertificate()
             const expiresAt = certificate.valid_to ? new Date(certificate.valid_to).toISOString() : null
             const daysRemaining = expiresAt ? (Date.parse(expiresAt) - Date.now()) / 86_400_000 : -1
-            finish({ status: daysRemaining < 0 ? 'invalid' : daysRemaining <= 30 ? 'expiring' : 'valid', subject: certificate.subject?.CN || null, issuer: certificate.issuer?.O || certificate.issuer?.CN || null, expiresAt })
+            finish({ status: !socket.authorized || daysRemaining < 0 ? 'invalid' : daysRemaining <= 30 ? 'expiring' : 'valid', subject: certificate.subject?.CN || null, issuer: certificate.issuer?.O || certificate.issuer?.CN || null, expiresAt })
         })
     })
 }
