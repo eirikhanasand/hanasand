@@ -318,10 +318,10 @@ function retainedPublisherReferences(store: DiscoveryStore) {
       && parent.metadata?.sourcePortfolioVerification?.outcome === "content_parsed"
       && parent.metadata?.sourcePortfolioExcluded !== true
       && sourceCollectionLane({ ...parent, status: "active", metadata: { ...parent.metadata, productionCollection: true } }) === "public";
-    const revalidation = parent && sources.has(parent.id)
+    const revalidation = parent && (sources.has(parent.id) || qualifyingParent)
       && plan.publisherKey === `portfolio-revalidation:${parent.id}`
       && referenceUrl && canonicalFeedKey(referenceUrl) === canonicalFeedKey(parent.url);
-    if (plan.requestId !== REQUEST_ID || plan.status !== "failed" || !tenantAbsent(plan.tenantId)
+    if (plan.requestId !== REQUEST_ID || !["failed", "running"].includes(String(plan.status)) || !tenantAbsent(plan.tenantId)
       || !parent || !tenantAbsent(parent.tenantId) || (!sources.has(parent.id) && !qualifyingParent) || !referenceUrl
       || (!revalidation && (!plan.evidenceCaptureId || publisherOriginKey(referenceUrl) !== plan.publisherKey))
       || plan.id !== planId(String(plan.publisherKey)) || byPublisher.has(String(plan.publisherKey))) continue;

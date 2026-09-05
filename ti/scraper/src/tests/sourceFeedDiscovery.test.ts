@@ -49,13 +49,13 @@ describe("scheduled public feed discovery", () => {
     expect(store.getSource(parent.id)).toEqual(parent);
   });
 
-  test("finishes a retained revalidation by fetching the already active feed again", async () => {
+  test.each(["failed", "running"])("finishes a %s retained revalidation by fetching the already active feed again", async (status) => {
     const store = new InMemoryScraperStore();
     const parent = source({ id: "active-parent", url: "https://retry.example/feed" });
     store.saveSource(parent);
     const publisherKey = `portfolio-revalidation:${parent.id}`;
     const id = stableId("source-feed-discovery-plan", publisherKey);
-    store.savePlan({ id, requestId: "req_source_feed_discovery", publisherKey, referenceUrl: parent.url, parentSourceId: parent.id, status: "failed", tasks: [] } as any);
+    store.savePlan({ id, requestId: "req_source_feed_discovery", publisherKey, referenceUrl: parent.url, parentSourceId: parent.id, status, activeRunId: status === "running" ? "abandoned-run" : undefined, runExpiresAt: "2026-07-01T00:00:00Z", tasks: [] } as any);
     const result = await runSourceFeedDiscoveryCycle({ store, sourceFeedDiscoveryFetch: async () => response(rss("CVE-2026-1000", "https://retry.example/report", generatedAt), parent.url, "application/rss+xml") }, generatedAt);
     expect(result.processedPublisherCount).toBe(1);
     expect(store.getPlan(id)?.status).toBe("completed");
