@@ -17,6 +17,12 @@ const tasks: TestTask[] = [
         command: [bun, 'scripts/check-automation-routes.mjs'],
     },
     {
+        id: 'dashboard-navigation',
+        title: 'Dashboard navigation interactions',
+        command: [bun, 'scripts/check-dashboard-navigation.mjs'],
+        requires: 'playwright',
+    },
+    {
         id: 'dashboard-sidebar-shell',
         title: 'Dashboard sidebar shell contract',
         command: [bun, 'scripts/check-dashboard-sidebar-shell.mjs'],

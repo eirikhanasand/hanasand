@@ -2,257 +2,149 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, AlarmClockCheck, BookOpen, BrainCircuit, Building2, ChevronDown, ClipboardList, Code2, Database, DatabaseBackup, DatabaseZap, FileCode2, FileWarning, FolderKanban, Gauge, Globe2, Inbox, LayoutDashboard, ListChecks, Network, NotebookText, PanelLeftClose, PanelLeftOpen, PlayCircle, Radar, ScanSearch, Server, Settings2, ShieldAlert, ShieldCheck, Sparkles, UserRound, UserRoundCheck, Zap } from 'lucide-react'
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { AlarmClockCheck, ChevronDown, FolderKanban, NotebookText, PanelLeftClose, PanelLeftOpen, Pin, Radar, Search, Server, Settings2, ShieldCheck } from 'lucide-react'
+import { useEffect, useId, useState, useSyncExternalStore } from 'react'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
+import { getDashboardNavigation, navigationLinks, type NavigationAccess, type NavigationItem } from '@/utils/layout/dashboardNavigation'
 
-type Item = {
-    href: string
-    label: string
-    icon: React.ReactNode
-    subItems?: Array<{ href: string, label: string }>
+const sectionIcons: Record<string, typeof ShieldCheck> = {
+    'Security operations': ShieldCheck,
+    'Threat intelligence': Radar,
+    Automation: AlarmClockCheck,
+    Infrastructure: Server,
+    Content: NotebookText,
+    Administration: FolderKanban,
+    Settings: Settings2,
+    Pinned: Pin,
 }
+type Preferences = { expanded: Record<string, boolean>, pinned: string[] }
 
-type Section = {
-    title: string
-    items: Item[]
-}
-
-export default function DashboardSidebar({
-    id,
-    isAdmin,
-    canManageSystem,
-    canManageContent,
-    canReviewIntel = isAdmin,
-}: {
-    id: string
-    isAdmin: boolean
-    canManageSystem: boolean
-    canManageContent: boolean
-    canReviewIntel?: boolean
-}) {
+export default function DashboardSidebar(access: NavigationAccess) {
     const pathname = usePathname()
+    const domId = useId()
+    const storageKey = `dashboard-navigation:v1:${access.id}`
+    const [preferences, setPreferences] = useState<Preferences>({ expanded: {}, pinned: [] })
+    const [query, setQuery] = useState('')
     const mode = useSyncExternalStore(
-        (onStoreChange) => {
-            function handleModeChange() {
-                onStoreChange()
-            }
-
-            window.addEventListener('dashboard-view-mode', handleModeChange)
-            return () => window.removeEventListener('dashboard-view-mode', handleModeChange)
+        (onChange) => {
+            window.addEventListener('dashboard-view-mode', onChange)
+            return () => window.removeEventListener('dashboard-view-mode', onChange)
         },
         () => getDashboardViewMode(),
-        () => 'normal'
+        () => 'normal',
     )
-
-    const productItems: Item[] = [
-        { href: '/dashboard/overview', label: 'Overview', icon: <LayoutDashboard className='h-4 w-4' /> },
-        { href: '/ti', label: 'Threat search', icon: <Radar className='h-4 w-4' /> },
-        { href: '/dashboard/dwm', label: 'DWM', icon: <ShieldCheck className='h-4 w-4' />, subItems: [
-            { href: '/dashboard/dwm/cases', label: 'Cases' },
-            { href: '/dashboard/dwm/watchlists', label: 'Watchlists' },
-            { href: '/dashboard/dwm/delivery', label: 'Integrations' },
-            { href: '/dashboard/dwm/actors', label: 'Actors' },
-            { href: '/dashboard/dwm/actions', label: 'Actions' },
-        ] },
-        { href: '/dashboard/mill', label: 'Security Monitoring', icon: <ShieldAlert className='h-4 w-4' /> },
-        { href: '/dashboard/automation', label: 'Automation', icon: <AlarmClockCheck className='h-4 w-4' />, subItems: [
-            { href: '/dashboard/automation/health', label: 'Health checks' },
-            { href: '/dashboard/automation/monitoring', label: 'Monitoring' },
-            { href: '/dashboard/automation/cron', label: 'Cron jobs' },
-        ] },
-        { href: '/dashboard/scanner', label: 'Scanner', icon: <ScanSearch className='h-4 w-4' /> },
-        { href: '/api', label: 'API docs', icon: <Code2 className='h-4 w-4' /> },
-        { href: '/dashboard/subscription', label: 'Subscription', icon: <ScanSearch className='h-4 w-4' /> },
-    ]
-
-    const workspaceItems: Item[] = [
-        { href: '/organizations', label: 'Organizations', icon: <Building2 className='h-4 w-4' /> },
-        { href: `/profile/${id}`, label: 'Profile', icon: <UserRound className='h-4 w-4' /> },
-    ]
-
-    const systemItems: Item[] = []
-    const contentItems: Item[] = []
-    const adminItems: Item[] = []
-    const tiAdminItems: Item[] = []
-
-    if (canReviewIntel) {
-        tiAdminItems.push(
-            { href: '/dashboard/ti/evaluation', label: 'Evaluation', icon: <ListChecks className='h-4 w-4' /> },
-            { href: '/dashboard/ti/timeliness', label: 'Timeliness', icon: <AlarmClockCheck className='h-4 w-4' /> },
-        )
-    }
-
-    if (canManageSystem) {
-        systemItems.push(
-            { href: '/dashboard/vms', label: 'VMs', icon: <Server className='h-4 w-4' /> },
-            { href: '/dashboard/traffic', label: 'Traffic', icon: <Network className='h-4 w-4' /> },
-            { href: '/dashboard/system', label: 'System', icon: <Settings2 className='h-4 w-4' /> },
-            { href: '/dashboard/system/ai', label: 'AI Metrics', icon: <Sparkles className='h-4 w-4' /> },
-            { href: '/dashboard/vulnerabilities', label: 'Vulnerabilities', icon: <ScanSearch className='h-4 w-4' /> },
-            { href: '/dashboard/load-testing', label: 'Load testing', icon: <Zap className='h-4 w-4' /> },
-        )
-    }
-
-    if (canManageContent) {
-        contentItems.push(
-            { href: '/dashboard/content', label: 'Content management', icon: <NotebookText className='h-4 w-4' /> },
-            { href: '/dashboard/notes', label: 'Notes', icon: <NotebookText className='h-4 w-4' /> },
-            { href: '/dashboard/articles', label: 'Articles', icon: <BookOpen className='h-4 w-4' /> },
-            { href: '/dashboard/thoughts', label: 'Thoughts', icon: <BrainCircuit className='h-4 w-4' /> },
-        )
-    }
-
-    if (isAdmin) {
-        tiAdminItems.push(
-            { href: '/dashboard/ti/control', label: 'Collection', icon: <Radar className='h-4 w-4' /> },
-            { href: '/dashboard/ti/attacks', label: 'Attacks', icon: <Inbox className='h-4 w-4' /> },
-            { href: '/dashboard/ti/activity', label: 'Latest activity', icon: <Activity className='h-4 w-4' /> },
-            { href: '/dashboard/ti/enrichment', label: 'Actor profiles', icon: <ListChecks className='h-4 w-4' /> },
-            { href: '/dashboard/ti/sources', label: 'Sources', icon: <DatabaseZap className='h-4 w-4' /> },
-            { href: '/dashboard/ti/domains', label: 'Watched entities', icon: <Globe2 className='h-4 w-4' /> },
-            { href: '/dashboard/ti/runs', label: 'Collection runs', icon: <PlayCircle className='h-4 w-4' /> },
-            { href: '/dashboard/ti/audit', label: 'Audit log', icon: <ClipboardList className='h-4 w-4' /> },
-        )
-
-        adminItems.push(
-            { href: '/dashboard/thesis', label: 'Thesis', icon: <BookOpen className='h-4 w-4' /> },
-            { href: '/dashboard/projects', label: 'Projects', icon: <FolderKanban className='h-4 w-4' /> },
-            { href: '/dashboard/shares', label: 'Shares', icon: <FileCode2 className='h-4 w-4' /> },
-            { href: '/dashboard/logs', label: 'Logs', icon: <FileWarning className='h-4 w-4' /> },
-            { href: '/dashboard/mail', label: 'Mail', icon: <Inbox className='h-4 w-4' /> },
-            { href: '/dashboard/db', label: 'Database', icon: <Database className='h-4 w-4' /> },
-            { href: '/dashboard/db/backups', label: 'Backup', icon: <DatabaseBackup className='h-4 w-4' /> },
-            { href: '/dashboard/system/rates', label: 'Rate Limits', icon: <Gauge className='h-4 w-4' /> },
-            { href: '/dashboard/system/updates', label: 'Host Updates', icon: <ShieldCheck className='h-4 w-4' /> },
-            { href: '/dashboard/helpdesk', label: 'Helpdesk', icon: <UserRoundCheck className='h-4 w-4' /> },
-            { href: '/dashboard/management', label: 'Management', icon: <ShieldCheck className='h-4 w-4' /> },
-        )
-    }
-
     const compact = mode === 'compact'
-    const toggleLabel = compact ? 'Expand sidebar' : 'Collapse sidebar'
-    const sections: Section[] = [
-        { title: 'Monitoring', items: productItems },
-        { title: 'Threat monitoring', items: tiAdminItems },
-        { title: 'Settings', items: workspaceItems },
-        { title: 'Content', items: contentItems },
-        { title: 'System', items: systemItems },
-        { title: 'Admin', items: adminItems },
-    ].filter(section => section.items.length)
-    const items = sections.flatMap(section => section.items)
-    const allItems = items.flatMap(item => [item, ...(item.subItems || []).map(subItem => ({ ...subItem, icon: item.icon }))])
-    const activeHref = items
-        .filter((item) => pathname === item.href
-            || (item.href === '/dashboard' && pathname === '/dashboard/overview')
-            || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`)))
-        .sort((a, b) => b.href.length - a.href.length)[0]?.href
-    const activeSubHref = allItems
-        .filter((item) => pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`)))
-        .sort((a, b) => b.href.length - a.href.length)[0]?.href
-    const activeGroupKey = sections
-        .flatMap(section => section.items)
-        .find(item => item.subItems?.length && (pathname === item.href || pathname.startsWith(`${item.href}/`) || item.subItems.some(subItem => subItem.href === activeSubHref || pathname.startsWith(`${subItem.href}/`))))?.href
-    const [expandedGroups, setExpandedGroups] = useState<string[]>(() => activeGroupKey ? [activeGroupKey] : [])
+    const sections = getDashboardNavigation(access)
+    const links = navigationLinks(sections)
+    const route = pathname === '/dashboard' ? '/dashboard/overview' : pathname === '/dashboard/dwm' ? '/dashboard/dwm/cases' : pathname
+    const active = links.filter(item => route === item.href || route.startsWith(`${item.href}/`))
+        .sort((left, right) => right.href.length - left.href.length)[0]
+    const activePath = active?.ancestors.join('/') ?? (pathname.startsWith('/dashboard/automation') ? 'Automation' : '')
 
     useEffect(() => {
-        setExpandedGroups(activeGroupKey ? [activeGroupKey] : [])
-    }, [activeGroupKey])
+        let saved: Preferences = { expanded: {}, pinned: [] }
+        try {
+            const parsed = JSON.parse(localStorage.getItem(storageKey) || '{}')
+            saved = {
+                expanded: Object.fromEntries(Object.entries(parsed.expanded || {}).filter(([, value]) => typeof value === 'boolean')) as Record<string, boolean>,
+                pinned: Array.isArray(parsed.pinned) ? parsed.pinned.filter((href: unknown) => typeof href === 'string') : [],
+            }
+        } catch { /* Navigation still works when browser storage is unavailable. */ }
+        const path = activePath.split('/').filter(Boolean)
+        path.forEach((_, index) => { saved.expanded[path.slice(0, index + 1).join('/')] = true })
+        try { localStorage.setItem(storageKey, JSON.stringify(saved)) } catch { /* Preferences are optional. */ }
+        setPreferences(saved)
+        setQuery('')
+    }, [storageKey, pathname, activePath])
+
+    function save(next: Preferences) {
+        setPreferences(next)
+        try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* Keep this session usable without storage. */ }
+    }
+
+    function toggle(key: string) {
+        save({ ...preferences, expanded: { ...preferences.expanded, [key]: !preferences.expanded[key] } })
+    }
+
+    function pin(href: string) {
+        save({ ...preferences, expanded: { ...preferences.expanded, Pinned: true }, pinned: preferences.pinned.includes(href) ? preferences.pinned.filter(item => item !== href) : [...preferences.pinned, href] })
+    }
+
+    function renderLink(item: { label: string, href: string }, key = item.href) {
+        const pinned = preferences.pinned.includes(item.href)
+        return (
+            <div key={key} className='group flex min-w-0 items-center rounded-md hover:bg-ui-canvas'>
+                <Link href={item.href} aria-current={active?.href === item.href ? 'page' : undefined}
+                    className={`min-w-0 flex-1 rounded-md px-2 py-2 text-sm leading-5 focus-visible:outline-2 focus-visible:outline-ui-primary ${active?.href === item.href ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-muted hover:text-ui-text'}`}>
+                    {item.label}
+                </Link>
+                <button type='button' onClick={() => pin(item.href)} aria-label={`${pinned ? 'Unpin' : 'Pin'} ${item.label}`} aria-pressed={pinned}
+                    className={`grid h-8 w-7 shrink-0 place-items-center rounded text-ui-muted hover:text-ui-primary focus-visible:outline-2 focus-visible:outline-ui-primary ${pinned ? 'text-ui-primary' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100'}`}>
+                    <Pin className={`h-3.5 w-3.5 ${pinned ? 'fill-current' : ''}`} />
+                </button>
+            </div>
+        )
+    }
+
+    function renderGroup(item: NavigationItem, ancestors: string[] = []) {
+        const path = [...ancestors, item.label]
+        const key = path.join('/')
+        const expanded = Boolean(preferences.expanded[key])
+        const containsActive = activePath === key || activePath.startsWith(`${key}/`)
+        const Icon = sectionIcons[item.label] || FolderKanban
+        const controls = `${domId}-${encodeURIComponent(key)}`
+        return (
+            <div key={key} className={ancestors.length ? 'min-w-0' : 'min-w-0 border-t border-ui-border/50 pt-1 first:border-0'}>
+                <button type='button' aria-expanded={expanded} aria-controls={controls} onClick={() => toggle(key)}
+                    className={`flex min-h-10 w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm leading-5 hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary ${containsActive ? 'text-ui-primary' : 'text-ui-text'} ${ancestors.length ? 'font-medium' : 'font-semibold'}`}>
+                    {!ancestors.length && <Icon className='h-4 w-4 shrink-0' />}
+                    <span className='min-w-0 flex-1'>{item.label}</span>
+                    <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? '' : '-rotate-90'}`} />
+                </button>
+                <div id={controls} hidden={!expanded} className='ml-2 border-l border-ui-border pl-2'>
+                    {item.items?.map(child => child.items ? renderGroup(child, path) : child.href ? renderLink({ label: child.label, href: child.href }) : null)}
+                </div>
+            </div>
+        )
+    }
+
+    const favorites = links.filter(item => preferences.pinned.includes(item.href))
+        .sort((left, right) => preferences.pinned.indexOf(left.href) - preferences.pinned.indexOf(right.href))
+    const search = query.trim().toLocaleLowerCase()
+    const matches = search ? links.filter(item => [...item.ancestors, item.label].join(' ').toLocaleLowerCase().includes(search)) : []
 
     return (
-        <aside className={`dashboard-sidebar-sticky noscroll min-h-0 w-full overflow-auto rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm shadow-ui-canvas/10 dark:shadow-ui-canvas/20 ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
-            <div className={`mb-2 flex items-center ${compact ? 'justify-center' : 'justify-between gap-3 px-2 py-1'}`}>
-                {compact ? (
-                    <button
-                        type='button'
-                        onClick={() => setDashboardViewMode('normal')}
-                        className='grid h-10 w-10 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-canvas hover:text-ui-text'
-                        aria-label='Expand sidebar'
-                        title='Expand sidebar'
-                    >
-                        <PanelLeftOpen className='h-4 w-4' />
-                    </button>
-                ) : (
-                    <>
-                        <div>
-                            <h2 className='mt-1 text-sm font-semibold text-ui-text'>Monitoring</h2>
-                        </div>
-                        <button
-                            type='button'
-                            onClick={() => setDashboardViewMode('compact')}
-                            className='grid h-9 w-9 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-canvas hover:text-ui-text'
-                            aria-label={toggleLabel}
-                            title={toggleLabel}
-                        >
-                            <PanelLeftClose className='h-4 w-4' />
-                        </button>
-                    </>
-                )}
+        <aside aria-label='Dashboard sidebar' className={`dashboard-sidebar-sticky noscroll min-h-0 w-full overflow-auto rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm shadow-ui-canvas/10 dark:shadow-ui-canvas/20 ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
+            <div className={`mb-2 flex items-center ${compact ? 'justify-center' : 'justify-between px-2'}`}>
+                {!compact && <h2 className='text-sm font-semibold text-ui-text'>Workspace</h2>}
+                <button type='button' onClick={() => setDashboardViewMode(compact ? 'normal' : 'compact')} aria-label={compact ? 'Expand sidebar' : 'Collapse sidebar'} title={compact ? 'Expand sidebar' : 'Collapse sidebar'}
+                    className='grid h-10 w-10 place-items-center rounded-lg text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'>
+                    {compact ? <PanelLeftOpen className='h-4 w-4' /> : <PanelLeftClose className='h-4 w-4' />}
+                </button>
             </div>
-
-            <nav className='grid gap-3'>
-                {sections.map(section => (
-                    <div key={section.title} className='grid gap-1'>
-                        {!compact && <p className='px-2 text-[0.62rem] font-semibold uppercase text-ui-muted'>{section.title}</p>}
-                        <div className='grid gap-1 sm:grid-cols-2 lg:grid-cols-1'>
-                            {section.items.map((item) => {
-                                const active = item.href === activeHref || item.subItems?.some(subItem => subItem.href === activeSubHref)
-                                const itemKey = `${section.title}:${item.href}:${item.label}`
-                                const expanded = expandedGroups.includes(item.href)
-                                const hasSubmenu = Boolean(item.subItems?.length)
-
-                                return (
-                                    <div key={itemKey} className='grid gap-1'>
-                                        <div className={`flex min-h-10 items-center rounded-lg border transition ${
-                                            active
-                                                ? 'border-ui-primary bg-ui-primary/10 text-ui-primary'
-                                                : 'border-transparent text-ui-muted hover:border-ui-border hover:bg-ui-canvas hover:text-ui-text'
-                                        }`}>
-                                            <Link
-                                                href={item.href}
-                                                title={item.label}
-                                                onClick={() => hasSubmenu ? setExpandedGroups([item.href]) : undefined}
-                                                className={`flex min-h-10 min-w-0 flex-1 items-center px-3 ${compact ? 'justify-center' : 'gap-3'}`}
-                                            >
-                                                {item.icon}
-                                                {!compact && <span className='truncate text-sm font-medium'>{item.label}</span>}
-                                            </Link>
-                                            {!compact && hasSubmenu ? (
-                                                <button
-                                                    type='button'
-                                                    onClick={() => setExpandedGroups(current => current.includes(item.href) ? current.filter(key => key !== item.href) : [...current, item.href])}
-                                                    className='mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-md text-ui-muted transition hover:bg-ui-panel hover:text-ui-text'
-                                                    aria-expanded={expanded}
-                                                    aria-label={`${expanded ? 'Collapse' : 'Expand'} ${item.label}`}
-                                                    title={`${expanded ? 'Collapse' : 'Expand'} ${item.label}`}
-                                                >
-                                                    <ChevronDown className={`h-4 w-4 transition ${expanded ? 'rotate-180' : ''}`} />
-                                                </button>
-                                            ) : null}
-                                        </div>
-                                        {!compact && expanded && item.subItems?.length ? (
-                                            <div className='grid gap-0.5 pl-7'>
-                                                {item.subItems.map(subItem => {
-                                                    const subActive = activeSubHref === subItem.href
-                                                    return (
-                                                        <Link
-                                                            key={subItem.href}
-                                                            href={subItem.href}
-                                                            onClick={() => setExpandedGroups([item.href])}
-                                                            className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${subActive ? 'text-ui-primary' : 'text-ui-muted hover:bg-ui-canvas hover:text-ui-text'}`}
-                                                        >
-                                                            {subItem.label}
-                                                        </Link>
-                                                    )
-                                                })}
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    </div>
-                ))}
+            {!compact && <div className='relative mb-2'>
+                <Search aria-hidden='true' className='pointer-events-none absolute left-2 top-3 h-4 w-4 text-ui-muted' />
+                <input type='search' aria-label='Search navigation' placeholder='Find a page…' value={query} onChange={event => setQuery(event.target.value)}
+                    className='h-10 w-full min-w-0 rounded-md border border-ui-border bg-ui-canvas pl-8 pr-2 text-sm text-ui-text placeholder:text-ui-muted focus-visible:outline-2 focus-visible:outline-ui-primary' />
+            </div>}
+            <nav aria-label='Main navigation' className='grid gap-1'>
+                {compact ? sections.map(section => {
+                    const Icon = sectionIcons[section.label] || FolderKanban
+                    return <button key={section.label} type='button' aria-label={`Open ${section.label}`} title={section.label}
+                        onClick={() => { save({ ...preferences, expanded: { ...preferences.expanded, [section.label]: true } }); setDashboardViewMode('normal') }}
+                        className={`grid h-10 w-full place-items-center rounded-md hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary ${activePath.startsWith(section.label) ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted'}`}>
+                        <Icon className='h-4 w-4' />
+                    </button>
+                }) : search ? <div aria-label='Navigation search results'>
+                    <p role='status' className='px-2 py-1 text-xs text-ui-muted'>{matches.length} matching pages</p>
+                    {matches.map(item => <div key={item.href} className='mb-2'>
+                        <p className='px-2 text-[10px] text-ui-muted'>{item.ancestors.join(' › ')}</p>
+                        {renderLink(item)}
+                    </div>)}
+                </div> : <>
+                    {favorites.length > 0 && renderGroup({ label: 'Pinned', items: favorites })}
+                    {sections.map(section => renderGroup(section))}
+                </>}
             </nav>
         </aside>
     )

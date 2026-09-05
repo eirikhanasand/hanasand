@@ -385,7 +385,7 @@ export function DwmAnalystPortal({
 
     if (view === 'actors') {
         return (
-            <DwmPanelPage title='Actors' meta={`${snapshot.actorOverviews.length} actor profiles`}>
+            <DwmPanelPage title='Monitored actors' meta={`${snapshot.actorOverviews.length} actors in monitoring context`}>
                 <ActorPanel snapshot={snapshot} />
             </DwmPanelPage>
         )
