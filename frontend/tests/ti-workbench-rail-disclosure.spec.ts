@@ -48,7 +48,7 @@ test('TI workbench keeps selected-case actions primary and collapses secondary r
     expect(route).toContain('AbortSignal.timeout(WORKBENCH_FETCH_TIMEOUT_MS)')
     expect(loading).toContain('Loading collection, recent attacks, actor profiles, sources, and review state.')
     expect(loading).toContain('animate-pulse')
-    expect(proxy).toContain("auth.state === 'unavailable'")
+    expect(proxy).toContain('auth.state === \'unavailable\'')
     expect(proxy).not.toContain('recentlyValidatedSession')
     expect(proxy).toContain('session_expires_at')
     expect(proxy).toContain('auth_checked_at')
