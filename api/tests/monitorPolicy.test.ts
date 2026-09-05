@@ -28,7 +28,7 @@ describe('production monitor notification transitions', () => {
 
     test('processing backlog deduplicates current review tasks by their persisted id', async () => {
         const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
-        expect(source).toContain('SELECT DISTINCT ON (record->>\'id\') record, updated_at')
+        expect(source).toContain("SELECT DISTINCT ON (record->>'id') record->>'state' AS state, record->>'promptVersion' AS prompt_version, updated_at")
         expect(source).toContain('ORDER BY record->>\'id\', updated_at DESC')
         expect(source).not.toContain('SELECT DISTINCT ON (record->>\'taskId\') record, updated_at')
     })

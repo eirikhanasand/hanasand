@@ -333,7 +333,7 @@ export default async function runSyntheticMonitor() {
         check('threat-intelligence', 'Processing backlog', async () => {
             const result = await run(`
                 WITH latest_review_tasks AS (
-                  SELECT DISTINCT ON (record->>'id') record, updated_at
+                  SELECT DISTINCT ON (record->>'id') record->>'state' AS state, record->>'promptVersion' AS prompt_version, updated_at
                   FROM threat_intel.workflow_records
                   WHERE record_type = 'analyst_metadata_review_task'
                     AND record->>'recordKind' = 'automatic_intelligence_review_task'
@@ -341,8 +341,8 @@ export default async function runSyntheticMonitor() {
                 )
                 SELECT
                   (SELECT count(*)::int FROM latest_review_tasks
-                    WHERE record->>'state' IN ('queued', 'running', 'retrying')
-                      AND record->>'promptVersion' NOT IN (
+                    WHERE state IN ('queued', 'running', 'retrying')
+                      AND prompt_version NOT IN (
                         'ti.automatic_intelligence_review.prompt.v1',
                         'ti.automatic_intelligence_review.prompt.v2',
                         'ti.automatic_intelligence_review.prompt.v3'
@@ -351,8 +351,8 @@ export default async function runSyntheticMonitor() {
                   ) AS stale_reviews,
                   COALESCE(
                     EXTRACT(EPOCH FROM (NOW() - (SELECT MIN(updated_at) FROM latest_review_tasks
-                      WHERE record->>'state' IN ('queued', 'running', 'retrying')
-                        AND record->>'promptVersion' NOT IN (
+                      WHERE state IN ('queued', 'running', 'retrying')
+                        AND prompt_version NOT IN (
                           'ti.automatic_intelligence_review.prompt.v1',
                           'ti.automatic_intelligence_review.prompt.v2',
                           'ti.automatic_intelligence_review.prompt.v3'
