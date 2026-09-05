@@ -250,6 +250,7 @@ export default async function ensureSchema() {
     await run('ALTER TABLE tokens ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()')
     await run('ALTER TABLE tokens ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ')
     await run('ALTER TABLE tokens ADD COLUMN IF NOT EXISTS revoked_by TEXT')
+    await run('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tokens_active_token ON tokens (token) WHERE revoked_at IS NULL')
     await run(`
         CREATE TABLE IF NOT EXISTS login_events (
             id BIGSERIAL PRIMARY KEY,
