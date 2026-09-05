@@ -19,7 +19,7 @@ test('certificate states are explicit and neutral details open by click and keyb
     const retry = page.getByRole('button', { name: 'Try again' })
     if (await retry.isVisible()) await retry.click()
     await expect(page.getByRole('button', { name: 'Certificate: Valid — Website TLS' }).first()).toBeVisible({ timeout: 25000 })
-    const notNeeded = page.getByRole('button', { name: 'Certificate: Not needed — Git SSH' })
+    const notNeeded = page.getByRole('button', { name: 'Certificate: N/A — Git SSH' })
     await expect(notNeeded).toHaveClass(/text-ui-muted/)
     await expect(notNeeded.locator('.lucide-info')).toBeVisible()
     await expect(notNeeded.locator('.lucide-shield-x')).toHaveCount(0)
