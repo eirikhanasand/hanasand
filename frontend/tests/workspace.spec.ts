@@ -15,6 +15,8 @@ test('sheet markdown, inline tables, persistence and inherited reader permission
     const owner = await browser.newContext()
     await owner.addInitScript(socketFixture)
     await owner.addCookies([{ name: 'id', value: 'eirikhanasand', url: baseURL! }, { name: 'access_token', value: 'synthetic-owner', url: baseURL! }])
+    const initial = await (await owner.request.get(baseURL + '/api/thesis')).json()
+    expect((await owner.request.put(baseURL + '/api/thesis', { headers: { Origin: baseURL! }, data: { ...initial, title: '# Thesis', body: '' } })).ok()).toBe(true)
     const page = await owner.newPage()
     const errors: string[] = []
     page.on('pageerror', error => errors.push(error.message))

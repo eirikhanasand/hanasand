@@ -1,10 +1,30 @@
 import { marked } from 'marked'
 
 export const sheetNames = ['Overview', 'Timetable', 'Plan', 'Research'] as const
-export type Sheet = { title: string, body: string }
+export type Sheet = { title: string, body: string, id?: string, name?: string }
 const marker = /^<!-- thesis-sheet:(Overview|Timetable|Plan|Research) title:(.*?) -->\n/gm
 
 export function readSheets(title: string, body: string): Sheet[] {
+    // Lengths keep literal metadata examples inside markdown from becoming sheet boundaries.
+    const header = /^<!-- thesis-workspace:2 (.*?) -->\n/.exec(body)
+    if (header) {
+        try {
+            const metadata = JSON.parse(decodeURIComponent(header[1]))
+            let offset = header[0].length
+            if (!Array.isArray(metadata) || !metadata.length) throw new Error('Invalid sheets')
+            const result: Sheet[] = metadata.map(item => {
+                if (!item || typeof item.title !== 'string' || !Number.isSafeInteger(item.length) || item.length < 0 ||
+                    (item.id !== undefined && typeof item.id !== 'string') || (item.name !== undefined && typeof item.name !== 'string')) throw new Error('Invalid sheet')
+                const { length, ...sheet } = item
+                const content = body.slice(offset, offset + length)
+                if (content.length !== length) throw new Error('Incomplete sheet')
+                offset += length + 2
+                return { ...sheet, body: content }
+            })
+            if (offset - 2 !== body.length) throw new Error('Unexpected content')
+            return result
+        } catch { /* Preserve malformed metadata as ordinary markdown. */ }
+    }
     const sheets = sheetNames.map(name => ({ title: `# ${name}`, body: '' }))
     sheets[0] = { title, body }
     const matches = [...body.matchAll(marker)]
@@ -35,7 +55,8 @@ export function readSheets(title: string, body: string): Sheet[] {
 }
 
 export function writeSheets(sheets: Sheet[]) {
-    return sheets.map((sheet, index) => index === 0 ? sheet.body : `<!-- thesis-sheet:${sheetNames[index]} title:${encodeURIComponent(sheet.title).replace(/-/g, '%2D')} -->\n${sheet.body}`).join('\n\n')
+    const metadata = sheets.map(({ body, ...sheet }) => ({ ...sheet, length: body.length }))
+    return `<!-- thesis-workspace:2 ${encodeURIComponent(JSON.stringify(metadata)).replace(/-/g, '%2D')} -->\n` + sheets.map(sheet => sheet.body).join('\n\n')
 }
 
 export type TableData = { cells: string[][], widths: number[], heights: number[] }
@@ -108,4 +129,14 @@ export function reshape(data: TableData, axis: 'row' | 'column', index: number, 
     const widths = [...data.widths], heights = [...data.heights]
     ;(axis === 'row' ? heights : widths).splice(index, remove ? 1 : 0, ...(!remove ? [axis === 'row' ? 48 : 180] : []))
     return { cells, widths, heights }
+}
+
+export function identifiedSheets(title: string, body: string) {
+    return readSheets(title, body).map((sheet, index) => ({ ...sheet, id: sheet.id || sheetNames[index] || String(index), name: sheet.name || sheetNames[index] || `Sheet ${index + 1}` }))
+}
+
+export function sheetChanges(before: Sheet[], after: Sheet[]) {
+    return [...before.map(sheet => ({ before: sheet, after: after.find(current => current.id === sheet.id) })),
+        ...after.filter(sheet => !before.some(old => old.id === sheet.id)).map(sheet => ({ before: undefined, after: sheet }))]
+        .filter(change => !change.before || !change.after || change.before.title !== change.after.title || change.before.body !== change.after.body || change.before.name !== change.after.name)
 }

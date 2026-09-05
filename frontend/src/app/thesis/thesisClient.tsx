@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import SheetEditor from './sheetEditor'
-import { readSheets, writeSheets, sheetNames } from './workspace'
+import { identifiedSheets, writeSheets, sheetChanges } from './workspace'
 import type { ThesisDocument } from '@/utils/thesis'
 import useThesis from './useThesis'
 
@@ -13,17 +13,32 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
     useEffect(() => { setReady(true) }, [])
     const thesis = useThesis(initialDocument, canEdit)
     const { document } = thesis
-    const [active, setActive] = useState(0)
+    const [selected, setActive] = useState(0)
     const [validationError, setValidationError] = useState('')
-    const sheets = readSheets(document.title, document.body)
+    const sheets = identifiedSheets(document.title, document.body)
+    const active = Math.min(selected, sheets.length - 1)
     function updateSheet(field: 'title' | 'body', value: string) {
         const next = sheets.map((sheet, index) => index === active ? { ...sheet, [field]: value } : sheet)
         if (field === 'title' && (!value.trim() || value.length > 500)) { setValidationError('Enter a title of 1–500 characters.'); return }
         const body = writeSheets(next)
         if (body.length > 1_000_000) { setValidationError('The workspace is full. Shorten the content before adding more.'); return }
         setValidationError('')
-        if (active === 0 && field === 'title') thesis.update('title', value)
-        else thesis.update('body', body)
+        thesis.update('body', body)
+    }
+    function addSheet() {
+        const name = window.prompt('Sheet name', 'New sheet')?.trim()
+        if (!name) return
+        if (name.length > 100) { setValidationError('Use a sheet name of 100 characters or fewer.'); return }
+        const body = writeSheets([...sheets, { id: crypto.randomUUID(), name, title: `# ${name}`, body: '' }])
+        if (body.length > 1_000_000) { setValidationError('The workspace is full.'); return }
+        thesis.update('body', body)
+        setActive(sheets.length)
+        setValidationError('')
+    }
+    function removeSheet() {
+        if (sheets.length === 1 || !window.confirm(`Remove “${sheets[active].name}” and its content? Earlier saved versions remain in shared History.`)) return
+        thesis.update('body', writeSheets(sheets.filter((_, index) => index !== active)))
+        setActive(Math.max(0, active - 1))
     }
     const [history, setHistory] = useState<HistoryItem[] | null>(null)
     const [preview, setPreview] = useState<ThesisDocument | null>(null)
@@ -82,15 +97,21 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                 if ((event.target as HTMLElement).closest('button, [role=button]')) event.preventDefault()
             }}>
             <div role='tabpanel' id={`sheet-${active}`} aria-labelledby={`tab-${active}`}>
-                <SheetEditor key={active} sheet={sheets[active]} canEdit={canEdit && ready} onChange={updateSheet} />
+                <SheetEditor key={sheets[active].id} sheet={sheets[active]} canEdit={canEdit && ready} onChange={updateSheet} />
             </div>
             {validationError && <p role='alert' className='text-sm text-ui-danger'>{validationError}</p>}
-            <nav className='thesis-tabs' role='tablist' aria-label='Thesis sheets'>
-                {sheetNames.map((name, index) => <button key={name} id={`tab-${index}`} role='tab' disabled={!ready} aria-selected={active === index} aria-controls={`sheet-${index}`} tabIndex={active === index ? 0 : -1}
-                    onClick={() => setActive(index)} onKeyDown={event => {
-                        const target = event.key === 'ArrowRight' ? (index + 1) % 4 : event.key === 'ArrowLeft' ? (index + 3) % 4 : event.key === 'Home' ? 0 : event.key === 'End' ? 3 : -1
-                        if (target >= 0) { event.preventDefault(); setActive(target); window.document.getElementById(`tab-${target}`)?.focus() }
-                    }}>{name}</button>)}
+            <nav className='thesis-tabs' aria-label='Sheet navigation'>
+                <div role='tablist' aria-label='Thesis sheets' className='flex'>
+                    {sheets.map(({ id, name }, index) => <button key={id} id={`tab-${index}`} role='tab' disabled={!ready} aria-selected={active === index} aria-controls={`sheet-${index}`} tabIndex={active === index ? 0 : -1}
+                        onClick={() => setActive(index)} onKeyDown={event => {
+                            const target = event.key === 'ArrowRight' ? (index + 1) % sheets.length : event.key === 'ArrowLeft' ? (index + sheets.length - 1) % sheets.length : event.key === 'Home' ? 0 : event.key === 'End' ? sheets.length - 1 : -1
+                            if (target >= 0) { event.preventDefault(); setActive(target); window.document.getElementById(`tab-${target}`)?.focus() }
+                        }}>{name}</button>)}
+                </div>
+                {canEdit && <>
+                    <button disabled={!ready} onClick={addSheet} aria-label='Add sheet'>+</button>
+                    <button disabled={!ready || sheets.length === 1} onClick={removeSheet} aria-label={`Remove ${sheets[active].name} sheet`}>Remove sheet</button>
+                </>}
             </nav>
             {canEdit ? (
                 <>
@@ -128,7 +149,15 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                                         </div>
                                         {preview?.revision === item.revision && (
                                             <section id={`thesis-version-${item.revision}`} aria-label='Version preview' className='grid gap-3 border-t border-ui-border p-3'>
-                                                {readSheets(preview.title, preview.body).map((sheet, index) => <section key={index}><h3>{sheetNames[index]}</h3><SheetEditor sheet={sheet} canEdit={false} onChange={() => {}} /></section>)}
+                                                <p className='text-sm text-ui-muted'>Changes from this saved version to the current workspace. Restore restores all sheets together.</p>
+                                                {sheetChanges(identifiedSheets(preview.title, preview.body), sheets).length === 0 && <p>No sheet changes.</p>}
+                                                {sheetChanges(identifiedSheets(preview.title, preview.body), sheets).map(({ before, after }) => <section key={(before || after)!.id} className='grid gap-3'>
+                                                    <h3 className='font-semibold'>{(after || before)!.name} — {!before ? 'Added' : !after ? 'Removed' : 'Changed'}</h3>
+                                                    <div className='grid gap-4 md:grid-cols-2'>
+                                                        <div><h4>Saved version</h4>{before ? <SheetEditor sheet={before} canEdit={false} onChange={() => {}} /> : <p>Sheet did not exist.</p>}</div>
+                                                        <div><h4>Current workspace</h4>{after ? <SheetEditor sheet={after} canEdit={false} onChange={() => {}} /> : <p>Sheet removed.</p>}</div>
+                                                    </div>
+                                                </section>)}
                                             </section>
                                         )}
                                     </li>

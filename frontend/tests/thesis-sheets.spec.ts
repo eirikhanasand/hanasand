@@ -1,0 +1,61 @@
+import { expect, test } from '@playwright/test'
+
+test('owners add/remove persisted tabs and compare sheets in shared history; viewers cannot edit', async({ browser, baseURL }) => {
+    test.skip(process.env.THESIS_WORKSPACE_TEST !== '1', 'Requires disposable thesis API.')
+    test.setTimeout(60000)
+    expect(baseURL).toBe('http://127.0.0.1:3205')
+    const context = await browser.newContext()
+    await context.addCookies([{ name: 'id', value: 'eirikhanasand', url: baseURL! }, { name: 'access_token', value: 'synthetic-owner', url: baseURL! }])
+    await context.addInitScript(() => {
+        const Socket = window.WebSocket
+        window.WebSocket = class extends Socket {
+            constructor(url: string | URL, protocols?: string | string[]) { super(String(url).endsWith('/api/ws/thesis') ? 'ws://127.0.0.1:3202/api/ws/thesis' : url, protocols) }
+        }
+    })
+    const saved = await (await context.request.get(baseURL + '/api/thesis')).json()
+    await context.request.put(baseURL + '/api/thesis', { headers: { Origin: baseURL! }, data: { ...saved, title: '# Thesis', body: 'Original overview' } })
+    const page = await context.newPage()
+    await page.goto(baseURL + '/thesis')
+    await expect(page.getByRole('tab')).toHaveCount(4)
+    page.once('dialog', dialog => dialog.accept('Notes'))
+    await page.getByRole('button', { name: 'Add sheet', exact: true }).click()
+    await expect(page.getByRole('tab', { name: 'Notes', exact: true })).toHaveAttribute('aria-selected', 'true')
+    const current = async() => { const doc = await (await context.request.get(baseURL + '/api/thesis')).json(); const header = /^<!-- thesis-workspace:2 (.*?) -->/.exec(doc.body); return header ? JSON.parse(decodeURIComponent(header[1])) as { name: string }[] : [] }
+    await expect.poll(async() => (await current()).length, { timeout: 12000 }).toBe(5)
+    await page.getByRole('tab', { name: 'Overview', exact: true }).click()
+    page.once('dialog', dialog => dialog.dismiss())
+    await page.getByRole('button', { name: 'Remove Overview sheet', exact: true }).click()
+    await expect(page.getByRole('tab')).toHaveCount(5)
+    page.once('dialog', dialog => dialog.accept())
+    await page.getByRole('button', { name: 'Remove Overview sheet', exact: true }).click()
+    await expect.poll(async() => (await current()).map(sheet => sheet.name), { timeout: 12000 }).toEqual(['Timetable', 'Plan', 'Research', 'Notes'])
+    await page.reload()
+    await expect(page.getByRole('tab')).toHaveCount(4)
+    await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toHaveCount(0)
+    await page.getByRole('button', { name: 'History', exact: true }).click()
+    await page.getByRole('button', { name: /^Previous version/ }).click()
+    await expect(page.getByRole('heading', { name: 'Overview — Removed', exact: true })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Version preview' })).toContainText('Original overview')
+    const viewer = await browser.newContext()
+    const publicPage = await viewer.newPage()
+    await publicPage.goto(baseURL + '/thesis')
+    await expect(publicPage.getByRole('tab', { name: 'Notes', exact: true })).toBeVisible()
+    await expect(publicPage.getByRole('button', { name: /Add sheet|Remove .* sheet|^History$/ })).toHaveCount(0)
+    const doc = await (await viewer.request.get(baseURL + '/api/thesis')).json()
+    expect((await viewer.request.put(baseURL + '/api/thesis', { headers: { Origin: baseURL! }, data: doc })).status()).toBe(403)
+    await page.setViewportSize({ width: 390, height: 844 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.getByRole('region', { name: 'Version history' }).getByRole('button', { name: /^Restore version/ }).first().click()
+    await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toBeVisible()
+    await expect(page.getByRole('tab')).toHaveCount(5)
+    while (await page.getByRole('tab').count() > 1) {
+        page.once('dialog', dialog => dialog.accept())
+        await page.getByRole('button', { name: /^Remove .* sheet$/ }).click()
+    }
+    await expect(page.getByRole('button', { name: /^Remove .* sheet$/ })).toBeDisabled()
+    await expect.poll(async() => (await current()).length, { timeout: 12000 }).toBe(1)
+    await page.reload()
+    await expect(page.getByRole('tab')).toHaveCount(1)
+    await viewer.close()
+    await context.close()
+})

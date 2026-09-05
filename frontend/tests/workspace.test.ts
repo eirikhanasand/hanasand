@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { readSheets, writeSheets, tables, writeTable, cellValue, reshape, columnName } from '../src/app/thesis/workspace'
+import { readSheets, writeSheets, identifiedSheets, sheetChanges, tables, writeTable, cellValue, reshape, columnName } from '../src/app/thesis/workspace'
 
 test('sheets preserve existing markdown and round-trip titles, prose, tables and sizes', () => {
     const sheets = readSheets('# Existing **thesis**', '## Existing content\n\nKeep this.\n')
@@ -42,4 +42,12 @@ test('SUMMARIZE supports both directions, nested formulas, invalid ranges and st
     assert.equal(inserted.cells[2][2], '=SUMMARIZE(A3:B3)')
     const removed = reshape(data, 'column', 0, true)
     assert.equal(cellValue(removed.cells, 1, 1), '#REF!')
+})
+
+test('sheet metadata preserves deletion, arbitrary markdown and stable history identity', () => {
+    const initial = identifiedSheets('# Thesis', 'Keep this\n\n<!-- thesis-sheet:Plan title:example -->\n')
+    const next = [...initial.slice(1), { id: 'notes', name: 'Notes', title: '# Notes', body: '😀\n\n<!-- thesis-workspace:2 example -->\n' }]
+    assert.deepEqual(identifiedSheets('# Thesis', writeSheets(next)), next)
+    assert.deepEqual(sheetChanges(initial, next).map(change => change.before?.id || change.after?.id), ['Overview', 'notes'])
+    assert.deepEqual(identifiedSheets('# Thesis', writeSheets([next[3]])), [next[3]])
 })

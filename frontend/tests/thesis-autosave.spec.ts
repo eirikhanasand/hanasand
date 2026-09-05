@@ -31,7 +31,9 @@ test('autosave, idle, WebSocket updates, history restore, closing and draft reco
     const publicPage = await reader.newPage()
     const current = async() => {
         const saved = await (await owner.request.get(baseURL + '/api/thesis')).json()
-        return { ...saved, body: saved.body.split('\n\n<!-- thesis-sheet:')[0] }
+        const header = /^<!-- thesis-workspace:2 (.*?) -->\n/.exec(saved.body)
+        const body = header ? saved.body.slice(header[0].length, header[0].length + JSON.parse(decodeURIComponent(header[1]))[0].length) : saved.body.split('\n\n<!-- thesis-sheet:')[0]
+        return { ...saved, body }
     }
     await page.goto(baseURL + '/content/thesis')
     await editBody()
