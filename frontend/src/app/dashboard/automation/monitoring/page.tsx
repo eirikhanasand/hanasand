@@ -1,1 +1,1 @@
-export { default } from '../../automations/monitoring/page'
+export { default } from '../page'

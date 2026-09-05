@@ -12,6 +12,11 @@ const bun = process.execPath
 
 const tasks: TestTask[] = [
     {
+        id: 'automation-routes',
+        title: 'Automation route regression',
+        command: [bun, 'scripts/check-automation-routes.mjs'],
+    },
+    {
         id: 'dashboard-sidebar-shell',
         title: 'Dashboard sidebar shell contract',
         command: [bun, 'scripts/check-dashboard-sidebar-shell.mjs'],

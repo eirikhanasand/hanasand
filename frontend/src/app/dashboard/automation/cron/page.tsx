@@ -1,1 +1,1 @@
-export { default } from '../../automations/cron/page'
+export { default } from '../../system/cron/page'
