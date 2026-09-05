@@ -44,6 +44,8 @@ describe('production monitor notification transitions', () => {
         const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
         expect(source).toContain("check('threat-intelligence', 'Source collection'")
         expect(source).toContain('const SOURCE_OPERATIONS_DEGRADED_RATIO = 0.05')
+        expect(source).toContain('!storage || storage.databaseAvailable === false')
+        expect(source).not.toContain('storage?.ok !== true')
     })
 
     test('scraper backlog is visible before it becomes a write failure', async () => {

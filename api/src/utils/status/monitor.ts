@@ -142,7 +142,7 @@ export default async function runSyntheticMonitor() {
             const { response, body } = await fetchJson('/v1/health', { signal: AbortSignal.timeout(45_000) }, scraperBase)
             const health = object(body)
             const storage = object(health?.storage)
-            if (response.status !== 200 || health?.ok !== true || storage?.ok !== true) {
+            if (response.status !== 200 || health?.ok !== true || !storage || storage.databaseAvailable === false) {
                 throw new Error(`Threat-intelligence storage or service is unhealthy (${response.status}).`)
             }
             const memory = object(health?.memory)
