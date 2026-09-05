@@ -46,13 +46,12 @@ if (error) throw new Error(error.error.message)`
     return (
         <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas text-ui-text'>
             <section className='border-b border-ui-border bg-ui-panel'>
-                <div className='mx-auto flex max-w-7xl flex-col gap-6 px-4 py-10 md:px-8 lg:flex-row lg:items-end lg:justify-between'>
-                    <div className='max-w-3xl'>
+                <div className='mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 md:px-8 lg:flex-row lg:items-center lg:justify-between'>
+                    <div className='min-w-0'>
                         <p className='text-sm font-semibold uppercase text-ui-primary'>API v{contract.info.version}</p>
-                        <h1 className='mt-2 text-4xl font-semibold tracking-normal'>{contract.info.title}</h1>
-                        <p className='mt-4 text-base leading-7 text-ui-muted'>{contract.info.description}</p>
+                        <h1 className='mt-1 text-2xl font-semibold tracking-normal md:text-3xl'>{contract.info.title}</h1>
                     </div>
-                    <div className='flex flex-wrap gap-3'>
+                    <div className='flex shrink-0 flex-wrap gap-3'>
                         <Link href='/register?path=%2Fdevelopers%23api-access' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>Create API key<ArrowRight className='h-4 w-4' /></Link>
                         <Link href='/api/openapi/ti' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'><FileJson className='h-4 w-4' />OpenAPI JSON</Link>
                     </div>
@@ -72,7 +71,7 @@ if (error) throw new Error(error.error.message)`
                 </div>
             </section>
 
-            <section className='border-b border-ui-border bg-ui-panel'>
+            <section id='endpoints' className='scroll-mt-24 border-b border-ui-border bg-ui-panel'>
                 <div className='mx-auto max-w-7xl px-4 py-9 md:px-8'>
                     <h2 className='text-2xl font-semibold'>Endpoints</h2>
                     <div className='mt-5 overflow-x-auto rounded-lg border border-ui-border'>
@@ -84,7 +83,7 @@ if (error) throw new Error(error.error.message)`
                 </div>
             </section>
 
-            <section className='border-b border-ui-border'>
+            <section id='clients' className='scroll-mt-24 border-b border-ui-border'>
                 <div className='mx-auto grid max-w-7xl gap-6 px-4 py-9 md:px-8 lg:grid-cols-2'>
                     <CodeBlock title='Generate TypeScript types' code={typeCommand} />
                     <CodeBlock title='Typed client' code={clientExample} />

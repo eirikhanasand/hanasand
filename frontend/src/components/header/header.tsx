@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation'
 import ShareIcon from '@/components/menu/shareIcon'
 import ThemeSwitch from '@/components/theme/themeSwitch'
-import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, Gauge, LockKeyhole, MenuIcon, Network, Radar, Search, ShieldAlert, ShieldCheck, X } from 'lucide-react'
+import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, FileJson, Gauge, LockKeyhole, MenuIcon, Network, Radar, Search, ShieldAlert, ShieldCheck, X } from 'lucide-react'
 import Login from '@/components/login/login'
 import Logout from '@/components/logout/logout'
 import { isInternalAppPath, hasAppSidebar } from '@/utils/routes/appRoutes'
@@ -19,19 +19,21 @@ import SiteSearch from './siteSearch'
 import SupportAssistant from '@/components/support/supportAssistant'
 
 const productItems = [
-    { title: 'Organizations', detail: 'Manage members, shared watchlists, alert scope, and destinations.', href: '/organizations', icon: ShieldCheck },
-    { title: 'Dark Web Monitoring', detail: 'Watch companies, vendors, domains, and brands for reviewable exposure alerts.', href: '/dwm', icon: BellRing },
-    { title: 'Search', detail: 'Search companies, groups, source changes, and alert context.', href: '/ti', icon: Search },
-    { title: 'API and Webhooks', detail: 'Send reviewed alerts to your tools.', href: '/developers', icon: Code2 },
-]
-
-const solutionItems = [
-    { title: 'All Solutions', detail: 'Company monitoring, alerts, and integrations.', href: '/solutions', icon: ShieldCheck },
+    { title: 'All products and solutions', detail: 'Explore monitoring, investigation, and security tools.', href: '/solutions', icon: ShieldCheck },
     { title: 'Dark Web Monitoring', detail: 'Company and vendor alerts from watched exposure sources.', href: '/dwm', icon: BellRing },
     { title: 'Security Monitoring', detail: 'Find suspicious logins and other security events.', href: '/solutions/mill', icon: ShieldAlert },
     { title: 'Security Scanner', detail: 'Safe validation scans for approved Hanasand assets.', href: '/solutions/scanner', icon: ShieldAlert },
-    { title: 'Threat Search', detail: 'Open the public intelligence workspace for companies and groups.', href: '/ti', icon: Radar },
+    { title: 'Threat Search', detail: 'Search companies, groups, source changes, and alert context.', href: '/ti', icon: Radar },
     { title: 'Browser', detail: 'Open suspicious sites in isolated browsers and save the results.', href: '/browser', icon: Network },
+    { title: 'Organizations', detail: 'Manage members, shared watchlists, alert scope, and destinations.', href: '/organizations', icon: ShieldCheck },
+]
+
+const developerItems = [
+    { title: 'API overview', detail: 'Get started with the Hanasand API.', href: '/developers', icon: Code2 },
+    { title: 'API keys and onboarding', detail: 'Create an organization, get a key, and make your first request.', href: '/developers#api-access', icon: ShieldCheck },
+    { title: 'API reference', detail: 'Browse endpoints, access requirements, and key scopes.', href: '/developers#endpoints', icon: BookOpen },
+    { title: 'TypeScript client', detail: 'Generate types and connect your application.', href: '/developers#clients', icon: Code2 },
+    { title: 'OpenAPI JSON', detail: 'Download the API specification.', href: '/api/openapi/ti', icon: FileJson },
 ]
 
 const resourceItems = [
@@ -39,7 +41,7 @@ const resourceItems = [
     { title: 'Status', detail: 'Service health and current uptime.', href: '/status', icon: ActivityIcon },
     { title: 'Service Checks', detail: 'Permitted endpoint checks for URLs you control.', href: '/test', icon: Gauge },
     { title: 'Hash Exposure Lookup', detail: 'Check a SHA-1 hash through a prefix-only exposure lookup.', href: '/pwned', icon: LockKeyhole },
-    { title: 'Company', detail: 'Product notes, ownership, and current Hanasand direction.', href: '/about', icon: BookOpen },
+    { title: 'About Hanasand', detail: 'Product notes, ownership, and current Hanasand direction.', href: '/about', icon: BookOpen },
 ]
 
 function PublicDropdown({ label, items }: { label: string, items: Array<{ title: string, detail: string, href: string, icon: typeof Radar }> }) {
@@ -71,17 +73,8 @@ function PublicDropdown({ label, items }: { label: string, items: Array<{ title:
 }
 
 const mobilePublicLinks = [
-    { label: 'Organizations', href: '/organizations' },
-    { label: 'Dark web monitoring', href: '/dwm' },
-    { label: 'Threat search', href: '/ti' },
-    { label: 'Solutions', href: '/solutions' },
+    ...[...productItems, ...developerItems, ...resourceItems].map(item => ({ label: item.title, href: item.href })),
     { label: 'Pricing', href: '/pricing' },
-    { label: 'Trust center', href: '/trust' },
-    { label: 'Developers', href: '/developers' },
-    { label: 'Browser', href: '/browser' },
-    { label: 'Hash exposure lookup', href: '/pwned' },
-    { label: 'Status', href: '/status' },
-    { label: 'Service checks', href: '/test' },
     { label: 'Support', href: '/support' },
 ]
 
@@ -96,7 +89,7 @@ function PublicMobileMenu({ token }: { token: boolean }) {
         : mobilePublicLinks
 
     return (
-        <div className='relative lg:hidden'>
+        <div className='relative xl:hidden'>
             <button
                 type='button'
                 onClick={() => setOpen((next) => !next)}
@@ -107,7 +100,7 @@ function PublicMobileMenu({ token }: { token: boolean }) {
                 {open ? <X className='h-5 w-5' /> : <MenuIcon className='h-5 w-5' />}
             </button>
             {open && (
-                <div className='absolute right-0 top-13 z-30 w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-lg border border-ui-border bg-ui-panel p-2 shadow-[0_22px_70px_rgba(25,34,52,0.16)] dark:shadow-[0_22px_70px_rgba(0,0,0,0.42)]'>
+                <div className='absolute right-0 top-13 z-30 max-h-[calc(100dvh-6rem)] w-[min(20rem,calc(100vw-1.5rem))] overflow-y-auto rounded-lg border border-ui-border bg-ui-panel p-2 shadow-[0_22px_70px_rgba(25,34,52,0.16)] dark:shadow-[0_22px_70px_rgba(0,0,0,0.42)]'>
                     {links.map((item) => (
                         <Link
                             key={item.href}
@@ -146,13 +139,9 @@ export default function Header({ token, path: serverPath, initialMode = 'normal'
                 <div className='mx-auto flex h-18 w-full max-w-7xl items-center justify-between gap-5'>
                     <BrandLogo />
 
-                    <nav className='hidden items-center gap-5 lg:flex'>
+                    <nav aria-label='Main navigation' className='mr-auto hidden items-center gap-3 xl:flex'>
                         <PublicDropdown label='Product' items={token ? productItems.map(item => item.href === '/dwm' ? { ...item, href: '/dwm' } : item) : productItems} />
-                        <PublicDropdown label='Solutions' items={token ? solutionItems.map(item => item.href === '/dwm' ? { ...item, href: '/dwm' } : item) : solutionItems} />
-                        <Link href='/developers' className='inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>
-                            Developers
-                            <Code2 className='h-4 w-4 text-ui-muted' />
-                        </Link>
+                        <PublicDropdown label='Developers' items={developerItems} />
                         <PublicDropdown label='Resources' items={resourceItems} />
                         <Link href={pricingHref} className='inline-flex h-10 min-w-20 items-center justify-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Pricing</Link>
                     </nav>
@@ -164,7 +153,7 @@ export default function Header({ token, path: serverPath, initialMode = 'normal'
                         <Link href={token ? '/dashboard' : '/login'} className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90'>
                             Go to Dashboard
                         </Link>
-                        <Link href='/ti' aria-label='Search intelligence' className='hidden h-11 w-11 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-raised hover:text-ui-text sm:grid lg:hidden'>
+                        <Link href='/ti' aria-label='Search intelligence' className='hidden h-11 w-11 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-raised hover:text-ui-text sm:grid xl:hidden'>
                             <Search className='h-5 w-5' />
                         </Link>
                         <PublicMobileMenu token={token} />
