@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { InitialAutomationData } from '@/utils/automations/server'
-import { fetchAutomation, type AgentAutomationRun } from '@/utils/automations/client'
+import { fetchAutomation, type AgentAutomationRun, type MonitoringIssue } from '@/utils/automations/client'
 
 export default function useAutomationHistory(id: string | undefined, from: string, to: string, initial?: InitialAutomationData['detail'], initialError = '') {
     const seeded = initial?.automation.id === id && !from && !to ? initial : undefined
     const [runs, setRuns] = useState<AgentAutomationRun[]>(seeded?.runs || [])
+    const [issues, setIssues] = useState<MonitoringIssue[]>(seeded?.issues || [])
     const [total, setTotal] = useState(seeded?.total || 0)
     const [hasMore, setHasMore] = useState(Boolean(seeded?.nextCursor))
     const [loading, setLoading] = useState(false)
@@ -20,6 +21,7 @@ export default function useAutomationHistory(id: string | undefined, from: strin
         let cursor: string | null = seeded?.nextCursor || null
         let rows: AgentAutomationRun[] = seeded?.runs || []
         setRuns(rows)
+        setIssues(seeded?.issues || [])
         setTotal(seeded?.total || 0)
         setHasMore(Boolean(cursor))
         setError('')
@@ -36,6 +38,7 @@ export default function useAutomationHistory(id: string | undefined, from: strin
                 rows = [...merged.values()].sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id))
                 if (older || !cursor && rows.length <= 50) cursor = page.nextCursor
                 setRuns(rows)
+                setIssues(page.issues || [])
                 setTotal(page.total)
                 setHasMore(Boolean(cursor) && rows.length < page.total)
                 setError('')
@@ -52,5 +55,5 @@ export default function useAutomationHistory(id: string | undefined, from: strin
         const timer = window.setInterval(() => { void load() }, 15_000)
         return () => { stopped = true; window.clearInterval(timer) }
     }, [id, from, to])
-    return { runs, total, hasMore, loading, error, loadMore: useCallback(() => action.current(), []), refresh: useCallback(() => refresh.current(), []) }
+    return { runs, issues, total, hasMore, loading, error, loadMore: useCallback(() => action.current(), []), refresh: useCallback(() => refresh.current(), []) }
 }

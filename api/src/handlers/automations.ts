@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
+import { loadMonitoringIssues } from '#utils/monitoringIssues.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import {
@@ -52,7 +53,7 @@ export async function getAutomation(req: FastifyRequest<{ Params: { id: string }
 
     try {
         const page = await loadRuns(req.params.id, ownerId, includeAll, req.query as Record<string, string>)
-        return res.send({ automation: toAutomation(automation), ...page })
+        return res.send({ automation: toAutomation(automation), ...page, issues: await loadMonitoringIssues(automation.id) })
     } catch (error) {
         if (error instanceof RangeError) return res.status(400).send({ error: error.message })
         throw error

@@ -1,11 +1,11 @@
 import 'server-only'
 import { cookies } from 'next/headers'
 import config from '@/config'
-import type { AgentAutomation, AgentAutomationRun } from './client'
+import type { AgentAutomation, AgentAutomationRun, MonitoringIssue } from './client'
 
 export type InitialAutomationData = {
     automations: AgentAutomation[]
-    detail?: { automation: AgentAutomation, runs: AgentAutomationRun[], total: number, nextCursor: string | null }
+    detail?: { automation: AgentAutomation, runs: AgentAutomationRun[], issues?: MonitoringIssue[], total: number, nextCursor: string | null }
     error?: string
 }
 

@@ -1,4 +1,5 @@
 import run from '#db'
+import ensureMonitoringIssuesSchema from './monitoringIssuesSchema.ts'
 import ensureThesisSchema from './thesisSchema.ts'
 import { reservedUsernames } from '#utils/auth/reservedUsernames.ts'
 
@@ -781,6 +782,7 @@ export default async function ensureSchema() {
     await run('ALTER TABLE agent_automation_runs ADD COLUMN IF NOT EXISTS warning BOOLEAN NOT NULL DEFAULT FALSE')
     await run('CREATE INDEX IF NOT EXISTS idx_agent_automation_runs_automation_started ON agent_automation_runs(automation_id, started_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_agent_automation_runs_owner_started ON agent_automation_runs(owner_id, started_at DESC)')
+    await ensureMonitoringIssuesSchema()
     await run(`
         CREATE TABLE IF NOT EXISTS ai_deployments (
             id TEXT PRIMARY KEY,

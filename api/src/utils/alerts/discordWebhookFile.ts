@@ -10,14 +10,14 @@ export function discordWebhookFileModelLabel(value: string | null | undefined) {
     return isDiscordWebhookFileDestination(value) ? 'discord-webhook-file' : value || 'discord'
 }
 
-export async function deliverDiscordWebhookFile(destination: string | null, content: string) {
+export async function deliverDiscordWebhookFile(destination: string | null, content: string, mentionEveryone = true) {
     const webhookUrl = await resolveDiscordWebhookUrl(destination)
     const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            content: `@everyone ${content}`.slice(0, 1900),
-            allowed_mentions: { parse: ['everyone'] },
+            content: (mentionEveryone ? `@everyone ${content}` : content).slice(0, 1900),
+            allowed_mentions: { parse: mentionEveryone ? ['everyone'] : [] },
         }),
         signal: AbortSignal.timeout(10_000),
     })

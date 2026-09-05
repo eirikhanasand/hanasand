@@ -1,12 +1,14 @@
 import { test, expect } from 'bun:test'
 if (process.env.DB_HOST !== 'monitor-test-db') throw Error('Requires the disposable monitor-test-db database')
 const { queryOnce: query } = await import('../src/utils/db.ts')
+const { default: ensureIssues } = await import('../src/utils/db/monitoringIssuesSchema.ts')
 const { loadRuns } = await import('../src/handlers/automations.ts')
 const { recoverStaleAutomationRuns, executeAutomation } = await import('../src/utils/automations.ts')
 test('history pagination retains timestamp precision and recovery releases orphaned claims', async () => {
-    await query(`DROP TABLE IF EXISTS agent_automation_runs, agent_automations`)
+    await query(`DROP TABLE IF EXISTS agent_automation_runs, monitoring_issue_notifications, monitoring_issues, agent_automations`)
     await query(`CREATE TABLE agent_automation_runs (id text PRIMARY KEY, automation_id text, owner_id text, status text, warning boolean DEFAULT false, result text, error text, provider text, model text, artifacts jsonb DEFAULT '[]', started_at timestamptz DEFAULT NOW(), completed_at timestamptz, duration_ms int)`)
     await query(`CREATE TABLE agent_automations (id text PRIMARY KEY, status text, last_status text, last_run_at timestamptz, updated_at timestamptz, last_error text, last_completed_at timestamptz, next_run_at timestamptz, schedule_kind text, consecutive_failures int DEFAULT 0, action_type text, paused_reason text, run_count int DEFAULT 0, certificate_status text, certificate_subject text, certificate_issuer text, certificate_expires_at timestamptz)`)
+    await ensureIssues()
     await query(`INSERT INTO agent_automation_runs(id,automation_id,owner_id,status,started_at) SELECT 'run-' || n, 'a', 'owner', 'completed', '2026-01-01 12:00:00.123456+00'::timestamptz FROM generate_series(1,125) n`)
     const first = await loadRuns('a', 'owner')
     expect(first.total).toBe(125)

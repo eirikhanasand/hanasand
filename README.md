@@ -20,6 +20,12 @@ Hanasand combines threat intelligence, AI development tools, and infrastructure 
 
 `docker-compose.yml` defines service connections, ports, volumes and health checks. OpenResty terminates public HTTPS outside this Compose project. The API also integrates with external VM hosts, password lookup and other configured services.
 
+## Monitoring issues
+
+Health-check failures and slow responses are grouped by monitor, target and failure reason in `monitoring_issues`. Each has a stable `MON-<number>` reference, occurrence count, first/last seen times and recovery time. Check records link to the issue; recovery closes it, and recurrence reopens the same number. Details are returned by the authenticated `GET /api/automations/:id` endpoint and shown in the monitoring dashboard.
+
+Discord receives only the case number, without mentions, at most once per issue and destination every 24 hours. PostgreSQL reserves delivery before sending, so restarts and concurrent workers do not reset the limit. Failed or uncertain delivery is recorded in the issue and waits for the same 24-hour window before retrying. Monitoring results remain independent of notification delivery. These records can later be linked to a broader case system.
+
 ## Development
 
 Use Bun 1.3.11, Node.js 22 and Docker Compose. Install dependencies in the component you are changing with `bun install`.

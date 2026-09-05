@@ -88,7 +88,7 @@ const unitTasks: TestTask[] = (await readdir(path.join(scriptDir, '../tests')))
         id: file.replace(/\.test\.(ts|mjs)$/, ''),
         title: `API behavior: ${file}`,
         command: [bun, 'test', `tests/${file}`],
-        ...(file === 'automation-history.test.mjs' ? { requires: 'database' as const } : {}),
+        ...(['automation-history.test.mjs', 'monitoring-issues-postgres.test.ts'].includes(file) ? { requires: 'database' as const } : {}),
     }))
 const playwrightTasks = await discoverPlaywrightTasks()
 const tasks = [...coreTasks, ...unitTasks, ...environmentTasks, ...playwrightTasks]

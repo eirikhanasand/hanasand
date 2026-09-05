@@ -45,7 +45,20 @@ export type AgentAutomation = {
     updatedAt: string
 }
 
+export type MonitoringIssue = {
+    id: string
+    caseNumber: string
+    kind: 'failure' | 'warning'
+    summary: string
+    occurrences: number
+    firstSeenAt: string
+    lastSeenAt: string
+    resolvedAt: string | null
+    notifications: Array<{ deliveredAt: string | null, nextAttemptAt: string, error: string | null }>
+}
+
 export type AgentAutomationRun = {
+    caseNumber?: string | null
     id: string
     automationId: string
     status: 'running' | 'completed' | 'failed'
@@ -138,7 +151,7 @@ export function fetchAutomation(id: string, options: { cursor?: string, from?: s
     if (options.cursor) query.set('cursor', options.cursor)
     if (options.from) query.set('from', new Date(options.from).toISOString())
     if (options.to) query.set('to', new Date(options.to).toISOString())
-    return request<{ automation: AgentAutomation, runs: AgentAutomationRun[], total: number, nextCursor: string | null }>(`/automations/${id}?${query}`)
+    return request<{ automation: AgentAutomation, runs: AgentAutomationRun[], issues?: MonitoringIssue[], total: number, nextCursor: string | null }>(`/automations/${id}?${query}`)
 }
 
 export function createAutomation(payload: AutomationPayload) {

@@ -13,7 +13,7 @@ test('certificate states are explicit and neutral details open by click and keyb
     ]
     await page.route('**/api/backend/automations**', async route => {
         const id = new URL(route.request().url()).pathname.split('/').at(-1)
-        await route.fulfill({ json: id === 'automations' ? { automations: rows } : { automation: rows.find(row => row.id === id) || rows[0], runs: [], total: 0, nextCursor: null } })
+        await route.fulfill({ json: id === 'automations' ? { automations: rows } : { automation: rows.find(row => row.id === id) || rows[0], runs: [], total: 0, nextCursor: null, issues: [{ id: '12', caseNumber: 'MON-12', kind: 'failure', summary: 'TLS certificate validation failed.', occurrences: 120, firstSeenAt: '2026-09-01T12:00:00Z', lastSeenAt: '2026-09-05T12:00:00Z', resolvedAt: null, notifications: [] }] } })
     })
     await page.goto('/dashboard/automation/health')
     const retry = page.getByRole('button', { name: 'Try again' })
@@ -33,6 +33,9 @@ test('certificate states are explicit and neutral details open by click and keyb
     await page.getByRole('button', { name: 'Close', exact: true }).filter({ visible: true }).click()
     await expect(page.getByRole('button', { name: 'Certificate: Pending — New HTTPS check' })).toBeVisible()
     await page.getByRole('button', { name: 'Website TLS', exact: true }).click()
+    await expect(page.getByText('MON-12', { exact: true })).toBeVisible()
+    await page.getByText('MON-12', { exact: true }).click()
+    await expect(page.getByText('TLS certificate validation failed.', { exact: true })).toBeVisible()
     await page.setViewportSize({ width: 390, height: 844 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })

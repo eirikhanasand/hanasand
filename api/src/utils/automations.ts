@@ -1,4 +1,5 @@
 import run from '#db'
+import { recordMonitoringOutcome } from './monitoringIssues.ts'
 import { connect as connectTcp } from 'node:net'
 import { connect as connectTls } from 'node:tls'
 import { deliverDiscordWebhookFile, discordWebhookFileModelLabel, redactSecretBearingText } from '#utils/alerts/discordWebhookFile.ts'
@@ -50,6 +51,7 @@ export type AutomationRow = {
 }
 
 export type AutomationRunRow = {
+    issue_id?: string | null
     id: string
     automation_id: string
     owner_id: string
@@ -192,6 +194,7 @@ export function toAutomationRun(row: AutomationRunRow) {
     return {
         id: row.id,
         automationId: row.automation_id,
+        caseNumber: row.issue_id ? `MON-${row.issue_id}` : null,
         ownerId: row.owner_id,
         status: row.status,
         warning: row.warning,
@@ -362,6 +365,7 @@ export async function recoverStaleAutomationRuns() {
 }
 
 export async function executeAutomation(automation: AutomationRow) {
+    let outcome: { kind: 'failure' | 'warning' | null, message: string }
     const runId = crypto.randomUUID()
     const startedAt = Date.now()
     await run(`
@@ -371,6 +375,7 @@ export async function executeAutomation(automation: AutomationRow) {
 
     try {
         const result = await runAutomationAction(automation)
+        outcome = { kind: 'warning' in result && result.warning === true ? 'warning' : null, message: result.message }
         const durationMs = Date.now() - startedAt
         const nextRunAt = automation.schedule_kind === 'interval'
             ? computeNextRunAt({
@@ -412,6 +417,7 @@ export async function executeAutomation(automation: AutomationRow) {
     } catch (error) {
         const durationMs = Date.now() - startedAt
         const message = error instanceof Error ? error.message : 'Automation run failed.'
+        outcome = { kind: 'failure', message }
         const nextRunAt = automation.schedule_kind === 'interval'
             ? computeNextRunAt({
                 scheduleKind: automation.schedule_kind,
@@ -446,6 +452,10 @@ export async function executeAutomation(automation: AutomationRow) {
                    updated_at = NOW()
              WHERE id = $1
         `, [automation.id, nextRunAt, message, getCertificateFromError(error)?.status || null, getCertificateFromError(error)?.subject || null, getCertificateFromError(error)?.issuer || null, getCertificateFromError(error)?.expiresAt || null])
+    }
+    if (automation.action_type === 'agent_prompt') {
+        await recordMonitoringOutcome(automation, runId, outcome.kind, outcome.message)
+            .catch(error => console.error('Unable to record monitoring issue:', error))
     }
 }
 
@@ -538,7 +548,6 @@ async function runMonitoringCheck(automation: AutomationRow) {
             const message = `${automation.monitoring_type.toUpperCase()} check ${healthy ? 'passed' : 'failed'}: ${automation.target_url} ${result.detail}.`
             if (!healthy) throw new Error(message)
             const warning = Date.now() - startedAt >= 1000
-            if ((automation.notify_on === 'always' || warning && automation.notify_warnings) && (automation.model_name || automation.notification_destinations?.length)) await deliverDiscordIfConfigured(automation, warning ? `Hanasand monitoring warning: ${message}` : message)
             return { provider: 'hanasand-monitoring', model: automation.monitoring_type, message, certificate: certificate!, warning }
         } catch (error) {
             lastError = error instanceof DOMException && error.name === 'TimeoutError'
@@ -547,7 +556,6 @@ async function runMonitoringCheck(automation: AutomationRow) {
         }
     }
     const message = lastError instanceof Error ? lastError.message : 'Monitoring request failed.'
-    if (automation.notify_on !== 'never' && (automation.model_name || automation.notification_destinations?.length)) await deliverDiscordIfConfigured(automation, `Hanasand monitoring alert: ${message}`)
     const failure = Object.assign(new Error(`${message} Failed after ${automation.retry_count + 1} attempt${automation.retry_count ? 's' : ''}.`), { certificate })
     throw failure
 }
