@@ -1,46 +1,108 @@
-# hanasand
+# Hanasand
 
-## Deployment
+Hanasand combines threat intelligence, AI development tools, and infrastructure management at [hanasand.com](https://hanasand.com). The public site and authenticated dashboard share a Next.js frontend and a Bun/Fastify API. PostgreSQL stores accounts and application data.
 
-On the production server, from `/home/hanasand/hanasand`, run:
+## Service map
+
+| Component | Source | Responsibility |
+| --- | --- | --- |
+| Frontend | `frontend/` | Public pages, dashboard, AI editor, shared projects, articles, notes, mail and thesis |
+| API | `api/` | Authentication, organizations, permissions, billing, AI requests, project storage, infrastructure and public API |
+| Threat intelligence | `ti/scraper/` | Source collection, parsing, search, alerts and monitoring; separate storage and migrations |
+| AI model client | `ti/ai-model-client/` | Connects an inference server to the API over WebSockets |
+| AI parser bridge | `ti/ai-parser-bridge/` | Makes AI parsing available to the collector |
+| Model runtime | `gpt/` | Model launch scripts and inference server code |
+| Browser services | `ops/browser-worker/`, `ops/onion-tor/` | Isolated browser sessions, WebRTC transport and Tor access |
+| Database | `db/`, `api/src/utils/db/` | Initial schema and application schema updates |
+| Mail | `mail/` | Stalwart configuration and persistent mail data |
+| Client apps | `app/` | Mobile and desktop clients; see [desktop setup](app/desktop/README.md) |
+| Operations | `ops/`, `scripts/` | Deployment, backups, maintenance and service checks |
+
+`docker-compose.yml` defines service connections, ports, volumes and health checks. OpenResty terminates public HTTPS outside this Compose project. The API also integrates with external VM hosts, password lookup and other configured services.
+
+## Development
+
+Use Bun 1.3.11, Node.js 22 and Docker Compose. Install dependencies in the component you are changing with `bun install`.
+
+The root `.env` is private and is not committed. Obtain a development configuration from the operator; never copy production credentials into tests. The API requires `DB_HOST`, `DB_PASSWORD` and `VM_API_TOKEN`. Also configure `DB`, `DB_USER` and `DB_PORT` for the development database. Match the frontend API URLs to that environment; several defaults point at production.
+
+Run in separate terminals:
 
 ```sh
+cd api
+bun run start:local
+```
+
+```sh
+cd frontend
+bun run dev
+```
+
+The local API defaults to port 8080 and the frontend to 3000. A host process reaches the Compose database on port 8503; containers use `postgres:5432`. Use a separate development database. API startup applies schema updates and starts scheduled jobs, so do not point a development server at production.
+
+## AI
+
+`POST /api/tools/ai` handles AI requests. Common project requests can use built-in generators; other requests go to a connected model. `GET /api/ai/models` reports connected models. An empty list means inference is unavailable, even if the API and parser bridge are healthy.
+
+The model client uses `HANASAND_AI_CLIENT_API_WS`, `HANASAND_AI_OPENAI_BASE` and `HANASAND_AI_MODEL`. Model launch scripts live in `gpt/`. Starting the client alone does not start an inference server.
+
+Generated projects include source, a README, environment examples, build commands and Docker configuration. Website output includes its page, layout and CSS. These are starting points: API records and worker queues currently use in-memory state, and external integrations require implementation. A generated project or passing source check is not evidence that a production integration works.
+
+## Tests
+
+Run the checks for the component you change:
+
+```sh
+cd api
+bun run test
+bun run lint
+```
+
+```sh
+cd frontend
+bun run test
+bun run lint
+bun run build
+```
+
+The API's default tests do not run checks requiring a database, a running server or browser automation. Those are selected in `api/scripts/index.ts`; run them against disposable services. Generated websites also need an actual build and browser check. Source-text assertions alone do not establish that a page works.
+
+The collector has its own `bun run test` and `bun run check` commands in `ti/scraper/`.
+
+## Production deployment
+
+Use `ssh inspur` and work from `/home/hanasand/hanasand`. Deploy only the changed component.
+
+```sh
+# Frontend: build, check, switch traffic, then remove the old container.
 ./scripts/deploy.sh
 # Equivalent: make deploy
+
+# API: build and test before replacing the running container.
+docker compose build api
+docker compose up -d --no-deps --no-build api
 ```
 
-The deploy command builds the new frontend, checks that it is working, switches
-traffic to it, and then removes the old container. Do not run `docker compose
-up --build` directly in production. It stops the current frontend before the
-new one is ready and causes a short 502 error.
+Do not use a stack-wide `docker compose up --build`. Do not replace the frontend directly through Compose; use the script to avoid a gap in service. API replacement can briefly interrupt requests and WebSockets.
 
+After deployment, check the affected page or endpoint, service logs and `docker compose ps`. The frontend alternates between ports 3000 and 3100, with OpenResty routing traffic to the active container. For rollback, retain the previous image ID and proxy configuration. Schema changes require a separate rollback plan; an image rollback does not reverse a migration.
 
-For API changes, deploy only that service before deploying the frontend:
+## Data and operations
 
-```sh
-docker compose up -d --no-deps --build api
-./scripts/deploy.sh
-```
+PostgreSQL, API state, prompt submissions, collected evidence and mail are persistent. `db/init.sql` initializes a new database; application schema updates run through `api/src/utils/db/ensureSchema.ts`. Collector migrations are maintained under `ti/scraper/migrations/`.
 
-Do not rebuild the entire stack. API startup applies the database schema updates.
+Database backups are configured through `DB_BACKUP_*` variables. Defaults schedule a daily backup and retain 14 days in the API state volume. Keep an independent copy and verify restoration; a backup on the same host does not cover host loss. Collector backup tools are under `ops/threat-intel-backup/`. Do not delete volumes during deployment.
 
-The shared thesis is available at `/thesis` and under Dashboard → Admin → Thesis
-(`/dashboard/thesis`). Only the authenticated account ID `eirikhanasand` can edit
-and save it. PostgreSQL stores a single row in `thesis`, with separate `title`
-and `content` columns. Display names do not determine editing permission.
+Start diagnosis with `docker compose ps` and `docker compose logs --tail=100 <service>`. `/api/health` checks the API process; `/api/ai/models` checks model connections. Use the dashboard status page for collection, processing and dependency failures. A healthy container does not imply that its external dependencies work.
 
+## Shared thesis
 
-Thesis edits autosave five seconds after the first pending edit, with no repeated
-writes when unchanged. Saved changes broadcast to readers over
-`/api/ws/thesis`. Hiding or closing the page sends a final save, and each edit is
-also kept as a local recovery draft. Browser shutdown/network failures cannot
-guarantee delivery, and keepalive requests have a roughly 64 KiB limit; recovery
-drafts cover interrupted delivery and can be reopened from the editor.
+`/thesis` is public. Dashboard → Admin → Thesis opens the editor. Only account ID `eirikhanasand` can edit; permissions do not depend on its display name.
 
-History preserves the immediate previous version plus one checkpoint before the
-first edit in each 20-minute UTC window for seven days. Older checkpoints compact
-to the first checkpoint of each eight-hour UTC block (up to three per day).
-Compaction runs on saves and history reads. Duplicate saves create no revision
-or history entry. Concurrent stale writes are rejected and the editor offers a
-choice of local or latest text. History and restoration remain owner-only;
-restoring uses the normal save path, preserving what it replaces.
+PostgreSQL stores the shared title and content. Edits autosave after five seconds and broadcast over `/api/ws/thesis`. Unchanged content causes no write. Leaving the page triggers a final save attempt; local recovery drafts cover interrupted delivery and browser request limits.
+
+History keeps the previous version, 20-minute checkpoints for seven days, then up to three checkpoints per day. Stale concurrent writes require a choice of versions. Restoring a version preserves the text it replaces.
+
+## Contributing
+
+Follow [AGENTS.md](AGENTS.md) and [copy style](docs/copy-style.md). Keep changes focused, verify them, and push `main` to both Forgejo (`origin`) and GitHub (`github`). Do not include private configuration or credentials in commits or logs.

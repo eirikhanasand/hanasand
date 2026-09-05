@@ -754,13 +754,15 @@ export function buildShareProjectResponse(prompt: string): GeneratedBuilderRespo
         }
     }
 
-    const project = keepRunnableFiles(chooseProject(prompt))
+    const project = chooseProject(prompt)
     const response: GeneratedBuilderResponse = {
         status: 'completed',
         provider: 'hanasand-ai',
         model: 'share-builder',
         message: [
             `Prepared a runnable ${project.label} with the files needed to start it.`,
+            toolTag('.gitignore', 'node_modules/\n.next/\ndist/\n.env\n.env.*\n!.env.example\n'),
+            toolTag('.dockerignore', 'node_modules\n.next\ndist\n.git\n.env\n.env.*\n!.env.example\n'),
             ...project.files.map((file) => toolTag(file.path, file.content)),
         ].join('\n\n'),
         cache: {
@@ -771,11 +773,6 @@ export function buildShareProjectResponse(prompt: string): GeneratedBuilderRespo
     }
     rememberCommonResponse(cacheKey, response)
     return response
-}
-
-function keepRunnableFiles(project: GeneratedProject): GeneratedProject {
-    const keep = new Set(['package.json', 'tsconfig.json', 'next.config.ts', 'Dockerfile', 'docker-compose.yml', '.env.example', '.github/workflows/ci.yml', 'src/index.ts', 'src/worker.ts', 'src/queue.ts'])
-    return { ...project, files: project.files.filter(file => keep.has(file.path)) }
 }
 
 function rememberCommonResponse(key: string, response: GeneratedBuilderResponse) {
@@ -1170,7 +1167,7 @@ function sectionsForPage(lower: string) {
     if (lower.includes('data room') || lower.includes('diligence')) {
         return ['Diligence metrics', 'Document controls', 'Pricing impact', 'Review tasks', 'Testimonials', 'Deployment notes']
     }
-    if (lower.includes('delivery') || lower.includes('scope/pricing')) {
+    if (lower.includes('design delivery') || lower.includes('scope/pricing')) {
         return ['Asset inventory', 'Launch metrics', 'Scope and pricing', 'Testimonials', 'Delivery tasks', 'Deployment notes']
     }
     if (lower.includes('asset approval') || lower.includes('creative asset') || lower.includes('proofdeck')) {
@@ -1293,44 +1290,114 @@ function sectionsForPage(lower: string) {
     if (lower.includes('gallery') || lower.includes('image')) {
         return ['Review queue', 'Keep', 'Reject later', 'Collections', 'Export summary', 'Deferred deletion confirmation']
     }
-    return ['Overview', 'Highlights', 'Process', 'Validation', 'Next step']
+    if (/\bservices\b/.test(lower)) return ['Services', 'Pricing', 'Process', 'FAQ', 'Contact']
+    return ['Overview', 'Highlights', 'Process', 'Next steps']
 }
 
 function websiteFiles(title: string, slug: string, sections: string[], lower: string): GeneratedProject {
-    const productType = productTypeFor(lower)
+    for (const [term, section] of [['dns', 'DNS checklist'], ['ssl', 'SSL checklist']]) {
+        if (lower.includes(term) && !sections.includes(section)) sections.push(section)
+    }
     const cards = sections.map((section, index) => ({
-        section,
-        metric: ['24h', '98%', '12', '4.9', '3x', 'Today'][index % 6],
-        detail: detailForSection(section, lower),
+        id: `section-${index + 1}`,
+        title: section,
+        description: detailForSection(section),
     }))
-    const businessName = title.replace(/\bThat\b|\bThis\b/gi, '').trim() || 'Hanasand Project'
     return {
-        label: `${productType} website/app`,
+        label: `${productTypeFor(lower)} website`,
         files: [
-            nextPackage(slug),
-            tsconfig(),
-            nextConfig(),
-            dockerfile('next'),
-            composeFile(slug, '3000'),
-            envExample(['NEXT_PUBLIC_SITE_URL=http://localhost:3000', 'CONTACT_EMAIL=hello@example.com', 'BACKEND_CONTRACT_VERSION=review-required', 'FAILURE_OWNER=unassigned']),
-            ciConfig(),
-            designNotes(title, slug),
-            securityNotes(),
-            threatNotes(),
-            procurementNotes(),
+            nextPackage(slug), tsconfig(), nextConfig(), dockerfile('next'),
+            composeFile(slug, '3000'), envExample(['CONTACT_EMAIL=']), ciConfig(),
+            designNotes(title, slug), securityNotes(), threatNotes(), procurementNotes(),
             {
                 path: 'src/app/layout.tsx',
-                content: `import type { Metadata } from 'next'\n\nexport const metadata: Metadata = {\n  title: '${escapeTs(title)}',\n  description: 'Accessible, responsive ${escapeTs(productType)} starter generated in Hanasand Chat.',\n}\n\nexport default function RootLayout({ children }: { children: React.ReactNode }) {\n  return (\n    <html lang="en">\n      <body>{children}</body>\n    </html>\n  )\n}\n`,
+                content: `import type { Metadata } from 'next'
+import './globals.css'
+
+export const metadata: Metadata = { title: ${JSON.stringify(title)}, description: ${JSON.stringify(sections.slice(0, 3).join(', ') + '.')} }
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return <html lang="en"><body>{children}</body></html>
+}
+`,
             },
             {
                 path: 'src/app/page.tsx',
-                content: `const sections = ${JSON.stringify(cards, null, 2)}\n\nconst trust = ['No platform lock-in', 'Readable source', 'Mobile layout', 'Accessible controls', 'Privacy rules', 'Connect the real API before launch']\nconst tasks = ['Replace contact routes', 'Connect real data', 'Run Lighthouse/a11y pass', 'Deploy with Docker Compose', ' Test forms and permissions']\n\nexport default function Page() {\n  return (\n    <main style={{ minHeight: '100vh', background: 'radial-gradient(circle at 18% 8%, rgba(226,88,34,.24), transparent 28%), radial-gradient(circle at 82% 0%, rgba(157,225,143,.16), transparent 24%), #080a08', color: '#f7f0e6', fontFamily: 'Avenir Next, ui-sans-serif, system-ui', padding: '24px' }}>\n      <a href="#content" style={{ position: 'absolute', left: 16, top: 16, color: '#080a08', background: '#f7f0e6', padding: '8px 12px', borderRadius: 999 }}>Skip to content</a>\n      <section id="content" style={{ maxWidth: 1160, margin: '0 auto', display: 'grid', gap: 28 }}>\n        <nav aria-label="Primary" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, color: '#c7beb0', flexWrap: 'wrap' }}>\n          <strong>${escapeTs(businessName)}</strong>\n          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>\n            <a href="#sections" style={{ color: '#f7f0e6' }}>Details</a>\n            <a href="#delivery" style={{ color: '#f7f0e6' }}>Delivery</a>\n            <a href="mailto:hello@example.com" style={{ color: '#ffb15f' }}>Contact</a>\n          </div>\n        </nav>\n        <header style={{ border: '1px solid rgba(255,255,255,.12)', borderRadius: 32, padding: 'clamp(26px, 5vw, 52px)', background: 'linear-gradient(135deg, rgba(255,255,255,.09), rgba(255,255,255,.035))', boxShadow: '0 30px 90px rgba(0,0,0,.35)' }}>\n          <p style={{ color: '#ffb15f', letterSpacing: '.18em', textTransform: 'uppercase', fontSize: 12 }}>Built for a skeptical client</p>\n          <h1 style={{ fontSize: 'clamp(42px, 8vw, 86px)', lineHeight: .92, margin: '18px 0' }}>${escapeTs(title)}</h1>\n          <p style={{ maxWidth: 720, color: '#ded6ca', fontSize: 20 }}>A concrete ${escapeTs(productType)} starter that avoids generic filler: responsive sections, accessible navigation, real release notes, and clear places to connect production data.</p>\n          <form aria-label="Lead capture" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 26 }}>\n            <label style={{ display: 'grid', gap: 6, minWidth: 240, flex: '1 1 260px' }}>\n              <span style={{ color: '#c7beb0' }}>Email</span>\n              <input required type="email" placeholder="you@example.com" style={{ border: '1px solid rgba(255,255,255,.16)', background: 'rgba(0,0,0,.25)', color: '#f7f0e6', padding: '14px 16px', borderRadius: 16 }} />\n            </label>\n            <button type="submit" style={{ alignSelf: 'end', border: 0, background: '#f7f0e6', color: '#0b0d0b', padding: '15px 20px', borderRadius: 999, fontWeight: 800 }}>Request review</button>\n          </form>\n        </header>\n        <section id="sections" aria-label="Project sections" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>\n          {sections.map((item) => (\n            <article key={item.section} style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.045)' }}>\n              <strong style={{ color: '#ffb15f' }}>{item.metric}</strong>\n              <h2 style={{ margin: '12px 0 8px' }}>{item.section}</h2>\n              <p style={{ color: '#bfb7aa' }}>{item.detail}</p>\n            </article>\n          ))}\n        </section>\n        <section id="delivery" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>\n          <article style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.04)' }}>\n            <h2>Project notes</h2>\n            <ul>{trust.map((item) => <li key={item}>{item}</li>)}</ul>\n          </article>\n          <article style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.04)' }}>\n            <h2>Next steps</h2>\n            <ol>{tasks.map((item) => <li key={item}>{item}</li>)}</ol>\n          </article>\n        </section>\n      </section>\n    </main>\n  )\n}\n`,
+                content: `export const dynamic = 'force-dynamic'
+
+const title = ${JSON.stringify(title)}
+const sections = ${JSON.stringify(cards, null, 2)}
+const email = process.env.CONTACT_EMAIL?.trim()
+const contact = email && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) ? 'mailto:' + encodeURIComponent(email) : null
+
+export default function Page() {
+  return <>
+    <a className="skip-link" href="#content">Skip to content</a>
+    <header className="site-header">
+      <a className="brand" href="#content">{title}</a>
+      <nav aria-label="Primary">
+        <a href="#sections">Explore</a>
+        {contact && <a href={contact}>Contact</a>}
+      </nav>
+    </header>
+    <main id="content" tabIndex={-1}>
+      <section className="intro" aria-labelledby="page-title">
+        <p className="eyebrow">Overview</p>
+        <h1 id="page-title">{title}</h1>
+        <p className="summary">{sections.slice(0, 3).map(item => item.title).join(' · ')}</p>
+        <a className="button" href="#sections">Explore the details <span aria-hidden="true">↗</span></a>
+      </section>
+      <section id="sections" className="sections" aria-label="Details">
+        {sections.map((item, index) => <article key={item.id} aria-labelledby={item.id}>
+          <span className="section-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+          <h2 id={item.id}>{item.title}</h2>
+          {item.description && <p>{item.description}</p>}
+        </article>)}
+      </section>
+    </main>
+    <footer><span>{title}</span>{contact && <a href={contact}>Get in touch</a>}</footer>
+  </>
+}
+`,
             },
+            {
+                path: 'src/app/globals.css',
+                content: `:root { color-scheme: light; --ink: #182b29; --muted: #52615b; --paper: #f7f6f0; --line: #c9d0c6; --accent: #235749; }
+* { box-sizing: border-box; }
+html { scroll-padding-top: 1.5rem; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: system-ui, sans-serif; line-height: 1.6; }
+a { color: inherit; text-underline-offset: .25em; }
+a:hover { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 5px; }
+.skip-link { position: fixed; top: 1rem; left: 1rem; z-index: 10; padding: .75rem 1rem; background: var(--ink); color: white; transform: translateY(-200%); }
+.skip-link:focus { transform: translateY(0); color: white; }
+.site-header, main, footer { width: min(100% - 3rem, 72rem); margin-inline: auto; }
+.site-header, footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.5rem; padding-block: 1.5rem; }
+.site-header { border-bottom: 1px solid var(--line); }
+.brand { font-weight: 650; max-width: 32rem; overflow-wrap: anywhere; text-decoration: none; }
+nav { display: flex; flex-wrap: wrap; gap: 1.25rem; }
+nav a { display: inline-block; padding-block: .6rem; }
+.intro { padding-block: clamp(3rem, 8vw, 7rem); max-width: 58rem; }
+.eyebrow, .section-number { color: var(--accent); font-size: .85rem; letter-spacing: .1em; }
+h1 { font-size: clamp(2.5rem, 6vw, 5.5rem); line-height: 1.08; letter-spacing: -.045em; margin: 1rem 0 1.5rem; overflow-wrap: anywhere; }
+.summary { color: var(--muted); max-width: 42rem; font-size: 1.15rem; }
+.button { display: inline-flex; gap: 1.5rem; align-items: center; min-height: 44px; margin-top: 1.5rem; padding: .8rem 1.1rem; background: var(--ink); color: white; text-decoration: none; border-radius: .3rem; }
+.button:hover { background: var(--accent); color: white; }
+.sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 2rem; padding-bottom: 4rem; }
+article { min-width: 0; border-top: 1px solid var(--line); padding-top: 1.25rem; overflow-wrap: anywhere; }
+h2 { font-size: 1.3rem; line-height: 1.3; margin: .8rem 0; }
+article p, footer { color: var(--muted); }
+footer { border-top: 1px solid var(--line); font-size: .9rem; }
+@media (max-width: 480px) { .site-header, main, footer { width: calc(100% - 2rem); } }
+`,
+            },
+            { path: 'public/.gitkeep', content: '' },
             readme(title, [
-                'Responsive Next.js app with accessible labels, skip link, and concrete sections.',
-                'Dockerfile and docker-compose.yml keep the result exportable and self-hostable.',
-                '.env.example documents the values to replace before publishing.',
-                'Run Lighthouse, keyboard navigation, and real form integration before launch.',
+                'Next.js website. Edit src/app/page.tsx for content, layout.tsx for metadata, and globals.css for styles.',
+                'Set CONTACT_EMAIL to enable the email link. The site does not collect form submissions or store user data.',
+                'The generated sections are a starting point, not verified business information. Add approved content before publishing.',
+                'Keyboard navigation includes a skip link and visible focus. Check the finished content at mobile widths and 200% zoom.',
+                'Backend contract: authentication, payments, and persistent data require a separate implementation. This website does not provide them.',
             ]),
         ],
     }
@@ -1537,7 +1604,7 @@ app.post<{ Body: { name?: string; payload?: Record<string, unknown> } }>('/api/j
             },
             readme(title, [
                 `Queue starter with an enqueue API, retries, cancellation, replay, job status, and a worker entrypoint.${workerDomainNotes}${workerBillingNotes}${workerSchedulingNotes}${workerMediaNotes}${workerAccessNotes}`,
-                'Redis is included in Docker Compose as the production replacement seam; the starter runs locally with an in-memory queue.',
+                'The queue is in memory. The API and a separate worker process do not share jobs; connect both to persistent queue storage before using them together. Redis is supplied but not connected.',
                 'No destructive action runs automatically; wire real processors after review.',
             ]),
         ],
@@ -1545,7 +1612,7 @@ app.post<{ Body: { name?: string; payload?: Record<string, unknown> } }>('/api/j
 }
 
 function nextPackage(slug: string) {
-    return packageJson(slug, { dev: 'next dev', build: 'next build', start: 'next start' }, { next: 'latest', react: 'latest', 'react-dom': 'latest' }, { '@types/node': 'latest', '@types/react': 'latest', '@types/react-dom': 'latest', typescript: 'latest' })
+    return packageJson(slug, { dev: 'next dev', build: 'next build', start: 'next start' }, { next: '16.2.4', react: '19.2.5', 'react-dom': '19.2.5' }, { '@types/node': '^25.6.0', '@types/react': '^19.2.14', '@types/react-dom': '^19.2.3', typescript: '^6.0.3' })
 }
 
 function packageJson(name: string, scripts: Record<string, string>, dependencies: Record<string, string>, devDependencies: Record<string, string>): GeneratedFile {
@@ -1684,13 +1751,11 @@ function designNotes(title: string, slug: string): GeneratedFile {
 function securityNotes(): GeneratedFile {
     return {
         path: 'docs/security-review.md',
-        content: `# Security Review
+        content: `# Security review
 
-- Secrets rotation is explicit and never hardcoded.
-- Tenant access must be enforced with owner scoping or RLS policies before production.
-- Audit events should be append-only and exported with deployment evidence.
-- Data residency, deletion holds, and backup restore must be rehearsed before cutover.
-- Public APIs should expose request IDs, shaped errors, metrics, and OpenAPI contracts.
+No security review has been completed for this project. Before publishing, check access control, input handling, dependency updates and secret storage against the deployed code. Use HTTPS and test rejected requests as well as successful ones.
+
+Example API and worker state is not durable. Do not use it for sensitive records without implementing persistent storage, authorization and tested backups.
 `,
     }
 }
@@ -1698,11 +1763,11 @@ function securityNotes(): GeneratedFile {
 function threatNotes(): GeneratedFile {
     return {
         path: 'docs/threat-model.md',
-        content: `# Threat Model
+        content: `# Threat review
 
-- Assets: tenant data, secrets, audit logs, generated source, deployment pipeline.
-- Primary risks: broken access control, replay attacks, dependency compromise, data residency drift, and hidden client-side business logic.
-- Mitigations: RBAC/RLS, webhook signatures, request IDs, immutable audit trails, SBOM review, and contract tests.
+Identify the data the service stores, who can read or change it, and which external systems it trusts. Check unauthorized access, malicious input, leaked credentials and dependency compromise. Record the controls actually implemented and test them before release.
+
+This document is a starting point, not evidence that those controls exist.
 `,
     }
 }
@@ -1710,12 +1775,11 @@ function threatNotes(): GeneratedFile {
 function procurementNotes(): GeneratedFile {
     return {
         path: 'docs/procurement-review.md',
-        content: `# Procurement Review
+        content: `# Dependency and hosting review
 
-- SBOM and license policy are included for dependency review.
-- Privacy DPIA and data-residency decisions must be completed before production data.
-- Exit plan: Docker, source export, schema ownership, and workflow logic ownership.
-- Required evidence: CI run, synthetic checks, restore drill, and incident drill.
+Review package.json and the installed dependency tree for licenses and security updates. The project includes source and Docker configuration; hosting, backups and support remain the operator's responsibility.
+
+No dependency inventory or compliance assessment has been completed. Document those results for the deployment you choose.
 `,
     }
 }
@@ -1738,7 +1802,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - run: npm install
       - run: npm run build
 `,
@@ -1752,15 +1815,52 @@ function envExample(lines: string[]): GeneratedFile {
 function readme(title: string, bullets: string[]): GeneratedFile {
     return {
         path: 'README.md',
-        content: `# ${title}\n\nGenerated by Hanasand Chat as an exportable starter.\n\n## Run locally\n\n\`\`\`bash\ncp .env.example .env\nnpm install\nnpm run dev\n\`\`\`\n\n## Docker\n\n\`\`\`bash\ndocker compose up --build\n\`\`\`\n\n## Release notes\n\n${bullets.map((line) => `- ${line}`).join('\n')}\n\n## Verification\n\n- Run \`npm run build\`.\n- Check keyboard navigation and mobile layout.\n- Replace demo values in \`.env\` before production.\n`,
+        content: `# ${title}
+
+${bullets.map(line => `- ${line}`).join('\n')}
+
+## Development
+
+Use Node.js 22. Copy the environment file, fill in the required values, then start the app:
+
+\`\`\`sh
+cp .env.example .env
+npm install
+npm run dev
+\`\`\`
+
+Do not commit .env. Keep the generated package-lock.json in version control.
+
+## Build and run
+
+\`\`\`sh
+npm run build
+npm start
+# Or run the services defined in docker-compose.yml:
+docker compose up -d --build
+\`\`\`
+
+HOST_PORT selects the published port (default 3000). Check service logs with \`docker compose logs --tail=100\`.
+
+## Verification
+
+Review the generated code and replace example configuration. Test the main user actions and failure responses before exposing the service. Generated source is not a production certification.
+
+Rollback plan: retain the previous image and configuration before deploying. Restore them if the release fails; database changes need a separate, tested rollback plan.
+`,
     }
 }
 
-function detailForSection(section: string, lower: string) {
-    if (lower.includes('complain') || lower.includes('critic') || lower.includes('angry')) {
-        return `Specific, reviewable ${section.toLowerCase()} work with no vague filler and an obvious production seam.`
-    }
-    return `Concrete ${section.toLowerCase()} content with clear next steps and accessible structure.`
+function detailForSection(section: string) {
+    const name = section.toLowerCase()
+    if (/hours|location|venue/.test(name)) return 'Opening times, directions, and access information.'
+    if (/pricing|cost|fee|plans|tiers|packages/.test(name)) return 'Available options, included services, and costs.'
+    if (/faq|questions/.test(name)) return 'Answers to common questions.'
+    if (/contact|inquiry|support/.test(name)) return 'Contact details and where to get help.'
+    if (/privacy|consent|retention/.test(name)) return 'How personal information is collected, used, and removed.'
+    if (/process|tasks|checklist|next|application/.test(name)) return 'Steps, requirements, and what happens next.'
+    if (/services|categories|features/.test(name)) return 'Available services and what each includes.'
+    return ''
 }
 
 function productTypeFor(lower: string) {

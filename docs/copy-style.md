@@ -12,3 +12,5 @@ Write like a developer explaining a working product to another developer or a cu
 - Keep one idea per sentence. Remove claims that do not help someone use, debug, or evaluate the product.
 
 Before merging copy, read it out loud. If a developer would not say it in a code review or a support reply, rewrite it.
+
+Documentation should cover purpose, configuration, commands, data storage and known limits. Describe what exists; distinguish examples from working integrations. Keep the README brief and link to component documentation for details. Avoid slogans, self-praise, and terms such as ‘harness’ or ‘fixture’ when ‘test’ or ‘example’ is clearer.

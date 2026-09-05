@@ -17,6 +17,7 @@ const bun = process.execPath
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 
 const coreTasks: TestTask[] = [
+    scriptTask('generated-website', 'Generated website files and styles', 'check-generated-website.ts'),
     scriptTask('notes-unit', 'Notes unit contract', 'smoke-notes.ts'),
     scriptTask('roles-unit', 'Role permission contract', 'smoke-role-permissions.ts'),
     scriptTask('role-authorization', 'Role authorization contract', 'smoke-has-role.ts'),
