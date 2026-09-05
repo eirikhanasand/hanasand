@@ -1,7 +1,7 @@
 import { appPagePath, canonicalAppPath } from './utils/routes/appRoutes'
 import { NextRequest, NextResponse } from 'next/server'
 import pathIsAllowedWhileUnauthorized from './utils/proxy/pathIsAllowedWhileUnauthorized'
-import tokenIsValid, { recentlyValidatedSession, tokenValidationOutcome } from './utils/proxy/tokenIsValid'
+import tokenIsValid from './utils/proxy/tokenIsValid'
 import pathToRoleArray from './utils/proxy/pathToRoleArray'
 
 export async function proxy(req: NextRequest) {
@@ -21,8 +21,6 @@ export async function proxy(req: NextRequest) {
     const impersonationToken = req.cookies.get('impersonation_token')?.value || ''
     const impersonatingId = req.cookies.get('impersonating_id')?.value || ''
     const impersonatingName = req.cookies.get('impersonating_name')?.value || ''
-    const sessionExpiresAt = req.cookies.get('session_expires_at')?.value || ''
-    const authCheckedAt = req.cookies.get('auth_checked_at')?.value || ''
     const requiresAuth = !pathIsAllowedWhileUnauthorized(path)
 
     if ((path === '/dev' || path.startsWith('/dev/')) && requestHostname(req).endsWith('hanasand.com')) {
@@ -61,14 +59,9 @@ export async function proxy(req: NextRequest) {
         } else {
             const auth = await tokenIsValid(token, id)
 
-            const outcome = tokenValidationOutcome(auth.state, recentlyValidatedSession(sessionExpiresAt, authCheckedAt))
-            if (outcome === 'degraded') {
-                requestHeaders.set('x-auth-state', 'degraded')
-                const rolesCookie = req.cookies.get('roles')?.value
-                roles = normalizeRoles(rolesCookie ? JSON.parse(rolesCookie) : [])
-            } else if (outcome === 'unavailable') {
+            if (auth.state === 'unavailable') {
                 return authServiceUnavailable(req)
-            } else if (outcome === 'invalid') {
+            } else if (auth.state === 'invalid') {
                 return loginRedirect(req, pathWithSearch, { expired: Boolean(token), clearAuth: true })
             }
 

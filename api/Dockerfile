@@ -7,6 +7,14 @@ WORKDIR /app
 COPY package.json bun.lock* bunfig.toml ./
 RUN bun install
 
+FROM deps AS auth-runtime
+COPY --chown=bun:bun . .
+RUN DB_PASSWORD=build-test DB_HOST=localhost VM_API_TOKEN=build-test bun run test --only=auth-service,auth-boundary
+RUN bun run lint
+ENV NODE_ENV=production AUTH_SERVICE_ONLY=1
+USER bun
+CMD ["bun", "src/authServer.ts"]
+
 FROM oven/bun:1.3.11-alpine AS app-runtime
 
 ARG TRIVY_VERSION=0.72.0

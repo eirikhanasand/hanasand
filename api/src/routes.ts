@@ -1,22 +1,9 @@
+import authRoutes from './authRoutes.ts'
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
 import indexHandler from './handlers/index.ts'
-import loginHandler from './handlers/auth/login.ts'
-import {
-    deletePasskey,
-    getPasskeys,
-    getPasskeyAuthenticateOptions,
-    getPasskeyRegisterOptions,
-    patchPasskey,
-    postPasskeyAuthenticateVerify,
-    postPasskeyRegisterVerify,
-} from './handlers/auth/passkeys.ts'
-import { getSsoStart, postSsoCallback } from './handlers/auth/sso.ts'
 import getUser from './handlers/user/get.ts'
 import postUser from './handlers/user/post.ts'
-import logoutHandler from './handlers/auth/logout.ts'
 import postPwned from './handlers/pwned/post.ts'
-import tokenHandler from './handlers/auth/token.ts'
-import { completePasswordReset, requestPasswordReset, verifyPasswordResetCode } from './handlers/auth/passwordReset.ts'
 import getRole from './handlers/roles/get.ts'
 import postRole from './handlers/roles/post.ts'
 import putRole from './handlers/roles/put.ts'
@@ -86,7 +73,6 @@ import vmAction from './handlers/vms/action.ts'
 import getStatus from './handlers/status/get.ts'
 import ingestStatus from './handlers/status/ingest.ts'
 import deactivateUser from './handlers/user/deactivateUser.ts'
-import { getSessions, revokeSession, revokeSessions } from './handlers/auth/sessions.ts'
 import httpRequestTool from './handlers/tools/httpRequest.ts'
 import browserTaskTool from './handlers/tools/browserTask.ts'
 import getExecutionTargets from './handlers/tools/getExecutionTargets.ts'
@@ -239,25 +225,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/app/download', downloadAppUpdate)
     fastify.get('/app/download/:name', downloadNamedAppUpdate)
 
-    // Auth handlers
-    fastify.get('/auth/logout/:id', logoutHandler)
-    fastify.get('/auth/token/:id', tokenHandler)
-    fastify.get('/auth/sessions', getSessions)
-    fastify.post('/auth/login/:id', loginHandler)
-    fastify.get('/auth/passkeys', getPasskeys)
-    fastify.patch('/auth/passkeys/:credentialId', patchPasskey)
-    fastify.delete('/auth/passkeys/:credentialId', deletePasskey)
-    fastify.get('/auth/passkeys/register/options', getPasskeyRegisterOptions)
-    fastify.post('/auth/passkeys/register/verify', postPasskeyRegisterVerify)
-    fastify.get('/auth/passkeys/authenticate/options', getPasskeyAuthenticateOptions)
-    fastify.post('/auth/passkeys/authenticate/verify', postPasskeyAuthenticateVerify)
-    fastify.get('/auth/sso/start', getSsoStart)
-    fastify.post('/auth/sso/callback', postSsoCallback)
-    fastify.post('/auth/password-reset/request', requestPasswordReset)
-    fastify.post('/auth/password-reset/verify', verifyPasswordResetCode)
-    fastify.post('/auth/password-reset/complete', completePasswordReset)
-    fastify.post('/auth/sessions/revoke', revokeSessions)
-    fastify.delete('/auth/sessions/:token_id', revokeSession)
+    await fastify.register(authRoutes)
 
     // Impersonation
     fastify.get('/impersonation', getImpersonationCurrent)

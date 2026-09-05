@@ -26,7 +26,10 @@ export default async function tokenHandler(req: FastifyRequest, res: FastifyRepl
     const token = authHeader.split(' ')[1]
 
     try {
-        const session = await validateSession({ id, token })
+        const checked = (req as FastifyRequest & { rateLimitSession?: Awaited<ReturnType<typeof validateSession>> }).rateLimitSession
+        const session = checked?.user.id === id && checked.session.token === token
+            ? checked
+            : await validateSession({ id, token })
         if (!session) {
             return res.status(401).send({ error: 'Invalid token.' })
         }

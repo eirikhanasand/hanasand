@@ -26,10 +26,19 @@ const pool = new Pool({
     max: Number(DB_MAX_CONN) || 20,
     idleTimeoutMillis: Number(DB_IDLE_TIMEOUT_MS) || 5000,
     connectionTimeoutMillis: Number(DB_TIMEOUT_MS) || 3000,
+    statement_timeout: process.env.AUTH_SERVICE_ONLY === '1' ? 5000 : undefined,
     keepAlive: true
 })
 
+pool.on('error', error => console.error('Idle database connection failed:', error.message))
+
+export async function closeDatabase() {
+    await pool.end()
+}
+
 export default async function run(query: string, params?: SQLParamType) {
+    // Authentication must fail promptly; replaying an ambiguous write can duplicate it.
+    if (process.env.AUTH_SERVICE_ONLY === '1') return queryOnce(query, params)
     while (true) {
         try {
             return await queryOnce(query, params)

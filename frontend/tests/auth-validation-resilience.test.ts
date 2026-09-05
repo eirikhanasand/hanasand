@@ -9,7 +9,7 @@ mock.module('@/utils/fetchWithRetry', () => ({ default: async () => {
     if (fetchResult instanceof Error) throw fetchResult
     return fetchResult.clone()
 } }))
-const { default: tokenIsValid, recentlyValidatedSession, tokenValidationOutcome, tokenValidationState } = await import('../src/utils/proxy/tokenIsValid')
+const { default: tokenIsValid, tokenValidationState } = await import('../src/utils/proxy/tokenIsValid')
 const { proxy } = await import('../src/proxy')
 const { default: requireApiSession } = await import('../src/utils/proxy/requireApiSession')
 
@@ -29,17 +29,12 @@ assert.equal(tokenValidationState(400), 'unavailable')
 assert.equal((await validate(new Error('temporary outage'), 'recovering-session')).state, 'unavailable')
 assert.equal((await validate(Response.json({ roles: [] }), 'recovering-session')).state, 'valid', 'An outage must not remain cached after authentication recovers')
 
-const now = Date.parse('2026-08-09T12:00:00.000Z')
-assert.equal(recentlyValidatedSession('2026-08-09T12:30:00.000Z', '2026-08-09T11:58:00.000Z', now), true)
-assert.equal(tokenValidationOutcome('unavailable', true), 'degraded')
-assert.equal(tokenValidationOutcome('unavailable', false), 'unavailable')
-assert.equal(tokenValidationOutcome('invalid', true), 'invalid')
 const sessionExpiresAt = new Date(Date.now() + 30 * 60_000).toISOString()
 const authCheckedAt = new Date(Date.now() - 2 * 60_000).toISOString()
 fetchResult = new Error('network unavailable')
 const degraded = await proxy(request(`access_token=grace; id=user; roles=%5B%5D; session_expires_at=${encodeURIComponent(sessionExpiresAt)}; auth_checked_at=${encodeURIComponent(authCheckedAt)}`))
-assert.equal(degraded.status, 200)
-assert.equal(degraded.headers.get('x-auth-state'), 'degraded')
+assert.equal(degraded.status, 503, 'Client-provided freshness cookies must never authorize an unavailable session')
+assert.equal(degraded.headers.get('x-middleware-next'), null)
 
 const unavailable = await proxy(request('access_token=outage; id=user'))
 assert.equal(unavailable.status, 503)

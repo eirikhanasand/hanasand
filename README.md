@@ -118,3 +118,7 @@ History keeps the previous version, 20-minute checkpoints for seven days, then u
 ## Contributing
 
 Follow [AGENTS.md](AGENTS.md) and [copy style](docs/copy-style.md). Keep changes focused, verify them, and push `main` to both Forgejo (`origin`) and GitHub (`github`). Do not include private configuration or credentials in commits or logs.
+
+### Authentication releases
+
+Authentication has its own redundant worker pool. Deploy it with `scripts/deploy-auth.sh` on the production host, independently of API replacement. See [authentication availability](docs/authentication-availability.md) for readiness, rollback, session consistency, and scaling constraints.

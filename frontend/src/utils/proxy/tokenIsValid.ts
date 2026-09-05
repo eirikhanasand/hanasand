@@ -11,8 +11,6 @@ export type TokenValidationResult = {
     expires_at?: string
 }
 
-export type TokenValidationOutcome = 'valid' | 'degraded' | 'invalid' | 'unavailable'
-
 const TOKEN_VALIDATION_CACHE_MS = 5_000
 const validationCache = new Map<string, { expiresAt: number; result: TokenValidationResult }>()
 const validationRequests = new Map<string, Promise<TokenValidationResult>>()
@@ -30,6 +28,9 @@ export default async function tokenIsValid(token: string, id: string): Promise<T
     try {
         const result = await request
         if (result.state !== 'unavailable') {
+            validationCache.delete(key)
+            // Bound retained bearer tokens and results as the active user population grows.
+            if (validationCache.size >= 10_000) validationCache.delete(validationCache.keys().next().value!)
             validationCache.set(key, { expiresAt: Date.now() + TOKEN_VALIDATION_CACHE_MS, result })
         }
         return result
@@ -74,19 +75,4 @@ export function tokenValidationState(status: number): TokenValidationResult['sta
     if (status === 401 || status === 403) return 'invalid'
     if (status >= 500) return 'unavailable'
     return 'unavailable'
-}
-
-export function recentlyValidatedSession(sessionExpiresAt: string, authCheckedAt: string, now = Date.now()) {
-    const expires = Date.parse(sessionExpiresAt)
-    const checked = Date.parse(authCheckedAt)
-    return Number.isFinite(expires)
-        && Number.isFinite(checked)
-        && expires - now > 60 * 1000
-        && now - checked < 5 * 60 * 1000
-}
-
-export function tokenValidationOutcome(state: TokenValidationResult['state'], withinGraceWindow: boolean): TokenValidationOutcome {
-    if (state === 'valid') return 'valid'
-    if (state === 'invalid') return 'invalid'
-    return withinGraceWindow ? 'degraded' : 'unavailable'
 }

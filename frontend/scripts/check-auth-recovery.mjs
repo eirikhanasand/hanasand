@@ -6,13 +6,11 @@ import { chromium } from '@playwright/test'
 let healthy = false
 mock.module('@/utils/proxy/tokenIsValid', () => ({
     default: async () => ({ valid: healthy, state: healthy ? 'valid' : 'unavailable', roles: [] }),
-    recentlyValidatedSession: () => false,
-    tokenValidationOutcome: state => state,
 }))
 const { proxy } = await import('../src/proxy.ts')
 const server = Bun.serve({ port: 0, async fetch(request) {
     const result = await proxy(new NextRequest(request))
-    return result.headers.get('x-middleware-next') === '1'
+    return result.headers.get('x-middleware-next') === '1' || result.headers.has('x-middleware-rewrite')
         ? new Response('<h1>Verified session restored</h1>', { headers: { 'content-type': 'text/html' } })
         : result
 } })
@@ -23,7 +21,7 @@ try {
         { name: 'id', value: 'test-user', url: server.url.href },
         { name: 'access_token', value: 'local-test-token', url: server.url.href },
     ])
-    const target = `${server.url}dashboard/thesis?view=history`
+    const target = `${server.url}content/thesis?view=history`
     const response = await page.goto(target)
     assert.equal(response.status(), 503)
     await page.getByRole('heading', { name: 'Reconnecting your session' }).waitFor()

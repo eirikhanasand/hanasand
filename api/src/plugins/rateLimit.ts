@@ -168,7 +168,7 @@ export async function resolveRateLimitActor(
 
     const apiKeySecret = extractPresentedApiKey(req)
     if (apiKeySecret) {
-        const apiKey = await validate(apiKeySecret).catch(() => null)
+        const apiKey = await validate(apiKeySecret)
         if (apiKey) {
             return {
                 scope: apiKey.apiKey.tier === 'internal' && apiKey.roles.some((role) => isInternalRole(role.id, role.name)) ? 'internal' : 'authenticated',
@@ -186,7 +186,7 @@ export async function resolveRateLimitActor(
         const session = await validateUserSession({
             id: typeof headerId === 'string' ? headerId : undefined,
             token,
-        }).catch(() => null)
+        })
 
         if (session) {
             ;(req as FastifyRequest & { rateLimitSession?: typeof session }).rateLimitSession = session
