@@ -7,6 +7,10 @@ test "$root" = "/home/hanasand/hanasand" || {
     exit 1
 }
 
+# Keep concurrent releases from claiming the same standby port.
+exec 9>/tmp/hanasand-frontend-deploy.lock
+flock 9
+
 proxy_conf=/home/hanasand/openresty/nginx/conf.d/default.conf
 active_port=$(sed -n 's/.*proxy_pass http:\/\/localhost:\([0-9][0-9]*\);.*/\1/p' "$proxy_conf" | head -1)
 case "$active_port" in
