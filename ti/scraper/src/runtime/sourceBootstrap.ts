@@ -211,6 +211,7 @@ function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord,
     reconciled.status = "candidate";
     reconciled.countsAsCoverage = false;
     reconciled.metadata.productionCollection = false;
+    reconciled.metadata.countsAsCoverage = false;
     reconciled.metadata.sourcePortfolioStatus = "verification_expired";
   }
   return isDeepStrictEqual(managedSourceConfiguration(existing), managedSourceConfiguration(reconciled)) ? undefined : reconciled;

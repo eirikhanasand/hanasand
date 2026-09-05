@@ -211,6 +211,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       });
       expect(expiredAdmissionStore.getSource(globalRevalidationSourceId)?.metadata?.sourcePortfolioStatus).toBeUndefined();
       expect(expiredAdmissionStore.getSource("src_portfolio_current")?.metadata?.sourcePortfolioStatus).toBe("verification_expired");
+      expect(expiredAdmissionStore.getSource("src_portfolio_current")?.metadata?.countsAsCoverage).toBe(false);
       for (const checkedAt of ["2026-08-31T11:00:00.000Z", "2026-09-01T11:00:00.000Z"]) {
         store.saveSourceHealthObservation({
           id: `empty-${checkedAt}`,

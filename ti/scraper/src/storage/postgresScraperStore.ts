@@ -2332,13 +2332,13 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           AND (
             record_type <> 'collection_plan'
             OR id IN (SELECT id FROM recent_collection_plans)
-            OR record->>'status' IN ('queued', 'running')
+            OR record->>'status' IN ('queued', 'running', 'failed')
             OR COALESCE(NULLIF(record->>'nextEligibleAt', '')::timestamptz, '-infinity'::timestamptz) >= now()
           )
           AND (
             NOT ${deferHighVolumeHydration}
             OR record_type NOT IN ('collection_plan', 'collection_run')
-            OR record->>'status' IN ('queued', 'running')
+            OR record->>'status' IN ('queued', 'running', 'failed')
             OR created_at >= now() - interval '30 days'
           )
           ORDER BY created_at`,
