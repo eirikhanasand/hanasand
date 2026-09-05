@@ -87,6 +87,8 @@ Use `ssh inspur` and work from `/home/hanasand/hanasand`. Deploy only the change
 # Frontend: build, check, switch traffic, then remove the old container.
 ./scripts/deploy.sh
 # Equivalent: make deploy
+# Use an already tested image tagged hanasand:
+./scripts/deploy.sh --no-build
 
 # API: build and test before replacing the running container.
 docker compose build api

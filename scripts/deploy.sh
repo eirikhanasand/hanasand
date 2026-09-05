@@ -22,7 +22,11 @@ fi
 test -n "$old_container" || { echo "Could not find the active frontend container" >&2; exit 1; }
 new_container=hanasand-frontend-$new_port
 docker rm -f "$new_container" >/dev/null 2>&1 || true
-docker compose build frontend
+case "${1:-}" in
+    "") docker compose build frontend ;;
+    --no-build) ;;
+    *) echo "Usage: ./scripts/deploy.sh [--no-build]" >&2; exit 2 ;;
+esac
 docker compose run -d --no-deps --name "$new_container" -p "$new_port:3000" frontend >/dev/null
 
 ready=0
