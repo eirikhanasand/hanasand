@@ -12,6 +12,17 @@ const bun = process.execPath
 
 const tasks: TestTask[] = [
     {
+        id: 'auth-validation-resilience',
+        title: 'Authentication failure and recovery',
+        command: [bun, 'tests/auth-validation-resilience.test.ts'],
+    },
+    {
+        id: 'auth-recovery-browser',
+        title: 'Authentication recovery in browser',
+        command: [bun, 'scripts/check-auth-recovery.mjs'],
+        requires: 'playwright',
+    },
+    {
         id: 'automation-routes',
         title: 'Automation route regression',
         command: [bun, 'scripts/check-automation-routes.mjs'],

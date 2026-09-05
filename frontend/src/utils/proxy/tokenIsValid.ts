@@ -29,7 +29,9 @@ export default async function tokenIsValid(token: string, id: string): Promise<T
     validationRequests.set(key, request)
     try {
         const result = await request
-        validationCache.set(key, { expiresAt: Date.now() + TOKEN_VALIDATION_CACHE_MS, result })
+        if (result.state !== 'unavailable') {
+            validationCache.set(key, { expiresAt: Date.now() + TOKEN_VALIDATION_CACHE_MS, result })
+        }
         return result
     } finally {
         validationRequests.delete(key)

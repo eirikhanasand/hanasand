@@ -59,7 +59,7 @@ export async function proxy(req: NextRequest) {
                 const rolesCookie = req.cookies.get('roles')?.value
                 roles = normalizeRoles(rolesCookie ? JSON.parse(rolesCookie) : [])
             } else if (outcome === 'unavailable') {
-                return authServiceUnavailable()
+                return authServiceUnavailable(req)
             } else if (outcome === 'invalid') {
                 return loginRedirect(req, pathWithSearch, { expired: Boolean(token), clearAuth: true })
             }
@@ -288,12 +288,34 @@ function loginRedirect(
     return response
 }
 
-function authServiceUnavailable() {
-    return NextResponse.json({
-        ok: false,
-        error: {
-            code: 'authentication_service_unavailable',
-            message: 'Authentication service is temporarily unavailable.',
-        },
-    }, { status: 503, headers: { 'cache-control': 'no-store' } })
+function authServiceUnavailable(req: NextRequest) {
+    const headers = { 'cache-control': 'no-store', 'retry-after': '3' }
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+        return NextResponse.json({
+            ok: false,
+            error: { code: 'authentication_service_unavailable', message: 'Authentication service is temporarily unavailable.' },
+        }, { status: 503, headers })
+    }
+
+    const retryPath = `${req.nextUrl.pathname}${req.nextUrl.search}`.replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;',
+    })[character]!)
+    const dark = req.cookies.get('theme')?.value === 'dark'
+    // Page requests (including Next client navigation) get a retryable document,
+    // never a raw API envelope or unverified protected content.
+    return new NextResponse(`<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><meta http-equiv="refresh" content="3">
+<title>Reconnecting your session · Hanasand</title>
+<style>
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:${dark ? '#07101d' : '#f7f8fb'};color:${dark ? '#f5f7fb' : '#171a21'};font:16px/1.6 system-ui,sans-serif}
+main{max-width:28rem;margin:1.5rem;padding:2rem;border:1px solid ${dark ? '#34445f' : '#d9e2ef'};border-radius:12px;background:${dark ? '#101927' : '#fff'}}
+h1{font-size:1.5rem;line-height:1.3}p{color:${dark ? '#b9c4d6' : '#4b5565'}}
+a{display:inline-block;margin-top:.5rem;padding:.6rem 1rem;border-radius:6px;background:#3056d3;color:white;text-decoration:none;font-weight:600}a:focus-visible{outline:3px solid ${dark ? '#8fb2ff' : '#171a21'};outline-offset:3px}
+</style></head><body><main>
+<p>Hanasand</p><h1>Reconnecting your session</h1>
+<p role="status">We couldn’t check your session just now. We’ll try again automatically in a few seconds.</p>
+<a href="${retryPath}">Try again now</a>
+</main></body></html>`, { status: 503, headers: { ...headers, 'content-type': 'text/html; charset=utf-8' } })
 }
