@@ -30,7 +30,8 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
                 link('Integrations', '/dashboard/dwm/delivery'),
             ]),
             group('Security tools', [
-                link('Security Monitoring', '/dashboard/mill'),
+                link('Overview', '/dashboard/mill'),
+                link('Detection rules', '/dashboard/mill/rules'),
                 link('Scanner', '/dashboard/scanner'),
             ]),
         ]),
