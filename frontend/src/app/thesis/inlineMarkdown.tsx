@@ -5,6 +5,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { marked } from 'marked'
 import type { Root } from 'mdast'
+import markdownSpacing from './markdownSpacing'
 
 type SourceNode = {
     type: string, value?: string, children?: SourceNode[],
@@ -75,8 +76,8 @@ export default function InlineMarkdown({ text, label, singleLine = false, onChan
         setActive(nextLine)
         onChange(next)
     }
-    function render(source: string, firstLine: number, key: string) {
-        if (!source) return null
+    function render(source: string, firstLine: number, key: string, count: number) {
+        if (!count) return null
         return <div key={key} className='thesis-markdown thesis-inline-render' tabIndex={0} role='group' aria-label={`${label}, click a line to edit`}
             onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select(firstLine) } }}
             onPointerDown={event => {
@@ -97,7 +98,7 @@ export default function InlineMarkdown({ text, label, singleLine = false, onChan
                 }
                 select(selected)
             }}>
-            <Markdown remarkPlugins={[remarkGfm, sourceLines]}>{source}</Markdown>
+            <Markdown remarkPlugins={[remarkGfm, markdownSpacing, sourceLines]}>{source}</Markdown>
         </div>
     }
 
@@ -119,7 +120,7 @@ export default function InlineMarkdown({ text, label, singleLine = false, onChan
         }
     }
     return <div className='thesis-inline-document'>
-        {render(before, 0, 'before')}
+        {render(before, 0, 'before', line ?? lines.length)}
         {line !== null && <textarea ref={input} aria-label={label} rows={1} className='thesis-inline-input' value={value}
             maxLength={singleLine ? 500 : 1_000_000} spellCheck
             onBlur={() => setActive(null)}
@@ -142,6 +143,9 @@ export default function InlineMarkdown({ text, label, singleLine = false, onChan
                     if (previous) { to.current.push({ text, line, cursor: a }); cursor.current = previous.cursor; setActive(previous.line); onChange(previous.text) }
                 } else if (event.key === 'Escape' || (singleLine && event.key === 'Enter')) {
                     event.preventDefault(); element.blur()
+                } else if (!singleLine && event.key === 'Enter') {
+                    event.preventDefault()
+                    change(text.slice(0, start + a) + '\n' + text.slice(start + b), line + 1, 0)
                 } else if (!singleLine && a === b && event.key === 'Backspace' && a === 0 && line > 0) {
                     event.preventDefault(); change(text.slice(0, start - 1) + text.slice(start), line - 1, lines[line - 1].length)
                 } else if (!singleLine && a === b && event.key === 'Delete' && b === value.length && line < lines.length - 1) {
@@ -152,7 +156,7 @@ export default function InlineMarkdown({ text, label, singleLine = false, onChan
                     event.preventDefault(); select(line + 1, 0)
                 }
             }} />}
-        {render(after, afterLine, 'after')}
+        {render(after, afterLine, 'after', line === null ? 0 : lines.length - line - 1)}
         {line === null && !singleLine && <div className='thesis-inline-empty' role='button' tabIndex={0} aria-label={`Add text to ${label}`}
             onClick={() => {
                 if (!text || text.endsWith('\n')) select(lines.length - 1, 0)

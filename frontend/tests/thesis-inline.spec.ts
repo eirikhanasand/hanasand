@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 
 test('only the active line shows source, with direct typing, line breaks, undo and autosave', async({ browser, baseURL }) => {
     test.skip(process.env.THESIS_WORKSPACE_TEST !== '1', 'Requires the disposable thesis API.')
+    test.setTimeout(60000)
     expect(baseURL).toBe('http://127.0.0.1:3205')
     const context = await browser.newContext()
     await context.addCookies([{ name: 'id', value: 'eirikhanasand', url: baseURL! }, { name: 'access_token', value: 'synthetic-owner', url: baseURL! }])
@@ -59,6 +60,38 @@ test('only the active line shows source, with direct typing, line breaks, undo a
     await region.getByText('here is footer', { exact: true }).click()
     await expect(line).toHaveValue('here is footer')
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await line.press('End')
+    await line.press('Enter')
+    const firstBlank = (await line.boundingBox())!.y
+    await line.press('Enter')
+    await line.press('Enter')
+    await expect(line).toHaveValue('')
+    expect((await line.boundingBox())!.y).toBeGreaterThan(firstBlank + 40)
+    await line.fill('After blank lines')
+    await line.press('Escape')
+    await expect.poll(async() => (await (await context.request.get(baseURL + '/api/thesis')).json()).body, { timeout: 12000 }).toContain('here is footer\n\n\nAfter blank lines')
+    await page.reload()
+    const footer = region.getByText('here is footer', { exact: true })
+    const spaced = region.getByText('After blank lines', { exact: true })
+    await expect(spaced).toBeVisible()
+    expect((await spaced.boundingBox())!.y - (await footer.boundingBox())!.y).toBeGreaterThan(70)
+    await region.locator('p.thesis-markdown-blank').first().click()
+    await expect(line).toHaveValue('')
+    await line.press('Escape')
+    const viewer = await browser.newContext()
+    await viewer.addInitScript(() => {
+        const Socket = window.WebSocket
+        window.WebSocket = class extends Socket {
+            constructor(url: string | URL, protocols?: string | string[]) { super(String(url).endsWith('/api/ws/thesis') ? 'ws://127.0.0.1:3202/api/ws/thesis' : url, protocols) }
+        }
+    })
+    const publicPage = await viewer.newPage()
+    await publicPage.goto(baseURL + '/thesis')
+    const publicFooter = publicPage.locator('.thesis-markdown p').filter({ hasText: 'here is footer' })
+    const publicSpaced = publicPage.getByText('After blank lines', { exact: true })
+    await expect(publicSpaced).toBeVisible()
+    expect((await publicSpaced.boundingBox())!.y - (await publicFooter.boundingBox())!.y).toBeGreaterThan(70)
+    await viewer.close()
     await page.screenshot({ path: '/tmp/thesis-inline-mobile.png', fullPage: true })
     expect(errors).toEqual([])
     await context.close()

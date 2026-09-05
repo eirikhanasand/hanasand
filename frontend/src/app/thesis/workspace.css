@@ -33,3 +33,5 @@
 .thesis-inline-input { display: block; width: 100%; min-height: 1.75em; margin: .5rem 0; padding: 0; border: 0; border-radius: 0; resize: none; overflow: hidden; background: transparent; color: inherit; font: inherit; font-family: monospace; line-height: 1.75; outline: none; box-shadow: -2px 0 var(--color-ui-primary); padding-left: .5rem; }
 .thesis-inline-empty { min-height: 1.75em; color: var(--color-ui-muted); cursor: text; }
 .thesis-inline-empty:focus-visible, .thesis-inline-render:focus-visible { outline: 1px solid var(--color-ui-primary); outline-offset: 3px; }
+
+.thesis-markdown p.thesis-markdown-blank { min-height: 1.75em; margin: 0; }

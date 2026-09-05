@@ -6,11 +6,12 @@ import remarkGfm from 'remark-gfm'
 import { marked } from 'marked'
 import { cellValue, columnName, reshape, tables, writeTable, type TableData, type Sheet } from './workspace'
 import InlineMarkdown from './inlineMarkdown'
+import markdownSpacing from './markdownSpacing'
 import './workspace.css'
 
 const button = 'rounded-lg border border-ui-border px-3 py-2 text-sm hover:bg-ui-raised disabled:opacity-40'
 export function RenderMarkdown({ text }: { text: string }) {
-    return <div className='thesis-markdown'><Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown></div>
+    return <div className='thesis-markdown'><Markdown remarkPlugins={[remarkGfm, markdownSpacing]}>{text}</Markdown></div>
 }
 
 function InlineTable({ data, onChange, onMoveUp, onMoveDown }: { data: TableData, onChange?: (data: TableData) => void, onMoveUp?: () => void, onMoveDown?: () => void }) {
