@@ -140,14 +140,6 @@ export async function runSourceFeedDiscoveryCycle(options: DiscoveryOptions, gen
     references: [...expiredPortfolioRssReferences(store, generatedAt), ...retained.references],
     rejectedReferenceCount: retained.rejectedReferenceCount
   };
-  const publishers = new Set(selected.references.map((reference) => reference.publisherKey));
-  for (const plan of store.listPlans?.() ?? []) {
-    if (plan.requestId === REQUEST_ID && plan.status === "failed" && !plan.activeRunId
-      && !publishers.has(String(plan.publisherKey))) {
-      store.savePlan({ ...plan, status: "superseded", updatedAt: generatedAt,
-        supersededReason: "Publisher no longer has an eligible retained discovery reference." } as any);
-    }
-  }
   const now = Date.parse(generatedAt);
   const due = selected.references
     .filter((reference) => {
