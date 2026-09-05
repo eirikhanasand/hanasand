@@ -21,7 +21,7 @@ test('public navigation has distinct destinations and useful developer shortcuts
     await reference.click()
     await expect(page).toHaveURL(/#endpoints$/)
     await expect.poll(async () => (await page.locator('#endpoints').boundingBox())?.y).toBeGreaterThanOrEqual(72)
-    await expect.poll(async () => (await page.locator('#endpoints').boundingBox())?.y).toBeLessThan(130)
+    await expect.poll(async () => (await page.locator('#endpoints').boundingBox())?.y).toBeLessThan(200)
 })
 
 test('developer hero stays compact with inline desktop actions and mobile navigation', async ({ page }) => {

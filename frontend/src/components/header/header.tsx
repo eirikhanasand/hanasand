@@ -52,7 +52,7 @@ function PublicDropdown({ label, items }: { label: string, items: Array<{ title:
                 <ChevronDown className='h-4 w-4 text-ui-muted' />
             </button>
             <div className='invisible pointer-events-none absolute left-0 top-10 z-10 h-3 w-[23rem] group-hover:visible group-hover:pointer-events-auto group-focus-within:visible group-focus-within:pointer-events-auto' aria-hidden='true' />
-            <div className='invisible pointer-events-none absolute left-0 top-12 z-20 w-[23rem] translate-y-1 rounded-lg border border-ui-border bg-ui-panel p-2 opacity-0 shadow-[0_22px_70px_rgba(25,34,52,0.15)] transition group-hover:visible group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100 dark:shadow-[0_22px_70px_rgba(0,0,0,0.42)]'>
+            <div className='invisible pointer-events-none absolute left-0 top-12 z-20 max-h-[calc(100dvh-6rem)] w-[23rem] overflow-y-auto translate-y-1 rounded-lg border border-ui-border bg-ui-panel p-2 opacity-0 shadow-[0_22px_70px_rgba(25,34,52,0.15)] transition group-hover:visible group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100 dark:shadow-[0_22px_70px_rgba(0,0,0,0.42)]'>
                 {items.map((item) => {
                     const Icon = item.icon
                     return (

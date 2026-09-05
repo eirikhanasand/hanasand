@@ -23,15 +23,15 @@ test('signed-in customer creates an organization key, runs the shown request, an
         { name: 'id', value: 'browser-proof-owner', url: origin.href },
         { name: 'access_token', value: 'browser-proof-session', url: origin.href },
     ])
-    await page.route(url => new URL(url).pathname === '/api/organizations', async route => {
-        requests.push({ method: route.request().method(), path: new URL(route.request().url()).pathname })
-        organizations = [organization]
-        await route.fulfill({ json: { organization } })
-    })
     await page.route(url => new URL(url).pathname.startsWith('/api/organizations'), async route => {
         const request = route.request()
         const path = new URL(request.url()).pathname
         requests.push({ method: request.method(), path })
+        if (path === '/api/organizations' && request.method() === 'POST') {
+            organizations = [organization]
+            await route.fulfill({ status: 201, json: { organization } })
+            return
+        }
         if (path === `/api/organizations/${organization.id}/api-keys` && request.method() === 'POST') {
             activeKey = key
             await route.fulfill({ status: 201, json: { apiKey: key, secret: issuedSecret } })
