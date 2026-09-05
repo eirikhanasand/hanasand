@@ -25,6 +25,14 @@ const generatedAt = "2026-07-23T12:00:00.000Z";
 const nextYear = "2027-07-23T12:00:00.000Z";
 
 describe("scheduled public feed discovery", () => {
+  test("retires failed discovery plans that are no longer eligible without losing their history", async () => {
+    const store = new InMemoryScraperStore();
+    store.savePlan({ id: "obsolete", requestId: "req_source_feed_discovery", publisherKey: "https://old.example/", status: "failed", tasks: [], audit: [{ outcome: "failed" }] } as any);
+    store.savePlan({ id: "unrelated", requestId: "other", status: "failed", tasks: [] } as any);
+    await runSourceFeedDiscoveryCycle({ store });
+    expect(store.getPlan("obsolete")).toMatchObject({ status: "superseded", audit: [{ outcome: "failed" }] });
+    expect(store.getPlan("unrelated")?.status).toBe("failed");
+  });
   test("uses bounded global publisher workflows and remains restart-idempotent", async () => {
     const directory = mkdtempSync(join(tmpdir(), "source-feed-discovery-"));
     const snapshotPath = join(directory, "store.json");

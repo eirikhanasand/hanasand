@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { check, fetchJson } from '../src/utils/status/monitor.ts'
-import { addMissingRequiredChecks, notificationEvent } from '../src/utils/status/monitorPolicy.ts'
+import { addMissingRequiredChecks, notificationEvent, watchlistProcessingStatus } from '../src/utils/status/monitorPolicy.ts'
 
 describe('production monitor notification transitions', () => {
     test('status history SQL avoids reserved PostgreSQL window identifier', async () => {
@@ -38,6 +38,12 @@ describe('production monitor notification transitions', () => {
         expect(source).toContain('const MONITOR_REQUEST_TIMEOUT_MS = 5_000')
         expect(source).toContain('signal: options.signal || AbortSignal.timeout(timeoutMs)')
         expect(source).toContain('signal: AbortSignal.timeout(MONITOR_REQUEST_TIMEOUT_MS)')
+    })
+
+    test('source collection has a persisted monitor with defined thresholds', async () => {
+        const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
+        expect(source).toContain("check('threat-intelligence', 'Source collection'")
+        expect(source).toContain('const SOURCE_OPERATIONS_DEGRADED_RATIO = 0.05')
     })
 
     test('scraper backlog is visible before it becomes a write failure', async () => {

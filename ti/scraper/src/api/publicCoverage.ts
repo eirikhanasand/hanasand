@@ -1,6 +1,7 @@
 import { nowIso } from "../utils.ts";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
-import { buildSourceOperationsSnapshot } from "./sourceOperations.ts";
+import { SOURCE_PORTFOLIO_BASELINE } from "../ops/sourcePortfolioQualification.ts";
+import { buildSourceOperationsSummary, buildSourceOperationsSnapshot } from "./sourceOperations.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 
 export async function publicCoverage(options: ApiServerOptions) {

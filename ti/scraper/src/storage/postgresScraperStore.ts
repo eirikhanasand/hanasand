@@ -135,7 +135,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   static async create(options: PostgresScraperStoreOptions = {}): Promise<PostgresScraperStore> {
     const databaseUrl = options.databaseUrl ?? Bun.env.TI_DATABASE_URL;
-    const sql = new SQL(databaseUrl);
+    // ponytail: avoid pipelined result decoding in the production Bun SQL driver.
+    const sql = new SQL(databaseUrl, { prepare: false });
     const runMaintenanceMigrations = options.runMaintenanceMigrations !== false;
     const migrations = DEFAULT_MIGRATIONS.filter((migration) => runMaintenanceMigrations || !MAINTENANCE_MIGRATION_VERSIONS.has(migration.version)).map((migration, index) => ({
       ...migration,
@@ -1428,34 +1429,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return { rows, totals, total, nextCursor: offset + rows.length < total ? String(offset + rows.length) : undefined };
   }
 
-  async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string; executableOnly?: boolean }) {
-    const [row] = await this.sql.unsafe(`
-      WITH capture_counts AS (
-        SELECT source_id, tenant_id, count(*) AS capture_count
-        FROM threat_intel.captures
-        WHERE tenant_id IS NOT DISTINCT FROM $1::text
-        GROUP BY source_id, tenant_id
-      ), ranked_sources AS (
-        SELECT sources.*,
-          row_number() OVER (
-            PARTITION BY COALESCE(sources.canonical_feed_key, 'source:' || sources.id)
-            ORDER BY sources.collection_executable DESC,
-              COALESCE(capture_counts.capture_count, 0) DESC,
-              COALESCE(sources.record->>'createdAt', ''),
-              sources.id
-          ) AS canonical_rank
-        FROM threat_intel.sources sources
-        LEFT JOIN capture_counts
-          ON capture_counts.source_id = sources.id
-          AND capture_counts.tenant_id IS NOT DISTINCT FROM sources.tenant_id
-        WHERE sources.tenant_id IS NOT DISTINCT FROM $1::text
-      ), latest_health AS (
-        SELECT DISTINCT ON (source_id)
-          source_id, checked_at, success, useful, capture_count, parser_warning_count
-        FROM threat_intel.source_health
-        WHERE tenant_id IS NOT DISTINCT FROM $1::text
-        ORDER BY source_id, checked_at DESC
-      )
+  async querySourceOperationalSummary(input: { tenantId?: string; generatedAt: string; executableOnly?: boolean }, sql = this.sql) {
+    const tenantPredicate = input.tenantId == null ? "IS NULL" : "= $1::text";
+    const [row] = await sql.unsafe(`
       SELECT jsonb_build_object(
         'sourceCount', count(*),
         'retainedSourceCount', count(*) FILTER (WHERE collection_executable),
@@ -1498,10 +1474,17 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         'backoffSourceCount', count(*) FILTER (WHERE collection_executable AND NULLIF(sources.record->'crawlState'->>'backoffUntil', '')::timestamptz > now()),
         'neverObservedSourceCount', count(*) FILTER (WHERE collection_executable AND latest_health.source_id IS NULL)
       ) AS summary
-      FROM ranked_sources sources
-      LEFT JOIN latest_health ON latest_health.source_id = sources.id
-      WHERE sources.tenant_id IS NOT DISTINCT FROM $1::text
-    `, [input.tenantId ?? null]);
+      FROM threat_intel.sources sources
+      LEFT JOIN LATERAL (
+        SELECT source_id, checked_at, success, useful, capture_count, parser_warning_count
+        FROM threat_intel.source_health
+        WHERE source_id = sources.id
+          AND tenant_id ${tenantPredicate}
+        ORDER BY checked_at DESC, id DESC
+        LIMIT 1
+      ) latest_health ON TRUE
+      WHERE sources.tenant_id ${tenantPredicate}
+    `, input.tenantId == null ? [] : [input.tenantId]);
     return { schemaVersion: "ti.source_operations_summary.v1", generatedAt: input.generatedAt, tenantId: input.tenantId ?? "global", summary: row?.summary ?? {} };
   }
 

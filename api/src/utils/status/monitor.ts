@@ -9,6 +9,8 @@ const webBase = (process.env.MONITOR_WEB_BASE || 'https://hanasand.com').replace
 const scraperBase = (process.env.TI_SCRAPER_API_BASE || 'http://ti-scraper:8097').replace(/\/$/, '')
 const modelClientBase = (process.env.HANASAND_MODEL_CLIENT_HEALTH_BASE || 'http://hanasand_ai_model_client:18182').replace(/\/$/, '')
 const MONITOR_REQUEST_TIMEOUT_MS = 5_000
+const SCRAPER_PENDING_WRITES_DEGRADED_THRESHOLD = 1_000
+const SOURCE_OPERATIONS_DEGRADED_RATIO = 0.05
 type CheckResult = string | void | { status: MonitorStatus, message: string }
 type MonitorRecorder = typeof recordMonitorResult
 
@@ -136,7 +138,7 @@ export default async function runSyntheticMonitor() {
             }
             return 'A canonical threat-intelligence search completed successfully.'
         }, { degraded: 3_000, down: 10_000 }),
-        check('threat-intelligence', 'Scraper health', async () => {
+        check('threat-intelligence', 'Source collection', async () => {
             const { response, body } = await fetchJson('/v1/health', { signal: AbortSignal.timeout(45_000) }, scraperBase)
             const health = object(body)
             const storage = object(health?.storage)
@@ -383,7 +385,7 @@ export default async function runSyntheticMonitor() {
                         SELECT 1
                         FROM threat_intel.captures capture
                         WHERE capture.source_id = source.id
-                          AND capture.tenant_id IS NOT DISTINCT FROM source.tenant_id
+                          AND (capture.tenant_id = source.tenant_id OR (capture.tenant_id IS NULL AND source.tenant_id IS NULL))
                       )
                   ) AS unreviewed_sources,
                   (

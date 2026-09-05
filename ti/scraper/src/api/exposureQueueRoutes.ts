@@ -265,7 +265,7 @@ export async function saveExposureClaimFromCollectedItem(store: any, item: any, 
     title: item.title,
     text: item.rawText || item.body,
     capturedAt: item.collectedAt || at,
-    publishedAt: publisherTimestamp,
+    publishedAt: zonedSourceTimestamp(item.publishedAt),
     reportTimestamps: item.metadata?.reportTimestamps,
     sourceFamily
   }, at);
