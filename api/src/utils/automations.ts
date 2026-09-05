@@ -295,7 +295,8 @@ export function computeNextRunAt({
 
     if (runAt && runAt.getTime() >= from.getTime() - 1000) return runAt
     const minutes = Math.max(1, intervalMinutes || 60)
-    return new Date(from.getTime() + minutes * 60_000)
+    // Match the minute-based cron ticks so check duration does not skip the next tick.
+    return new Date((Math.floor(from.getTime() / 60_000) + minutes) * 60_000)
 }
 
 export async function runDueAutomations() {
