@@ -122,7 +122,7 @@ export async function startScraperRuntime() {
     crawlBudgetPolicies: { "public-canary": { taskLimit: Number(Bun.env.TI_CANARY_BUDGET_TASKS ?? "1000"), byteLimit: Number(Bun.env.TI_CANARY_BUDGET_BYTES ?? "512000000") } }
   });
   const objectStore = new FileObjectEvidenceStore({ rootDir: paths.evidenceObjectDir });
-  const serverOptions: ApiServerOptions = { port: config.port, store, frontier, config, objectStore };
+  const serverOptions: ApiServerOptions = { port: config.port, store, frontier, config, objectStore, ready: false };
   const server = startApiServer(serverOptions);
   startupPhase("api_server_started", { port: server.port });
   const startupChecks = Promise.all([
@@ -221,7 +221,7 @@ export async function startScraperRuntime() {
     onCycle: (result) => logger.info("automatic evaluation cycle", { event: "automatic_evaluation.cycle", ...result }),
     onError: (error: unknown) => logger.warn("automatic evaluation cycle failed", { event: "automatic_evaluation.error", error: error instanceof Error ? error.message : String(error) })
   });
-  Object.assign(serverOptions, { canaryLoop: canary, defaultCanaryLoop: defaultCanary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
+  Object.assign(serverOptions, { ready: true, canaryLoop: canary, defaultCanaryLoop: defaultCanary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
   // ponytail: warm the common global inventory page once; later reads are served
   // from the bounded five-second backend cache instead of repeating cold joins.
   // ponytail: cache warming must never delay listener startup or make health fail.

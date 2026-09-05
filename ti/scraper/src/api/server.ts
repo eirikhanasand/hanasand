@@ -69,6 +69,7 @@ async function handleDurableApiRequest(request: Request, options: ApiServerOptio
   }
 }
 export async function handleApiRequest(request: Request, options: ApiServerOptions): Promise<Response> {
+  if (options.ready === false) return error("service_starting", "Source storage is still loading; retry shortly.", 503);
   const url = new URL(request.url);
   try {
     if (requiresAuthenticatedRequest(url.pathname)) {

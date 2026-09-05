@@ -1,9 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import { startApiServer } from "../api/server.ts";
+import { handleApiRequest, startApiServer } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 
 describe("health route", () => {
+  test("rejects traffic until persisted sources have finished loading", async () => {
+    const store = new InMemoryScraperStore();
+    const options = { store, frontier: new FocusedFrontier(), ready: false };
+    const response = await handleApiRequest(new Request("http://local/v1/health"), options);
+    expect(response.status).toBe(503);
+    const mutation = await handleApiRequest(new Request("http://local/v1/ops/service-monitor-incident", { method: "POST", body: "{}" }), options);
+    expect(mutation.status).toBe(503);
+    expect(store.listSources()).toHaveLength(0);
+    options.ready = true;
+    expect((await handleApiRequest(new Request("http://local/v1/health"), options)).status).toBe(200);
+  });
   test("reports pending storage without waiting for unrelated writes to flush", async () => {
     const store = new InMemoryScraperStore();
     let release = () => {};
