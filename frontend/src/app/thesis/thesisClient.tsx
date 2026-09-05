@@ -33,24 +33,33 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
         } finally { setBusy(false) }
     }
 
+    async function readVersion(revision: number): Promise<ThesisDocument> {
+        if (preview?.revision === revision) return preview
+        const response = await fetch(`/api/thesis/history?revision=${revision}`, { cache: 'no-store' })
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || 'This version could not be loaded.')
+        return result
+    }
+
     async function showVersion(revision: number) {
+        if (preview?.revision === revision) { setPreview(null); return }
         setBusy(true)
         setHistoryError('')
         try {
-            const response = await fetch(`/api/thesis/history?revision=${revision}`, { cache: 'no-store' })
-            const result = await response.json()
-            if (!response.ok) throw new Error(result.error || 'This version could not be loaded.')
-            setPreview(result)
+            setPreview(await readVersion(revision))
         } catch (error) {
             setHistoryError(error instanceof Error ? error.message : 'This version could not be loaded.')
         } finally { setBusy(false) }
     }
 
-    async function restore() {
-        if (!preview) return
+    async function restore(revision: number) {
         setBusy(true)
-        if (await thesis.restore(preview)) { setPreview(null); await loadHistory() }
-        setBusy(false)
+        setHistoryError('')
+        try {
+            if (await thesis.restore(await readVersion(revision))) { setPreview(null); await loadHistory() }
+        } catch (error) {
+            setHistoryError(error instanceof Error ? error.message : 'This version could not be restored.')
+        } finally { setBusy(false) }
     }
 
     const title = (
@@ -113,19 +122,27 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                         <section aria-label='Version history' className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4'>
                             <p className='text-sm text-ui-muted'>Previous version, plus checkpoints every 20 minutes for seven days; up to three per day after that.</p>
                             {history.length === 0 && <p>No earlier versions yet.</p>}
-                            {history.map(item => (
-                                <button key={item.revision} type='button' disabled={busy} onClick={() => showVersion(item.revision)} className='rounded-lg border border-ui-border px-3 py-2 text-left'>
-                                    {item.immediate ? 'Previous version' : item.title} — {new Date(item.saved_at).toLocaleString()}
-                                </button>
-                            ))}
+                            <ul className='grid gap-2'>
+                                {history.map(item => (
+                                    <li key={item.revision} className='group rounded-lg border border-ui-border'>
+                                        <div className='flex items-center gap-2 px-3 py-2'>
+                                            <button type='button' disabled={busy} aria-expanded={preview?.revision === item.revision} aria-controls={`thesis-version-${item.revision}`} onClick={() => showVersion(item.revision)} className='min-w-0 flex-1 rounded-sm py-1 text-left focus-visible:outline-2 focus-visible:outline-ui-primary'>
+                                                {item.immediate ? 'Previous version' : item.title} — {new Date(item.saved_at).toLocaleString()}
+                                            </button>
+                                            <button type='button' aria-label={`Restore version ${item.revision}`} disabled={busy || thesis.conflict} onClick={() => restore(item.revision)} className='shrink-0 rounded-md px-2 py-1 text-sm text-ui-muted transition-opacity hover:bg-ui-raised hover:text-ui-text focus-visible:outline-2 focus-visible:outline-ui-primary [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100'>
+                                                Restore
+                                            </button>
+                                        </div>
+                                        {preview?.revision === item.revision && (
+                                            <section id={`thesis-version-${item.revision}`} aria-label='Version preview' className='grid gap-3 border-t border-ui-border p-3'>
+                                                <h2 className='font-semibold'>{preview.title}</h2>
+                                                <MarkdownRender MDstr={preview.body} />
+                                            </section>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
                             {more && <button type='button' disabled={busy} onClick={() => loadHistory(true)}>Older versions</button>}
-                            {preview && (
-                                <section aria-label='Version preview' className='grid gap-3 border-t border-ui-border pt-4'>
-                                    <h2 className='font-semibold'>{preview.title}</h2>
-                                    <MarkdownRender MDstr={preview.body} />
-                                    <button type='button' disabled={busy || thesis.conflict} onClick={restore} className='justify-self-start rounded-lg bg-ui-primary px-4 py-2 text-ui-canvas'>Restore this version</button>
-                                </section>
-                            )}
                         </section>
                     )}
                     {historyError && <p role='alert' className='text-sm text-ui-danger'>{historyError}</p>}
