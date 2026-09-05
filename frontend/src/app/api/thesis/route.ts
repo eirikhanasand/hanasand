@@ -20,13 +20,14 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'Only eirikhanasand can edit the thesis.' }, { status: 403 })
     }
     const document = await request.json().catch(() => null)
-    if (!validThesis(document)) {
-        return NextResponse.json({ error: 'Enter a single-line title (up to 500 characters) and a body up to 1,000,000 characters.' }, { status: 400 })
-    }
+    if (!validThesis(document)) return NextResponse.json({ error: 'Enter a non-empty title of at most 500 characters.' }, { status: 400 })
     try {
-        await writeThesis(document, request.cookies.get('access_token')!.value, request.cookies.get('id')!.value)
-        return NextResponse.json({ saved: true })
+        const response = await writeThesis(document, request.cookies.get('access_token')!.value, request.cookies.get('id')!.value)
+        return NextResponse.json(await response.json(), { status: response.status, headers: { 'Cache-Control': 'no-store' } })
     } catch {
-        return NextResponse.json({ error: 'The thesis could not be saved. Your draft is still in the editor.' }, { status: 500 })
+        return NextResponse.json({ error: 'The thesis could not be saved. Your draft is kept in this browser.' }, { status: 500 })
     }
 }
+
+// sendBeacon uses POST when the page is being hidden or closed.
+export const POST = PUT

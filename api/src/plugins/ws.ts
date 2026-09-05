@@ -1,4 +1,5 @@
 import fp from 'fastify-plugin'
+import { subscribeThesis } from '#utils/thesis.ts'
 import WebSocket from 'ws'
 import type { RawData } from 'ws'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
@@ -56,6 +57,7 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
         return
     }
 
+    fastify.get('/api/ws/thesis', { websocket: true }, socket => subscribeThesis(socket))
     registerBrowserStreamRoute(fastify)
 
     // pwned
