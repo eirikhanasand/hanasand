@@ -427,6 +427,8 @@ function validateBannedPublicCopy(filePath, source, node, value, label) {
     if (!value || !shouldValidateVisibleCopy(filePath)) return
     const normalized = value.replace(/\s+/g, ' ').trim()
     if (!normalized) return
+    // Certificate applicability uses the requested compact label with an explanatory popover.
+    if (relative(filePath) === 'src/app/dashboard/automation/certificateStatus.tsx' && normalized === 'N/A') return
 
     for (const pattern of bannedPublicCopyPatterns) {
         if (pattern.test(normalized)) {
