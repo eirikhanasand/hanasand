@@ -3,7 +3,9 @@
 import { useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { marked } from 'marked'
 import { cellValue, columnName, reshape, tables, writeTable, type TableData, type Sheet } from './workspace'
+import InlineMarkdown from './inlineMarkdown'
 import './workspace.css'
 
 const button = 'rounded-lg border border-ui-border px-3 py-2 text-sm hover:bg-ui-raised disabled:opacity-40'
@@ -11,7 +13,7 @@ export function RenderMarkdown({ text }: { text: string }) {
     return <div className='thesis-markdown'><Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown></div>
 }
 
-function InlineTable({ data, onChange }: { data: TableData, onChange?: (data: TableData) => void }) {
+function InlineTable({ data, onChange, onMoveUp, onMoveDown }: { data: TableData, onChange?: (data: TableData) => void, onMoveUp?: () => void, onMoveDown?: () => void }) {
     const [selected, setSelected] = useState<[number, number]>([1, 0])
     const [focused, setFocused] = useState('')
     const row = Math.min(selected[0], data.cells.length - 1), col = Math.min(selected[1], data.cells[0].length - 1)
@@ -50,6 +52,8 @@ function InlineTable({ data, onChange }: { data: TableData, onChange?: (data: Ta
     }
     return <section className='thesis-table-block' aria-label='Inline table'>
         {onChange && <div className='flex flex-wrap items-center gap-2 py-3'>
+            <button className={button} aria-label='Move table up' disabled={!onMoveUp} onClick={onMoveUp}>↑</button>
+            <button className={button} aria-label='Move table down' disabled={!onMoveDown} onClick={onMoveDown}>↓</button>
             <span className='mr-2 text-sm text-ui-muted'>{columnName(col)}{row + 1}</span>
             <button className={button} onClick={() => onChange(reshape(data, 'row', row + 1, false))}>Add row below</button>
             <button className={button} disabled={row === 0 || data.cells.length <= 1} onClick={() => onChange(reshape(data, 'row', row, true))}>Remove row</button>
@@ -81,32 +85,45 @@ function InlineTable({ data, onChange }: { data: TableData, onChange?: (data: Ta
 }
 
 export default function SheetEditor({ sheet, canEdit, onChange }: { sheet: Sheet, canEdit: boolean, onChange: (field: 'title' | 'body', value: string) => void }) {
-    const [source, setSource] = useState(false)
-    const textarea = useRef<HTMLTextAreaElement>(null)
+    const selection = useRef({ start: sheet.body.length, end: sheet.body.length })
     const parsed = tables(sheet.body)
+    function prose(text: string, start: number, end: number) {
+        return canEdit ? <InlineMarkdown text={text} label='Description Markdown'
+            onSelection={(a, b) => { selection.current = { start: start + a, end: start + b } }}
+            onChange={value => onChange('body', sheet.body.slice(0, start) + value + sheet.body.slice(end))} /> : <RenderMarkdown text={text} />
+    }
+    const blocks: { start: number, end: number }[] = []
+    let blockOffset = 0
+    for (const token of marked.lexer(sheet.body)) {
+        const start = sheet.body.indexOf(token.raw, blockOffset)
+        blockOffset = start + token.raw.length
+        if (token.type !== 'space' && !token.raw.startsWith('<!-- thesis-table:')) blocks.push({ start, end: parsed.find(table => table.start === start)?.end ?? blockOffset })
+    }
+    function move(start: number, end: number, target: { start: number, end: number }, up: boolean) {
+        const raw = sheet.body.slice(start, end)
+        onChange('body', up
+            ? sheet.body.slice(0, target.start) + raw + '\n\n' + sheet.body.slice(target.start, start) + sheet.body.slice(end)
+            : sheet.body.slice(0, start) + sheet.body.slice(end, target.end) + '\n\n' + raw + sheet.body.slice(target.end))
+    }
     let offset = 0
     const content = parsed.map((table, index) => {
-        const before = sheet.body.slice(offset, table.start)
+        const before = prose(sheet.body.slice(offset, table.start), offset, table.start)
         offset = table.end
-        return <div key={index}><RenderMarkdown text={before} /><InlineTable data={table.data} onChange={canEdit ? data => onChange('body', sheet.body.slice(0, table.start) + writeTable(data) + sheet.body.slice(table.end)) : undefined} /></div>
+        const previous = blocks.findLast(block => block.end <= table.start)
+        const next = blocks.find(block => block.start >= table.end)
+        return <div key={index}>{before}<InlineTable data={table.data}
+            onMoveUp={canEdit && previous ? () => move(table.start, table.end, previous, true) : undefined}
+            onMoveDown={canEdit && next ? () => move(table.start, table.end, next, false) : undefined} onChange={canEdit ? data => onChange('body', sheet.body.slice(0, table.start) + writeTable(data) + sheet.body.slice(table.end)) : undefined} /></div>
     })
     function insert() {
-        const start = textarea.current?.selectionStart ?? sheet.body.length
-        const end = textarea.current?.selectionEnd ?? start
+        const start = Math.min(selection.current.start, sheet.body.length)
+        const end = Math.min(selection.current.end, sheet.body.length)
         const value = '\n\n' + writeTable({ cells: [['Task', 'Hours', 'Notes'], ['', '', ''], ['', '', '']], widths: [], heights: [] }) + '\n'
         onChange('body', sheet.body.slice(0, start) + value + sheet.body.slice(end))
     }
     return <div className='grid min-w-0 gap-5'>
-        {canEdit && <div className='flex flex-wrap gap-2'>
-            <button className={button} aria-pressed={source} onClick={() => setSource(!source)}>{source ? 'Done editing markdown' : 'Edit markdown'}</button>
-            <button className={button} onClick={insert}>Insert table</button>
-        </div>}
-        {source && canEdit ? <>
-            <label className='grid gap-2 text-sm'>Title Markdown<input maxLength={500} className='rounded-lg border border-ui-border bg-ui-raised p-3' value={sheet.title} onChange={event => onChange('title', event.target.value)} /></label>
-            <label className='grid gap-2 text-sm'>Description Markdown<textarea ref={textarea} maxLength={1_000_000} className='min-h-80 w-full resize-y rounded-lg border border-ui-border bg-ui-raised p-4 font-mono text-base leading-7' value={sheet.body} onChange={event => onChange('body', event.target.value)} /></label>
-            <p className='text-sm text-ui-muted'>Insert tables at the cursor. Cut and paste a table with its sizing comment to move it between paragraphs. Preview below updates as you type.</p>
-        </> : null}
-        <RenderMarkdown text={sheet.title || '# Untitled'} />
-        <div className='min-w-0'>{content}<RenderMarkdown text={sheet.body.slice(offset)} /></div>
+        {canEdit ? <InlineMarkdown text={sheet.title || '# Untitled'} label='Title Markdown' singleLine onChange={value => onChange('title', value)} /> : <RenderMarkdown text={sheet.title || '# Untitled'} />}
+        <div className='min-w-0'>{content}{prose(sheet.body.slice(offset), offset, sheet.body.length)}</div>
+        {canEdit && <button className={button + ' justify-self-start'} onMouseDown={event => event.preventDefault()} onClick={insert}>Insert table</button>}
     </div>
 }

@@ -21,13 +21,20 @@ test('autosave, idle, WebSocket updates, history restore, closing and draft reco
         })
     }
     const page = await owner.newPage()
+    async function editBody() {
+        await expect(page.getByRole('button', { name: 'Insert table', exact: true })).toBeVisible()
+        if (await page.getByRole('textbox', { name: 'Description Markdown', exact: true }).count()) return
+        const rendered = page.getByRole('group', { name: 'Description Markdown, click a line to edit', exact: true }).first()
+        if (await rendered.count()) await rendered.press('Enter')
+        else await page.getByRole('button', { name: 'Add text to Description Markdown', exact: true }).first().click()
+    }
     const publicPage = await reader.newPage()
     const current = async() => {
         const saved = await (await owner.request.get(baseURL + '/api/thesis')).json()
         return { ...saved, body: saved.body.split('\n\n<!-- thesis-sheet:')[0] }
     }
     await page.goto(baseURL + '/content/thesis')
-    await page.getByRole('button', { name: 'Edit markdown', exact: true }).click()
+    await editBody()
     await publicPage.goto(baseURL + '/thesis')
     const body = page.getByRole('textbox', { name: 'Description Markdown' })
     await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0)
@@ -57,6 +64,7 @@ test('autosave, idle, WebSocket updates, history restore, closing and draft reco
     await expect(preview).toBeVisible()
     await previous.press('Space')
     await expect(preview).toHaveCount(0)
+    await editBody()
     await body.focus()
     await page.mouse.move(0, 0)
     await expect(restore).toHaveCSS('opacity', '0')
@@ -70,18 +78,19 @@ test('autosave, idle, WebSocket updates, history restore, closing and draft reco
     // Restore directly from a collapsed row, through the existing save path.
     await restore.press('Enter')
     await expect.poll(async() => (await current()).body).toBe('First live edit')
+    await editBody()
     await expect(body).toHaveValue('First live edit')
     await body.fill('Written immediately before leaving')
     await page.goto('about:blank')
     await expect.poll(async() => (await current()).body, { timeout: 7000 }).toBe('Written immediately before leaving')
     await page.goto(baseURL + '/content/thesis')
-    await page.getByRole('button', { name: 'Edit markdown', exact: true }).click()
+    await editBody()
     await expect(body).toHaveValue('Written immediately before leaving')
     // A failed close request must leave a draft that survives reload.
     await page.route('**/api/thesis', route => route.request().method() === 'GET' ? route.continue() : route.abort())
     await body.fill('Recover after interrupted delivery')
     await page.reload()
-    await page.getByRole('button', { name: 'Edit markdown', exact: true }).click()
+    await editBody()
     await expect(body).toHaveValue('Recover after interrupted delivery')
     await page.unroute('**/api/thesis')
     await expect.poll(async() => (await current()).body, { timeout: 9000 }).toBe('Recover after interrupted delivery')
@@ -95,6 +104,7 @@ test('autosave, idle, WebSocket updates, history restore, closing and draft reco
     await expect(page.getByRole('button', { name: 'Use my draft' })).toBeVisible()
     await expect(body).toHaveValue('Local conflicting draft')
     await page.getByRole('button', { name: 'Use latest version' }).click()
+    await editBody()
     await expect(body).toHaveValue('Newer remote draft')
     await owner.close()
     await reader.close()
