@@ -32,3 +32,9 @@ Current limitations: the proxy, workers, and database are on one host; PostgreSQ
 | Managed OIDC provider | Outsources much identity security and HA; can offer enterprise federation and MFA | Account/passkey migration, integration changes, provider dependency and usage costs. Worth evaluating for enterprise identity needs; does not remove the app's own session/authorization availability requirements. |
 
 References: [NGINX retry semantics](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_next_upstream), [Fastify graceful close](https://fastify.dev/docs/latest/Reference/Server/#close), [OWASP session management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html), [PostgreSQL high availability](https://www.postgresql.org/docs/current/high-availability.html).
+
+## Validation on 6 September 2026
+
+Production fault injection killed one auth worker, restored it, then deployed the replacement pair while a real session continuously validated through the TLS endpoint. All 1,971 validations succeeded; p95 was 88 ms and p99 106 ms. The same session worked on both initial workers, and revocation returned 401. The temporary account and sessions were removed. This was an availability smoke test (roughly eight requests/second), not a peak-load benchmark.
+
+`api/scripts/check-auth-live.ts` reproduces the real-session check with `AUTH_LIVE_CHECK=1`, a duration in `AUTH_CHECK_SECONDS`, and optional `AUTH_CHECK_WORKERS` endpoints. Set `FRONTEND_BASE` to also verify frontend login, protected navigation, and revoked-session rejection after the five-second cache expires. It creates its own temporary account and cleans it up. Never use a real user's credentials for this probe.
