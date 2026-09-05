@@ -1,17 +1,30 @@
 'use client'
 
-import { useState } from 'react'
-import Markdown from 'react-markdown'
-import MarkdownRender from '@/components/markdown/markdown'
+import { useEffect, useState } from 'react'
+import SheetEditor from './sheetEditor'
+import { readSheets, writeSheets, sheetNames } from './workspace'
 import type { ThesisDocument } from '@/utils/thesis'
 import useThesis from './useThesis'
 
 type HistoryItem = { revision: number, title: string, saved_at: string, immediate: boolean }
 
 export default function ThesisClient({ initialDocument, canEdit }: { initialDocument: ThesisDocument, canEdit: boolean }) {
+    const [ready, setReady] = useState(false)
+    useEffect(() => { setReady(true) }, [])
     const thesis = useThesis(initialDocument, canEdit)
     const { document } = thesis
-    const [editingTitle, setEditingTitle] = useState(false)
+    const [active, setActive] = useState(0)
+    const [validationError, setValidationError] = useState('')
+    const sheets = readSheets(document.title, document.body)
+    function updateSheet(field: 'title' | 'body', value: string) {
+        const next = sheets.map((sheet, index) => index === active ? { ...sheet, [field]: value } : sheet)
+        if (field === 'title' && (!value.trim() || value.length > 500)) { setValidationError('Enter a title of 1–500 characters.'); return }
+        const body = writeSheets(next)
+        if (body.length > 1_000_000) { setValidationError('The workspace is full. Shorten the content before adding more.'); return }
+        setValidationError('')
+        if (active === 0 && field === 'title') thesis.update('title', value)
+        else thesis.update('body', body)
+    }
     const [history, setHistory] = useState<HistoryItem[] | null>(null)
     const [preview, setPreview] = useState<ThesisDocument | null>(null)
     const [historyError, setHistoryError] = useState('')
@@ -62,45 +75,21 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
         } finally { setBusy(false) }
     }
 
-    const title = (
-        <Markdown allowedElements={['strong', 'em', 'code', 'br']} unwrapDisallowed>
-            {document.title || '# Thesis'}
-        </Markdown>
-    )
-
     return (
-        <section className='mx-auto grid w-full max-w-4xl gap-6 px-4 py-12 text-ui-text md:px-8 md:py-16' aria-label='Thesis document'>
-            {canEdit && editingTitle ? (
-                <input
-                    autoFocus
-                    aria-label='Title Markdown'
-                    maxLength={500}
-                    className='w-full rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-4xl font-semibold outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/35'
-                    value={document.title}
-                    onChange={event => thesis.update('title', event.target.value)}
-                    onBlur={() => setEditingTitle(false)}
-                    onKeyDown={event => {
-                        if (event.key === 'Enter' || event.key === 'Escape') setEditingTitle(false)
-                    }}
-                />
-            ) : (
-                <h1 className='text-4xl font-semibold leading-tight'>
-                    {canEdit ? (
-                        <button type='button' aria-label='Edit title' className='w-full rounded-sm text-left focus-visible:outline-2 focus-visible:outline-ui-primary' onClick={() => setEditingTitle(true)}>
-                            {title}
-                        </button>
-                    ) : title}
-                </h1>
-            )}
+        <section className='mx-auto grid w-full max-w-6xl gap-6 px-4 pt-12 pb-32 text-ui-text md:px-8 md:pt-16' aria-label='Thesis document'>
+            <div role='tabpanel' id={`sheet-${active}`} aria-labelledby={`tab-${active}`}>
+                <SheetEditor key={active} sheet={sheets[active]} canEdit={canEdit && ready} onChange={updateSheet} />
+            </div>
+            {validationError && <p role='alert' className='text-sm text-ui-danger'>{validationError}</p>}
+            <nav className='thesis-tabs' role='tablist' aria-label='Thesis sheets'>
+                {sheetNames.map((name, index) => <button key={name} id={`tab-${index}`} role='tab' disabled={!ready} aria-selected={active === index} aria-controls={`sheet-${index}`} tabIndex={active === index ? 0 : -1}
+                    onClick={() => setActive(index)} onKeyDown={event => {
+                        const target = event.key === 'ArrowRight' ? (index + 1) % 4 : event.key === 'ArrowLeft' ? (index + 3) % 4 : event.key === 'Home' ? 0 : event.key === 'End' ? 3 : -1
+                        if (target >= 0) { event.preventDefault(); setActive(target); window.document.getElementById(`tab-${target}`)?.focus() }
+                    }}>{name}</button>)}
+            </nav>
             {canEdit ? (
                 <>
-                    <textarea
-                        aria-label='Description Markdown'
-                        maxLength={1_000_000}
-                        className='min-h-80 w-full resize-y rounded-lg border border-ui-border bg-ui-raised p-4 font-mono text-base leading-7 outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/35'
-                        value={document.body}
-                        onChange={event => thesis.update('body', event.target.value)}
-                    />
                     {thesis.error && <p role='alert' className='text-sm text-ui-danger'>{thesis.error}</p>}
                     {thesis.conflict && (
                         <div className='flex flex-wrap gap-3'>
@@ -135,8 +124,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                                         </div>
                                         {preview?.revision === item.revision && (
                                             <section id={`thesis-version-${item.revision}`} aria-label='Version preview' className='grid gap-3 border-t border-ui-border p-3'>
-                                                <h2 className='font-semibold'>{preview.title}</h2>
-                                                <MarkdownRender MDstr={preview.body} />
+                                                {readSheets(preview.title, preview.body).map((sheet, index) => <section key={index}><h3>{sheetNames[index]}</h3><SheetEditor sheet={sheet} canEdit={false} onChange={() => {}} /></section>)}
                                             </section>
                                         )}
                                     </li>
@@ -147,7 +135,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                     )}
                     {historyError && <p role='alert' className='text-sm text-ui-danger'>{historyError}</p>}
                 </>
-            ) : document.body ? <MarkdownRender MDstr={document.body} /> : null}
+            ) : null}
         </section>
     )
 }

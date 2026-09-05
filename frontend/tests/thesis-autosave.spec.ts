@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test('autosave, idle, WebSocket updates, history restore, closing and draft recovery', async({ browser, baseURL }) => {
     test.skip(process.env.THESIS_TEST_DATABASE !== '1', 'Requires the disposable thesis database and fixture server.')
     test.setTimeout(90000)
-    expect(baseURL).toBe('http://127.0.0.1:3201')
+    expect(['http://127.0.0.1:3201', 'http://127.0.0.1:3205']).toContain(baseURL)
     const owner = await browser.newContext()
     await owner.addCookies([
         { name: 'id', value: 'eirikhanasand', url: baseURL! },
@@ -22,8 +22,12 @@ test('autosave, idle, WebSocket updates, history restore, closing and draft reco
     }
     const page = await owner.newPage()
     const publicPage = await reader.newPage()
-    const current = async() => (await owner.request.get(baseURL + '/api/thesis')).json()
+    const current = async() => {
+        const saved = await (await owner.request.get(baseURL + '/api/thesis')).json()
+        return { ...saved, body: saved.body.split('\n\n<!-- thesis-sheet:')[0] }
+    }
     await page.goto(baseURL + '/content/thesis')
+    await page.getByRole('button', { name: 'Edit markdown', exact: true }).click()
     await publicPage.goto(baseURL + '/thesis')
     const body = page.getByRole('textbox', { name: 'Description Markdown' })
     await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0)
@@ -71,11 +75,13 @@ test('autosave, idle, WebSocket updates, history restore, closing and draft reco
     await page.goto('about:blank')
     await expect.poll(async() => (await current()).body, { timeout: 7000 }).toBe('Written immediately before leaving')
     await page.goto(baseURL + '/content/thesis')
+    await page.getByRole('button', { name: 'Edit markdown', exact: true }).click()
     await expect(body).toHaveValue('Written immediately before leaving')
     // A failed close request must leave a draft that survives reload.
     await page.route('**/api/thesis', route => route.request().method() === 'GET' ? route.continue() : route.abort())
     await body.fill('Recover after interrupted delivery')
     await page.reload()
+    await page.getByRole('button', { name: 'Edit markdown', exact: true }).click()
     await expect(body).toHaveValue('Recover after interrupted delivery')
     await page.unroute('**/api/thesis')
     await expect.poll(async() => (await current()).body, { timeout: 9000 }).toBe('Recover after interrupted delivery')
