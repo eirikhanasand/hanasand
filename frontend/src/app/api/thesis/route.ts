@@ -24,7 +24,7 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'Enter a single-line title (up to 500 characters) and a body up to 1,000,000 characters.' }, { status: 400 })
     }
     try {
-        await writeThesis(document)
+        await writeThesis(document, request.cookies.get('access_token')!.value, request.cookies.get('id')!.value)
         return NextResponse.json({ saved: true })
     } catch {
         return NextResponse.json({ error: 'The thesis could not be saved. Your draft is still in the editor.' }, { status: 500 })

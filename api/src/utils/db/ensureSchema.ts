@@ -1,7 +1,9 @@
 import run from '#db'
+import ensureThesisSchema from './thesisSchema.ts'
 import { reservedUsernames } from '#utils/auth/reservedUsernames.ts'
 
 export default async function ensureSchema() {
+    await ensureThesisSchema()
     const ownerUserIds = (process.env.HANASAND_OWNER_USER_IDS || 'eirikhanasand').split(',').map(id => id.trim().toLowerCase()).filter(Boolean)
     const obsoleteProbeUserNames = [
         'Browser Proof',

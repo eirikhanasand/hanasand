@@ -116,6 +116,7 @@ export default function DashboardSidebar({
         )
 
         adminItems.push(
+            { href: '/dashboard/thesis', label: 'Thesis', icon: <BookOpen className='h-4 w-4' /> },
             { href: '/dashboard/projects', label: 'Projects', icon: <FolderKanban className='h-4 w-4' /> },
             { href: '/dashboard/shares', label: 'Shares', icon: <FileCode2 className='h-4 w-4' /> },
             { href: '/dashboard/logs', label: 'Logs', icon: <FileWarning className='h-4 w-4' /> },

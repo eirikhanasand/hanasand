@@ -748,3 +748,13 @@ VALUES ('users', 'Users', 200, 'Default role for all users. Gives base access to
 -- Maps initial roles for the administrator
 INSERT INTO user_roles (user_id, role_id, assigned_by) 
 VALUES ('administrator', 'administrator', 'administrator');
+
+
+-- Shared site-wide thesis
+CREATE TABLE IF NOT EXISTS thesis (
+    id SMALLINT PRIMARY KEY CHECK (id = 1),
+    title TEXT NOT NULL CHECK (length(btrim(title)) BETWEEN 1 AND 500),
+    content TEXT NOT NULL DEFAULT '' CHECK (length(content) <= 1000000),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+INSERT INTO thesis (id, title, content) VALUES (1, '# Thesis', '') ON CONFLICT (id) DO NOTHING;

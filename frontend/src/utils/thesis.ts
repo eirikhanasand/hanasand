@@ -1,14 +1,12 @@
-import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import path from 'node:path'
+import config from '@/config'
 import tokenIsValid from '@/utils/proxy/tokenIsValid'
 
 export type ThesisDocument = { title: string, body: string }
 
 export async function canEditThesis(token?: string, id?: string) {
-    if (!token || !id) return false
+    if (!token || id !== 'eirikhanasand') return false
     const auth = await tokenIsValid(token, id)
-    return auth.state === 'valid' && auth.name === 'eirikhanasand'
+    return auth.state === 'valid'
 }
 
 export function validThesis(value: unknown): value is ThesisDocument {
@@ -19,27 +17,22 @@ export function validThesis(value: unknown): value is ThesisDocument {
         && typeof document.body === 'string' && document.body.length <= 1_000_000
 }
 
-function thesisPath() {
-    // Reuse the frontend's persistent volume so redeploys preserve the shared document.
-    return path.join(process.env.PROMPT_PORTAL_STATE_DIR || '/var/lib/hanasand-prompt', 'thesis.json')
-}
-
 export async function readThesis(): Promise<ThesisDocument> {
-    try {
-        const document = JSON.parse(await readFile(thesisPath(), 'utf8'))
-        if (!validThesis(document)) throw new Error('Invalid saved thesis')
-        return { title: document.title, body: document.body }
-    } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { title: '# Thesis', body: '' }
-        throw error
-    }
+    const response = await fetch(`${config.url.api}/thesis`, { cache: 'no-store', signal: AbortSignal.timeout(10000) })
+    if (!response.ok) throw new Error('The thesis could not be loaded.')
+    const document = await response.json()
+    if (!validThesis(document)) throw new Error('Invalid saved thesis')
+    return { title: document.title, body: document.body }
 }
 
-export async function writeThesis(document: ThesisDocument) {
+export async function writeThesis(document: ThesisDocument, token: string, id: string) {
     if (!validThesis(document)) throw new Error('Invalid thesis')
-    const destination = thesisPath()
-    await mkdir(path.dirname(destination), { recursive: true })
-    const temporary = `${destination}.${randomUUID()}.tmp`
-    await writeFile(temporary, JSON.stringify({ title: document.title, body: document.body }), { mode: 0o600 })
-    await rename(temporary, destination)
+    const response = await fetch(`${config.url.api}/thesis`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, id },
+        body: JSON.stringify(document),
+        cache: 'no-store',
+        signal: AbortSignal.timeout(10000),
+    })
+    if (!response.ok) throw new Error('The thesis could not be saved.')
 }
