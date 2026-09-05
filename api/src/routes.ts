@@ -132,6 +132,7 @@ import postMailFilter from './handlers/mail/postFilter.ts'
 import deleteMailFilter from './handlers/mail/deleteFilter.ts'
 import getMailBlob from './handlers/mail/getBlob.ts'
 import { deleteNote, getNote, getNotes, postNote, putNote } from './handlers/notes.ts'
+import { getThesis, putThesis } from './handlers/thesis.ts'
 import { downloadAppUpdate, downloadNamedAppUpdate, getAppUpdate, getTauriAppUpdate } from './handlers/app/get.ts'
 import getRateLimitSettingsHandler from './handlers/rateLimit/getSettings.ts'
 import putRateLimitSettingsHandler from './handlers/rateLimit/putSettings.ts'
@@ -368,6 +369,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.delete('/thought/:id', deleteThought)
 
     // Notes
+    fastify.get('/thesis', getThesis)
+    fastify.put('/thesis', { bodyLimit: 4_100_000 }, putThesis)
     fastify.get('/notes', getNotes)
     fastify.get('/notes/:id', getNote)
     fastify.post('/notes', postNote)
