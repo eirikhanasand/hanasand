@@ -16,7 +16,7 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
         const check = (await query('SELECT issue_id FROM agent_automation_runs WHERE id = $1 FOR UPDATE', [runId])).rows[0]
         if (!check) throw new Error('Monitoring run was not found.')
         if (kind !== 'failure') {
-            await query("UPDATE monitoring_issues SET resolved_at = NOW() WHERE automation_id = $1 AND resolved_at IS NULL AND ($2::text IS NULL OR kind = 'failure')", [automation.id, kind])
+            await query('UPDATE monitoring_issues SET resolved_at = NOW() WHERE automation_id = $1 AND resolved_at IS NULL AND ($2::text IS NULL OR kind = \'failure\')', [automation.id, kind])
             if (!kind) return null
         }
         if (check.issue_id) return check.issue_id as string
@@ -65,7 +65,7 @@ export async function loadMonitoringIssues(automationId: string) {
 }
 
 export async function backfillMonitoringIssues() {
-    const automations = await run("SELECT * FROM agent_automations WHERE action_type = 'agent_prompt'")
+    const automations = await run('SELECT * FROM agent_automations WHERE action_type = \'agent_prompt\'')
     for (const automation of automations.rows as AutomationRow[]) {
         await withTransaction(async query => {
             const checks = await query(`SELECT id, status, warning, error, result, started_at FROM agent_automation_runs
