@@ -8,7 +8,12 @@ test('generated website builds a usable desktop and mobile page', async({ page }
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Field & Form')
     await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
     await expect(page.getByRole('form')).toHaveCount(0)
-    await expect(page.getByRole('link', { name: 'Contact', exact: true })).toHaveAttribute('href', 'mailto:owner%40example.com')
+    const contact = page.getByRole('link', { name: 'Contact', exact: true })
+    if (process.env.GENERATED_WEBSITE_CONTACT_EMAIL) {
+        await expect(contact).toHaveAttribute('href', 'mailto:' + encodeURIComponent(process.env.GENERATED_WEBSITE_CONTACT_EMAIL))
+    } else {
+        await expect(contact).toHaveCount(0)
+    }
     await page.keyboard.press('Tab')
     await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused()
     await expect(page.getByRole('link', { name: 'Skip to content' })).toBeInViewport()

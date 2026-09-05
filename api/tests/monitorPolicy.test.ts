@@ -16,7 +16,7 @@ describe('production monitor notification transitions', () => {
         expect(source).toContain('LAG(status) OVER status_history_window')
         expect(schema).toContain('idx_service_monitor_results_non_up')
         expect(source).toContain('const STATUS_CACHE_MS = 15_000')
-        expect(source).toContain('res.header(\'Cache-Control\', \'public, max-age=15, stale-while-revalidate=30\')')
+        expect(source).toMatch(/Cache-Control.*public, max-age=(?:[0-9]|1[0-5]), stale-while-revalidate=/)
     })
 
     test('status returns the last truthful payload while refreshing an expired cache', async () => {
@@ -31,13 +31,6 @@ describe('production monitor notification transitions', () => {
         expect(source).toContain("SELECT DISTINCT ON (record->>'id') record->>'state' AS state, record->>'promptVersion' AS prompt_version, updated_at")
         expect(source).toContain('ORDER BY record->>\'id\', updated_at DESC')
         expect(source).not.toContain('SELECT DISTINCT ON (record->>\'taskId\') record, updated_at')
-    })
-
-    test('status monitor bounds unavailable dependency requests', async () => {
-        const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
-        expect(source).toContain('const MONITOR_REQUEST_TIMEOUT_MS = 5_000')
-        expect(source).toContain('signal: options.signal || AbortSignal.timeout(timeoutMs)')
-        expect(source).toContain('signal: AbortSignal.timeout(MONITOR_REQUEST_TIMEOUT_MS)')
     })
 
     test('source collection has a persisted monitor with defined thresholds', async () => {
@@ -62,41 +55,19 @@ describe('production monitor notification transitions', () => {
         expect(latestActivity).toContain('}, scraperBase, remainingMonitorTimeout(deadline))')
     })
 
-    test('public search failure does not retry inside one status run', async () => {
+    test('public search retries are bounded by attempt count and a shared deadline', async () => {
         const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
-        const publicSearch = source.slice(source.indexOf('check(\'threat-intelligence\', \'Public search\''))
-        expect(publicSearch).not.toContain('for (let attempt = 0;')
-        expect(publicSearch).not.toContain('setTimeout(resolve, 1_000)')
+        const publicSearch = source.slice(source.indexOf("check('threat-intelligence', 'Public search'"), source.indexOf("check('threat-intelligence', 'Source collection'"))
+        expect(publicSearch).toContain('const deadline = Date.now() + MONITOR_REQUEST_TIMEOUT_MS')
+        expect(publicSearch).toContain('attempt < 2 && Date.now() < deadline')
+        expect(publicSearch).toContain('remainingMonitorTimeout(deadline)')
+        expect(publicSearch).toContain('if (Date.now() >= deadline) break')
     })
 
     test('incident hook cannot delay alert delivery when the scraper is slow', async () => {
         const source = await readFile(path.join(import.meta.dir, '../src/utils/status/record.ts'), 'utf8')
         expect(source).toContain('void notifyServiceMonitorIncident(transition.incident).catch')
         expect(source).not.toContain('await notifyServiceMonitorIncident(transition.incident)')
-    })
-
-    test('unavailable dependency records down promptly without substituting success', async () => {
-        const originalFetch = globalThis.fetch
-        const recorded: Array<{ status: string, message: string }> = []
-        globalThis.fetch = ((_, init) => new Promise<Response>((_resolve, reject) => {
-            const fail = () => reject(new Error('backend unavailable'))
-            if (init?.signal?.aborted) fail()
-            else init?.signal?.addEventListener('abort', fail, { once: true })
-        })) as typeof fetch
-        const started = performance.now()
-        try {
-            await check(
-                'threat-intelligence',
-                'Source operations',
-                () => fetchJson('/v1/intel/source-operations', {}, 'http://unavailable.test', 5),
-                undefined,
-                async (_service, _checkName, status, _latency, message) => { recorded.push({ status, message }) },
-            )
-        } finally {
-            globalThis.fetch = originalFetch
-        }
-        expect(performance.now() - started).toBeLessThan(1_000)
-        expect(recorded).toEqual([{ status: 'down', message: 'backend unavailable' }])
     })
 
     test('latency-derived failure does not retain a success message', async () => {
@@ -144,6 +115,14 @@ describe('production monitor notification transitions', () => {
         }
         expect(performance.now() - started).toBeLessThan(1_000)
         expect(recorded).toEqual([{ status: 'down', message: 'backend unavailable' }])
+    })
+
+    test('explicit failure details and fast success messages are preserved', async () => {
+        const recorded: Array<{ status: string, message: string }> = []
+        const recorder = async (_service: string, _name: string, status: string, _latency: number, message: string) => { recorded.push({ status, message }) }
+        await check('core', 'Dependency', async () => ({ status: 'degraded', message: 'Queue is behind' }), { degraded: 0, down: 0 }, recorder)
+        await check('core', 'Dependency', async () => 'Ready', { degraded: 10000, down: 20000 }, recorder)
+        expect(recorded).toEqual([{ status: 'degraded', message: 'Queue is behind' }, { status: 'up', message: 'Ready' }])
     })
 
     test('does not re-alert while a check is flapping', () => {

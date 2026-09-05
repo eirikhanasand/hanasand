@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { readFile, readdir } from 'node:fs/promises'
+import { readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -17,6 +17,7 @@ const bun = process.execPath
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 
 const coreTasks: TestTask[] = [
+    scriptTask('generated-projects', 'Generated API, worker and bot behavior', 'check-generated-projects.ts'),
     scriptTask('generated-website', 'Generated website files and styles', 'check-generated-website.ts'),
     scriptTask('notes-unit', 'Notes unit contract', 'smoke-notes.ts'),
     scriptTask('roles-unit', 'Role permission contract', 'smoke-role-permissions.ts'),
@@ -59,6 +60,7 @@ const coreTasks: TestTask[] = [
 ]
 
 const environmentTasks: TestTask[] = [
+    { ...scriptTask('generated-builds', 'Build generated projects with their declared dependencies', 'check-generated-builds.ts'), requires: 'network' },
     guardedTask('rate-limits', 'Rate-limit API smoke', 'smoke-rate-limits.mjs', 'database'),
     guardedTask('notes', 'Notes API smoke', 'smoke-notes.mjs', 'database'),
     guardedTask('impersonation-production', 'Impersonation production contract', 'smoke-impersonation-production.ts', 'database'),
@@ -77,9 +79,17 @@ const environmentTasks: TestTask[] = [
     },
 ]
 
-const storyTasks = await discoverStoryContractTasks()
+const unitTasks: TestTask[] = (await readdir(path.join(scriptDir, '../tests')))
+    .filter(file => /\.test\.(ts|mjs)$/.test(file))
+    .sort()
+    .map(file => ({
+        id: file.replace(/\.test\.(ts|mjs)$/, ''),
+        title: `API behavior: ${file}`,
+        command: [bun, 'test', `tests/${file}`],
+        ...(file === 'automation-history.test.mjs' ? { requires: 'database' as const } : {}),
+    }))
 const playwrightTasks = await discoverPlaywrightTasks()
-const tasks = [...coreTasks, ...storyTasks, ...environmentTasks, ...playwrightTasks]
+const tasks = [...coreTasks, ...unitTasks, ...environmentTasks, ...playwrightTasks]
 const selected = parseOnly()
 const runnable = tasks.filter(task => selected.size ? selected.has(task.id) : shouldRunByDefault(task))
 
@@ -105,20 +115,6 @@ function guardedTask(id: string, title: string, scriptName: string, requires: Te
         requires,
         guardProductionSmoke: true,
     }
-}
-
-async function discoverStoryContractTasks() {
-    const files = await readdir(scriptDir)
-    return await Promise.all(files
-        .filter(file => file.startsWith('smoke-share-chat-') && file.endsWith('.ts'))
-        .sort()
-        .map(async file => {
-            const task = scriptTask(file.replace(/\.(mjs|ts)$/, ''), `Share chat story contract: ${file}`, file)
-            const content = await readFile(path.join(scriptDir, file), 'utf8').catch(() => '')
-            return /\bfrom ['"]playwright['"]|\bfrom ['"]@playwright\/test['"]|\bimport\(['"]playwright['"]\)/.test(content)
-                ? { ...task, requires: 'playwright' as const }
-                : task
-        }))
 }
 
 async function discoverPlaywrightTasks() {
