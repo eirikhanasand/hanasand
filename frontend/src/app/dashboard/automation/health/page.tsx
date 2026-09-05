@@ -1,5 +1,6 @@
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 import AutomationsClient from '../simplePageClient'
+import { loadAutomations } from '@/utils/automations/server'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -8,7 +9,7 @@ export const metadata: Metadata = {
 }
 
 export default async function Page({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
-    const params = await searchParams
+    const [params, initial] = await Promise.all([searchParams, loadAutomations()])
     const setup = Array.isArray(params?.setup) ? params.setup[0] : params?.setup
-    return <DashboardPage><DashboardHeader eyebrow={null} title='Automation' /><AutomationsClient setup={setup === 'dwm' ? 'dwm' : undefined} /></DashboardPage>
+    return <DashboardPage><DashboardHeader eyebrow={null} title='Automation' /><AutomationsClient initial={initial} setup={setup === 'dwm' ? 'dwm' : undefined} /></DashboardPage>
 }

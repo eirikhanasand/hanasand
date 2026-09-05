@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { canonicalAppPath } from '@/utils/routes/appRoutes'
+import { NAVIGATION_COOKIE, readNavigationPreferences, type NavigationPreferences as Preferences } from '@/utils/layout/navigationPreferences'
+import { getCookie, setCookie } from '@/utils/cookies/cookies'
 import { usePathname } from 'next/navigation'
 import { AlarmClockCheck, ChevronDown, FolderKanban, NotebookText, PanelLeftClose, PanelLeftOpen, Pin, Radar, Search, Server, Settings2, ShieldCheck } from 'lucide-react'
 import { useEffect, useId, useState, useSyncExternalStore } from 'react'
@@ -18,13 +19,12 @@ const sectionIcons: Record<string, typeof ShieldCheck> = {
     Settings: Settings2,
     Pinned: Pin,
 }
-type Preferences = { expanded: Record<string, boolean>, pinned: string[] }
 
-export default function DashboardSidebar(access: NavigationAccess) {
+export default function DashboardSidebar({ initialPreferences = { expanded: {}, pinned: [] }, initialMode = 'normal', ...access }: NavigationAccess & { initialPreferences?: Preferences, initialMode?: 'normal' | 'compact' }) {
     const pathname = usePathname()
     const domId = useId()
     const storageKey = `dashboard-navigation:v1:${access.id}`
-    const [preferences, setPreferences] = useState<Preferences>({ expanded: {}, pinned: [] })
+    const [preferences, setPreferences] = useState<Preferences>(initialPreferences)
     const [query, setQuery] = useState('')
     const mode = useSyncExternalStore(
         (onChange) => {
@@ -32,7 +32,7 @@ export default function DashboardSidebar(access: NavigationAccess) {
             return () => window.removeEventListener('dashboard-view-mode', onChange)
         },
         () => getDashboardViewMode(),
-        () => 'normal',
+        () => initialMode,
     )
     const compact = mode === 'compact'
     const sections = getDashboardNavigation(access)
@@ -43,28 +43,24 @@ export default function DashboardSidebar(access: NavigationAccess) {
     const activePath = active?.ancestors.join('/') ?? (pathname.startsWith('/automation') ? 'Automation' : '')
 
     useEffect(() => {
-        let saved: Preferences = { expanded: {}, pinned: [] }
+        let saved = readNavigationPreferences(getCookie(NAVIGATION_COOKIE) || undefined, access.id)
         try {
-            const parsed = JSON.parse(localStorage.getItem(storageKey) || '{}')
-            saved = {
-                expanded: Object.fromEntries(Object.entries(parsed.expanded || {}).filter(([, value]) => typeof value === 'boolean')) as Record<string, boolean>,
-                pinned: Array.isArray(parsed.pinned) ? parsed.pinned.filter((href: unknown) => typeof href === 'string').map(canonicalAppPath) : [],
+            if (!getCookie(NAVIGATION_COOKIE)) {
+                const legacy = JSON.parse(localStorage.getItem(storageKey) || '{}')
+                saved = readNavigationPreferences(JSON.stringify({ ...legacy, id: access.id }), access.id)
             }
-        } catch { /* Navigation still works when browser storage is unavailable. */ }
-        const path = activePath.split('/').filter(Boolean)
-        path.forEach((_, index) => { saved.expanded[path.slice(0, index + 1).join('/')] = true })
-        try { localStorage.setItem(storageKey, JSON.stringify(saved)) } catch { /* Preferences are optional. */ }
-        setPreferences(saved)
+        } catch { /* Preferences are optional. */ }
+        save(saved)
         setQuery('')
     }, [storageKey, pathname, activePath])
 
     function save(next: Preferences) {
         setPreferences(next)
-        try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* Keep this session usable without storage. */ }
+        try { setCookie(NAVIGATION_COOKIE, JSON.stringify({ ...next, id: access.id }), 365); localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* Keep this session usable without storage. */ }
     }
 
     function toggle(key: string) {
-        save({ ...preferences, expanded: { ...preferences.expanded, [key]: !preferences.expanded[key] } })
+        save({ ...preferences, expanded: { ...preferences.expanded, [key]: !(preferences.expanded[key] ?? (activePath === key || activePath.startsWith(`${key}/`))) } })
     }
 
     function pin(href: string) {
@@ -90,8 +86,8 @@ export default function DashboardSidebar(access: NavigationAccess) {
     function renderGroup(item: NavigationItem, ancestors: string[] = []) {
         const path = [...ancestors, item.label]
         const key = path.join('/')
-        const expanded = Boolean(preferences.expanded[key])
         const containsActive = activePath === key || activePath.startsWith(`${key}/`)
+        const expanded = preferences.expanded[key] ?? containsActive
         const Icon = sectionIcons[item.label] || FolderKanban
         const controls = `${domId}-${encodeURIComponent(key)}`
         return (

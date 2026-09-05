@@ -1,3 +1,4 @@
+import { NAVIGATION_COOKIE, readNavigationPreferences } from '@/utils/layout/navigationPreferences'
 import parseCookie from '@/utils/cookies/parseCookie'
 import DashboardSidebar from '@/components/dashboard/dashboardSidebar'
 import ImpersonationBanner from '@/components/impersonation/impersonationBanner'
@@ -28,6 +29,8 @@ export default async function layout({ children }: { children: ReactNode }) {
     const canManageSystem = isAdmin || roleIds.includes('system_admin')
     const canManageContent = isAdmin || roleIds.includes('content_admin')
     const canReviewIntel = canManageSystem || roleIds.includes('analyst') || roleIds.includes('owner')
+    const initialMode = Cookies.get('dashboard_view_mode')?.value === 'compact' ? 'compact' : 'normal'
+    const initialPreferences = readNavigationPreferences(Cookies.get(NAVIGATION_COOKIE)?.value, id)
     const impersonatingId = Cookies.get('impersonating_id')?.value || Headers.get('x-impersonating-id') || ''
     const impersonatingName = Cookies.get('impersonating_name')?.value || Headers.get('x-impersonating-name') || ''
 
@@ -35,10 +38,10 @@ export default async function layout({ children }: { children: ReactNode }) {
         <html lang='en' className={theme}>
             <body className='h-full w-full max-h-screen max-w-screen overflow-hidden'>
                 <div className='site-atmosphere' />
-                <Header token={token} path={path} />
+                <Header token={token} path={path} initialMode={initialMode} />
                 <DetachedBoxHost />
                 <RouteFrame serverPath={path} token={token}
-                    sidebar={id && token ? <DashboardSidebar id={id} isAdmin={isAdmin} canManageSystem={canManageSystem} canManageContent={canManageContent} canReviewIntel={canReviewIntel} /> : null}
+                    sidebar={id && token ? <DashboardSidebar initialPreferences={initialPreferences} initialMode={initialMode} id={id} isAdmin={isAdmin} canManageSystem={canManageSystem} canManageContent={canManageContent} canReviewIntel={canReviewIntel} /> : null}
                     banner={impersonatingId ? <ImpersonationBanner id={impersonatingId} name={impersonatingName} /> : null}>
                     {children}
                 </RouteFrame>

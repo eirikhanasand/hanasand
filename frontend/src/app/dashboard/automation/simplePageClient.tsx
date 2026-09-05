@@ -13,6 +13,7 @@ import {
     type AgentAutomationRun,
     type AutomationPayload,
 } from '@/utils/automations/client'
+import type { InitialAutomationData } from '@/utils/automations/server'
 import useAutomationHistory from './useAutomationHistory'
 import ErrorNotice from '@/components/error/errorNotice'
 
@@ -40,22 +41,24 @@ const defaultDraft = (): AutomationPayload => ({
     notifyWarnings: false,
 })
 
-export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
-    const [automations, setAutomations] = useState<AgentAutomation[]>([])
-    const [selected, setSelected] = useState<AgentAutomation | null>(null)
-    const [draft, setDraft] = useState<AutomationPayload>(defaultDraft)
+export default function AutomationsClient({ setup, initial }: { setup?: 'dwm', initial: InitialAutomationData }) {
+    const [automations, setAutomations] = useState<AgentAutomation[]>(initial.automations)
+    const [selected, setSelected] = useState<AgentAutomation | null>(setup ? null : initial.detail?.automation || initial.automations[0] || null)
+    const [draft, setDraft] = useState<AutomationPayload>(() => selected ? toDraft(selected) : { ...defaultDraft(), timezone: 'UTC' })
     const [historyFrom, setHistoryFrom] = useState('')
     const [historyTo, setHistoryTo] = useState('')
-    const history = useAutomationHistory(selected?.id, historyFrom, historyTo)
+    const history = useAutomationHistory(selected?.id, historyFrom, historyTo, initial.detail, initial.error)
     const [showHistoryFilters, setShowHistoryFilters] = useState(false)
     const [editing, setEditing] = useState(Boolean(setup))
     const [busy, setBusy] = useState('')
-    const [message, setMessage] = useState('')
+    const [message, setMessage] = useState(initial.error || '')
+    const [loadError, setLoadError] = useState(initial.error || '')
 
     async function load(selectedId = selected?.id) {
         setBusy('load')
         try {
             const result = await fetchAutomations()
+            setLoadError('')
             setAutomations(result.automations || [])
             const next = (result.automations || []).find(item => item.id === selectedId) || (result.automations || [])[0] || null
             if (next) await select(next, false)
@@ -63,21 +66,19 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                 setSelected(null)
             }
         } catch (error) {
-            setMessage(error instanceof Error ? error.message : 'Unable to load automations.')
+            setLoadError(error instanceof Error ? error.message : 'Unable to load automations.')
         } finally {
             setBusy('')
         }
     }
 
-    useEffect(() => { void load() }, [])
-
     useEffect(() => {
-        if (!selected || editing) return
+        if (editing) return
         const refresh = window.setInterval(() => {
             void fetchAutomations().then(result => {
                 setAutomations(result.automations)
-                const fresh = result.automations.find(item => item.id === selected.id)
-                if (fresh) setSelected(fresh)
+                const fresh = result.automations.find(item => item.id === selected?.id) || result.automations[0] || null
+                setSelected(fresh)
             }).catch(() => undefined)
         }, 15_000)
         return () => window.clearInterval(refresh)
@@ -153,6 +154,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
         }
     }
 
+    if (!automations.length && loadError) return <ErrorNotice message={loadError} actionLabel={busy ? 'Retrying…' : 'Try again'} onAction={() => void load()} />
     if (!automations.length && !editing) return <WelcomeState onCreate={beginCreate} />
 
     return (
@@ -284,7 +286,7 @@ function AutomationDetails({ automation, runs, history, historyFrom, historyTo, 
     }, [history.hasMore, history.loading, history.error, history.loadMore])
     return <div className='grid gap-4'><div className='flex flex-wrap items-start justify-between gap-3'><div><p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Automation</p><h2 className='mt-1 text-xl font-semibold text-ui-text'>{automation.name}</h2><p className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${failed ? 'bg-ui-danger/10 text-ui-danger' : warning ? 'bg-ui-warning/10 text-ui-warning' : automation.status === 'active' ? 'bg-ui-success/10 text-ui-success' : 'bg-ui-raised text-ui-muted'}`}>{state}</p></div><div className='flex gap-2'><button type='button' onClick={onRun} disabled={busy === 'run' || missingUrl} className='inline-flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:opacity-50' title={missingUrl ? 'Add a URL before checking' : undefined}><Play className='h-4 w-4' />Check now</button><button type='button' onClick={onEdit} className='h-9 rounded-lg border border-ui-border px-3 text-sm font-semibold text-ui-text'>Edit</button></div></div>
         <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 text-sm'><div className='flex items-center justify-between gap-3'><p className='leading-6 text-ui-text'>{automation.prompt}</p>{automation.certificateStatus === 'valid' ? <span className='inline-flex items-center gap-1 rounded-full bg-ui-success/10 px-2 py-1 text-xs font-semibold text-ui-success'><ShieldCheck className='h-4 w-4' />Valid certificate</span> : null}</div><div className='grid gap-3 border-t border-ui-border pt-3 text-xs text-ui-muted sm:grid-cols-2'>{automation.actionType === 'agent_prompt' ? <span className={`break-all ${missingUrl ? 'font-semibold text-ui-danger' : ''}`}>{missingUrl ? 'Missing URL' : `${automation.monitoringType.toUpperCase()}: ${automation.targetUrl}`}</span> : null}<span>{formatInterval(automation.intervalMinutes)}</span><span>{automation.actionType === 'agent_prompt' ? `Timeout: ${automation.timeoutSeconds || 1}s · ${automation.retryCount || 0} retries` : ''}</span>{automation.certificateStatus === 'not_applicable' || automation.monitoringType === 'tcp' || automation.monitoringType === 'ssh' ? null : <span>{automation.certificateSubject ? `Certificate: ${automation.certificateSubject}${automation.certificateIssuer ? ` · ${automation.certificateIssuer}` : ''}` : 'Certificate: Pending'}</span>}<span>{automation.certificateExpiresAt ? `Expires ${formatDate(automation.certificateExpiresAt)}` : ''}</span><span>{automation.modelName || 'No notification destination'}{!automation.modelName && automation.notifyOn !== 'never' ? <span className='ml-1 inline-flex align-text-bottom text-ui-warning' title='No delivery destination configured' aria-label='No delivery destination configured'><AlertTriangle className='h-4 w-4' /></span> : null}</span></div></div>
-        <div><div className='mb-2 flex flex-wrap items-center justify-between gap-2'><h3 className='text-sm font-semibold text-ui-text'>Recent checks <span className='font-normal text-ui-muted'>({visibleRuns.length}/{history.total})</span></h3><div className='flex items-center gap-2'><button type='button' onClick={() => onShowHistoryFiltersChange(!showHistoryFilters)} className={`rounded-md p-1.5 ${showHistoryFilters || historyFrom || historyTo ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted hover:text-ui-text'}`} aria-label='Filter checks by time' aria-pressed={showHistoryFilters} title='Filter checks by time'><Filter className='h-4 w-4' /></button><button type='button' onClick={onRefresh} className='text-ui-muted hover:text-ui-text' aria-label='Refresh checks' title='Refresh checks'><RefreshCw className='h-4 w-4' /></button></div></div>{showHistoryFilters ? <div className='mb-2 grid gap-2 sm:grid-cols-2'><label className='grid gap-1 text-xs text-ui-muted'><span>From</span><input type='datetime-local' value={historyFrom} onChange={event => onHistoryFromChange(event.target.value)} className={inputClass} /></label><label className='grid gap-1 text-xs text-ui-muted'><span>To</span><input type='datetime-local' value={historyTo} onChange={event => onHistoryToChange(event.target.value)} className={inputClass} /></label></div> : null}<div className='grid max-h-[32rem] gap-2 overflow-y-auto pr-1'>{visibleRuns.map(run => <div key={run.id} className='rounded-lg border border-ui-border bg-ui-raised p-3'><div className='flex justify-between gap-2 text-xs text-ui-muted'><span>{formatDate(run.startedAt)}</span><span className={run.status === 'failed' ? 'font-semibold text-ui-danger' : run.warning ? 'font-semibold text-ui-warning' : 'font-semibold text-ui-success'}>{run.warning ? 'warning' : run.status}</span></div>{run.status === 'failed' ? <ErrorNotice compact className='mt-2' message={run.error || 'Check failed.'} /> : <p className='mt-2 whitespace-pre-wrap text-sm leading-6 text-ui-muted'>{run.result || 'Check completed.'}</p>}</div>)}{!visibleRuns.length ? <p className='rounded-lg border border-dashed border-ui-border p-4 text-sm text-ui-muted'>{runs.length ? 'No checks match this time range.' : 'No checks yet. Run it now or wait for the next check.'}</p> : null}<div ref={bottom} aria-live='polite'>{history.loading ? 'Loading checks…' : history.error ? <button type='button' onClick={history.loadMore}>Retry: {history.error}</button> : history.hasMore ? <button type='button' onClick={history.loadMore}>Load more checks</button> : null}</div></div></div>
+        <div><div className='mb-2 flex flex-wrap items-center justify-between gap-2'><h3 className='text-sm font-semibold text-ui-text'>Recent checks <span className='font-normal text-ui-muted'>({visibleRuns.length}/{history.total})</span></h3><div className='flex items-center gap-2'><button type='button' onClick={() => onShowHistoryFiltersChange(!showHistoryFilters)} className={`rounded-md p-1.5 ${showHistoryFilters || historyFrom || historyTo ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted hover:text-ui-text'}`} aria-label='Filter checks by time' aria-pressed={showHistoryFilters} title='Filter checks by time'><Filter className='h-4 w-4' /></button><button type='button' onClick={onRefresh} className='text-ui-muted hover:text-ui-text' aria-label='Refresh checks' title='Refresh checks'><RefreshCw className='h-4 w-4' /></button></div></div>{showHistoryFilters ? <div className='mb-2 grid gap-2 sm:grid-cols-2'><label className='grid gap-1 text-xs text-ui-muted'><span>From</span><input type='datetime-local' value={historyFrom} onChange={event => onHistoryFromChange(event.target.value)} className={inputClass} /></label><label className='grid gap-1 text-xs text-ui-muted'><span>To</span><input type='datetime-local' value={historyTo} onChange={event => onHistoryToChange(event.target.value)} className={inputClass} /></label></div> : null}<div className='grid max-h-[32rem] gap-2 overflow-y-auto pr-1'>{visibleRuns.map(run => <div key={run.id} className='rounded-lg border border-ui-border bg-ui-raised p-3'><div className='flex justify-between gap-2 text-xs text-ui-muted'><span>{formatDate(run.startedAt)}</span><span className={run.status === 'failed' ? 'font-semibold text-ui-danger' : run.warning ? 'font-semibold text-ui-warning' : 'font-semibold text-ui-success'}>{run.warning ? 'warning' : run.status}</span></div>{run.status === 'failed' ? <ErrorNotice compact className='mt-2' message={run.error || 'Check failed.'} /> : <p className='mt-2 whitespace-pre-wrap text-sm leading-6 text-ui-muted'>{run.result || 'Check completed.'}</p>}</div>)}{!visibleRuns.length ? <p className='rounded-lg border border-dashed border-ui-border p-4 text-sm text-ui-muted'>{history.loading ? 'Loading checks…' : history.error ? 'Checks are unavailable.' : runs.length ? 'No checks match this time range.' : 'No checks yet. Run it now or wait for the next check.'}</p> : null}<div ref={bottom} aria-live='polite'>{history.loading ? 'Loading checks…' : history.error ? <button type='button' onClick={history.loadMore}>Retry: {history.error}</button> : history.hasMore ? <button type='button' onClick={history.loadMore}>Load more checks</button> : null}</div></div></div>
         <div className='flex items-center justify-between border-t border-ui-border pt-3'><span className='text-sm text-ui-muted'>{message}</span><button type='button' onClick={onDelete} disabled={busy === 'delete'} className='inline-flex items-center gap-2 text-sm font-semibold text-ui-danger hover:underline'><Trash2 className='h-4 w-4' />Delete</button></div>
     </div>
 }
@@ -332,7 +334,7 @@ function labelForType(type: AgentAutomation['actionType']) {
 
 function formatDate(value?: string | null) {
     if (!value) return 'Not yet'
-    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+    return new Date(value).toISOString().slice(0, 16).replace('T', ' ') + ' UTC'
 }
 
 function formatInterval(value?: number | null) {

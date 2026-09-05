@@ -125,7 +125,7 @@ function PublicMobileMenu({ token }: { token: boolean }) {
     )
 }
 
-export default function Header({ token, path: serverPath }: { token: boolean, path: string }) {
+export default function Header({ token, path: serverPath, initialMode = 'normal' }: { token: boolean, path: string, initialMode?: 'normal' | 'compact' }) {
     const baseStyles = 'group grid h-10 w-10 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'
     const pathname = usePathname() || serverPath
     const isStatus = pathname.includes('/status')
@@ -194,7 +194,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                     )}
                 </div>
                 <div className='flex items-center justify-end gap-2'>
-                    {token && isDashboard && <ViewModeToggle />}
+                    {token && isDashboard && <ViewModeToggle initialMode={initialMode} />}
                     {isShare ? <ShareIcon baseStyles={baseStyles} isShare={isShare} href='/s' /> : null}
                     <SiteSearch token={token} />
                     <Link href='/status' aria-label='Status' title='Status' className={`${baseStyles} hidden sm:grid`}>

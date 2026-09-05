@@ -4,7 +4,7 @@ import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useSyncExternalStore } from 'react'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 
-export default function ViewModeToggle() {
+export default function ViewModeToggle({ initialMode = 'normal' }: { initialMode?: 'normal' | 'compact' }) {
     const mode = useSyncExternalStore(
         (onStoreChange) => {
             function handleModeChange() {
@@ -15,7 +15,7 @@ export default function ViewModeToggle() {
             return () => window.removeEventListener('dashboard-view-mode', handleModeChange)
         },
         () => getDashboardViewMode(),
-        () => 'normal'
+        () => initialMode
     )
 
     function toggleMode() {

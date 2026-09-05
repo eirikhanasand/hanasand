@@ -1,25 +1,27 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { InitialAutomationData } from '@/utils/automations/server'
 import { fetchAutomation, type AgentAutomationRun } from '@/utils/automations/client'
 
-export default function useAutomationHistory(id: string | undefined, from: string, to: string) {
-    const [runs, setRuns] = useState<AgentAutomationRun[]>([])
-    const [total, setTotal] = useState(0)
-    const [hasMore, setHasMore] = useState(false)
+export default function useAutomationHistory(id: string | undefined, from: string, to: string, initial?: InitialAutomationData['detail'], initialError = '') {
+    const seeded = initial?.automation.id === id && !from && !to ? initial : undefined
+    const [runs, setRuns] = useState<AgentAutomationRun[]>(seeded?.runs || [])
+    const [total, setTotal] = useState(seeded?.total || 0)
+    const [hasMore, setHasMore] = useState(Boolean(seeded?.nextCursor))
     const [loading, setLoading] = useState(false)
-    const [error, setError] = useState('')
+    const [error, setError] = useState(initialError)
     const refresh = useRef<() => void>(() => {})
     const action = useRef<() => void>(() => {})
 
     useEffect(() => {
         let stopped = false
         let busy = false
-        let cursor: string | null = null
-        let rows: AgentAutomationRun[] = []
-        setRuns([])
-        setTotal(0)
-        setHasMore(false)
+        let cursor: string | null = seeded?.nextCursor || null
+        let rows: AgentAutomationRun[] = seeded?.runs || []
+        setRuns(rows)
+        setTotal(seeded?.total || 0)
+        setHasMore(Boolean(cursor))
         setError('')
         async function load(older = false) {
             if (!id || busy || older && !cursor) return

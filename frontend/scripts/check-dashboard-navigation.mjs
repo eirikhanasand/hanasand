@@ -9,7 +9,7 @@ assert.equal(all.length, new Set(all.map(item => item.href)).size)
 const memberAccess = { ...access, isAdmin: false, canManageSystem: false, canManageContent: false }
 assert.deepEqual(getDashboardNavigation(memberAccess).map(item => item.label), ['Security operations', 'Automation', 'Settings'])
 const reviewer = navigationLinks(getDashboardNavigation({ ...memberAccess, canReviewIntel: true }))
-assert.deepEqual(reviewer.filter(item => item.href.startsWith('/ti/admin/')).map(item => item.label), ['Evaluation', 'Timeliness'])
+assert.deepEqual(reviewer.filter(item => ['/ti/evaluation', '/ti/timeliness'].includes(item.href)).map(item => item.label), ['Evaluation', 'Timeliness'])
 const operator = navigationLinks(getDashboardNavigation({ ...memberAccess, canManageSystem: true }))
 assert(operator.some(item => item.href === '/system'))
 assert(!operator.some(item => ['/db', '/logs', '/system/updates'].includes(item.href)))
@@ -41,7 +41,7 @@ try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
-    await page.goto(`${server.url}dashboard/dwm/actors`)
+    await page.goto(`${server.url}dwm/actors`)
     const nav = page.getByRole('navigation', { name: 'Main navigation' })
     const button = (name) => nav.getByRole('button', { name, exact: true })
     const link = (name) => nav.getByRole('link', { name, exact: true })

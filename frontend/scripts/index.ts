@@ -12,6 +12,12 @@ const bun = process.execPath
 
 const tasks: TestTask[] = [
     {
+        id: 'automation-ssr',
+        title: 'Automation server rendering and hydration',
+        command: [bun, 'scripts/check-automation-ssr.mjs'],
+        requires: 'playwright',
+    },
+    {
         id: 'auth-validation-resilience',
         title: 'Authentication failure and recovery',
         command: [bun, 'tests/auth-validation-resilience.test.ts'],
