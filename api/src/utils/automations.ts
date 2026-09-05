@@ -198,7 +198,6 @@ export function toAutomationRun(row: AutomationRunRow) {
         automationId: row.automation_id,
         caseNumber: row.issue_id ? `MON-${row.issue_id}` : null,
         ownerId: row.owner_id,
-        caseNumbers: row.case_numbers || [],
         status: row.status,
         warning: row.warning,
         result: row.result,
