@@ -427,6 +427,8 @@ function feedProof(body: string, feedUrl: string, mediaType: string | null, gene
 }
 
 async function admitFeed(store: DiscoveryStore, reference: PublisherReference, proof: FeedProof, generatedAt: string): Promise<Admission> {
+  const sourceType = proof.sourceType ?? "rss";
+  const family = proof.family ?? "clear_web";
   const verification = {
     outcome: "content_parsed",
     verifiedAt: generatedAt,
