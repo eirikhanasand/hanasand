@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Copy, Minus, Plus } from 'lucide-react'
 import SheetEditor from './sheetEditor'
 import { identifiedSheets, writeSheets, sheetChanges } from './workspace'
 import type { ThesisDocument } from '@/utils/thesis'
@@ -25,20 +26,49 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
         setValidationError('')
         thesis.update('body', body)
     }
-    function addSheet() {
-        const name = window.prompt('Sheet name', 'New sheet')?.trim()
-        if (!name) return
-        if (name.length > 100) { setValidationError('Use a sheet name of 100 characters or fewer.'); return }
-        const body = writeSheets([...sheets, { id: crypto.randomUUID(), name, title: `# ${name}`, body: '' }])
-        if (body.length > 1_000_000) { setValidationError('The workspace is full.'); return }
-        thesis.update('body', body)
-        setActive(sheets.length)
-        setValidationError('')
+    const [sheetDialog, setSheetDialog] = useState<{ kind: 'add' } | { kind: 'delete', id: string, name: string } | null>(null)
+    const [sheetName, setSheetName] = useState('')
+    const [dialogError, setDialogError] = useState('')
+    const [copyMessage, setCopyMessage] = useState('')
+    const dialogRef = useRef<HTMLDialogElement>(null)
+    const triggerRef = useRef<HTMLButtonElement | null>(null)
+    useEffect(() => {
+        if (sheetDialog) dialogRef.current?.showModal()
+        else if (triggerRef.current) {
+            const target = triggerRef.current.isConnected ? triggerRef.current : window.document.querySelector<HTMLButtonElement>('.thesis-tabs [aria-selected=true]')
+            target?.focus()
+        }
+    }, [sheetDialog])
+    function closeSheetDialog() {
+        dialogRef.current?.close()
+        setSheetDialog(null)
     }
-    function removeSheet() {
-        if (sheets.length === 1 || !window.confirm(`Remove “${sheets[active].name}” and its content? Earlier saved versions remain in shared History.`)) return
-        thesis.update('body', writeSheets(sheets.filter((_, index) => index !== active)))
-        setActive(Math.max(0, active - 1))
+    function openSheetDialog(dialog: NonNullable<typeof sheetDialog>, trigger: HTMLButtonElement) {
+        triggerRef.current = trigger
+        setSheetName('')
+        setDialogError('')
+        setCopyMessage('')
+        setSheetDialog(dialog)
+    }
+    const deleteTarget = sheetDialog?.kind === 'delete' ? sheets.find(sheet => sheet.id === sheetDialog.id && sheet.name === sheetDialog.name) : undefined
+    function submitSheetDialog(event: React.FormEvent) {
+        event.preventDefault()
+        if (!canEdit || !sheetDialog) return
+        if (sheetDialog.kind === 'add') {
+            const name = sheetName.trim()
+            if (!name || name.length > 100) { setDialogError('Enter a sheet name of 1–100 characters.'); return }
+            const body = writeSheets([...sheets, { id: crypto.randomUUID(), name, title: `# ${name}`, body: '' }])
+            if (body.length > 1_000_000) { setDialogError('The workspace is full.'); return }
+            thesis.update('body', body)
+            setActive(sheets.length)
+        } else {
+            if (!deleteTarget || sheets.length === 1 || sheetName !== deleteTarget.name) return
+            const index = sheets.findIndex(sheet => sheet.id === deleteTarget.id)
+            thesis.update('body', writeSheets(sheets.filter(sheet => sheet.id !== deleteTarget.id)))
+            setActive(Math.max(0, index - 1))
+        }
+        setValidationError('')
+        closeSheetDialog()
     }
     const [history, setHistory] = useState<HistoryItem[] | null>(null)
     const [preview, setPreview] = useState<ThesisDocument | null>(null)
@@ -94,7 +124,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
         <section className='mx-auto grid w-full max-w-6xl gap-6 px-4 pt-12 pb-32 text-ui-text md:px-8 md:pt-16' aria-label='Thesis document'
             onMouseDownCapture={event => {
                 // Keep the active line stable until a document control has received its click. Keyboard focus still behaves normally.
-                if ((event.target as HTMLElement).closest('button, [role=button]')) event.preventDefault()
+                if (!(event.target as HTMLElement).closest('dialog') && (event.target as HTMLElement).closest('button, [role=button]')) event.preventDefault()
             }}>
             <div role='tabpanel' id={`sheet-${active}`} aria-labelledby={`tab-${active}`}>
                 <SheetEditor key={sheets[active].id} sheet={sheets[active]} canEdit={canEdit && ready} onChange={updateSheet}
@@ -105,17 +135,39 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
             {validationError && <p role='alert' className='text-sm text-ui-danger'>{validationError}</p>}
             <nav className='thesis-tabs' aria-label='Sheet navigation'>
                 <div role='tablist' aria-label='Thesis sheets' className='flex'>
-                    {sheets.map(({ id, name }, index) => <button key={id} id={`tab-${index}`} role='tab' disabled={!ready} aria-selected={active === index} aria-controls={`sheet-${index}`} tabIndex={active === index ? 0 : -1}
+                    {sheets.map(({ id, name }, index) => <div key={id} role='presentation' className='thesis-tab' data-active={active === index}><button id={`tab-${index}`} role='tab' disabled={!ready} aria-selected={active === index} aria-controls={`sheet-${index}`} tabIndex={active === index ? 0 : -1}
                         onClick={() => setActive(index)} onKeyDown={event => {
                             const target = event.key === 'ArrowRight' ? (index + 1) % sheets.length : event.key === 'ArrowLeft' ? (index + sheets.length - 1) % sheets.length : event.key === 'Home' ? 0 : event.key === 'End' ? sheets.length - 1 : -1
                             if (target >= 0) { event.preventDefault(); setActive(target); window.document.getElementById(`tab-${target}`)?.focus() }
-                        }}>{name}</button>)}
+                        }}>{name}</button>
+                    {canEdit && active === index && <button className='thesis-tab-remove' disabled={!ready || sheets.length === 1} aria-label={`Remove ${name} sheet`} title={sheets.length === 1 ? 'Keep at least one sheet' : `Remove ${name}`} onClick={event => openSheetDialog({ kind: 'delete', id, name }, event.currentTarget)}><Minus size={16} aria-hidden='true' /></button>}
+                    </div>)}
                 </div>
-                {canEdit && <>
-                    <button disabled={!ready} onClick={addSheet} aria-label='Add sheet'>+</button>
-                    <button disabled={!ready || sheets.length === 1} onClick={removeSheet} aria-label={`Remove ${sheets[active].name} sheet`}>Remove sheet</button>
-                </>}
+                {canEdit && <button disabled={!ready} onClick={event => openSheetDialog({ kind: 'add' }, event.currentTarget)} aria-label='Add sheet'><Plus size={18} aria-hidden='true' /></button>}
             </nav>
+            {canEdit && sheetDialog && <dialog ref={dialogRef} className='thesis-sheet-dialog' aria-labelledby='sheet-dialog-title' onCancel={event => { event.preventDefault(); closeSheetDialog() }}>
+                <form onSubmit={submitSheetDialog} className='grid gap-5'>
+                    <h2 id='sheet-dialog-title' className='text-lg font-semibold'>{sheetDialog.kind === 'add' ? 'Create a new sheet' : 'Are you sure you want to delete?'}</h2>
+                    {sheetDialog.kind === 'delete' && <div className='text-sm leading-6 text-ui-muted'>
+                        <p>This deletes the sheet and its content. Earlier saved versions remain in shared History.</p>
+                        <div id='sheet-name-instruction' className='mt-3'>Enter “<span className='font-semibold text-ui-text'>{sheetDialog.name}</span>” <button type='button' className='inline-flex rounded-md p-2 align-middle text-ui-text hover:bg-ui-raised' aria-label='Copy sheet name' onClick={async() => {
+                            try { await navigator.clipboard.writeText(sheetDialog.name); setCopyMessage('Sheet name copied.') }
+                            catch { setCopyMessage('Could not copy. Select the sheet name above and copy it manually.') }
+                        }}><Copy size={16} aria-hidden='true' /></button> below to confirm.</div>
+                        <p role='status'>{copyMessage}</p>
+                    </div>}
+                    <label className='grid gap-2 text-sm font-medium'>
+                        {sheetDialog.kind === 'add' ? 'Sheet name' : 'Confirm sheet name'}
+                        <input autoFocus value={sheetName} onChange={event => setSheetName(event.target.value)} maxLength={sheetDialog.kind === 'add' ? 100 : undefined} autoComplete='off' aria-describedby={sheetDialog.kind === 'delete' ? 'sheet-name-instruction' : undefined} className='w-full rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-ui-text outline-none focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/15' />
+                    </label>
+                    {sheetDialog.kind === 'delete' && (!deleteTarget || sheets.length === 1) && <p role='alert' className='text-sm text-ui-danger'>This sheet can no longer be deleted. Close this dialog and check the current sheets.</p>}
+                    {dialogError && <p role='alert' className='text-sm text-ui-danger'>{dialogError}</p>}
+                    <div className='flex justify-between gap-3 pt-2'>
+                        <button type='button' onClick={closeSheetDialog} className='rounded-md border border-ui-border bg-ui-raised px-4 py-2 text-sm font-semibold text-ui-muted hover:text-ui-text'>Cancel</button>
+                        <button type='submit' disabled={sheetDialog.kind === 'add' ? !sheetName.trim() : !deleteTarget || sheets.length === 1 || sheetName !== sheetDialog.name} className={`rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${sheetDialog.kind === 'delete' ? 'bg-ui-danger text-white' : 'bg-ui-primary text-ui-canvas'}`}>{sheetDialog.kind === 'add' ? 'Create sheet' : 'Delete'}</button>
+                    </div>
+                </form>
+            </dialog>}
             {canEdit ? (
                 <>
                     {thesis.error && <p role='alert' className='text-sm text-ui-danger'>{thesis.error}</p>}
