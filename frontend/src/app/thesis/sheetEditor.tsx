@@ -70,6 +70,11 @@ function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { 
                                 if (event.nativeEvent.isComposing || event.metaKey || event.ctrlKey || event.altKey) return
                                 const input = event.currentTarget
                                 if (event.key === 'Escape') { input.blur(); return }
+                                if (event.key === 'Enter' && event.shiftKey) {
+                                    event.preventDefault()
+                                    onNavigate({ table: index, row: r + 1, col: c }, true)
+                                    return
+                                }
                                 if (input.selectionStart !== input.selectionEnd || (event.shiftKey && event.key !== 'Tab')) return
                                 const cursor = input.selectionStart
                                 let row = r, col = c
@@ -208,7 +213,7 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
             <h2 className='font-semibold'>Working with tables</h2>
             <ul className='mt-2 list-disc space-y-1 pl-5'>
                 <li>Select a cell to edit it. The toolbar shows the selected cell and its row and column.</li>
-                <li>Use arrow keys to move between cells at the edge of the text, or Tab to move to the next cell. Enter adds a new line.</li>
+                <li>Use arrow keys to move between cells at the edge of the text, or Tab to move to the next cell. Shift+Enter moves down one row. Enter adds a new line.</li>
                 <li>Drag a column’s right edge or a row’s bottom edge to resize it. The first row contains column headings.</li>
                 <li>For totals, enter <code>=SUMMARIZE(B2:B5)</code> for a column or <code>=SUMMARIZE(B2:G2)</code> for a row. Text and empty cells are skipped.</li>
             </ul>

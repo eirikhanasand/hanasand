@@ -204,3 +204,21 @@ test('arrows create temporary edges, clean up empty cells, and save entered text
     await page.reload()
     await expect(cell('B4')).toHaveValue('New text')
 })
+
+
+test('Shift+Enter moves down and creates the same temporary edge as arrow navigation', async({ page }) => {
+    const cell = (name: string) => page.getByRole('textbox', { name: `Cell ${name}`, exact: true })
+    await cell('B2').fill('First line\nSecond line')
+    await cell('B2').press('ControlOrMeta+a')
+    await page.keyboard.press('Shift+Enter')
+    await expect(cell('B3')).toBeFocused()
+    await expect(cell('B2')).toHaveValue('First line\nSecond line')
+    await page.keyboard.press('Shift+Enter')
+    await expect(cell('B4')).toBeFocused()
+    await page.keyboard.press('ArrowUp')
+    await expect(cell('B3')).toBeFocused()
+    await expect(cell('B4')).toHaveCount(0)
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await expect(cell('B3')).toHaveValue('2\n')
+})
