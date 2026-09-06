@@ -187,7 +187,7 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
     return <div ref={root} className='grid min-w-0 gap-5' onBlurCapture={event => {
         if (!(event.relatedTarget as HTMLElement | null)?.closest('[data-table-cell], [data-table-tools]')) setActive(null)
     }}>
-        <div className='flex min-w-0 flex-col gap-4'>
+        <div className='flex min-w-0 items-start gap-4'>
             <div className='min-w-0 flex-1'>
                 {canEdit ? <InlineMarkdown text={sheet.title || '# Untitled'} label='Title Markdown' singleLine onChange={value => onChange('title', value, 'title')} /> : <RenderMarkdown text={sheet.title || '# Untitled'} />}
             </div>

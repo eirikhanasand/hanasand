@@ -50,5 +50,5 @@
 
 .thesis-table-scroll [data-active=true] { outline: 2px solid var(--color-ui-primary); outline-offset: -2px; }
 
-.thesis-document-actions { display: flex; align-items: center; gap: .5rem; max-width: 100%; overflow-x: auto; padding: .25rem; white-space: nowrap; }
+.thesis-document-actions { display: flex; align-items: center; gap: .5rem; flex: 0 1 auto; min-width: 0; max-width: 75%; overflow-x: auto; padding: .25rem; white-space: nowrap; }
 .thesis-document-actions > * { flex-shrink: 0; }
