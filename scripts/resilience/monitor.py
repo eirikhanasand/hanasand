@@ -117,6 +117,9 @@ def sample(config, previous):
     def check(instance):
         health = instance['health']
         if health.startswith('peer:'):
+            # OVH reaches both local intelligence instances through one primary-site pool.
+            if instance['id'].startswith('inspur-ti-') and proxy_status.get('inspur-ti-1') is False:
+                return instance['id'], False
             return instance['id'], bool(peer_instances.get(health[5:]))
         if instance['id'] in proxy_status:
             return instance['id'], proxy_status[instance['id']]
