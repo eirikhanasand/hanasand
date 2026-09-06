@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { inventory, sha256 } from '../scripts/code-inventory.mjs'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { collectSources, inventory, sha256 } from '../scripts/code-inventory.mjs'
 
 test('routes, aliases, queries and transitive review hashes follow source changes', () => {
     const files = new Map([
@@ -36,4 +39,14 @@ test('cyclic modules terminate and dynamic references remain visible', () => {
     assert.equal(result.nodes[0].dependencyCount, 1)
     assert.ok(result.nodes[0].unresolved.some(value => value.includes('Dynamic import')))
     assert.ok(result.nodes[0].unresolved.some(value => value.includes('dynamicUrl')))
+})
+
+test('native build files and shaders are included while credentials and output are excluded', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'review-inventory-'))
+    try {
+        for (const name of ['CMakeLists.txt', 'kernel.wgsl', 'source.metal', 'repoCredentials.ts', '.env', 'credentials.json']) fs.writeFileSync(path.join(root, name), 'source')
+        fs.mkdirSync(path.join(root, 'CMakeFiles'))
+        fs.writeFileSync(path.join(root, 'CMakeFiles', 'generated.c'), 'generated')
+        assert.deepEqual([...collectSources(root).keys()].sort(), ['CMakeLists.txt', 'kernel.wgsl', 'repoCredentials.ts', 'source.metal'])
+    } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
