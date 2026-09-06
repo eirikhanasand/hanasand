@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Copy, Minus, Plus } from 'lucide-react'
+import { Copy, Info, Minus, Plus, Redo2, Undo2 } from 'lucide-react'
 import SheetEditor from './sheetEditor'
 import { identifiedSheets, writeSheets, sheetChanges } from './workspace'
 import type { ThesisDocument } from '@/utils/thesis'
@@ -26,13 +26,13 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
     const [validationError, setValidationError] = useState('')
     const sheets = identifiedSheets(document.title, document.body)
     const active = Math.min(selected, sheets.length - 1)
-    function updateSheet(field: 'title' | 'body', value: string) {
+    function updateSheet(field: 'title' | 'body', value: string, group?: string) {
         const next = sheets.map((sheet, index) => index === active ? { ...sheet, [field]: value } : sheet)
         if (field === 'title' && (!value.trim() || value.length > 500)) { setValidationError('Enter a title of 1–500 characters.'); return }
         const body = writeSheets(next)
         if (body.length > 1_000_000) { setValidationError('The workspace is full. Shorten the content before adding more.'); return }
         setValidationError('')
-        thesis.update('body', body)
+        thesis.update('body', body, group ? `${sheets[active].id}:${group}` : undefined)
     }
     const [sheetDialog, setSheetDialog] = useState<{ kind: 'add' } | { kind: 'delete', id: string, name: string } | null>(null)
     const [sheetName, setSheetName] = useState('')
@@ -81,6 +81,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
     const [history, setHistory] = useState<HistoryItem[] | null>(null)
     const [preview, setPreview] = useState<ThesisDocument | null>(null)
     const [historyError, setHistoryError] = useState('')
+    const [historyHelp, setHistoryHelp] = useState(false)
     const [busy, setBusy] = useState(false)
     const [more, setMore] = useState(false)
 
@@ -130,15 +131,29 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
 
     return (
         <section className='mx-auto grid w-full max-w-6xl gap-6 px-4 pt-12 pb-32 text-ui-text md:px-8 md:pt-16' aria-label='Thesis document'
+            onKeyDownCapture={event => {
+                if (!canEdit || event.nativeEvent.isComposing || (event.target as HTMLElement).closest('dialog')) return
+                if (!(event.metaKey || event.ctrlKey) || event.altKey) return
+                const key = event.key.toLowerCase()
+                if (key !== 'z' && key !== 'y') return
+                event.preventDefault(); event.stopPropagation()
+                if (busy) return
+                if (key === 'y' || event.shiftKey) thesis.redo()
+                else thesis.undo()
+            }}
             onMouseDownCapture={event => {
                 // Keep the active line stable until a document control has received its click. Keyboard focus still behaves normally.
                 if (!(event.target as HTMLElement).closest('dialog') && (event.target as HTMLElement).closest('button, [role=button]')) event.preventDefault()
             }}>
             <div role='tabpanel' id={`sheet-${active}`} aria-labelledby={`tab-${active}`}>
                 <SheetEditor key={sheets[active].id} sheet={sheets[active]} canEdit={canEdit && ready} onChange={updateSheet}
-                    actions={canEdit && <button type='button' disabled={busy || !ready} aria-expanded={history !== null} onClick={() => history === null ? loadHistory() : setHistory(null)} className='min-h-11 rounded-lg border border-ui-border px-3 py-2 text-sm hover:bg-ui-raised disabled:opacity-40'>
-                        {history === null ? 'History' : 'Close history'}
-                    </button>} />
+                    actions={canEdit && <>
+                        <button type='button' disabled={!thesis.canUndo || busy} onClick={thesis.undo} aria-label='Undo' title='Undo (Ctrl/⌘ Z)' className='grid min-h-11 min-w-11 place-items-center rounded-lg border border-ui-border hover:bg-ui-raised disabled:opacity-40'><Undo2 size={18} /></button>
+                        <button type='button' disabled={!thesis.canRedo || busy} onClick={thesis.redo} aria-label='Redo' title='Redo (Ctrl/⌘ Shift Z)' className='grid min-h-11 min-w-11 place-items-center rounded-lg border border-ui-border hover:bg-ui-raised disabled:opacity-40'><Redo2 size={18} /></button>
+                        <button type='button' disabled={busy || !ready} aria-expanded={history !== null} onClick={() => history === null ? loadHistory() : setHistory(null)} className='min-h-11 rounded-lg border border-ui-border px-3 py-2 text-sm hover:bg-ui-raised disabled:opacity-40'>
+                            {history === null ? 'History' : 'Close history'}
+                        </button>
+                    </>} />
             </div>
             {validationError && <p role='alert' className='text-sm text-ui-danger'>{validationError}</p>}
             <nav className='thesis-tabs' hidden={footerVisible} aria-label='Sheet navigation'>
@@ -192,7 +207,11 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                     ))}
                     {history !== null && (
                         <section aria-label='Version history' className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4'>
-                            <p className='text-sm text-ui-muted'>Previous version, plus checkpoints every 20 minutes for seven days; up to three per day after that.</p>
+                            <div className='flex items-center justify-between gap-3'>
+                                <h2 className='font-semibold'>Previous version</h2>
+                                <button type='button' aria-label='About version history' aria-expanded={historyHelp} aria-controls='thesis-history-help' onClick={() => setHistoryHelp(!historyHelp)} className='grid min-h-11 min-w-11 place-items-center rounded-lg text-ui-muted hover:bg-ui-raised'><Info size={18} /></button>
+                            </div>
+                            {historyHelp && <div id='thesis-history-help' className='rounded-lg border border-ui-border bg-ui-raised p-3 text-sm leading-6 text-ui-muted'>A checkpoint is saved every 20 minutes for 7 days. After that, up to 3 checkpoints are kept per day.</div>}
                             {history.length === 0 && <p>No earlier versions yet.</p>}
                             <ul className='grid gap-2'>
                                 {history.map(item => (

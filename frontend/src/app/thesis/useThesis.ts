@@ -10,11 +10,14 @@ const same = (a: ThesisDocument, b: ThesisDocument) => a.title === b.title && a.
 
 export default function useThesis(initial: ThesisDocument, canEdit: boolean) {
     const [document, setDocument] = useState(initial)
+    const [undoState, setUndoState] = useState({ undo: 0, redo: 0 })
     const [error, setError] = useState('')
     const [conflict, setConflict] = useState(false)
     const [recoveries, setRecoveries] = useState<Recovery[]>([])
     const actions = useRef<{
-        update(field: 'title' | 'body', value: string): void
+        update(field: 'title' | 'body', value: string, group?: string): void
+        undo(): void
+        redo(): void
         flush(): Promise<boolean>
         restore(document: ThesisDocument): Promise<boolean>
         recover(recovery: Recovery): void
@@ -34,6 +37,36 @@ export default function useThesis(initial: ThesisDocument, canEdit: boolean) {
         let retryDelay = 1000
         let key = ''
         let recovered: Recovery | null = null
+        let past: ThesisDocument[] = []
+        let future: ThesisDocument[] = []
+        let lastGroup: string | undefined
+        let lastEdit = 0
+        const publishUndo = () => setUndoState({ undo: past.length, redo: future.length })
+        function clearUndo() {
+            past = []; future = []; lastGroup = undefined
+            publishUndo()
+        }
+        function remember(group?: string) {
+            const now = Date.now()
+            // Group continuous typing; structural changes remain separate undo steps.
+            if (!group || group !== lastGroup || now - lastEdit > 750 || future.length) past = [...past.slice(-49), draft]
+            future = []
+            lastGroup = group; lastEdit = now
+            publishUndo()
+        }
+        function travel(redo: boolean) {
+            if (!canEdit || remote) return
+            const previous = (redo ? future : past).pop()
+            if (!previous) return
+            if (redo) past.push(draft)
+            else future.push(draft)
+            lastGroup = undefined
+            draft = { ...previous, revision: base.revision }
+            setDocument(draft)
+            publishUndo()
+            keepDraft()
+            schedule()
+        }
         const dirty = () => !same(draft, base)
 
         function keepDraft() {
@@ -60,7 +93,8 @@ export default function useThesis(initial: ThesisDocument, canEdit: boolean) {
                 setError('Another tab changed the thesis. Your draft is kept in this browser.')
                 return
             }
-            const preserveDraft = dirty() && !same(draft, next)
+            const preserveDraft = !same(draft, next) && (dirty() || Boolean(sent && same(sent, next)))
+            if (!preserveDraft && !same(draft, next)) clearUndo()
             remote = null
             setConflict(false)
             setError('')
@@ -142,16 +176,20 @@ export default function useThesis(initial: ThesisDocument, canEdit: boolean) {
         const online = () => { void flush() }
 
         actions.current = {
-            update(field, value) {
-                if (!canEdit) return
+            update(field, value, group) {
+                if (!canEdit || draft[field] === value) return
+                remember(group)
                 draft = { ...draft, [field]: value, revision: remote ? draft.revision : base.revision }
                 setDocument(draft)
                 keepDraft()
                 schedule()
             },
+            undo: () => travel(false),
+            redo: () => travel(true),
             flush,
             async restore(version) {
                 do { if (!await flush()) return false } while (dirty())
+                if (!same(draft, version)) remember()
                 draft = { title: version.title, body: version.body, revision: base.revision }
                 setDocument(draft)
                 keepDraft()
@@ -159,6 +197,7 @@ export default function useThesis(initial: ThesisDocument, canEdit: boolean) {
             },
             recover(version) {
                 if (dirty()) { setError('Wait for the current edit to reach the server before recovering another draft.'); return }
+                clearUndo()
                 recovered = version
                 draft = version
                 setDocument(draft)
@@ -172,6 +211,7 @@ export default function useThesis(initial: ThesisDocument, canEdit: boolean) {
             },
             resolve(keep) {
                 if (!remote) return
+                clearUndo()
                 base = remote
                 draft = keep ? { ...draft, revision: base.revision } : base
                 remote = null
@@ -237,7 +277,11 @@ export default function useThesis(initial: ThesisDocument, canEdit: boolean) {
 
     return {
         document, error, conflict, recoveries,
-        update: (field: 'title' | 'body', value: string) => actions.current?.update(field, value),
+        update: (field: 'title' | 'body', value: string, group?: string) => actions.current?.update(field, value, group),
+        canUndo: canEdit && !conflict && undoState.undo > 0,
+        canRedo: canEdit && !conflict && undoState.redo > 0,
+        undo: () => actions.current?.undo(),
+        redo: () => actions.current?.redo(),
         flush: () => actions.current?.flush() ?? Promise.resolve(false),
         restore: (version: ThesisDocument) => actions.current?.restore(version) ?? Promise.resolve(false),
         recover: (version: Recovery) => actions.current?.recover(version),

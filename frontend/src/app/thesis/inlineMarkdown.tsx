@@ -35,17 +35,13 @@ function sourceLines() {
     }
 }
 
-type Snapshot = { text: string, line: number, cursor: number }
-
-export default function InlineMarkdown({ text, label, singleLine = false, onChange, onSelection }: {
-    text: string, label: string, singleLine?: boolean,
-    onChange: (text: string) => void, onSelection?: (start: number, end: number) => void,
+export default function InlineMarkdown({ text, label, singleLine = false, showEmptyHint = true, onChange, onSelection }: {
+    text: string, label: string, singleLine?: boolean, showEmptyHint?: boolean,
+    onChange: (text: string, group?: string) => void, onSelection?: (start: number, end: number) => void,
 }) {
     const [active, setActive] = useState<number | null>(null)
     const input = useRef<HTMLTextAreaElement>(null)
     const cursor = useRef<number | null>(null)
-    const undo = useRef<Snapshot[]>([])
-    const redo = useRef<Snapshot[]>([])
     const lines = text.split('\n')
     const line = active === null ? null : Math.min(active, lines.length - 1)
     const start = line === null ? 0 : lines.slice(0, line).reduce((length, value) => length + value.length + 1, 0)
@@ -68,16 +64,13 @@ export default function InlineMarkdown({ text, label, singleLine = false, onChan
         cursor.current = position ?? lines[selected].length
         setActive(selected)
     }
-    function change(next: string, nextLine: number, position: number) {
-        // ponytail: retain 30 local edit snapshots; durable recovery and older history use the existing document history.
-        undo.current = [...undo.current.slice(-29), { text, line: line ?? 0, cursor: input.current?.selectionStart ?? 0 }]
-        redo.current = []
+    function change(next: string, nextLine: number, position: number, typing = false) {
         cursor.current = position
         setActive(nextLine)
-        onChange(next)
+        onChange(next, typing ? `line:${line ?? 0}` : undefined)
     }
     function render(source: string, firstLine: number, key: string, count: number) {
-        if (!count) return null
+        if (!count || (!showEmptyHint && !source.trim())) return null
         return <div key={key} className='thesis-markdown thesis-inline-render' tabIndex={0} role='group' aria-label={`${label}, click a line to edit`}
             onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select(firstLine) } }}
             onPointerDown={event => {
@@ -130,18 +123,13 @@ export default function InlineMarkdown({ text, label, singleLine = false, onChan
                 const position = event.target.selectionStart
                 const preceding = replacement.slice(0, position).split('\n')
                 onSelection?.(start + position, start + position)
-                change(text.slice(0, start) + replacement + text.slice(start + value.length), line + preceding.length - 1, preceding.at(-1)!.length)
+                change(text.slice(0, start) + replacement + text.slice(start + value.length), line + preceding.length - 1, preceding.at(-1)!.length, true)
             }}
             onKeyDown={event => {
                 if (event.nativeEvent.isComposing) return
                 const element = event.currentTarget
                 const a = element.selectionStart, b = element.selectionEnd
-                if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
-                    event.preventDefault()
-                    const from = event.shiftKey ? redo : undo, to = event.shiftKey ? undo : redo
-                    const previous = from.current.pop()
-                    if (previous) { to.current.push({ text, line, cursor: a }); cursor.current = previous.cursor; setActive(previous.line); onChange(previous.text) }
-                } else if (event.key === 'Escape' || (singleLine && event.key === 'Enter')) {
+                if (event.key === 'Escape' || (singleLine && event.key === 'Enter')) {
                     event.preventDefault(); element.blur()
                 } else if (!singleLine && event.key === 'Enter') {
                     event.preventDefault()
@@ -162,7 +150,7 @@ export default function InlineMarkdown({ text, label, singleLine = false, onChan
                 if (!text || text.endsWith('\n')) select(lines.length - 1, 0)
                 else { cursor.current = 0; setActive(lines.length); onChange(text + '\n') }
             }} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click() } }}>
-            {!text ? 'Write here…' : '\u00a0'}
+            {!text && showEmptyHint ? 'Write here…' : '\u00a0'}
         </div>}
     </div>
 }
