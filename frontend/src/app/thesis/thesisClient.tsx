@@ -97,7 +97,10 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                 if ((event.target as HTMLElement).closest('button, [role=button]')) event.preventDefault()
             }}>
             <div role='tabpanel' id={`sheet-${active}`} aria-labelledby={`tab-${active}`}>
-                <SheetEditor key={sheets[active].id} sheet={sheets[active]} canEdit={canEdit && ready} onChange={updateSheet} />
+                <SheetEditor key={sheets[active].id} sheet={sheets[active]} canEdit={canEdit && ready} onChange={updateSheet}
+                    actions={canEdit && <button type='button' disabled={busy || !ready} aria-expanded={history !== null} onClick={() => history === null ? loadHistory() : setHistory(null)} className='rounded-lg border border-ui-border px-3 py-2 text-sm hover:bg-ui-raised disabled:opacity-40'>
+                        {history === null ? 'History' : 'Close history'}
+                    </button>} />
             </div>
             {validationError && <p role='alert' className='text-sm text-ui-danger'>{validationError}</p>}
             <nav className='thesis-tabs' aria-label='Sheet navigation'>
@@ -127,11 +130,6 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                             Recover browser draft: {item.title} — {new Date(item.savedAt).toLocaleString()}
                         </button>
                     ))}
-                    <div>
-                        <button type='button' disabled={busy} onClick={() => history === null ? loadHistory() : setHistory(null)} className='rounded-lg border border-ui-border px-3 py-2'>
-                            {history === null ? 'History' : 'Close history'}
-                        </button>
-                    </div>
                     {history !== null && (
                         <section aria-label='Version history' className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4'>
                             <p className='text-sm text-ui-muted'>Previous version, plus checkpoints every 20 minutes for seven days; up to three per day after that.</p>

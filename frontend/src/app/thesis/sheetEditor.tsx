@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { marked } from 'marked'
@@ -85,7 +85,7 @@ function InlineTable({ data, onChange, onMoveUp, onMoveDown }: { data: TableData
     </section>
 }
 
-export default function SheetEditor({ sheet, canEdit, onChange }: { sheet: Sheet, canEdit: boolean, onChange: (field: 'title' | 'body', value: string) => void }) {
+export default function SheetEditor({ sheet, canEdit, onChange, actions }: { sheet: Sheet, canEdit: boolean, actions?: ReactNode, onChange: (field: 'title' | 'body', value: string) => void }) {
     const selection = useRef({ start: sheet.body.length, end: sheet.body.length })
     const parsed = tables(sheet.body)
     function prose(text: string, start: number, end: number) {
@@ -123,8 +123,15 @@ export default function SheetEditor({ sheet, canEdit, onChange }: { sheet: Sheet
         onChange('body', sheet.body.slice(0, start) + value + sheet.body.slice(end))
     }
     return <div className='grid min-w-0 gap-5'>
-        {canEdit ? <InlineMarkdown text={sheet.title || '# Untitled'} label='Title Markdown' singleLine onChange={value => onChange('title', value)} /> : <RenderMarkdown text={sheet.title || '# Untitled'} />}
+        <div className='flex flex-col gap-4 md:flex-row md:items-start md:justify-between'>
+            <div className='min-w-0 flex-1'>
+                {canEdit ? <InlineMarkdown text={sheet.title || '# Untitled'} label='Title Markdown' singleLine onChange={value => onChange('title', value)} /> : <RenderMarkdown text={sheet.title || '# Untitled'} />}
+            </div>
+            {(canEdit || actions) && <div className='flex shrink-0 flex-wrap items-center justify-end gap-2' aria-label='Document actions'>
+                {canEdit && <button className={button} onMouseDown={event => event.preventDefault()} onClick={insert}>Insert table</button>}
+                {actions}
+            </div>}
+        </div>
         <div className='min-w-0'>{content}{prose(sheet.body.slice(offset), offset, sheet.body.length)}</div>
-        {canEdit && <button className={button + ' justify-self-start'} onMouseDown={event => event.preventDefault()} onClick={insert}>Insert table</button>}
     </div>
 }
