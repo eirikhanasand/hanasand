@@ -43,14 +43,14 @@ export async function exportTimetablePdf(title: string, model: ReturnType<typeof
         }
     }
     if (!body.length) body.push([{ content: 'No dated activities have been logged.', colSpan: 5 }])
-    autoTable(pdf, { startY: 34, margin: { top: 15, bottom: 18, left: 14, right: 14 }, styles, headStyles,
+    let reportEnd = 34
+    autoTable(pdf, { startY: 34, didDrawPage: data => { reportEnd = data.cursor?.y || reportEnd }, margin: { top: 15, bottom: 18, left: 14, right: 14 }, styles, headStyles,
         head: [['Date', 'Week', 'Hours', 'Category', 'Description']], body, rowPageBreak: 'avoid',
         columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 23 }, 2: { cellWidth: 14 }, 3: { cellWidth: 30 } },
     })
     const notes = ['Expected hours: 12 per week before Christmas (2.4 per weekday); 37.5 per week from January (7.5 per weekday). Weeks 51-53 and Norwegian public holidays falling on weekdays are excluded. Only planned rows contribute expected hours. Logged work on days off still counts.', ...(model.weeks.some(week => week.legacy) ? ['* Earlier totals are included in the timetable but have no dated activity records. They are excluded from the logged-hours and daily totals.'] : []), ...model.notes]
     if (notes.length) {
-        pdf.addPage(); pdf.setFontSize(16); pdf.text('Original timetable notes', 14, 20)
-        autoTable(pdf, { startY: 28, margin: { top: 15, bottom: 18, left: 14, right: 14 }, styles, body: notes.map(note => [note]) })
+        autoTable(pdf, { startY: reportEnd + 8, margin: { top: 15, bottom: 18, left: 14, right: 14 }, styles, headStyles, head: [['Report notes']], body: notes.map(note => [note]) })
     }
     const count = pdf.getNumberOfPages()
     for (let page = 1; page <= count; page++) {
