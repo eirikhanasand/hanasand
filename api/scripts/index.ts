@@ -17,6 +17,7 @@ const bun = process.execPath
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 
 const coreTasks: TestTask[] = [
+    scriptTask('status-summary', 'Bounded current status query', 'check-status-summary.ts'),
     scriptTask('resilience', 'Recovery boundaries and stale state', 'check-resilience.ts'),
     scriptTask('auth-boundary', 'Authentication outage classification', 'check-auth-boundary.ts'),
     scriptTask('database-pool-error', 'Checked-out connection recovery', 'check-database-pool-error.ts'),

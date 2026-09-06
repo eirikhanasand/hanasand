@@ -32,9 +32,9 @@ const MONITOR_STALE_MS = 5 * 60 * 1000
 let statusCache: { expiresAt: number, payload: object } | null = null
 let statusInflight: Promise<object> | null = null
 
-export default async function getStatus(_req: FastifyRequest, res: FastifyReply) {
+export default async function getStatus(req: FastifyRequest<{ Querystring: { summary?: string } }>, res: FastifyReply) {
     res.header('Cache-Control', 'public, max-age=3, stale-while-revalidate=15')
-    return res.send(await statusPayload())
+    return res.send(await (req.query?.summary === 'true' ? loadStatusPayload(true) : statusPayload()))
 }
 
 function statusPayload() {
@@ -72,9 +72,17 @@ function statusPayload() {
     return statusInflight
 }
 
-async function loadStatusPayload() {
+async function loadStatusPayload(summary = false) {
     const [result, historyResult, incidentResult] = await Promise.all([
-        run(`
+        run(summary ? `
+        SELECT DISTINCT ON (service, check_name)
+            service, check_name, status, latency_ms, message, checked_at,
+            'unverified'::text AS uptime_30d
+        FROM service_monitor_results
+        WHERE checked_at >= NOW() - INTERVAL '5 minutes'
+          AND NOT (service = 'core' AND check_name = 'API index')
+        ORDER BY service, check_name, checked_at DESC
+        ` : `
         WITH latest AS (
             SELECT DISTINCT ON (service, check_name)
                 service, check_name, status, latency_ms, message, checked_at
@@ -108,7 +116,7 @@ async function loadStatusPayload() {
         LEFT JOIN uptime USING (service, check_name)
         ORDER BY latest.service ASC, latest.check_name ASC
     `),
-        run(`
+        summary ? Promise.resolve({ rows: [] }) : run(`
         SELECT
             service,
             check_name,
@@ -125,7 +133,7 @@ async function loadStatusPayload() {
         GROUP BY service, check_name, checked_at::date
         ORDER BY service ASC, check_name ASC, date ASC
     `),
-        run(`
+        summary ? Promise.resolve({ rows: [] }) : run(`
         WITH sequenced AS (
             SELECT
                 service,

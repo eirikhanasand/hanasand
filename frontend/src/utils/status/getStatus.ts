@@ -50,9 +50,9 @@ export function unavailableServiceStatus(): ServiceStatus {
     }
 }
 
-export default async function getStatus(): Promise<ServiceStatus> {
+export default async function getStatus({ summary = false }: { summary?: boolean } = {}): Promise<ServiceStatus> {
     try {
-        const response = await fetch(`${config.url.api}/status`, { cache: 'no-store', signal: AbortSignal.timeout(5000) })
+        const response = await fetch(`${config.url.api}/status${summary ? '?summary=true' : ''}`, { cache: 'no-store', signal: AbortSignal.timeout(5000) })
         if (!response.ok) return unavailableServiceStatus()
 
         const payload = await response.json()
