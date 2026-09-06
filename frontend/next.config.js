@@ -33,6 +33,7 @@ const nextConfig = {
         return {
             beforeFiles: appRoutes
                 .filter(([, canonical]) => canonical !== '/dashboard')
+                .sort((a, b) => b[1].length - a[1].length)
                 .map(([legacy, canonical]) => ({ source: `${canonical}/:path*`, destination: `${legacy}/:path*` })),
         }
     },

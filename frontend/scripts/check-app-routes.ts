@@ -16,6 +16,14 @@ for (const page of pages) {
     assert.ok(!canonical.startsWith('/dashboard/'), original)
     assert.equal(canonical === '/dashboard' ? '/dashboard/overview' : appPagePath(canonical), original)
     assert.ok(hasAppSidebar(canonical), canonical)
+    if (canonical !== '/dashboard') {
+        const rewrite = rewrites.find(route => {
+            const prefix = route.source.replace('/:path*', '')
+            return canonical === prefix || canonical.startsWith(prefix + '/')
+        })!
+        assert.ok(rewrite, canonical)
+        assert.equal(rewrite.destination.replace('/:path*', '') + canonical.slice(rewrite.source.replace('/:path*', '').length), original)
+    }
 }
 for (const [original, canonical] of appRoutes) {
     assert.ok(existsSync(new URL('../src/app' + original + '/page.tsx', import.meta.url)), original)
