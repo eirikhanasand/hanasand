@@ -1388,7 +1388,7 @@ function sourceMatchedOrgRuntime(input: {
 }
 
 async function ensureExposureQueueDwmAlerts(options: ApiServerOptions, scope: { tenantId: string; organizationId?: string }) {
-  if (typeof (options.store as any).saveDwmAlert !== "function") return { savedAlertCount: 0 };
+  if (options.readOnly || typeof (options.store as any).saveDwmAlert !== "function") return { savedAlertCount: 0 };
   const generatedAt = nowIso();
   const existingAlerts = (options.store as any).listDwmAlerts?.() ?? [];
   let savedAlertCount = 0;
