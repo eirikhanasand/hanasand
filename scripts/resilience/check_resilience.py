@@ -45,3 +45,6 @@ try:
     raise AssertionError('Unrelated DNS records must be rejected')
 except ValueError: pass
 print('DNS failover, stable failback and unrelated-record protection checks passed.')
+
+assert monitor.apply_dns_placement([primary], {'api.hanasand.com': {'activeSite': 'ovhcloud'}})[0]['activeInstance'] == 'ovh-api'
+assert monitor.apply_dns_placement([primary], {'api.hanasand.com': {'activeSite': 'inspur'}})[0]['activeInstance'] == 'inspur-api-1'

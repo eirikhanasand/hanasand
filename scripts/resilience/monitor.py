@@ -53,6 +53,14 @@ def choose_service(service, observations):
             'instances': [{**instance, 'healthy': bool(observations.get(instance['id']))} for instance in service['instances']]}
 
 
+
+def apply_dns_placement(services, dns_state):
+    hosts = {'frontend': 'hanasand.com', 'api': 'api.hanasand.com', 'auth': 'api.hanasand.com'}
+    return [choose_service(service, {i['id']: i['healthy'] and i['site'] == 'ovhcloud' for i in service['instances']})
+            if dns_state.get(hosts.get(service['id']), {}).get('activeSite') == 'ovhcloud' else service
+            for service in services]
+
+
 def transition_embed(previous, current, services, drill=False):
     restored = current['status'] == 'up' or (previous.get('activeSite') == 'ovhcloud' and current.get('activeSite') == 'inspur')
     recovery_message = 'Preferred Inspur instance restored.' if current['status'] == 'up' else 'Primary site restored on its alternate instance; the preferred instance is still recovering.'
@@ -201,6 +209,7 @@ def sample(config, previous):
             'mode': 'read_only_recovery' if read_only else 'service_failover' if affected else 'normal',
             'readOnly': read_only, 'services': services, 'database': database, 'affected': affected,
             'compute': compute, 'sites': sites, 'replicaEligibility': eligibility,
+            'dns': peer.get('dns', previous.get('dns', {})),
             'healthCounters': counters, 'events': previous.get('events', [])[-99:],
             'notifications': previous.get('notifications', [])[-99:],
             'safety': {'automaticDatabasePromotion': False, 'fencingRequired': True,
@@ -227,16 +236,20 @@ def run_monitor():
         previous = read_json(STATE, {})
         try:
             current = sample(config, previous)
-            current['dns'] = previous.get('dns', {})
-            if dns_job is not None and dns_job.done():
-                try:
-                    current['dns'], dns_events = dns_job.result()
-                    current.setdefault('pendingNotifications', []).extend(dns_events)
-                except Exception as error:
-                    current['dns'] = {**current['dns'], 'status': 'error', 'reason': type(error).__name__}
-                dns_job = None
-            if dns_job is None:
-                dns_job = dns_worker.submit(dns.reconcile, config.get('dns'), current, current['dns'])
+            if config.get('dns'):
+                current['dns'] = previous.get('dns', {})
+                if dns_job is not None and dns_job.done():
+                    try:
+                        current['dns'], dns_events = dns_job.result()
+                        current.setdefault('pendingNotifications', []).extend(dns_events)
+                    except Exception as error:
+                        current['dns'] = {**current['dns'], 'status': 'error', 'reason': type(error).__name__}
+                    dns_job = None
+                if dns_job is None:
+                    dns_job = dns_worker.submit(dns.reconcile, config.get('dns'), current, current['dns'])
+            current['services'] = apply_dns_placement(current['services'], current.get('dns', {}))
+            current['affected'] = [s['name'] for s in current['services'] if s['status'] != 'up']
+            current['mode'] = 'read_only_recovery' if current['readOnly'] else 'service_failover' if current['affected'] else 'normal'
             old_services = {service['id']: service for service in previous.get('services', [])}
             for service in current['services']:
                 old = old_services.get(service['id'])
