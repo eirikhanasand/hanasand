@@ -1,3 +1,5 @@
+const appRoutes = require('./src/utils/routes/appRoutes.json')
+
 const nextConfig = {
     distDir: process.env.NEXT_DIST_DIR || '.next',
     allowedDevOrigins: ['127.0.0.1'],
@@ -26,6 +28,13 @@ const nextConfig = {
                 ],
             },
         ]
+    },
+    async rewrites() {
+        return {
+            beforeFiles: appRoutes
+                .filter(([, canonical]) => canonical !== '/dashboard')
+                .map(([legacy, canonical]) => ({ source: `${canonical}/:path*`, destination: `${legacy}/:path*` })),
+        }
     },
     async redirects() {
         return [
