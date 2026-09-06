@@ -40,6 +40,8 @@
     "eslint-config-next": "^16.2.4",
     "formik": "^2.4.9",
     "highlight.js": "^11.11.1",
+    "jspdf": "4.2.1",
+    "jspdf-autotable": "5.0.8",
     "lucide-react": "^1.8.0",
     "marked": "^18.0.2",
     "marked-highlight": "^2.2.4",

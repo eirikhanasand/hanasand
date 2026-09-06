@@ -124,7 +124,9 @@ function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { 
     </section>
 }
 
-export default function SheetEditor({ sheet, canEdit, onChange, actions, trailingActions, showInsertTable = true }: { sheet: Sheet, canEdit: boolean, actions?: ReactNode, trailingActions?: ReactNode, showInsertTable?: boolean, onChange: (field: 'title' | 'body', value: string, group?: string) => void }) {
+export type SheetEditorProps = { sheet: Sheet, canEdit: boolean, actions?: ReactNode, trailingActions?: ReactNode, showInsertTable?: boolean, titleAside?: ReactNode, beforeContent?: ReactNode, renderTable?: (data: TableData, index: number) => ReactNode, onChange: (field: 'title' | 'body', value: string, group?: string) => void }
+
+export default function SheetEditor({ sheet, canEdit, onChange, actions, trailingActions, titleAside, beforeContent, renderTable, showInsertTable = true }: SheetEditorProps) {
     const root = useRef<HTMLDivElement>(null)
     const selection = useRef({ start: sheet.body.length, end: sheet.body.length })
     const [active, setActive] = useState<Cell | null>(null)
@@ -196,8 +198,8 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
     const content = parsed.map((table, index) => {
         const before = prose(sheet.body.slice(offset, table.start), offset, table.start)
         offset = table.end
-        return <div key={index}>{before}<InlineTable data={table.data} index={index} active={cell} onSelect={next => selectCell(next)} onNavigate={(next, extend) => selectCell(next, extend, true)}
-            onChange={canEdit ? (data, group) => updateTable(index, data, group) : undefined} /></div>
+        return <div key={index}>{before}{renderTable?.(table.data, index) ?? <InlineTable data={table.data} index={index} active={cell} onSelect={next => selectCell(next)} onNavigate={(next, extend) => selectCell(next, extend, true)}
+            onChange={canEdit ? (data, group) => updateTable(index, data, group) : undefined} />}</div>
     })
     function insert() {
         const start = cell ? parsed[cell.table].end : Math.min(selection.current.start, sheet.body.length)
@@ -209,6 +211,7 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
     return <div ref={root} className='grid min-w-0 gap-5' onBlurCapture={event => {
         if (!(event.relatedTarget as HTMLElement | null)?.closest('[data-table-cell], [data-table-tools]')) setActive(null)
     }}>
+        {titleAside && <div className='flex justify-end'>{titleAside}</div>}
         <div className='flex min-w-0 items-start gap-4'>
             <div className='min-w-0 flex-1'>
                 {canEdit ? <InlineMarkdown text={sheet.title || '# Untitled'} label='Title Markdown' singleLine onChange={value => onChange('title', value, 'title')} /> : <RenderMarkdown text={sheet.title || '# Untitled'} />}
@@ -230,6 +233,7 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
                 </div>}
             </div>}
         </div>
+        {beforeContent}
         <div className='min-w-0'>{content}{prose(sheet.body.slice(offset), offset, sheet.body.length)}</div>
     </div>
 }

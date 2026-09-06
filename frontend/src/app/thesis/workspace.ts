@@ -1,8 +1,9 @@
 import { marked } from 'marked'
+import { validActivityLog, type ActivityLog } from './timetableData'
 
 export const sheetNames = ['Overview', 'Timetable', 'Plan', 'Research'] as const
 export type SheetSettings = { insertTable?: boolean, history?: boolean, codeReview?: boolean }
-export type Sheet = { title: string, body: string, id?: string, name?: string, settings?: SheetSettings }
+export type Sheet = { title: string, body: string, id?: string, name?: string, settings?: SheetSettings, activityLog?: ActivityLog }
 const marker = /^<!-- thesis-sheet:(Overview|Timetable|Plan|Research) title:(.*?) -->\n/gm
 
 export function readSheets(title: string, body: string): Sheet[] {
@@ -16,6 +17,7 @@ export function readSheets(title: string, body: string): Sheet[] {
             const result: Sheet[] = metadata.map(item => {
                 if (!item || typeof item.title !== 'string' || !Number.isSafeInteger(item.length) || item.length < 0 ||
                     (item.settings !== undefined && (!item.settings || typeof item.settings !== 'object' || Array.isArray(item.settings) || Object.entries(item.settings).some(([key, value]) => !['insertTable', 'history', 'codeReview'].includes(key) || typeof value !== 'boolean'))) ||
+                    (item.activityLog !== undefined && !validActivityLog(item.activityLog)) ||
                     (item.id !== undefined && typeof item.id !== 'string') || (item.name !== undefined && typeof item.name !== 'string')) throw new Error('Invalid sheet')
                 const { length, ...sheet } = item
                 const content = body.slice(offset, offset + length)
@@ -140,5 +142,5 @@ export function identifiedSheets(title: string, body: string) {
 export function sheetChanges(before: Sheet[], after: Sheet[]) {
     return [...before.map(sheet => ({ before: sheet, after: after.find(current => current.id === sheet.id) })),
         ...after.filter(sheet => !before.some(old => old.id === sheet.id)).map(sheet => ({ before: undefined, after: sheet }))]
-        .filter(change => !change.before || !change.after || change.before.title !== change.after.title || change.before.body !== change.after.body || change.before.name !== change.after.name || JSON.stringify(change.before.settings) !== JSON.stringify(change.after.settings))
+        .filter(change => !change.before || !change.after || change.before.title !== change.after.title || change.before.body !== change.after.body || change.before.name !== change.after.name || JSON.stringify(change.before.settings) !== JSON.stringify(change.after.settings) || JSON.stringify(change.before.activityLog) !== JSON.stringify(change.after.activityLog))
 }

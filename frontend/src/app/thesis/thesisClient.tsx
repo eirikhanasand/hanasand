@@ -4,11 +4,18 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Copy, Info, Minus, Plus, Redo2, Settings2, Undo2 } from 'lucide-react'
 import SheetEditor from './sheetEditor'
+import TimetableSheet from './timetableSheet'
+import type { ActivityLog } from './timetableData'
 import CodeReview from './codeReview'
-import type { SheetSettings } from './workspace'
+import type { Sheet, SheetSettings } from './workspace'
 import { identifiedSheets, writeSheets, sheetChanges } from './workspace'
 import type { ThesisDocument } from '@/utils/thesis'
 import useThesis from './useThesis'
+
+function ReadOnlySheet({ sheet }: { sheet: Sheet }) {
+    const Component = sheet.id === 'Timetable' || sheet.name?.toLowerCase() === 'timetable' ? TimetableSheet : SheetEditor
+    return <Component sheet={sheet} canEdit={false} onChange={() => {}} />
+}
 
 type HistoryItem = { revision: number, title: string, saved_at: string, immediate: boolean }
 
@@ -49,6 +56,15 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
         if (body.length > 1_000_000) { setValidationError('The workspace is full.'); return }
         thesis.update('body', body)
         if (key === 'history' && !value) setHistory(null)
+    }
+    const Editor = sheets[active].id === 'Timetable' || sheets[active].name.toLowerCase() === 'timetable' ? TimetableSheet : SheetEditor
+    function updateActivityLog(activityLog: ActivityLog) {
+        if (!canEdit) return false
+        const body = writeSheets(sheets.map((sheet, index) => index === active ? { ...sheet, activityLog } : sheet))
+        if (body.length > 1_000_000) { setValidationError('The workspace is full.'); return false }
+        setValidationError('')
+        thesis.update('body', body)
+        return true
     }
     function updateSheet(field: 'title' | 'body', value: string, group?: string) {
         const next = sheets.map((sheet, index) => index === active ? { ...sheet, [field]: value } : sheet)
@@ -157,7 +173,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
     return (
         <section className='mx-auto grid w-full max-w-6xl gap-6 px-4 pt-12 pb-32 text-ui-text md:px-8 md:pt-16' aria-label='Thesis document'
             onKeyDownCapture={event => {
-                if (!canEdit || event.nativeEvent.isComposing || (event.target as HTMLElement).closest('dialog, .code-workspace')) return
+                if (!canEdit || event.nativeEvent.isComposing || (event.target as HTMLElement).closest('dialog, .code-workspace, .thesis-timetable, .thesis-timetable-controls')) return
                 if (!(event.metaKey || event.ctrlKey) || event.altKey) return
                 const key = event.key.toLowerCase()
                 if (key !== 'z' && key !== 'y') return
@@ -168,10 +184,10 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
             }}
             onMouseDownCapture={event => {
                 // Keep the active line stable until a document control has received its click. Keyboard focus still behaves normally.
-                if (!(event.target as HTMLElement).closest('dialog, .code-workspace') && (event.target as HTMLElement).closest('button, [role=button], .thesis-settings > summary')) event.preventDefault()
+                if (!(event.target as HTMLElement).closest('dialog, .code-workspace, .thesis-timetable, .thesis-timetable-controls') && (event.target as HTMLElement).closest('button, [role=button], .thesis-settings > summary')) event.preventDefault()
             }}>
             <div role='tabpanel' id={`sheet-${active}`} aria-labelledby={`tab-${active}`}>
-                <SheetEditor key={sheets[active].id} sheet={sheets[active]} canEdit={canEdit && ready} onChange={updateSheet} showInsertTable={settings.insertTable !== false}
+                <Editor onActivityLogChange={updateActivityLog} key={sheets[active].id} sheet={sheets[active]} canEdit={canEdit && ready} onChange={updateSheet} showInsertTable={settings.insertTable !== false}
                     trailingActions={canEdit && <details className='thesis-settings' key={sheets[active].id} onKeyDown={event => { if (event.key === 'Escape') event.currentTarget.open = false }}>
                         <summary aria-label='Sheet settings' title='Sheet settings'><Settings2 size={17} /></summary>
                         <div className='thesis-settings-panel' role='group' aria-label='Features on this sheet'>
@@ -266,8 +282,8 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                                                 {sheetChanges(identifiedSheets(preview.title, preview.body), sheets).map(({ before, after }) => <section key={(before || after)!.id} className='grid gap-3'>
                                                     <h3 className='font-semibold'>{(after || before)!.name} — {!before ? 'Added' : !after ? 'Removed' : 'Changed'}</h3>
                                                     <div className='grid gap-4 md:grid-cols-2'>
-                                                        <div><h4>Saved version</h4>{before ? <SheetEditor sheet={before} canEdit={false} onChange={() => {}} /> : <p>Sheet did not exist.</p>}</div>
-                                                        <div><h4>Current workspace</h4>{after ? <SheetEditor sheet={after} canEdit={false} onChange={() => {}} /> : <p>Sheet removed.</p>}</div>
+                                                        <div><h4>Saved version</h4>{before ? <ReadOnlySheet sheet={before} /> : <p>Sheet did not exist.</p>}</div>
+                                                        <div><h4>Current workspace</h4>{after ? <ReadOnlySheet sheet={after} /> : <p>Sheet removed.</p>}</div>
                                                     </div>
                                                 </section>)}
                                             </section>

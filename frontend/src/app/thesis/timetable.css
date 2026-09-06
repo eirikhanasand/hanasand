@@ -1,0 +1,59 @@
+.thesis-timetable { min-width: 0; }
+.thesis-timetable-scroll { overflow-x: auto; border: 1px solid var(--color-ui-border); border-radius: .5rem; }
+.thesis-timetable table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.thesis-timetable th, .thesis-timetable td { padding: .65rem .75rem; border-bottom: 1px solid var(--color-ui-border); text-align: right; }
+.thesis-timetable thead th { background: var(--color-ui-raised); font-weight: 600; }
+.thesis-timetable th:first-child { text-align: left; }
+.thesis-week-row { cursor: pointer; }
+.thesis-week-row:hover { background: var(--color-ui-raised); }
+.thesis-week-row th { padding: 0; }
+.thesis-week-row th button { display: flex; align-items: center; gap: .35rem; width: 100%; min-height: 44px; padding: .4rem .65rem; text-align: left; }
+.thesis-week-row small { display: block; font-size: .65rem; font-weight: 400; color: var(--color-ui-muted); }
+.thesis-week-row td:last-child { font-weight: 600; }
+.thesis-week-expanded > td { padding: 0; text-align: left; }
+.thesis-week-detail { padding: 1rem; background: var(--color-ui-panel); text-align: left; font-size: .875rem; }
+.thesis-week-detail h2 { font-weight: 600; }
+.thesis-week-detail p { margin-top: .3rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.thesis-week-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.thesis-week-heading > div > p, .thesis-timetable-hint { color: var(--color-ui-muted); font-size: .8rem; }
+.thesis-timetable-action { display: inline-flex; min-height: 44px; min-width: 44px; align-items: center; justify-content: center; gap: .4rem; padding: .5rem; border: 1px solid var(--color-ui-border); border-radius: .5rem; font-size: .8rem; }
+.thesis-timetable-action:hover, .thesis-activity-tools button:hover, .thesis-week-heading > button:hover { background: var(--color-ui-raised); }
+.thesis-timetable-action:disabled { opacity: .5; }
+.thesis-activities { list-style: none; padding: 0; margin: .8rem 0; }
+.thesis-activities li { display: flex; align-items: start; justify-content: space-between; gap: .7rem; padding: .8rem 0; border-top: 1px solid var(--color-ui-border); }
+.thesis-activities li > div:first-child { min-width: 0; }
+.thesis-activity-tools { display: flex; flex-shrink: 0; }
+.thesis-activity-tools button, .thesis-week-heading > button { padding: .65rem; border-radius: .35rem; }
+.thesis-activity-tools button:last-child { color: var(--color-ui-danger); }
+.thesis-add-activity { display: inline-flex; align-items: center; gap: .4rem; margin-top: .75rem; padding: .5rem .7rem; border: 1px solid var(--color-ui-border); border-radius: .4rem; }
+.thesis-activity-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .65fr) minmax(0, 1.2fr); gap: .75rem; margin-top: 1rem; }
+.thesis-activity-form label { display: grid; min-width: 0; gap: .3rem; font-size: .8rem; }
+.thesis-activity-form input, .thesis-activity-form select, .thesis-activity-form textarea { width: 100%; min-width: 0; padding: .55rem; border: 1px solid var(--color-ui-border); background: var(--color-ui-raised); color: var(--color-ui-text); border-radius: .35rem; font: inherit; }
+.thesis-activity-description, .thesis-activity-form-actions, .thesis-activity-form > p { grid-column: 1 / -1; }
+.thesis-activity-form-actions { display: flex; justify-content: space-between; gap: .5rem; }
+.thesis-activity-form-actions button { padding: .6rem .8rem; border-radius: .35rem; background: var(--color-ui-raised); }
+.thesis-activity-form-actions button[type=submit] { background: var(--color-ui-primary); color: var(--color-ui-canvas); }
+.thesis-activity-form [role=alert], .thesis-timetable-controls [role=alert] { color: var(--color-ui-danger); }
+.thesis-timetable-controls:empty { display: none; }
+.thesis-timetable-controls [role=status] { font-size: .85rem; padding-top: .5rem; }
+@media (max-width: 600px) {
+    .thesis-timetable table { min-width: 600px; }
+    .thesis-week-detail { max-width: calc(100vw - 2rem); box-sizing: border-box; }
+    .thesis-activity-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .thesis-activity-form label:nth-child(3) { grid-column: 1 / -1; }
+}
+
+.thesis-timetable tfoot { font-weight: 600; background: var(--color-ui-raised); }
+.thesis-timetable button:focus-visible, .thesis-activity-form :is(input, select, textarea, button):focus-visible { outline: 2px solid var(--color-ui-primary); outline-offset: 2px; }
+
+.thesis-hours-progress { position: relative; text-align: right; font-size: .8rem; min-width: 0; }
+.thesis-hours-progress summary { cursor: pointer; list-style: none; }
+.thesis-hours-progress strong, .thesis-hours-progress span { display: block; }
+.thesis-hours-progress span { color: var(--color-ui-muted); font-size: .7rem; }
+.thesis-hours-progress > div { position: absolute; right: 0; z-index: 20; width: min(300px, 80vw); padding: .8rem; border: 1px solid var(--color-ui-border); border-radius: .5rem; background: var(--color-ui-panel); text-align: left; box-shadow: 0 4px 16px #0003; }
+.thesis-plan-week { font-size: .8rem; margin-top: .5rem; }
+.thesis-plan-week summary { cursor: pointer; }
+.thesis-plan-week form { display: flex; align-items: end; gap: .75rem; margin-top: .5rem; }
+.thesis-plan-week label { display: grid; }
+.thesis-plan-week input, .thesis-plan-week button { padding: .5rem; border: 1px solid var(--color-ui-border); border-radius: .35rem; background: var(--color-ui-raised); }
+.thesis-week-plan-button { display: block; margin-top: 1rem; color: var(--color-ui-muted); text-decoration: underline; font-size: .75rem; }
