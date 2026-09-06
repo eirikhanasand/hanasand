@@ -6,7 +6,7 @@ import sys
 
 
 def render(config):
-    lines = ['global', '    log stdout format raw local0', f"    stats socket /run/haproxy/admin{config.get('proxyIndex', 0)}.sock mode 600 level admin",
+    lines = ['global', '    hard-stop-after 65s', '    log stdout format raw local0', f"    stats socket /run/haproxy/admin{config.get('proxyIndex', 0)}.sock mode 600 level admin",
              f"    stats socket ipv4@127.0.0.1:{19909 + config.get('proxyIndex', 0)} level admin",
              'defaults', '    log global', '    mode http', '    timeout connect 2s', '    timeout client 60s', '    timeout server 60s',
              '    retries 1', '    option redispatch', '    default-server inter 2s fall 3 rise 15',

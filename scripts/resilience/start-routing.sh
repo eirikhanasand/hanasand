@@ -6,7 +6,7 @@ mkdir -p "$root/proxy"
 python3 "$root/render_proxy.py" "$root/config.json" "$root/proxy/haproxy.cfg" "$root/proxy/haproxy-secondary.cfg"
 for index in 0 1; do
  file=haproxy.cfg; test "$index" = 0 || file=haproxy-secondary.cfg
- docker run --rm --network host -v "$root/proxy:/resilience:ro" haproxy@sha256:475863a372c92c3dab3d59eafbbf8019dceebcd0c456594551b160ecdba4bdb9 haproxy -c -f "/resilience/$file"
+ docker run --rm --network host -v "$root/proxy:/resilience:ro" haproxy@sha256:de601ccc9a79b715055bc5c8d51ff357edca04c1e869f4209f02bf6872fde8ac haproxy -c -f "/resilience/$file"
 done
 for index in 0 1; do
  file=haproxy.cfg; test "$index" = 0 || file=haproxy-secondary.cfg
@@ -15,6 +15,6 @@ for index in 0 1; do
   docker kill -s USR2 "$name" >/dev/null
  else
   docker run -d --name "$name" --restart unless-stopped --network host --memory 128m --cpus .5 \
-   -v "$root/proxy:/resilience:ro" --tmpfs /run/haproxy:mode=700,uid=99,gid=99 haproxy@sha256:475863a372c92c3dab3d59eafbbf8019dceebcd0c456594551b160ecdba4bdb9 haproxy -W -db -f "/resilience/$file" >/dev/null
+   -v "$root/proxy:/resilience:ro" --tmpfs /run/haproxy:mode=700,uid=99,gid=99 haproxy@sha256:de601ccc9a79b715055bc5c8d51ff357edca04c1e869f4209f02bf6872fde8ac haproxy -W -db -f "/resilience/$file" >/dev/null
  fi
 done

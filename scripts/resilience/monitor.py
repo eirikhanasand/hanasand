@@ -167,6 +167,9 @@ def sample(config, previous):
     sites[other] = {'compute': peer.get('compute'), 'database': peer.get('database'), 'fresh': bool(peer)}
     backup = read_json(ROOT / 'backup-status.json', {'status': 'not_verified', 'restoreRequired': False})
     if config['site'] == 'inspur' and peer.get('backups'): backup = peer['backups']
+    backup_job = read_json(ROOT / 'backup-job-status.json', {}) if config['site'] == 'inspur' else peer.get('backupJob', {})
+    if backup_job.get('status') == 'failed':
+        backup = {**backup, 'status': 'backup_failed', 'reason': 'The latest backup, isolated restore verification or off-site upload failed. The previous verified backup remains available.'}
     source_database = database if config['site'] == 'inspur' else peer.get('database', {})
     local_slot = 'hanasand_inspur_standby' if config['site']=='inspur' else 'hanasand_ovh_standby'
     prior_database = previous.get('database', {})
@@ -214,7 +217,7 @@ def sample(config, previous):
             'notifications': previous.get('notifications', [])[-99:],
             'safety': {'automaticDatabasePromotion': False, 'fencingRequired': True,
                        'aiOnOvhcloud': False, 'existingOvhcloudServicesPreserved': True},
-            'backups': backup}
+            'backups': backup, 'backupJob': backup_job}
 
 
 def public_state(state):

@@ -5,6 +5,15 @@ secrets=/home/hanasand/resilience-secrets
 image=postgres@sha256:29342cb52157b098821961d2c14eec3c019071f56a5d559e990cf07cf541ea9b
 exec 9>"$root/backup.lock"
 flock -n 9 || exit 0
+record_result() {
+ backup_exit=$?
+ python3 - "$root/backup-job-status.json" "$backup_exit" <<'RESULT'
+import json,pathlib,sys,time
+p=pathlib.Path(sys.argv[1]);t=p.with_suffix('.tmp')
+t.write_text(json.dumps({'status':'verified' if sys.argv[2]=='0' else 'failed','at':time.time()}));t.replace(p)
+RESULT
+}
+trap record_result EXIT
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 mkdir -p "$root/backups/$stamp"
 chmod 700 "$root/backups" "$root/backups/$stamp"
