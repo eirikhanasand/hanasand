@@ -33,7 +33,8 @@ test('SUMMARIZE supports both directions, nested formulas, invalid ranges and st
     assert.equal(cellValue(cells, 3, 2), '#REF!')
     assert.equal(cellValue([['=SUMMARIZE(A1:A1)']], 0, 0), '#CYCLE!')
     assert.equal(cellValue([['=SUMMARIZE(B1:B1)', '=SUMMARIZE(A1:A1)']], 0, 0), '#CYCLE!')
-    assert.equal(cellValue([['=evil()']], 0, 0), '#FORMULA!')
+    assert.equal(cellValue([['=evil()']], 0, 0), '=evil()')
+    assert.equal(cellValue([['=SUMMARIZE(invalid)']], 0, 0), '#FORMULA!')
     assert.equal(columnName(26), 'AA')
     assert.equal(cellValue([['2', '3', '=SUMMARIZE(B1:A1)']], 0, 2), '5')
     const data = { cells, widths: [], heights: [] }
@@ -50,4 +51,18 @@ test('sheet metadata preserves deletion, arbitrary markdown and stable history i
     assert.deepEqual(identifiedSheets('# Thesis', writeSheets(next)), next)
     assert.deepEqual(sheetChanges(initial, next).map(change => change.before?.id || change.after?.id), ['Overview', 'notes'])
     assert.deepEqual(identifiedSheets('# Thesis', writeSheets([next[3]])), [next[3]])
+})
+
+
+test('table cells preserve whitespace, punctuation, literal entities and arbitrary text', () => {
+    const values = [' ', '  leading', 'trailing  ', 'two  spaces', '\tindent\t', 'a\tb', 'a\r\nb', '\u00a0text\u00a0', 'line one\n\nline three', '| \\ & <br> &#32; &amp;', '**bold** _text_ `code` # - [link](url)', 'æøå 中文 👩🏽‍💻', '= ordinary text', '=2 + 2']
+    const data = { cells: [values, values], widths: [], heights: [] }
+    assert.deepEqual(tables(writeTable(data))[0].data, data)
+    for (const value of values) assert.equal(cellValue([[value]], 0, 0), value)
+    // Spaces must survive each keystroke, before the following word is typed.
+    let value = ''
+    for (const character of '  hello  world  ') {
+        value += character
+        assert.equal(tables(writeTable({ cells: [['Header'], [value]], widths: [], heights: [] }))[0].data.cells[1][0], value)
+    }
 })

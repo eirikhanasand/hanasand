@@ -222,3 +222,21 @@ test('Shift+Enter moves down and creates the same temporary edge as arrow naviga
     await page.keyboard.press('Enter')
     await expect(cell('B3')).toHaveValue('2\n')
 })
+
+test('cell typing preserves spaces, pasted characters and literal equals text after saving', async({ page, context, baseURL }) => {
+    const cell = (name: string) => page.getByRole('textbox', { name: `Cell ${name}`, exact: true })
+    const initial = await (await context.request.get(baseURL + '/api/thesis')).json()
+    await cell('B2').fill('')
+    await cell('B2').pressSequentially('  hello  world  ')
+    await expect(cell('B2')).toHaveValue('  hello  world  ')
+    const pasted = '\t first | \\ & <br> &#32; **bold** æøå 中文 👩🏽‍💻\n\nlast  '
+    await cell('B3').fill(pasted)
+    await cell('C2').fill('= ordinary text + 2')
+    await cell('B2').focus()
+    await expect(cell('C2')).toHaveValue('= ordinary text + 2')
+    await expect.poll(async() => (await (await context.request.get(baseURL + '/api/thesis')).json()).revision, { timeout: 15000 }).toBeGreaterThan(initial.revision)
+    await page.reload()
+    await expect(cell('B2')).toHaveValue('  hello  world  ')
+    await expect(cell('B3')).toHaveValue(pasted)
+    await expect(cell('C2')).toHaveValue('= ordinary text + 2')
+})

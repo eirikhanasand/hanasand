@@ -63,7 +63,7 @@ export function writeSheets(sheets: Sheet[]) {
 
 export type TableData = { cells: string[][], widths: number[], heights: number[] }
 const decode = (value: string) => value.replace(/<br\s*\/?\s*>/gi, '\n').replace(/\\\|/g, '|').replace(/&#(\d+);/g, (_, n) => Number(n) <= 0x10ffff ? String.fromCodePoint(Number(n)) : '\uFFFD').replace(/&amp;/g, '&')
-const encode = (value: string) => value.replace(/&/g, '&amp;').replace(/\\/g, '&#92;').replace(/\|/g, '&#124;').replace(/</g, '&#60;').replace(/>/g, '&#62;').replace(/\n/g, '<br>')
+const encode = (value: string) => value.replace(/&/g, '&amp;').replace(/\\/g, '&#92;').replace(/\|/g, '&#124;').replace(/</g, '&#60;').replace(/>/g, '&#62;').replace(/\n/g, '<br>').replace(/^\s+|\s+$|\t|\r/gu, whitespace => [...whitespace].map(character => `&#${character.codePointAt(0)};`).join(''))
 
 export function tables(body: string) {
     const result: { start: number, end: number, data: TableData }[] = []
@@ -96,7 +96,7 @@ export function cellValue(cells: string[][], row: number, col: number, visiting 
     if (--budget.remaining < 0) return '#LIMIT!'
     const raw = cells[row]?.[col]
     if (raw === undefined) return '#REF!'
-    if (!raw.trim().startsWith('=')) return raw
+    if (!/^=SUMMARIZE\b/i.test(raw.trim())) return raw
     const match = /^=SUMMARIZE\(\s*([A-Z]+)([1-9]\d*)\s*:\s*([A-Z]+)([1-9]\d*)\s*\)$/i.exec(raw.trim())
     if (!match) return raw.includes('#REF!') ? '#REF!' : '#FORMULA!'
     const key = `${row}:${col}`
