@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import Ajv2020 from 'ajv/dist/2020.js'
 import publicTiApi, { normalizeError } from '../src/handlers/ti/publicApi.ts'
 import { publicTiOpenApi } from '../src/contracts/publicTiOpenApi.ts'
+import { matchApiKeyScope, organizationPublicApiScopes } from '../src/utils/auth/apiKeys.ts'
 import { createPublicTiClient } from '../sdk/publicTiClient.ts'
 
 const apps: FastifyInstance[] = []
@@ -27,7 +28,7 @@ describe('public TI v1', () => {
         expect(response.headers['cache-control']).toBe('no-store, max-age=0')
         const spec = response.json()
         expect(spec.openapi).toBe('3.1.0')
-        expect(Object.keys(spec.paths)).toEqual(['/ti/search', '/ti/search/batch', '/actors', '/aliases', '/incidents', '/claims', '/evidence', '/sources', '/validations', '/alerts', '/evaluation', '/timeliness'])
+        expect(Object.keys(spec.paths)).toEqual(['/ti/search', '/ti/search/batch', '/actors', '/aliases', '/incidents', '/findings', '/evidence', '/sources', '/validations', '/alerts', '/evaluation', '/timeliness'])
         expect(spec.paths['/ti/search'].post.security).toEqual([])
         expect(spec.paths['/actors'].get.security).toEqual([{ ApiKey: [] }, { SessionBearer: [], SessionId: [] }])
         expect(spec.paths['/alerts'].get.security).toEqual([{ ApiKey: [] }])
@@ -42,6 +43,56 @@ describe('public TI v1', () => {
         expect(incidentFields).not.toContain('sourceId')
         expect(incidentFields).not.toContain('captureId')
         expect(JSON.stringify(spec)).not.toContain('additionalProperties":true')
+    })
+
+    test('publishes reusable pagination parameters and correct operation names', () => {
+        const spec = publicTiOpenApi
+        expect(Object.keys(spec.info)).toEqual(['title', 'version'])
+        expect((spec.paths['/aliases'] as any).get.operationId).toBe('listActorAliases')
+        expect((spec.paths['/timeliness'] as any).get.operationId).toBe('listTimeliness')
+        const ids = Object.values(spec.paths).flatMap((path: any) => Object.values(path).map((op: any) => op.operationId))
+        expect(new Set(ids).size).toBe(ids.length)
+        for (const path of Object.values(spec.paths) as any[]) {
+            if (!path.get) continue
+            for (const parameter of path.get.parameters) expect(resolveRef(parameter.$ref)).toHaveProperty('schema')
+        }
+        const cursor = spec.components.parameters.Cursor
+        expect(new RegExp(String(cursor.schema.pattern)).test('50')).toBe(true)
+        expect(new RegExp(String(cursor.schema.pattern)).test('invalid')).toBe(false)
+    })
+
+    test('serves paginated findings while preserving the old route and its access checks', async () => {
+        const requested: URL[] = []
+        const app = await testApp(async input => {
+            const url = new URL(String(input))
+            requested.push(url)
+            const offset = url.searchParams.get('cursor') || '0'
+            return Response.json({ claims: [{ id: `finding-${offset}`, claimType: 'victim_report', subjectType: 'company', subjectId: 'company-1', value: { company: 'Example' }, summary: 'A source reports an incident.', confidence: 0.5, reviewState: 'needs_review', sourceIds: ['source-1'], captureIds: ['capture-1'] }], total: 2, nextCursor: offset === '0' ? '1' : null })
+        })
+        for (const route of ['/findings', '/claims']) {
+            expect((await app.inject({ method: 'GET', url: `/api/v1${route}` })).statusCode).toBe(401)
+            const first = await app.inject({ method: 'GET', url: `/api/v1${route}?limit=1`, headers: { 'x-api-key': 'valid' } })
+            expect(first.statusCode).toBe(200)
+            expect(validateResponse('/findings', 'get', 200, first.json())).toBe(true)
+            const second = await app.inject({ method: 'GET', url: `/api/v1${route}?limit=1&cursor=${first.json().pagination.nextCursor}`, headers: { 'x-api-key': 'valid' } })
+            expect(second.json().data[0].id).toBe('finding-1')
+            expect(second.json().pagination.nextCursor).toBeNull()
+        }
+        expect(requested.every(url => url.pathname === '/v1/intel/claims')).toBe(true)
+    })
+
+    test('findings scopes preserve existing keys and rate limits without widening access', () => {
+        const scope = organizationPublicApiScopes().find(scope => scope.route === '/api/v1/findings')!
+        expect(scope).toBeDefined()
+        for (const savedRoute of ['/api/v1/claims', '/api/v1/findings']) {
+            const saved = { ...scope, route: savedRoute }
+            for (const route of ['/api/v1/claims', '/api/v1/findings']) {
+                expect(matchApiKeyScope([saved], 'GET', route)).toBe(saved)
+                expect(matchApiKeyScope([saved], 'POST', route)).toBeNull()
+                expect(matchApiKeyScope([{ ...saved, enabled: false }], 'GET', route)).toBeNull()
+            }
+            expect(matchApiKeyScope([saved], 'GET', '/api/v1/sources')).toBeNull()
+        }
     })
 
     test('keeps single search anonymous and returns stable request-correlated failures', async () => {

@@ -23,7 +23,7 @@ if (!cursor) throw new Error('Authenticated pagination proof requires a second a
 assertStatus(await capture('/actors', 'get', authenticated.GET('/actors', { params: { query: { limit: 1, cursor } } })), 200)
 assertStatus(await capture('/aliases', 'get', authenticated.GET('/aliases', { params: { query: { limit: 1 } } })), 200)
 assertStatus(await capture('/incidents', 'get', authenticated.GET('/incidents', { params: { query: { limit: 1 } } })), 200)
-assertStatus(await capture('/claims', 'get', authenticated.GET('/claims', { params: { query: { limit: 1 } } })), 200)
+assertStatus(await capture('/findings', 'get', authenticated.GET('/findings', { params: { query: { limit: 1 } } })), 200)
 assertStatus(await capture('/evidence', 'get', authenticated.GET('/evidence', { params: { query: { limit: 1 } } })), 200)
 assertStatus(await capture('/sources', 'get', authenticated.GET('/sources', { params: { query: { limit: 1 } } })), 200)
 assertStatus(await capture('/validations', 'get', authenticated.GET('/validations', { params: { query: { limit: 1 } } })), 200)

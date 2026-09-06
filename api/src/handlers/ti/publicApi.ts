@@ -21,7 +21,7 @@ const RESOURCE_ROUTES = {
     '/actors': ['actor-profiles', 'actorProfiles', publicActor],
     '/aliases': ['actor-aliases', 'actorAliases', publicAlias],
     '/incidents': ['incidents', 'incidents', publicIncident],
-    '/claims': ['claims', 'claims', publicClaim],
+    '/findings': ['claims', 'claims', publicClaim],
     '/evidence': ['evidence-links', 'evidenceLinks', publicEvidence],
     '/sources': ['sources', 'sources', publicSource],
     '/validations': ['validation-records', 'validationRecords', publicValidation],
@@ -85,7 +85,7 @@ export default async function publicTiApi(fastify: FastifyInstance, options: Pub
         return reply.status(partial ? 207 : 200).send({ generatedAt: new Date().toISOString(), count: results.length, partial, results })
     })
 
-    for (const [route, [upstream, responseKey, project]] of Object.entries(RESOURCE_ROUTES)) {
+    for (const [route, [upstream, responseKey, project]] of Object.entries({ ...RESOURCE_ROUTES, '/claims': RESOURCE_ROUTES['/findings'] })) {
         fastify.get(route, async (req: FastifyRequest<{ Querystring: { q?: unknown, limit?: unknown, cursor?: unknown } }>, reply) => {
             if (!hasAuthenticatedPrincipal(req)) return sendError(reply, req.id, 401, 'authentication_required', 'An API key or authenticated session is required.')
             const organizationId = apiKeyOrganizationId(req)

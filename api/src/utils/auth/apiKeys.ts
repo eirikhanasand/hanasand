@@ -148,7 +148,7 @@ export function organizationPublicApiScopes(): ApiKeyScopeRule[] {
         ['POST', '/mill'],
         ['POST', '/api/v1/ti/search'],
         ['POST', '/api/v1/ti/search/batch'],
-        ...['actors', 'aliases', 'incidents', 'claims', 'evidence', 'sources', 'validations', 'alerts', 'evaluation', 'timeliness']
+        ...['actors', 'aliases', 'incidents', 'findings', 'evidence', 'sources', 'validations', 'alerts', 'evaluation', 'timeliness']
             .map(route => ['GET', `/api/v1/${route}`]),
     ]
     return routes.map(([method, route], index) => ({
@@ -402,8 +402,13 @@ export function matchApiKeyScope(scopes: ApiKeyScopeRule[], method: string, rout
     return scopes.find((scope) =>
         scope.enabled
         && scope.method === method.toUpperCase()
-        && scope.route === route
+        && canonicalScopeRoute(scope.route) === canonicalScopeRoute(route)
     ) || null
+}
+
+// Existing keys keep their scope and quota when using the renamed findings endpoint.
+function canonicalScopeRoute(route: string) {
+    return route === '/api/v1/claims' ? '/api/v1/findings' : route
 }
 
 function buildApiKeySecret() {

@@ -15,7 +15,7 @@ export interface paths {
         put?: never;
         /**
          * Search public threat intelligence
-         * @description One bounded search is available anonymously. Results are never shared-cacheable.
+         * @description Search without an API key. Rate limits apply.
          */
         post: operations["searchThreatIntelligence"];
         delete?: never;
@@ -35,7 +35,7 @@ export interface paths {
         put?: never;
         /**
          * Search up to 25 unique queries
-         * @description Requires an API key or authenticated session. Input is capped at 25 unique queries and executed with concurrency 3. HTTP 207 reports per-query partial failures without disguising them as successful search results.
+         * @description Requires an API key or authenticated session. Returns HTTP 207 if any query fails; each result contains either the search result or an error.
          */
         post: operations["batchSearchThreatIntelligence"];
         delete?: never;
@@ -51,7 +51,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Actor intelligence profiles */
+        /** List threat actors */
         get: operations["listActors"];
         put?: never;
         post?: never;
@@ -68,8 +68,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Actor aliases linked to canonical profiles */
-        get: operations["listActorAliass"];
+        /** List alternative names for threat actors */
+        get: operations["listActorAliases"];
         put?: never;
         post?: never;
         delete?: never;
@@ -85,7 +85,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Structured incidents inferred from public evidence */
+        /** List reported security incidents */
         get: operations["listIncidents"];
         put?: never;
         post?: never;
@@ -95,15 +95,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/claims": {
+    "/findings": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Structured intelligence claims */
-        get: operations["listClaims"];
+        /** List findings extracted from source reports */
+        get: operations["listFindings"];
         put?: never;
         post?: never;
         delete?: never;
@@ -119,7 +119,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Capture-to-intelligence evidence links */
+        /** List source records supporting actors, incidents, and findings */
         get: operations["listEvidence"];
         put?: never;
         post?: never;
@@ -136,7 +136,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Governed public-intelligence sources */
+        /** List sources */
         get: operations["listSources"];
         put?: never;
         post?: never;
@@ -153,7 +153,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Public-reference validation records */
+        /** List checks against supporting or contradicting reports */
         get: operations["listValidations"];
         put?: never;
         post?: never;
@@ -171,8 +171,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Metadata-safe threat alerts
-         * @description Returns only alerts belonging to the organization embedded in the presented API key. Caller-supplied tenant headers or query parameters cannot select another organization.
+         * List organization alerts
+         * @description Returns alerts for the organization that owns the API key.
          */
         get: operations["listAlerts"];
         put?: never;
@@ -190,7 +190,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Independent evaluation labels */
+        /** List extraction accuracy assessments */
         get: operations["listEvaluationLabels"];
         put?: never;
         post?: never;
@@ -207,8 +207,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Collection and publication latency records */
-        get: operations["listTimelinesss"];
+        /** List collection and processing times */
+        get: operations["listTimeliness"];
         put?: never;
         post?: never;
         delete?: never;
@@ -232,11 +232,12 @@ export interface components {
         Pagination: {
             limit: number;
             total: number;
+            /** @description Pass this as cursor to fetch the next page. Null means there are no more pages. */
             nextCursor: string | null;
         };
         Meta: {
             requestId: string;
-            /** @description Organization bound to the presented API key. Present on organization-scoped responses. */
+            /** @description Organization that owns the API key, when applicable. */
             organizationId?: string;
         };
         SearchRequest: {
@@ -362,9 +363,7 @@ export interface components {
             /** @enum {string} */
             cacheStatus?: "hit" | "miss";
             /** @enum {string} */
-            cacheStatus?: "hit" | "miss";
-            /** @enum {string} */
-            status?: "queued" | "searching" | "partial" | "ready" | "metadata_review" | "blocked_unsafe_target" | "needs_source_activation" | "unavailable";
+            status?: "queued" | "searching" | "partial" | "ready" | "metadata_review" | "blocked_unsafe_target" | "needs_source_activation";
             runId?: string;
             refreshAfterSeconds?: number;
             summary: string;
@@ -484,7 +483,7 @@ export interface components {
             automaticReview?: components["schemas"]["IncidentAutomaticReview"];
             extractorVersion?: string;
         };
-        ClaimValue: {
+        FindingValue: {
             title?: string;
             summary?: string;
             type?: string;
@@ -494,12 +493,12 @@ export interface components {
             victim?: string;
             datasetType?: string;
         };
-        Claim: {
+        Finding: {
             id: string;
             claimType: string;
             subjectType: string;
             subjectId: string;
-            value: components["schemas"]["ClaimValue"];
+            value: components["schemas"]["FindingValue"];
             summary: string;
             confidence: number;
             evidenceStage?: string;
@@ -698,8 +697,8 @@ export interface components {
             pagination: components["schemas"]["Pagination"];
             meta: components["schemas"]["Meta"];
         };
-        ClaimCollection: {
-            data: components["schemas"]["Claim"][];
+        FindingCollection: {
+            data: components["schemas"]["Finding"][];
             pagination: components["schemas"]["Pagination"];
             meta: components["schemas"]["Meta"];
         };
@@ -803,7 +802,14 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        /** @description Filter by text, ignoring case. */
+        Query: string;
+        /** @description Number of records per page. */
+        Limit: number;
+        /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+        Cursor: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -888,12 +894,12 @@ export interface operations {
     listActors: {
         parameters: {
             query?: {
-                /** @description Case-insensitive text filter. */
-                q?: string;
-                /** @description Records per page. */
-                limit?: number;
-                /** @description Opaque cursor returned by the preceding page. */
-                cursor?: string;
+                /** @description Filter by text, ignoring case. */
+                q?: components["parameters"]["Query"];
+                /** @description Number of records per page. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
             path?: never;
@@ -920,15 +926,15 @@ export interface operations {
             503: components["responses"]["Unavailable"];
         };
     };
-    listActorAliass: {
+    listActorAliases: {
         parameters: {
             query?: {
-                /** @description Case-insensitive text filter. */
-                q?: string;
-                /** @description Records per page. */
-                limit?: number;
-                /** @description Opaque cursor returned by the preceding page. */
-                cursor?: string;
+                /** @description Filter by text, ignoring case. */
+                q?: components["parameters"]["Query"];
+                /** @description Number of records per page. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
             path?: never;
@@ -958,12 +964,12 @@ export interface operations {
     listIncidents: {
         parameters: {
             query?: {
-                /** @description Case-insensitive text filter. */
-                q?: string;
-                /** @description Records per page. */
-                limit?: number;
-                /** @description Opaque cursor returned by the preceding page. */
-                cursor?: string;
+                /** @description Filter by text, ignoring case. */
+                q?: components["parameters"]["Query"];
+                /** @description Number of records per page. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
             path?: never;
@@ -990,15 +996,15 @@ export interface operations {
             503: components["responses"]["Unavailable"];
         };
     };
-    listClaims: {
+    listFindings: {
         parameters: {
             query?: {
-                /** @description Case-insensitive text filter. */
-                q?: string;
-                /** @description Records per page. */
-                limit?: number;
-                /** @description Opaque cursor returned by the preceding page. */
-                cursor?: string;
+                /** @description Filter by text, ignoring case. */
+                q?: components["parameters"]["Query"];
+                /** @description Number of records per page. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
             path?: never;
@@ -1006,7 +1012,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Claim page */
+            /** @description Finding page */
             200: {
                 headers: {
                     "X-Request-Id"?: string;
@@ -1014,7 +1020,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClaimCollection"];
+                    "application/json": components["schemas"]["FindingCollection"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -1028,12 +1034,12 @@ export interface operations {
     listEvidence: {
         parameters: {
             query?: {
-                /** @description Case-insensitive text filter. */
-                q?: string;
-                /** @description Records per page. */
-                limit?: number;
-                /** @description Opaque cursor returned by the preceding page. */
-                cursor?: string;
+                /** @description Filter by text, ignoring case. */
+                q?: components["parameters"]["Query"];
+                /** @description Number of records per page. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
             path?: never;
@@ -1063,12 +1069,12 @@ export interface operations {
     listSources: {
         parameters: {
             query?: {
-                /** @description Case-insensitive text filter. */
-                q?: string;
-                /** @description Records per page. */
-                limit?: number;
-                /** @description Opaque cursor returned by the preceding page. */
-                cursor?: string;
+                /** @description Filter by text, ignoring case. */
+                q?: components["parameters"]["Query"];
+                /** @description Number of records per page. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
             path?: never;
@@ -1098,12 +1104,12 @@ export interface operations {
     listValidations: {
         parameters: {
             query?: {
-                /** @description Case-insensitive text filter. */
-                q?: string;
-                /** @description Records per page. */
-                limit?: number;
-                /** @description Opaque cursor returned by the preceding page. */
-                cursor?: string;
+                /** @description Filter by text, ignoring case. */
+                q?: components["parameters"]["Query"];
+                /** @description Number of records per page. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
             path?: never;
@@ -1133,12 +1139,12 @@ export interface operations {
     listAlerts: {
         parameters: {
             query?: {
-                /** @description Case-insensitive text filter. */
-                q?: string;
-                /** @description Records per page. */
-                limit?: number;
-                /** @description Opaque cursor returned by the preceding page. */
-                cursor?: string;
+                /** @description Filter by text, ignoring case. */
+                q?: components["parameters"]["Query"];
+                /** @description Number of records per page. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
             path?: never;
@@ -1168,12 +1174,12 @@ export interface operations {
     listEvaluationLabels: {
         parameters: {
             query?: {
-                /** @description Case-insensitive text filter. */
-                q?: string;
-                /** @description Records per page. */
-                limit?: number;
-                /** @description Opaque cursor returned by the preceding page. */
-                cursor?: string;
+                /** @description Filter by text, ignoring case. */
+                q?: components["parameters"]["Query"];
+                /** @description Number of records per page. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
             path?: never;
@@ -1200,15 +1206,15 @@ export interface operations {
             503: components["responses"]["Unavailable"];
         };
     };
-    listTimelinesss: {
+    listTimeliness: {
         parameters: {
             query?: {
-                /** @description Case-insensitive text filter. */
-                q?: string;
-                /** @description Records per page. */
-                limit?: number;
-                /** @description Opaque cursor returned by the preceding page. */
-                cursor?: string;
+                /** @description Filter by text, ignoring case. */
+                q?: components["parameters"]["Query"];
+                /** @description Number of records per page. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
             path?: never;

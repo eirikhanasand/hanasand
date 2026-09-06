@@ -60,7 +60,7 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
 })
 
 async function enforceRateLimit(req: FastifyRequest, res: FastifyReply, databaseReadOnly = false) {
-    const path = normalizeRequestPath(req)
+    let path = normalizeRequestPath(req)
     if (
         req.headers.upgrade?.toLowerCase() === 'websocket'
         || isInfrastructureWebSocketPath(path)
@@ -86,6 +86,8 @@ async function enforceRateLimit(req: FastifyRequest, res: FastifyReply, database
             sendBoundaryError(req, res, 403, 'scope_forbidden', 'API key is not allowed to access this endpoint.')
             return false
         }
+        // Route aliases share the existing key's quota counters and configured limits.
+        path = apiKeyScope.route
     }
 
     const checkedSession = (req as FastifyRequest & { rateLimitSession?: Awaited<ReturnType<typeof validateSession>> }).rateLimitSession

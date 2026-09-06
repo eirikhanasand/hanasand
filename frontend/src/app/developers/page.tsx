@@ -8,13 +8,13 @@ import ApiKeyOnboarding from './apiKeyOnboarding'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Developers',
-    description: 'Versioned Hanasand public-intelligence API contract, authentication, pagination, limits, and generated client setup.',
+    description: 'Use the Hanasand API to search threat intelligence and retrieve actors, incidents, findings, and sources.',
     path: '/developers',
     keywords: ['hanasand developers', 'threat intelligence api', 'public intelligence api'],
 })
 
 type OpenApiOperation = { operationId?: string, summary?: string, description?: string, security?: Array<Record<string, unknown>>, requestBody?: { content?: { 'application/json'?: { schema?: { $ref?: string } } } }, responses?: Record<string, { description?: string } | { $ref?: string }> }
-type OpenApiDocument = { info: { title: string, version: string, description?: string, 'x-compatibility-policy'?: string, 'x-idempotency-policy'?: string }, servers?: Array<{ url: string }>, paths: Record<string, Partial<Record<'get' | 'post', OpenApiOperation>>>, components?: { securitySchemes?: { ApiKey?: { name?: string } }, responses?: Record<string, { description?: string }> } }
+type OpenApiDocument = { info: { title: string, version: string, description?: string }, servers?: Array<{ url: string }>, paths: Record<string, Partial<Record<'get' | 'post', OpenApiOperation>>>, components?: { securitySchemes?: { ApiKey?: { name?: string } }, responses?: Record<string, { description?: string }> } }
 
 export default async function DevelopersPage() {
     const contract = await loadContract()
@@ -66,7 +66,7 @@ if (error) throw new Error(error.error.message)`
                     <div className='rounded-lg border border-ui-border bg-ui-panel p-5'>
                         <div className='flex items-center gap-2'><KeyRound className='h-5 w-5 text-ui-primary' /><h2 className='text-lg font-semibold'>Authentication</h2></div>
                         <p className='mt-3 text-sm leading-7 text-ui-muted'>Send a provisioned key in <code className='font-semibold text-ui-text'>{apiKeyHeader}</code>. Single search is anonymously rate-limited; batch search and most collection routes accept an exact method-and-route key scope or an authenticated session. organization-specific alerts require an organization API key.</p>
-                        <p className='mt-3 text-sm leading-7 text-ui-muted'>Responses include <code>X-Request-Id</code> and quota headers. API responses are <code>no-store</code>; failures and partial batches keep their real status.</p>
+                        <p className='mt-3 text-sm leading-7 text-ui-muted'>Responses include <code>X-Request-Id</code> and quota headers. API responses are <code>no-store</code>; a batch returns HTTP 207 when one or more queries fail.</p>
                     </div>
                 </div>
             </section>
@@ -92,13 +92,13 @@ if (error) throw new Error(error.error.message)`
 
             <section className='border-b border-ui-border bg-ui-panel'>
                 <div className='mx-auto grid max-w-7xl gap-8 px-4 py-9 md:px-8 lg:grid-cols-2'>
-                    <div><h2 className='text-2xl font-semibold'>Stable errors</h2><div className='mt-4 grid gap-2'>{errorRows.map(([name, response]) => <div key={name} className='grid grid-cols-[8rem_1fr] gap-3 border-b border-ui-border py-3 text-sm'><code className='font-semibold'>{name}</code><span className='text-ui-muted'>{response.description}</span></div>)}</div></div>
-                    <div><h2 className='text-2xl font-semibold'>Compatibility</h2><p className='mt-4 text-sm leading-7 text-ui-muted'>{contract.info['x-compatibility-policy']}</p><p className='mt-3 text-sm leading-7 text-ui-muted'>{contract.info['x-idempotency-policy']}</p></div>
+                    <div><h2 className='text-2xl font-semibold'>Errors</h2><div className='mt-4 grid gap-2'>{errorRows.map(([name, response]) => <div key={name} className='grid grid-cols-[8rem_1fr] gap-3 border-b border-ui-border py-3 text-sm'><code className='font-semibold'>{name}</code><span className='text-ui-muted'>{response.description}</span></div>)}</div></div>
+                    <div><h2 className='text-2xl font-semibold'>Pagination</h2><p className='mt-4 text-sm leading-7 text-ui-muted'>Use <code>limit</code> to choose how many records to fetch, up to 100. To fetch the next page, pass the response’s <code>pagination.nextCursor</code> as <code>cursor</code>. A null cursor means you have reached the end.</p></div>
                 </div>
             </section>
 
             <section>
-                <div className='mx-auto flex max-w-7xl gap-3 px-4 py-9 md:px-8'><ShieldCheck className='mt-1 h-5 w-5 shrink-0 text-ui-primary' /><div><h2 className='font-semibold'>Evidence boundary</h2><p className='mt-2 text-sm leading-6 text-ui-muted'>Public responses exclude raw stolen material, restricted locators, customer tenant data, secrets, and internal object references.</p></div></div>
+                <div className='mx-auto flex max-w-7xl gap-3 px-4 py-9 md:px-8'><ShieldCheck className='mt-1 h-5 w-5 shrink-0 text-ui-primary' /><div><h2 className='font-semibold'>Response contents</h2><p className='mt-2 text-sm leading-6 text-ui-muted'>Public responses exclude raw stolen material, restricted locators, customer tenant data, secrets, and internal object references.</p></div></div>
             </section>
         </main>
     )

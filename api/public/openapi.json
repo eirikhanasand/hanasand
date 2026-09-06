@@ -2,11 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Hanasand Public Intelligence API",
-    "version": "1.0.0",
-    "description": "Versioned, metadata-safe access to production-backed public intelligence. Version 1 is read-only: POST search operations are retrieval operations, and no mutation or idempotency-key contract is advertised.",
-    "x-compatibility-policy": "Additive fields and endpoints may be introduced within v1. Removing or changing existing fields, semantics, authentication, or pagination requires a new major API version.",
-    "x-idempotency-policy": "v1 exposes no public mutations. Search POSTs are retrieval-only and safe to retry; no Idempotency-Key header is required.",
-    "x-onboarding": "Create an account, organization, and 90-day organization API key at https://hanasand.com/developers#api-access. The secret is returned once."
+    "version": "1.0.0"
   },
   "servers": [
     {
@@ -27,7 +23,7 @@
       "post": {
         "operationId": "searchThreatIntelligence",
         "summary": "Search public threat intelligence",
-        "description": "One bounded search is available anonymously. Results are never shared-cacheable.",
+        "description": "Search without an API key. Rate limits apply.",
         "security": [],
         "requestBody": {
           "required": true,
@@ -88,7 +84,7 @@
       "post": {
         "operationId": "batchSearchThreatIntelligence",
         "summary": "Search up to 25 unique queries",
-        "description": "Requires an API key or authenticated session. Input is capped at 25 unique queries and executed with concurrency 3. HTTP 207 reports per-query partial failures without disguising them as successful search results.",
+        "description": "Requires an API key or authenticated session. Returns HTTP 207 if any query fails; each result contains either the search result or an error.",
         "security": [
           {
             "ApiKey": []
@@ -179,7 +175,7 @@
     "/actors": {
       "get": {
         "operationId": "listActors",
-        "summary": "Actor intelligence profiles",
+        "summary": "List threat actors",
         "security": [
           {
             "ApiKey": []
@@ -191,33 +187,13 @@
         ],
         "parameters": [
           {
-            "name": "q",
-            "in": "query",
-            "description": "Case-insensitive text filter.",
-            "schema": {
-              "type": "string",
-              "maxLength": 200
-            }
+            "$ref": "#/components/parameters/Query"
           },
           {
-            "name": "limit",
-            "in": "query",
-            "description": "Records per page.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50
-            }
+            "$ref": "#/components/parameters/Limit"
           },
           {
-            "name": "cursor",
-            "in": "query",
-            "description": "Opaque cursor returned by the preceding page.",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d+$"
-            }
+            "$ref": "#/components/parameters/Cursor"
           }
         ],
         "responses": {
@@ -267,8 +243,8 @@
     },
     "/aliases": {
       "get": {
-        "operationId": "listActorAliass",
-        "summary": "Actor aliases linked to canonical profiles",
+        "operationId": "listActorAliases",
+        "summary": "List alternative names for threat actors",
         "security": [
           {
             "ApiKey": []
@@ -280,33 +256,13 @@
         ],
         "parameters": [
           {
-            "name": "q",
-            "in": "query",
-            "description": "Case-insensitive text filter.",
-            "schema": {
-              "type": "string",
-              "maxLength": 200
-            }
+            "$ref": "#/components/parameters/Query"
           },
           {
-            "name": "limit",
-            "in": "query",
-            "description": "Records per page.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50
-            }
+            "$ref": "#/components/parameters/Limit"
           },
           {
-            "name": "cursor",
-            "in": "query",
-            "description": "Opaque cursor returned by the preceding page.",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d+$"
-            }
+            "$ref": "#/components/parameters/Cursor"
           }
         ],
         "responses": {
@@ -357,7 +313,7 @@
     "/incidents": {
       "get": {
         "operationId": "listIncidents",
-        "summary": "Structured incidents inferred from public evidence",
+        "summary": "List reported security incidents",
         "security": [
           {
             "ApiKey": []
@@ -369,33 +325,13 @@
         ],
         "parameters": [
           {
-            "name": "q",
-            "in": "query",
-            "description": "Case-insensitive text filter.",
-            "schema": {
-              "type": "string",
-              "maxLength": 200
-            }
+            "$ref": "#/components/parameters/Query"
           },
           {
-            "name": "limit",
-            "in": "query",
-            "description": "Records per page.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50
-            }
+            "$ref": "#/components/parameters/Limit"
           },
           {
-            "name": "cursor",
-            "in": "query",
-            "description": "Opaque cursor returned by the preceding page.",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d+$"
-            }
+            "$ref": "#/components/parameters/Cursor"
           }
         ],
         "responses": {
@@ -443,10 +379,10 @@
         }
       }
     },
-    "/claims": {
+    "/findings": {
       "get": {
-        "operationId": "listClaims",
-        "summary": "Structured intelligence claims",
+        "operationId": "listFindings",
+        "summary": "List findings extracted from source reports",
         "security": [
           {
             "ApiKey": []
@@ -458,38 +394,18 @@
         ],
         "parameters": [
           {
-            "name": "q",
-            "in": "query",
-            "description": "Case-insensitive text filter.",
-            "schema": {
-              "type": "string",
-              "maxLength": 200
-            }
+            "$ref": "#/components/parameters/Query"
           },
           {
-            "name": "limit",
-            "in": "query",
-            "description": "Records per page.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50
-            }
+            "$ref": "#/components/parameters/Limit"
           },
           {
-            "name": "cursor",
-            "in": "query",
-            "description": "Opaque cursor returned by the preceding page.",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d+$"
-            }
+            "$ref": "#/components/parameters/Cursor"
           }
         ],
         "responses": {
           "200": {
-            "description": "Claim page",
+            "description": "Finding page",
             "headers": {
               "X-Request-Id": {
                 "schema": {
@@ -506,7 +422,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ClaimCollection"
+                  "$ref": "#/components/schemas/FindingCollection"
                 }
               }
             }
@@ -535,7 +451,7 @@
     "/evidence": {
       "get": {
         "operationId": "listEvidence",
-        "summary": "Capture-to-intelligence evidence links",
+        "summary": "List source records supporting actors, incidents, and findings",
         "security": [
           {
             "ApiKey": []
@@ -547,33 +463,13 @@
         ],
         "parameters": [
           {
-            "name": "q",
-            "in": "query",
-            "description": "Case-insensitive text filter.",
-            "schema": {
-              "type": "string",
-              "maxLength": 200
-            }
+            "$ref": "#/components/parameters/Query"
           },
           {
-            "name": "limit",
-            "in": "query",
-            "description": "Records per page.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50
-            }
+            "$ref": "#/components/parameters/Limit"
           },
           {
-            "name": "cursor",
-            "in": "query",
-            "description": "Opaque cursor returned by the preceding page.",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d+$"
-            }
+            "$ref": "#/components/parameters/Cursor"
           }
         ],
         "responses": {
@@ -624,7 +520,7 @@
     "/sources": {
       "get": {
         "operationId": "listSources",
-        "summary": "Governed public-intelligence sources",
+        "summary": "List sources",
         "security": [
           {
             "ApiKey": []
@@ -636,33 +532,13 @@
         ],
         "parameters": [
           {
-            "name": "q",
-            "in": "query",
-            "description": "Case-insensitive text filter.",
-            "schema": {
-              "type": "string",
-              "maxLength": 200
-            }
+            "$ref": "#/components/parameters/Query"
           },
           {
-            "name": "limit",
-            "in": "query",
-            "description": "Records per page.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50
-            }
+            "$ref": "#/components/parameters/Limit"
           },
           {
-            "name": "cursor",
-            "in": "query",
-            "description": "Opaque cursor returned by the preceding page.",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d+$"
-            }
+            "$ref": "#/components/parameters/Cursor"
           }
         ],
         "responses": {
@@ -713,7 +589,7 @@
     "/validations": {
       "get": {
         "operationId": "listValidations",
-        "summary": "Public-reference validation records",
+        "summary": "List checks against supporting or contradicting reports",
         "security": [
           {
             "ApiKey": []
@@ -725,33 +601,13 @@
         ],
         "parameters": [
           {
-            "name": "q",
-            "in": "query",
-            "description": "Case-insensitive text filter.",
-            "schema": {
-              "type": "string",
-              "maxLength": 200
-            }
+            "$ref": "#/components/parameters/Query"
           },
           {
-            "name": "limit",
-            "in": "query",
-            "description": "Records per page.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50
-            }
+            "$ref": "#/components/parameters/Limit"
           },
           {
-            "name": "cursor",
-            "in": "query",
-            "description": "Opaque cursor returned by the preceding page.",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d+$"
-            }
+            "$ref": "#/components/parameters/Cursor"
           }
         ],
         "responses": {
@@ -802,8 +658,8 @@
     "/alerts": {
       "get": {
         "operationId": "listAlerts",
-        "summary": "Metadata-safe threat alerts",
-        "description": "Returns only alerts belonging to the organization embedded in the presented API key. Caller-supplied tenant headers or query parameters cannot select another organization.",
+        "summary": "List organization alerts",
+        "description": "Returns alerts for the organization that owns the API key.",
         "security": [
           {
             "ApiKey": []
@@ -811,33 +667,13 @@
         ],
         "parameters": [
           {
-            "name": "q",
-            "in": "query",
-            "description": "Case-insensitive text filter.",
-            "schema": {
-              "type": "string",
-              "maxLength": 200
-            }
+            "$ref": "#/components/parameters/Query"
           },
           {
-            "name": "limit",
-            "in": "query",
-            "description": "Records per page.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50
-            }
+            "$ref": "#/components/parameters/Limit"
           },
           {
-            "name": "cursor",
-            "in": "query",
-            "description": "Opaque cursor returned by the preceding page.",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d+$"
-            }
+            "$ref": "#/components/parameters/Cursor"
           }
         ],
         "responses": {
@@ -888,7 +724,7 @@
     "/evaluation": {
       "get": {
         "operationId": "listEvaluationLabels",
-        "summary": "Independent evaluation labels",
+        "summary": "List extraction accuracy assessments",
         "security": [
           {
             "ApiKey": []
@@ -900,33 +736,13 @@
         ],
         "parameters": [
           {
-            "name": "q",
-            "in": "query",
-            "description": "Case-insensitive text filter.",
-            "schema": {
-              "type": "string",
-              "maxLength": 200
-            }
+            "$ref": "#/components/parameters/Query"
           },
           {
-            "name": "limit",
-            "in": "query",
-            "description": "Records per page.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50
-            }
+            "$ref": "#/components/parameters/Limit"
           },
           {
-            "name": "cursor",
-            "in": "query",
-            "description": "Opaque cursor returned by the preceding page.",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d+$"
-            }
+            "$ref": "#/components/parameters/Cursor"
           }
         ],
         "responses": {
@@ -976,8 +792,8 @@
     },
     "/timeliness": {
       "get": {
-        "operationId": "listTimelinesss",
-        "summary": "Collection and publication latency records",
+        "operationId": "listTimeliness",
+        "summary": "List collection and processing times",
         "security": [
           {
             "ApiKey": []
@@ -989,33 +805,13 @@
         ],
         "parameters": [
           {
-            "name": "q",
-            "in": "query",
-            "description": "Case-insensitive text filter.",
-            "schema": {
-              "type": "string",
-              "maxLength": 200
-            }
+            "$ref": "#/components/parameters/Query"
           },
           {
-            "name": "limit",
-            "in": "query",
-            "description": "Records per page.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50
-            }
+            "$ref": "#/components/parameters/Limit"
           },
           {
-            "name": "cursor",
-            "in": "query",
-            "description": "Opaque cursor returned by the preceding page.",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d+$"
-            }
+            "$ref": "#/components/parameters/Cursor"
           }
         ],
         "responses": {
@@ -1065,12 +861,44 @@
     }
   },
   "components": {
+    "parameters": {
+      "Query": {
+        "name": "q",
+        "in": "query",
+        "description": "Filter by text, ignoring case.",
+        "schema": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "description": "Number of records per page.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 50
+        }
+      },
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "description": "Pass pagination.nextCursor from the previous response. Omit for the first page.",
+        "schema": {
+          "type": "string",
+          "pattern": "^\\d+$",
+          "example": "50"
+        }
+      }
+    },
     "securitySchemes": {
       "ApiKey": {
         "type": "apiKey",
         "in": "header",
         "name": "X-API-Key",
-        "description": "Organization-owned key with exact method-and-route scopes. Self-serve keys use Starter limits; batch is additionally limited to 1 request/second, 12/minute, 120/hour, and 1,000/day."
+        "description": "Organization API key. Access and rate limits depend on its allowed routes. Batch search allows 1 request/second, 12/minute, 120/hour, and 1,000/day."
       },
       "SessionBearer": {
         "type": "http",
@@ -1134,7 +962,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Pass this as cursor to fetch the next page. Null means there are no more pages."
           }
         },
         "required": [
@@ -1152,7 +981,7 @@
           },
           "organizationId": {
             "type": "string",
-            "description": "Organization bound to the presented API key. Present on organization-scoped responses."
+            "description": "Organization that owns the API key, when applicable."
           }
         },
         "required": [
@@ -1627,8 +1456,7 @@
               "ready",
               "metadata_review",
               "blocked_unsafe_target",
-              "needs_source_activation",
-              "unavailable"
+              "needs_source_activation"
             ]
           },
           "runId": {
@@ -2127,7 +1955,7 @@
           "actorAttribution"
         ]
       },
-      "ClaimValue": {
+      "FindingValue": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
@@ -2157,7 +1985,7 @@
           }
         }
       },
-      "Claim": {
+      "Finding": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
@@ -2174,7 +2002,7 @@
             "type": "string"
           },
           "value": {
-            "$ref": "#/components/schemas/ClaimValue"
+            "$ref": "#/components/schemas/FindingValue"
           },
           "summary": {
             "type": "string"
@@ -2859,14 +2687,14 @@
           "meta"
         ]
       },
-      "ClaimCollection": {
+      "FindingCollection": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "data": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Claim"
+              "$ref": "#/components/schemas/Finding"
             }
           },
           "pagination": {

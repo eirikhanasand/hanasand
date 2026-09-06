@@ -20,30 +20,26 @@ const errorResponses = {
     '503': { $ref: '#/components/responses/Unavailable' },
 }
 
-const paginationParameters = [
-    { name: 'q', in: 'query', description: 'Case-insensitive text filter.', schema: string({ maxLength: 200 }) },
-    { name: 'limit', in: 'query', description: 'Records per page.', schema: integer({ minimum: 1, maximum: 100, default: 50 }) },
-    { name: 'cursor', in: 'query', description: 'Opaque cursor returned by the preceding page.', schema: string({ pattern: '^\\d+$' }) },
-]
+const paginationParameters = ['Query', 'Limit', 'Cursor'].map(name => ({ $ref: `#/components/parameters/${name}` }))
 
 const resourceDefinitions = {
-    '/actors': ['Actor', 'Actor intelligence profiles'],
-    '/aliases': ['ActorAlias', 'Actor aliases linked to canonical profiles'],
-    '/incidents': ['Incident', 'Structured incidents inferred from public evidence'],
-    '/claims': ['Claim', 'Structured intelligence claims'],
-    '/evidence': ['EvidenceLink', 'Capture-to-intelligence evidence links'],
-    '/sources': ['Source', 'Governed public-intelligence sources'],
-    '/validations': ['Validation', 'Public-reference validation records'],
-    '/alerts': ['Alert', 'Metadata-safe threat alerts'],
-    '/evaluation': ['EvaluationLabel', 'Independent evaluation labels'],
-    '/timeliness': ['Timeliness', 'Collection and publication latency records'],
+    '/actors': ['Actor', 'List threat actors', 'listActors'],
+    '/aliases': ['ActorAlias', 'List alternative names for threat actors', 'listActorAliases'],
+    '/incidents': ['Incident', 'List reported security incidents', 'listIncidents'],
+    '/findings': ['Finding', 'List findings extracted from source reports', 'listFindings'],
+    '/evidence': ['EvidenceLink', 'List source records supporting actors, incidents, and findings', 'listEvidence'],
+    '/sources': ['Source', 'List sources', 'listSources'],
+    '/validations': ['Validation', 'List checks against supporting or contradicting reports', 'listValidations'],
+    '/alerts': ['Alert', 'List organization alerts', 'listAlerts'],
+    '/evaluation': ['EvaluationLabel', 'List extraction accuracy assessments', 'listEvaluationLabels'],
+    '/timeliness': ['Timeliness', 'List collection and processing times', 'listTimeliness'],
 } as const
 
 const schemas: Record<string, Schema> = {
     ErrorDetail: object({ code: string(), message: string(), requestId: string() }, ['code', 'message', 'requestId']),
     ErrorEnvelope: object({ error: ref('ErrorDetail') }, ['error']),
-    Pagination: object({ limit: integer({ minimum: 1, maximum: 100 }), total: integer({ minimum: 0 }), nextCursor: nullableString() }, ['limit', 'total', 'nextCursor']),
-    Meta: object({ requestId: string(), organizationId: string({ description: 'Organization bound to the presented API key. Present on organization-scoped responses.' }) }, ['requestId']),
+    Pagination: object({ limit: integer({ minimum: 1, maximum: 100 }), total: integer({ minimum: 0 }), nextCursor: { ...nullableString(), description: 'Pass this as cursor to fetch the next page. Null means there are no more pages.' } }, ['limit', 'total', 'nextCursor']),
+    Meta: object({ requestId: string(), organizationId: string({ description: 'Organization that owns the API key, when applicable.' }) }, ['requestId']),
     SearchRequest: object({ query: string({ minLength: 2, maxLength: 200, example: 'APT29' }) }, ['query']),
     BatchSearchRequest: object({ queries: { type: 'array', minItems: 1, maxItems: 25, items: string({ minLength: 2, maxLength: 200 }), example: ['APT29', 'CVE-2024-3094'] } }, ['queries']),
     Activity: object({
@@ -77,8 +73,8 @@ const schemas: Record<string, Schema> = {
         configuredModelVersion: string({ maxLength: 200 }), runtimeIdentity: ref('ModelRuntimeIdentity'), promptVersion: string({ maxLength: 200 }), responseSchemaVersion: string({ maxLength: 200 }), evidenceProjectionSchema: string({ maxLength: 200 }), linkedEvidenceCount: integer({ minimum: 0, maximum: 100_000 }), linkedSourceCount: integer({ minimum: 0, maximum: 100_000 }), linkedIndependentSourceCount: integer({ minimum: 0, maximum: 100_000 }), reviewedAt: dateTime(), action: string({ enum: ['confirm', 'reject', 'mark_contradicted', 'mark_needs_review'] }), claimValidity: string({ enum: ['supported', 'invalid', 'contradicted', 'uncertain'] }), confidence: confidence(),
     }, ['configuredModelVersion']),
     Incident: object({ id: string({ maxLength: 200 }), title: string({ maxLength: 500 }), summary: string({ maxLength: 4000 }), firstSeenAt: dateTime(), confidence: confidence(), assertionKind: string({ const: 'inferred' }), reviewState: string({ maxLength: 100 }), actorAttribution: { oneOf: [ref('IncidentActorAttribution'), { type: 'null' }] }, automaticReview: ref('IncidentAutomaticReview'), extractorVersion: string({ maxLength: 200 }) }, ['id', 'title', 'summary', 'assertionKind', 'reviewState', 'actorAttribution']),
-    ClaimValue: object({ title: string(), summary: string(), type: string(), value: string(), normalizedValue: string(), company: string(), victim: string(), datasetType: string() }),
-    Claim: object({ id: string(), claimType: string(), subjectType: string(), subjectId: string(), value: ref('ClaimValue'), summary: string(), confidence: confidence(), evidenceStage: string(), extractionMethod: string(), extractorVersion: string(), reviewState: string(), corroborationState: string(), sourceCount: integer({ minimum: 0 }), evidenceCount: integer({ minimum: 0 }), firstSeenAt: dateTime(), lastSeenAt: dateTime(), sourceIds: stringArray(), captureIds: stringArray(), uncertaintyReasons: stringArray(), legalHold: boolean(), retentionClass: string(), createdAt: dateTime(), updatedAt: dateTime() }, ['id', 'claimType', 'subjectType', 'subjectId', 'value', 'summary', 'confidence', 'reviewState', 'sourceIds', 'captureIds']),
+    FindingValue: object({ title: string(), summary: string(), type: string(), value: string(), normalizedValue: string(), company: string(), victim: string(), datasetType: string() }),
+    Finding: object({ id: string(), claimType: string(), subjectType: string(), subjectId: string(), value: ref('FindingValue'), summary: string(), confidence: confidence(), evidenceStage: string(), extractionMethod: string(), extractorVersion: string(), reviewState: string(), corroborationState: string(), sourceCount: integer({ minimum: 0 }), evidenceCount: integer({ minimum: 0 }), firstSeenAt: dateTime(), lastSeenAt: dateTime(), sourceIds: stringArray(), captureIds: stringArray(), uncertaintyReasons: stringArray(), legalHold: boolean(), retentionClass: string(), createdAt: dateTime(), updatedAt: dateTime() }, ['id', 'claimType', 'subjectType', 'subjectId', 'value', 'summary', 'confidence', 'reviewState', 'sourceIds', 'captureIds']),
     EvidenceLink: object({ id: string(), captureId: string(), subjectType: string(), subjectId: string(), relationship: string(), confidence: confidence(), extractorVersion: string(), createdAt: dateTime() }, ['id', 'captureId', 'subjectType', 'subjectId', 'relationship', 'confidence']),
     OperatingMode: object({ accessMethod: string(), metadataOnly: boolean(), approvalState: string(), policyVersion: string() }, ['accessMethod', 'metadataOnly', 'approvalState']),
     Publisher: object({ name: string(), country: string(), homepage: string({ format: 'uri' }), trustBasis: string() }, ['name']),
@@ -103,7 +99,7 @@ const paths: Record<string, unknown> = {
         post: {
             operationId: 'searchThreatIntelligence',
             summary: 'Search public threat intelligence',
-            description: 'One bounded search is available anonymously. Results are never shared-cacheable.',
+            description: 'Search without an API key. Rate limits apply.',
             security: [],
             requestBody: { required: true, content: { 'application/json': { schema: ref('SearchRequest') } } },
             responses: { '200': jsonResponse('Search result', ref('SearchResult')), ...errorResponses },
@@ -113,7 +109,7 @@ const paths: Record<string, unknown> = {
         post: {
             operationId: 'batchSearchThreatIntelligence',
             summary: 'Search up to 25 unique queries',
-            description: 'Requires an API key or authenticated session. Input is capped at 25 unique queries and executed with concurrency 3. HTTP 207 reports per-query partial failures without disguising them as successful search results.',
+            description: 'Requires an API key or authenticated session. Returns HTTP 207 if any query fails; each result contains either the search result or an error.',
             security: protectedSecurity(),
             requestBody: { required: true, content: { 'application/json': { schema: ref('BatchSearchRequest') } } },
             responses: { '200': jsonResponse('All searches completed', ref('BatchSearchResponse')), '207': jsonResponse('One or more searches failed', ref('BatchSearchResponse')), ...errorResponses },
@@ -121,12 +117,12 @@ const paths: Record<string, unknown> = {
     },
 }
 
-for (const [path, [schemaName, summary]] of Object.entries(resourceDefinitions)) {
+for (const [path, [schemaName, summary, operationId]] of Object.entries(resourceDefinitions)) {
     paths[path] = {
         get: {
-            operationId: `list${schemaName === 'EvidenceLink' ? 'Evidence' : schemaName === 'EvaluationLabel' ? 'EvaluationLabels' : `${schemaName}s`}`,
+            operationId,
             summary,
-            ...(path === '/alerts' ? { description: 'Returns only alerts belonging to the organization embedded in the presented API key. Caller-supplied tenant headers or query parameters cannot select another organization.' } : {}),
+            ...(path === '/alerts' ? { description: 'Returns alerts for the organization that owns the API key.' } : {}),
             security: path === '/alerts' ? [{ ApiKey: [] }] : protectedSecurity(),
             parameters: paginationParameters,
             responses: { '200': jsonResponse(`${schemaName} page`, ref(`${schemaName}Collection`)), ...errorResponses },
@@ -139,17 +135,18 @@ export const publicTiOpenApi = {
     info: {
         title: 'Hanasand Public Intelligence API',
         version: '1.0.0',
-        description: 'Versioned, metadata-safe access to production-backed public intelligence. Version 1 is read-only: POST search operations are retrieval operations, and no mutation or idempotency-key contract is advertised.',
-        'x-compatibility-policy': 'Additive fields and endpoints may be introduced within v1. Removing or changing existing fields, semantics, authentication, or pagination requires a new major API version.',
-        'x-idempotency-policy': 'v1 exposes no public mutations. Search POSTs are retrieval-only and safe to retry; no Idempotency-Key header is required.',
-        'x-onboarding': 'Create an account, organization, and 90-day organization API key at https://hanasand.com/developers#api-access. The secret is returned once.',
     },
     servers: [{ url: 'https://api.hanasand.com/api/v1', description: 'Production' }],
     tags: [{ name: 'Search' }, { name: 'Intelligence' }],
     paths,
     components: {
+        parameters: {
+            Query: { name: 'q', in: 'query', description: 'Filter by text, ignoring case.', schema: string({ maxLength: 200 }) },
+            Limit: { name: 'limit', in: 'query', description: 'Number of records per page.', schema: integer({ minimum: 1, maximum: 100, default: 50 }) },
+            Cursor: { name: 'cursor', in: 'query', description: 'Pass pagination.nextCursor from the previous response. Omit for the first page.', schema: string({ pattern: '^\\d+$', example: '50' }) },
+        },
         securitySchemes: {
-            ApiKey: { type: 'apiKey', in: 'header', name: 'X-API-Key', description: 'Organization-owned key with exact method-and-route scopes. Self-serve keys use Starter limits; batch is additionally limited to 1 request/second, 12/minute, 120/hour, and 1,000/day.' },
+            ApiKey: { type: 'apiKey', in: 'header', name: 'X-API-Key', description: 'Organization API key. Access and rate limits depend on its allowed routes. Batch search allows 1 request/second, 12/minute, 120/hour, and 1,000/day.' },
             SessionBearer: { type: 'http', scheme: 'bearer', bearerFormat: 'session-token' },
             SessionId: { type: 'apiKey', in: 'header', name: 'id', description: 'Session identifier required together with SessionBearer.' },
         },
