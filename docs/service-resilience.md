@@ -24,7 +24,7 @@ DNS recovery is a last resort after public readiness fails despite service-level
 - `scripts/resilience/maintenance.py ROOT SERVICE maint|ready INSTANCE...` updates both routing processes and persists maintenance state. Always restore maintenance after a drill.
 - `scripts/resilience/backup.sh` performs a compressed physical backup from the local standby, verifies the manifest and isolated recovery, then sends only the verified bundle through a command-restricted SSH key. OVH retains fourteen verified bundles. The monitor alerts immediately when the job fails and when no verified off-site backup arrives within 36 hours.
 - `scripts/resilience/check-database-switch.sh` uses isolated temporary databases and leaves production databases untouched.
-- `api/scripts/check-recovery-records.ts` creates and deletes a scoped temporary account and case to verify authenticated case/timeline reads, search and read-only boundaries during a drill.
+- `api/scripts/check-recovery-records.ts` creates and deletes a scoped temporary account, case and alert to verify authenticated alerts and actual timeline events, search and read-only boundaries during a drill.
 
 Secrets stay outside source control. OVH receives a dedicated, limited application database identity, a replication-only identity and the existing monitoring webhook. It does not receive the primary's administrative, AI or SSH credentials.
 
@@ -40,14 +40,18 @@ For stronger recovery guarantees, add an independent witness/fencing service or 
 - Real frontend/API/auth routing passed preferred Inspur → alternate Inspur → OVH → alternate Inspur → preferred Inspur, with ten response checks at each stage.
 - Public routing cutover: 2,408 valid-session checks, zero failures; login, page navigation and revoked-session rejection passed.
 - Replacement-pair deployment: 1,911 valid-session checks, zero failures; no application action is replayed by the bounded authentication pre-handler retry.
-- Sustained OVH-only recovery: nine rounds of actual replicated case/timeline and search reads, blocked writes and hard session-expiry checks passed.
+- HAProxy LTS replacement: 1,432 valid-session checks, zero failures. Actual database routing switch and failback: 366 valid-session checks, zero failures and no auth/API process restarts.
+- Final API/auth release: another 1,209 valid-session checks, zero failures, with frontend login/navigation and revoked-session rejection. The five successful final runs total 7,326 validations.
+- Sustained OVH-only recovery: twelve rounds of actual case/timeline-event, alert and public-search reads passed, including nine verified blocked-write and hard session-expiry checks. Temporary fixtures were removed.
 - A stopped local routing process left its peer serving fifty successful requests.
 - Both live physical replicas streamed with verified replay positions. A compressed physical backup passed manifest/WAL verification and an isolated writable restore; OVH acknowledged checksum-verified receipt. The scheduled daily run repeated this successfully.
 - The isolated database promotion/reseed/failback check preserved all three test writes without stopping production databases.
 - Discord acknowledged red failover/restore-required/job-failure and green recovery messages. Simulations were labelled TEST.
-- Recovery UI browser checks passed normal, read-only, unavailable-status and failback states. Full API and frontend build checks passed; fourteen focused TI checks passed. The wider TI type-check retains unrelated existing errors.
+- Recovery UI browser checks passed normal, read-only, unavailable-status and failback states. Full API and frontend build checks passed; sixteen focused TI checks passed. The wider TI type-check retains unrelated existing errors.
 - OVH's expired manual-renewal certificate was replaced with DNS-based automatic renewal. Both sites passed strict HTTPS readiness checks. Website/API DNS records were verified at a 60-second TTL; unrelated DNS records were unchanged.
 
-The database switching drills exposed an unhandled error on a checked-out PostgreSQL connection, in addition to the earlier monitoring-convergence gap. The shared connection pool now handles those events and discards failed clients; session checks use the actual database role, and a single bounded pre-handler retry handles a connection switch before application execution. These fixes are covered by runnable regression checks.
+The database switching drills exposed an unhandled error on a checked-out PostgreSQL connection, in addition to the earlier monitoring-convergence gap. The shared connection pool now handles those events and discards failed clients; session checks use the actual database role, and a single bounded pre-handler retry handles a connection switch before application execution. Anonymous requests also immediately use recovery rate counters when PostgreSQL rejects a shared-counter write, before monitor convergence. These fixes are covered by runnable regression checks.
+
+Recovery alert reads skip projection-repair writes and page through the canonical alerts table. First pages fetch one extra row to expose a continuation cursor. A scoped live fixture checks a real replicated alert and a specific timeline event rather than accepting an empty response.
 
 Reference behavior: [PostgreSQL standby and replication](https://www.postgresql.org/docs/15/warm-standby.html), [PostgreSQL base backups](https://www.postgresql.org/docs/15/app-pgbasebackup.html), [HAProxy supported releases](https://www.haproxy.org/).
