@@ -46,6 +46,7 @@ if '--activate' in flags:
         if 'listen 443 ssl;' not in block: continue
         if re.search(r'server_name\s+hanasand.com(?:\s+www.hanasand.com)?;', block):
             block = re.sub(r'proxy_pass http://(?:localhost|127\.0\.0\.1):(?:3000|3100|3200|3300);', 'proxy_pass http://hanasand_recovery_frontend;', block)
+            block = re.sub(r'proxy_pass http://(?:localhost|127\.0\.0\.1):8080;', 'proxy_pass http://hanasand_recovery_api;', block)
             touched.add('frontend')
         if re.search(r'server_name\s+api.hanasand.com;', block):
             block = re.sub(r'proxy_pass http://(?:localhost|127\.0\.0\.1):8080;', 'proxy_pass http://hanasand_recovery_api;', block)

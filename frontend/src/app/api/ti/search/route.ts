@@ -3,7 +3,8 @@ import { authApiUrl } from '@/utils/auth/authApiUrl'
 import { proxyApiTiRequest } from '../../dwm/_tiProxy'
 
 export const dynamic = 'force-dynamic'
-const PUBLIC_TI_SEARCH_TIMEOUT_MS = 3_500
+// Allow the API's bounded 12-second canonical lookup to complete on a cold recovery replica.
+const PUBLIC_TI_SEARCH_TIMEOUT_MS = 13_000
 
 export async function GET(request: NextRequest) {
     const query = request.nextUrl.searchParams.get('q')?.trim() || ''
