@@ -18,7 +18,14 @@ assert local['activeInstance'] == 'inspur-api-2'
 assert remote['activeSite'] == 'ovhcloud'
 assert monitor.transition_embed(primary, local, [local])['color'] == 0xFF0000
 restored = monitor.transition_embed(remote, primary, [primary, {'name': 'TI collection', 'status': 'unavailable'}])
-assert monitor.transition_embed(remote, local, [local])['color'] == 0x00CC66
+partial = monitor.transition_embed(remote, local, [local])
+assert partial['color'] == 0x00CC66
+assert partial['description'] == 'ovh-api → inspur-api-2. Traffic is back on Inspur through inspur-api-2. inspur-api-1 is still down.'
+assert restored['description'].endswith('inspur-api-1 is back online.')
+assert monitor.transition_embed(primary, local, [local])['description'].endswith('inspur-api-1 stopped responding. Traffic is now going to inspur-api-2.')
+unavailable = monitor.choose_service(service, {})
+assert monitor.transition_embed(primary, unavailable, [unavailable])['description'].endswith('None of the instances are responding right now.')
+assert monitor.transition_embed(unavailable, local, [local])['description'].endswith('Service is back on inspur-api-2. inspur-api-1 is still down.')
 assert restored['color'] == 0x00CC66
 assert 'TI collection' in restored['fields'][1]['value']
 assert monitor.choose_service(service, {})['status'] == 'unavailable'

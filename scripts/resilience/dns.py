@@ -54,7 +54,7 @@ def reconcile(config, state, previous):
                 verified = api(config, path)
                 if verified['data'] != desired: raise ValueError('DNS change not verified')
                 events.append({'title': ('Failback' if target == 'inspur' else 'Failover') + ': ' + host,
-                    'description': f"Public endpoint switched to {target}. DNS caches may take up to the configured TTL to refresh. " + ('Preferred site is stable again.' if target == 'inspur' else 'Both local service paths failed the public readiness check.'),
+                    'description': ('Inspur is responding again, so traffic is moving back from OVH.' if target == 'inspur' else 'Inspur is not responding, so traffic is moving to OVH.') + ' Some visitors may still reach the previous site until their DNS cache refreshes.',
                     'color': 0x00CC66 if target == 'inspur' else 0xFF0000,
                     'fields': [{'name': 'Still affected', 'value': ', '.join(state.get('affected', [])) or 'All monitored services are back to normal.'}]})
             current.update(activeSite=target, verifiedAt=time.time(), ttl=60)

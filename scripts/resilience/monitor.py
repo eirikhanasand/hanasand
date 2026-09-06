@@ -63,11 +63,22 @@ def apply_dns_placement(services, dns_state):
 
 def transition_embed(previous, current, services, drill=False):
     restored = current['status'] == 'up' or (previous.get('activeSite') == 'ovhcloud' and current.get('activeSite') == 'inspur')
-    recovery_message = 'Preferred Inspur instance restored.' if current['status'] == 'up' else 'Primary site restored on its alternate instance; the preferred instance is still recovering.'
+    active = current.get('activeInstance')
+    preferred = current['instances'][0]['id']
+    if not active:
+        message = 'None of the instances are responding right now.'
+    elif current['status'] == 'up':
+        message = f'{active} is back online.'
+    elif restored:
+        message = f'Traffic is back on Inspur through {active}. {preferred} is still down.'
+    elif previous.get('activeInstance'):
+        message = f"{previous['activeInstance']} stopped responding. Traffic is now going to {active}."
+    else:
+        message = f'Service is back on {active}. {preferred} is still down.'
     remaining = [service['name'] for service in services if service['status'] != 'up']
     title = f"{'[TEST] ' if drill else ''}{'Failback' if restored else 'Failover'}: {current['name']}"
     description = (f"{previous.get('activeInstance') or 'unavailable'} → {current.get('activeInstance') or 'unavailable'}. "
-                   f"{recovery_message if restored else 'Preferred instance unavailable; recovery priority applied.'}")
+                   f"{message}")
     return {'title': title, 'description': description, 'color': 0x00CC66 if restored else 0xFF0000,
             'fields': [{'name': 'Active endpoint', 'value': current.get('activeEndpoint') or 'None'},
                        {'name': 'Still affected', 'value': ', '.join(remaining) or 'All monitored services are back to normal.'}],
