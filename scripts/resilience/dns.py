@@ -7,12 +7,12 @@ import time
 import urllib.request
 
 
-def api(config, path, payload=None):
+def api(config, path, payload=None, method=None):
     values = dict(line.split('=', 1) for line in pathlib.Path(config['credentialsFile']).read_text().splitlines() if '=' in line and not line.lstrip().startswith('#'))
     values = {key.strip(): value.strip() for key, value in values.items()}
     auth = base64.b64encode((values['dns_domeneshop_client_token'] + ':' + values['dns_domeneshop_client_secret']).encode()).decode()
     request = urllib.request.Request('https://api.domeneshop.no/v0' + path, data=json.dumps(payload).encode() if payload is not None else None,
-        headers={'Authorization': 'Basic ' + auth, 'Content-Type': 'application/json', 'User-Agent': 'Hanasand-Resilience/1.0'}, method='PUT' if payload is not None else 'GET')
+        headers={'Authorization': 'Basic ' + auth, 'Content-Type': 'application/json', 'User-Agent': 'Hanasand-Resilience/1.0'}, method=method or ('PUT' if payload is not None else 'GET'))
     with urllib.request.urlopen(request, timeout=10) as response:
         body = response.read()
         return json.loads(body) if body else None

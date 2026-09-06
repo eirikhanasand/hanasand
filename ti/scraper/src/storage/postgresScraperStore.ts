@@ -154,7 +154,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       options.onStartupPhase?.("connected");
       store.readOnly = options.readOnly === true;
       if (store.readOnly) {
-        const [clock] = await sql`SELECT clock_timestamp() AS at`;
+        const [clock] = await sql`SELECT CASE WHEN pg_is_in_recovery() THEN coalesce(pg_last_xact_replay_timestamp(), 'epoch'::timestamptz) ELSE clock_timestamp() END AS at`;
         store.readOnlyRefreshedAt = new Date(clock.at);
       }
       if (!store.readOnly) await store.migrate();
@@ -208,7 +208,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   async refreshReadOnlyRecords(): Promise<void> {
     if (!this.readOnly) throw new Error("Metadata refresh is reserved for query replicas");
-    const [clock] = await this.sql`SELECT clock_timestamp() AS at`;
+    const [clock] = await this.sql`SELECT CASE WHEN pg_is_in_recovery() THEN coalesce(pg_last_xact_replay_timestamp(), 'epoch'::timestamptz) ELSE clock_timestamp() END AS at`;
     // Overlap committed updates without repeatedly rebuilding the full evidence/history heap.
     const since = new Date(this.readOnlyRefreshedAt.getTime() - 300_000).toISOString();
     const [sources, profiles, alerts, workflows] = await Promise.all([
