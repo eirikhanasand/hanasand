@@ -37,6 +37,17 @@ test('owners add/remove persisted tabs and compare sheets in shared history; vie
     await expect(page.getByRole('button', { name: 'Add sheet', exact: true })).toBeFocused()
     const current = async() => { const doc = await (await context.request.get(baseURL + '/api/thesis')).json(); const header = /^<!-- thesis-workspace:2 (.*?) -->/.exec(doc.body); return header ? JSON.parse(decodeURIComponent(header[1])) as { name: string }[] : [] }
     await expect.poll(async() => (await current()).length, { timeout: 12000 }).toBe(5)
+    const plan = page.getByRole('tab', { name: 'Plan', exact: true })
+    const inactiveWidth = (await plan.boundingBox())!.width
+    await plan.click()
+    const minus = page.getByRole('button', { name: 'Remove Plan sheet', exact: true })
+    expect((await minus.boundingBox())!.width).toBe(24)
+    expect((await plan.boundingBox())!.width - inactiveWidth).toBeLessThanOrEqual(12)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.screenshot({ path: '/tmp/thesis-compact-minus.png' })
+    await minus.click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
+    await page.setViewportSize({ width: 1280, height: 720 })
     await page.getByRole('tab', { name: 'Overview', exact: true }).click()
     await page.getByRole('button', { name: 'Remove Overview sheet', exact: true }).click()
     const deletion = page.getByRole('dialog', { name: 'Are you sure you want to delete?' })
