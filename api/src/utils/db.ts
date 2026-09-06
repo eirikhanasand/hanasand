@@ -30,6 +30,8 @@ const pool = new Pool({
     keepAlive: true
 })
 
+// Checked-out clients can emit transport errors between queries, outside the pool's idle handler.
+pool.on('connect', client => client.on('error', error => console.error('Database connection failed:', error.message)))
 pool.on('error', error => console.error('Idle database connection failed:', error.message))
 
 export async function closeDatabase() {
@@ -56,10 +58,14 @@ export default async function run(query: string, params?: SQLParamType) {
 
 export async function queryOnce(query: string, params?: SQLParamType) {
     const client = await pool.connect()
+    let failure: Error | undefined
     try {
         return await client.query(query, params ?? [])
+    } catch (error) {
+        failure = error as Error
+        throw error
     } finally {
-        client.release()
+        client.release(failure)
     }
 }
 

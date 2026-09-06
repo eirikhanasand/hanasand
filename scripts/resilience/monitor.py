@@ -113,7 +113,7 @@ def sample(config, previous):
             pass
     if time.time() - peer.get('sampledAt', 0) > 60:
         peer = {}
-    peer_instances = {instance['id']: instance['healthy'] for service in peer.get('services', []) for instance in service.get('instances', [])}
+    peer_instances = {instance['id']: instance for service in peer.get('services', []) for instance in service.get('instances', [])}
     proxy_status = {}
     for stats_url in config.get('statsUrls', [config.get('statsUrl')]):
         if not stats_url: continue
@@ -129,7 +129,7 @@ def sample(config, previous):
             # OVH reaches both local intelligence instances through one primary-site pool.
             if instance['id'].startswith('inspur-ti-') and proxy_status.get('inspur-ti-1') is False:
                 return instance['id'], False
-            return instance['id'], bool(peer_instances.get(health[5:]))
+            return instance['id'], bool(peer_instances.get(health[5:], {}).get('healthy'))
         if instance['id'] in proxy_status:
             return instance['id'], proxy_status[instance['id']]
         try:
@@ -150,7 +150,7 @@ def sample(config, previous):
         count = old['count'] + 1 if old['observed'] == healthy else 1
         stable = healthy if count >= (config.get('rise', 6) if healthy else config.get('fall', 3)) else old['healthy']
         counters[key] = {'healthy': stable, 'count': count, 'observed': healthy}
-    services = [choose_service(service, {key: value['healthy'] for key, value in counters.items()}) for service in config['services']]
+    services = [choose_service({**service, 'instances': [{**i, 'endpoint': peer_instances.get(i['id'], {}).get('endpoint', i['endpoint'])} if i['health'].startswith('peer:') else i for i in service['instances']]}, {key: value['healthy'] for key, value in counters.items()}) for service in config['services']]
     database = database_status(config)
     database_service = next((service for service in services if service['id'] == 'database'), None)
     read_only = bool(database_service and database_service.get('activeInstance') != 'inspur-db-primary')
