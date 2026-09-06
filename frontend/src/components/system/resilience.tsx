@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 
 type Service = { id: string; name: string; activeInstance: string | null; activeSite: string | null; activeEndpoint: string | null; status: string; instances: { id: string; site: string; healthy: boolean }[] }
-type State = { mode: string; readOnly: boolean; updatedAt?: string; stale?: boolean; services: Service[]; affected?: string[]; database?: { status: string; replica?: boolean; replayAt?: string }; backups?: { status: string; verifiedAt?: string; restoreRequired?: boolean }; notifications?: { title: string; status: string; at: number }[] }
+type Site = { fresh: boolean; compute?: { diskFreeBytes?: number; memoryAvailableBytes?: number; memoryTotalBytes?: number }; database?: { receiverStatus?: string; replayAt?: string } }
+type State = { sites?: Record<string, Site>; notificationHealth?: string; dns?: Record<string, { activeSite?: string } | string>;  mode: string; readOnly: boolean; updatedAt?: string; stale?: boolean; services: Service[]; affected?: string[]; database?: { status: string; replica?: boolean; replayAt?: string }; backups?: { status: string; verifiedAt?: string; restoreRequired?: boolean }; notifications?: { title: string; status: string; at: number }[] }
 
 function useResilience() {
     const [state, setState] = useState<State | null>(null)
@@ -32,6 +33,7 @@ export function RecoveryBanner() {
         {state.mode === 'unknown' || state.stale ? 'Service status is reconnecting. Some actions may be temporarily unavailable.'
             : state.readOnly ? 'Recovery mode: existing records remain available where replication is healthy. Changes and new processing are paused.'
                 : 'A backup service is handling requests while the preferred service recovers.'}
+        {state.services.some(service => service.id === 'intelligence' && service.activeInstance && service.activeInstance !== 'inspur-ti-1') && <span> Intelligence is being served in read-only mode.</span>}
         {unavailable.length > 0 && <span> Currently unavailable: {unavailable.join(', ')}.</span>}
     </div>
 }
@@ -45,12 +47,14 @@ export default function ResiliencePanel() {
             <div className='overflow-x-auto'><table className='w-full text-sm text-left'><thead><tr><th className='p-2'>Service</th><th className='p-2'>Serving from</th><th className='p-2'>Endpoint</th><th className='p-2'>Instances</th></tr></thead><tbody>
                 {state.services.map(service => <tr key={service.id} className='border-t border-current/10'><th className='p-2 font-medium'>{service.name}</th><td className='p-2'>{service.activeInstance || 'Unavailable'}</td><td className='p-2 break-all'>{service.activeEndpoint || 'None'}</td><td className='p-2'>{service.instances.map(instance => `${instance.id}: ${instance.healthy ? 'ready' : 'unavailable'}`).join(' · ')}</td></tr>)}
             </tbody></table></div>
+            {state.sites && <div className='grid gap-4 md:grid-cols-2'>{Object.entries(state.sites).map(([name, site]) => <div key={name}><h3 className='font-medium'>{name === 'inspur' ? 'Inspur' : 'OVHcloud'}</h3><p className='text-sm'>{site.fresh ? `${Math.round((site.compute?.memoryAvailableBytes || 0) / 1024 ** 3)} GB memory available · ${Math.round((site.compute?.diskFreeBytes || 0) / 1024 ** 3)} GB disk available` : 'Host telemetry is unavailable.'}</p><p className='text-xs opacity-70'>Replication: {site.database?.receiverStatus || 'Not verified'}</p></div>)}</div>}
             <div className='grid gap-4 md:grid-cols-3'>
                 <div><h3 className='font-medium'>Database replication</h3><p className='text-sm'>{state.database?.status || 'Not verified'}{state.database?.replica ? ' · standby' : ''}</p>{state.database?.replayAt && <p className='text-xs opacity-70'>Last replay: {state.database.replayAt}</p>}</div>
                 <div><h3 className='font-medium'>Backups and recovery</h3><p className='text-sm'>{state.backups?.restoreRequired ? 'A database restore is required.' : state.backups?.status?.replaceAll('_', ' ') || 'Not verified'}</p>{state.backups?.verifiedAt && <p className='text-xs opacity-70'>Verified: {state.backups.verifiedAt}</p>}</div>
                 <div><h3 className='font-medium'>Security and capacity</h3><p className='text-sm'>One writable database. Promotion requires fencing the old primary. OVHcloud reserves capacity for core services; heavy AI processing stays on Inspur.</p></div>
             </div>
-            <div><h3 className='font-medium'>Recent recovery notifications</h3>{state.notifications?.length ? <ul className='text-sm'>{state.notifications.slice(-5).reverse().map((notification, index) => <li key={index}>{notification.title} — {notification.status}</li>)}</ul> : <p className='text-sm opacity-70'>No delivery has been recorded yet.</p>}</div>
+            {state.dns && <div><h3 className='font-medium'>Public endpoints</h3>{Object.entries(state.dns).filter(([, value]) => typeof value === 'object').map(([host, value]) => <p className='text-sm' key={host}>{host}: {typeof value === 'object' ? value.activeSite || 'Verifying' : 'Verifying'}</p>)}</div>}
+            <div><h3 className='font-medium'>Recent recovery notifications</h3>{state.notificationHealth === 'delivery_retry_pending' && <p className='text-sm'>Discord delivery is retrying. Recovery monitoring continues.</p>}{state.notifications?.length ? <ul className='text-sm'>{state.notifications.slice(-5).reverse().map((notification, index) => <li key={index}>{notification.title} — {notification.status}</li>)}</ul> : <p className='text-sm opacity-70'>No delivery has been recorded yet.</p>}</div>
             {state.updatedAt && <p className='text-xs opacity-60'>Updated {state.updatedAt}</p>}
         </>}
     </section>

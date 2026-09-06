@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import bcrypt from 'bcrypt'
-import { queryOnce, closeDatabase } from '../src/utils/db.ts'
+import { queryOnce, closeDatabase, withTransaction } from '../src/utils/db.ts'
 
 if (process.env.AUTH_LIVE_CHECK !== '1') throw new Error('Set AUTH_LIVE_CHECK=1 to create and clean up a temporary authentication test account')
 const base = process.env.API_BASE || 'https://api.hanasand.com/api'
@@ -67,9 +67,12 @@ try {
     console.log(JSON.stringify({ successfulValidations: latencies.length, failures, p95Ms: Math.round(latencies[Math.floor(latencies.length * 0.95)] || 0), p99Ms: Math.round(latencies[Math.floor(latencies.length * 0.99)] || 0), revokedStatus: revoked.status }))
     assert.equal(Object.keys(failures).length, 0, 'Rollout/failover must preserve valid sessions')
 } finally {
-    await queryOnce('DELETE FROM tokens WHERE id = $1', [id])
-    await queryOnce('DELETE FROM login_events WHERE user_id = $1', [id])
-    await queryOnce('DELETE FROM attempts WHERE id = $1', [id])
-    await queryOnce('DELETE FROM users WHERE id = $1', [id])
+    await withTransaction(async query => {
+        await query('SET LOCAL statement_timeout = \'60s\'')
+        await query('DELETE FROM tokens WHERE id = $1', [id])
+        await query('DELETE FROM login_events WHERE user_id = $1', [id])
+        await query('DELETE FROM attempts WHERE id = $1', [id])
+        await query('DELETE FROM users WHERE id = $1', [id])
+    })
     await closeDatabase()
 }

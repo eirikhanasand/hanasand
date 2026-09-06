@@ -14,12 +14,8 @@ const refresh = setInterval(async () => {
   if (refreshing) return;
   refreshing = true;
   try {
-    const next = await PostgresScraperStore.create({ readOnly: true, deferHighVolumeHydration: true, deferStartupChecks: true });
-    const previous = options.store as PostgresScraperStore;
-    options.store = next;
-    // Requests have a 12-second upstream deadline; let readers finish before closing.
-    setTimeout(() => { void previous.close(); }, 30_000).unref();
+    await store.refreshReadOnlyRecords();
   } catch (error) { console.error("Intelligence replica refresh failed", error instanceof Error ? error.message : "unknown"); }
   finally { refreshing = false; }
-}, 60_000);
+}, 15_000);
 process.once("SIGTERM", () => { clearInterval(refresh); void server.stop().then(() => (options.store as PostgresScraperStore).close()); });

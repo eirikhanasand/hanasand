@@ -67,3 +67,5 @@ dist/
 *.xcodeproj
 ios
 android
+
+__pycache__/

@@ -1,3 +1,4 @@
+import { recoveryReadOnly } from '../../api/src/utils/resilience'
 import { appPagePath, canonicalAppPath } from './utils/routes/appRoutes'
 import { NextRequest, NextResponse } from 'next/server'
 import pathIsAllowedWhileUnauthorized from './utils/proxy/pathIsAllowedWhileUnauthorized'
@@ -5,6 +6,9 @@ import tokenIsValid from './utils/proxy/tokenIsValid'
 import pathToRoleArray from './utils/proxy/pathToRoleArray'
 
 export async function proxy(req: NextRequest) {
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !(req.method === 'POST' && req.nextUrl.pathname === '/api/ti/search') && recoveryReadOnly()) {
+        return NextResponse.json({ error: { code: 'recovery_read_only', message: 'Changes are paused during database recovery. Existing records remain available for viewing.' } }, { status: 503, headers: { 'retry-after': '30', 'cache-control': 'no-store' } })
+    }
     const tokenCookie = req.cookies.get('access_token')
     const idCookie = req.cookies.get('id')
     const visiblePath = req.nextUrl.pathname

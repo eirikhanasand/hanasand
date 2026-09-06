@@ -11,6 +11,8 @@ type TestTask = {
 const bun = process.execPath
 
 const tasks: TestTask[] = [
+    { id: 'recovery-boundary', title: 'Recovery request boundaries', command: [bun, 'tests/recovery-boundary.test.ts'] },
+    { id: 'resilience-ui', title: 'Recovery status and failback UI', command: [bun, 'scripts/check-resilience-ui.mjs'], requires: 'playwright' },
     {
         id: 'automation-ssr',
         title: 'Automation server rendering and hydration',

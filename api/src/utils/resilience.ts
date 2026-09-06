@@ -10,7 +10,7 @@ export function recoveryState(): RecoveryState {
     checkedAt = Date.now()
     try {
         cached = JSON.parse(readFileSync(path, 'utf8')) as RecoveryState
-        if (!cached.updatedAt || Date.now() - Date.parse(cached.updatedAt) > 60_000 || !Number.isFinite(Date.parse(cached.updatedAt))) throw new Error('Stale recovery status')
+        if (typeof cached.readOnly !== 'boolean' || !cached.updatedAt || Date.now() - Date.parse(cached.updatedAt) > 60_000 || !Number.isFinite(Date.parse(cached.updatedAt))) throw new Error('Stale recovery status')
     } catch {
         cached = { readOnly: true, mode: 'unknown', reason: 'Recovery status is unavailable; changes are paused for safety.' }
     }

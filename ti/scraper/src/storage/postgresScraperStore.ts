@@ -111,6 +111,7 @@ type DatabaseHealth = {
 export class PostgresScraperStore extends InMemoryScraperStore {
   readonly usesPostgresSearchIndex = false;
   private readOnly = false;
+  private readOnlyRefreshedAt = new Date();
   private readonly sql: SQL;
   private readonly migrations: Migration[];
   private readonly latestMigrationVersion: string;
@@ -138,6 +139,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   static async create(options: PostgresScraperStoreOptions = {}): Promise<PostgresScraperStore> {
     const databaseUrl = options.databaseUrl ?? Bun.env.TI_DATABASE_URL;
+    if (!databaseUrl) throw new Error("TI_DATABASE_URL is required for PostgreSQL storage");
     // ponytail: avoid pipelined result decoding in the production Bun SQL driver.
     const sql = new SQL(databaseUrl, { prepare: false, ...(options.readOnly ? { max: 3 } : {}) });
     const runMaintenanceMigrations = options.runMaintenanceMigrations !== false;
@@ -151,6 +153,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       await sql.unsafe("SET TIME ZONE 'UTC'");
       options.onStartupPhase?.("connected");
       store.readOnly = options.readOnly === true;
+      if (store.readOnly) {
+        const [clock] = await sql`SELECT clock_timestamp() AS at`;
+        store.readOnlyRefreshedAt = new Date(clock.at);
+      }
       if (!store.readOnly) await store.migrate();
       options.onStartupPhase?.("migrated");
       if (options.hydrate !== false) {
@@ -198,6 +204,27 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     if (this.pendingWrites.length) {
       throw new Error(`Threat-intelligence database write failed (${this.pendingWrites[0].description}): ${this.lastWriteError?.message ?? "unknown database error"}`);
     }
+  }
+
+  async refreshReadOnlyRecords(): Promise<void> {
+    if (!this.readOnly) throw new Error("Metadata refresh is reserved for query replicas");
+    const [clock] = await this.sql`SELECT clock_timestamp() AS at`;
+    // Overlap committed updates without repeatedly rebuilding the full evidence/history heap.
+    const since = new Date(this.readOnlyRefreshedAt.getTime() - 300_000);
+    const [sources, profiles, alerts, workflows] = await Promise.all([
+      this.sql`SELECT record FROM threat_intel.sources WHERE updated_at >= ${since}`,
+      this.sql`SELECT record FROM threat_intel.actor_profiles WHERE updated_at >= ${since}`,
+      this.sql`SELECT record FROM threat_intel.alerts WHERE updated_at >= ${since}`,
+      this.sql`SELECT record_type, record FROM threat_intel.workflow_records WHERE updated_at >= ${since}
+        AND record_type IN ('case', 'dwm_watchlist', 'dwm_webhook_delivery', 'organization', 'organization_member', 'organization_invite', 'webhook_destination', 'live_search_snapshot')`
+    ]);
+    this.hydrateWithoutOrganizationWriteGuard(() => {
+      for (const row of sources) super.saveSource(readRecord(row));
+      for (const row of profiles) super.saveActorProfile(readRecord(row));
+      for (const row of alerts) super.saveDwmAlert(readRecord(row));
+      for (const row of workflows) this.hydrateWorkflow(String(row.record_type), readRecord(row));
+    });
+    this.readOnlyRefreshedAt = new Date(clock.at);
   }
 
   async close(): Promise<void> {
@@ -405,7 +432,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           AND ${tenantWhere}
         ORDER BY created_at ASC, id ASC`, allTenants ? [] : [tenantId])
     ]);
-    const tasksAndEvents = [...taskRows, ...eventRows].map(readRecord).filter(isRecord);
+    const tasksAndEvents = [...taskRows, ...eventRows].map(readRecord).filter((record) => record !== null && typeof record === "object" && !Array.isArray(record));
     const tasks = tasksAndEvents.filter((record: any) => record.recordKind === 'automatic_intelligence_review_task');
     const claimIds = tasks.map((task: any) => task.subject?.claimId).filter(Boolean);
     const incidentIds = tasks.map((task: any) => task.subject?.incidentId).filter(Boolean);
@@ -1687,7 +1714,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   override saveCaptureWithDedupe(capture: RawCapture): CaptureWriteResult {
     const result = super.saveCaptureWithDedupe(capture);
     if (result.status === "inserted") this.indexPostgresExposureQueueCapture(result.capture);
-    if (result.status === "inserted" && !this.pipelineDepth) this.enqueue(`capture:${result.capture.id}`, () => this.persistCapture(result.capture));
+    if (result.status === "inserted" && !this.pipelineDepth) this.enqueue(`capture:${result.capture.id}`, async () => { await this.persistCapture(result.capture); });
     return result;
   }
 
@@ -2373,6 +2400,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         for (const row of [...workflows, ...reviewTasks, ...workflowEvents]) this.hydrateWorkflow(String(row.record_type), readRecord(row));
       });
     }
+    // A reader must never reconcile, archive or write actor records while hydrating.
+    if (this.readOnly) return;
     // High-volume evidence remains queryable in PostgreSQL. Hydrating it here makes
     // readiness proportional to historical volume and consumes most of the process heap.
     this.pipelineDepth++;

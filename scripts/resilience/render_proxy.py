@@ -7,6 +7,7 @@ import sys
 
 def render(config):
     lines = ['global', '    log stdout format raw local0', f"    stats socket /run/haproxy/admin{config.get('proxyIndex', 0)}.sock mode 600 level admin",
+             f"    stats socket ipv4@127.0.0.1:{19909 + config.get('proxyIndex', 0)} level admin",
              'defaults', '    log global', '    mode http', '    timeout connect 2s', '    timeout client 60s', '    timeout server 60s',
              '    retries 1', '    option redispatch', '    default-server inter 2s fall 3 rise 15',
              'listen stats', f"    bind 127.0.0.1:{config.get('statsPort', 19900)}", '    stats enable', '    stats uri /stats']
@@ -23,6 +24,10 @@ def render(config):
             if not instance.get('address'):
                 continue
             suffix = ' backup' if index else ''
+            if instance['id'] in config.get('maintenanceInstances', []): suffix += ' disabled'
+            if tcp:
+                suffix += ' on-marked-down shutdown-sessions'
+                if index == 0: suffix += ' on-marked-up shutdown-backup-sessions'
             if instance.get('tlsName'):
                 suffix += f" ssl verify required ca-file /etc/ssl/certs/ca-certificates.crt sni str({instance['tlsName']}) check-sni {instance['tlsName']}"
             lines.append(f"    server {instance['id']} {instance['address']} check{suffix}")
@@ -35,6 +40,5 @@ if __name__ == '__main__':
     if len(sys.argv) > 3:
         config['proxyIndex'] = 1
         config['statsPort'] = 19902
-        for service in config['services']:
-            if service.get('listenPort'): service['listenPort'] += 1
+        # Linux SO_REUSEPORT keeps one stable endpoint backed by two independent routers.
         pathlib.Path(sys.argv[3]).write_text(render(config))

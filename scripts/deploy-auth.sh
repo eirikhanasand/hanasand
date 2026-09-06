@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+if test -f /home/hanasand/resilience/config.json; then exec sh scripts/resilience/deploy-pair.sh auth "$@"; fi
 # Two serving workers and two temporary replacements. The API is never restarted.
 test "$(pwd)" = /home/hanasand/hanasand || { echo 'Run from /home/hanasand/hanasand' >&2; exit 1; }
 # Share the frontend lock because both deployments reload the same proxy configuration.

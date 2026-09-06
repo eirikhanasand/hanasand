@@ -29,7 +29,7 @@ export function createAuthServer() {
             await queryOnce('SELECT token_id, revoked_at FROM tokens LIMIT 0')
             const result = await queryOnce('SELECT pg_is_in_recovery() AS recovery, current_setting(\'transaction_read_only\') AS read_only')
             if (!recoveryReadOnly() && (result.rows[0].recovery || result.rows[0].read_only !== 'off')) throw new Error('Database is read-only')
-            return { ok: true, service: 'authentication', release: process.env.HANASAND_RELEASE_COMMIT || 'unknown' }
+            return { ok: true, service: 'authentication', site: process.env.RESILIENCE_SITE || 'unknown', release: process.env.HANASAND_RELEASE_COMMIT || 'unknown' }
         } catch {
             return reply.code(503).send({ ok: false })
         }

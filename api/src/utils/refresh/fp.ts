@@ -21,5 +21,6 @@ export default fp(async (fastify) => {
     }
 
     void runTrackedBackgroundJob('api-hot-cache-refresh', refreshQueries)
-    setInterval(() => void runTrackedBackgroundJob('api-hot-cache-refresh', refreshQueries), config.CACHE_TTL_HOT)
+    const timer = setInterval(() => void runTrackedBackgroundJob('api-hot-cache-refresh', refreshQueries), config.CACHE_TTL_HOT)
+    fastify.addHook('onClose', async () => { clearInterval(timer) })
 })

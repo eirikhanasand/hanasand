@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+if test -f /home/hanasand/resilience/config.json; then exec sh scripts/resilience/deploy-pair.sh frontend "$@"; fi
 
 root=$(pwd)
 test "$root" = "/home/hanasand/hanasand" || {
