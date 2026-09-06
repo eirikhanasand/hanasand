@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { ArrowDown, ArrowUp, Info } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cellValue, columnName, reshape, tables, writeTable, type TableData, type Sheet } from './workspace'
@@ -19,6 +19,9 @@ type Cell = { table: number, row: number, col: number }
 
 function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { data: TableData, index: number, active: Cell | null, onSelect: (cell: Cell) => void, onNavigate: (cell: Cell, extend?: boolean) => void, onChange?: (data: TableData, group?: string) => void }) {
     const [focused, setFocused] = useState('')
+    const [completionCell, setCompletionCell] = useState('')
+    const [dismissedCompletion, setDismissedCompletion] = useState('')
+    const composing = useRef(false)
     const resize = useRef<{ axis: 'row' | 'column', index: number, start: number, size: number, value: number } | null>(null)
     function resizeHandle(axis: 'row' | 'column', index: number) {
         const size = (axis === 'row' ? data.heights[index] : data.widths[index]) || (axis === 'row' ? 48 : 180)
@@ -60,16 +63,36 @@ function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { 
                     const Cell = r === 0 ? 'th' : 'td'
                     const address = `${columnName(c)}${r + 1}`
                     const value = cellValue(data.cells, r, c)
+                    const completion = '=SUMMARIZE()'
+                    const suggestion = focused === address && completionCell === address && dismissedCompletion !== `${address}:${raw}` && /^=[a-z]*$/i.test(raw) && '=SUMMARIZE'.startsWith(raw.toUpperCase()) ? completion.slice(raw.length) : ''
                     return <Cell key={c} data-active={active?.table === index && active.row === r && active.col === c} scope={r === 0 ? 'col' : undefined}>
                         {onChange ? <textarea data-table-cell={`${index}:${r}:${c}`} aria-label={`Cell ${address}`} spellCheck={false} rows={Math.max(1, raw.split('\n').length)} value={focused === address ? raw : value}
-                            onFocus={() => { setFocused(address); onSelect({ table: index, row: r, col: c }) }} onBlur={() => setFocused('')}
+                            onFocus={event => { setFocused(address); setDismissedCompletion(''); setCompletionCell(event.currentTarget.selectionStart === raw.length ? address : ''); onSelect({ table: index, row: r, col: c }) }} onBlur={() => { setFocused(''); setCompletionCell('') }}
+                            aria-autocomplete='inline' aria-description={suggestion ? 'Tab to complete SUMMARIZE' : undefined}
+                            onSelect={event => { const input = event.currentTarget; setCompletionCell(!composing.current && input.selectionStart === input.value.length && input.selectionEnd === input.value.length ? address : '') }}
+                            onCompositionStart={() => { composing.current = true; setCompletionCell('') }}
+                            onCompositionEnd={event => { composing.current = false; setCompletionCell(event.currentTarget.selectionStart === event.currentTarget.value.length ? address : '') }}
                             onChange={event => {
+                                setDismissedCompletion('')
+                                setCompletionCell(!composing.current && event.target.selectionStart === event.target.value.length ? address : '')
                                 const next = data.cells.map(line => [...line]); next[r][c] = event.target.value
                                 onChange({ ...data, cells: next }, `cell:${index}:${r}:${c}`)
                             }} onKeyDown={event => {
                                 if (event.nativeEvent.isComposing || event.metaKey || event.ctrlKey || event.altKey) return
                                 const input = event.currentTarget
-                                if (event.key === 'Escape') { input.blur(); return }
+                                if (event.key === 'Escape') {
+                                    if (suggestion) { event.preventDefault(); setDismissedCompletion(`${address}:${raw}`); setCompletionCell('') }
+                                    else input.blur()
+                                    return
+                                }
+                                if (event.key === 'Tab' && !event.shiftKey && suggestion && input.selectionStart === raw.length && input.selectionEnd === raw.length) {
+                                    event.preventDefault()
+                                    const next = data.cells.map(line => [...line]); next[r][c] = completion
+                                    setCompletionCell('')
+                                    onChange({ ...data, cells: next })
+                                    requestAnimationFrame(() => input.setSelectionRange(completion.length - 1, completion.length - 1))
+                                    return
+                                }
                                 if (event.key === 'Enter' && event.shiftKey) {
                                     event.preventDefault()
                                     onNavigate({ table: index, row: r + 1, col: c }, true)
@@ -90,6 +113,7 @@ function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { 
                                 event.preventDefault()
                                 onNavigate({ table: index, row, col }, event.key !== 'Tab')
                             }} /> : <RenderMarkdown text={value} />}
+                        {onChange && suggestion && <span className='thesis-formula-suggestion' aria-hidden='true'><span className='invisible'>{raw}</span>{suggestion}</span>}
                         {onChange && r === 0 && resizeHandle('column', c)}
                         {onChange && c === 0 && resizeHandle('row', r)}
                     </Cell>
@@ -105,8 +129,6 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
     const selection = useRef({ start: sheet.body.length, end: sheet.body.length })
     const [active, setActive] = useState<Cell | null>(null)
     const [pending, setPending] = useState<(PendingTable & { table: number, source: string }) | null>(null)
-    const [help, setHelp] = useState(false)
-    const helpId = useId()
     const draft = active && canEdit && pending?.source === sheet.body ? pending : null
     const parsed = tables(sheet.body).map((table, index) => draft?.table === index ? { ...table, data: draft.data } : table)
     useEffect(() => { if (!active || pending?.source !== sheet.body) setPending(null) }, [active, sheet.body])
@@ -195,7 +217,6 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
                 {actions}
                 {canEdit && showInsertTable && <button className={button} onMouseDown={event => event.preventDefault()} onClick={insert}>Insert table</button>}
                 {trailingActions}
-                {canEdit && parsed.length > 0 && <button type='button' className={button} aria-label='Table help' aria-expanded={help} aria-controls={helpId} onClick={() => setHelp(!help)}><Info size={18} /></button>}
                 {canEdit && cell && table && <div className='flex shrink-0 items-center gap-2' role='group' aria-label='Active table controls'>
                     <span className='text-sm font-semibold text-ui-primary'>Table {cell.table + 1} · {columnName(cell.col)}{cell.row + 1}</span>
                     <button className={button} aria-label={`Add row below ${cell.row + 1}`} title={`Add row below ${cell.row + 1}`} onClick={() => changeShape('row', false)}>+ Row</button>
@@ -209,15 +230,6 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
                 </div>}
             </div>}
         </div>
-        {canEdit && help && parsed.length > 0 && <div id={helpId} className='rounded-lg border border-ui-border bg-ui-panel p-4 text-sm leading-6'>
-            <h2 className='font-semibold'>Working with tables</h2>
-            <ul className='mt-2 list-disc space-y-1 pl-5'>
-                <li>Select a cell to edit it. The toolbar shows the selected cell and its row and column.</li>
-                <li>Use arrow keys to move between cells at the edge of the text, or Tab to move to the next cell. Shift+Enter moves down one row. Enter adds a new line.</li>
-                <li>Drag a column’s right edge or a row’s bottom edge to resize it. The first row contains column headings.</li>
-                <li>For totals, enter <code>=SUMMARIZE(B2:B5)</code> for a column or <code>=SUMMARIZE(B2:G2)</code> for a row. Text and empty cells are skipped.</li>
-            </ul>
-        </div>}
         <div className='min-w-0'>{content}{prose(sheet.body.slice(offset), offset, sheet.body.length)}</div>
     </div>
 }

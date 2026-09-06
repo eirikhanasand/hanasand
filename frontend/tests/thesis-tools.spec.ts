@@ -24,15 +24,12 @@ test.beforeEach(async({ page, context, baseURL }) => {
     await expect(page.getByRole('button', { name: 'Insert table', exact: true })).toBeVisible()
 })
 
-test('help is expandable and table actions follow the selected cell', async({ page }) => {
+test('table actions follow the selected cell and history help is expandable', async({ page }) => {
     const tools = page.getByRole('group', { name: 'Active table controls' })
     await expect(tools).toHaveCount(0)
     await expect(page.getByText('Write here…', { exact: true })).toHaveCount(0)
     await expect(page.getByText(/Click a cell to edit\. Enter adds a line/)).toHaveCount(0)
-    await page.getByRole('button', { name: 'Table help', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Working with tables' })).toBeVisible()
-    await page.getByRole('button', { name: 'Table help', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Working with tables' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Table help', exact: true })).toHaveCount(0)
     const b2 = page.getByRole('textbox', { name: 'Cell B2', exact: true })
     await b2.click()
     await expect(tools).toContainText('Table 1 · B2')
