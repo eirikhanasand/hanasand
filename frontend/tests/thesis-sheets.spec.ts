@@ -38,11 +38,11 @@ test('owners add/remove persisted tabs and compare sheets in shared history; vie
     const current = async() => { const doc = await (await context.request.get(baseURL + '/api/thesis')).json(); const header = /^<!-- thesis-workspace:2 (.*?) -->/.exec(doc.body); return header ? JSON.parse(decodeURIComponent(header[1])) as { name: string }[] : [] }
     await expect.poll(async() => (await current()).length, { timeout: 12000 }).toBe(5)
     const plan = page.getByRole('tab', { name: 'Plan', exact: true })
-    const inactiveWidth = (await plan.boundingBox())!.width
+    const inactivePadding = await plan.evaluate(element => parseFloat(getComputedStyle(element).paddingRight))
     await plan.click()
     const minus = page.getByRole('button', { name: 'Remove Plan sheet', exact: true })
     expect((await minus.boundingBox())!.width).toBe(24)
-    expect((await plan.boundingBox())!.width - inactiveWidth).toBeLessThanOrEqual(12)
+    expect(await plan.evaluate(element => parseFloat(getComputedStyle(element).paddingRight)) - inactivePadding).toBe(12)
     await page.setViewportSize({ width: 390, height: 844 })
     await page.screenshot({ path: '/tmp/thesis-compact-minus.png' })
     await minus.click()
