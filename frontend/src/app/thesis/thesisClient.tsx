@@ -6,7 +6,7 @@ import { Copy, Info, Minus, Plus, Redo2, Settings2, Undo2 } from 'lucide-react'
 import SheetEditor from './sheetEditor'
 import TimetableSheet from './timetableSheet'
 import type { ActivityLog } from './timetableData'
-import CodeReview from './codeReview'
+import CodeAccess from './codeAccess'
 import type { Sheet, SheetSettings } from './workspace'
 import { identifiedSheets, writeSheets, sheetChanges } from './workspace'
 import type { ThesisDocument } from '@/utils/thesis'
@@ -21,6 +21,7 @@ type HistoryItem = { revision: number, title: string, saved_at: string, immediat
 
 export default function ThesisClient({ initialDocument, canEdit }: { initialDocument: ThesisDocument, canEdit: boolean }) {
     const [ready, setReady] = useState(false)
+    const [codeToolbar, setCodeToolbar] = useState<HTMLDivElement | null>(null)
     const [footerVisible, setFooterVisible] = useState(false)
     useEffect(() => {
         const footer = window.document.querySelector('footer')
@@ -173,7 +174,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
     return (
         <section className='mx-auto grid w-full max-w-6xl gap-6 px-4 pt-12 pb-32 text-ui-text md:px-8 md:pt-16' aria-label='Thesis document'
             onKeyDownCapture={event => {
-                if (!canEdit || event.nativeEvent.isComposing || (event.target as HTMLElement).closest('dialog, .code-workspace, .thesis-timetable, .thesis-timetable-controls')) return
+                if (!canEdit || event.nativeEvent.isComposing || (event.target as HTMLElement).closest('dialog, .code-workspace, .code-access, .thesis-timetable, .thesis-timetable-controls')) return
                 if (!(event.metaKey || event.ctrlKey) || event.altKey) return
                 const key = event.key.toLowerCase()
                 if (key !== 'z' && key !== 'y') return
@@ -184,27 +185,30 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
             }}
             onMouseDownCapture={event => {
                 // Keep the active line stable until a document control has received its click. Keyboard focus still behaves normally.
-                if (!(event.target as HTMLElement).closest('dialog, .code-workspace, .thesis-timetable, .thesis-timetable-controls') && (event.target as HTMLElement).closest('button, [role=button], .thesis-settings > summary')) event.preventDefault()
+                if (!(event.target as HTMLElement).closest('dialog, .code-workspace, .code-access, .thesis-timetable, .thesis-timetable-controls') && (event.target as HTMLElement).closest('button, [role=button], .thesis-settings > summary')) event.preventDefault()
             }}>
             <div role='tabpanel' id={`sheet-${active}`} aria-labelledby={`tab-${active}`}>
-                <Editor onActivityLogChange={updateActivityLog} key={sheets[active].id} sheet={sheets[active]} canEdit={canEdit && ready} onChange={updateSheet} showInsertTable={settings.insertTable !== false}
+                <Editor onActivityLogChange={updateActivityLog} contentOnly={codeEnabled} key={sheets[active].id} sheet={sheets[active]} canEdit={canEdit && ready} onChange={updateSheet} showInsertTable={settings.insertTable !== false}
                     trailingActions={canEdit && <details className='thesis-settings' key={sheets[active].id} onKeyDown={event => { if (event.key === 'Escape') event.currentTarget.open = false }}>
                         <summary aria-label='Sheet settings' title='Sheet settings'><Settings2 size={17} /></summary>
                         <div className='thesis-settings-panel' role='group' aria-label='Features on this sheet'>
                             <strong>Features on this sheet</strong>
                             <label><input type='checkbox' checked={settings.insertTable !== false} onChange={event => updateSettings('insertTable', event.target.checked)} />Insert table</label>
                             <label><input type='checkbox' checked={settings.history !== false} onChange={event => updateSettings('history', event.target.checked)} />History</label>
-                            <label><input type='checkbox' checked={codeEnabled} onChange={event => updateSettings('codeReview', event.target.checked)} />Code review (owner only)</label>
+                            <label><input type='checkbox' checked={codeEnabled} onChange={event => updateSettings('codeReview', event.target.checked)} />Code review</label>
                         </div>
                     </details>}
-                    actions={canEdit && <>
-                        <button type='button' disabled={!thesis.canUndo || busy} onClick={thesis.undo} aria-label='Undo' title='Undo (Ctrl/⌘ Z)' className='grid min-h-11 min-w-11 place-items-center rounded-lg border border-ui-border hover:bg-ui-raised disabled:opacity-40'><Undo2 size={18} /></button>
-                        <button type='button' disabled={!thesis.canRedo || busy} onClick={thesis.redo} aria-label='Redo' title='Redo (Ctrl/⌘ Shift Z)' className='grid min-h-11 min-w-11 place-items-center rounded-lg border border-ui-border hover:bg-ui-raised disabled:opacity-40'><Redo2 size={18} /></button>
-                        {settings.history !== false && <button type='button' disabled={busy || !ready} aria-expanded={history !== null} onClick={() => history === null ? loadHistory() : setHistory(null)} className='min-h-11 rounded-lg border border-ui-border px-3 py-2 text-sm hover:bg-ui-raised disabled:opacity-40'>
-                            {history === null ? 'History' : 'Close history'}
-                        </button>}
+                    actions={(canEdit || codeEnabled) && <>
+                        {codeEnabled && <div ref={setCodeToolbar} className='flex' />}
+                        {canEdit && <>
+                            <button type='button' disabled={!thesis.canUndo || busy} onClick={thesis.undo} aria-label='Undo' title='Undo (Ctrl/⌘ Z)' className='grid min-h-11 min-w-11 place-items-center rounded-lg border border-ui-border hover:bg-ui-raised disabled:opacity-40'><Undo2 size={18} /></button>
+                            <button type='button' disabled={!thesis.canRedo || busy} onClick={thesis.redo} aria-label='Redo' title='Redo (Ctrl/⌘ Shift Z)' className='grid min-h-11 min-w-11 place-items-center rounded-lg border border-ui-border hover:bg-ui-raised disabled:opacity-40'><Redo2 size={18} /></button>
+                            {settings.history !== false && <button type='button' disabled={busy || !ready} aria-expanded={history !== null} onClick={() => history === null ? loadHistory() : setHistory(null)} className='min-h-11 rounded-lg border border-ui-border px-3 py-2 text-sm hover:bg-ui-raised disabled:opacity-40'>
+                                {history === null ? 'History' : 'Close history'}
+                            </button>}
+                        </>}
                     </>} />
-                {canEdit && ready && codeEnabled && <CodeReview />}
+                {ready && codeEnabled && <CodeAccess canEdit={canEdit} toolbar={codeToolbar} />}
             </div>
             {validationError && <p role='alert' className='text-sm text-ui-danger'>{validationError}</p>}
             <nav className='thesis-tabs' hidden={footerVisible} aria-label='Sheet navigation'>

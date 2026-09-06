@@ -12,6 +12,7 @@ const bun = process.execPath
 
 const tasks: TestTask[] = [
     { id: 'timetable', title: 'Dated timetable activity totals and persistence', command: [bun, 'test', 'tests/timetable.test.ts'] },
+    { id: 'code-access', title: 'Code access sessions and login limits', command: [bun, 'test', 'tests/code-access.test.ts'] },
     { id: 'thesis-workspace', title: 'Thesis table text, formulas and persistence', command: [bun, 'test', 'tests/workspace.test.ts'] },
     { id: 'table-navigation', title: 'Temporary table edges and formula preservation', command: [bun, 'test', 'tests/table-navigation.test.ts'] },
     { id: 'code-inventory', title: 'Source inventory and dependency hashes', command: [bun, 'test', 'tests/code-inventory.test.mjs'] },

@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { queryOnce } from '#db'
 import { validateSession } from '#utils/auth/session.ts'
+import hasInternalToken from '#utils/auth/internalToken.ts'
 
 let schema: Promise<unknown> | undefined
 async function prepare() {
@@ -21,7 +22,7 @@ async function owner(req: FastifyRequest) {
 }
 export async function getCodeReviews(req: FastifyRequest, res: FastifyReply) {
     try {
-        if (!await owner(req)) return res.status(403).send({ error: 'Source reviews are only available to the owner.' })
+        if (!hasInternalToken(req) && !await owner(req)) return res.status(403).send({ error: 'Code access is required to read reviews.' })
         const { id, before } = req.query as { id?: string, before?: string }
         if ((id !== undefined && (typeof id !== 'string' || !id || id.length > 2000)) || (before !== undefined && (!id || typeof before !== 'string' || !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(before)))) return res.status(400).send({ error: 'Invalid review history request.' })
         await prepare()

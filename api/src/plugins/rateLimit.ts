@@ -69,7 +69,9 @@ async function enforceRateLimit(req: FastifyRequest, res: FastifyReply, database
         || isTrustedStatusIngest(req, path)
     ) return true
 
-    const actor = await resolveRateLimitActor(req)
+    const actor: RateLimitActor = req.method === 'GET' && path === '/api/thesis/code-reviews' && hasInternalToken(req)
+        ? { scope: 'internal', identifier: 'service:code-review' }
+        : await resolveRateLimitActor(req)
     if (actor.invalidApiKey) {
         sendBoundaryError(req, res, 401, 'invalid_api_key', 'The presented API key is invalid, disabled, or expired.')
         return false

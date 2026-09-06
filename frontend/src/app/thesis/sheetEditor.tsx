@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowDown, ArrowUp } from 'lucide-react'
+import { ArrowDown, ArrowUp, Pencil } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { marked } from 'marked'
 import { cellValue, columnName, reshape, tables, writeTable, type TableData, type Sheet } from './workspace'
 import InlineMarkdown from './inlineMarkdown'
 import { navigateTable, type PendingTable } from './tableNavigation'
@@ -124,10 +125,11 @@ function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { 
     </section>
 }
 
-export type SheetEditorProps = { sheet: Sheet, canEdit: boolean, actions?: ReactNode, trailingActions?: ReactNode, showInsertTable?: boolean, titleAside?: ReactNode, beforeContent?: ReactNode, renderTable?: (data: TableData, index: number) => ReactNode, onChange: (field: 'title' | 'body', value: string, group?: string) => void }
+export type SheetEditorProps = { contentOnly?: boolean, sheet: Sheet, canEdit: boolean, actions?: ReactNode, trailingActions?: ReactNode, showInsertTable?: boolean, titleAside?: ReactNode, beforeContent?: ReactNode, renderTable?: (data: TableData, index: number) => ReactNode, onChange: (field: 'title' | 'body', value: string, group?: string) => void }
 
-export default function SheetEditor({ sheet, canEdit, onChange, actions, trailingActions, titleAside, beforeContent, renderTable, showInsertTable = true }: SheetEditorProps) {
+export default function SheetEditor({ sheet, canEdit, onChange, actions, trailingActions, titleAside, beforeContent, renderTable, showInsertTable = true, contentOnly = false }: SheetEditorProps) {
     const root = useRef<HTMLDivElement>(null)
+    const [writing, setWriting] = useState(false)
     const selection = useRef({ start: sheet.body.length, end: sheet.body.length })
     const [active, setActive] = useState<Cell | null>(null)
     const [pending, setPending] = useState<(PendingTable & { table: number, source: string }) | null>(null)
@@ -189,7 +191,11 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
         updateTable(cell.table, data, undefined, true)
         focusCell({ ...cell, row: axis === 'row' ? Math.min(index + (remove ? 0 : 1), data.cells.length - 1) : cell.row, col: axis === 'column' ? Math.min(index + (remove ? 0 : 1), data.cells[0].length - 1) : cell.col })
     }
+    const tokens = marked.lexer(sheet.body)
+    const compact = (contentOnly || parsed.length > 0 || tokens.some(token => token.type === 'code')) && tokens.every(token => ['space', 'table', 'code', 'html'].includes(token.type) && (token.type !== 'html' || /^<!-- thesis-table:/.test(token.raw)))
     function prose(text: string, start: number, end: number) {
+        if (!text.trim() && (!canEdit || (compact && !writing))) return null
+        if (compact && !writing) return <RenderMarkdown text={text} />
         return canEdit ? <InlineMarkdown text={text} label='Description Markdown' showEmptyHint={!parsed.length}
             onSelection={(a, b) => { selection.current = { start: start + a, end: start + b } }}
             onChange={(value, group) => onChange('body', sheet.body.slice(0, start) + value + sheet.body.slice(end), group ? `prose:${start}:${group}` : undefined)} /> : <RenderMarkdown text={text} />
@@ -218,6 +224,7 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
             </div>
             {(canEdit || actions) && <div data-table-tools className='thesis-document-actions' aria-label='Document actions'>
                 {actions}
+                {canEdit && compact && <button className={button} aria-label={writing ? 'Hide text editor' : 'Add text'} title={writing ? 'Hide text editor' : 'Add text'} aria-pressed={writing} onClick={() => setWriting(value => !value)}><Pencil size={18} /></button>}
                 {canEdit && showInsertTable && <button className={button} onMouseDown={event => event.preventDefault()} onClick={insert}>Insert table</button>}
                 {trailingActions}
                 {canEdit && cell && table && <div className='flex shrink-0 items-center gap-2' role='group' aria-label='Active table controls'>
@@ -234,6 +241,6 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
             </div>}
         </div>
         {beforeContent}
-        <div className='min-w-0'>{content}{prose(sheet.body.slice(offset), offset, sheet.body.length)}</div>
+        {(!compact || writing || sheet.body.trim()) && <div className='min-w-0'>{content}{prose(sheet.body.slice(offset), offset, sheet.body.length)}</div>}
     </div>
 }
