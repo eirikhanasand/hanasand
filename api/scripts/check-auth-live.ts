@@ -18,6 +18,7 @@ async function validate(url = base) {
         const response = await fetch(`${url}/auth/token/${id}`, {
             headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000),
         })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
         const body = await response.json()
         if (response.status !== 200 || body.id !== id || body.token !== token) throw new Error(`HTTP ${response.status}`)
         latencies.push(performance.now() - started)

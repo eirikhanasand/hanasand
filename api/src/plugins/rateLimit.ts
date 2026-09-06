@@ -79,7 +79,8 @@ async function enforceRateLimit(req: FastifyRequest, res: FastifyReply) {
         }
     }
 
-    if (recoveryReadOnly()) {
+    const checkedSession = (req as FastifyRequest & { rateLimitSession?: Awaited<ReturnType<typeof validateSession>> }).rateLimitSession
+    if (recoveryReadOnly() || checkedSession?.session.database_read_only) {
         const now = Date.now()
         const bucket = recoveryBuckets.get(actor.identifier)
         if (!bucket || now >= bucket.resetAt) {

@@ -13,6 +13,7 @@ type SessionRow = {
     user_agent: string
     created_at: string
     timestamp: string
+    database_read_only?: boolean
 }
 
 type SessionUser = {
@@ -72,7 +73,7 @@ export async function issueToken({ id, ip, userAgent = '' }: { id: string, ip: s
 
 export async function validateSession({ id, token }: { id?: string, token: string }) {
     const tokenResult = await run(`
-        SELECT token_id, id, token, ip, user_agent, created_at, timestamp
+        SELECT token_id, id, token, ip, user_agent, created_at, timestamp, pg_is_in_recovery() AS database_read_only
         FROM tokens
         WHERE ($1::text IS NULL OR id = $1)
           AND token = $2
@@ -113,7 +114,8 @@ export async function validateSession({ id, token }: { id?: string, token: strin
         ORDER BY r.priority ASC, r.id ASC
     `, [userId])
 
-    if (!recoveryReadOnly()) await run(`
+    const readOnly = recoveryReadOnly() || session.database_read_only === true
+    if (!readOnly) await run(`
         UPDATE tokens
         SET timestamp = NOW()
         WHERE id = $1
@@ -126,7 +128,7 @@ export async function validateSession({ id, token }: { id?: string, token: strin
         session,
         refreshed: {
             token,
-            expires_at: new Date((recoveryReadOnly() ? new Date(session.timestamp).getTime() : Date.now()) + ttlHours * 60 * 60 * 1000).toISOString(),
+            expires_at: new Date((readOnly ? new Date(session.timestamp).getTime() : Date.now()) + ttlHours * 60 * 60 * 1000).toISOString(),
         }
     }
 }
