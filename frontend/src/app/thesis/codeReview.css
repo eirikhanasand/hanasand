@@ -60,3 +60,11 @@
 
 .code-status[data-priority="0"] { color:#dc2626; border-color:#dc2626; background:#dc262615; }
 .code-status[data-priority="1"] { color:#ca8a04; border-color:#ca8a04; background:#eab30820; }
+
+.code-map-scroll { touch-action:none; overscroll-behavior:contain; }
+.code-map[data-expanded=true] { position:fixed; inset:10vh 10vw; width:80vw; height:80dvh; z-index:1100; display:flex; flex-direction:column; box-shadow:0 0 0 10vmax #0008; }
+.code-map[data-expanded=true] .code-map-scroll { flex:1; min-height:0; max-height:none; }
+.code-map-search { position:relative; margin-top:.75rem; }
+.code-map-search-input { display:flex; gap:.5rem; align-items:center; }
+.code-map-search input { min-width:0; flex:1; padding:.6rem; border:1px solid var(--color-ui-border); border-radius:.4rem; background:var(--color-ui-canvas); color:var(--color-ui-text); }
+.code-map-search-results { position:absolute; inset:100% 0 auto; max-height:40vh; overflow:auto; z-index:2; padding:.5rem; border:1px solid var(--color-ui-border); border-radius:.4rem; background:var(--color-ui-panel); box-shadow:0 8px 24px #0002; }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, Circle, Clock, Code2, Database, FileCode2, Globe, Minus, Plus, RotateCcw, Search, ZoomIn } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Circle, Clock, Code2, Maximize2, Minimize2, X, Database, FileCode2, Globe, Minus, Plus, RotateCcw, Search, ZoomIn } from 'lucide-react'
 import { reviewPriority, reviewStatus, type CodeInventory, type CodeItem, type ReviewEvent } from '@/utils/codeReviewTypes'
 import './codeReview.css'
 
@@ -26,33 +26,157 @@ function related(item: CodeItem, byId: Map<string, CodeItem>) {
     return [...visited].map(id => byId.get(id)).filter((node): node is CodeItem => Boolean(node)).sort((a, b) => a.title.localeCompare(b.title, 'en'))
 }
 function DependencyMap({ items, selected, onSelect }: { items: CodeItem[], selected?: CodeItem, onSelect: (id: string) => void }) {
-    const [zoom, setZoom] = useState(1), [limit, setLimit] = useState(12), [overview, setOverview] = useState(true)
+    const [zoom, setZoom] = useState(1), [limit, setLimit] = useState(12), [overview, setOverview] = useState(false)
     const viewport = useRef<HTMLDivElement>(null)
+    const searchInput = useRef<HTMLInputElement>(null)
+    const [expanded, setExpanded] = useState(false), [searchOpen, setSearchOpen] = useState(false), [query, setQuery] = useState('')
+    const zoomRef = useRef(1), dragged = useRef(false)
+    const searchTrigger = useRef<HTMLElement | null>(null)
+    function openSearch() {
+        if (!searchInput.current) searchTrigger.current = document.activeElement as HTMLElement | null
+        setSearchOpen(true)
+        requestAnimationFrame(() => searchInput.current?.focus())
+    }
+    function closeSearch() {
+        setSearchOpen(false)
+        searchTrigger.current?.focus({ preventScroll: true })
+    }
+    const changeZoom = useCallback((value: number, clientX?: number, clientY?: number) => {
+        const element = viewport.current
+        if (!element) return
+        const bounds = element.getBoundingClientRect()
+        const x = clientX === undefined ? element.clientWidth / 2 : clientX - bounds.left
+        const y = clientY === undefined ? element.clientHeight / 2 : clientY - bounds.top
+        const next = Math.max(Number.EPSILON, Math.min(16, value))
+        const ratio = next / zoomRef.current
+        const left = (element.scrollLeft + x) * ratio - x, top = (element.scrollTop + y) * ratio - y
+        zoomRef.current = next
+        setZoom(next)
+        requestAnimationFrame(() => element.scrollTo(Math.max(0, left), Math.max(0, top)))
+    }, [])
+    useEffect(() => {
+        const element = viewport.current
+        if (!element) return
+        let previous: { x: number, y: number, distance: number } | null = null
+        let gestureZoom = 1
+        const position = (touches: TouchList) => {
+            const a = touches[0], b = touches[1] || a
+            return { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2, distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) }
+        }
+        const start = (event: TouchEvent) => { dragged.current = false; previous = position(event.touches) }
+        const move = (event: TouchEvent) => {
+            if (!previous || !event.touches.length) return
+            event.preventDefault()
+            const next = position(event.touches)
+            if (next.distance && previous.distance) {
+                changeZoom(zoomRef.current * next.distance / previous.distance, next.x, next.y)
+                dragged.current = true
+            } else {
+                const dx = previous.x - next.x, dy = previous.y - next.y
+                element.scrollBy(dx, dy)
+                if (Math.abs(dx) + Math.abs(dy) > 2) dragged.current = true
+            }
+            previous = next
+        }
+        const end = (event: TouchEvent) => { previous = event.touches.length ? position(event.touches) : null }
+        const wheel = (event: WheelEvent) => {
+            if (!event.ctrlKey) return
+            event.preventDefault()
+            changeZoom(zoomRef.current * Math.exp(-event.deltaY * 0.01), event.clientX, event.clientY)
+        }
+        // Safari trackpads report gesture events instead of Ctrl+wheel.
+        const gestureStart = (event: Event) => { event.preventDefault(); gestureZoom = zoomRef.current }
+        const gestureChange = (event: Event) => {
+            event.preventDefault()
+            const gesture = event as Event & { scale: number, clientX: number, clientY: number }
+            if (Number.isFinite(gesture.scale)) changeZoom(gestureZoom * gesture.scale, gesture.clientX, gesture.clientY)
+        }
+        element.addEventListener('wheel', wheel, { passive: false })
+        element.addEventListener('touchstart', start, { passive: true })
+        element.addEventListener('touchmove', move, { passive: false })
+        element.addEventListener('touchend', end)
+        element.addEventListener('touchcancel', end)
+        element.addEventListener('gesturestart', gestureStart)
+        element.addEventListener('gesturechange', gestureChange)
+        return () => {
+            element.removeEventListener('wheel', wheel)
+            element.removeEventListener('touchstart', start)
+            element.removeEventListener('touchmove', move)
+            element.removeEventListener('touchend', end)
+            element.removeEventListener('touchcancel', end)
+            element.removeEventListener('gesturestart', gestureStart)
+            element.removeEventListener('gesturechange', gestureChange)
+        }
+    }, [changeZoom])
+    useEffect(() => {
+        function shortcut(event: KeyboardEvent) {
+            if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'j') {
+                event.preventDefault(); event.stopImmediatePropagation()
+                openSearch()
+            }
+        }
+        window.addEventListener('keydown', shortcut)
+        return () => window.removeEventListener('keydown', shortcut)
+    }, [])
+    useEffect(() => { if (searchOpen) searchInput.current?.focus() }, [searchOpen])
+    useEffect(() => {
+        if (!expanded) return
+        const previous = document.body.style.overflow
+        document.body.style.overflow = 'hidden'
+        return () => { document.body.style.overflow = previous }
+    }, [expanded])
+    function focusItem(id: string) {
+        onSelect(id); setOverview(false); setLimit(12)
+        changeZoom(1)
+        requestAnimationFrame(() => viewport.current?.scrollTo(0, 0))
+    }
     const byId = useMemo(() => new Map(items.map(item => [item.id, item])), [items])
     const dependencies = (selected?.dependencies || []).map(id => byId.get(id)).filter((item): item is CodeItem => Boolean(item))
     const dependents = selected ? items.filter(item => item.dependencies.includes(selected.id)) : []
-    const summary = overview || zoom < 0.55 || !selected
+    const summary = overview || !selected
     const height = summary ? 300 : Math.max(220, Math.max(Math.min(dependencies.length, limit), Math.min(dependents.length, limit)) * 64 + 100)
     const nodes = summary ? [] : [
         { item: selected, x: 350, y: 70 },
         ...dependents.slice(0, limit).map((item, index) => ({ item, x: 10, y: 70 + index * 64 })),
         ...dependencies.slice(0, limit).map((item, index) => ({ item, x: 690, y: 70 + index * 64 })),
     ]
-    return <section aria-label='Dependency map' className='code-map'>
+    const matches = query.trim() ? items.filter(item => (item.title + ' ' + item.file).toLowerCase().includes(query.trim().toLowerCase())) : []
+    return <section aria-label='Dependency map' className='code-map' data-expanded={expanded} onKeyDownCapture={event => {
+        if (event.key !== 'Escape' || !searchOpen) return
+        event.preventDefault(); event.stopPropagation(); event.nativeEvent.stopImmediatePropagation()
+        closeSearch()
+    }}>
         <div className='code-map-tools'>
             <strong>Dependency map</strong>
-            <button aria-label='Zoom out' disabled={zoom <= 0.3} onClick={() => setZoom(value => Math.max(0.3, value - 0.15))}><Minus size={15} /></button>
-            <output aria-label='Map zoom'>{Math.round(zoom * 100)}%</output>
-            <button aria-label='Zoom in' disabled={zoom >= 1.8} onClick={() => { setOverview(false); setZoom(value => Math.min(1.8, value + 0.15)) }}><Plus size={15} /></button>
-            <button onClick={() => { setOverview(true); setZoom(1); viewport.current?.scrollTo(0, 0) }}>Overview</button>
-            {selected && <button onClick={() => { setOverview(false); setZoom(1); setLimit(12); viewport.current?.scrollTo(0, 0) }}><ZoomIn size={15} /> Focus selected</button>}
+            <button aria-label='Zoom out' onClick={() => changeZoom(zoomRef.current * 0.85)}><Minus size={15} /></button>
+            <output aria-label='Map zoom'>{Number((zoom * 100).toPrecision(3))}%</output>
+            <button aria-label='Zoom in' onClick={() => changeZoom(zoomRef.current / 0.85)}><Plus size={15} /></button>
+            <button aria-label={overview ? 'Expand connections' : 'Collapse connections'} title={overview ? 'Expand connections' : 'Collapse connections'} onClick={() => setOverview(value => !value)}>{overview ? <ChevronDown size={15} /> : <ChevronUp size={15} />}</button>
+            {selected && <button onClick={() => focusItem(selected.id)}><ZoomIn size={15} /> Focus selected</button>}
+            <button aria-label='Search dependency map' title='Search dependency map (⌘J / Ctrl+J)' onClick={openSearch}><Search size={15} /></button>
+            <button aria-label={expanded ? 'Minimize dependency map' : 'Enlarge dependency map'} title={expanded ? 'Minimize dependency map' : 'Enlarge dependency map'} aria-pressed={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}</button>
         </div>
-        <div className='code-map-scroll' ref={viewport} tabIndex={0} aria-label='Scrollable dependency map'>
+        {searchOpen && <div className='code-map-search' role='search' aria-label='Dependency map search'>
+            <div className='code-map-search-input'>
+                <Search size={16} />
+                <input ref={searchInput} aria-label='Find in dependency map' placeholder='Search routes, queries or files' value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
+                    if (event.key === 'Enter' && matches[0]) { event.preventDefault(); focusItem(matches[0].id); closeSearch() }
+                }} />
+                <button aria-label='Close map search' onClick={closeSearch}><X size={15} /></button>
+            </div>
+            {query.trim() && <div className='code-map-search-results'>
+                <ul className='code-links'>{matches.slice(0, 50).map(item => <li key={item.id}><button onClick={() => { focusItem(item.id); closeSearch() }}><ItemIcon item={item} /><span>{item.title}</span></button></li>)}</ul>
+                <p className='code-caption' role='status'>{matches.length ? `${matches.length} matches${matches.length > 50 ? ' · Showing the first 50. Refine your search to narrow the results.' : ''}` : 'No matching items.'}</p>
+            </div>}
+        </div>}
+        <div className='code-map-scroll' ref={viewport} tabIndex={0} aria-label='Scrollable dependency map' onPointerDownCapture={event => { if (event.pointerType !== 'touch') dragged.current = false }} onClickCapture={event => {
+            if (dragged.current) { event.preventDefault(); event.stopPropagation(); dragged.current = false }
+        }}>
             {summary ? <div className='code-map-summary'>
-                {kinds.map(kind => <button key={kind} onClick={() => { const first = items.find(item => item.kind === kind); if (first) onSelect(first.id); setOverview(false); setZoom(1) }}>
+                {kinds.map(kind => <button key={kind} onClick={() => { const first = items.find(item => item.kind === kind); if (first) focusItem(first.id) }}>
                     {(() => { const Icon = icons[kind]; return <Icon size={22} /> })()}<span>{names[kind]}</span><b>{items.filter(item => item.kind === kind).length}</b>
                 </button>)}
-                {selected && <p>{selected.title}: <b>{selected.dependencyCount}</b> dependencies. Zoom in or focus to explore.</p>}
+                {selected && <p>{selected.title}: <b>{selected.dependencyCount}</b> dependencies. Expand connections or focus to explore.</p>}
             </div> : <svg role='group' aria-label={`Dependencies of ${selected.title}`} width={1010 * zoom} height={height * zoom} viewBox={`0 0 1010 ${height}`}>
                 <text x='10' y='28'>Used by</text><text x='350' y='28'>Selected</text><text x='690' y='28'>Depends on</text>
                 {nodes.slice(1).map(({ item, x, y }) => <path key={'edge:' + item.id + x} d={x < 350 ? `M310 ${y + 22} C330 ${y + 22} 330 92 350 92` : `M650 92 C670 92 670 ${y + 22} 690 ${y + 22}`} />)}
@@ -67,7 +191,7 @@ function DependencyMap({ items, selected, onSelect }: { items: CodeItem[], selec
             </svg>}
         </div>
         {!summary && Math.max(dependencies.length, dependents.length) > limit && <button className='code-more' onClick={() => setLimit(value => value + 24)}>Show more connections ({Math.max(0, dependencies.length - limit) + Math.max(0, dependents.length - limit)} hidden)</button>}
-        <p className='code-caption'>Connections read from source. Counts include transitive dependencies. Scroll to move around; use + and − to zoom. Unresolved references are listed with each item.</p>
+        <p className='code-caption'>Connections read from source. Counts include transitive dependencies. Scroll to move around; pinch or use + and − to zoom. Use the collapse button to switch to the overview. Unresolved references are listed with each item.</p>
     </section>
 }
 function SourceDetail({ item, onReview, onSelect, byId, canReview }: { canReview: boolean, item: CodeItem, onReview: (event: ReviewEvent) => void, onSelect: (id: string) => void, byId: Map<string, CodeItem> }) {
