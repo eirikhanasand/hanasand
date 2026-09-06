@@ -41,7 +41,7 @@
 .thesis-tab[data-active=true] { border-color: var(--color-ui-primary); background: var(--color-ui-raised); }
 .thesis-tab > button { border-top: 0; }
 .thesis-tab:has(.thesis-tab-remove) > [role=tab] { padding-right: 2rem; }
-.thesis-tabs .thesis-tab-remove { position: absolute; right: .25rem; display: grid; place-items: center; width: 1.5rem; height: 1.5rem; margin: 0; padding: 0; border-radius: .25rem; color: var(--color-ui-muted); }
+.thesis-tabs .thesis-tab-remove { position: absolute; right: .25rem; display: grid; place-items: center; width: 1.5rem; height: 1.5rem; min-width: 1.5rem; min-height: 1.5rem; margin: 0; padding: 0; border-radius: .25rem; color: var(--color-ui-muted); }
 .thesis-tab-remove svg { width: .75rem; height: .75rem; }
 .thesis-tab-remove:hover:not(:disabled) { color: var(--color-ui-danger); background: var(--color-ui-panel); }
 .thesis-tab-remove:disabled { opacity: .4; cursor: not-allowed; }
