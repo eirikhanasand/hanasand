@@ -6,12 +6,13 @@ test('owners add/remove persisted tabs and compare sheets in shared history; vie
     expect(baseURL).toBe('http://127.0.0.1:3205')
     const context = await browser.newContext()
     await context.addCookies([{ name: 'id', value: 'eirikhanasand', url: baseURL! }, { name: 'access_token', value: 'synthetic-owner', url: baseURL! }])
-    await context.addInitScript(() => {
+    const socketFixture = () => {
         const Socket = window.WebSocket
         window.WebSocket = class extends Socket {
             constructor(url: string | URL, protocols?: string | string[]) { super(String(url).endsWith('/api/ws/thesis') ? 'ws://127.0.0.1:3202/api/ws/thesis' : url, protocols) }
         }
-    })
+    }
+    await context.addInitScript(socketFixture)
     const saved = await (await context.request.get(baseURL + '/api/thesis')).json()
     await context.request.put(baseURL + '/api/thesis', { headers: { Origin: baseURL! }, data: { ...saved, title: '# Thesis', body: 'Original overview' } })
     const page = await context.newPage()
@@ -78,6 +79,7 @@ test('owners add/remove persisted tabs and compare sheets in shared history; vie
     await expect(page.getByRole('heading', { name: 'Overview — Removed', exact: true })).toBeVisible()
     await expect(page.getByRole('region', { name: 'Version preview' })).toContainText('Original overview')
     const viewer = await browser.newContext()
+    await viewer.addInitScript(socketFixture)
     const publicPage = await viewer.newPage()
     await publicPage.goto(baseURL + '/thesis')
     await expect(publicPage.getByRole('tab', { name: 'Notes', exact: true })).toBeVisible()

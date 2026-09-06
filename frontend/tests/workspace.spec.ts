@@ -81,6 +81,7 @@ test('sheet markdown, inline tables, persistence and inherited reader permission
     await page.getByRole('tab', { name: 'Plan', exact: true }).click()
     await page.getByRole('button', { name: 'Add text to Description Markdown', exact: true }).last().click()
     await body.fill('## Milestones\n\n- **Write** the thesis.')
+    await page.locator('.enterprise-theme').evaluate(element => element.scrollTo({ top: 0 }))
     await page.getByRole('tab', { name: 'Research', exact: true }).click()
     await page.getByRole('button', { name: 'Add text to Description Markdown', exact: true }).last().click()
     await body.fill('## Sources\n\n<script>window.unsafeThesis = true</script>\n\n[Unsafe](javascript:alert(1))')
