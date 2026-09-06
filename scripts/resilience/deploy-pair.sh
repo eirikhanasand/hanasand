@@ -19,6 +19,7 @@ case "${1:-}" in
   esac;;
  *) exit 2;;
 esac
+if test "$kind" = frontend; then sh scripts/resilience/deploy-code-indexer.sh; fi
 old_ports=$(python3 - "$root/config.json" "$kind" <<'JSON'
 import json,sys
 s=next(s for s in json.load(open(sys.argv[1]))['services'] if s['id']==sys.argv[2])

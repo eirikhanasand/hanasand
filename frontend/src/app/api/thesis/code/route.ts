@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { NextRequest, NextResponse } from 'next/server'
 import { canEditThesis } from '@/utils/thesis'
@@ -7,9 +7,19 @@ import config from '@/config'
 
 export const dynamic = 'force-dynamic'
 let source: Promise<CodeInventory> | undefined
-function inventory() {
-    source ??= readFile(path.join(process.cwd(), 'code-inventory.json'), 'utf8').then(value => JSON.parse(value) as CodeInventory).catch(error => { source = undefined; throw error })
-    return source
+let signature = ''
+async function inventory() {
+    const file = process.env.CODE_REVIEW_INVENTORY_PATH || path.join(process.cwd(), 'code-inventory.json')
+    const info = await stat(file), next = `${info.mtimeMs}:${info.size}`
+    if (!source || signature !== next) {
+        signature = next
+        source = readFile(file, 'utf8').then(value => JSON.parse(value) as CodeInventory).catch(error => { source = undefined; throw error })
+    }
+    const data = await source
+    if (!process.env.CODE_REVIEW_INVENTORY_PATH) return data
+    const sync = JSON.parse(await readFile(path.join(path.dirname(file), 'status.json'), 'utf8')) as NonNullable<CodeInventory['sync']>
+    if (!sync.checkedAt || Date.now() - Date.parse(sync.checkedAt) > 120000) sync.error = 'Git synchronization has stopped. The last indexed version is shown.'
+    return { ...data, sync }
 }
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } })
 async function authorized(request: NextRequest) {
@@ -34,9 +44,10 @@ export async function GET(request: NextRequest) {
             const history = await reviews(request, '?' + new URLSearchParams({ id, ...(before ? { before } : {}) }))
             return json({ item, history })
         }
+        if (request.nextUrl.searchParams.get('since') === data.hash + ':' + (data.revision || '') && (!data.sync || data.sync.phase === 'ready') && !data.sync?.error && !data.sync?.warning) return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'private, no-store' } })
         const events = await reviews(request) as ReviewEvent[]
         const byId = new Map(events.map(event => [event.item_id, event]))
-        return json({ ...data, release: process.env.HANASAND_RELEASE_COMMIT || 'development', nodes: data.nodes.map(item => ({ ...item, content: undefined, review: byId.get(item.id) })) })
+        return json({ ...data, release: data.revision || process.env.HANASAND_RELEASE_COMMIT || 'development', nodes: data.nodes.map(item => ({ ...item, content: undefined, review: byId.get(item.id) })) })
     } catch { return json({ error: 'The code inventory or review history could not be loaded. Please retry.' }, 503) }
 }
 export async function POST(request: NextRequest) {
@@ -44,7 +55,9 @@ export async function POST(request: NextRequest) {
         const origin = request.headers.get('origin')
         if (!origin || !URL.canParse(origin) || new URL(origin).host !== request.headers.get('host') || !await authorized(request)) return json({ error: 'Only the owner can review source code.' }, 403)
         const input = await request.json().catch(() => null)
-        const data = await inventory(), item = data.nodes.find(node => node.id === input?.id)
+        const data = await inventory()
+        if (data.sync && (data.sync.phase !== 'ready' || data.sync.error)) return json({ error: 'Git is being synchronized. Wait for the current version before approving.' }, 409)
+        const item = data.nodes.find(node => node.id === input?.id)
         if (!item || typeof input.approved !== 'boolean' || typeof input.eventId !== 'string') return json({ error: 'Invalid review.' }, 400)
         if (input.reviewHash !== item.reviewHash || input.sha256 !== item.sha256) return json({ error: 'This item changed. Refresh and review the current version before approving.' }, 409)
         return json(await reviews(request, '', { id: item.id, sha256: item.sha256, reviewHash: item.reviewHash, approved: input.approved, eventId: input.eventId }))

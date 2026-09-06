@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readSheets, writeSheets, sheetChanges } from '../src/app/thesis/workspace'
-import { reviewStatus, type CodeItem } from '../src/utils/codeReviewTypes'
+import { reviewPriority, reviewStatus, type CodeItem } from '../src/utils/codeReviewTypes'
 
 test('per-sheet preferences round trip and participate in shared history', () => {
     const sheets = [{ id: 'code', name: 'Code', title: '# Code', body: '\n\nNotes\n', settings: { insertTable: false, history: false, codeReview: true } }]
@@ -18,4 +18,16 @@ test('approval belongs to the exact source and dependency version', () => {
     assert.equal(item.review.review_hash, 'current')
     item.reviewHash = 'current'; item.review.approved = false
     assert.equal(reviewStatus(item), 'unreviewed')
+})
+
+test('review priority turns yellow changes red at fourteen days', () => {
+    const now = Date.parse('2026-09-20T12:00:00Z')
+    const item = { reviewHash: 'new', review: { approved: true, review_hash: 'old', reviewed_at: '2026-09-06T12:00:01Z' } } as CodeItem
+    assert.equal(reviewPriority(item, now), 1)
+    item.review!.reviewed_at = '2026-09-06T12:00:00Z'
+    assert.equal(reviewPriority(item, now), 0)
+    item.reviewHash = 'old'
+    assert.equal(reviewPriority(item, now), 2)
+    delete item.review
+    assert.equal(reviewPriority(item, now), 0)
 })

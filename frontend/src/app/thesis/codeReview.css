@@ -58,3 +58,6 @@
 .code-workspace,.code-main,.code-detail { grid-template-columns:minmax(0,1fr); }
 .code-workspace > *,.code-main > *,.code-detail > *,.code-map > * { min-width:0; }
 .code-detail pre { width:100%; max-width:100%; }
+
+.code-status[data-priority="0"] { color:#dc2626; border-color:#dc2626; background:#dc262615; }
+.code-status[data-priority="1"] { color:#ca8a04; border-color:#ca8a04; background:#eab30820; }
