@@ -210,7 +210,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     if (!this.readOnly) throw new Error("Metadata refresh is reserved for query replicas");
     const [clock] = await this.sql`SELECT clock_timestamp() AS at`;
     // Overlap committed updates without repeatedly rebuilding the full evidence/history heap.
-    const since = new Date(this.readOnlyRefreshedAt.getTime() - 300_000);
+    const since = new Date(this.readOnlyRefreshedAt.getTime() - 300_000).toISOString();
     const [sources, profiles, alerts, workflows] = await Promise.all([
       this.sql`SELECT record FROM threat_intel.sources WHERE updated_at >= ${since}`,
       this.sql`SELECT record FROM threat_intel.actor_profiles WHERE updated_at >= ${since}`,
