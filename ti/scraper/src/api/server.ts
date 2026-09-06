@@ -44,7 +44,7 @@ async function queryDwmEvidence(options: ApiServerOptions, tenantId: string, ter
 }
 export type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 export function startApiServer(options: ApiServerOptions): ApiServerHandle {
-  const serve = (port: number) => Bun.serve({ port, hostname: options.port === 0 ? "127.0.0.1" : "0.0.0.0", fetch: (request) => handleDurableApiRequest(request, options) });
+  const serve = (port: number) => Bun.serve({ port, hostname: Bun.env.SCRAPER_HOST || (options.port === 0 ? "127.0.0.1" : "0.0.0.0"), fetch: (request) => handleDurableApiRequest(request, { ...options }) });
   let server: ReturnType<typeof Bun.serve> | undefined;
   for (let attempt = 0; attempt < (options.port === 0 ? 512 : 1); attempt++) {
     try { server = serve(options.port === 0 ? 18_100 + attempt : options.port ?? 8097); break; }
@@ -69,6 +69,7 @@ async function handleDurableApiRequest(request: Request, options: ApiServerOptio
   }
 }
 export async function handleApiRequest(request: Request, options: ApiServerOptions): Promise<Response> {
+  if (options.readOnly && !["GET", "HEAD", "OPTIONS"].includes(request.method)) return error("recovery_read_only", "Existing intelligence is available. Collection and changes are paused during recovery.", 503);
   if (options.ready === false) return error("service_starting", "Source storage is still loading; retry shortly.", 503);
   const url = new URL(request.url);
   try {

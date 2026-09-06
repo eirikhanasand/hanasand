@@ -1,3 +1,5 @@
+import { recoveryRequestAllowed, recoveryState } from './utils/resilience.ts'
+import { queryOnce, closeDatabase } from './utils/db.ts'
 import Fastify from 'fastify'
 import apiRoutes from './routes.ts'
 import cors from '@fastify/cors'
@@ -37,6 +39,22 @@ const fastify = Fastify({
     genReqId: () => randomUUID(),
 })
 const port = Number(process.env.PORT) || 8081
+const httpWorkerOnly = process.env.API_HTTP_ONLY === '1'
+fastify.addHook('onRequest', async (req, reply) => {
+    if (!recoveryRequestAllowed(req.method, req.url.split('?')[0])) {
+        return reply.code(503).header('Retry-After', '30').send({ code: 'recovery_read_only', error: 'Recovery mode: viewing existing cases, alerts and intelligence is available. Changes and new processing are temporarily paused.' })
+    }
+})
+fastify.get('/ready', async (_req, reply) => {
+    try {
+        const result = await queryOnce('SELECT pg_is_in_recovery() AS replica')
+        return { ok: true, readOnly: result.rows[0].replica, recovery: recoveryState().mode || 'normal' }
+    } catch { return reply.code(503).send({ ok: false }) }
+})
+if (httpWorkerOnly) {
+    process.once('SIGTERM', () => { void fastify.close().then(closeDatabase) })
+}
+
 const browserWorkerOnly = process.env.BROWSER_SANDBOX_WORKER_ONLY === '1'
 
 fastify.decorate('cachedIPMetrics', { status: 200, data: Buffer.from(JSON.stringify([])) })
@@ -62,16 +80,16 @@ fastify.register(cors, {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD']
 })
 
-if (!browserWorkerOnly) fastify.register(fp)
+if (!browserWorkerOnly && !httpWorkerOnly) fastify.register(fp)
 fastify.register(ws)
 if (!browserWorkerOnly) {
     fastify.register(rateLimit)
     fastify.addHook('onSend', async (req, res, payload) => {
-        await recordHttpErrorResponse(req, res, payload)
+        if (!httpWorkerOnly) await recordHttpErrorResponse(req, res, payload)
         return payload
     })
     fastify.addHook('onResponse', async (req, res) => {
-        recordTraffic(req, res)
+        if (!httpWorkerOnly) recordTraffic(req, res)
     })
     fastify.register(publicTiApi, { prefix: '/api/v1' })
     fastify.register(apiRoutes, { prefix: '/api' })
@@ -84,7 +102,7 @@ if (browserWorkerOnly) {
 }
 if (!browserWorkerOnly) {
     fastify.addHook('onResponse', async (req, res) => {
-        if (res.statusCode < 400) {
+        if (httpWorkerOnly || res.statusCode < 400) {
             return
         }
         if (res.statusCode === 401 || res.statusCode === 403) {
@@ -121,6 +139,7 @@ if (!browserWorkerOnly) {
         }).catch(error => fastify.log.error(error, 'Failed to persist production monitor signal'))
     })
     fastify.addHook('onError', async (req, _res, error) => {
+        if (httpWorkerOnly) return
         await recordLog({
             level: 'error',
             message: error.message,
@@ -143,8 +162,8 @@ process.on('unhandledRejection', reason => {
 
 async function start() {
     try {
-        if (!browserWorkerOnly) await ensureSchema()
-        if (!browserWorkerOnly && process.env.SKIP_MAIL_PROVISIONING !== '1') {
+        if (!browserWorkerOnly && !httpWorkerOnly) await ensureSchema()
+        if (!browserWorkerOnly && !httpWorkerOnly && process.env.SKIP_MAIL_PROVISIONING !== '1') {
             await provisionExistingMailAccounts().catch(error => {
                 if (isMailAdminConfigError(error)) {
                     fastify.log.debug('Mail account startup provisioning skipped because mail administration is not configured')
@@ -154,8 +173,8 @@ async function start() {
                 fastify.log.warn({ error }, 'Failed to provision mail accounts on startup')
             })
         }
-        await fastify.listen({ port, host: '0.0.0.0' })
-        if (browserWorkerOnly) return
+        await fastify.listen({ port, host: process.env.LISTEN_HOST || '0.0.0.0' })
+        if (browserWorkerOnly || httpWorkerOnly) return
         if (process.env.SKIP_REPOSITORY_SYNC !== '1') {
             void ensureRepositoryUpToDate().catch(error => {
                 fastify.log.warn({ error }, 'Failed to warm articles repository')
@@ -190,7 +209,7 @@ function describeUnknownError(error: unknown) {
 
 function main() {
     start()
-    if (!browserWorkerOnly) cron()
+    if (!browserWorkerOnly && !httpWorkerOnly) cron()
 }
 
 main()

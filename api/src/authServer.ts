@@ -1,3 +1,4 @@
+import { recoveryReadOnly, recoveryRequestAllowed } from './utils/resilience.ts'
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import { randomUUID } from 'node:crypto'
@@ -15,6 +16,9 @@ export function createAuthServer() {
         genReqId: () => randomUUID(),
         bodyLimit: 1_048_576,
     })
+    server.addHook('onRequest', async (req, reply) => {
+        if (!recoveryRequestAllowed(req.method, req.url.split('?')[0])) return reply.code(503).send({ code: 'recovery_read_only', error: 'Existing sessions remain available. Sign-in and account changes are paused during database recovery.' })
+    })
     server.addHook('onSend', async (_req, reply, payload) => {
         reply.header('Cache-Control', 'no-store')
         return payload
@@ -24,7 +28,7 @@ export function createAuthServer() {
             // Exercise the session schema and writable primary, not just a listening socket.
             await queryOnce('SELECT token_id, revoked_at FROM tokens LIMIT 0')
             const result = await queryOnce('SELECT pg_is_in_recovery() AS recovery, current_setting(\'transaction_read_only\') AS read_only')
-            if (result.rows[0].recovery || result.rows[0].read_only !== 'off') throw new Error('Database is read-only')
+            if (!recoveryReadOnly() && (result.rows[0].recovery || result.rows[0].read_only !== 'off')) throw new Error('Database is read-only')
             return { ok: true, service: 'authentication', release: process.env.HANASAND_RELEASE_COMMIT || 'unknown' }
         } catch {
             return reply.code(503).send({ ok: false })
@@ -56,5 +60,5 @@ if (import.meta.main) {
     }
     process.once('SIGTERM', () => void shutdown())
     process.once('SIGINT', () => void shutdown())
-    await server.listen({ port: Number(process.env.PORT) || 8081, host: '0.0.0.0' })
+    await server.listen({ port: Number(process.env.PORT) || 8081, host: process.env.LISTEN_HOST || '0.0.0.0' })
 }

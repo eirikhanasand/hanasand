@@ -1,3 +1,4 @@
+import ResiliencePanel from '@/components/system/resilience'
 import { cookies } from 'next/headers'
 import SystemDashboard from './clientPage'
 import getDockerContainers from '@/utils/vms/fetch/metrics/getDockerContainers'
@@ -29,6 +30,7 @@ export default async function page() {
                 title='System'
                 description='Operate containers, host resources, and virtual machines from one live surface.'
             />
+            <ResiliencePanel />
             <SystemDashboard
                 id={id}
                 token={token}

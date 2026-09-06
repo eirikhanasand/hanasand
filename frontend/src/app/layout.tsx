@@ -7,6 +7,7 @@ import { cookies, headers } from 'next/headers'
 import './globals.css'
 import Header from '@/components/header/header'
 import DetachedBoxHost from '@/components/box/detachedBoxHost'
+import { RecoveryBanner } from '@/components/system/resilience'
 import RouteFrame from '@/components/layout/routeFrame'
 export { default as metadata } from './metadata'
 export { default as viewport } from './metadata'
@@ -42,7 +43,7 @@ export default async function layout({ children }: { children: ReactNode }) {
                 <DetachedBoxHost />
                 <RouteFrame serverPath={path} token={token}
                     sidebar={id && token ? <DashboardSidebar initialPreferences={initialPreferences} initialMode={initialMode} id={id} isAdmin={isAdmin} canManageSystem={canManageSystem} canManageContent={canManageContent} canReviewIntel={canReviewIntel} /> : null}
-                    banner={impersonatingId ? <ImpersonationBanner id={impersonatingId} name={impersonatingName} /> : null}>
+                    banner={<><RecoveryBanner />{impersonatingId ? <ImpersonationBanner id={impersonatingId} name={impersonatingName} /> : null}</>}>
                     {children}
                 </RouteFrame>
             </body>

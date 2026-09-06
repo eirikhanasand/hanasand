@@ -1,3 +1,4 @@
+import { recoveryReadOnly } from '#utils/resilience.ts'
 import fp from 'fastify-plugin'
 import type { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from 'fastify'
 import { matchApiKeyScope, organizationPublicApiScopes, validateApiKey } from '#utils/auth/apiKeys.ts'
@@ -11,6 +12,9 @@ import {
 import hasInternalToken from '#utils/auth/internalToken.ts'
 import { verifiedClientIp } from '#utils/http/publicBoundary.ts'
 import { withTransaction } from '#db'
+
+// ponytail: per-worker counters during read-only recovery; shared DB limits resume with writes.
+const recoveryBuckets = new Map<string, { count: number; resetAt: number }>()
 
 type RateLimitActor = {
     scope: RateLimitScope
@@ -75,6 +79,20 @@ async function enforceRateLimit(req: FastifyRequest, res: FastifyReply) {
         }
     }
 
+    if (recoveryReadOnly()) {
+        const now = Date.now()
+        const bucket = recoveryBuckets.get(actor.identifier)
+        if (!bucket || now >= bucket.resetAt) {
+            if (recoveryBuckets.size >= 50_000) recoveryBuckets.delete(recoveryBuckets.keys().next().value!)
+            recoveryBuckets.set(actor.identifier, { count: 1, resetAt: now + 60_000 })
+            return true
+        }
+        bucket.count++
+        if (bucket.count <= (actor.scope === 'anonymous' ? 90 : 1800)) return true
+        res.header('Retry-After', Math.ceil((bucket.resetAt - now) / 1000))
+        sendBoundaryError(req, res, 429, 'rate_limited', 'Too many requests during recovery. Please retry shortly.')
+        return false
+    }
     const settings = await getRateLimitSettings()
     if (!settings.enabled) return true
 

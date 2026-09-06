@@ -213,7 +213,7 @@ import { createBillingPortal, getBillingSubscription, receiveStripeWebhook } fro
  */
 export default async function apiRoutes(fastify: FastifyInstance, options: FastifyPluginOptions) {
     void options
-    startLoadTestQueue()
+    if (process.env.API_HTTP_ONLY !== '1') startLoadTestQueue()
 
     // Index handler
     fastify.get('/', indexHandler)

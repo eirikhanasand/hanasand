@@ -86,6 +86,7 @@ const MAINTENANCE_MIGRATION_VERSIONS = new Set(["037_remove_parser_fallback_arti
 
 export type PostgresScraperStoreOptions = {
   databaseUrl?: string;
+  readOnly?: boolean;
   migrationPath?: string;
   onStartupPhase?: (phase: string) => void;
   runMaintenanceMigrations?: boolean;
@@ -109,6 +110,7 @@ type DatabaseHealth = {
 
 export class PostgresScraperStore extends InMemoryScraperStore {
   readonly usesPostgresSearchIndex = false;
+  private readOnly = false;
   private readonly sql: SQL;
   private readonly migrations: Migration[];
   private readonly latestMigrationVersion: string;
@@ -137,7 +139,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   static async create(options: PostgresScraperStoreOptions = {}): Promise<PostgresScraperStore> {
     const databaseUrl = options.databaseUrl ?? Bun.env.TI_DATABASE_URL;
     // ponytail: avoid pipelined result decoding in the production Bun SQL driver.
-    const sql = new SQL(databaseUrl, { prepare: false });
+    const sql = new SQL(databaseUrl, { prepare: false, ...(options.readOnly ? { max: 3 } : {}) });
     const runMaintenanceMigrations = options.runMaintenanceMigrations !== false;
     const migrations = DEFAULT_MIGRATIONS.filter((migration) => runMaintenanceMigrations || !MAINTENANCE_MIGRATION_VERSIONS.has(migration.version)).map((migration, index) => ({
       ...migration,
@@ -148,9 +150,13 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       await sql.connect();
       await sql.unsafe("SET TIME ZONE 'UTC'");
       options.onStartupPhase?.("connected");
-      await store.migrate();
+      store.readOnly = options.readOnly === true;
+      if (!store.readOnly) await store.migrate();
       options.onStartupPhase?.("migrated");
-      if (options.hydrate !== false) await store.hydrateStartupData(options.onStartupPhase);
+      if (options.hydrate !== false) {
+        if (store.readOnly) await store.hydrate();
+        else await store.hydrateStartupData(options.onStartupPhase);
+      }
       if (options.deferStartupChecks !== true) {
         await store.databaseHealth();
         await store.queryExposureQueuePage({ tenantId: "default", filters: {}, limit: 25, offset: 0, global: true });
@@ -2526,6 +2532,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   private enqueue(description: string, run: () => Promise<void>): void {
+    if (this.readOnly) throw new Error("Recovery mode: intelligence changes and collection are paused.");
     this.pendingWrites.push({ description, run });
     if (!this.draining && !this.lastWriteError) this.startDrain();
   }

@@ -1,3 +1,4 @@
+import { recoveryReadOnly } from '../resilience.ts'
 import { randomUUID } from 'crypto'
 import run from '#db'
 
@@ -112,7 +113,7 @@ export async function validateSession({ id, token }: { id?: string, token: strin
         ORDER BY r.priority ASC, r.id ASC
     `, [userId])
 
-    await run(`
+    if (!recoveryReadOnly()) await run(`
         UPDATE tokens
         SET timestamp = NOW()
         WHERE id = $1
@@ -125,7 +126,7 @@ export async function validateSession({ id, token }: { id?: string, token: strin
         session,
         refreshed: {
             token,
-            expires_at: new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString(),
+            expires_at: new Date((recoveryReadOnly() ? new Date(session.timestamp).getTime() : Date.now()) + ttlHours * 60 * 60 * 1000).toISOString(),
         }
     }
 }
