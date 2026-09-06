@@ -50,7 +50,7 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
             catch (error) {
                 if (!isTransientDatabaseError(error) && (error as { code?: string }).code !== '25006') throw error
                 await new Promise(resolve => setTimeout(resolve, 100))
-                return enforceRateLimit(req, res)
+                return enforceRateLimit(req, res, (error as { code?: string }).code === '25006')
             }
         }
         void enforce().then(proceed => {
@@ -59,7 +59,7 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
     })
 })
 
-async function enforceRateLimit(req: FastifyRequest, res: FastifyReply) {
+async function enforceRateLimit(req: FastifyRequest, res: FastifyReply, databaseReadOnly = false) {
     const path = normalizeRequestPath(req)
     if (
         req.headers.upgrade?.toLowerCase() === 'websocket'
@@ -89,7 +89,7 @@ async function enforceRateLimit(req: FastifyRequest, res: FastifyReply) {
     }
 
     const checkedSession = (req as FastifyRequest & { rateLimitSession?: Awaited<ReturnType<typeof validateSession>> }).rateLimitSession
-    if (recoveryReadOnly() || checkedSession?.session.database_read_only) {
+    if (databaseReadOnly || recoveryReadOnly() || checkedSession?.session.database_read_only) {
         const now = Date.now()
         const bucket = recoveryBuckets.get(actor.identifier)
         if (!bucket || now >= bucket.resetAt) {
