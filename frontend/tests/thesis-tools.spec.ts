@@ -169,3 +169,38 @@ test('vertical navigation centers cells in a large table', async({ page, context
     }
     await expect(page.getByRole('textbox', { name: 'Cell B21', exact: true })).toBeFocused()
 })
+
+test('arrows create temporary edges, clean up empty cells, and save entered text', async({ page, context, baseURL }) => {
+    const cell = (name: string) => page.getByRole('textbox', { name: `Cell ${name}`, exact: true })
+    const count = () => page.locator('[data-table-cell]').count()
+    const saved = await (await context.request.get(baseURL + '/api/thesis')).json()
+    for (const [start, key, next, back] of [['B3', 'ArrowDown', 'B4', 'ArrowUp'], ['B1', 'ArrowUp', 'B1', 'ArrowDown'], ['A2', 'ArrowLeft', 'A2', 'ArrowRight'], ['C2', 'ArrowRight', 'D2', 'ArrowLeft']]) {
+        await cell(start).focus()
+        if (key === 'ArrowLeft' || key === 'ArrowUp') await page.keyboard.press('Home')
+        else await page.keyboard.press('End')
+        await page.keyboard.press(key)
+        await expect(cell(next)).toBeFocused()
+        await expect.poll(count).toBe(12)
+        await page.keyboard.press(back)
+        await expect.poll(count).toBe(9)
+    }
+    await cell('B3').focus()
+    for (let n = 0; n < 20; n++) {
+        await page.keyboard.press('ArrowDown')
+        await expect(cell('B4')).toBeFocused()
+        await expect.poll(count).toBe(12)
+    }
+    await page.getByRole('separator', { name: 'Resize row 4', exact: true }).press('ArrowDown')
+    await page.getByRole('heading', { name: 'Timetable', exact: true }).click()
+    await expect.poll(count).toBe(9)
+    expect((await (await context.request.get(baseURL + '/api/thesis')).json()).body).toBe(saved.body)
+    await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled()
+    await cell('B3').focus()
+    await page.keyboard.press('ArrowDown')
+    await cell('B4').fill('New text')
+    await page.keyboard.press('ArrowUp')
+    await expect.poll(count).toBe(12)
+    await expect.poll(async() => (await (await context.request.get(baseURL + '/api/thesis')).json()).body, { timeout: 15000 }).toContain('New text')
+    await page.reload()
+    await expect(cell('B4')).toHaveValue('New text')
+})

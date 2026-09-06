@@ -6,6 +6,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cellValue, columnName, reshape, tables, writeTable, type TableData, type Sheet } from './workspace'
 import InlineMarkdown from './inlineMarkdown'
+import { navigateTable, type PendingTable } from './tableNavigation'
 import markdownSpacing from './markdownSpacing'
 import './workspace.css'
 
@@ -16,7 +17,7 @@ export function RenderMarkdown({ text }: { text: string }) {
 
 type Cell = { table: number, row: number, col: number }
 
-function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { data: TableData, index: number, active: Cell | null, onSelect: (cell: Cell) => void, onNavigate: (cell: Cell) => void, onChange?: (data: TableData, group?: string) => void }) {
+function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { data: TableData, index: number, active: Cell | null, onSelect: (cell: Cell) => void, onNavigate: (cell: Cell, extend?: boolean) => void, onChange?: (data: TableData, group?: string) => void }) {
     const [focused, setFocused] = useState('')
     const resize = useRef<{ axis: 'row' | 'column', index: number, start: number, size: number, value: number } | null>(null)
     function resizeHandle(axis: 'row' | 'column', index: number) {
@@ -80,9 +81,9 @@ function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { 
                                     const next = r * data.cells[0].length + c + (event.shiftKey ? -1 : 1)
                                     row = Math.floor(next / data.cells[0].length); col = next % data.cells[0].length
                                 } else return
-                                if (row < 0 || col < 0 || row >= data.cells.length || col >= data.cells[0].length) return
+                                if (event.key === 'Tab' && (row < 0 || col < 0 || row >= data.cells.length || col >= data.cells[0].length)) return
                                 event.preventDefault()
-                                onNavigate({ table: index, row, col })
+                                onNavigate({ table: index, row, col }, event.key !== 'Tab')
                             }} /> : <RenderMarkdown text={value} />}
                         {onChange && r === 0 && resizeHandle('column', c)}
                         {onChange && c === 0 && resizeHandle('row', r)}
@@ -98,9 +99,12 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
     const root = useRef<HTMLDivElement>(null)
     const selection = useRef({ start: sheet.body.length, end: sheet.body.length })
     const [active, setActive] = useState<Cell | null>(null)
+    const [pending, setPending] = useState<(PendingTable & { table: number, source: string }) | null>(null)
     const [help, setHelp] = useState(false)
     const helpId = useId()
-    const parsed = tables(sheet.body)
+    const draft = active && canEdit && pending?.source === sheet.body ? pending : null
+    const parsed = tables(sheet.body).map((table, index) => draft?.table === index ? { ...table, data: draft.data } : table)
+    useEffect(() => { if (!active || pending?.source !== sheet.body) setPending(null) }, [active, sheet.body])
     const table = active ? parsed[active.table] : undefined
     const cell = active && table && active.row < table.data.cells.length && active.col < table.data.cells[0].length ? active : null
     useEffect(() => {
@@ -131,7 +135,21 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
             input?.scrollIntoView({ block: largeTable ? 'center' : 'nearest', inline: 'nearest', behavior: 'instant' })
         })
     }
-    function updateTable(index: number, data: TableData, group?: string) {
+    function selectCell(next: Cell, extend = false, focus = false) {
+        const current = parsed[next.table]
+        if (!current) return
+        const move = navigateTable(draft?.table === next.table ? draft : { data: current.data }, next, extend)
+        setPending(move.row !== undefined || move.col !== undefined ? { ...move, table: next.table, source: sheet.body } : null)
+        const target = { ...next, ...move.cell }
+        if (focus || target.row !== next.row || target.col !== next.col) focusCell(target)
+        else setActive(target)
+    }
+    function updateTable(index: number, data: TableData, group?: string, explicitShape = false) {
+        if (draft?.table === index && !explicitShape && !data.cells.some((row, r) => row.some((value, c) => (r === draft.row || c === draft.col) && value.trim()))) {
+            setPending({ ...draft, data })
+            return
+        }
+        setPending(null)
         const target = parsed[index]
         onChange('body', sheet.body.slice(0, target.start) + writeTable(data) + sheet.body.slice(target.end), group)
     }
@@ -139,7 +157,7 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
         if (!cell || !table) return
         const index = axis === 'row' ? cell.row : cell.col
         const data = reshape(table.data, axis, index + (remove ? 0 : 1), remove)
-        updateTable(cell.table, data)
+        updateTable(cell.table, data, undefined, true)
         focusCell({ ...cell, row: axis === 'row' ? Math.min(index + (remove ? 0 : 1), data.cells.length - 1) : cell.row, col: axis === 'column' ? Math.min(index + (remove ? 0 : 1), data.cells[0].length - 1) : cell.col })
     }
     function prose(text: string, start: number, end: number) {
@@ -151,7 +169,7 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
     const content = parsed.map((table, index) => {
         const before = prose(sheet.body.slice(offset, table.start), offset, table.start)
         offset = table.end
-        return <div key={index}>{before}<InlineTable data={table.data} index={index} active={cell} onSelect={setActive} onNavigate={focusCell}
+        return <div key={index}>{before}<InlineTable data={table.data} index={index} active={cell} onSelect={next => selectCell(next)} onNavigate={(next, extend) => selectCell(next, extend, true)}
             onChange={canEdit ? (data, group) => updateTable(index, data, group) : undefined} /></div>
     })
     function insert() {
