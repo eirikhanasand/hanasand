@@ -18,6 +18,7 @@ assert local['activeInstance'] == 'inspur-api-2'
 assert remote['activeSite'] == 'ovhcloud'
 assert monitor.transition_embed(primary, local, [local])['color'] == 0xFF0000
 restored = monitor.transition_embed(remote, primary, [primary, {'name': 'TI collection', 'status': 'unavailable'}])
+assert monitor.transition_embed(remote, local, [local])['color'] == 0x00CC66
 assert restored['color'] == 0x00CC66
 assert 'TI collection' in restored['fields'][1]['value']
 assert monitor.choose_service(service, {})['status'] == 'unavailable'

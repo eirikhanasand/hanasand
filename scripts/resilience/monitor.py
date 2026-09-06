@@ -54,11 +54,12 @@ def choose_service(service, observations):
 
 
 def transition_embed(previous, current, services, drill=False):
-    restored = current['status'] == 'up'
+    restored = current['status'] == 'up' or (previous.get('activeSite') == 'ovhcloud' and current.get('activeSite') == 'inspur')
+    recovery_message = 'Preferred Inspur instance restored.' if current['status'] == 'up' else 'Primary site restored on its alternate instance; the preferred instance is still recovering.'
     remaining = [service['name'] for service in services if service['status'] != 'up']
     title = f"{'[TEST] ' if drill else ''}{'Failback' if restored else 'Failover'}: {current['name']}"
     description = (f"{previous.get('activeInstance') or 'unavailable'} → {current.get('activeInstance') or 'unavailable'}. "
-                   f"{'Preferred Inspur instance restored.' if restored else 'Preferred instance unavailable; recovery priority applied.'}")
+                   f"{recovery_message if restored else 'Preferred instance unavailable; recovery priority applied.'}")
     return {'title': title, 'description': description, 'color': 0x00CC66 if restored else 0xFF0000,
             'fields': [{'name': 'Active endpoint', 'value': current.get('activeEndpoint') or 'None'},
                        {'name': 'Still affected', 'value': ', '.join(remaining) or 'All monitored services are back to normal.'}],
