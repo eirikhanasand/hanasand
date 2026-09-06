@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { NAVIGATION_COOKIE, readNavigationPreferences, type NavigationPreferences as Preferences } from '@/utils/layout/navigationPreferences'
 import { getCookie, setCookie } from '@/utils/cookies/cookies'
 import { usePathname } from 'next/navigation'
-import { AlarmClockCheck, ChevronDown, FolderKanban, NotebookText, PanelLeftClose, PanelLeftOpen, Pin, Radar, Search, Server, Settings2, ShieldCheck } from 'lucide-react'
+import { AlarmClockCheck, ChevronDown, ChevronsUp, FolderKanban, NotebookText, PanelLeftClose, PanelLeftOpen, Pin, Radar, Search, Server, Settings2, ShieldCheck } from 'lucide-react'
 import { useEffect, useId, useState, useSyncExternalStore } from 'react'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 import { getDashboardNavigation, navigationLinks, type NavigationAccess, type NavigationItem } from '@/utils/layout/dashboardNavigation'
@@ -63,6 +63,16 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         save({ ...preferences, expanded: { ...preferences.expanded, [key]: !(preferences.expanded[key] ?? (activePath === key || activePath.startsWith(`${key}/`))) } })
     }
 
+    function collapseAll() {
+        const keys = [
+            ...Object.keys(preferences.expanded),
+            'Pinned',
+            ...links.flatMap(item => item.ancestors.map((_, index) => item.ancestors.slice(0, index + 1).join('/'))),
+        ]
+        save({ ...preferences, expanded: Object.fromEntries(keys.map(key => [key, false])) })
+        setQuery('')
+    }
+
     function pin(href: string) {
         save({ ...preferences, expanded: { ...preferences.expanded, Pinned: true }, pinned: preferences.pinned.includes(href) ? preferences.pinned.filter(item => item !== href) : [...preferences.pinned, href] })
     }
@@ -114,10 +124,16 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         <aside aria-label='Dashboard sidebar' className={`dashboard-sidebar-sticky noscroll min-h-0 w-full overflow-auto rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm shadow-ui-canvas/10 dark:shadow-ui-canvas/20 ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
             <div className={`mb-2 flex items-center ${compact ? 'justify-center' : 'justify-between px-2'}`}>
                 {!compact && <h2 className='text-sm font-semibold text-ui-text'>Workspace</h2>}
-                <button type='button' onClick={() => setDashboardViewMode(compact ? 'normal' : 'compact')} aria-label={compact ? 'Expand sidebar' : 'Collapse sidebar'} title={compact ? 'Expand sidebar' : 'Collapse sidebar'}
-                    className='grid h-10 w-10 place-items-center rounded-lg text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'>
-                    {compact ? <PanelLeftOpen className='h-4 w-4' /> : <PanelLeftClose className='h-4 w-4' />}
-                </button>
+                <div className='flex shrink-0 items-center'>
+                    {!compact && <button type='button' onClick={collapseAll} aria-label='Collapse all menus' title='Collapse all menus'
+                        className='grid h-10 w-10 place-items-center rounded-lg text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'>
+                        <ChevronsUp aria-hidden='true' className='h-4 w-4' />
+                    </button>}
+                    <button type='button' onClick={() => setDashboardViewMode(compact ? 'normal' : 'compact')} aria-label={compact ? 'Expand sidebar' : 'Collapse sidebar'} title={compact ? 'Expand sidebar' : 'Collapse sidebar'}
+                        className='grid h-10 w-10 place-items-center rounded-lg text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'>
+                        {compact ? <PanelLeftOpen className='h-4 w-4' /> : <PanelLeftClose className='h-4 w-4' />}
+                    </button>
+                </div>
             </div>
             {!compact && <div className='relative mb-2'>
                 <Search aria-hidden='true' className='pointer-events-none absolute left-2 top-3 h-4 w-4 text-ui-muted' />
