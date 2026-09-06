@@ -11,6 +11,14 @@ type HistoryItem = { revision: number, title: string, saved_at: string, immediat
 
 export default function ThesisClient({ initialDocument, canEdit }: { initialDocument: ThesisDocument, canEdit: boolean }) {
     const [ready, setReady] = useState(false)
+    const [footerVisible, setFooterVisible] = useState(false)
+    useEffect(() => {
+        const footer = window.document.querySelector('footer')
+        if (!footer) return
+        const observer = new IntersectionObserver(([entry]) => setFooterVisible(entry.isIntersecting), { rootMargin: '0px 0px -1px 0px' })
+        observer.observe(footer)
+        return () => observer.disconnect()
+    }, [])
     useEffect(() => { setReady(true) }, [])
     const thesis = useThesis(initialDocument, canEdit)
     const { document } = thesis
@@ -128,12 +136,12 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
             }}>
             <div role='tabpanel' id={`sheet-${active}`} aria-labelledby={`tab-${active}`}>
                 <SheetEditor key={sheets[active].id} sheet={sheets[active]} canEdit={canEdit && ready} onChange={updateSheet}
-                    actions={canEdit && <button type='button' disabled={busy || !ready} aria-expanded={history !== null} onClick={() => history === null ? loadHistory() : setHistory(null)} className='rounded-lg border border-ui-border px-3 py-2 text-sm hover:bg-ui-raised disabled:opacity-40'>
+                    actions={canEdit && <button type='button' disabled={busy || !ready} aria-expanded={history !== null} onClick={() => history === null ? loadHistory() : setHistory(null)} className='min-h-11 rounded-lg border border-ui-border px-3 py-2 text-sm hover:bg-ui-raised disabled:opacity-40'>
                         {history === null ? 'History' : 'Close history'}
                     </button>} />
             </div>
             {validationError && <p role='alert' className='text-sm text-ui-danger'>{validationError}</p>}
-            <nav className='thesis-tabs' aria-label='Sheet navigation'>
+            <nav className='thesis-tabs' hidden={footerVisible} aria-label='Sheet navigation'>
                 <div role='tablist' aria-label='Thesis sheets' className='flex'>
                     {sheets.map(({ id, name }, index) => <div key={id} role='presentation' className='thesis-tab' data-active={active === index}><button id={`tab-${index}`} role='tab' disabled={!ready} aria-selected={active === index} aria-controls={`sheet-${index}`} tabIndex={active === index ? 0 : -1}
                         onClick={() => setActive(index)} onKeyDown={event => {

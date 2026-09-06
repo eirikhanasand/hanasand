@@ -9,7 +9,7 @@ import InlineMarkdown from './inlineMarkdown'
 import markdownSpacing from './markdownSpacing'
 import './workspace.css'
 
-const button = 'rounded-lg border border-ui-border px-3 py-2 text-sm hover:bg-ui-raised disabled:opacity-40'
+const button = 'min-h-11 rounded-lg border border-ui-border px-3 py-2 text-sm hover:bg-ui-raised disabled:opacity-40'
 export function RenderMarkdown({ text }: { text: string }) {
     return <div className='thesis-markdown'><Markdown remarkPlugins={[remarkGfm, markdownSpacing]}>{text}</Markdown></div>
 }
