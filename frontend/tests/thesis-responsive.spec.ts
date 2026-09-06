@@ -21,7 +21,7 @@ for (const [width, height] of [[320, 568], [390, 844], [767, 1024], [768, 1024],
             const box = element.getBoundingClientRect()
             return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2))
         })).toBe(true)
-        await page.getByRole('tabpanel').evaluate(element => element.scrollIntoView({ block: 'start' }))
+        await page.locator('.enterprise-theme').evaluate(element => element.scrollTo({ top: 0 }))
         await expect(bar).toBeVisible()
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     })
