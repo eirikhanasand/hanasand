@@ -47,6 +47,27 @@ export default function AutomationsClient({ setup, initial }: { setup?: 'dwm', i
     const [automations, setAutomations] = useState<AgentAutomation[]>(initial.automations)
     const [detailsOpen, setDetailsOpen] = useState(true)
     const [caseSearch, setCaseSearch] = useState('')
+    const [searchOpen, setSearchOpen] = useState(false)
+    const searchInput = useRef<HTMLInputElement>(null)
+    const searchButton = useRef<HTMLButtonElement>(null)
+
+    function closeSearch() {
+        setSearchOpen(false)
+        setCaseSearch('')
+        searchButton.current?.focus()
+    }
+
+    useEffect(() => {
+        if (searchOpen) searchInput.current?.focus()
+        function onKeyDown(event: KeyboardEvent) {
+            if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'j' || event.repeat) return
+            event.preventDefault()
+            if (searchOpen) closeSearch()
+            else setSearchOpen(true)
+        }
+        window.addEventListener('keydown', onKeyDown)
+        return () => window.removeEventListener('keydown', onKeyDown)
+    }, [searchOpen])
     const [selected, setSelected] = useState<AgentAutomation | null>(setup ? null : initial.detail?.automation || initial.automations[0] || null)
     const [draft, setDraft] = useState<AutomationPayload>(() => selected ? toDraft(selected) : { ...defaultDraft(), timezone: 'UTC' })
     const [historyFrom, setHistoryFrom] = useState('')
@@ -170,9 +191,12 @@ export default function AutomationsClient({ setup, initial }: { setup?: 'dwm', i
                     <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
                         <div><h2 className='text-lg font-semibold text-ui-text'>Health checks</h2><p className='mt-1 text-sm text-ui-muted'>{automations.length} check{automations.length === 1 ? '' : 's'} configured</p></div>
                         <button type='button' aria-label={detailsOpen ? 'Collapse check details' : 'Expand check details'} title={detailsOpen ? 'Collapse check details' : 'Expand check details'} aria-expanded={detailsOpen} aria-controls='health-check-details' onClick={() => setDetailsOpen(!detailsOpen)} className='ml-auto rounded p-2 text-ui-muted hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-ui-primary'>{detailsOpen ? <PanelRightClose className='h-4 w-4' /> : <PanelRightOpen className='h-4 w-4' />}</button>
-                        {!editing ? <button type='button' onClick={beginCreate} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90'><Plus className='h-4 w-4' />Create automation</button> : null}
+                        <div className='flex max-w-full flex-wrap items-center gap-2'>
+                            {searchOpen && <input ref={searchInput} id='health-check-search' aria-label='Find a case or monitor' className={`${inputClass} max-w-56`} type='search' placeholder='MON-123 or monitor name' value={caseSearch} onChange={event => setCaseSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); closeSearch() } }} />}
+                            <button ref={searchButton} type='button' aria-label='Find a case or monitor (Cmd J)' aria-keyshortcuts='Meta+J Control+J' aria-expanded={searchOpen} aria-controls='health-check-search' title='Find a case or monitor (Cmd J)' onClick={() => searchOpen ? closeSearch() : setSearchOpen(true)} className='rounded-md border border-ui-border bg-ui-panel px-1.5 py-0.5 text-[10px] font-semibold text-ui-muted hover:text-ui-text focus-visible:outline-2 focus-visible:outline-ui-primary'>Cmd J</button>
+                            {!editing ? <button type='button' onClick={beginCreate} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90'><Plus className='h-4 w-4' />Create automation</button> : null}
+                        </div>
                     </div>
-                    <label className='grid gap-1.5 border-b border-ui-border p-4 text-xs text-ui-muted'><span>Find a case or monitor</span><input className={inputClass} type='search' placeholder='MON-123 or monitor name' value={caseSearch} onChange={event => setCaseSearch(event.target.value)} /></label>
                     <div className='hidden grid-cols-2 gap-3 border-b border-ui-border px-4 py-2 text-xs text-ui-muted md:grid md:grid-cols-[minmax(9rem,1.3fr)_minmax(7rem,0.8fr)_minmax(6rem,0.7fr)_minmax(8rem,1fr)_minmax(5rem,0.6fr)_minmax(5rem,0.6fr)]'><span>Name</span><span>Status</span><span>Cert</span><span>History</span><span>Uptime</span><span>Tags</span></div>
                     <div className='divide-y divide-ui-border'>
                         {automations.filter(automation => !caseSearch.trim() || [automation.name, ...(automation.caseNumbers || [])].some(value => value.toLowerCase().includes(caseSearch.trim().toLowerCase()))).map(automation => <AutomationRow key={automation.id} automation={automation} selected={selected?.id === automation.id} onClick={() => { setDetailsOpen(true); void select(automation) }} />)}
