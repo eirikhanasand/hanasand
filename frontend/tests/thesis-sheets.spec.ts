@@ -96,6 +96,7 @@ test('owners add/remove persisted tabs and compare sheets in shared history; vie
         await page.screenshot({ path: '/tmp/thesis-delete-dialog-mobile.png' })
         await deletion.getByRole('button', { name: 'Delete', exact: true }).click()
     }
+    await page.locator('.enterprise-theme').evaluate(element => element.scrollTo({ top: 0 }))
     await expect(page.getByRole('button', { name: /^Remove .* sheet$/ })).toBeDisabled()
     await expect.poll(async() => (await current()).length, { timeout: 12000 }).toBe(1)
     await page.reload()

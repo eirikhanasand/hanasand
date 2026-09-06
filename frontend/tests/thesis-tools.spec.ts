@@ -80,6 +80,7 @@ test('undo survives a pending save, redo saves again, and a new edit clears redo
         await requestStarted
         await b2.press('ControlOrMeta+z')
         await expect(b2).toHaveValue('1')
+        expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('hanasand-thesis-recovery:')).map(key => JSON.parse(localStorage.getItem(key)!).body))).toContain(initial.body)
         release()
         await expect.poll(async() => (await (await context.request.get(baseURL + '/api/thesis')).json()).revision, { timeout: 18000 }).toBeGreaterThanOrEqual(initial.revision + 2)
         await expect(b2).toHaveValue('1')

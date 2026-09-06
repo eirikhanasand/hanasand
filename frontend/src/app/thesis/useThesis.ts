@@ -72,7 +72,7 @@ export default function useThesis(initial: ThesisDocument, canEdit: boolean) {
         function keepDraft() {
             if (!key || !canEdit) return
             try {
-                if (dirty()) localStorage.setItem(key, JSON.stringify({ ...draft, savedAt: Date.now() }))
+                if (dirty() || (sent && !same(draft, sent))) localStorage.setItem(key, JSON.stringify({ ...draft, savedAt: Date.now() }))
                 else localStorage.removeItem(key)
             } catch {
                 setError('Browser recovery storage is unavailable. Keep this page open until your changes reach the server.')

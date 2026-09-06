@@ -75,6 +75,7 @@ test('only the active line shows source, with direct typing, line breaks, undo a
     const spaced = region.getByText('After blank lines', { exact: true })
     await expect(spaced).toBeVisible()
     expect((await spaced.boundingBox())!.y - (await footer.boundingBox())!.y).toBeGreaterThan(70)
+    await expect(region.getByRole('button', { name: 'History', exact: true })).toBeEnabled()
     await region.locator('p.thesis-markdown-blank').first().click()
     await expect(line).toHaveValue('')
     await line.press('Escape')

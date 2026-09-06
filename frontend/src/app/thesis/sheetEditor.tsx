@@ -104,13 +104,19 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions }: { she
     const table = active ? parsed[active.table] : undefined
     const cell = active && table && active.row < table.data.cells.length && active.col < table.data.cells[0].length ? active : null
     useEffect(() => {
+        let pointerTarget: HTMLElement | null = null
+        const rememberPointer = (event: PointerEvent) => { pointerTarget = event.target as HTMLElement }
         const clearOutside = (event: Event) => {
-            const target = event.target as HTMLElement
+            // Opening the toolbar can move the cell before pointer-up. Use the original target.
+            const target = event.type === 'click' ? pointerTarget || event.target as HTMLElement : event.target as HTMLElement
+            if (event.type === 'click') pointerTarget = null
             if (!root.current?.contains(target) || !target.closest('[data-table-cell], [data-table-tools]')) setActive(null)
         }
+        window.document.addEventListener('pointerdown', rememberPointer, true)
         window.document.addEventListener('click', clearOutside)
         window.document.addEventListener('focusin', clearOutside)
         return () => {
+            window.document.removeEventListener('pointerdown', rememberPointer, true)
             window.document.removeEventListener('click', clearOutside)
             window.document.removeEventListener('focusin', clearOutside)
         }
