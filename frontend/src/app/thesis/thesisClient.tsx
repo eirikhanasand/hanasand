@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Copy, Info, Minus, Plus, Redo2, Undo2 } from 'lucide-react'
+import { Copy, Info, Minus, Plus, Redo2, Settings2, Undo2 } from 'lucide-react'
 import SheetEditor from './sheetEditor'
+import CodeReview from './codeReview'
+import type { SheetSettings } from './workspace'
 import { identifiedSheets, writeSheets, sheetChanges } from './workspace'
 import type { ThesisDocument } from '@/utils/thesis'
 import useThesis from './useThesis'
@@ -38,6 +40,16 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
         // History updates can lag behind document edits; do not replace a newer selection.
         if (ready && selected && selected === new URL(window.location.href).searchParams.get('sheet') && !sheets.some(sheet => sheet.id === selected)) selectSheet(sheets[0].id, true)
     }, [ready, selected, document.body])
+    const settings = sheets[active].settings || {}
+    const codeEnabled = settings.codeReview ?? sheets[active].name.toLowerCase() === 'code'
+    function updateSettings(key: keyof SheetSettings, value: boolean) {
+        if (!canEdit) return
+        const next = sheets.map((sheet, index) => index === active ? { ...sheet, settings: { ...sheet.settings, [key]: value } } : sheet)
+        const body = writeSheets(next)
+        if (body.length > 1_000_000) { setValidationError('The workspace is full.'); return }
+        thesis.update('body', body)
+        if (key === 'history' && !value) setHistory(null)
+    }
     function updateSheet(field: 'title' | 'body', value: string, group?: string) {
         const next = sheets.map((sheet, index) => index === active ? { ...sheet, [field]: value } : sheet)
         if (field === 'title' && (!value.trim() || value.length > 500)) { setValidationError('Enter a title of 1–500 characters.'); return }
@@ -145,7 +157,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
     return (
         <section className='mx-auto grid w-full max-w-6xl gap-6 px-4 pt-12 pb-32 text-ui-text md:px-8 md:pt-16' aria-label='Thesis document'
             onKeyDownCapture={event => {
-                if (!canEdit || event.nativeEvent.isComposing || (event.target as HTMLElement).closest('dialog')) return
+                if (!canEdit || event.nativeEvent.isComposing || (event.target as HTMLElement).closest('dialog, .code-workspace')) return
                 if (!(event.metaKey || event.ctrlKey) || event.altKey) return
                 const key = event.key.toLowerCase()
                 if (key !== 'z' && key !== 'y') return
@@ -156,17 +168,27 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
             }}
             onMouseDownCapture={event => {
                 // Keep the active line stable until a document control has received its click. Keyboard focus still behaves normally.
-                if (!(event.target as HTMLElement).closest('dialog') && (event.target as HTMLElement).closest('button, [role=button]')) event.preventDefault()
+                if (!(event.target as HTMLElement).closest('dialog, .code-workspace') && (event.target as HTMLElement).closest('button, [role=button], .thesis-settings > summary')) event.preventDefault()
             }}>
             <div role='tabpanel' id={`sheet-${active}`} aria-labelledby={`tab-${active}`}>
-                <SheetEditor key={sheets[active].id} sheet={sheets[active]} canEdit={canEdit && ready} onChange={updateSheet}
+                <SheetEditor key={sheets[active].id} sheet={sheets[active]} canEdit={canEdit && ready} onChange={updateSheet} showInsertTable={settings.insertTable !== false}
+                    trailingActions={canEdit && <details className='thesis-settings' key={sheets[active].id} onKeyDown={event => { if (event.key === 'Escape') event.currentTarget.open = false }}>
+                        <summary aria-label='Sheet settings' title='Sheet settings'><Settings2 size={17} /></summary>
+                        <div className='thesis-settings-panel' role='group' aria-label='Features on this sheet'>
+                            <strong>Features on this sheet</strong>
+                            <label><input type='checkbox' checked={settings.insertTable !== false} onChange={event => updateSettings('insertTable', event.target.checked)} />Insert table</label>
+                            <label><input type='checkbox' checked={settings.history !== false} onChange={event => updateSettings('history', event.target.checked)} />History</label>
+                            <label><input type='checkbox' checked={codeEnabled} onChange={event => updateSettings('codeReview', event.target.checked)} />Code review (owner only)</label>
+                        </div>
+                    </details>}
                     actions={canEdit && <>
                         <button type='button' disabled={!thesis.canUndo || busy} onClick={thesis.undo} aria-label='Undo' title='Undo (Ctrl/⌘ Z)' className='grid min-h-11 min-w-11 place-items-center rounded-lg border border-ui-border hover:bg-ui-raised disabled:opacity-40'><Undo2 size={18} /></button>
                         <button type='button' disabled={!thesis.canRedo || busy} onClick={thesis.redo} aria-label='Redo' title='Redo (Ctrl/⌘ Shift Z)' className='grid min-h-11 min-w-11 place-items-center rounded-lg border border-ui-border hover:bg-ui-raised disabled:opacity-40'><Redo2 size={18} /></button>
-                        <button type='button' disabled={busy || !ready} aria-expanded={history !== null} onClick={() => history === null ? loadHistory() : setHistory(null)} className='min-h-11 rounded-lg border border-ui-border px-3 py-2 text-sm hover:bg-ui-raised disabled:opacity-40'>
+                        {settings.history !== false && <button type='button' disabled={busy || !ready} aria-expanded={history !== null} onClick={() => history === null ? loadHistory() : setHistory(null)} className='min-h-11 rounded-lg border border-ui-border px-3 py-2 text-sm hover:bg-ui-raised disabled:opacity-40'>
                             {history === null ? 'History' : 'Close history'}
-                        </button>
+                        </button>}
                     </>} />
+                {canEdit && ready && codeEnabled && <CodeReview />}
             </div>
             {validationError && <p role='alert' className='text-sm text-ui-danger'>{validationError}</p>}
             <nav className='thesis-tabs' hidden={footerVisible} aria-label='Sheet navigation'>
@@ -218,7 +240,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                             Recover browser draft: {item.title} — {new Date(item.savedAt).toLocaleString()}
                         </button>
                     ))}
-                    {history !== null && (
+                    {settings.history !== false && history !== null && (
                         <section aria-label='Version history' className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4'>
                             <div className='flex items-center justify-between gap-3'>
                                 <h2 className='font-semibold'>Previous version</h2>

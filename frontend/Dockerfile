@@ -17,6 +17,8 @@ ENV NODE_ENV=production
 COPY frontend ./
 COPY api /workspace/api
 COPY docker-compose.yml /workspace/docker-compose.yml
+COPY . /repository
+RUN bun scripts/code-inventory.mjs /repository /workspace/frontend/code-inventory.json
 RUN bun run test
 RUN bun run lint
 RUN bun run build
@@ -34,6 +36,8 @@ COPY frontend/entrypoint.sh /app/entrypoint.sh
 COPY --from=builder /workspace/frontend/.next/standalone ./
 COPY --from=builder /workspace/frontend/.next/static /app/.next/static
 COPY --from=builder /workspace/frontend/public /app/public
+# Private source inventory is served only through the authenticated owner endpoint.
+COPY --from=builder /workspace/frontend/code-inventory.json /app/code-inventory.json
 
 EXPOSE 3000
 

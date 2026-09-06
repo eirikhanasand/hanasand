@@ -13,7 +13,7 @@ case "${1:-}" in
   docker image inspect "$image" >/dev/null 2>&1 || { echo 'The exact release image must be built before --no-build.' >&2; exit 1; };;
  '')
   case "$kind" in
-   frontend) docker build -f frontend/Dockerfile -t "$image" .;;
+   frontend) git archive "$release" | docker build -f frontend/Dockerfile -t "$image" -;;
    api) docker build --target app-runtime --build-context database_schema=./db -t "$image" api;;
    auth) docker build --target auth-runtime -t "$image" api;;
   esac;;

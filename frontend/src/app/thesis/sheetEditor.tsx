@@ -94,7 +94,7 @@ function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { 
     </section>
 }
 
-export default function SheetEditor({ sheet, canEdit, onChange, actions }: { sheet: Sheet, canEdit: boolean, actions?: ReactNode, onChange: (field: 'title' | 'body', value: string, group?: string) => void }) {
+export default function SheetEditor({ sheet, canEdit, onChange, actions, trailingActions, showInsertTable = true }: { sheet: Sheet, canEdit: boolean, actions?: ReactNode, trailingActions?: ReactNode, showInsertTable?: boolean, onChange: (field: 'title' | 'body', value: string, group?: string) => void }) {
     const root = useRef<HTMLDivElement>(null)
     const selection = useRef({ start: sheet.body.length, end: sheet.body.length })
     const [active, setActive] = useState<Cell | null>(null)
@@ -168,7 +168,8 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions }: { she
             </div>
             {(canEdit || actions) && <div data-table-tools className='flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2 md:max-w-[65%]' aria-label='Document actions'>
                 {actions}
-                {canEdit && <button className={button} onMouseDown={event => event.preventDefault()} onClick={insert}>Insert table</button>}
+                {canEdit && showInsertTable && <button className={button} onMouseDown={event => event.preventDefault()} onClick={insert}>Insert table</button>}
+                {trailingActions}
                 {canEdit && parsed.length > 0 && <button type='button' className={button} aria-label='Table help' aria-expanded={help} aria-controls={helpId} onClick={() => setHelp(!help)}><Info size={18} /></button>}
                 {canEdit && cell && table && <div className='flex flex-wrap items-center justify-end gap-2' role='group' aria-label='Active table controls'>
                     <span className='text-sm font-semibold text-ui-primary'>Table {cell.table + 1} · {columnName(cell.col)}{cell.row + 1}</span>
