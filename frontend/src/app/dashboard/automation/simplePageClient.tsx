@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, Clock3, Filter, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { AlertTriangle, PanelRightClose, PanelRightOpen, Check, Clock3, Filter, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import {
     createAutomation,
     deleteAutomation,
@@ -17,6 +17,7 @@ import type { InitialAutomationData } from '@/utils/automations/server'
 import useAutomationHistory from './useAutomationHistory'
 import ErrorNotice from '@/components/error/errorNotice'
 import CertificateStatus from './certificateStatus'
+import JsonRuleForm, { defaultJsonRule } from './jsonRuleForm'
 
 const inputClass = 'h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
 const defaultDraft = (): AutomationPayload => ({
@@ -44,6 +45,7 @@ const defaultDraft = (): AutomationPayload => ({
 
 export default function AutomationsClient({ setup, initial }: { setup?: 'dwm', initial: InitialAutomationData }) {
     const [automations, setAutomations] = useState<AgentAutomation[]>(initial.automations)
+    const [detailsOpen, setDetailsOpen] = useState(true)
     const [caseSearch, setCaseSearch] = useState('')
     const [selected, setSelected] = useState<AgentAutomation | null>(setup ? null : initial.detail?.automation || initial.automations[0] || null)
     const [draft, setDraft] = useState<AutomationPayload>(() => selected ? toDraft(selected) : { ...defaultDraft(), timezone: 'UTC' })
@@ -100,6 +102,7 @@ export default function AutomationsClient({ setup, initial }: { setup?: 'dwm', i
     }
 
     function beginCreate() {
+        setDetailsOpen(true)
         setSelected(null)
         setHistoryFrom('')
         setHistoryTo('')
@@ -162,20 +165,21 @@ export default function AutomationsClient({ setup, initial }: { setup?: 'dwm', i
     return (
         <div className='grid gap-4'>
             <StatusSummary automations={automations} />
-            <div className='grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.72fr)]'>
+            <div className={`grid gap-4 ${detailsOpen ? 'xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.72fr)]' : ''}`}>
                 <section className='rounded-xl border border-ui-border bg-ui-panel shadow-sm'>
                     <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
-                        <div><h2 className='text-lg font-semibold text-ui-text'>Your automations</h2><p className='mt-1 text-sm text-ui-muted'>{automations.length} check{automations.length === 1 ? '' : 's'} configured</p></div>
+                        <div><h2 className='text-lg font-semibold text-ui-text'>Health checks</h2><p className='mt-1 text-sm text-ui-muted'>{automations.length} check{automations.length === 1 ? '' : 's'} configured</p></div>
+                        <button type='button' aria-label={detailsOpen ? 'Collapse check details' : 'Expand check details'} title={detailsOpen ? 'Collapse check details' : 'Expand check details'} aria-expanded={detailsOpen} aria-controls='health-check-details' onClick={() => setDetailsOpen(!detailsOpen)} className='ml-auto rounded p-2 text-ui-muted hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-ui-primary'>{detailsOpen ? <PanelRightClose className='h-4 w-4' /> : <PanelRightOpen className='h-4 w-4' />}</button>
                         {!editing ? <button type='button' onClick={beginCreate} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90'><Plus className='h-4 w-4' />Create automation</button> : null}
                     </div>
                     <label className='grid gap-1.5 border-b border-ui-border p-4 text-xs text-ui-muted'><span>Find a case or monitor</span><input className={inputClass} type='search' placeholder='MON-123 or monitor name' value={caseSearch} onChange={event => setCaseSearch(event.target.value)} /></label>
                     <div className='hidden grid-cols-2 gap-3 border-b border-ui-border px-4 py-2 text-xs text-ui-muted md:grid md:grid-cols-[minmax(9rem,1.3fr)_minmax(7rem,0.8fr)_minmax(6rem,0.7fr)_minmax(8rem,1fr)_minmax(5rem,0.6fr)_minmax(5rem,0.6fr)]'><span>Name</span><span>Status</span><span>Cert</span><span>History</span><span>Uptime</span><span>Tags</span></div>
                     <div className='divide-y divide-ui-border'>
-                        {automations.filter(automation => !caseSearch.trim() || [automation.name, ...(automation.caseNumbers || [])].some(value => value.toLowerCase().includes(caseSearch.trim().toLowerCase()))).map(automation => <AutomationRow key={automation.id} automation={automation} selected={selected?.id === automation.id} onClick={() => void select(automation)} />)}
+                        {automations.filter(automation => !caseSearch.trim() || [automation.name, ...(automation.caseNumbers || [])].some(value => value.toLowerCase().includes(caseSearch.trim().toLowerCase()))).map(automation => <AutomationRow key={automation.id} automation={automation} selected={selected?.id === automation.id} onClick={() => { setDetailsOpen(true); void select(automation) }} />)}
                     </div>
                 </section>
 
-                <section className='rounded-xl border border-ui-border bg-ui-panel p-4 shadow-sm'>
+                <section id='health-check-details' hidden={!detailsOpen} className='rounded-xl border border-ui-border bg-ui-panel p-4 shadow-sm'>
                     {editing ? <AutomationForm draft={draft} selected={selected} busy={busy} message={message} onChange={setDraft} onSave={() => void save()} onCancel={() => { setEditing(false); setMessage('') }} /> : selected ? <AutomationDetails automation={selected} runs={history.runs} history={history} historyFrom={historyFrom} historyTo={historyTo} onHistoryFromChange={setHistoryFrom} onHistoryToChange={setHistoryTo} showHistoryFilters={showHistoryFilters} onShowHistoryFiltersChange={setShowHistoryFilters} busy={busy} message={message} onRun={() => void runNow()} onEdit={() => setEditing(true)} onDelete={() => void remove()} onRefresh={history.refresh} /> : <WelcomeState onCreate={beginCreate} compact />}
                 </section>
             </div>
@@ -221,7 +225,7 @@ function AutomationRow({ automation, selected, onClick }: { automation: AgentAut
     const missingUrl = automation.actionType === 'agent_prompt' && !automation.targetUrl
     const failed = Boolean(automation.consecutiveFailures || automation.lastStatus === 'failed' || missingUrl)
     const warning = automation.lastStatus === 'warning'
-    const state = missingUrl ? 'Missing URL' : failed ? 'Needs attention' : warning ? 'Warning' : automation.expectedDown || automation.upsideDown ? 'Maintenance' : automation.status === 'active' ? 'Healthy' : 'Paused'
+    const state = missingUrl ? 'Missing URL' : failed ? automation.monitoringType === 'json' ? 'Critical' : 'Needs attention' : warning ? 'Warning' : automation.expectedDown || automation.upsideDown ? 'Maintenance' : automation.status === 'active' ? 'Healthy' : 'Paused'
     return <div className={`relative grid [&>span]:pointer-events-none w-full grid-cols-2 items-center gap-3 border-t border-ui-border px-4 py-3 text-left transition hover:bg-ui-raised md:grid-cols-[minmax(9rem,1.3fr)_minmax(7rem,0.8fr)_minmax(6rem,0.7fr)_minmax(8rem,1fr)_minmax(5rem,0.6fr)_minmax(5rem,0.6fr)] ${selected ? 'bg-ui-primary/5' : ''}`}>
         <button type='button' onClick={onClick} aria-label={automation.name} className='absolute inset-0 rounded focus-visible:outline-2 focus-visible:outline-ui-primary' />
         <span className='min-w-0 truncate text-sm font-semibold text-ui-text'>{automation.name}</span>
@@ -249,7 +253,8 @@ function AutomationForm({ draft, selected, busy, message, onChange, onSave, onCa
         <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Name</span><input className={inputClass} required value={draft.name} onChange={event => onChange({ ...draft, name: event.target.value })} placeholder='Website health' />{validation?.field === 'name' ? <span className='text-sm text-ui-danger'>{validation.message}</span> : null}</label>
         <label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Automation type</span><select className={inputClass} value={draft.actionType} onChange={event => onChange({ ...draft, actionType: event.target.value as AutomationPayload['actionType'] })}><option value='agent_prompt'>Monitoring</option><option value='mail_health_check'>Mail health</option><option value='system_alert'>System alert</option></select></label>
         {draft.actionType === 'agent_prompt' ? <>
-            <div className='grid gap-3 sm:grid-cols-2'><label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Type</span><select className={inputClass} value={draft.monitoringType || 'fetch'} onChange={event => onChange({ ...draft, monitoringType: event.target.value as AutomationPayload['monitoringType'] })}><option value='fetch'>Fetch</option><option value='post'>Post</option><option value='tcp'>TCP</option><option value='ssh'>SSH</option></select></label><label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>{draft.monitoringType === 'ssh' ? 'SSH host' : draft.monitoringType === 'tcp' ? 'TCP host' : 'URL to check'}</span><span className='relative block'>{draft.monitoringType === 'fetch' || draft.monitoringType === 'post' ? <span className={`pointer-events-none absolute inset-y-0 left-3 flex items-center text-ui-muted ${hasUrlScheme(draft.targetUrl || '') ? 'hidden' : ''}`} aria-hidden='true'>https://</span> : null}<input className={`${inputClass} ${(draft.monitoringType === 'fetch' || draft.monitoringType === 'post') && !hasUrlScheme(draft.targetUrl || '') ? 'pl-14' : ''}`} required type='text' value={draft.targetUrl || ''} onChange={event => onChange({ ...draft, targetUrl: event.target.value })} placeholder={draft.monitoringType === 'ssh' ? 'git.hanasand.com:22' : draft.monitoringType === 'tcp' ? 'git.hanasand.com:22' : 'example.com/health'} /></span>{validation?.field === 'url' ? <span className='text-sm text-ui-danger'>{validation.message}</span> : null}</label></div>
+            <div className='grid gap-3 sm:grid-cols-2'><label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Type</span><select className={inputClass} value={draft.monitoringType || 'fetch'} onChange={event => onChange({ ...draft, monitoringType: event.target.value as AutomationPayload['monitoringType'] })}><option value='fetch'>Fetch</option><option value='post'>Post</option><option value='tcp'>TCP</option><option value='ssh'>SSH</option><option value='json'>JSON</option></select></label><label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>{draft.monitoringType === 'ssh' ? 'SSH host' : draft.monitoringType === 'tcp' ? 'TCP host' : 'URL to check'}</span><span className='relative block'>{draft.monitoringType === 'fetch' || draft.monitoringType === 'post' ? <span className={`pointer-events-none absolute inset-y-0 left-3 flex items-center text-ui-muted ${hasUrlScheme(draft.targetUrl || '') ? 'hidden' : ''}`} aria-hidden='true'>https://</span> : null}<input className={`${inputClass} ${(draft.monitoringType === 'fetch' || draft.monitoringType === 'post') && !hasUrlScheme(draft.targetUrl || '') ? 'pl-14' : ''}`} required type='text' value={draft.targetUrl || ''} onChange={event => onChange({ ...draft, targetUrl: event.target.value })} placeholder={draft.monitoringType === 'ssh' ? 'git.hanasand.com:22' : draft.monitoringType === 'tcp' ? 'git.hanasand.com:22' : 'example.com/health'} /></span>{validation?.field === 'url' ? <span className='text-sm text-ui-danger'>{validation.message}</span> : null}</label></div>
+            {draft.monitoringType === 'json' && <JsonRuleForm draft={draft} onChange={onChange} inputClass={inputClass} />}
             <div className='grid gap-3 sm:grid-cols-2'><label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>User agent</span><input className={inputClass} value={draft.userAgent || ''} onChange={event => onChange({ ...draft, userAgent: event.target.value })} placeholder='Default browser-like agent' /></label><label className='grid gap-1.5'><span className='text-xs font-semibold text-ui-muted'>Redirects</span><select className={inputClass} value={draft.followRedirects === false ? 'no' : 'yes'} onChange={event => onChange({ ...draft, followRedirects: event.target.value === 'yes' })}><option value='yes'>Follow redirects</option><option value='no'>Do not follow redirects</option></select></label></div>
             <div className='grid gap-3 sm:grid-cols-2'><label className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-2.5'><span><span className='block text-sm font-semibold text-ui-text'>Expected down</span><span className='text-xs text-ui-muted'>Down is maintenance; up is a failure.</span></span><input type='checkbox' checked={Boolean(draft.expectedDown)} onChange={event => onChange({ ...draft, expectedDown: event.target.checked })} className='h-4 w-4 accent-(--ui-primary)' /></label><label className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-2.5'><span><span className='block text-sm font-semibold text-ui-text'>Upside down</span><span className='text-xs text-ui-muted'>Invert the expected result.</span></span><input type='checkbox' checked={Boolean(draft.upsideDown)} onChange={event => onChange({ ...draft, upsideDown: event.target.checked })} className='h-4 w-4 accent-(--ui-primary)' /></label></div>
         </> : null}
@@ -268,7 +273,7 @@ function AutomationDetails({ automation, runs, history, historyFrom, historyTo, 
     const missingUrl = automation.actionType === 'agent_prompt' && !automation.targetUrl
     const failed = Boolean(automation.consecutiveFailures || automation.lastStatus === 'failed' || missingUrl)
     const warning = automation.lastStatus === 'warning'
-    const state = missingUrl ? 'Missing URL' : failed ? 'Needs attention' : warning ? 'Warning' : automation.expectedDown || automation.upsideDown ? 'Maintenance' : automation.status === 'active' ? 'Healthy' : 'Paused'
+    const state = missingUrl ? 'Missing URL' : failed ? automation.monitoringType === 'json' ? 'Critical' : 'Needs attention' : warning ? 'Warning' : automation.expectedDown || automation.upsideDown ? 'Maintenance' : automation.status === 'active' ? 'Healthy' : 'Paused'
     const visibleRuns = runs
     const bottom = useRef<HTMLDivElement>(null)
     useEffect(() => {
@@ -279,11 +284,11 @@ function AutomationDetails({ automation, runs, history, historyFrom, historyTo, 
         observer.observe(bottom.current)
         return () => observer.disconnect()
     }, [history.hasMore, history.loading, history.error, history.loadMore])
-    return <div className='grid gap-4'><div className='flex flex-wrap items-start justify-between gap-3'><div><p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Automation</p><h2 className='mt-1 text-xl font-semibold text-ui-text'>{automation.name}</h2><p className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${failed ? 'bg-ui-danger/10 text-ui-danger' : warning ? 'bg-ui-warning/10 text-ui-warning' : automation.status === 'active' ? 'bg-ui-success/10 text-ui-success' : 'bg-ui-raised text-ui-muted'}`}>{state}</p></div><div className='flex gap-2'><button type='button' onClick={onRun} disabled={busy === 'run' || missingUrl} className='inline-flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:opacity-50' title={missingUrl ? 'Add a URL before checking' : undefined}><Play className='h-4 w-4' />Check now</button><button type='button' onClick={onEdit} className='h-9 rounded-lg border border-ui-border px-3 text-sm font-semibold text-ui-text'>Edit</button></div></div>
+    return <div className='grid gap-4'><div className='flex flex-wrap items-start justify-between gap-3'><div><h2 className='text-xl font-semibold text-ui-text'>{automation.name}</h2><p className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${failed ? 'bg-ui-danger/10 text-ui-danger' : warning ? 'bg-ui-warning/10 text-ui-warning' : automation.status === 'active' ? 'bg-ui-success/10 text-ui-success' : 'bg-ui-raised text-ui-muted'}`}>{state}</p></div><div className='flex gap-2'><button type='button' onClick={onRun} disabled={busy === 'run' || missingUrl} className='inline-flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:opacity-50' title={missingUrl ? 'Add a URL before checking' : undefined}><Play className='h-4 w-4' />Check now</button><button type='button' onClick={onEdit} className='h-9 rounded-lg border border-ui-border px-3 text-sm font-semibold text-ui-text'>Edit</button></div></div>
         <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 text-sm'><div className='flex items-center justify-between gap-3'><p className='leading-6 text-ui-text'>{automation.prompt}</p><CertificateStatus automation={automation} /></div><div className='grid gap-3 border-t border-ui-border pt-3 text-xs text-ui-muted sm:grid-cols-2'>{automation.actionType === 'agent_prompt' ? <span className={`break-all ${missingUrl ? 'font-semibold text-ui-danger' : ''}`}>{missingUrl ? 'Missing URL' : `${automation.monitoringType.toUpperCase()}: ${automation.targetUrl}`}</span> : null}<span>{formatInterval(automation.intervalMinutes)}</span><span>{automation.actionType === 'agent_prompt' ? `Timeout: ${automation.timeoutSeconds || 1}s · ${automation.retryCount || 0} retries` : ''}</span><span>{automation.modelName || 'No notification destination'}{!automation.modelName && automation.notifyOn !== 'never' ? <span className='ml-1 inline-flex align-text-bottom text-ui-warning' title='No delivery destination configured' aria-label='No delivery destination configured'><AlertTriangle className='h-4 w-4' /></span> : null}</span></div></div>
         <section aria-label='Monitoring issues' className='grid gap-2'>
             <h3 className='text-sm font-semibold text-ui-text'>Issues ({history.issues.length})</h3>
-            <p className='text-xs text-ui-muted'>Discord receives only the case number, at most once per issue every 24 hours.</p>
+            <p className='text-xs text-ui-muted'>Discord receives @everyone and the case number, at most once per issue every 24 hours.</p>
             <div className='grid max-h-80 gap-2 overflow-y-auto'>{history.issues.map(issue => <details key={issue.id} id={issue.caseNumber} className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                 <summary className='cursor-pointer text-sm text-ui-text'><span className='font-semibold'>{issue.caseNumber}</span> · {issue.resolvedAt ? 'Resolved' : 'Open'} · {issue.occurrences} occurrences</summary>
                 <p className='mt-2 whitespace-pre-wrap wrap-break-word text-sm text-ui-text'>{issue.summary}</p>
@@ -298,11 +303,12 @@ function AutomationDetails({ automation, runs, history, historyFrom, historyTo, 
 }
 
 function toDraft(automation: AgentAutomation): AutomationPayload {
-    return { name: automation.name, prompt: automation.prompt, targetUrl: automation.monitoringType === 'fetch' || automation.monitoringType === 'post' ? normalizeMonitoringUrl(automation.targetUrl || '') : automation.targetUrl, monitoringType: automation.monitoringType, followRedirects: automation.followRedirects, userAgent: automation.userAgent || '', expectedDown: automation.expectedDown, upsideDown: automation.upsideDown, timeoutSeconds: automation.timeoutSeconds || 1, retryCount: automation.retryCount ?? 1, scheduleKind: automation.scheduleKind, intervalMinutes: automation.intervalMinutes || 15, runAt: automation.runAt || '', status: automation.status === 'paused' ? 'paused' : 'active', actionType: automation.actionType, organizationId: automation.organizationId, timezone: automation.timezone, modelName: automation.modelName, notificationDestinations: automation.notificationDestinations || (automation.modelName ? [automation.modelName] : []), notifyOn: automation.notifyOn || 'failure', notifyWarnings: automation.notifyWarnings }
+    return { name: automation.name, prompt: automation.prompt, targetUrl: automation.monitoringType === 'fetch' || automation.monitoringType === 'post' ? normalizeMonitoringUrl(automation.targetUrl || '') : automation.targetUrl, monitoringType: automation.monitoringType, jsonRule: automation.jsonRule, followRedirects: automation.followRedirects, userAgent: automation.userAgent || '', expectedDown: automation.expectedDown, upsideDown: automation.upsideDown, timeoutSeconds: automation.timeoutSeconds || 1, retryCount: automation.retryCount ?? 1, scheduleKind: automation.scheduleKind, intervalMinutes: automation.intervalMinutes || 15, runAt: automation.runAt || '', status: automation.status === 'paused' ? 'paused' : 'active', actionType: automation.actionType, organizationId: automation.organizationId, timezone: automation.timezone, modelName: automation.modelName, notificationDestinations: automation.notificationDestinations || (automation.modelName ? [automation.modelName] : []), notifyOn: automation.notifyOn || 'failure', notifyWarnings: automation.notifyWarnings }
 }
 
 function normalizeMonitoringUrl(value: string) {
     const trimmed = value.trim()
+    if (trimmed === 'system:metrics') return trimmed
     return trimmed && !/^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? `https://${trimmed}` : trimmed
 }
 
@@ -317,7 +323,7 @@ function validateDraft(draft: AutomationPayload) {
         if (!targetUrl) return { field: 'url' as const, message: 'URL is required.' }
         if (draft.monitoringType === 'tcp' || draft.monitoringType === 'ssh') {
             if (!/^[^:/\s]+(?::\d+)?$/.test(targetUrl)) return { field: 'url' as const, message: 'Enter a host with an optional port.' }
-        } else {
+        } else if (!(draft.monitoringType === 'json' && targetUrl === 'system:metrics')) {
             try {
                 const parsed = new URL(targetUrl)
                 if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error()
@@ -325,6 +331,11 @@ function validateDraft(draft: AutomationPayload) {
                 return { field: 'url' as const, message: 'Enter a valid HTTP or HTTPS URL.' }
             }
         }
+    }
+    if (draft.monitoringType === 'json') {
+        const rule = draft.jsonRule || defaultJsonRule
+        if (!/^[\w*-]+(?:\.[\w*-]+)*$/.test(rule.path)) return { field: 'json' as const, message: 'Enter a dot-separated JSON field.' }
+        if (!['eq', 'ne'].includes(rule.operator) && typeof rule.value !== 'number') return { field: 'json' as const, message: 'The comparison needs a number.' }
     }
     if (!draft.prompt.trim()) return { field: 'prompt' as const, message: 'Description is required.' }
     return null

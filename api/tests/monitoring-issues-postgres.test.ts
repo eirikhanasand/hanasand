@@ -32,7 +32,7 @@ test('database aggregation, concurrent delivery, rolling cooldown, recovery and 
     let issues = await loadMonitoringIssues('issues')
     expect(issues).toHaveLength(1)
     expect(issues[0].occurrences).toBe(12)
-    expect(sent).toEqual([{ content: issues[0].caseNumber, mention: false }])
+    expect(sent).toEqual([{ content: issues[0].caseNumber, mention: true }])
     await recordMonitoringOutcome(monitor, 'issue-0', 'failure', 'HTTP 503')
     expect((await loadMonitoringIssues('issues'))[0].occurrences).toBe(12)
     await check('different', 'HTTP 401')
@@ -72,4 +72,29 @@ test('database aggregation, concurrent delivery, rolling cooldown, recovery and 
     const count = sent.length
     await executeAutomation(monitor)
     expect(sent).toHaveLength(count)
+})
+
+test('JSON checks share a fetch across concurrent rules and cache source failures', async () => {
+    const { sharedJsonSnapshot, evaluateJsonRule } = await import('../src/utils/jsonMonitoring.ts')
+    let requests = 0
+    let broken = false
+    const server = Bun.serve({ port: 0, async fetch() {
+        requests++
+        await Bun.sleep(30)
+        return broken ? new Response('offline', { status: 503 }) : Response.json({ cpu: 81, ram: 25 })
+    } })
+    const source = { owner_id: 'json-test', target_url: `http://127.0.0.1:${server.port}`, user_agent: null, follow_redirects: true, timeout_seconds: 2 }
+    try {
+        const snapshots = await Promise.all(Array.from({ length: 12 }, () => sharedJsonSnapshot(source)))
+        expect(requests).toBe(1)
+        expect(evaluateJsonRule(snapshots[0].payload, { path: 'cpu', aggregate: 'max', operator: 'gt', value: 80 }).exceeded).toBe(true)
+        expect(evaluateJsonRule(snapshots[1].payload, { path: 'ram', aggregate: 'max', operator: 'gt', value: 80 }).exceeded).toBe(false)
+        await sharedJsonSnapshot({ ...source, owner_id: 'other-json-owner' })
+        expect(requests).toBe(2)
+        await query("UPDATE monitoring_json_snapshots SET expires_at = NOW() - INTERVAL '1 second'")
+        broken = true
+        const failures = await Promise.allSettled(Array.from({ length: 12 }, () => sharedJsonSnapshot(source)))
+        expect(requests).toBe(3)
+        expect(failures.every(result => result.status === 'rejected' && result.reason.message.includes('503'))).toBe(true)
+    } finally { server.stop(true) }
 })

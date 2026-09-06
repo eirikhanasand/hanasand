@@ -74,7 +74,9 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
         return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid automation.' })
     }
 
-    if (input.status === 'active') {
+    const manageAll = await canManageAllAutomations(req, res)
+    if (input.targetUrl === 'system:metrics' && !manageAll) return res.status(403).send({ error: 'Host telemetry requires system administrator access.' })
+    if (input.status === 'active' && !manageAll) {
         const limitError = await activeAutomationLimitError(ownerId)
         if (limitError) {
             return res.status(409).send({ error: limitError })
@@ -110,9 +112,9 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
             notify_on,
             notify_warnings,
             next_run_at,
-            notification_destinations
+            notification_destinations, json_rule
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25::jsonb)
         RETURNING *
     `, [
         id,
@@ -139,6 +141,7 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
         input.notifyWarnings,
         input.nextRunAt,
         input.notificationDestinations,
+        JSON.stringify(input.jsonRule),
     ])
 
     return res.status(201).send({ automation: toAutomation(result.rows[0] as AutomationRow) })
@@ -163,7 +166,8 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
         return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid automation.' })
     }
 
-    if (input.status === 'active') {
+    if (input.targetUrl === 'system:metrics' && !manageAll) return res.status(403).send({ error: 'Host telemetry requires system administrator access.' })
+    if (input.status === 'active' && existing.status !== 'active' && !manageAll) {
         const limitError = await activeAutomationLimitError(existing.owner_id, req.params.id)
         if (limitError) {
             return res.status(409).send({ error: limitError })
@@ -197,6 +201,7 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
                notify_warnings = $22,
                next_run_at = $23,
                notification_destinations = $24,
+               json_rule = $26::jsonb,
                consecutive_failures = CASE WHEN $16 = 'active' THEN 0 ELSE consecutive_failures END,
                paused_reason = CASE WHEN $16 = 'active' THEN NULL ELSE paused_reason END,
                last_status = CASE WHEN last_status = 'running' THEN NULL ELSE last_status END,
@@ -230,6 +235,7 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
         input.nextRunAt,
         input.notificationDestinations,
         ownerId,
+        JSON.stringify(input.jsonRule),
     ])
 
     return res.send({ automation: toAutomation(result.rows[0] as AutomationRow) })

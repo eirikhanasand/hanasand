@@ -1,4 +1,5 @@
 import run from '#db'
+import { normalizeJsonRule, evaluateJsonRule, sharedJsonSnapshot, type JsonRule } from './jsonMonitoring.ts'
 import { recordMonitoringOutcome } from './monitoringIssues.ts'
 import { connect as connectTcp } from 'node:net'
 import { connect as connectTls } from 'node:tls'
@@ -10,13 +11,14 @@ export type AutomationStatus = 'active' | 'paused' | 'archived'
 export type AutomationActionType = 'agent_prompt' | 'echo' | 'mail_health_check' | 'system_alert' | 'organization_report'
 
 export type AutomationRow = {
+    json_rule?: JsonRule | null
     case_numbers?: string[]
     id: string
     owner_id: string
     name: string
     prompt: string
     target_url: string | null
-    monitoring_type: 'fetch' | 'post' | 'tcp' | 'ssh'
+    monitoring_type: 'fetch' | 'post' | 'tcp' | 'ssh' | 'json'
     follow_redirects: boolean
     user_agent: string | null
     expected_down: boolean
@@ -77,6 +79,8 @@ export type AutomationRunArtifact = {
 }
 
 export type AutomationInput = {
+    jsonRule?: unknown
+    json_rule?: unknown
     name?: unknown
     prompt?: unknown
     targetUrl?: unknown
@@ -118,10 +122,11 @@ export type AutomationInput = {
 }
 
 type NormalizedAutomationInput = {
+    jsonRule: JsonRule | null
     name: string
     prompt: string
     targetUrl: string | null
-    monitoringType: 'fetch' | 'post' | 'tcp' | 'ssh'
+    monitoringType: 'fetch' | 'post' | 'tcp' | 'ssh' | 'json'
     followRedirects: boolean
     userAgent: string | null
     expectedDown: boolean
@@ -156,6 +161,7 @@ export function toAutomation(row: AutomationRow) {
         prompt: row.prompt,
         targetUrl: row.target_url,
         monitoringType: row.monitoring_type,
+        jsonRule: row.json_rule || null,
         followRedirects: row.follow_redirects,
         userAgent: row.user_agent,
         expectedDown: row.expected_down,
@@ -218,7 +224,8 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
     const prompt = clean(input.prompt) || existing?.prompt || ''
     const monitoringType = parseMonitoringType(input.monitoringType ?? input.monitoring_type ?? existing?.monitoring_type)
     const rawTarget = clean(input.targetUrl ?? input.target_url ?? existing?.target_url)
-    const targetUrl = monitoringType === 'tcp' || monitoringType === 'ssh' ? rawTarget : normalizeTargetUrl(rawTarget)
+    const targetUrl = monitoringType === 'tcp' || monitoringType === 'ssh' || monitoringType === 'json' && rawTarget === 'system:metrics' ? rawTarget : normalizeTargetUrl(rawTarget)
+    const jsonRule = monitoringType === 'json' ? normalizeJsonRule(input.jsonRule ?? input.json_rule ?? existing?.json_rule) : null
     const followRedirects = parseBoolean(input.followRedirects ?? input.follow_redirects ?? existing?.follow_redirects, true)
     const userAgent = clean(input.userAgent ?? input.user_agent ?? existing?.user_agent) || null
     const expectedDown = parseBoolean(input.expectedDown ?? input.expected_down ?? existing?.expected_down, false)
@@ -249,7 +256,7 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
         if (!targetUrl) throw new Error('Monitoring needs a URL to check.')
         if (monitoringType === 'tcp' || monitoringType === 'ssh') {
             if (!/^[^:/\s]+(?::\d+)?$/.test(targetUrl)) throw new Error(`${monitoringType.toUpperCase()} checks need a host and optional port.`)
-        } else {
+        } else if (!(monitoringType === 'json' && targetUrl === 'system:metrics')) {
             let parsedUrl: URL
             try { parsedUrl = new URL(targetUrl) } catch { throw new Error('Monitoring URL must be a valid HTTP or HTTPS URL.') }
             if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Monitoring URL must use HTTP or HTTPS.')
@@ -271,7 +278,7 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
         throw new Error('Organization reports need a delivery destination before activation.')
     }
 
-    return { name, prompt, targetUrl, monitoringType, followRedirects, userAgent, expectedDown, upsideDown, timeoutSeconds, retryCount, notifyWarnings, scheduleKind, intervalMinutes, runAt, status, actionType, timezone, modelName, notificationDestinations, notifyOn, organizationId, nextRunAt }
+    return { name, prompt, targetUrl, monitoringType, jsonRule, followRedirects, userAgent, expectedDown, upsideDown, timeoutSeconds, retryCount, notifyWarnings, scheduleKind, intervalMinutes, runAt, status, actionType, timezone, modelName, notificationDestinations, notifyOn, organizationId, nextRunAt }
 }
 
 function parseBoundedInteger(value: unknown, min: number, max: number, fallback: number) {
@@ -306,6 +313,7 @@ export function computeNextRunAt({
 
 export async function runDueAutomations() {
     await recoverStaleAutomationRuns()
+    await run('DELETE FROM monitoring_json_snapshots WHERE expires_at < NOW() - INTERVAL \'1 day\'')
 
     const claimResult = await run(`
         UPDATE agent_automations
@@ -321,7 +329,7 @@ export async function runDueAutomations() {
               AND next_run_at <= NOW()
               AND COALESCE(last_status, '') <> 'running'
             ORDER BY next_run_at ASC
-            LIMIT 10
+            LIMIT 100
             FOR UPDATE SKIP LOCKED
          )
          RETURNING *
@@ -534,6 +542,7 @@ export function certificateTarget(automation: Pick<AutomationRow, 'monitoring_ty
 
 async function runMonitoringCheck(automation: AutomationRow) {
     if (!automation.target_url) throw new Error('Monitoring is missing the URL to check.')
+    if (automation.monitoring_type === 'json') return runJsonCheck(automation)
     const target = automation.monitoring_type === 'tcp' || automation.monitoring_type === 'ssh' ? null : new URL(automation.target_url)
     const tlsTarget = certificateTarget(automation)
     const startedAt = Date.now()
@@ -560,6 +569,23 @@ async function runMonitoringCheck(automation: AutomationRow) {
     const message = lastError instanceof Error ? lastError.message : 'Monitoring request failed.'
     const failure = Object.assign(new Error(`${message} Failed after ${automation.retry_count + 1} attempt${automation.retry_count ? 's' : ''}.`), { certificate })
     throw failure
+}
+
+async function runJsonCheck(automation: AutomationRow) {
+    let certificate: Awaited<ReturnType<typeof checkCertificate>> | { status: 'not_applicable', subject: null, issuer: null, expiresAt: null } | null = null
+    try {
+        const snapshot = await sharedJsonSnapshot(automation)
+        certificate = snapshot.certificate
+        const rule = normalizeJsonRule(automation.json_rule)
+        const { exceeded, observed } = evaluateJsonRule(snapshot.payload, rule)
+        const inverted = automation.upside_down || automation.expected_down
+        const failed = inverted ? !exceeded : exceeded
+        const message = `JSON ${failed ? 'threshold exceeded' : 'check passed'}: ${rule.path} = ${observed}; alert ${rule.operator} ${rule.value} (${rule.aggregate}).`
+        if (failed) throw new Error(message)
+        return { provider: 'hanasand-monitoring', model: 'json', message, certificate, warning: false }
+    } catch (error) {
+        throw Object.assign(error instanceof Error ? error : new Error('JSON check failed.'), { certificate })
+    }
 }
 
 async function runHttpCheck(target: URL, automation: AutomationRow) {
@@ -709,8 +735,8 @@ function parseActionType(value: unknown): AutomationActionType {
     return ACTION_TYPES.has(actionType) ? actionType as AutomationActionType : 'agent_prompt'
 }
 
-function parseMonitoringType(value: unknown): 'fetch' | 'post' | 'tcp' | 'ssh' {
-    return value === 'post' || value === 'tcp' || value === 'ssh' ? value : 'fetch'
+function parseMonitoringType(value: unknown): 'fetch' | 'post' | 'tcp' | 'ssh' | 'json' {
+    return value === 'post' || value === 'tcp' || value === 'ssh' || value === 'json' ? value : 'fetch'
 }
 
 function parseDestinations(value: unknown, fallback: string | null) {

@@ -2,7 +2,10 @@
 
 import { getCookie, setCookieWithExpiresAt } from '@/utils/cookies/cookies'
 
+export type JsonRule = { path: string, operator: 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'ne', value: number | boolean | string, aggregate: 'max' | 'min' | 'avg' | 'first' }
+
 export type AgentAutomation = {
+    jsonRule?: JsonRule | null
     caseNumbers?: string[]
     id: string
     history?: Array<{ id: string, status: string, warning: boolean, started_at: string }>
@@ -11,7 +14,7 @@ export type AgentAutomation = {
     name: string
     prompt: string
     targetUrl: string | null
-    monitoringType: 'fetch' | 'post' | 'tcp' | 'ssh'
+    monitoringType: 'fetch' | 'post' | 'tcp' | 'ssh' | 'json'
     followRedirects: boolean
     userAgent: string | null
     expectedDown: boolean
@@ -85,10 +88,11 @@ export type AutomationRunArtifact = {
 }
 
 export type AutomationPayload = {
+    jsonRule?: JsonRule | null
     name: string
     prompt: string
     targetUrl?: string | null
-    monitoringType?: 'fetch' | 'post' | 'tcp' | 'ssh'
+    monitoringType?: 'fetch' | 'post' | 'tcp' | 'ssh' | 'json'
     followRedirects?: boolean
     userAgent?: string | null
     expectedDown?: boolean

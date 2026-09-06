@@ -1,19 +1,23 @@
-import { statfsSync } from 'node:fs'
+import { readFileSync, statfsSync } from 'node:fs'
 import os from 'node:os'
 
 export default async function getStats() {
+    let host: { sampledAt: string, memoryTotalBytes: number, memoryAvailableBytes: number, memoryPercent: number, [key: string]: unknown } | null
+    let hostUnavailableReason: string | null = null
     try {
-        return { status: 200, data: { system: runtimeSystemSnapshot() } }
+        host = JSON.parse(readFileSync(process.env.HOST_METRICS_FILE || '/host/var/lib/hanasand/metrics/host.json', 'utf8'))
+        const age = Date.now() - Date.parse(host?.sampledAt || '')
+        if (!host || ![host.memoryTotalBytes, host.memoryAvailableBytes, host.memoryPercent].every(Number.isFinite)) throw new Error('Invalid host snapshot.')
+        if (!Number.isFinite(age) || age > 90_000 || age < -5_000) throw new Error('Host telemetry is stale.')
     } catch (error) {
-        return {
-            status: 200,
-            data: {
-                system: null,
-                unavailable_reason: error instanceof Error ? error.message : 'System telemetry is unavailable.',
-                generated_at: new Date().toISOString(),
-            },
-        }
+        host = null
+        hostUnavailableReason = error instanceof Error && error.message === 'Host telemetry is stale.' ? error.message : 'Host telemetry is unavailable.'
     }
+    const system = runtimeSystemSnapshot()
+    if (host) {
+        system.memory = { total: host.memoryTotalBytes, used: host.memoryTotalBytes - host.memoryAvailableBytes, percent: host.memoryPercent.toFixed(2) }
+    }
+    return { status: 200, data: { system, host, hostUnavailableReason } }
 }
 
 function runtimeSystemSnapshot() {

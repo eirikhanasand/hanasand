@@ -12,7 +12,7 @@ export function discordWebhookFileModelLabel(value: string | null | undefined) {
 
 export async function deliverDiscordWebhookFile(destination: string | null, content: string, mentionEveryone = true) {
     const webhookUrl = await resolveDiscordWebhookUrl(destination)
-    const response = await fetch(webhookUrl, {
+    const response = await fetch(`${webhookUrl}?wait=true`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -26,6 +26,7 @@ export async function deliverDiscordWebhookFile(destination: string | null, cont
         const body = await response.text().catch(() => '')
         throw new Error(`Discord delivery failed with HTTP ${response.status}${body ? `: ${redactSecretBearingText(body).slice(0, 180)}` : ''}`)
     }
+    return response.status === 204 ? null : await response.json() as { id: string, mention_everyone: boolean }
 }
 
 export async function resolveDiscordWebhookUrl(destination: string | null) {

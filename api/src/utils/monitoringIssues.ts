@@ -3,11 +3,12 @@ import run, { withTransaction } from '#db'
 import type { AutomationRow } from './automations.ts'
 import { deliverDiscordWebhookFile, redactSecretBearingText } from './alerts/discordWebhookFile.ts'
 
-export function monitoringIssueFingerprint(automation: Pick<AutomationRow, 'target_url' | 'monitoring_type'>, kind: string, message: string) {
+export function monitoringIssueFingerprint(automation: Pick<AutomationRow, 'target_url' | 'monitoring_type' | 'json_rule'>, kind: string, message: string) {
     // Group changing durations and retry counts, but retain HTTP codes and error details.
-    const reason = redactSecretBearingText(message)
-        .replace(/ Failed after \d+ attempts?\.$/, '')
-        .replace(/\b\d+(?:\.\d+)?\s*(?:milliseconds?|ms|seconds?)\b/gi, '<duration>')
+    const reason = automation.monitoring_type === 'json' && message.startsWith('JSON threshold exceeded:')
+        ? JSON.stringify(automation.json_rule) : redactSecretBearingText(message)
+            .replace(/ Failed after \d+ attempts?\.$/, '')
+            .replace(/\b\d+(?:\.\d+)?\s*(?:milliseconds?|ms|seconds?)\b/gi, '<duration>')
     return createHash('sha256').update(JSON.stringify([automation.monitoring_type, automation.target_url, kind, reason])).digest('hex')
 }
 
@@ -40,11 +41,10 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
             RETURNING issue_id`, [issue, destination])
         if (!claim.rows.length) continue
         try {
-            await deliverDiscordWebhookFile(destination, `MON-${issue}`, false)
-            await run('UPDATE monitoring_issue_notifications SET delivered_at = NOW(), next_attempt_at = NOW() + INTERVAL \'24 hours\', last_error = NULL WHERE issue_id = $1 AND destination = $2', [issue, destination])
+            const receipt = await deliverDiscordWebhookFile(destination, `MON-${issue}`, true)
+            await run('UPDATE monitoring_issue_notifications SET delivered_at = NOW(), next_attempt_at = NOW() + INTERVAL \'24 hours\', last_error = NULL, message_id = $3, mentioned_everyone = $4 WHERE issue_id = $1 AND destination = $2', [issue, destination, receipt?.id || null, receipt?.mention_everyone ?? null])
         } catch (error) {
-            // ponytail: ambiguous network failures keep the 24h reservation to avoid duplicate alerts;
-            // add delivery receipts if guaranteed delivery becomes necessary.
+            // Keep the reservation after ambiguous failures to avoid duplicate pings.
             const detail = redactSecretBearingText(error instanceof Error ? error.message : 'Discord delivery failed.')
             await run('UPDATE monitoring_issue_notifications SET last_error = $3 WHERE issue_id = $1 AND destination = $2', [issue, destination, detail])
             console.error(`Monitoring case MON-${issue} notification failed: ${detail}`)
@@ -54,7 +54,7 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
 
 export async function loadMonitoringIssues(automationId: string) {
     const result = await run(`SELECT i.*, COALESCE((SELECT jsonb_agg(jsonb_build_object(
-        'deliveredAt', n.delivered_at, 'nextAttemptAt', n.next_attempt_at, 'error', n.last_error))
+        'messageId', n.message_id, 'mentionedEveryone', n.mentioned_everyone, 'deliveredAt', n.delivered_at, 'nextAttemptAt', n.next_attempt_at, 'error', n.last_error))
         FROM monitoring_issue_notifications n WHERE n.issue_id = i.id), '[]'::jsonb) AS notifications
         FROM monitoring_issues i WHERE i.automation_id = $1 ORDER BY i.last_seen_at DESC, i.id DESC`, [automationId])
     return result.rows.map(row => ({
