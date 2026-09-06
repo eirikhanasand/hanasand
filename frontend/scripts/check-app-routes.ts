@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import config from '../next.config.js'
+const rewrites = (await config.rewrites()).beforeFiles
 import { readdirSync, existsSync } from 'node:fs'
 import { appRoutes, canonicalAppPath, appPagePath, hasAppSidebar } from '../src/utils/routes/appRoutes'
 import { getDashboardNavigation, navigationLinks } from '../src/utils/layout/dashboardNavigation'
@@ -28,9 +30,10 @@ for (const [original, canonical] of appRoutes) {
     assert.equal(authenticated.status, 200, canonical)
     assert.equal(authenticated.headers.get('x-current-path'), canonical)
     if (canonical !== '/dashboard') {
-        const destination = new URL(authenticated.headers.get('x-middleware-rewrite')!)
-        assert.equal(destination.pathname, original)
-        assert.equal(destination.search, '?test=1')
+        assert.equal(authenticated.headers.get('x-middleware-rewrite'), null)
+        assert.deepEqual(rewrites.find(route => route.source === `${canonical}/:path*`), {
+            source: `${canonical}/:path*`, destination: `${original}/:path*`,
+        })
     }
 }
 assert.equal(appPagePath('/content/articles/create'), '/dashboard/articles/create')

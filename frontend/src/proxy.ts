@@ -41,11 +41,9 @@ export async function proxy(req: NextRequest) {
         requestHeaders.set('x-impersonating-name', impersonatingName || impersonatingId)
     }
 
-    const destination = req.nextUrl.clone()
-    destination.pathname = path
-    const response = path === visiblePath
-        ? NextResponse.next({ request: { headers: requestHeaders } })
-        : NextResponse.rewrite(destination, { request: { headers: requestHeaders } })
+    // Page aliases are relative rewrites in next.config.js. Middleware URLs can
+    // normalize a loopback host and accidentally turn them into external HTTPS requests.
+    const response = NextResponse.next({ request: { headers: requestHeaders } })
     const refreshedCookieOptions = authCookieOptions(req)
     let refreshedAuth: TokenRefreshCookies | null = null
 
