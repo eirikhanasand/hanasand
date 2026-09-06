@@ -70,7 +70,7 @@ export default function InlineMarkdown({ text, label, singleLine = false, showEm
         onChange(next, typing ? `line:${line ?? 0}` : undefined)
     }
     function render(source: string, firstLine: number, key: string, count: number) {
-        if (!count || (!showEmptyHint && !source.trim())) return null
+        if (!count || ((!text.trim() || !showEmptyHint) && !source.trim())) return null
         return <div key={key} className='thesis-markdown thesis-inline-render' tabIndex={0} role='group' aria-label={`${label}, click a line to edit`}
             onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select(firstLine) } }}
             onPointerDown={event => {
@@ -114,7 +114,7 @@ export default function InlineMarkdown({ text, label, singleLine = false, showEm
     }
     return <div className='thesis-inline-document'>
         {render(before, 0, 'before', line ?? lines.length)}
-        {line !== null && <textarea ref={input} aria-label={label} rows={1} className='thesis-inline-input' value={value}
+        {line !== null && <textarea ref={input} aria-label={label} rows={1} className='thesis-inline-input' value={value} placeholder={!singleLine && showEmptyHint ? 'Write here…' : undefined}
             maxLength={singleLine ? 500 : 1_000_000} spellCheck
             onBlur={() => setActive(null)}
             onSelect={event => onSelection?.(start + event.currentTarget.selectionStart, start + event.currentTarget.selectionEnd)}

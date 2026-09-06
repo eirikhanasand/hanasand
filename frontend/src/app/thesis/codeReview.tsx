@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, Circle, Clock, Code2, Database, FileCode2, Globe, Minus, Plus, RotateCcw, Search, ZoomIn } from 'lucide-react'
 import { reviewPriority, reviewStatus, type CodeInventory, type CodeItem, type ReviewEvent } from '@/utils/codeReviewTypes'
 import './codeReview.css'
@@ -69,7 +70,7 @@ function DependencyMap({ items, selected, onSelect }: { items: CodeItem[], selec
         <p className='code-caption'>Connections read from source. Counts include transitive dependencies. Scroll to move around; use + and − to zoom. Unresolved references are listed with each item.</p>
     </section>
 }
-function SourceDetail({ item, onReview, onSelect, byId }: { item: CodeItem, onReview: (event: ReviewEvent) => void, onSelect: (id: string) => void, byId: Map<string, CodeItem> }) {
+function SourceDetail({ item, onReview, onSelect, byId, canReview }: { canReview: boolean, item: CodeItem, onReview: (event: ReviewEvent) => void, onSelect: (id: string) => void, byId: Map<string, CodeItem> }) {
     const [detail, setDetail] = useState<{ item: CodeItem, history: ReviewEvent[] } | null>(null)
     const [error, setError] = useState(''), [busy, setBusy] = useState(false), [reviewOpen, setReviewOpen] = useState(false), [more, setMore] = useState(false)
     const allDependencies = useMemo(() => related(item, byId), [item, byId])
@@ -104,8 +105,8 @@ function SourceDetail({ item, onReview, onSelect, byId }: { item: CodeItem, onRe
             <h4><Clock size={15} /> Review history</h4>
             <p>{item.review ? `Last review: ${new Date(item.review.reviewed_at).toLocaleString()} by ${item.review.reviewer}.` : 'This item has not been reviewed.'}</p>
             {reviewStatus(item) === 'changed' && <p>The source or one of its dependencies changed since the last review.</p>}
-            <button disabled={busy || !detail || reviewStatus(item) === 'approved'} onClick={() => approve(true)}>Approve this version</button>
-            {reviewStatus(item) === 'approved' && <button disabled={busy} onClick={() => approve(false)}>Mark as needing review</button>}
+            {canReview && <button disabled={busy || !detail || reviewStatus(item) === 'approved'} onClick={() => approve(true)}>Approve this version</button>}
+            {canReview && reviewStatus(item) === 'approved' && <button disabled={busy} onClick={() => approve(false)}>Mark as needing review</button>}
             <ul>{detail?.history.map(event => <li key={event.event_id}>{event.approved ? 'Approved' : 'Marked for review'} · {new Date(event.reviewed_at).toLocaleString()} · {event.reviewer}<details><summary>Version hashes</summary><code>Source: {event.content_hash}<br />With dependencies: {event.review_hash}</code></details></li>)}</ul>
             {detail?.history.length === 0 && <p>No earlier reviews.</p>}
             {more && <button disabled={busy} onClick={async() => {
@@ -126,7 +127,7 @@ function SourceDetail({ item, onReview, onSelect, byId }: { item: CodeItem, onRe
         <details><summary>All source files used by this item ({sourceDependencies.length})</summary><ul className='code-links'>{sourceDependencies.map(node => <li key={node.id}><button onClick={() => onSelect(node.id)}><ItemIcon item={node} /><span>{node.title}</span><StatusIcon item={node} /></button></li>)}</ul></details>
     </article>
 }
-export default function CodeReview() {
+export default function CodeReview({ canReview, toolbar, onLocked }: { canReview: boolean, toolbar: HTMLElement | null, onLocked: () => void }) {
     const [data, setData] = useState<CodeInventory | null>(null), [error, setError] = useState(''), [loading, setLoading] = useState(false)
     const [clock, setClock] = useState(0)
     const [order, setOrder] = useState('priority')
@@ -141,14 +142,14 @@ export default function CodeReview() {
                 setData(current => current?.sync && (current.sync.phase !== 'ready' || current.sync.error || current.sync.warning) ? { ...current, sync: { phase: 'ready' } } : current)
                 return
             }
-            if (response.status === 403) { setData(null); version.current = '' }
+            if (response.status === 403) { setData(null); version.current = ''; onLocked(); return }
             const result = await response.json()
             if (!response.ok) throw new Error(result.error)
             version.current = result.hash + ':' + (result.revision || '')
             setData(result)
         } catch (cause) { setError(cause instanceof Error ? cause.message : 'The inventory could not be loaded.') }
         finally { setLoading(false) }
-    }, [])
+    }, [onLocked])
     useEffect(() => {
         let stopped = false
         async function poll() { await load(true); if (!stopped) timer = setTimeout(poll, 3000) }
@@ -163,7 +164,7 @@ export default function CodeReview() {
     const item = byId.get(selected) || scoped.find(node => node.kind === 'frontend') || scoped[0]
     const select = (id: string) => { setSelected(id); if (byId.get(id) && !website(byId.get(id)!)) setScope('repository') }
     return <section className='code-workspace' aria-label='Code review workspace'>
-        <header><h2>Code review</h2><button disabled={loading} onClick={() => load()}><RotateCcw size={15} /> Refresh</button><span className='code-caption'>Owner only</span></header>
+        {toolbar && createPortal(<button className='inline-flex min-h-11 items-center gap-2 rounded-lg border border-ui-border px-3 py-2 text-sm hover:bg-ui-raised disabled:opacity-40' disabled={loading} onClick={() => load()}><RotateCcw size={15} /> Refresh</button>, toolbar)}
         {error && <p role='alert'>{error}</p>}
         {data?.sync?.phase === 'indexing' && <p role='status'>Updating from the latest Git commit…</p>}
         {(data?.sync?.error || data?.sync?.warning) && <p role='alert'>{data.sync.error || data.sync.warning}</p>}{loading && <p role='status'>Loading inventory…</p>}
@@ -180,7 +181,7 @@ export default function CodeReview() {
                     const entries = filtered.filter(node => node.kind === kind)
                     return <details key={kind} open><summary>{names[kind]} <span>{entries.length}</span></summary><ul className='code-links'>{entries.slice(0, limit).map(node => <li key={node.id}><button aria-current={node.id === item?.id ? 'true' : undefined} onClick={() => select(node.id)}><ItemIcon item={node} /><span>{node.title}</span><StatusIcon item={node} /></button></li>)}</ul>{entries.length > limit && <button className='code-more' onClick={() => setLimit(value => value + 100)}>Show more ({entries.length - limit})</button>}</details>
                 })}{!filtered.length && <p>No matching items.</p>}</aside>
-                <div className='code-main'><DependencyMap items={data.nodes} selected={item} onSelect={select} />{item && <SourceDetail key={item.id + ':' + item.reviewHash} item={item} byId={byId} onSelect={select} onReview={event => setData(current => current && ({ ...current, nodes: current.nodes.map(node => node.id === event.item_id ? { ...node, review: event } : node) }))} />}</div>
+                <div className='code-main'><DependencyMap items={data.nodes} selected={item} onSelect={select} />{item && <SourceDetail canReview={canReview} key={item.id + ':' + item.reviewHash} item={item} byId={byId} onSelect={select} onReview={event => setData(current => current && ({ ...current, nodes: current.nodes.map(node => node.id === event.item_id ? { ...node, review: event } : node) }))} />}</div>
             </div>
             <details className='code-caption'><summary>Inventory details and coverage</summary><p>Repository commit: {data.release}. Updates from Git appear automatically; a site redeployment is not needed. Runtime data, credentials, binary files and build output are excluded. Route and query entries describe source declarations, not recorded production requests. Computed requests and non-JavaScript dependencies require manual inspection; see “References to inspect” on each source file.</p><code>Inventory SHA-256: {data.hash}</code></details>
         </>}

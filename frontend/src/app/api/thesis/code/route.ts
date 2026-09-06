@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { canEditThesis } from '@/utils/thesis'
 import type { CodeInventory, ReviewEvent } from '@/utils/codeReviewTypes'
 import config from '@/config'
+import { codeAccessCookie, validCodeSession } from '@/utils/codeAccess'
 
 export const dynamic = 'force-dynamic'
 let source: Promise<CodeInventory> | undefined
@@ -25,9 +26,10 @@ const json = (body: unknown, status = 200) => NextResponse.json(body, { status, 
 async function authorized(request: NextRequest) {
     return canEditThesis(request.cookies.get('access_token')?.value, request.cookies.get('id')?.value)
 }
-async function reviews(request: NextRequest, suffix = '', body?: unknown) {
+async function reviews(request: NextRequest, suffix = '', body?: unknown, guest = false) {
+    if (guest && !process.env.VM_API_TOKEN) throw new Error('Review access is not configured.')
     const response = await fetch(`${config.url.api}/thesis/code-reviews${suffix}`, {
-        method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${request.cookies.get('access_token')!.value}`, id: request.cookies.get('id')!.value, 'Content-Type': 'application/json' },
+        method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${guest ? process.env.VM_API_TOKEN : request.cookies.get('access_token')!.value}`, id: guest ? '' : request.cookies.get('id')!.value, 'Content-Type': 'application/json' },
         body: body ? JSON.stringify(body) : undefined, cache: 'no-store', signal: AbortSignal.timeout(15000),
     })
     if (!response.ok) throw new Error('Review storage is unavailable. Please retry.')
@@ -35,17 +37,18 @@ async function reviews(request: NextRequest, suffix = '', body?: unknown) {
 }
 export async function GET(request: NextRequest) {
     try {
-        if (!await authorized(request)) return json({ error: 'Source code is only available to the owner.' }, 403)
+        const guest = !await authorized(request)
+        if (guest && !validCodeSession(request.cookies.get(codeAccessCookie)?.value)) return json({ error: 'Enter the access code to view source code.' }, 403)
         const data = await inventory(), id = request.nextUrl.searchParams.get('id')
         if (id) {
             const item = data.nodes.find(node => node.id === id)
             if (!item) return json({ error: 'This item is not in the current release. Refresh the inventory.' }, 404)
             const before = request.nextUrl.searchParams.get('before')
-            const history = await reviews(request, '?' + new URLSearchParams({ id, ...(before ? { before } : {}) }))
+            const history = await reviews(request, '?' + new URLSearchParams({ id, ...(before ? { before } : {}) }), undefined, guest)
             return json({ item, history })
         }
         if (request.nextUrl.searchParams.get('since') === data.hash + ':' + (data.revision || '') && (!data.sync || data.sync.phase === 'ready') && !data.sync?.error && !data.sync?.warning) return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'private, no-store' } })
-        const events = await reviews(request) as ReviewEvent[]
+        const events = await reviews(request, '', undefined, guest) as ReviewEvent[]
         const byId = new Map(events.map(event => [event.item_id, event]))
         return json({ ...data, release: data.revision || process.env.HANASAND_RELEASE_COMMIT || 'development', nodes: data.nodes.map(item => ({ ...item, content: undefined, review: byId.get(item.id) })) })
     } catch { return json({ error: 'The code inventory or review history could not be loaded. Please retry.' }, 503) }

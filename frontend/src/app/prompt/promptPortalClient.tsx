@@ -1,7 +1,8 @@
 'use client'
 
 import { ArrowDown, ArrowUp, ImageIcon, LockKeyhole, Pencil, RefreshCw, Send, ShieldCheck, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import AccessCodePanel from '@/components/accessCodePanel'
+import { useEffect, useMemo, useState } from 'react'
 
 type PortalFile = {
     id: string
@@ -43,8 +44,6 @@ export default function PromptPortalClient({ initialState = emptyState }: { init
     const [files, setFiles] = useState<FileList | null>(null)
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState('')
-    const codeInputRef = useRef<HTMLInputElement>(null)
-    const codeDigits = code.padEnd(6, ' ').split('')
     const pending = useMemo(() => state.items
         .filter(item => item.status === 'queued' || item.status === 'running')
         .sort(comparePromptItems), [state.items])
@@ -133,31 +132,7 @@ export default function PromptPortalClient({ initialState = emptyState }: { init
                 {error ? <p className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-sm font-semibold text-ui-danger'>{error}</p> : null}
 
                 {!state.authenticated ? (
-                    <form onSubmit={login} className='mx-auto mt-16 grid w-full max-w-md gap-5 rounded-lg border border-ui-border bg-ui-panel p-6 shadow-2xl shadow-black/20'>
-                        <label className='grid gap-2 text-sm font-semibold'>
-                            Access code
-                            <input
-                                ref={codeInputRef}
-                                value={code}
-                                onChange={event => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                                inputMode='numeric'
-                                autoComplete='one-time-code'
-                                className='sr-only'
-                                placeholder='000000'
-                            />
-                            <button type='button' onClick={() => codeInputRef.current?.focus()} className='grid grid-cols-6 gap-2'>
-                                {codeDigits.map((digit, index) => (
-                                    <span key={index} className={`flex aspect-square items-center justify-center rounded-lg border bg-ui-canvas text-2xl font-semibold tabular-nums ${digit.trim() ? 'border-ui-primary/50 text-ui-text' : 'border-ui-border text-ui-muted'}`}>
-                                        {digit.trim() || ' '}
-                                    </span>
-                                ))}
-                            </button>
-                        </label>
-                        <button disabled={busy || code.length !== 6} className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas disabled:cursor-not-allowed disabled:opacity-60'>
-                            <LockKeyhole className='h-4 w-4' />
-                            Unlock
-                        </button>
-                    </form>
+                    <AccessCodePanel code={code} onChange={setCode} busy={busy} onSubmit={login} />
                 ) : (
                     <section className='grid gap-4 lg:max-h-[calc(100vh-13rem)] lg:grid-cols-3 lg:overflow-hidden'>
                         <form onSubmit={enqueue} className='grid min-h-0 gap-3 overflow-y-auto rounded-lg border border-ui-border bg-ui-panel p-4'>

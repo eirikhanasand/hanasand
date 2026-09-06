@@ -1,6 +1,5 @@
 .code-workspace { min-width:0; display:grid; gap:1rem; margin-top:1.5rem; }
-.code-workspace header,.code-detail-heading,.code-map-tools,.code-filters,.code-review-history h4 { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
-.code-workspace h2 { font-size:1.2rem; font-weight:600; margin-right:auto; }
+.code-detail-heading,.code-map-tools,.code-filters,.code-review-history h4 { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
 .code-workspace button { display:inline-flex; align-items:center; gap:.4rem; border:1px solid var(--color-ui-border); border-radius:.4rem; padding:.4rem .6rem; font-size:.8rem; }
 .code-workspace button:hover { background:var(--color-ui-raised); }
 .code-workspace button:disabled { opacity:.45; cursor:not-allowed; }
