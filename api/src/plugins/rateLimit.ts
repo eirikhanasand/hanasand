@@ -11,7 +11,7 @@ import {
 } from '#utils/rateLimit/config.ts'
 import hasInternalToken from '#utils/auth/internalToken.ts'
 import { verifiedClientIp } from '#utils/http/publicBoundary.ts'
-import { withTransaction } from '#db'
+import { withTransaction, isTransientDatabaseError } from '#db'
 
 // ponytail: per-worker counters during read-only recovery; shared DB limits resume with writes.
 const recoveryBuckets = new Map<string, { count: number; resetAt: number }>()
@@ -44,7 +44,16 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
     })
 
     fastify.addHook('preHandler', (req, res, done) => {
-        void enforceRateLimit(req, res).then(proceed => {
+        // Retry only the authentication/rate-limit pre-handler; the application action has not run.
+        const enforce = async () => {
+            try { return await enforceRateLimit(req, res) }
+            catch (error) {
+                if (!isTransientDatabaseError(error) && (error as { code?: string }).code !== '25006') throw error
+                await new Promise(resolve => setTimeout(resolve, 100))
+                return enforceRateLimit(req, res)
+            }
+        }
+        void enforce().then(proceed => {
             if (proceed) done()
         }, error => done(error as Error))
     })

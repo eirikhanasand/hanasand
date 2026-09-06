@@ -90,7 +90,7 @@ export async function withTransaction<T>(work: (query: typeof queryOnce) => Prom
     }
 }
 
-function isTransientDatabaseError(error: unknown) {
+export function isTransientDatabaseError(error: unknown) {
     const err = error as PgError
     const message = err?.message?.toLowerCase() || ''
     const retryableCodes = new Set([
