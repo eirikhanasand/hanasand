@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { searchThreatIntel } from '#utils/ti/search.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import { recoveryReadOnly } from '#utils/resilience.ts'
 import { consumeBillingQuota, getBillingQuota } from '../billing.ts'
 
 interface SearchBody {
@@ -25,6 +26,7 @@ export default async function postTiSearch(req: FastifyRequest<{ Body: SearchBod
         return res.status(400).send({ error: 'invalid_query', message: `query must contain 2-${TI_QUERY_MAX_LENGTH} characters` })
     }
 
+    if (auth?.id && recoveryReadOnly()) return res.status(503).send({ error: 'recovery_read_only', message: 'Metered searches are temporarily paused because usage cannot be recorded. Public intelligence search remains available.' })
     if (auth?.id) {
         const quota = await getBillingQuota(auth.id, 'searchesPerDay')
         if (quota.limit === null || quota.remaining === 0) return res.status(quota.limit === null ? 402 : 429).send({ error: quota.limit === null ? 'subscription_required' : 'quota_exhausted', message: quota.limit === null ? 'A Threat Intelligence plan is required to search.' : 'Your daily Threat Intelligence search quota has been reached.', quota })
