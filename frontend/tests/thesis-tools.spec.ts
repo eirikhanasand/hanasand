@@ -122,10 +122,15 @@ test('active toolbar fits phones and tablets, supports multiline cells, and hide
         await b2.focus()
         const tools = page.getByRole('group', { name: 'Active table controls' })
         await expect(tools).toBeVisible()
-        const bounds = (await tools.boundingBox())!
+        const toolbar = page.locator('[aria-label="Document actions"]')
+        const bounds = (await toolbar.boundingBox())!
         expect(bounds.x).toBeGreaterThanOrEqual(16)
         expect(bounds.x + bounds.width).toBeLessThanOrEqual(width - 16)
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+        const rows = await toolbar.locator('button').evaluateAll(buttons => buttons.filter(button => button.getBoundingClientRect().height).map(button => Math.round(button.getBoundingClientRect().top)))
+        expect(new Set(rows).size).toBe(1)
+        await tools.getByRole('button', { name: 'Add column after B', exact: true }).scrollIntoViewIfNeeded()
+        await expect(tools.getByRole('button', { name: 'Add column after B', exact: true })).toBeInViewport()
     }
     await page.setViewportSize({ width: 820, height: 1180 })
     await page.screenshot({ path: '/tmp/thesis-tools-ipad.png' })
@@ -143,4 +148,24 @@ test.describe('touch controls', () => {
         await expect(page.getByRole('textbox', { name: 'Cell B2', exact: true })).toBeFocused()
         await page.screenshot({ path: '/tmp/thesis-tools-mobile.png' })
     })
+})
+
+
+test('vertical navigation centers cells in a large table', async({ page, context, baseURL }) => {
+    const current = await (await context.request.get(baseURL + '/api/thesis')).json()
+    const body = '| Task | Hours | Notes |\n| --- | --- | --- |\n' + Array.from({ length: 60 }, (_, index) => `| Task ${index + 1} | ${index + 1} | Notes |`).join('\n')
+    expect((await context.request.put(baseURL + '/api/thesis', { headers: { Origin: baseURL! }, data: { ...current, body } })).ok()).toBe(true)
+    await page.reload()
+    const b20 = page.getByRole('textbox', { name: 'Cell B20', exact: true })
+    await b20.click()
+    for (const key of ['ArrowDown', 'ArrowDown', 'ArrowUp']) {
+        await page.keyboard.press(key)
+        await expect.poll(async() => page.locator('[data-table-cell]:focus').evaluate(element => {
+            const bounds = element.getBoundingClientRect()
+            const viewport = element.closest('.enterprise-theme')!
+            const frame = viewport.getBoundingClientRect()
+            return Math.abs(bounds.top + bounds.height / 2 - (frame.top + viewport.clientHeight / 2))
+        })).toBeLessThan(3)
+    }
+    await expect(page.getByRole('textbox', { name: 'Cell B21', exact: true })).toBeFocused()
 })

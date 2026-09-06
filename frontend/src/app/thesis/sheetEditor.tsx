@@ -125,8 +125,10 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
         setActive(next)
         requestAnimationFrame(() => {
             const input = root.current?.querySelector<HTMLTextAreaElement>(`[data-table-cell="${next.table}:${next.row}:${next.col}"]`)
-            input?.focus()
+            input?.focus({ preventScroll: true })
             input?.setSelectionRange(input.value.length, input.value.length)
+            const largeTable = (input?.closest('table')?.getBoundingClientRect().height || 0) > window.innerHeight
+            input?.scrollIntoView({ block: largeTable ? 'center' : 'nearest', inline: 'nearest', behavior: 'instant' })
         })
     }
     function updateTable(index: number, data: TableData, group?: string) {
@@ -162,16 +164,16 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
     return <div ref={root} className='grid min-w-0 gap-5' onBlurCapture={event => {
         if (!(event.relatedTarget as HTMLElement | null)?.closest('[data-table-cell], [data-table-tools]')) setActive(null)
     }}>
-        <div className='flex flex-col gap-4 md:flex-row md:items-start md:justify-between'>
+        <div className='flex min-w-0 flex-col gap-4'>
             <div className='min-w-0 flex-1'>
                 {canEdit ? <InlineMarkdown text={sheet.title || '# Untitled'} label='Title Markdown' singleLine onChange={value => onChange('title', value, 'title')} /> : <RenderMarkdown text={sheet.title || '# Untitled'} />}
             </div>
-            {(canEdit || actions) && <div data-table-tools className='flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2 md:max-w-[65%]' aria-label='Document actions'>
+            {(canEdit || actions) && <div data-table-tools className='thesis-document-actions' aria-label='Document actions'>
                 {actions}
                 {canEdit && showInsertTable && <button className={button} onMouseDown={event => event.preventDefault()} onClick={insert}>Insert table</button>}
                 {trailingActions}
                 {canEdit && parsed.length > 0 && <button type='button' className={button} aria-label='Table help' aria-expanded={help} aria-controls={helpId} onClick={() => setHelp(!help)}><Info size={18} /></button>}
-                {canEdit && cell && table && <div className='flex flex-wrap items-center justify-end gap-2' role='group' aria-label='Active table controls'>
+                {canEdit && cell && table && <div className='flex shrink-0 items-center gap-2' role='group' aria-label='Active table controls'>
                     <span className='text-sm font-semibold text-ui-primary'>Table {cell.table + 1} · {columnName(cell.col)}{cell.row + 1}</span>
                     <button className={button} aria-label={`Add row below ${cell.row + 1}`} title={`Add row below ${cell.row + 1}`} onClick={() => changeShape('row', false)}>+ Row</button>
                     <button className={button} aria-label={`Remove row ${cell.row + 1}`} title={`Remove row ${cell.row + 1}`} disabled={cell.row === 0} onClick={() => changeShape('row', true)}>− Row</button>
