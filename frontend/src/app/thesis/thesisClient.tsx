@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Copy, Info, Minus, Plus, Redo2, Undo2 } from 'lucide-react'
 import SheetEditor from './sheetEditor'
 import { identifiedSheets, writeSheets, sheetChanges } from './workspace'
@@ -22,10 +23,21 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
     useEffect(() => { setReady(true) }, [])
     const thesis = useThesis(initialDocument, canEdit)
     const { document } = thesis
-    const [selected, setActive] = useState(0)
+    const selected = useSearchParams().get('sheet')
     const [validationError, setValidationError] = useState('')
     const sheets = identifiedSheets(document.title, document.body)
-    const active = Math.min(selected, sheets.length - 1)
+    const active = Math.max(0, sheets.findIndex(sheet => sheet.id === selected))
+    function selectSheet(id: string, replace = false) {
+        const url = new URL(window.location.href)
+        if (url.searchParams.get('sheet') === id) return
+        url.searchParams.set('sheet', id)
+        if (replace) window.history.replaceState(null, '', url)
+        else window.history.pushState(null, '', url)
+    }
+    useEffect(() => {
+        // History updates can lag behind document edits; do not replace a newer selection.
+        if (ready && selected && selected === new URL(window.location.href).searchParams.get('sheet') && !sheets.some(sheet => sheet.id === selected)) selectSheet(sheets[0].id, true)
+    }, [ready, selected, document.body])
     function updateSheet(field: 'title' | 'body', value: string, group?: string) {
         const next = sheets.map((sheet, index) => index === active ? { ...sheet, [field]: value } : sheet)
         if (field === 'title' && (!value.trim() || value.length > 500)) { setValidationError('Enter a title of 1–500 characters.'); return }
@@ -65,15 +77,16 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
         if (sheetDialog.kind === 'add') {
             const name = sheetName.trim()
             if (!name || name.length > 100) { setDialogError('Enter a sheet name of 1–100 characters.'); return }
-            const body = writeSheets([...sheets, { id: crypto.randomUUID(), name, title: `# ${name}`, body: '' }])
+            const id = crypto.randomUUID()
+            const body = writeSheets([...sheets, { id, name, title: `# ${name}`, body: '' }])
             if (body.length > 1_000_000) { setDialogError('The workspace is full.'); return }
             thesis.update('body', body)
-            setActive(sheets.length)
+            selectSheet(id)
         } else {
             if (!deleteTarget || sheets.length === 1 || sheetName !== deleteTarget.name) return
             const index = sheets.findIndex(sheet => sheet.id === deleteTarget.id)
             thesis.update('body', writeSheets(sheets.filter(sheet => sheet.id !== deleteTarget.id)))
-            setActive(Math.max(0, index - 1))
+            selectSheet(sheets[index > 0 ? index - 1 : 1].id, true)
         }
         setValidationError('')
         closeSheetDialog()
@@ -159,9 +172,9 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
             <nav className='thesis-tabs' hidden={footerVisible} aria-label='Sheet navigation'>
                 <div role='tablist' aria-label='Thesis sheets' className='flex'>
                     {sheets.map(({ id, name }, index) => <div key={id} role='presentation' className='thesis-tab' data-active={active === index}><button id={`tab-${index}`} role='tab' disabled={!ready} aria-selected={active === index} aria-controls={`sheet-${index}`} tabIndex={active === index ? 0 : -1}
-                        onClick={() => setActive(index)} onKeyDown={event => {
+                        onClick={() => selectSheet(id)} onKeyDown={event => {
                             const target = event.key === 'ArrowRight' ? (index + 1) % sheets.length : event.key === 'ArrowLeft' ? (index + sheets.length - 1) % sheets.length : event.key === 'Home' ? 0 : event.key === 'End' ? sheets.length - 1 : -1
-                            if (target >= 0) { event.preventDefault(); setActive(target); window.document.getElementById(`tab-${target}`)?.focus() }
+                            if (target >= 0) { event.preventDefault(); selectSheet(sheets[target].id); window.document.getElementById(`tab-${target}`)?.focus() }
                         }}>{name}</button>
                     {canEdit && active === index && <button className='thesis-tab-remove' disabled={!ready || sheets.length === 1} aria-label={`Remove ${name} sheet`} title={sheets.length === 1 ? 'Keep at least one sheet' : `Remove ${name}`} onClick={event => openSheetDialog({ kind: 'delete', id, name }, event.currentTarget)}><Minus size={16} aria-hidden='true' /></button>}
                     </div>)}
