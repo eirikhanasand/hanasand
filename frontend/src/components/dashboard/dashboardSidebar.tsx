@@ -37,7 +37,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     const compact = mode === 'compact'
     const sections = getDashboardNavigation(access)
     const links = navigationLinks(sections)
-    const route = pathname === '/dwm' ? '/dwm/actors' : pathname
+    const route = pathname
     const active = links.filter(item => route === item.href || route.startsWith(`${item.href}/`))
         .sort((left, right) => right.href.length - left.href.length)[0]
     const activePath = active?.ancestors.join('/') ?? (pathname.startsWith('/automation') ? 'Automation' : '')

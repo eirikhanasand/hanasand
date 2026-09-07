@@ -19,5 +19,5 @@ export function isInternalAppPath(path: string) {
 }
 
 export function hasAppSidebar(path: string) {
-    return isInternalAppPath(path) || matches(path, '/profile') || matches(path, '/ti') || path === '/api' || path === '/api/openapi'
+    return isInternalAppPath(path) || matches(path, '/profile') || matches(path, '/ti') || path === '/api' || path === '/api/openapi' || matches(path, '/browser') || matches(path, '/solutions') || matches(path, '/pwned') || matches(path, '/test')
 }

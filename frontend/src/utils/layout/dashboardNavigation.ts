@@ -21,17 +21,22 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
             link('Overview', '/dashboard'),
             link('Threat Search', '/ti'),
             link('Cases', '/cases'),
+            link('Browser', '/browser'),
             group('Dark web monitoring', [
+                link('Overview', '/dwm'),
                 link('Monitored actors', '/dwm/actors'),
                 link('Actions', '/dwm/actions'),
                 link('Watchlists', '/dwm/watchlists'),
                 link('Integrations', '/dwm/delivery'),
             ]),
-            group('Security tools', [
+            group('Security Monitoring', [
                 link('Overview', '/mill'),
                 link('Detection rules', '/mill/rules'),
-                link('Scanner', '/scanner'),
             ]),
+            link('Security Scanner', canManageSystem ? '/scanner' : '/solutions/scanner'),
+            link('Exposure Lookup', '/pwned'),
+            link('Endpoint Checks', '/test'),
+            link('All products and solutions', '/solutions'),
         ]),
         group('Threat intelligence', [
             group('Intelligence', [
