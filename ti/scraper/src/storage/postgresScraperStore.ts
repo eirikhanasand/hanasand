@@ -1160,11 +1160,20 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       !sourceId && executableOnly
         ? this.querySourceOperationalSummary(input)
         : this.sql.unsafe(`
-        WITH capture_counts AS (
-          SELECT source_id, tenant_id, count(*) AS capture_count
-          FROM threat_intel.captures
-          WHERE tenant_id IS NOT DISTINCT FROM $1::text
-          GROUP BY source_id, tenant_id
+        WITH selected_sources AS MATERIALIZED (
+          SELECT source.*
+          FROM threat_intel.sources source
+          WHERE source.tenant_id IS NOT DISTINCT FROM $1::text
+            AND ($2::text IS NULL OR source.id = $2::text OR source.canonical_feed_key = (
+              SELECT requested.canonical_feed_key FROM threat_intel.sources requested
+              WHERE requested.id = $2::text AND requested.tenant_id IS NOT DISTINCT FROM $1::text
+            ))
+        ), capture_counts AS (
+          SELECT capture.source_id, capture.tenant_id, count(*) AS capture_count
+          FROM threat_intel.captures capture
+          JOIN selected_sources source ON source.id = capture.source_id
+            AND source.tenant_id IS NOT DISTINCT FROM capture.tenant_id
+          GROUP BY capture.source_id, capture.tenant_id
         ), canonical_sources AS (
           SELECT source.*,
             row_number() OVER (
@@ -1174,7 +1183,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                 COALESCE(source.record->>'createdAt', ''),
                 source.id
             ) AS canonical_rank
-          FROM threat_intel.sources source
+          FROM selected_sources source
           LEFT JOIN capture_counts
             ON capture_counts.source_id = source.id
             AND capture_counts.tenant_id IS NOT DISTINCT FROM source.tenant_id

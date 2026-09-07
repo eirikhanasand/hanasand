@@ -21,6 +21,7 @@ export type TiAdminSource = {
     qualifiesForBaseline: boolean
     qualificationReasons: string[]
     baselineFamily: string
+    lastError?: string
     healthState: string
     lastCheckedAt: string
     lastContentAt: string
@@ -147,7 +148,7 @@ export async function getTiAdminOverview(tenantId: string | null = 'default', pa
             cursor: page.cursor,
             limit: Math.max(1, Math.min(500, page.limit || 25)),
             sourceId: page.sourceId,
-            includeCandidates: page.includeCandidates === true,
+            includeCandidates: Boolean(page.sourceId) || page.includeCandidates === true,
             query: page.query,
             family: page.family,
             lifecycle: page.lifecycle,
@@ -338,6 +339,7 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
         qualifiesForBaseline: qualification.qualifies === true,
         qualificationReasons: listValue(qualification.reasons).map(stringValue).filter(Boolean),
         baselineFamily: textValue(qualification.family, 'not qualifying'),
+        lastError: stringValue(health.lastFailureReason) || undefined,
         healthState: textValue(health.state, 'not observed'),
         lastCheckedAt: isoValue(qualification.lastCheckedAt, health.lastAttemptAt),
         lastContentAt: isoValue(qualification.lastContentAt),

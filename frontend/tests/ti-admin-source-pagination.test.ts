@@ -56,6 +56,7 @@ describe('TI admin bounded source operations', () => {
             checks: ['supported', 'hanasand-review-v6'],
         })
         assert.equal(requested.find(url => url.pathname.endsWith('/source-operations'))?.searchParams.get('sourceId'), 'src_06100')
+        assert.equal(requested.find(url => url.pathname.endsWith('/source-operations'))?.searchParams.get('includeCandidates'), 'true')
         assert.equal(requested.find(url => url.pathname.endsWith('/captures'))?.searchParams.get('q'), 'src_06100')
     })
 
