@@ -61,9 +61,9 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
 
     return (
         <DashboardPage>
-            <DashboardPanel className='p-4'>
-                <h1 className='wrap-break-word text-xl font-semibold text-ui-text'>{displayName}</h1>
-                <p className='mt-1 text-sm text-ui-muted'>@{username}</p>
+            <DashboardPanel className='relative p-4'>
+                <h1 className='wrap-break-word pr-10 text-xl font-semibold text-ui-text'>{displayName}</h1>
+                <p className='mt-1 break-all pr-10 text-sm text-ui-muted'>@{username}</p>
                 {isSelf && <ProfileIdentity displayName={displayName} username={username} />}
                 {profile?.active === false && <p className='mt-2 text-sm text-ui-muted'>Inactive account</p>}
                 {!profile && !isSelf && <p role='status' className='mt-2 text-sm text-ui-muted'>Profile details are unavailable. Please try again.</p>}

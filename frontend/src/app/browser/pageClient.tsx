@@ -2,6 +2,7 @@
 
 import { ArrowUp, Check, Clipboard, Download, Globe2, Hourglass, Play, Plus, RotateCcw, Share2, ShieldCheck, SlidersHorizontal, Square, Trash2 } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
@@ -1510,28 +1511,24 @@ function RunDetailModal({ run, onClose, onRerun }: { run: BrowserRunHistory; onC
 function ProviderRunBadges({ run }: { run: BrowserRunHistory }) {
     return (
         <span className='inline-flex items-center gap-1.5 whitespace-nowrap'>
-            <ProviderRunBadge provider='virustotal' label='VT' result={run.providerResults?.virustotal} />
-            <ProviderRunBadge provider='urlquery' label='urlquery' result={run.providerResults?.urlquery} />
+            <ProviderRunBadge provider='virustotal' result={run.providerResults?.virustotal} />
+            <ProviderRunBadge provider='urlquery' result={run.providerResults?.urlquery} />
         </span>
     )
 }
 
-function ProviderRunBadge({ provider, label, result }: { provider: 'virustotal' | 'urlquery'; label: string; result?: ProviderRunResult }) {
+function ProviderRunBadge({ provider, result }: { provider: 'virustotal' | 'urlquery'; result?: ProviderRunResult }) {
     const clean = !result || result.status === 'clean'
-    const icon = provider === 'urlquery' && !clean ? '!' : clean ? '✓' : '!'
-    const text = provider === 'virustotal' ? virustotalRunLabel(result?.label || label) : urlqueryRunLabel(result?.label || label)
-    return <span className={`inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] font-semibold ${clean ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning'}`}>{provider === 'urlquery' ? <span>{icon}</span> : null}<span>{text}</span></span>
-}
-
-function virustotalRunLabel(label?: string) {
-    if (!label) return 'VT'
-    return /\bVT\b/i.test(label) ? label : `${label} VT`
-}
-
-function urlqueryRunLabel(label?: string) {
-    if (!label) return 'urlquery'
-    if (/^\d+$/.test(label.trim())) return `urlquery: ${label.trim()} alerts`
-    return /urlquery/i.test(label) ? label : `urlquery ${label}`
+    const name = provider === 'virustotal' ? 'VirusTotal' : 'urlquery'
+    const text = (result?.label || '').replace(/\b(?:virustotal|VT|urlquery)\b:?/gi, '').replace(/\s*alerts?$/i, '').trim()
+        || (provider === 'urlquery' && result?.status === 'clean' ? '0' : '—')
+    const description = `${name}: ${text}${provider === 'urlquery' && /^\d+$/.test(text) ? ' alerts' : ''}`
+    return (
+        <span role='img' title={description} aria-label={description} className={`inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] font-semibold ${clean ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning'}`}>
+            <Image src={`/logos/${provider}.${provider === 'virustotal' ? 'svg' : 'png'}`} alt='' width={16} height={16} unoptimized className='h-4 w-4 shrink-0 object-contain' />
+            <span aria-hidden='true'>{text}</span>
+        </span>
+    )
 }
 
 function virusTotalVendorLabel(analysis: Pick<SandboxToolAnalysis, 'vendorFlagged' | 'vendorTotal'>) {
