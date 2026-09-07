@@ -1,3 +1,4 @@
+import { checkScheduledAutomationAccess } from './automationAccess.ts'
 import { hostCheckMessage } from './hostCheckMessage.ts'
 import { monitoringLookup, monitoringUrl, publicMonitoringRequest, resolveMonitoringAddresses } from './publicMonitoringRequest.ts'
 import run from '#db'
@@ -377,6 +378,7 @@ export async function recoverStaleAutomationRuns() {
 }
 
 export async function executeAutomation(automation: AutomationRow) {
+    let accessGranted = false
     let outcome: { kind: 'failure' | 'warning' | null, message: string }
     const runId = crypto.randomUUID()
     const startedAt = Date.now()
@@ -386,6 +388,8 @@ export async function executeAutomation(automation: AutomationRow) {
     `, [runId, automation.id, automation.owner_id])
 
     try {
+        await checkScheduledAutomationAccess({ actionType: automation.action_type, targetUrl: automation.target_url, organizationId: automation.organization_id, modelName: automation.model_name, notificationDestinations: automation.notification_destinations }, automation.owner_id)
+        accessGranted = true
         const result = await runAutomationAction(automation)
         outcome = { kind: 'warning' in result && result.warning === true ? 'warning' : null, message: result.message }
         const durationMs = Date.now() - startedAt
@@ -465,7 +469,7 @@ export async function executeAutomation(automation: AutomationRow) {
              WHERE id = $1
         `, [automation.id, nextRunAt, message, getCertificateFromError(error)?.status || null, getCertificateFromError(error)?.subject || null, getCertificateFromError(error)?.issuer || null, getCertificateFromError(error)?.expiresAt || null])
     }
-    if (automation.action_type === 'agent_prompt') {
+    if (accessGranted && automation.action_type === 'agent_prompt') {
         await recordMonitoringOutcome(automation, runId, outcome.kind, outcome.message)
             .catch(error => console.error('Unable to record monitoring issue:', error))
     }

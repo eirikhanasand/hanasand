@@ -3,6 +3,8 @@ if (process.env.DB_HOST !== 'monitor-test-db') throw Error('Requires the disposa
 const sent: Array<{ content: string, mention: boolean }> = []
 let failDelivery = false
 mock.module('../src/utils/alerts/discordWebhookFile.ts', () => ({
+    isDiscordWebhookFileDestination: (value: unknown) => typeof value === 'string' && value.startsWith('discord-webhook-file:'),
+    isDiscordWebhookUrl: () => false,
     redactSecretBearingText: (text: string) => text,
     discordWebhookFileModelLabel: () => 'discord',
     deliverDiscordWebhookFile: async (_destination: string, content: string, mention: boolean) => {

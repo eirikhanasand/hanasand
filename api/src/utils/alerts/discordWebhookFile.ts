@@ -2,12 +2,16 @@ import { readFile } from 'node:fs/promises'
 
 const DISCORD_WEBHOOK_FILE_PREFIX = 'discord-webhook-file:'
 
+export function isDiscordWebhookUrl(value: string | null | undefined) {
+    return typeof value === 'string' && /^https:\/\/(?:discord\.com|discordapp\.com)\/api\/webhooks\/[0-9]+\/[A-Za-z0-9_-]+$/.test(value.trim())
+}
+
 export function isDiscordWebhookFileDestination(value: string | null | undefined) {
     return typeof value === 'string' && value.trim().startsWith(DISCORD_WEBHOOK_FILE_PREFIX)
 }
 
 export function discordWebhookFileModelLabel(value: string | null | undefined) {
-    return isDiscordWebhookFileDestination(value) ? 'discord-webhook-file' : value || 'discord'
+    return isDiscordWebhookFileDestination(value) ? 'discord-webhook-file' : isDiscordWebhookUrl(value) ? 'discord-webhook' : value || 'discord'
 }
 
 export async function deliverDiscordWebhookFile(destination: string | null, content: string, mentionEveryone = true) {
@@ -31,8 +35,9 @@ export async function deliverDiscordWebhookFile(destination: string | null, cont
 
 export async function resolveDiscordWebhookUrl(destination: string | null) {
     const cleaned = typeof destination === 'string' ? destination.trim() : ''
+    if (isDiscordWebhookUrl(cleaned)) return cleaned
     if (!cleaned.startsWith(DISCORD_WEBHOOK_FILE_PREFIX)) {
-        throw new Error('Discord delivery needs a discord-webhook-file:<absolute path> destination.')
+        throw new Error('Discord delivery needs a valid webhook URL or an administrator-configured webhook file.')
     }
 
     const filePath = cleaned.slice(DISCORD_WEBHOOK_FILE_PREFIX.length).trim()

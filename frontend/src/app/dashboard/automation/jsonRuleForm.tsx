@@ -4,12 +4,12 @@ import type { AutomationPayload, JsonRule } from '@/utils/automations/client'
 
 export const defaultJsonRule: JsonRule = { path: '', operator: 'gt', value: 80, aggregate: 'max' }
 
-export default function JsonRuleForm({ draft, onChange, inputClass }: { draft: AutomationPayload, onChange: (draft: AutomationPayload) => void, inputClass: string }) {
+export default function JsonRuleForm({ draft, onChange, inputClass, canManageSystem = false }: { canManageSystem?: boolean, draft: AutomationPayload, onChange: (draft: AutomationPayload) => void, inputClass: string }) {
     const rule = draft.jsonRule || defaultJsonRule
     const update = (change: Partial<JsonRule>) => onChange({ ...draft, jsonRule: { ...rule, ...change } })
     return <fieldset className='grid gap-3 rounded-lg border border-ui-border p-3'>
         <legend className='px-1 text-sm font-semibold text-ui-text'>JSON alert rule</legend>
-        <label className='grid gap-1.5 text-xs text-ui-muted'>Source<select className={inputClass} value={draft.targetUrl === 'system:metrics' ? 'host' : 'url'} onChange={event => onChange({ ...draft, targetUrl: event.target.value === 'host' ? 'system:metrics' : '' })}><option value='url'>URL above</option><option value='host'>Host telemetry (administrator)</option></select></label>
+        <label className='grid gap-1.5 text-xs text-ui-muted'>Source<select className={inputClass} value={draft.targetUrl === 'system:metrics' ? 'host' : 'url'} onChange={event => onChange({ ...draft, targetUrl: event.target.value === 'host' ? 'system:metrics' : '' })}><option value='url'>URL above</option>{canManageSystem && <option value='host'>Host telemetry (administrator)</option>}</select></label>
         <label className='grid gap-1.5 text-xs text-ui-muted'>JSON field<input className={inputClass} value={rule.path} placeholder='host.storage.*.usedPercent' onChange={event => update({ path: event.target.value })} /></label>
         <div className='grid gap-3 sm:grid-cols-2'>
             <label className='grid gap-1.5 text-xs text-ui-muted'>Combine values<select className={inputClass} value={rule.aggregate} onChange={event => update({ aggregate: event.target.value as JsonRule['aggregate'] })}><option value='max'>Maximum</option><option value='min'>Minimum</option><option value='avg'>Average</option><option value='first'>First value</option></select></label>

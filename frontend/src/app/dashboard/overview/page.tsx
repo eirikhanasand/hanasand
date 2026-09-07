@@ -30,8 +30,6 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
     const isAdmin = session?.valid === true && session.roles?.some(role => role.id === 'administrator' || role.id === 'admin') === true
 
     const params = searchParams ? await searchParams : {}
-    const deniedPathValue = params.from
-    const deniedPath = typeof deniedPathValue === 'string' && deniedPathValue.startsWith('/') ? deniedPathValue : ''
     const accessDenied = params.notAllowed === 'true'
 
     return (
@@ -46,14 +44,13 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
                     <DashboardPanel className='border-ui-warning/40 bg-ui-warning/10 p-4'>
                         <div className='flex flex-wrap items-start justify-between gap-4'>
                             <div>
-                                <p className='text-xs font-semibold uppercase text-ui-warning'>Access boundary</p>
-                                <h2 className='mt-1 text-base font-semibold text-ui-text'>That dashboard route is restricted for your current role.</h2>
+                                <h2 className='text-base font-semibold text-ui-text'>You don’t have access to this page.</h2>
                                 <p className='mt-1 max-w-2xl text-sm leading-6 text-ui-muted'>
-                                    {deniedPath ? `Requested route: ${deniedPath}. ` : ''}Your session is still active. Use the routes shown in the sidebar, or ask an organization administrator to confirm the required role.
+                                    If you need access, contact your administrator.
                                 </p>
                             </div>
                             <Link href='/organizations' className='inline-flex h-9 items-center rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
-                                Open organization access
+                                View organizations
                             </Link>
                         </div>
                     </DashboardPanel>
