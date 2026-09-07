@@ -34,7 +34,7 @@ test('database aggregation, concurrent delivery, rolling cooldown, recovery and 
     let issues = await loadMonitoringIssues('issues')
     expect(issues).toHaveLength(1)
     expect(issues[0].occurrences).toBe(12)
-    expect(sent).toEqual([{ content: issues[0].caseNumber, mention: true }])
+    expect(sent).toEqual([{ content: `[${issues[0].caseNumber}](https://hanasand.com/cases/${issues[0].caseNumber})`, mention: true }])
     await recordMonitoringOutcome(monitor, 'issue-0', 'failure', 'HTTP 503')
     expect((await loadMonitoringIssues('issues'))[0].occurrences).toBe(12)
     await check('different', 'HTTP 401')

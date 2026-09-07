@@ -1,3 +1,4 @@
+import { monitoringCaseDiscordAlert } from './alerts/monitoringCase.ts'
 import { isHostThresholdMessage } from './hostCheckMessage.ts'
 import { createHash } from 'node:crypto'
 import run, { withTransaction } from '#db'
@@ -32,8 +33,10 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
         return id
     })
     if (!issue || automation.notify_on === 'never' || kind === 'warning' && !automation.notify_warnings && automation.notify_on !== 'always') return
-    const preferences = await run('SELECT notifications_enabled FROM monitoring_issues WHERE id = $1', [issue])
-    if (preferences.rows[0]?.notifications_enabled === false) return
+    const preferences = await run('SELECT notifications_enabled, kind, summary, occurrences, first_seen_at, last_seen_at, resolved_at, severity_override, status_override FROM monitoring_issues WHERE id = $1', [issue])
+    const details = preferences.rows[0]
+    if (!details || details.notifications_enabled === false) return
+    const alert = monitoringCaseDiscordAlert(`HA-${issue}`, automation.name || 'Health check', automation.id, details)
     const destinations = new Set(automation.notification_destinations?.length ? automation.notification_destinations : automation.model_name ? [automation.model_name] : [])
     for (const destination of destinations) {
         // Reserve in PostgreSQL before delivery: concurrent workers and restarts cannot send duplicates.
@@ -44,7 +47,7 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
             RETURNING issue_id`, [issue, destination])
         if (!claim.rows.length) continue
         try {
-            const receipt = await deliverDiscordWebhookFile(destination, `HA-${issue}`, true)
+            const receipt = await deliverDiscordWebhookFile(destination, alert.content, true, alert.embeds)
             await run('UPDATE monitoring_issue_notifications SET delivered_at = NOW(), next_attempt_at = NOW() + INTERVAL \'24 hours\', last_error = NULL, message_id = $3, mentioned_everyone = $4 WHERE issue_id = $1 AND destination = $2', [issue, destination, receipt?.id || null, receipt?.mention_everyone ?? null])
         } catch (error) {
             // Keep the reservation after ambiguous failures to avoid duplicate pings.

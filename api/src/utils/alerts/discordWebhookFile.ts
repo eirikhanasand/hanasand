@@ -14,7 +14,12 @@ export function discordWebhookFileModelLabel(value: string | null | undefined) {
     return isDiscordWebhookFileDestination(value) ? 'discord-webhook-file' : isDiscordWebhookUrl(value) ? 'discord-webhook' : value || 'discord'
 }
 
-export async function deliverDiscordWebhookFile(destination: string | null, content: string, mentionEveryone = true) {
+export type DiscordEmbed = {
+    title: string, url: string, description: string, color: number,
+    fields: Array<{ name: string, value: string, inline?: boolean }>,
+}
+
+export async function deliverDiscordWebhookFile(destination: string | null, content: string, mentionEveryone = true, embeds?: DiscordEmbed[]) {
     const webhookUrl = await resolveDiscordWebhookUrl(destination)
     const response = await fetch(`${webhookUrl}?wait=true`, {
         method: 'POST',
@@ -22,6 +27,7 @@ export async function deliverDiscordWebhookFile(destination: string | null, cont
         body: JSON.stringify({
             content: (mentionEveryone ? `@everyone ${content}` : content).slice(0, 1900),
             allowed_mentions: { parse: mentionEveryone ? ['everyone'] : [] },
+            ...(embeds?.length ? { embeds } : {}),
         }),
         signal: AbortSignal.timeout(10_000),
     })
