@@ -1,5 +1,5 @@
 import authRoutes from './authRoutes.ts'
-import { getMonitoringCases } from './handlers/monitoringCases.ts'
+import { getMonitoringCases, updateMonitoringCase } from './handlers/monitoringCases.ts'
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
 import indexHandler from './handlers/index.ts'
 import getUser from './handlers/user/get.ts'
@@ -502,6 +502,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     // Agent automations
     fastify.get('/cases/monitoring', getMonitoringCases)
     fastify.get('/cases/monitoring/:id', getMonitoringCases)
+    fastify.patch('/cases/monitoring/:id', updateMonitoringCase)
     fastify.get('/automations', getAutomations)
     fastify.post('/automations', postAutomation)
     fastify.get('/automations/:id', getAutomation)
