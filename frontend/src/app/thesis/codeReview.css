@@ -45,11 +45,8 @@
 .code-review-history { display:grid; gap:.75rem; padding:.75rem; border:1px solid var(--color-ui-border); border-radius:.4rem; font-size:.8rem; }
 .code-review-history ul { display:grid; gap:.5rem; }
 .code-more { margin:.5rem 0; }
-.thesis-settings { position:relative; }
-.thesis-settings>summary { display:grid; place-items:center; list-style:none; cursor:pointer; width:32px; height:32px; border-radius:.4rem; color:var(--color-ui-muted); }
-.thesis-settings>summary::-webkit-details-marker { display:none; }
-.thesis-settings>summary:hover { background:var(--color-ui-raised); }
-.thesis-settings-panel { position:absolute; right:0; top:calc(100% + .5rem); z-index:30; min-width:220px; padding:1rem; border:1px solid var(--color-ui-border); border-radius:.5rem; background:var(--color-ui-panel); box-shadow:0 8px 24px #0002; display:grid; gap:.75rem; font-size:.8rem; }
+.thesis-settings-panel { position:fixed; inset:auto; margin:0; width:240px; max-width:calc(100vw - 32px); overflow:auto; padding:1rem; border:1px solid var(--color-ui-border); border-radius:.5rem; background:var(--color-ui-panel); color:var(--color-ui-text); box-shadow:0 8px 24px #0002; white-space:normal; font-size:.8rem; }
+.thesis-settings-panel:popover-open { display:grid; gap:.75rem; }
 .thesis-settings-panel label { display:flex; align-items:center; gap:.6rem; cursor:pointer; }
 @media(max-width:700px) { .code-columns { grid-template-columns:minmax(0,1fr); } .code-columns aside { position:static; max-height:250px; } .code-filters select { width:100%; } }
 

@@ -2,7 +2,7 @@
 
 import { Fragment, useId, useState } from 'react'
 import { ChevronDown, ChevronRight, ClipboardPlus, Download, Pencil, Trash2, X } from 'lucide-react'
-import SheetEditor, { type SheetEditorProps } from './sheetEditor'
+import SheetEditor, { sheetButton, type SheetEditorProps } from './sheetEditor'
 import { tables, writeTable } from './workspace'
 import { activityError, hoursText, initialTimetableYear, isTimetable, isoWeek, timetable, type Activity, type ActivityLog, type Week } from './timetableData'
 import './timetable.css'
@@ -59,6 +59,19 @@ export default function TimetableSheet({ onActivityLogChange, ...props }: SheetE
         props.onChange('body', sheet.body.slice(0, table.start) + writeTable({ ...table.data, cells, heights: [] }) + sheet.body.slice(table.end))
         setMessage(week?.sourceRow !== undefined ? 'Week removed from the plan. Its logged activities are kept. Use Undo to restore the row.' : 'Week added to the plan.')
     }
+    function addWeekNear(row: number, direction: -1 | 1 = 1) {
+        if (!model) return 0
+        const anchor = model.weeks[Math.max(0, Math.min(row - 1, model.weeks.length - 1))]
+        let date = anchor?.start || today()
+        const occupied = new Set(model.weeks.map(week => week.key))
+        do {
+            const next = new Date(date + 'T12:00:00Z')
+            next.setUTCDate(next.getUTCDate() + direction * 7)
+            date = next.toISOString().slice(0, 10)
+        } while (occupied.has(isoWeek(date).key))
+        changeWeek(undefined, date)
+        return model.weeks.filter(week => week.start < date).length + 1
+    }
     function save(activity: Activity) {
         if (!canEdit || !onActivityLogChange) return false
         if (form?.activity && !log.activities.some(item => item.id === form.activity!.id)) { setMessage('This activity was removed in another edit. Close the form and check the latest log.'); return false }
@@ -86,10 +99,21 @@ export default function TimetableSheet({ onActivityLogChange, ...props }: SheetE
         } catch { setPdfError('The PDF could not be created. Please try again.') }
         finally { setPdfBusy(false) }
     }
-    return <SheetEditor {...props} titleAside={model && <details className='thesis-hours-progress'><summary aria-label='Hours spent and expected'><strong>{model.totals.at(-1)} / {hoursText(model.expectedHours)} h</strong><span>spent / expected</span></summary><div>12 hours per week before Christmas; 7.5 hours per weekday from January. Before Christmas, each public holiday deducts 2.4 hours. Weeks 51–53 and Norwegian weekday public holidays are excluded. Work logged on days off still counts as spent.</div></details>} actions={<>
+    return <SheetEditor {...props} customTable={model ? {
+        index: target,
+        cells: [['Week', ...model.categories, 'Total'], ...model.weeks.map(week => [week.key, ...week.values])],
+        canRemoveRow: row => row > 0 && model.weeks[row - 1]?.sourceRow !== undefined,
+        changeRow: (row, remove) => {
+            if (!remove) return addWeekNear(row, row === 0 ? -1 : 1)
+            const week = model.weeks[row - 1]
+            changeWeek(week)
+            return Math.max(0, Math.min(row, model.weeks.length - (week?.activities.length ? 0 : 1)))
+        },
+        extendRow: direction => addWeekNear(direction < 0 ? 1 : model.weeks.length, direction),
+    } : undefined} titleAside={model && <details className='thesis-hours-progress'><summary aria-label='Hours spent and expected'><strong>{model.totals.at(-1)} / {hoursText(model.expectedHours)} h</strong><span>spent / expected</span></summary><div>12 hours per week before Christmas; 7.5 hours per weekday from January. Before Christmas, each public holiday deducts 2.4 hours. Weeks 51–53 and Norwegian weekday public holidays are excluded. Work logged on days off still counts as spent.</div></details>} actions={<>
         {model && <>
-            {canEdit && <button type='button' className='thesis-timetable-action' aria-label='Log activity' title='Log activity' aria-expanded={form !== null && !form.week} onClick={() => { setMessage(''); setForm(form && !form.week ? null : {}) }}><ClipboardPlus size={18} /></button>}
-            <button type='button' className='thesis-timetable-action' aria-label='Export timetable as PDF' title='Export as PDF' disabled={pdfBusy} onClick={exportPdf}><Download size={18} /><span>{pdfBusy ? 'Exporting…' : 'PDF'}</span></button>
+            {canEdit && <button type='button' className={sheetButton + ' inline-flex min-w-11 items-center justify-center gap-2'} aria-label='Log activity' title='Log activity' aria-expanded={form !== null && !form.week} onClick={() => { setMessage(''); setForm(form && !form.week ? null : {}) }}><ClipboardPlus size={18} /></button>}
+            <button type='button' className={sheetButton + ' inline-flex min-w-11 items-center justify-center gap-2'} aria-label='Export timetable as PDF' title='Export as PDF' disabled={pdfBusy} onClick={exportPdf}><Download size={18} /><span>{pdfBusy ? 'Exporting…' : 'PDF'}</span></button>
         </>}
         {props.actions}
     </>} beforeContent={<div className='thesis-timetable-controls'>
@@ -98,28 +122,47 @@ export default function TimetableSheet({ onActivityLogChange, ...props }: SheetE
         {canEdit && form && !form.week && <section aria-label='Quick activity log' className='thesis-week-detail'><h2>Log activity</h2>{activityForm()}</section>}
         {message && <p role='status'>{message}</p>}
         {pdfError && <p role='alert'>{pdfError}</p>}
-    </div>} renderTable={(data, index) => index !== target || !model ? undefined : <section className='thesis-timetable' aria-label='Weekly activity timetable'>
-        <div className='thesis-timetable-scroll'><table>
-            <thead><tr><th scope='col'>Week</th>{model.categories.map(category => <th key={category} scope='col'>{category}</th>)}<th scope='col'>Total</th></tr></thead>
-            <tbody>{model.weeks.map(week => <Fragment key={week.key}>
-                <tr className='thesis-week-row' data-week={week.key} onClick={event => { if (!(event.target as HTMLElement).closest('button')) setExpanded(expanded === week.key ? null : week.key) }}>
-                    <th scope='row'><button type='button' aria-label={`Week ${week.week}, ${week.year}`} aria-expanded={expanded === week.key} aria-controls={`week-${instanceId}-${week.key}`} onClick={() => setExpanded(expanded === week.key ? null : week.key)}>{expanded === week.key ? <ChevronDown size={14} /> : <ChevronRight size={14} />}<span>{week.week}<small>{week.year}</small></span></button></th>
-                    {week.values.map((value, col) => <td key={col}>{value || '—'}</td>)}
-                </tr>
-                {expanded === week.key && <tr id={`week-${instanceId}-${week.key}`} className='thesis-week-expanded'><td colSpan={model.categories.length + 2}><section className='thesis-week-detail' aria-label={`Activities for week ${week.week}, ${week.year}`}>
-                    <div className='thesis-week-heading'><div><h2>Week {week.week} · {week.year}</h2><p>{week.start} – {week.end} · {hoursText(week.expected)} expected hours</p></div><button type='button' aria-label='Close week details' onClick={() => setExpanded(null)}><X size={17} /></button></div>
-                    {week.exclusions.length > 0 && <p className='thesis-timetable-hint'>{week.exclusions.join(' · ')}</p>}
-                    {week.legacy && <p>Includes earlier totals without dated activity details. New entries are added to those totals.</p>}
-                    {week.activities.length ? <ul className='thesis-activities'>{week.activities.map(activity => <li key={activity.id}>
-                        <div><strong><time dateTime={activity.date}>{activity.date}</time> · {hoursText(activity.hours)} h · {activity.category}</strong><p>{activity.description}</p></div>
-                        {canEdit && <div className='thesis-activity-tools'><button type='button' aria-label={`Edit activity ${activity.date}: ${activity.description}`} title='Edit activity' onClick={() => setForm({ week: week.key, activity })}><Pencil size={15} /></button><button type='button' aria-label={`Remove activity ${activity.date}: ${activity.description}`} title='Remove activity' onClick={() => remove(activity)}><Trash2 size={15} /></button></div>}
-                    </li>)}</ul> : <p>No activities logged for this week.</p>}
-                    {canEdit && (form?.week === week.key ? activityForm(week) : <button type='button' className='thesis-add-activity' onClick={() => setForm({ week: week.key })}><ClipboardPlus size={16} />Add activity</button>)}
-                    {canEdit && <button type='button' className='thesis-week-plan-button' onClick={() => changeWeek(week, week.start)}>{week.sourceRow !== undefined ? 'Remove week from plan' : 'Include week in plan'}</button>}
-                </section></td></tr>}
-            </Fragment>)}</tbody>
-            <tfoot><tr><th scope='row'>{model.plannedWeeks} weeks</th>{model.totals.map((value, index) => <td key={index}>{value}</td>)}</tr></tfoot>
-        </table></div>
-        {model.notes.length > 0 && <details><summary>Original timetable notes</summary>{model.notes.map((note, index) => <p key={index}>{note}</p>)}</details>}
-    </section>} />
+    </div>} renderTable={(data, index, interaction) => {
+        if (index !== target || !model) return undefined
+        const cellProps = (row: number, col: number) => canEdit ? {
+            tabIndex: 0,
+            'data-table-cell': `${index}:${row}:${col}`,
+            'data-active': interaction.active?.table === index && interaction.active.row === row && interaction.active.col === col,
+            onFocus: () => interaction.onSelect({ table: index, row, col }),
+            onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
+                if (event.metaKey || event.ctrlKey || event.altKey) return
+                let nextRow = row, nextCol = col
+                if (event.key === 'ArrowUp') nextRow--
+                else if (event.key === 'ArrowDown') nextRow++
+                else if (event.key === 'ArrowLeft') nextCol--
+                else if (event.key === 'ArrowRight') nextCol++
+                else return
+                event.preventDefault()
+                interaction.onNavigate({ table: index, row: nextRow, col: nextCol }, true)
+            },
+        } : {}
+        return <section className='thesis-timetable' aria-label='Weekly activity timetable'>
+            <div className='thesis-timetable-scroll'><table>
+                <thead><tr><th {...cellProps(0, 0)} scope='col'>Week</th>{model.categories.map((category, col) => <th {...cellProps(0, col + 1)} key={category} scope='col'>{category}</th>)}<th {...cellProps(0, model.categories.length + 1)} scope='col'>Total</th></tr></thead>
+                <tbody>{model.weeks.map((week, row) => <Fragment key={week.key}>
+                    <tr className='thesis-week-row' data-week={week.key}>
+                        <th {...cellProps(row + 1, 0)} scope='row'><button type='button' aria-label={`Week ${week.week}, ${week.year}`} aria-expanded={expanded === week.key} aria-controls={`week-${instanceId}-${week.key}`} onClick={() => setExpanded(expanded === week.key ? null : week.key)}>{expanded === week.key ? <ChevronDown size={14} /> : <ChevronRight size={14} />}<span>{week.week}<small>{week.year}</small></span></button></th>
+                        {week.values.map((value, col) => <td {...cellProps(row + 1, col + 1)} key={col}>{value || '—'}</td>)}
+                    </tr>
+                    {expanded === week.key && <tr id={`week-${instanceId}-${week.key}`} className='thesis-week-expanded'><td colSpan={model.categories.length + 2}><section className='thesis-week-detail' aria-label={`Activities for week ${week.week}, ${week.year}`}>
+                        <div className='thesis-week-heading'><div><h2>Week {week.week} · {week.year}</h2><p>{week.start} – {week.end} · {hoursText(week.expected)} expected hours</p></div><button type='button' aria-label='Close week details' onClick={() => setExpanded(null)}><X size={17} /></button></div>
+                        {week.exclusions.length > 0 && <p className='thesis-timetable-hint'>{week.exclusions.join(' · ')}</p>}
+                        {week.legacy && <p>Includes earlier totals without dated activity details. New entries are added to those totals.</p>}
+                        {week.activities.length ? <ul className='thesis-activities'>{week.activities.map(activity => <li key={activity.id}>
+                            <div><strong><time dateTime={activity.date}>{activity.date}</time> · {hoursText(activity.hours)} h · {activity.category}</strong><p>{activity.description}</p></div>
+                            {canEdit && <div className='thesis-activity-tools'><button type='button' aria-label={`Edit activity ${activity.date}: ${activity.description}`} title='Edit activity' onClick={() => setForm({ week: week.key, activity })}><Pencil size={15} /></button><button type='button' aria-label={`Remove activity ${activity.date}: ${activity.description}`} title='Remove activity' onClick={() => remove(activity)}><Trash2 size={15} /></button></div>}
+                        </li>)}</ul> : <p>No activities logged for this week.</p>}
+                        {canEdit && (form?.week === week.key ? activityForm(week) : <button type='button' className='thesis-add-activity' onClick={() => setForm({ week: week.key })}><ClipboardPlus size={16} />Add activity</button>)}
+                        {canEdit && <button type='button' className='thesis-week-plan-button' onClick={() => changeWeek(week, week.start)}>{week.sourceRow !== undefined ? 'Remove week from plan' : 'Include week in plan'}</button>}
+                    </section></td></tr>}
+                </Fragment>)}</tbody>
+                <tfoot><tr><th scope='row'>{model.plannedWeeks} weeks</th>{model.totals.map((value, index) => <td key={index}>{value}</td>)}</tr></tfoot>
+            </table></div>
+            {model.notes.length > 0 && <details><summary>Original timetable notes</summary>{model.notes.map((note, index) => <p key={index}>{note}</p>)}</details>}
+        </section>}} />
 }
