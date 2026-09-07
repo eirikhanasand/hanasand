@@ -182,7 +182,7 @@ async function start() {
             fastify.addHook('onClose', async () => { stopLogRefresh() })
         }
         if (!browserWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
-            await warmTrafficStatistics()
+            await warmTrafficStatistics().catch(error => fastify.log.warn({ error }, 'Traffic startup snapshots will retry in the background'))
             const stopTrafficRefresh = refreshTrafficHistory()
             const snapshotTimer = setInterval(() => {
                 void warmTrafficStatistics().catch(error => fastify.log.warn({ error }, 'Traffic snapshot refresh failed'))
