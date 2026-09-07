@@ -1,8 +1,8 @@
 'use client'
 
 import postVM from '@/utils/vms/fetch/postVM'
-import { Info } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Info, Plus, X } from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
 import VMRow from './vm'
 import getVMs from '@/utils/vms/fetch/getVMs'
 import { getCookie } from '@/utils/cookies/cookies'
@@ -14,6 +14,9 @@ import { DashboardPanel } from '../dashboard/ui'
 export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
     const [vms, setVms] = useState<VM[]>(serverVMs || [])
     const router = useRouter()
+    const [showCreate, setShowCreate] = useState(false)
+    const createFormId = useId()
+    const nameInput = useRef<HTMLInputElement>(null)
     const [name, setName] = useState('')
     const [creating, setCreating] = useState(false)
     const [message, setMessage] = useState('')
@@ -44,6 +47,10 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
         update()
     }, [])
 
+    useEffect(() => {
+        if (showCreate) nameInput.current?.focus()
+    }, [showCreate])
+
     return (
         <DashboardPanel className='grid min-h-42 content-start gap-3 p-4'>
             <div className='mb-1 flex items-center justify-between gap-3'>
@@ -51,26 +58,39 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
                     <h2 className='text-base font-semibold text-ui-text'>Virtual machines</h2>
                     <p className='mt-1 text-sm text-ui-muted'>{vms.length} managed target{vms.length === 1 ? '' : 's'}</p>
                 </div>
-                <Tooltip
-                    align='right'
-                    content={
-                        <h1>
-                            Create a VM here or provision one from a project.
-                            Use these controls for start, stop, and restart.
-                        </h1>
-                    }
-                >
-                    <div className='p-px'>
-                        <div className='flex min-w-full items-center gap-1 rounded-md border border-ui-border bg-ui-primary/10 px-2.5 py-1'>
-                            <Info className='h-3 w-3 stroke-ui-primary' />
-                            <span className='text-[0.7rem] font-semibold text-ui-primary'>Managed</span>
+                <div className='flex shrink-0 items-center gap-2'>
+                    <Tooltip
+                        align='right'
+                        content={
+                            <h1>
+                                Create a VM here or provision one from a project.
+                                Use these controls for start, stop, and restart.
+                            </h1>
+                        }
+                    >
+                        <div className='p-px'>
+                            <div className='flex min-w-full items-center gap-1 rounded-md border border-ui-border bg-ui-primary/10 px-2.5 py-1'>
+                                <Info className='h-3 w-3 stroke-ui-primary' />
+                                <span className='text-[0.7rem] font-semibold text-ui-primary'>Managed</span>
+                            </div>
                         </div>
-                    </div>
-                </Tooltip>
+                    </Tooltip>
+                    <button
+                        type='button'
+                        aria-label={showCreate ? 'Close VM creation controls' : 'Create VM'}
+                        aria-expanded={showCreate}
+                        aria-controls={createFormId}
+                        disabled={creating}
+                        onClick={() => setShowCreate(open => !open)}
+                        className='flex h-8 w-8 items-center justify-center rounded-md border border-ui-border bg-ui-primary/10 text-ui-primary hover:bg-ui-primary/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary disabled:opacity-50'
+                    >
+                        {showCreate ? <X className='h-4 w-4' aria-hidden='true' /> : <Plus className='h-4 w-4' aria-hidden='true' />}
+                    </button>
+                </div>
             </div>
 
-            <form onSubmit={create} className='flex flex-wrap items-end gap-2'>
-                <label className='grid gap-1 text-sm text-ui-muted'>VM name<input value={name} onChange={event => setName(event.target.value)} required pattern='[a-z][a-z0-9-]{0,61}[a-z0-9]' minLength={2} maxLength={63} title='2–63 lowercase letters, numbers or hyphens, starting with a letter' disabled={creating} className='h-10 rounded-lg border border-ui-border bg-ui-raised px-3 text-ui-text' /></label>
+            <form id={createFormId} onSubmit={create} className={showCreate ? 'flex flex-wrap items-end gap-2' : 'hidden'}>
+                <label className='grid gap-1 text-sm text-ui-muted'>VM name<input ref={nameInput} value={name} onChange={event => setName(event.target.value)} required pattern='[a-z][a-z0-9-]{0,61}[a-z0-9]' minLength={2} maxLength={63} title='2–63 lowercase letters, numbers or hyphens, starting with a letter' disabled={creating} className='h-10 rounded-lg border border-ui-border bg-ui-raised px-3 text-ui-text' /></label>
                 <button disabled={creating} className='h-10 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas disabled:opacity-50'>{creating ? 'Creating VM…' : 'Create VM'}</button>
                 {message && <p role='status' className='w-full text-sm text-ui-muted'>{message}</p>}
             </form>
