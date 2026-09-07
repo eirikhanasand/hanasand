@@ -72,7 +72,9 @@ COPY . .
 COPY browser-worker/supervisor.conf /etc/supervisor/conf.d/browser-worker.conf
 COPY browser-worker/start.sh /usr/local/bin/hanasand-browser-worker
 COPY browser-worker/reconnect-watchdog.js /opt/gst-web/reconnect-watchdog.js
-RUN chmod +x /usr/local/bin/hanasand-browser-worker \
+COPY browser-worker/patch-stream-input.py /tmp/patch-stream-input.py
+RUN python3 /tmp/patch-stream-input.py \
+    && chmod +x /usr/local/bin/hanasand-browser-worker \
     && sed -i 's/selkies-gstreamer-resize 1920x1080/selkies-gstreamer-resize "${BROWSER_STREAM_RESOLUTION:-1280x720}"/' /etc/entrypoint.sh \
     && sed -i '/\.scale {/,/}/s/height: 100%;/height: 100%;\n      object-fit: contain;/' /opt/gst-web/index.html \
     && sed -i 's#</body>#<script src="reconnect-watchdog.js"></script></body>#' /opt/gst-web/index.html \

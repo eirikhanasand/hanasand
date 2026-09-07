@@ -29,7 +29,7 @@ test('developer hero stays compact with inline desktop actions and mobile naviga
     await page.goto('/developers')
     await expect(page.getByText('Versioned, metadata-safe access', { exact: false })).toHaveCount(0)
     const heading = await page.getByRole('heading', { level: 1 }).boundingBox()
-    const action = await page.getByRole('link', { name: 'Create API key', exact: true }).boundingBox()
+    const action = await page.locator('#api-key-header-action').getByRole('link', { name: 'Create account', exact: true }).boundingBox()
     expect(action!.x).toBeGreaterThan(heading!.x + heading!.width)
     expect(Math.abs(action!.y + action!.height / 2 - heading!.y - heading!.height / 2)).toBeLessThan(24)
     expect((await page.locator('#api-access').boundingBox())!.y).toBeLessThan(260)
