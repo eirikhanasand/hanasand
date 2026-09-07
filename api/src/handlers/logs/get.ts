@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import run from '#db'
+import run, { withTransaction } from '#db'
+import { cachedLogQuery } from '#utils/logs/cache.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { isRuntimeLogSourceAvailable, listRuntimeLogs } from '#utils/docker/engine.ts'
@@ -11,12 +12,23 @@ export async function getLogServices(req: FastifyRequest, res: FastifyReply) {
     const role = await hasRole(req, res, 'system_admin')
     if (!role.valid) return res.status(403).send({ error: 'Missing system_admin role.' })
 
-    const result = await run(`
+    return res.send(await loadLogServices())
+}
+
+export function loadLogServices() {
+    return cachedLogQuery('services', 60_000, queryLogServices)
+}
+
+async function queryLogServices() {
+    const result = await withTransaction(async query => {
+        await query('SET LOCAL statement_timeout = \'30s\'')
+        return query(`
         SELECT service, MAX(created_at) AS last_seen, COUNT(*)::int AS entries
         FROM service_logs
         GROUP BY service
         ORDER BY service ASC
-    `)
+        `)
+    })
     const nativeServices = await listNativeLogServices().catch(() => [])
     const combined = new Map<string, { service: string, last_seen: string, entries: number }>()
 
@@ -33,7 +45,7 @@ export async function getLogServices(req: FastifyRequest, res: FastifyReply) {
         }
     }
 
-    return res.send({ services: [...combined.values()].sort((a, b) => a.service.localeCompare(b.service)) })
+    return { services: [...combined.values()].sort((a, b) => a.service.localeCompare(b.service)) }
 }
 
 export async function getLogs(req: FastifyRequest, res: FastifyReply) {
@@ -42,7 +54,16 @@ export async function getLogs(req: FastifyRequest, res: FastifyReply) {
     const role = await hasRole(req, res, 'system_admin')
     if (!role.valid) return res.status(403).send({ error: 'Missing system_admin role.' })
 
-    const query = req.query as { service?: string, level?: string, search?: string, limit?: string }
+    return res.send(await loadLogs(req.query as LogQuery))
+}
+
+type LogQuery = { service?: string, level?: string, search?: string, limit?: string }
+
+export function loadLogs(query: LogQuery = {}) {
+    return cachedLogQuery(`logs:${JSON.stringify(query)}`, 5000, () => queryLogs(query))
+}
+
+async function queryLogs(query: LogQuery) {
     const limit = Math.min(Math.max(Number(query.limit || 100), 1), 500)
     const [result, nativeLogs] = await Promise.all([
         run(`
@@ -66,7 +87,7 @@ export async function getLogs(req: FastifyRequest, res: FastifyReply) {
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, limit)
 
-    return res.send({ logs })
+    return { logs }
 }
 
 export async function getRealtimeLogs(req: FastifyRequest, res: FastifyReply) {

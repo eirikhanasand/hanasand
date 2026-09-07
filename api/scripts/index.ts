@@ -17,6 +17,8 @@ const bun = process.execPath
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 
 const coreTasks: TestTask[] = [
+    { id: 'logs-cache', title: 'Log snapshot refresh and failures', command: [bun, 'test', 'tests/logs-cache.test.ts'] },
+    { id: 'logs-access', title: 'Cached log authorization', command: [bun, 'test', 'tests/logs-access.test.ts'] },
     { id: 'password-policy', title: 'Password requirements', command: [bun, 'test', 'tests/password-policy.test.ts'] },
     { id: 'code-review-access', title: 'Read-only code review access', command: [bun, 'test', 'tests/code-review-access.test.ts'] },
     scriptTask('status-summary', 'Bounded current status query', 'check-status-summary.ts'),

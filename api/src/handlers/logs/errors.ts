@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import run from '#db'
+import run, { withTransaction } from '#db'
+import { cachedLogQuery } from '#utils/logs/cache.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 
@@ -18,7 +19,14 @@ export async function getErrorEvents(req: FastifyRequest, res: FastifyReply) {
     const role = await hasRole(req, res, 'system_admin')
     if (!role.valid) return res.status(403).send({ error: 'Missing system_admin role.' })
 
-    const query = req.query as ErrorQuery
+    return res.send(await loadErrorEvents(req.query as ErrorQuery))
+}
+
+export function loadErrorEvents(query: ErrorQuery = {}) {
+    return cachedLogQuery(`errors:${JSON.stringify(query)}`, 5000, () => queryErrorEvents(query))
+}
+
+async function queryErrorEvents(query: ErrorQuery) {
     const limit = Math.min(Math.max(Number(query.limit || 100), 1), 500)
     const status = Number(query.status || 0)
     const normalizedStatus = Number.isFinite(status) && status >= 400 ? status : null
@@ -120,8 +128,12 @@ export async function getErrorEvents(req: FastifyRequest, res: FastifyReply) {
             ORDER BY created_at DESC
             LIMIT $6
         `, [surface, normalizedStatus, code, q, includeExpected, Math.min(limit, 100)]),
-        run(`
-            WITH raw_events AS (
+        cachedLogQuery(`error-summary:${includeExpected}`, 60_000, () => withTransaction(async query => {
+            // Full-history counters refresh off the request path after startup.
+            // Keep this budget local: ordinary API queries still fail promptly.
+            await query('SET LOCAL statement_timeout = \'30s\'')
+            return query(`
+            WITH raw_events AS NOT MATERIALIZED (
                 SELECT metadata->>'surface' AS surface, NULLIF(metadata->>'status_code', '')::int AS status_code, metadata->>'error_code' AS error_code, metadata->>'path' AS path, created_at
                 FROM service_logs
                 WHERE metadata->>'category' = 'http_response_error'
@@ -144,29 +156,38 @@ export async function getErrorEvents(req: FastifyRequest, res: FastifyReply) {
                 WHERE status >= 400
                   AND ($1::boolean OR NOT ${expectedTrafficProbePredicate()})
             ),
+            event_counts AS (
+                SELECT surface, status_code, error_code,
+                    ${scannerProjectSummaryPredicate()} AS project_scan,
+                    ${scannerShareSummaryPredicate()} AS share_scan,
+                    COUNT(*)::int AS count,
+                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 hour')::int AS last_hour
+                FROM raw_events
+                GROUP BY 1, 2, 3, 4, 5
+            ),
             scanner_stats AS (
                 SELECT
-                    COUNT(*) FILTER (WHERE ${scannerProjectSummaryPredicate()})::int AS project_scans,
-                    COUNT(*) FILTER (WHERE ${scannerShareSummaryPredicate()})::int AS share_scans
-                FROM raw_events
+                    COALESCE(SUM(count) FILTER (WHERE project_scan), 0)::int AS project_scans,
+                    COALESCE(SUM(count) FILTER (WHERE share_scan), 0)::int AS share_scans
+                FROM event_counts
             ),
             events AS (
                 SELECT *
-                FROM raw_events
-                WHERE $1::boolean OR NOT (${scannerProjectSummaryPredicate()} OR ${scannerShareSummaryPredicate()})
+                FROM event_counts
+                WHERE $1::boolean OR NOT (project_scan OR share_scan)
             ),
             stats AS (
                 SELECT
-                    COUNT(*)::int AS total,
-                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 hour')::int AS last_hour,
-                    COUNT(*) FILTER (WHERE status_code >= 500)::int AS server_errors,
-                    COUNT(*) FILTER (WHERE status_code BETWEEN 400 AND 499)::int AS client_errors
+                    COALESCE(SUM(count), 0)::int AS total,
+                    COALESCE(SUM(last_hour), 0)::int AS last_hour,
+                    COALESCE(SUM(count) FILTER (WHERE status_code >= 500), 0)::int AS server_errors,
+                    COALESCE(SUM(count) FILTER (WHERE status_code BETWEEN 400 AND 499), 0)::int AS client_errors
                 FROM events
             ),
             status_counts AS (
                 SELECT COALESCE(jsonb_agg(jsonb_build_object('status_code', status_code, 'count', count) ORDER BY count DESC), '[]'::jsonb) AS rows
                 FROM (
-                    SELECT status_code, COUNT(*)::int AS count
+                    SELECT status_code, SUM(count)::int AS count
                     FROM events
                     GROUP BY status_code
                 ) grouped
@@ -174,7 +195,7 @@ export async function getErrorEvents(req: FastifyRequest, res: FastifyReply) {
             surface_counts AS (
                 SELECT COALESCE(jsonb_agg(jsonb_build_object('surface', surface, 'count', count) ORDER BY count DESC), '[]'::jsonb) AS rows
                 FROM (
-                    SELECT COALESCE(surface, 'api') AS surface, COUNT(*)::int AS count
+                    SELECT COALESCE(surface, 'api') AS surface, SUM(count)::int AS count
                     FROM events
                     GROUP BY COALESCE(surface, 'api')
                 ) grouped
@@ -182,7 +203,7 @@ export async function getErrorEvents(req: FastifyRequest, res: FastifyReply) {
             code_counts AS (
                 SELECT COALESCE(jsonb_agg(jsonb_build_object('error_code', error_code, 'count', count) ORDER BY count DESC), '[]'::jsonb) AS rows
                 FROM (
-                    SELECT COALESCE(NULLIF(error_code, ''), 'uncategorized') AS error_code, COUNT(*)::int AS count
+                    SELECT COALESCE(NULLIF(error_code, ''), 'uncategorized') AS error_code, SUM(count)::int AS count
                     FROM events
                     GROUP BY COALESCE(NULLIF(error_code, ''), 'uncategorized')
                 ) grouped
@@ -198,18 +219,19 @@ export async function getErrorEvents(req: FastifyRequest, res: FastifyReply) {
                 scanner_stats.project_scans,
                 scanner_stats.share_scans
             FROM stats, status_counts, surface_counts, code_counts, scanner_stats
-        `, [includeExpected]),
+        `, [includeExpected])
+        })),
     ])
 
     const errors = [...httpRows.rows, ...authRows.rows, ...trafficRows.rows]
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, limit)
 
-    return res.send({
+    return {
         generated_at: new Date().toISOString(),
         summary: summary.rows[0] || emptySummary(),
         errors,
-    })
+    }
 }
 
 function expectedHttpProbePredicate() {

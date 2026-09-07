@@ -1,3 +1,4 @@
+import { warmLogSnapshots, refreshLogSnapshots } from '#utils/logs/warm.ts'
 import { recoveryRequestAllowed, recoveryState, recoveryReadOnly } from './utils/resilience.ts'
 import { queryOnce, closeDatabase } from './utils/db.ts'
 import Fastify from 'fastify'
@@ -172,6 +173,11 @@ async function start() {
 
                 fastify.log.warn({ error }, 'Failed to provision mail accounts on startup')
             })
+        }
+        if (!browserWorkerOnly) {
+            await warmLogSnapshots()
+            const stopLogRefresh = refreshLogSnapshots()
+            fastify.addHook('onClose', async () => { stopLogRefresh() })
         }
         await fastify.listen({ port, host: process.env.LISTEN_HOST || '0.0.0.0' })
         if (browserWorkerOnly || httpWorkerOnly) return

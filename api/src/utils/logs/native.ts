@@ -165,7 +165,7 @@ async function listFileLogs(limit: number) {
 
 async function listJournalLogs(limit: number) {
     try {
-        const { stdout } = await execFile('journalctl', ['-n', String(limit), '--no-pager', '-o', 'json'])
+        const { stdout } = await execFile('journalctl', ['-n', String(limit), '--no-pager', '-o', 'json'], { timeout: 2000 })
         const entries: NativeLogEntry[] = []
 
         for (const line of stdout.split('\n').filter(Boolean)) {
@@ -238,6 +238,7 @@ async function fetchRemoteNativeLogs({
                 'Content-Type': 'application/json',
                 'User-Agent': 'hanasand_api',
             },
+            signal: AbortSignal.timeout(2000),
         })
 
         if (!response.ok) {
@@ -272,6 +273,7 @@ async function fetchRemoteNativeLogServices(limit: number) {
                 'Content-Type': 'application/json',
                 'User-Agent': 'hanasand_api',
             },
+            signal: AbortSignal.timeout(2000),
         })
 
         if (!response.ok) {
