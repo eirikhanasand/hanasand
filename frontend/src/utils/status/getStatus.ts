@@ -3,7 +3,7 @@ import config from '@/config'
 export type ServiceCheck = {
     service: string
     check_name: string
-    status: 'up' | 'degraded' | 'down'
+    status: 'up' | 'degraded' | 'down' | 'unknown'
     latency_ms: number
     message: string | null
     checked_at: string
@@ -33,8 +33,12 @@ export type ServiceIncident = {
 }
 
 export type ServiceStatus = {
-    overall: 'up' | 'degraded' | 'down'
+    overall: 'up' | 'degraded' | 'down' | 'unknown'
     generated_at: string
+    monitoring?: 'live' | 'unavailable'
+    last_verified_at?: string
+    history_available?: boolean
+    history_generated_at?: string
     checks: ServiceCheck[]
     history: ServiceHistoryDay[]
     incidents: ServiceIncident[]
@@ -42,7 +46,8 @@ export type ServiceStatus = {
 
 export function unavailableServiceStatus(): ServiceStatus {
     return {
-        overall: 'down',
+        overall: 'unknown',
+        monitoring: 'unavailable',
         generated_at: '',
         checks: [],
         history: [],
@@ -62,7 +67,8 @@ export default async function getStatus({ summary = false }: { summary?: boolean
     }
 }
 
-function normalizeStatus(payload: Partial<ServiceStatus>): ServiceStatus {
+function normalizeStatus(payload: Partial<ServiceStatus> | null): ServiceStatus {
+    if (!payload || typeof payload !== 'object') return unavailableServiceStatus()
     const hasEvidence = Boolean(payload.generated_at)
         || (Array.isArray(payload.checks) && payload.checks.length > 0)
         || (Array.isArray(payload.history) && payload.history.length > 0)
@@ -71,13 +77,13 @@ function normalizeStatus(payload: Partial<ServiceStatus>): ServiceStatus {
         return unavailableServiceStatus()
     }
 
-    const checks = Array.isArray(payload.checks)
-        ? payload.checks.map((check) => ({
+    const checks: ServiceCheck[] = Array.isArray(payload.checks)
+        ? payload.checks.filter(check => check && typeof check === 'object').map((check) => ({
             service: check.service || '',
             check_name: check.check_name || '',
             status: check.status === 'up' || check.status === 'degraded' || check.status === 'down'
                 ? check.status
-                : 'degraded',
+                : 'unknown',
             latency_ms: Number(check.latency_ms) || 0,
             message: check.message || null,
             checked_at: check.checked_at || '',
@@ -90,6 +96,10 @@ function normalizeStatus(payload: Partial<ServiceStatus>): ServiceStatus {
             ? payload.overall
             : checks.some((check) => check.status === 'down') ? 'down' : checks.some((check) => check.status === 'degraded') ? 'degraded' : 'up',
         generated_at: payload.generated_at || '',
+        monitoring: payload.monitoring,
+        last_verified_at: payload.last_verified_at,
+        history_available: payload.history_available,
+        history_generated_at: payload.history_generated_at,
         checks,
         history: normalizeHistory((payload as ServiceStatus).history),
         incidents: normalizeIncidents((payload as ServiceStatus).incidents),

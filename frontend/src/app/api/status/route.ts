@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server'
-import getStatus from '@/utils/status/getStatus'
-import { toPublicServiceStatus } from '@/utils/status/publicStatus'
+import getPublicStatus from '@/utils/status/getPublicStatus'
 
 export async function GET() {
-    const status = await getStatus()
-    const publicStatus = toPublicServiceStatus(status)
+    const status = await getPublicStatus()
+    const publicStatus = status
 
     return NextResponse.json(publicStatus, {
         headers: {

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { checkStatusFeed, sendStatusFeedEmail } from './status-feed.mjs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname } from 'node:path'
@@ -50,6 +51,11 @@ if (process.argv.includes('--self-test')) {
     runSelfTest()
     process.exit(0)
 }
+
+await handleResult(await checkStatusFeed(`${baseUrl}/api/status`), {
+    statePath: process.env.HANASAND_STATUS_FEED_MONITOR_STATE || '/home/hanasand/monitor-state/status-feed-monitor.json',
+    service: 'production-monitor', checkName: 'Public status feed', title: 'Public status monitoring', noScreenshot: true, independentEmail: true,
+})
 
 await monitorThreatIntelBackup()
 
@@ -303,7 +309,7 @@ async function handleResult(result, options = {}) {
         failureThreshold,
         alertErrors,
     }
-    await sendStatusIngest(service, checkName, result).catch(error => {
+    if (!options.independentEmail) await sendStatusIngest(service, checkName, result).catch(error => {
         alertErrors.push(error instanceof Error ? error.message : String(error))
     })
 
@@ -312,7 +318,7 @@ async function handleResult(result, options = {}) {
         const sent = await trySendDiscord({
             status: 'RECOVERED',
             color: 0x22c55e,
-            title: backupRecovered ? 'Threat-intelligence backup recovered' : 'Database dashboard recovered',
+            title: options.title ? `${options.title} recovered` : backupRecovered ? 'Threat-intelligence backup recovered' : 'Database dashboard recovered',
             description: `${result.detail} Alerts resume only if the monitor sees a fresh outage.`,
             fields: resultFields(result),
         })
@@ -323,7 +329,7 @@ async function handleResult(result, options = {}) {
         const shouldAlert = next.failureCount >= failureThreshold
             && (previous.ok !== false || minutesSince(previous.lastAlertAt) >= repeatAlertMinutes)
         if (shouldAlert) {
-            const failureScreenshotUrl = backupFailure ? '' : await uploadFailureScreenshot().catch(error => {
+            const failureScreenshotUrl = backupFailure || options.noScreenshot ? '' : await uploadFailureScreenshot().catch(error => {
                 alertErrors.push(error instanceof Error ? error.message : String(error))
                 return ''
             })
@@ -334,10 +340,10 @@ async function handleResult(result, options = {}) {
             const sent = await trySendDiscord({
                 status: 'DOWN',
                 color: 0xef4444,
-                title: backupFailure
+                title: options.title ? `${options.title} unavailable` : backupFailure
                     ? `Threat-intelligence backup unavailable: ${reasonLabel(result.reason)}`
                     : `Database dashboard unavailable: ${reasonLabel(result.reason)}`,
-                description: `${failureImpact(result.reason)} ${result.detail}`,
+                description: options.title ? result.detail : `${failureImpact(result.reason)} ${result.detail}`,
                 fields: resultFields(result),
             })
             if (sent) next.lastAlertAt = now.toISOString()
@@ -349,7 +355,8 @@ async function handleResult(result, options = {}) {
 
     async function trySendDiscord(payload) {
         try {
-            await sendDiscord(payload)
+            if (options.independentEmail) await sendStatusFeedEmail(`[Hanasand] ${payload.title}`, `${payload.description}\nCheck: ${baseUrl}/api/status\nObserved: ${now.toISOString()}`)
+            else await sendDiscord(payload)
             return true
         } catch (error) {
             alertErrors.push(error instanceof Error ? error.message : String(error))

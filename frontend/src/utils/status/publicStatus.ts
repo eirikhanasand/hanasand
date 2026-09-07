@@ -11,28 +11,33 @@ const requiredPublicChecks = [
     { service: 'dark-web-monitoring', check_name: 'Latest activity' },
 ] as const
 
-const MAX_CHECK_AGE_MS = 5 * 60 * 1000
+export const MAX_CHECK_AGE_MS = 5 * 60 * 1000
 
 export function toPublicServiceStatus(status: ServiceStatus, nowMs = Date.now()): ServiceStatus {
-    if (!status.generated_at && status.checks.length === 0) {
-        return status
-    }
-
+    const allChecks = new Map(status.checks.map(check => [checkKey(check), check]))
     const currentChecks = new Map(status.checks
-        .filter(check => isCurrentPublicCheck(check, nowMs))
+        .filter(check => isCurrentPublicCheck(check, nowMs) && status.monitoring !== 'unavailable')
         .map(check => [checkKey(check), check]))
     const publicCheckKeys = new Set(requiredPublicChecks.map(checkKey))
     const checks = requiredPublicChecks.map(required => {
         const check = currentChecks.get(checkKey(required))
-        return check ? toPublicServiceCheck(check) : missingPublicCheck(required)
+        if (check) return toPublicServiceCheck(check)
+        const previous = allChecks.get(checkKey(required))
+        return previous ? { ...toPublicServiceCheck(previous), status: 'unknown' as const } : missingPublicCheck(required)
     })
 
+    const evidenceTimes = requiredPublicChecks.map(required => Date.parse(allChecks.get(checkKey(required))?.checked_at || ''))
+    const lastVerifiedAt = evidenceTimes.every(Number.isFinite) ? new Date(Math.min(...evidenceTimes)).toISOString() : status.last_verified_at
     return {
         overall: checks.some((check) => check.status === 'down')
             ? 'down'
             : checks.some((check) => check.status === 'degraded')
                 ? 'degraded'
-                : 'up',
+                : checks.some(check => check.status === 'unknown') ? 'unknown' : 'up',
+        monitoring: checks.every(check => check.status !== 'unknown') ? 'live' : 'unavailable',
+        last_verified_at: lastVerifiedAt,
+        history_available: status.history_available,
+        history_generated_at: status.history_generated_at,
         generated_at: status.generated_at,
         checks,
         history: status.history.filter(row => publicCheckKeys.has(checkKey(row))).map(row => ({
@@ -63,7 +68,7 @@ function missingPublicCheck(required: typeof requiredPublicChecks[number]): Serv
     return {
         service: publicStatusLabel(required.service),
         check_name: publicStatusLabel(required.check_name),
-        status: 'degraded',
+        status: 'unknown',
         latency_ms: 0,
         message: 'No status result has arrived in the last 5 minutes. Treat this component as unverified.',
         checked_at: '',
@@ -71,7 +76,7 @@ function missingPublicCheck(required: typeof requiredPublicChecks[number]): Serv
     }
 }
 
-function isCurrentPublicCheck(check: ServiceCheck, nowMs: number) {
+export function isCurrentPublicCheck(check: ServiceCheck, nowMs: number) {
     const checkedAt = new Date(check.checked_at).getTime()
     if (!Number.isFinite(checkedAt)) {
         return false
@@ -170,4 +175,25 @@ function publicStatusMessage(message: string | null) {
         .replace(/terminal failures/gi, 'workspace session issues')
         .replace(/websocket/gi, 'realtime delivery')
         .replace(/4xx\/5xx/gi, 'availability')
+}
+
+// The browser and server use the same evidence rule. Polling cannot turn an
+// empty or stale response into a verified snapshot.
+export function isVerifiedStatus(status: ServiceStatus, now = Date.now()) {
+    return status.monitoring !== 'unavailable' && status.checks.length === requiredPublicChecks.length
+        && status.checks.every(check => check.status !== 'unknown' && isCurrentPublicCheck(check, now))
+}
+
+export function retainVerifiedStatus(next: ServiceStatus, previous?: ServiceStatus): ServiceStatus {
+    if (isVerifiedStatus(next)) return next
+    if (!previous || !previous.last_verified_at) return { ...next, monitoring: 'unavailable' }
+    const checks = next.checks.map(check => {
+        if (check.status !== 'unknown') return check
+        const last = previous.checks.find(row => row.service === check.service && row.check_name === check.check_name)
+        return last ? { ...last, status: 'unknown' as const } : check
+    })
+    return { ...next, checks: checks.length ? checks : previous.checks.map(check => ({ ...check, status: 'unknown' as const })),
+        history: next.history.length ? next.history : previous.history,
+        incidents: next.incidents.length ? next.incidents : previous.incidents,
+        last_verified_at: previous.last_verified_at, monitoring: 'unavailable' }
 }

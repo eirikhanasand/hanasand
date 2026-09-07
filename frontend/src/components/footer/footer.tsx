@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { Activity, ArrowUpRight, BellRing, BookOpen, Code2, FileText, Gauge, Globe, LockKeyhole, Network, Radar, ShieldCheck, Waypoints } from 'lucide-react'
 import isSharePath from '@/utils/routes/isSharePath'
 import BrandLogo from '@/components/brand/brandLogo'
+import { isVerifiedStatus } from '@/utils/status/publicStatus'
 import type { ServiceStatus } from '@/utils/status/getStatus'
 
 const footerGroups = [
@@ -69,13 +70,13 @@ export default function Footer() {
             try {
                 const response = await fetch('/api/status', { cache: 'no-store' })
                 if (!response.ok) {
-                    if (mounted) setPublicStatus('degraded')
+                    if (mounted) setPublicStatus('unknown')
                     return
                 }
                 const status = await response.json() as ServiceStatus
-                if (mounted) setPublicStatus(status.overall)
+                if (mounted) setPublicStatus(isVerifiedStatus(status) ? status.overall : 'unknown')
             } catch {
-                if (mounted) setPublicStatus('degraded')
+                if (mounted) setPublicStatus('unknown')
             }
         }
 
@@ -174,5 +175,5 @@ function footerStatusCopy(status: ServiceStatus['overall'] | 'unknown') {
         return { label: 'Status degraded', dotClass: 'bg-ui-warning' }
     }
 
-    return { label: 'Checking status', dotClass: 'bg-ui-muted' }
+    return { label: 'Monitoring unavailable', dotClass: 'bg-ui-muted' }
 }

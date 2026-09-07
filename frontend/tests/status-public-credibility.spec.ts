@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { toPublicServiceStatus } from '@/utils/status/publicStatus'
+import { toPublicServiceStatus, retainVerifiedStatus, isVerifiedStatus } from '@/utils/status/publicStatus'
 import getStatus, { unavailableServiceStatus } from '@/utils/status/getStatus'
 import type { ServiceStatus } from '@/utils/status/getStatus'
 
@@ -16,7 +16,7 @@ test('public status does not claim operational health without fresh public check
         incidents: [],
     }, Date.parse('2026-07-05T00:00:00.000Z'))
 
-    expect(status.overall).toBe('degraded')
+    expect(status.overall).toBe('unknown')
     expect(status.checks).toHaveLength(8)
     expect(status.checks.map(check => check.service)).toEqual([
         'Core platform',
@@ -30,7 +30,7 @@ test('public status does not claim operational health without fresh public check
     ])
     expect(status.checks[0]).toMatchObject({
         check_name: 'API Health',
-        status: 'degraded',
+        status: 'unknown',
         checked_at: '',
         uptime_30d: 'unverified',
     })
@@ -74,7 +74,7 @@ test('public status is operational only when every buyer-facing monitor is fresh
             serviceCheck('website', 'Public website', checkedAt),
             serviceCheck('threat-intelligence', 'Public search', checkedAt),
             serviceCheck('threat-intelligence', 'Processing backlog', checkedAt),
-            serviceCheck('threat-intelligence', 'Source operations', checkedAt),
+            serviceCheck('threat-intelligence', 'Source collection', checkedAt),
             serviceCheck('browser-sandbox', 'Browser workspace', checkedAt),
             serviceCheck('dark-web-monitoring', 'Monitoring workspace', checkedAt),
             serviceCheck('dark-web-monitoring', 'Latest activity', checkedAt),
@@ -87,7 +87,7 @@ test('public status is operational only when every buyer-facing monitor is fresh
     expect(status.overall).toBe('up')
     expect(status.checks).toHaveLength(8)
     expect(status.checks.every(check => check.status === 'up')).toBe(true)
-    expect(status.checks.find(check => check.check_name === 'Source Collection')?.message).toBe('Source collection is responding; freshness is being monitored.')
+    expect(status.checks.find(check => check.check_name === 'Source Collection')?.status).toBe('up')
 })
 
 test('public status cannot hide fresh processing or source-collection failures', () => {
@@ -101,7 +101,7 @@ test('public status cannot hide fresh processing or source-collection failures',
             serviceCheck('website', 'Public website', checkedAt),
             serviceCheck('threat-intelligence', 'Public search', checkedAt),
             { ...serviceCheck('threat-intelligence', 'Processing backlog', checkedAt), status: 'down', message: '5263 stale reviews (oldest 1848 minutes).' },
-            { ...serviceCheck('threat-intelligence', 'Source operations', checkedAt), status: 'degraded', message: 'Source operations returned 76 sources; 1 failed.' },
+            { ...serviceCheck('threat-intelligence', 'Source collection', checkedAt), status: 'degraded', message: 'Source operations returned 76 sources; 1 failed.' },
             serviceCheck('browser-sandbox', 'Browser workspace', checkedAt),
             serviceCheck('dark-web-monitoring', 'Monitoring workspace', checkedAt),
             serviceCheck('dark-web-monitoring', 'Latest activity', checkedAt),
@@ -119,7 +119,7 @@ test('public status cannot hide fresh processing or source-collection failures',
     expect(status.checks.find(check => check.check_name === 'Source Collection')).toMatchObject({ status: 'degraded' })
 })
 
-test('public status cannot hide fresh processing or source-collection failures', () => {
+test('public status preserves degraded source-collection evidence', () => {
     const now = Date.parse('2026-08-09T11:00:00.000Z')
     const checkedAt = new Date(now).toISOString()
     const status = toPublicServiceStatus({
@@ -130,7 +130,7 @@ test('public status cannot hide fresh processing or source-collection failures',
             serviceCheck('website', 'Public website', checkedAt),
             serviceCheck('threat-intelligence', 'Public search', checkedAt),
             { ...serviceCheck('threat-intelligence', 'Processing backlog', checkedAt), status: 'down', message: '5263 stale reviews (oldest 1848 minutes).' },
-            { ...serviceCheck('threat-intelligence', 'Source operations', checkedAt), status: 'degraded', message: 'Source operations returned 76 sources; 1 failed.' },
+            { ...serviceCheck('threat-intelligence', 'Source collection', checkedAt), status: 'degraded', message: 'Source operations returned 76 sources; 1 failed.' },
             serviceCheck('browser-sandbox', 'Browser workspace', checkedAt),
             serviceCheck('dark-web-monitoring', 'Monitoring workspace', checkedAt),
             serviceCheck('dark-web-monitoring', 'Latest activity', checkedAt),
@@ -187,19 +187,20 @@ test('public status rejects monitor results older than five minutes', () => {
         incidents: [],
     }, now)
 
-    expect(status.overall).toBe('degraded')
-    expect(status.checks[0]).toMatchObject({ status: 'degraded', uptime_30d: 'unverified' })
+    expect(status.overall).toBe('unknown')
+    expect(status.checks[0]).toMatchObject({ status: 'unknown' })
 })
 
 test('status transport failure stays unavailable instead of becoming fresh synthetic status', async () => {
     expect(unavailableServiceStatus()).toEqual({
-        overall: 'down',
+        overall: 'unknown',
+        monitoring: 'unavailable',
         generated_at: '',
         checks: [],
         history: [],
         incidents: [],
     })
-    expect(toPublicServiceStatus(unavailableServiceStatus())).toEqual(unavailableServiceStatus())
+    expect(toPublicServiceStatus(unavailableServiceStatus())).toMatchObject({ overall: 'unknown', monitoring: 'unavailable' })
 
     for (const route of ['src/app/api/status/route.ts', 'src/app/status/page.tsx', 'src/app/status/incidents/page.tsx', 'src/app/status/incidents/[id]/page.tsx']) {
         const source = await readFile(path.join(root, route), 'utf8')
@@ -233,7 +234,7 @@ test('public status page renders unverified coverage without fake uptime', async
     expect(source).toContain('historyDaysFor(currentStatus, check)')
     expect(source).toContain('No incidents on')
     expect(source).toContain('/status/incidents/${day.incident.id}')
-    expect(source).toContain('Live refresh unavailable · showing last received status')
+    expect(source).toContain('Live monitoring unavailable')
     expect(source).not.toContain('{check.uptime_30d}%')
     expect(source).not.toContain('Array.from({ length: 45 }')
     expect(source).not.toContain('index > 38')
@@ -244,7 +245,7 @@ test('public footer does not hardcode operational status', async () => {
 
     expect(footer).toContain('fetch(\'/api/status\'')
     expect(footer).toContain('useState<ServiceStatus[\'overall\'] | \'unknown\'>(\'unknown\')')
-    expect(footer).toContain('return { label: \'Checking status\', dotClass: \'bg-ui-muted\' }')
+    expect(footer).toContain('return { label: \'Monitoring unavailable\', dotClass: \'bg-ui-muted\' }')
     expect(footer).not.toContain('<span className=\'h-2.5 w-2.5 rounded-full bg-ui-success shadow-sm\' />')
 })
 
@@ -272,3 +273,25 @@ test('status monitors probe buyer-facing surfaces without inserting fake traffic
 function serviceCheck(service: string, check_name: string, checked_at: string): ServiceStatus['checks'][number] {
     return { service, check_name, checked_at, status: 'up', latency_ms: 20, message: null, uptime_30d: '100.00' }
 }
+
+
+test('missing monitoring retains the last verified snapshot and never invents a refresh time', () => {
+    const at = new Date().toISOString()
+    const raw = { overall: 'up' as const, generated_at: at, checks: [
+        serviceCheck('core', 'API health', at), serviceCheck('website', 'Public website', at),
+        serviceCheck('threat-intelligence', 'Public search', at), serviceCheck('threat-intelligence', 'Processing backlog', at),
+        serviceCheck('threat-intelligence', 'Source collection', at), serviceCheck('browser-sandbox', 'Browser workspace', at),
+        serviceCheck('dark-web-monitoring', 'Monitoring workspace', at), serviceCheck('dark-web-monitoring', 'Latest activity', at),
+    ], history: [], incidents: [] }
+    const verified = toPublicServiceStatus(raw)
+    expect(isVerifiedStatus(verified)).toBe(true)
+    const failed = retainVerifiedStatus(toPublicServiceStatus(unavailableServiceStatus()), verified)
+    expect(failed).toMatchObject({ overall: 'unknown', monitoring: 'unavailable', last_verified_at: at })
+    expect(failed.checks).toHaveLength(8)
+    expect(failed.checks.every(check => check.status === 'unknown' && check.checked_at === at)).toBe(true)
+    expect(isVerifiedStatus(failed)).toBe(false)
+    const stale = toPublicServiceStatus(raw, Date.now() + 6 * 60_000)
+    expect(stale).toMatchObject({ overall: 'unknown', monitoring: 'unavailable', last_verified_at: at })
+    raw.checks[0].status = 'down'
+    expect(toPublicServiceStatus(raw).overall).toBe('down')
+})

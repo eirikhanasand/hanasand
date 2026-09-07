@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { type ReactNode, useEffect, useState } from 'react'
+import { isVerifiedStatus, retainVerifiedStatus, isCurrentPublicCheck } from '@/utils/status/publicStatus'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import type { ServiceIncident, ServiceStatus } from '@/utils/status/getStatus'
 import { AlertCircle, CheckCircle, Clock, RefreshCw } from 'lucide-react'
 
@@ -20,18 +21,30 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
     const [currentStatus, setCurrentStatus] = useState(serviceStatus)
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [refreshError, setRefreshError] = useState(false)
-    const [lastRefreshAt, setLastRefreshAt] = useState(serviceStatus.generated_at)
+    const verified = useRef<ServiceStatus | undefined>(isVerifiedStatus(serviceStatus) ? serviceStatus : undefined)
 
     useEffect(() => {
         setNow(Date.now())
+        try {
+            const saved = JSON.parse(localStorage.getItem('hanasand-verified-status') || 'null') as ServiceStatus | null
+            if (saved?.last_verified_at && Array.isArray(saved.checks) && Array.isArray(saved.history) && Array.isArray(saved.incidents) && (!verified.current || Date.parse(saved.last_verified_at) > Date.parse(verified.current.last_verified_at || ''))) {
+                verified.current = saved
+                setCurrentStatus(current => retainVerifiedStatus(current, saved))
+            }
+        } catch { /* Storage is optional, for example in private browsing. */ }
         async function refreshStatus() {
             setIsRefreshing(true)
             try {
                 const response = await fetch('/api/status', { cache: 'no-store' })
                 if (response.ok) {
-                    setCurrentStatus(await response.json() as ServiceStatus)
-                    setLastRefreshAt(new Date().toISOString())
-                    setRefreshError(false)
+                    const next = await response.json() as ServiceStatus
+                    if (!next || !Array.isArray(next.checks) || !Array.isArray(next.history) || !Array.isArray(next.incidents)) throw new Error('Invalid status feed')
+                    if (isVerifiedStatus(next)) {
+                        verified.current = next
+                        try { localStorage.setItem('hanasand-verified-status', JSON.stringify(next)) } catch { /* Optional persistence. */ }
+                    }
+                    setCurrentStatus(retainVerifiedStatus(next, verified.current))
+                    setRefreshError(next.monitoring === 'unavailable')
                 } else {
                     setRefreshError(true)
                 }
@@ -54,9 +67,11 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
 
     const checks = currentStatus.checks
     const incidents = currentStatus.incidents
-    const headline = currentStatus.overall === 'up'
+    const monitoringUnavailable = refreshError || currentStatus.monitoring === 'unavailable' || !currentStatus.checks.every(check => isCurrentPublicCheck(check, now || Date.now()))
+    const overall = monitoringUnavailable && !checks.some(check => check.status === 'down' && isCurrentPublicCheck(check, now || Date.now())) ? 'unknown' : currentStatus.overall
+    const headline = overall === 'unknown' ? 'Monitoring unavailable' : overall === 'up'
         ? 'Monitored services operational'
-        : currentStatus.overall === 'degraded'
+        : overall === 'degraded'
             ? 'Some systems degraded'
             : 'Service interruption'
     const incident = incidentId ? incidents.find(item => item.id === incidentId) : null
@@ -146,20 +161,22 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
 
     return (
         <main className='mx-auto grid max-w-5xl gap-6 pb-8'>
-            <section className={`rounded-md px-5 py-4 text-white ${currentStatus.overall === 'up' ? 'bg-green-600' : currentStatus.overall === 'degraded' ? 'bg-amber-500' : 'bg-red-600'}`}>
+            <section className={`rounded-md px-5 py-4 text-white ${overall === 'up' ? 'bg-green-600' : overall === 'degraded' ? 'bg-amber-500' : overall === 'unknown' ? 'bg-slate-600' : 'bg-red-600'}`}>
                 <div className='flex flex-wrap items-center justify-between gap-3'>
                     <div className='flex items-center gap-3'>
-                        {currentStatus.overall === 'up' ? <CheckCircle className='h-5 w-5' /> : <AlertCircle className='h-5 w-5' />}
+                        {overall === 'up' ? <CheckCircle className='h-5 w-5' /> : <AlertCircle className='h-5 w-5' />}
                         <h1 className='text-lg font-medium'>{headline}</h1>
                     </div>
                     <div className='flex flex-wrap items-center gap-3'>
                         <Link href='/status/incidents' className='inline-flex h-9 items-center rounded-md bg-white/15 px-3 text-sm font-semibold text-white transition hover:bg-white/25'>
                             Incident history
                         </Link>
-                        <span className='text-sm font-medium'>{refreshError ? 'Live refresh unavailable · showing last received status' : lastRefreshAt ? `Data refreshed ${relativeTime(lastRefreshAt, now)}` : 'Live status unavailable'}</span>
+                        <span className='text-sm font-medium'>{monitoringUnavailable ? 'Live monitoring unavailable' : 'Live monitoring'}</span>
                     </div>
                 </div>
             </section>
+
+            <p className='text-sm text-ui-muted'>{currentStatus.last_verified_at ? <>Last verified <time dateTime={currentStatus.last_verified_at}>{formatDateTime(currentStatus.last_verified_at)}</time>{monitoringUnavailable ? ' · showing the last received results' : ''}</> : 'No verified snapshot is available yet.'}</p>
 
             <section className='grid gap-3 border-y border-ui-border py-4 text-sm text-ui-muted md:grid-cols-3'>
                 <StatusMeta icon={<RefreshCw className={isRefreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />} label='Data interval' value={`${REFRESH_MS / 1000}s auto-refresh`} />
@@ -173,7 +190,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                     <h2 className='mt-1 text-xl font-semibold text-ui-text'>Operational history is evidence, not a contract.</h2>
                 </div>
                 <div className='grid gap-3 text-sm md:grid-cols-3'>
-                    <ReliabilityNote title='Freshness' detail='A public check older than five minutes is shown as unverified/degraded. A missing result is not counted as uptime.' />
+                    <ReliabilityNote title='Freshness' detail='Missing or stale checks mean monitoring is unavailable. They do not confirm a service outage.' />
                     <ReliabilityNote title='Incident history' detail='The 90-day bars link to monitor incidents. Resolved means the observed check recovered; it does not erase the event.' />
                     <ReliabilityNote title='Procurement boundary' detail='No standard uptime, response-time, maintenance, notification, or service-credit commitment is published. Put those terms in the signed order.' />
                 </div>
@@ -203,7 +220,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                                                 className={`min-w-0 flex-1 rounded-[1px] ${barClass(day.displayStatus)}`}
                                             />
                                         ) : (
-                                            <span key={day.date} title={`No incidents on ${formatDate(day.date)}`} className={`min-w-0 flex-1 rounded-[1px] ${barClass(day.displayStatus)}`} />
+                                            <span key={day.date} title={`${day.displayStatus === 'unknown' ? 'No verified history for' : 'No incidents on'} ${formatDate(day.date)}`} className={`min-w-0 flex-1 rounded-[1px] ${barClass(day.displayStatus)}`} />
                                         )
                                     ))}
                                 </div>
@@ -217,7 +234,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                             </div>
                             <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold ${statusPillClass(check.status)}`}>
                                 {check.status === 'up' ? <CheckCircle className='h-4 w-4' /> : <AlertCircle className='h-4 w-4' />}
-                                {check.status === 'up' ? 'Normal' : check.status}
+                                {monitoringUnavailable && !isCurrentPublicCheck(check, now || Date.now()) || check.status === 'unknown' ? 'Unverified' : check.status === 'up' ? 'Normal' : check.status}
                             </span>
                         </div>
                     ))}
@@ -289,6 +306,7 @@ function formatUptime(value: string) {
 }
 
 function barClass(status: ServiceStatus['checks'][number]['status']) {
+    if (status === 'unknown') return 'bg-slate-600'
     if (status === 'down') return 'bg-red-500 hover:ring-2 hover:ring-red-300'
     if (status === 'degraded') return 'bg-amber-400 hover:ring-2 hover:ring-amber-200'
     return 'bg-green-300'
@@ -297,7 +315,7 @@ function barClass(status: ServiceStatus['checks'][number]['status']) {
 function statusPillClass(status: ServiceStatus['checks'][number]['status']) {
     if (status === 'up') return 'bg-green-600 text-white'
     if (status === 'degraded') return 'bg-amber-100 text-amber-800'
-    return 'bg-red-100 text-red-800'
+    return status === 'unknown' ? 'bg-slate-200 text-slate-800' : 'bg-red-100 text-red-800'
 }
 
 function historyDaysFor(status: ServiceStatus, check: ServiceStatus['checks'][number]) {
@@ -309,7 +327,7 @@ function historyDaysFor(status: ServiceStatus, check: ServiceStatus['checks'][nu
     return lastDays(UPTIME_DAYS).map(date => {
         const row = rowsByDate.get(date)
         const incident = row?.incident_ids.map(id => incidentsById.get(id)).find(Boolean) || null
-        const rowStatus = row?.status || 'up'
+        const rowStatus = row?.status || 'unknown'
         return {
             date,
             status: rowStatus,

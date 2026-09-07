@@ -1,11 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import run from '#db'
-import { addMissingRequiredChecks } from '#utils/status/monitorPolicy.ts'
+import run, { withTransaction } from '#db'
 
 type MonitorRow = {
     service: string
     check_name: string
-    status: 'up' | 'degraded' | 'down'
+    status: 'up' | 'degraded' | 'down' | 'unknown'
     latency_ms: number
     message: string | null
     checked_at: string | Date
@@ -16,7 +15,7 @@ type HistoryRow = {
     service: string
     check_name: string
     date: string
-    status: 'up' | 'degraded' | 'down'
+    status: 'up' | 'degraded' | 'down' | 'unknown'
 }
 
 type IncidentRow = {
@@ -29,52 +28,73 @@ type IncidentRow = {
 
 const STATUS_CACHE_MS = 15_000
 const MONITOR_STALE_MS = 5 * 60 * 1000
-let statusCache: { expiresAt: number, payload: object } | null = null
+let statusCache: Awaited<ReturnType<typeof loadStatusPayload>> | null = null
+let expiresAt = 0
 let statusInflight: Promise<object> | null = null
+let historyRefresh: Promise<void> | null = null
+let historyRetryAt = 0
+let historySnapshot: Awaited<ReturnType<typeof loadStatusPayload>> | null = null
 
 export default async function getStatus(req: FastifyRequest<{ Querystring: { summary?: string } }>, res: FastifyReply) {
-    res.header('Cache-Control', 'public, max-age=3, stale-while-revalidate=15')
-    return res.send(await (req.query?.summary === 'true' ? loadStatusPayload(true) : statusPayload()))
+    res.header('Cache-Control', 'no-store')
+    return res.send(await statusPayload(req.query?.summary === 'true'))
 }
 
-function statusPayload() {
-    if (statusCache && statusCache.expiresAt > Date.now()) {
-        return Promise.resolve(statusCache.payload)
-    }
+async function statusPayload(summary: boolean) {
+    if (!summary) refreshHistory()
+    if (statusCache && expiresAt > Date.now()) return summary ? statusCache : withHistory(statusCache)
+    statusInflight ||= loadStatusPayload(true).then(payload => {
+        if (payload.checks.length) statusCache = payload
+        expiresAt = Date.now() + STATUS_CACHE_MS
+        return payload
+    }).catch(error => {
+        console.error('[production-monitor] current status unavailable:', error.message)
+        return { ...(statusCache || historySnapshot || { overall: 'unknown', generated_at: '', checks: [], history: [], incidents: [] }), monitoring: 'unavailable' }
+    }).finally(() => { statusInflight = null })
+    const current = await statusInflight
+    return summary ? current : withHistory(current)
+}
 
-    if (statusCache) {
-        if (!statusInflight) {
-            statusInflight = loadStatusPayload()
-                .then((payload) => {
-                    statusCache = { expiresAt: Date.now() + STATUS_CACHE_MS, payload }
-                    return payload
-                })
-                .catch(error => {
-                    console.error(`[production-monitor] status refresh failed: ${error instanceof Error ? error.message : String(error)}`)
-                    return statusCache!.payload
-                })
-                .finally(() => {
-                    statusInflight = null
-                })
+function withHistory(current: object) {
+    const snapshot = historySnapshot
+    const received = (current as { checks: MonitorRow[] }).checks
+    const retained = snapshot?.checks.filter(old => !received.some(check => check.service === old.service && check.check_name === old.check_name)) || []
+    const checks = [...received, ...retained].map(check => ({
+        ...check,
+        uptime_30d: snapshot?.checks.find(row => row.service === check.service && row.check_name === check.check_name)?.uptime_30d || 'unverified',
+    }))
+    return { ...current, ...(!received.length ? { monitoring: 'unavailable' } : {}), checks, history: snapshot?.history || [], incidents: snapshot?.incidents || [], history_generated_at: snapshot?.generated_at || '', history_available: Boolean(snapshot) }
+}
+
+function refreshHistory() {
+    if (historyRefresh || Date.now() < historyRetryAt) return
+    historyRetryAt = Date.now() + MONITOR_STALE_MS
+    historyRefresh = (async () => {
+        await run(`CREATE TABLE IF NOT EXISTS service_status_snapshots (id text PRIMARY KEY, payload jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT NOW())`)
+        const saved = await run(`SELECT payload, updated_at FROM service_status_snapshots WHERE id = 'history'`)
+        if (saved.rows[0]) {
+            historySnapshot = saved.rows[0].payload
+            if (Date.now() - new Date(saved.rows[0].updated_at).getTime() < MONITOR_STALE_MS) return
         }
-        return Promise.resolve(statusCache.payload)
-    }
-
-    statusInflight ||= loadStatusPayload()
-        .then((payload) => {
-            statusCache = { expiresAt: Date.now() + STATUS_CACHE_MS, payload }
-            return payload
+        // History scans never block current checks. A database lock shares one
+        // refresh across API instances; the persisted snapshot survives restarts.
+        await withTransaction(async query => {
+            const lock = await query("SELECT pg_try_advisory_xact_lock(hashtextextended('service-status-history', 0)) AS acquired")
+            if (!lock.rows[0].acquired) return
+            await query("SET LOCAL statement_timeout = '60s'")
+            const payload = await loadStatusPayload(false, query)
+            if (!payload.checks.length) throw new Error('No current monitor results; retaining the verified snapshot.')
+            await query(`INSERT INTO service_status_snapshots (id, payload) VALUES ('history', $1::jsonb) ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`, [JSON.stringify(payload)])
+            historySnapshot = payload
         })
-        .finally(() => {
-            statusInflight = null
-        })
-
-    return statusInflight
+    })().catch(error => {
+        console.error('[production-monitor] status history unavailable:', error.message)
+    }).finally(() => { historyRefresh = null })
 }
 
-async function loadStatusPayload(summary = false) {
-    const [result, historyResult, incidentResult] = await Promise.all([
-        run(summary ? `
+async function loadStatusPayload(summary = false, query = run) {
+    const tasks = [
+        () => query(summary ? `
         SELECT DISTINCT ON (service, check_name)
             service, check_name, status, latency_ms, message, checked_at,
             'unverified'::text AS uptime_30d
@@ -87,7 +107,8 @@ async function loadStatusPayload(summary = false) {
             SELECT DISTINCT ON (service, check_name)
                 service, check_name, status, latency_ms, message, checked_at
             FROM service_monitor_results
-            WHERE NOT (service = 'core' AND check_name = 'API index')
+            WHERE checked_at >= NOW() - INTERVAL '5 minutes'
+              AND NOT (service = 'core' AND check_name = 'API index')
               -- Alert delivery is event-driven. An old mail failure remains
               -- useful history, but must not hold the live status down forever.
               AND NOT (
@@ -116,7 +137,7 @@ async function loadStatusPayload(summary = false) {
         LEFT JOIN uptime USING (service, check_name)
         ORDER BY latest.service ASC, latest.check_name ASC
     `),
-        summary ? Promise.resolve({ rows: [] }) : run(`
+        () => summary ? Promise.resolve({ rows: [] }) : query(`
         SELECT
             service,
             check_name,
@@ -127,13 +148,12 @@ async function loadStatusPayload(summary = false) {
                 ELSE 'up'
             END AS status
         FROM service_monitor_results
-        WHERE status <> 'up'
-          AND checked_at >= CURRENT_DATE - INTERVAL '89 days'
+        WHERE checked_at >= CURRENT_DATE - INTERVAL '89 days'
           AND NOT (service = 'core' AND check_name = 'API index')
         GROUP BY service, check_name, checked_at::date
         ORDER BY service ASC, check_name ASC, date ASC
     `),
-        summary ? Promise.resolve({ rows: [] }) : run(`
+        () => summary ? Promise.resolve({ rows: [] }) : query(`
         WITH sequenced AS (
             SELECT
                 service,
@@ -167,23 +187,14 @@ async function loadStatusPayload(summary = false) {
           )
         ORDER BY service ASC, check_name ASC, checked_at ASC
     `),
-    ])
+    ]
+    const results = []
+    for (const task of tasks) results.push(await task())
+    const [result, historyResult, incidentResult] = results
 
-    const rawChecks = addMissingRequiredChecks(result.rows as MonitorRow[])
+    const rawChecks = result.rows as MonitorRow[]
     const checks = rawChecks.map(row => toPublicMonitorRow(row))
-    const staleRows = rawChecks
-        .filter(row => row.status === 'up' && Date.now() - time(row.checked_at) > MONITOR_STALE_MS)
-        .map(row => ({
-            service: row.service,
-            check_name: row.check_name,
-            status: 'down' as const,
-            message: `Monitoring stopped reporting after ${iso(row.checked_at)}.`,
-            checked_at: new Date(time(row.checked_at) + MONITOR_STALE_MS),
-        }))
-    const incidentRows = [...incidentResult.rows as IncidentRow[], ...staleRows]
-        .sort((left, right) => left.service.localeCompare(right.service)
-            || left.check_name.localeCompare(right.check_name)
-            || time(left.checked_at) - time(right.checked_at))
+    const incidentRows = incidentResult.rows as IncidentRow[]
     const incidents = buildIncidents(incidentRows, checks)
     const history = buildHistory(historyResult.rows as HistoryRow[], incidents)
     const overall = checks.length && checks.every(check => check.status === 'up')
@@ -194,7 +205,7 @@ async function loadStatusPayload(summary = false) {
 
     return {
         overall,
-        generated_at: new Date().toISOString(),
+        generated_at: checks.length ? new Date(Math.max(...checks.map(check => time(check.checked_at)))).toISOString() : '',
         checks,
         history,
         incidents,
@@ -205,7 +216,7 @@ function toPublicMonitorRow(row: MonitorRow): MonitorRow {
     if (Date.now() - time(row.checked_at) > MONITOR_STALE_MS) {
         return {
             ...row,
-            status: 'down',
+            status: 'unknown',
             message: `Monitoring stopped reporting after ${iso(row.checked_at)}.`,
         }
     }
