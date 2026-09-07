@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Pencil, Plus, Shield } from 'lucide-react'
 import { DashboardPanel } from '@/components/dashboard/ui'
@@ -11,6 +11,8 @@ import DashboardRole from './dashboardRole'
 
 export default function RoleList({ roles, canManage, highestPriority }: { roles: Role[], canManage: boolean, highestPriority: number }) {
     const router = useRouter()
+    const [items, setItems] = useState(roles)
+    useEffect(() => setItems(roles), [roles])
     const [editing, setEditing] = useState(false)
     const [form, setForm] = useState<Role | 'new' | null>(null)
     const [removing, setRemoving] = useState<Role | null>(null)
@@ -48,6 +50,11 @@ export default function RoleList({ roles, canManage, highestPriority }: { roles:
             })
             const result = await response.json().catch(() => null)
             if (!response.ok) throw new Error(result?.error || 'Unable to save this change. Please try again.')
+            setItems(current => method === 'DELETE'
+                ? current.filter(role => role.id !== roleId)
+                : method === 'POST'
+                    ? [...current, result].sort((a, b) => a.priority - b.priority)
+                    : current.map(role => role.id === roleId ? result : role))
             setForm(null)
             setRemoving(null)
             router.refresh()
@@ -87,7 +94,7 @@ export default function RoleList({ roles, canManage, highestPriority }: { roles:
             </div>}
             {error && <ErrorNotice compact message={error} />}
             <div className='grid gap-2'>
-                {roles.map(role => <DashboardRole key={role.id} role={role} editable={canManage && editing && highestPriority <= role.priority} disabled={pending} onEdit={() => openForm(role)} onDelete={() => { setRemoving(role); setForm(null); setError('') }} />)}
+                {items.map(role => <DashboardRole key={role.id} role={role} editable={canManage && editing && highestPriority <= role.priority} disabled={pending} onEdit={() => openForm(role)} onDelete={() => { setRemoving(role); setForm(null); setError('') }} />)}
             </div>
         </DashboardPanel>
     )

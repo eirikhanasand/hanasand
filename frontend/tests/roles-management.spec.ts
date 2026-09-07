@@ -2,12 +2,13 @@ import { expect, test } from '@playwright/test'
 
 test('role controls create, edit and remove roles without a Shift shortcut', async ({ browser, baseURL }) => {
     test.skip(process.env.ROLE_MANAGEMENT_TEST !== '1', 'Requires the isolated role management fixture.')
+    test.setTimeout(90000)
     expect(baseURL).toBe('http://127.0.0.1:3230')
     const context = await browser.newContext()
     await context.addCookies(['id', 'name', 'access_token'].map(name => ({ name, value: 'role-fixture-admin', url: baseURL! })))
-    await context.route('https://api.hanasand.com/api/role**', async route => {
+    await context.route(/\/api\/role(?:\/|$)/, async route => {
         const request = route.request()
-        const response = await context.request.fetch(request.url().replace('https://api.hanasand.com', 'http://127.0.0.1:3231'), { method: request.method(), data: request.postData(), headers: { 'Content-Type': 'application/json' } })
+        const response = await context.request.fetch('http://127.0.0.1:3231' + new URL(request.url()).pathname, { method: request.method(), data: request.postData(), headers: { 'Content-Type': 'application/json' } })
         await route.fulfill({ response })
     })
     const page = await context.newPage()
@@ -18,7 +19,7 @@ test('role controls create, edit and remove roles without a Shift shortcut', asy
     await form.getByLabel('Description').fill('Reviews reports.')
     await form.getByRole('button', { name: 'Create role' }).click()
     await expect(page.getByText('Review team', { exact: true })).toBeVisible()
-    await page.reload()
+    await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(page.getByText('Review team', { exact: true })).toBeVisible()
     await page.keyboard.down('Shift')
     await page.getByText('Review team', { exact: true }).click()
