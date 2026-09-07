@@ -1,4 +1,5 @@
 import fp from 'fastify-plugin'
+import registerVmConsole from '../handlers/vms/console.ts'
 import { subscribeThesis } from '#utils/thesis.ts'
 import WebSocket from 'ws'
 import type { RawData } from 'ws'
@@ -56,6 +57,8 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
         registerBrowserSessionRoutes(fastify)
         return
     }
+
+    registerVmConsole(fastify)
 
     fastify.get('/api/ws/thesis', { websocket: true }, socket => subscribeThesis(socket))
     registerBrowserStreamRoute(fastify)

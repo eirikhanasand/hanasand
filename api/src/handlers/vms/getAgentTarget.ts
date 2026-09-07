@@ -1,3 +1,4 @@
+import { withLiveVmStatus } from '#utils/vms/status.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
@@ -60,7 +61,7 @@ export default async function getAgentTarget(req: FastifyRequest, res: FastifyRe
         }
 
         return res.send(buildAgentTarget({
-            vm,
+            vm: await withLiveVmStatus(vm),
             currentUserId: userId,
             canManage: isAdmin,
         }))

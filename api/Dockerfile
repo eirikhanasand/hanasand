@@ -1,6 +1,6 @@
 FROM grafana/k6:latest AS k6builder
 
-FROM oven/bun:1.3.11-alpine AS deps
+FROM oven/bun:1.3.13-alpine AS deps
 
 WORKDIR /app
 
@@ -22,7 +22,7 @@ ENV NODE_ENV=production AUTH_SERVICE_ONLY=1
 USER bun
 CMD ["bun", "src/authServer.ts"]
 
-FROM oven/bun:1.3.11-alpine AS app-runtime
+FROM oven/bun:1.3.13-alpine AS app-runtime
 
 ARG TRIVY_VERSION=0.72.0
 RUN apk add --no-cache varnish git openssh-client docker-cli curl tar postgresql-client \
