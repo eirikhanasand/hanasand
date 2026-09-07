@@ -126,7 +126,7 @@ function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { 
 }
 
 export type TableInteraction = { active: Cell | null, onSelect: (cell: Cell) => void, onNavigate: (cell: Cell, extend?: boolean) => void }
-export type CustomTableControls = { index: number, cells: string[][], changeRow: (row: number, remove: boolean) => number, canRemoveRow: (row: number) => boolean, extendRow: (direction: -1 | 1) => number }
+export type CustomTableControls = { index: number, cells: string[][], copyCells?: string[][], changeRow: (row: number, remove: boolean) => number, canRemoveRow: (row: number) => boolean, extendRow: (direction: -1 | 1) => number }
 export type SheetEditorProps = { contentOnly?: boolean, sheet: Sheet, canEdit: boolean, actions?: ReactNode, trailingActions?: ReactNode, showInsertTable?: boolean, titleAside?: ReactNode, beforeContent?: ReactNode, customTable?: CustomTableControls, renderTable?: (data: TableData, index: number, interaction: TableInteraction) => ReactNode, onChange: (field: 'title' | 'body', value: string, group?: string) => void }
 
 export default function SheetEditor({ sheet, canEdit, onChange, actions, trailingActions, titleAside, beforeContent, renderTable, customTable, showInsertTable = true, contentOnly = false }: SheetEditorProps) {
@@ -228,7 +228,7 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
             onCopy={event => {
                 if (wholeTable !== index) return
                 event.preventDefault()
-                event.clipboardData.setData('text/plain', (customTable?.index === index ? customTable.cells : table.data.cells).map(row => row.map(value => /[\t\n"]/.test(value) ? '"' + value.replaceAll('"', '""') + '"' : value).join('\t')).join('\n'))
+                event.clipboardData.setData('text/plain', (customTable?.index === index ? customTable.copyCells || customTable.cells : table.data.cells).map(row => row.map(value => /[\t\n"]/.test(value) ? '"' + value.replaceAll('"', '""') + '"' : value).join('\t')).join('\n'))
             }}
             onKeyDown={event => {
                 if (wholeTable !== index) return

@@ -20,25 +20,26 @@ function ReadOnlySheet({ sheet }: { sheet: Sheet }) {
 function SheetSettingsMenu({ children }: { children: ReactNode }) {
     const id = useId()
     const panel = useRef<HTMLDivElement>(null)
+    const trigger = useRef<HTMLButtonElement>(null)
+    function positionPanel() {
+        if (!panel.current || !trigger.current) return
+        const box = trigger.current.getBoundingClientRect()
+        const height = panel.current.offsetHeight || 180
+        panel.current.style.left = `${Math.max(16, Math.min(box.right - 240, window.innerWidth - 256))}px`
+        panel.current.style.top = `${Math.max(16, Math.min(box.bottom + 8, window.innerHeight - height - 16))}px`
+        panel.current.style.maxHeight = `${Math.max(44, window.innerHeight - 32)}px`
+    }
     useEffect(() => {
-        const close = (event: Event) => {
-            if (!(event.target instanceof Node) || !panel.current?.contains(event.target)) panel.current?.hidePopover()
-        }
-        window.addEventListener('resize', close)
-        window.addEventListener('scroll', close, true)
+        const reposition = () => { if (panel.current?.matches(':popover-open')) positionPanel() }
+        window.addEventListener('resize', reposition)
+        window.addEventListener('scroll', reposition, true)
         return () => {
-            window.removeEventListener('resize', close)
-            window.removeEventListener('scroll', close, true)
+            window.removeEventListener('resize', reposition)
+            window.removeEventListener('scroll', reposition, true)
         }
     }, [])
     return <>
-        <button type='button' popoverTarget={id} aria-label='Sheet settings' title='Sheet settings' className={sheetButton + ' grid min-w-11 place-items-center'} onClick={event => {
-            const box = event.currentTarget.getBoundingClientRect()
-            if (!panel.current) return
-            panel.current.style.left = `${Math.max(16, Math.min(box.right - 240, window.innerWidth - 256))}px`
-            panel.current.style.top = `${Math.max(16, box.bottom + 8)}px`
-            panel.current.style.maxHeight = `${Math.max(44, window.innerHeight - box.bottom - 24)}px`
-        }}><Settings2 size={18} /></button>
+        <button ref={trigger} type='button' popoverTarget={id} aria-label='Sheet settings' title='Sheet settings' className={sheetButton + ' grid min-w-11 place-items-center'} onClick={positionPanel}><Settings2 size={18} /></button>
         <div ref={panel} id={id} popover='auto' className='thesis-settings-panel' role='group' aria-label='Features on this sheet'>{children}</div>
     </>
 }

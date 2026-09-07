@@ -153,6 +153,11 @@ test('sheet settings and weekly table controls remain usable above overflowing c
             const box = element.getBoundingClientRect()
             return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === element
         })).toBe(true)
+        if (width === 320) {
+            await actions.evaluate(element => { element.scrollLeft = 0 })
+            await page.waitForTimeout(50)
+            await expect(panel).toBeVisible()
+        }
         await page.keyboard.press('Escape')
         await expect(panel).toBeHidden()
         expect(await actions.evaluate(element => getComputedStyle(element).scrollbarWidth)).toBe('none')
@@ -196,6 +201,7 @@ test('sheet settings and weekly table controls remain usable above overflowing c
         return clipboardData.getData('text/plain')
     })
     expect(copy).toContain('Week\tResearch\tTotal')
+    expect(copy).toMatch(/weeks\t5\t5$/)
     await page.keyboard.press('Delete')
     await expect(page.getByRole('region', { name: 'Weekly activity timetable' })).toHaveCount(0)
     await expect(page.getByText('Keep these notes.', { exact: true })).toBeVisible()
