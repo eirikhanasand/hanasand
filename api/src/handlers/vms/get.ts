@@ -1,3 +1,4 @@
+import { withLiveVmStatus } from '#utils/vms/status.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import { loadSQL } from '#utils/loadSQL.ts'
@@ -30,7 +31,7 @@ export default async function getVM(req: FastifyRequest, res: FastifyReply) {
             return res.status(200).send([])
         }
 
-        return res.send(result.rows)
+        return res.send(await Promise.all(result.rows.map(row => withLiveVmStatus(row))))
     } catch (error) {
         console.log(error)
         return res.status(500).send({ error: 'Internal server error' })

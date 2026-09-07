@@ -1,4 +1,7 @@
 'use client'
+
+import Link from 'next/link'
+import { TerminalSquare } from 'lucide-react'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import deleteVM from '@/utils/vms/fetch/deleteVM'
 import { ArrowRight, Cpu, HardDrive, Network, Trash2 } from 'lucide-react'
@@ -18,6 +21,7 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
     const os = [vm.config_image_os, vm.config_image_version].filter(Boolean).join(' ')
     const image = os || formatDescription(vm.config_image_description)
     const lastUsed = vm.last_used ? prettyDate(vm.last_used) : vm.last_checked ? `Checked ${prettyDate(vm.last_checked)}` : 'Telemetry pending'
+    const statusNote = (vm as VM & { status_reason?: string }).status_reason || ''
     const editors = vm.access_users?.length || 0
 
     function openDetails() {
@@ -58,6 +62,7 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                                     : 'border border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
                             }`}>{status}</span>
                         </div>
+                        {statusNote && <p className='mt-1 text-xs text-ui-muted'>{statusNote}</p>}
                         <p className='mt-1 truncate text-xs text-ui-muted'>
                             {ip} · Owner {vm.owner || vm.created_by || 'Unknown'} · Last used {lastUsed} · {editors} editor{editors === 1 ? '' : 's'}
                         </p>
@@ -78,6 +83,9 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                     </div>
                     <div className='grid min-w-0 gap-2 justify-self-start sm:justify-self-end'>
                         <div className='flex flex-wrap items-center gap-2 sm:justify-end'>
+                            <Link href={`/vms/${encodeURIComponent(name)}/console`} aria-label={`Open ${name} console`} title='Open console' className='inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ui-border text-ui-primary hover:bg-ui-canvas'>
+                                <TerminalSquare className='h-4 w-4' />
+                            </Link>
                             <button
                                 type='button'
                                 onClick={openDetails}

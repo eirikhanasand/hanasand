@@ -354,7 +354,7 @@ async function writeVmDetailsToDb(details: VmDetails) {
     ])
 }
 
-async function lxdRequest<T>(path: string, options: LxdRequestOptions = {}) {
+export async function lxdRequest<T>(path: string, options: LxdRequestOptions = {}) {
     return lxdRequestImpl<T>(path, options)
 }
 

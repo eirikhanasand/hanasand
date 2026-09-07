@@ -25,7 +25,7 @@ type AgentTargetOptions = {
 
 export function buildAgentTarget({ vm, currentUserId, canManage }: AgentTargetOptions): AgentVmTarget {
     const accessUsers = Array.isArray(vm.access_users) ? vm.access_users : []
-    const canConnect = vm.status.toLowerCase() !== 'stopped'
+    const canConnect = vm.status.toLowerCase() === 'running'
     const supportedActions: Array<'start' | 'stop' | 'restart'> = canManage ? ['start', 'stop', 'restart'] : []
     const canAccess =
         canManage

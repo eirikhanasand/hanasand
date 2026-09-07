@@ -43,8 +43,12 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
         }
     }
 
+    useEffect(() => { setVms(serverVMs || []) }, [serverVMs])
+
     useEffect(() => {
         update()
+        const refresh = setInterval(update, 60000)
+        return () => clearInterval(refresh)
     }, [])
 
     useEffect(() => {
