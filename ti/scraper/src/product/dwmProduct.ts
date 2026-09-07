@@ -494,8 +494,7 @@ function buildActorOverviews(input: { sources: SourceRecord[]; captures: RawCapt
         summary: `${group.actor} is tracked across ${group.sourceIds.size} source(s), ${familyLabel}, with ${group.captureCount} recent capture(s).`
       };
     })
-    .sort((a, b) => b.confidence - a.confidence || b.captureCount - a.captureCount || (b.latestSeenAt ?? "").localeCompare(a.latestSeenAt ?? ""))
-    .slice(0, 8);
+    .sort((a, b) => b.confidence - a.confidence || b.captureCount - a.captureCount || (b.latestSeenAt ?? "").localeCompare(a.latestSeenAt ?? ""));
 }
 
 function mergeDuplicateAlerts(alerts: DwmAlert[]): DwmAlert[] {
