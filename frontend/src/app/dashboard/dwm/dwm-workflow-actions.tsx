@@ -827,25 +827,23 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     {claimDisabledReason ? <p className='mt-2 text-xs leading-5 text-ui-subtle'>{claimDisabledReason}</p> : null}
                 </form>
 
-                <form onSubmit={submitSource} className='rounded-lg border border-ui-border bg-ui-raised p-4 shadow-sm'>
-                    <div className='flex items-start justify-between gap-3'>
-                        <div>
-                            <h2 className='text-base font-semibold text-ui-text'>Telegram source request</h2>
-                            <p className='mt-1 text-sm leading-6 text-ui-subtle'>Add a public @handle or t.me URL. Private invites stay out of automated collection.</p>
-                        </div>
-                        <Plus className='h-5 w-5 text-ui-primary' />
+                <form onSubmit={submitSource} className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 shadow-sm'>
+                    <h2 className='text-base font-semibold text-ui-text'>Telegram source request</h2>
+                    <p id='telegram-source-help' className='text-xs text-ui-subtle'>Public channels only.</p>
+                    <div className='flex flex-col gap-2 sm:flex-row'>
+                        <input
+                            aria-label='Telegram channel'
+                            aria-describedby='telegram-source-help'
+                            value={sourceTarget}
+                            onChange={event => setSourceTarget(event.target.value)}
+                            placeholder='@channel or https://t.me/channel'
+                            className='h-10 min-w-0 flex-1 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                        />
+                        <button disabled={busy || Boolean(sourceDisabledReason)} title={sourceDisabledReason || undefined} className='inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
+                            {busyAction === 'source' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
+                            Submit source
+                        </button>
                     </div>
-                    <input
-                        value={sourceTarget}
-                        onChange={event => setSourceTarget(event.target.value)}
-                        placeholder='@breach_drop_house or https://t.me/channel'
-                        className='mt-4 h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
-                    />
-                    <button disabled={busy || Boolean(sourceDisabledReason)} title={sourceDisabledReason || undefined} className='mt-3 inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
-                        {busyAction === 'source' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
-                        Submit source
-                    </button>
-                    {sourceDisabledReason ? <p className='mt-2 text-xs leading-5 text-ui-subtle'>{sourceDisabledReason}</p> : null}
                 </form>
             </div>
         </div>
