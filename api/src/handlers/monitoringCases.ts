@@ -9,8 +9,8 @@ export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: st
     const { valid, id } = await tokenWrapper(req, res)
     if (!valid || !id) return res.status(401).send({ error: 'Unauthorized.' })
     const includeAll = (await hasRole(req, res, 'system_admin')).valid
-    const caseId = req.params.id
-    if (caseId && !/^MON-[1-9]\d*$/.test(caseId)) return res.status(404).send({ error: 'Case not found.' })
+    const caseId = req.params.id?.replace(/^MON-/, 'HA-')
+    if (caseId && !/^HA-[1-9]\d*$/.test(caseId)) return res.status(404).send({ error: 'Case not found.' })
     const organizationId = req.query.organizationId || null
     if (req.query.tenantId && req.query.tenantId !== (organizationId || id)) return res.status(403).send({ error: 'Invalid case scope.' })
     const result = await run(`SELECT i.*, a.name AS monitor_name, a.owner_id, a.organization_id
@@ -18,10 +18,10 @@ export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: st
         WHERE ($1::boolean OR a.owner_id = $2)
           AND ($3::text IS NULL OR a.organization_id = $3)
           AND ($4::text IS NULL OR i.id::text = $4)
-        ORDER BY i.last_seen_at DESC, i.id DESC`, [includeAll, id, organizationId, caseId?.slice(4) || null])
+        ORDER BY i.last_seen_at DESC, i.id DESC`, [includeAll, id, organizationId, caseId?.slice(3) || null])
     const items = result.rows.map(row => ({
-        id: `MON-${row.id}`, caseNumber: `MON-${row.id}`, source: 'monitoring',
-        title: `MON-${row.id} · ${row.monitor_name}`, summary: row.summary,
+        id: `HA-${row.id}`, caseNumber: `HA-${row.id}`, source: 'monitoring',
+        title: `HA-${row.id} · ${row.monitor_name}`, summary: row.summary,
         status: row.resolved_at ? 'resolved' : 'open', severity: row.kind === 'failure' ? 'high' : 'medium',
         assignedOwner: row.owner_id, organizationId: row.organization_id,
         createdAt: row.first_seen_at, updatedAt: row.last_seen_at, resolvedAt: row.resolved_at,

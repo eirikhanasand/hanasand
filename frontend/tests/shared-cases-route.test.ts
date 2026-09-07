@@ -8,11 +8,11 @@ mock.module('../src/app/api/cases/monitoring/route', () => ({ GET: () => monitor
 const { GET } = await import('../src/app/api/cases/route')
 beforeEach(() => {
     intelligence = async () => NextResponse.json({ items: [{ id: 'general', updatedAt: '2026-09-06' }], total: 60, nextCursor: 'page-2', access: { readOnly: true } })
-    monitoring = async () => NextResponse.json({ items: [{ id: 'MON-3', updatedAt: '2026-09-07' }] })
+    monitoring = async () => NextResponse.json({ items: [{ id: 'HA-3', updatedAt: '2026-09-07' }] })
 })
 test('common API merges persisted cases while preserving access and pagination metadata', async () => {
     const result = await (await GET(new NextRequest('http://localhost/api/cases'))).json()
-    expect(result.items.map((item: { id: string }) => item.id)).toEqual(['MON-3', 'general'])
+    expect(result.items.map((item: { id: string }) => item.id)).toEqual(['HA-3', 'general'])
     expect(result).toMatchObject({ total: 61, nextCursor: 'page-2', access: { readOnly: true }, warnings: [] })
     const next = await (await GET(new NextRequest('http://localhost/api/cases?cursor=page-2'))).json()
     expect(next.items.map((item: { id: string }) => item.id)).toEqual(['general'])

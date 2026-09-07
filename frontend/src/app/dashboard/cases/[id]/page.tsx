@@ -23,7 +23,7 @@ export default async function DwmCaseDetailPage({
 
     return (
         <DashboardPage className='gap-2 sm:gap-3'>
-            {/^MON-[1-9]\d*$/.test(id) ? <MonitoringCaseDetail caseId={id} organizationId={organizationId} /> : <DwmCaseDetailClient
+            {/^HA-[1-9]\d*$/.test(id) ? <MonitoringCaseDetail caseId={id} organizationId={organizationId} /> : <DwmCaseDetailClient
                 key={`${tenantId}:${id}`}
                 caseId={id}
                 tenantId={tenantId}

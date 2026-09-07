@@ -204,7 +204,7 @@ export function toAutomationRun(row: AutomationRunRow) {
     return {
         id: row.id,
         automationId: row.automation_id,
-        caseNumber: row.issue_id ? `MON-${row.issue_id}` : null,
+        caseNumber: row.issue_id ? `HA-${row.issue_id}` : null,
         ownerId: row.owner_id,
         status: row.status,
         warning: row.warning,

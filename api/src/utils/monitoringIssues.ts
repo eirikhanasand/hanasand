@@ -42,13 +42,13 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
             RETURNING issue_id`, [issue, destination])
         if (!claim.rows.length) continue
         try {
-            const receipt = await deliverDiscordWebhookFile(destination, `MON-${issue}`, true)
+            const receipt = await deliverDiscordWebhookFile(destination, `HA-${issue}`, true)
             await run('UPDATE monitoring_issue_notifications SET delivered_at = NOW(), next_attempt_at = NOW() + INTERVAL \'24 hours\', last_error = NULL, message_id = $3, mentioned_everyone = $4 WHERE issue_id = $1 AND destination = $2', [issue, destination, receipt?.id || null, receipt?.mention_everyone ?? null])
         } catch (error) {
             // Keep the reservation after ambiguous failures to avoid duplicate pings.
             const detail = redactSecretBearingText(error instanceof Error ? error.message : 'Discord delivery failed.')
             await run('UPDATE monitoring_issue_notifications SET last_error = $3 WHERE issue_id = $1 AND destination = $2', [issue, destination, detail])
-            console.error(`Monitoring case MON-${issue} notification failed: ${detail}`)
+            console.error(`Monitoring case HA-${issue} notification failed: ${detail}`)
         }
     }
 }
@@ -59,7 +59,7 @@ export async function loadMonitoringIssues(automationId: string) {
         FROM monitoring_issue_notifications n WHERE n.issue_id = i.id), '[]'::jsonb) AS notifications
         FROM monitoring_issues i WHERE i.automation_id = $1 ORDER BY i.last_seen_at DESC, i.id DESC`, [automationId])
     return result.rows.map(row => ({
-        id: row.id, caseNumber: `MON-${row.id}`, kind: row.kind, summary: row.summary,
+        id: row.id, caseNumber: `HA-${row.id}`, kind: row.kind, summary: row.summary,
         occurrences: row.occurrences, firstSeenAt: row.first_seen_at, lastSeenAt: row.last_seen_at,
         resolvedAt: row.resolved_at, notifications: row.notifications,
     }))
