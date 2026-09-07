@@ -140,7 +140,7 @@ for (const token of [
     'Watchlist to case',
     'Workflow updated',
     'Action blocked',
-    'Run watchlist, collection, case, and delivery steps from one queue.',
+    'Manage your watchlist, collect updates and send alerts.',
     'Org watchlists',
     'Commands',
     'RouteStateCard label=\'Terms\'',
