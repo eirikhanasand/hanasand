@@ -2,7 +2,7 @@ import type { Viewport, Metadata } from 'next'
 
 const title = 'Hanasand'
 const description = 'Dark web monitoring, company exposure alerts, and threat intelligence workflows from Hanasand.'
-const image = 'https://hanasand.com/hanasand-logo.png'
+const image = 'https://hanasand.com/hanasand-logo.png?v=transparent-1'
 
 const metadata: Metadata = {
     title,
@@ -23,8 +23,8 @@ const metadata: Metadata = {
         images: [
             {
                 url: image,
-                width: 600,
-                height: 600,
+                width: 1254,
+                height: 1254,
                 alt: 'Hanasand Logo',
             },
         ],
@@ -50,10 +50,10 @@ const metadata: Metadata = {
     },
     icons: {
         icon: [
-            { url: '/hanasand-logo.png', type: 'image/png' },
-            { url: '/favicon.ico' },
+            { url: '/hanasand-logo.png?v=transparent-1', type: 'image/png' },
+            { url: '/favicon.ico?v=transparent-1' },
         ],
-        apple: '/apple-touch-icon.png',
+        apple: '/apple-touch-icon.png?v=transparent-1',
     },
 }
 

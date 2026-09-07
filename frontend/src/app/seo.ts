@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 
 const SITE_NAME = 'Hanasand'
 const SITE_URL = 'https://hanasand.com'
-const DEFAULT_IMAGE = `${SITE_URL}/icon-512.png`
+const DEFAULT_IMAGE = `${SITE_URL}/icon-512.png?v=transparent-1`
 
 type RouteMetadataArgs = {
     title: string
@@ -35,8 +35,8 @@ export function buildRouteMetadata({
             images: [
                 {
                     url: DEFAULT_IMAGE,
-                    width: 600,
-                    height: 600,
+                    width: 512,
+                    height: 512,
                     alt: `${SITE_NAME} Logo`,
                 },
             ],
