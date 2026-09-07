@@ -1,5 +1,7 @@
 'use client'
 
+import formatRequestTime from '@/utils/monitoring/formatRequestTime'
+
 import { countryCentroids } from '@/utils/monitoring/geo'
 import {
     applyTrafficBatch,
@@ -293,7 +295,7 @@ export default function TrafficMap({
                     <StatCard
                         icon={<Clock3 className='h-4 w-4' />}
                         label='Avg Request Time'
-                        value={initialMetrics?.avg_request_time ? `${Math.round(initialMetrics.avg_request_time)}ms` : 'metering'}
+                        value={formatRequestTime(initialMetrics)}
                     />
                 </div>
 

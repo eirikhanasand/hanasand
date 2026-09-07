@@ -1,3 +1,4 @@
+import formatRequestTime from '@/utils/monitoring/formatRequestTime'
 import { Suspense, type ReactNode } from 'react'
 import DomainSelector from '@/components/monitoring/traffic/domainSelector'
 import TrafficMap from '@/components/monitoring/traffic/trafficMap'
@@ -93,7 +94,7 @@ async function TrafficOverview({ selectedDomain }: { selectedDomain?: string }) 
                     <TrafficLane
                         title='Response time'
                         icon={<Clock3 className='h-4 w-4' />}
-                        value={trafficMetrics?.avg_request_time ? `${Math.round(trafficMetrics.avg_request_time)}ms` : 'metering'}
+                        value={formatRequestTime(trafficMetrics)}
                         detail={`${trafficMetrics?.total_requests || 0} tracked requests`}
                         footer={trafficMetrics?.sampled_at ? `Updated ${shortTime(trafficMetrics.sampled_at)}` : 'rolling metrics'}
                         tone={trafficMetrics?.avg_request_time && trafficMetrics.avg_request_time > 1000 ? 'watch' : 'ok'}
