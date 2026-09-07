@@ -69,3 +69,4 @@ ios
 android
 
 __pycache__/
+/api/geoip/

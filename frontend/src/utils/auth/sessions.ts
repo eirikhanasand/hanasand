@@ -4,7 +4,9 @@ import { getCookie } from '../cookies/cookies'
 export type AuthSession = {
     token_id: number
     id: string
-    ip: string
+    ip: string | null
+    current: boolean
+    network: { provider: string | null, country: string | null, country_code: string | null, region: string | null, city: string | null } | null
     user_agent: string
     created_at: string
     last_seen_at: string
@@ -28,16 +30,17 @@ function authHeaders() {
 export async function fetchSessions(): Promise<AuthSession[]> {
     const headers = authHeaders()
     if (!headers) {
-        return []
+        throw new Error('Unable to load sessions')
     }
 
     const response = await fetch(`${config.url.api}/auth/sessions`, { headers }).catch(() => null)
     if (!response?.ok) {
-        return []
+        throw new Error('Unable to load sessions')
     }
 
-    const body = await response.json().catch(() => ({}))
-    return Array.isArray(body.sessions) ? body.sessions : []
+    const body = await response.json()
+    if (!Array.isArray(body.sessions)) throw new Error('Invalid session response')
+    return body.sessions
 }
 
 export async function revokeSession(tokenId: number) {

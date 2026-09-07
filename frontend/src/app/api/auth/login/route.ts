@@ -1,3 +1,4 @@
+import { clientHeaders } from '@/utils/auth/clientHeaders'
 import { NextRequest, NextResponse } from 'next/server'
 import { setAuthCookies } from '../_authCookies'
 import { authApiUrl } from '@/utils/auth/authApiUrl'
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
     const requestId = requestIdFor(req)
     const upstream = await fetch(`${authApiUrl()}/auth/login/${encodeURIComponent(id)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-request-id': requestId },
+        headers: { ...clientHeaders(req.headers), 'Content-Type': 'application/json', 'x-request-id': requestId },
         body: JSON.stringify({ password }),
         cache: 'no-store',
     }).catch(() => null)
