@@ -11,6 +11,7 @@ type TestTask = {
 const bun = process.execPath
 
 const tasks: TestTask[] = [
+    { id: 'browser-workspace', title: 'Browser workspace interaction and layout', command: [bun, 'scripts/check-browser-workspace.mjs'], requires: 'playwright' },
     { id: 'session-revoke', title: 'Session revoke interactions', command: [bun, 'scripts/check-session-revoke.mjs'], requires: 'playwright' },
     { id: 'session-requests', title: 'Session revocation requests', command: [bun, 'scripts/check-session-requests.ts'] },
     { id: 'session-details', title: 'Login session device and forwarding details', command: [bun, 'scripts/check-session-details.ts'] },
