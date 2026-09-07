@@ -264,7 +264,7 @@ export default function LogsPageClient({
                     <section className='grid gap-4'>
                         <div className={`${dashboardPanelClass} p-4`}>
                             <div className='flex items-center justify-between gap-3'>
-                                <h2 className='text-base font-semibold text-ui-text'>Most active stored services</h2>
+                                <h2 className='text-base font-semibold text-ui-text'>Most active services</h2>
                                 <span className='text-xs font-medium text-ui-muted'>{services.length} indexed</span>
                             </div>
                             <div className='mt-3 grid gap-1.5' data-logs-service-summary>
@@ -284,7 +284,7 @@ export default function LogsPageClient({
                                 )}
                             </div>
                         </div>
-                        <LogFeedCard title='Stored + native errors' icon={<Database className='h-4 w-4 text-ui-warning' />} logs={storedLogs.slice(0, 8)} empty='Stored error stream is clear.' expanded={expanded} onToggle={toggleLog} />
+                        <LogFeedCard title='Errors' icon={<Database className='h-4 w-4 text-ui-warning' />} logs={storedLogs.slice(0, 8)} empty='Stored error stream is clear.' expanded={expanded} onToggle={toggleLog} />
                     </section>
                 </section>
             )}
