@@ -50,8 +50,7 @@ const metadata: Metadata = {
     },
     icons: {
         icon: [
-            { url: '/hanasand-logo-transparent.png', type: 'image/png' },
-            { url: '/favicon.ico?v=transparent-1' },
+            { url: '/favicon.ico?v=larger-2', type: 'image/x-icon', sizes: '16x16 32x32 48x48' },
         ],
         apple: '/apple-touch-icon.png?v=transparent-1',
     },
