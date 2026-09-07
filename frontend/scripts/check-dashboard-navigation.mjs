@@ -35,7 +35,8 @@ assert.deepEqual(getDashboardNavigation(access)[0].items.slice(0, 3).map(item =>
 
 for (const permissions of [access, memberAccess]) {
     const links = navigationLinks(getDashboardNavigation(permissions))
-    for (const href of ['/solutions', '/dwm', '/mill', '/ti', '/browser', '/organizations', '/pwned', '/test']) assert(links.some(item => item.href === href), `Missing product destination: ${href}`)
+    assert(!links.some(item => item.href === '/solutions'), 'Marketing catalog must not appear in the internal menu')
+    for (const href of ['/dwm', '/mill', '/ti', '/browser', '/organizations', '/pwned', '/test']) assert(links.some(item => item.href === href), `Missing product destination: ${href}`)
     assert(links.some(item => item.label === 'Security Scanner' && item.href === (permissions.canManageSystem ? '/scanner' : '/solutions/scanner')))
     assert(links.some(item => item.href === '/mill' && item.ancestors.includes('Security Monitoring')))
 }
@@ -76,8 +77,7 @@ try {
     assert.equal(await link('Monitored actors').getAttribute('aria-current'), 'page')
     await link('Browser').click()
     assert.equal(await link('Browser').getAttribute('aria-current'), 'page')
-    await link('All products and solutions').click()
-    assert.equal(await link('All products and solutions').getAttribute('aria-current'), 'page')
+    assert.equal(await link('All products and solutions').count(), 0)
     await page.getByRole('searchbox').fill('Security Monitoring')
     await link('Overview').click()
     assert.equal(new URL(page.url()).pathname, '/mill')
