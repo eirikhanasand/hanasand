@@ -68,11 +68,9 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
                             </h1>
                         }
                     >
-                        <div className='p-px'>
-                            <div className='flex min-w-full items-center gap-1 rounded-md border border-ui-border bg-ui-primary/10 px-2.5 py-1'>
-                                <Info className='h-3 w-3 stroke-ui-primary' />
-                                <span className='text-[0.7rem] font-semibold text-ui-primary'>Managed</span>
-                            </div>
+                        <div className='flex h-8 items-center gap-1 rounded-md border border-ui-border bg-ui-primary/10 px-2.5'>
+                            <Info className='h-3 w-3 stroke-ui-primary' />
+                            <span className='text-[0.7rem] font-semibold text-ui-primary'>Managed</span>
                         </div>
                     </Tooltip>
                     <button
