@@ -240,6 +240,7 @@ export function DwmAnalystPortal({
     }
     const workflowActions = view === 'cases' ? null : (
         <DwmWorkflowActions
+            headingLevel={view === 'actions' ? 1 : 2}
             key={`${tenantId}:${snapshot.watchlist.map(term => term.value).join('\u0000')}`}
             tenantId={tenantId}
             organizationId={selectedOrganizationId}
@@ -408,10 +409,10 @@ export function DwmAnalystPortal({
 
     if (view === 'actions') {
         return (
-            <DwmPanelPage title='Actions' meta='Watchlist, source pack, case, and webhook controls'>
+            <div className='grid gap-3'>
                 {workflowActions}
                 <AlertReviewPanel alerts={alerts} busyAction={busyAction} onOpenCase={openCaseFromAlert} organizationId={organizationId} />
-            </DwmPanelPage>
+            </div>
         )
     }
 

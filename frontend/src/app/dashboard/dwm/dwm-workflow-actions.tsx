@@ -39,7 +39,8 @@ type WorkflowRouteSummary = {
     deliveryState?: string
 }
 
-export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, telemetry }: { tenantId: string, organizationId?: string, initialTerms: string[], telemetry?: WorkflowTelemetry }) {
+export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, telemetry, headingLevel = 2 }: { headingLevel?: 1 | 2, tenantId: string, organizationId?: string, initialTerms: string[], telemetry?: WorkflowTelemetry }) {
+    const Heading = headingLevel === 1 ? 'h1' : 'h2'
     const router = useRouter()
     const webhookInputRef = useRef<HTMLInputElement>(null)
     const watchlistInputRef = useRef<HTMLTextAreaElement>(null)
@@ -684,7 +685,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             <section className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.62fr)] lg:items-start'>
                 <div className='min-w-0'>
                     <p className='text-[10px] font-semibold uppercase text-ui-primary'>Monitoring workflow</p>
-                    <h2 className='mt-1 text-lg font-semibold tracking-normal text-ui-text'>Watchlist to case</h2>
+                    <Heading className='mt-1 text-lg font-semibold tracking-normal text-ui-text'>Watchlist to case</Heading>
                     <div className='mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5'>
                         <RouteStateCard label='Terms' value={String(effectiveTermCount)} detail={termCount ? 'ready' : 'needed'} tone={termCount ? 'ok' : 'warn'} />
                         <RouteStateCard label='Sources' value={`${activeSourceCount}/${sourceCount}`} detail={sourceCount ? 'executable' : 'none configured'} tone={activeSourceCount ? 'ok' : 'warn'} />
