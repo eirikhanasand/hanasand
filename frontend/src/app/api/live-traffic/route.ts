@@ -4,6 +4,12 @@ import type { TrafficRecord } from '@/utils/monitoring/types'
 import { cookies } from 'next/headers'
 import { NextRequest } from 'next/server'
 
+const streamHeaders = {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-store, no-transform',
+    'X-Accel-Buffering': 'no',
+}
+
 export async function GET(request: NextRequest) {
     try {
         const cookieStore = await cookies()
@@ -39,21 +45,22 @@ export async function GET(request: NextRequest) {
             headers: {
                 Authorization: `Bearer ${token}`,
                 Accept: 'text/event-stream',
-                Connection: 'keep-alive',
+                'Accept-Encoding': 'identity',
             },
             cache: 'no-store',
+            signal: request.signal,
         })
+
+        if (response.status === 401 || response.status === 403) {
+            return new Response('Unauthorized', { status: response.status })
+        }
 
         if (!response.ok || !response.body) {
             return trafficSnapshotStream(token, request.signal)
         }
 
         return new Response(response.body, {
-            headers: {
-                'Content-Type': 'text/event-stream',
-                'Cache-Control': 'no-cache',
-                Connection: 'keep-alive',
-            },
+            headers: streamHeaders,
         })
     } catch {
         const cookieStore = await cookies()
@@ -121,11 +128,7 @@ function trafficSnapshotStream(token: string, signal: AbortSignal) {
     }, { once: true })
 
     return new Response(stream, {
-        headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache, no-store',
-            Connection: 'keep-alive',
-        },
+        headers: streamHeaders,
     })
 }
 
