@@ -22,7 +22,7 @@ if kind == 'auth':
             raise SystemExit('Invalid authentication provider configuration')
         settings.update(secrets)
 settings.update(NODE_ENV='production', RESILIENCE_SITE='inspur', HANASAND_RELEASE_COMMIT=image.rsplit(':',1)[-1], RESILIENCE_STATE_FILE='/resilience/state.json', DB_HOST='127.0.0.1', DB_PORT='18504', DB_MAX_CONN='8' if kind=='api' else '5', DB_TIMEOUT_MS='2000', LISTEN_HOST='127.0.0.1')
-if kind == 'api': settings.update(API_HTTP_ONLY='1', TI_SCRAPER_API_BASE='http://127.0.0.1:18097')
+if kind == 'api': settings.update(API_HTTP_ONLY='1', VM_HOST_ID='inspur', TI_SCRAPER_API_BASE='http://127.0.0.1:18097')
 if kind == 'auth': settings.update(AUTH_SERVICE_ONLY='1')
 if kind == 'frontend': settings.update(CODE_REVIEW_INVENTORY_PATH='/app/code-review/current.json', HOSTNAME='127.0.0.1', FRONTEND_AUTH_API='http://127.0.0.1:28082/api', FRONTEND_INTERNAL_API='http://127.0.0.1:28082/api', TI_SCRAPER_API_BASE='http://127.0.0.1:18097', RESILIENCE_STATUS_URL='http://127.0.0.1:19901/status')
 # Reuse Docker network aliases in the host-network workers (mail, VM helpers, etc.).
