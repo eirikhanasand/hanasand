@@ -21,7 +21,6 @@ function authHeaders() {
     }
 
     return {
-        'Content-Type': 'application/json',
         id,
         Authorization: `Bearer ${token}`,
     }
@@ -64,7 +63,7 @@ export async function revokeOtherSessions() {
 
     const response = await fetch(`${config.url.api}/auth/sessions/revoke`, {
         method: 'POST',
-        headers,
+        headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ keep_current: true }),
     }).catch(() => null)
     return Boolean(response?.ok)
