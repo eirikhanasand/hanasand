@@ -78,6 +78,8 @@ export function sanitizeTiResultForPublicPage(result: TiSearchResponse | null): 
                 catalogId: candidate.catalogId,
                 externalId: candidate.externalId,
                 canonicalName: publicTiText(candidate.canonicalName),
+                description: candidate.description ? publicTiText(candidate.description) : undefined,
+                referenceSources: candidate.referenceSources?.map(source => ({ name: publicTiText(source.name), url: source.url })),
                 associatedNames: candidate.associatedNames.map(publicTiText),
                 matchKinds: candidate.matchKinds,
                 status: candidate.status,

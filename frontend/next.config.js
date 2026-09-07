@@ -60,6 +60,10 @@ const nextConfig = {
     },
     images: {
         qualities: [75, 100],
+        localPatterns: [
+            { pathname: '/**', search: '' },
+            { pathname: '/hanasand-logo.png', search: '?v=transparent-1' },
+        ],
         remotePatterns: [
             {
                 protocol: 'https',

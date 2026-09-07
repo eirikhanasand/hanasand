@@ -437,7 +437,7 @@ function ActorProfileHeader({ result, title, actor, aliases, summary, references
     const externalId = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0]?.externalId : undefined
     const catalogCandidate = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0] : undefined
     const catalogDescription = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0]?.description : undefined
-    const description = usefulActorSummary(summary) || usefulActorSummary(catalogDescription) || actorSummary({
+    const description = usefulActorSummary(catalogDescription) || usefulActorSummary(summary) || actorSummary({
         name: title,
         aliases,
         actorClass: actor.actorClass,
@@ -649,13 +649,14 @@ function EvidenceResults({ result, error }: { result: TiSearchResponse; error: s
     const heroVictimContext = victimObservations
         .slice(0, 4)
         .map(item => `${item.victim} (${item.country})`)
-    const actorProfileSummary = hasStableActorProfile
+    const catalogDescription = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0]?.description : undefined
+    const actorProfileSummary = usefulActorSummary(catalogDescription) || (hasStableActorProfile
         ? displayRequirementText([
             actorIntel.attribution,
             actorIntel.motivation.length ? `Motivation: ${actorIntel.motivation.slice(0, 2).join('; ')}.` : '',
             heroVictimContext.length ? `Victim context: ${heroVictimContext.join('; ')}.` : '',
         ].filter(Boolean).join(' '))
-        : displayRequirementText(result.summary)
+        : displayRequirementText(result.summary))
     const actorReferences = result.actorIdentity?.candidates.length === 1 ? result.actorIdentity.candidates[0]?.referenceSources : undefined
     const citations = citationNames(actorProfileSummary)
     const [activeCitation, setActiveCitation] = useState<number | null>(null)

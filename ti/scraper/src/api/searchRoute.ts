@@ -1183,6 +1183,8 @@ function actorIdentity(store: any, tenantId: string | undefined, query: string) 
     aptNumberDesignationPresent: candidate.identity.aptNumberDesignationPresent,
     sourceUrl: candidate.identity.sourceUrl,
     referenceSources: candidate.identity.referenceSources,
+    createdAt: candidate.identity.createdAt,
+    modifiedAt: candidate.identity.modifiedAt,
     catalogVersion: candidate.identity.catalogVersion,
     catalogModifiedAt: candidate.identity.catalogModifiedAt,
     captureId: (candidate.identity as any).captureId
