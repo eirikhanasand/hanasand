@@ -39,6 +39,8 @@ const nextConfig = {
     },
     async redirects() {
         return [
+            { source: '/dwm/cases/:path*', destination: '/cases/:path*', permanent: true },
+            { source: '/dashboard/dwm/cases/:path*', destination: '/cases/:path*', permanent: true },
             {
                 source: '/solutions/dwm',
                 destination: '/dwm',

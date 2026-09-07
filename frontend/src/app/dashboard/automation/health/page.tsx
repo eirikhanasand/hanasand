@@ -9,7 +9,8 @@ export const metadata: Metadata = {
 }
 
 export default async function Page({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
-    const [params, initial] = await Promise.all([searchParams, loadAutomations()])
+    const params = await searchParams
+    const initial = await loadAutomations(typeof params?.monitor === 'string' ? params.monitor : undefined)
     const setup = Array.isArray(params?.setup) ? params.setup[0] : params?.setup
     return <DashboardPage><DashboardHeader eyebrow={null} title='Automation' /><AutomationsClient initial={initial} setup={setup === 'dwm' ? 'dwm' : undefined} /></DashboardPage>
 }

@@ -77,7 +77,7 @@ function loadingDataHealth() {
 }
 
 function normalizeDwmView(value: string | undefined): DwmView {
-    return value === 'watchlists' || value === 'delivery' || value === 'actors' || value === 'actions' ? value : 'cases'
+    return value === 'watchlists' || value === 'delivery' || value === 'actors' || value === 'actions' ? value : 'actors'
 }
 
 function firstParam(value: string | string[] | undefined) {

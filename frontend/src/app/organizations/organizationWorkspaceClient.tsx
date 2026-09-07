@@ -1857,7 +1857,7 @@ function DwmHandoffBanner({ organization, bundle, selectedSubject, alertId, case
         ['Delivery', compactReference(effectiveDeliveryId, 'Delivery')],
     ].filter(([, value]) => Boolean(value))
     const caseHref = effectiveCaseId
-        ? `/dwm/cases/${encodeURIComponent(effectiveCaseId)}?organizationId=${encodeURIComponent(organization.id)}${effectiveAlertId ? `&alertId=${encodeURIComponent(effectiveAlertId)}` : ''}`
+        ? `/cases/${encodeURIComponent(effectiveCaseId)}?organizationId=${encodeURIComponent(organization.id)}${effectiveAlertId ? `&alertId=${encodeURIComponent(effectiveAlertId)}` : ''}`
         : ''
     const alertHref = effectiveAlertId
         ? `/ti/workbench?alertId=${encodeURIComponent(effectiveAlertId)}&organizationId=${encodeURIComponent(organization.id)}`
@@ -3528,7 +3528,7 @@ function DeliveryHistoryMobileRow({ delivery, organizationId, destinations, canM
 }
 
 function DeliveryReference({ delivery, organizationId, destinations }: { delivery: DeliveryRow, organizationId: string, destinations: WebhookDestination[] }) {
-    const caseHref = delivery.caseId ? `/dwm/cases/${encodeURIComponent(delivery.caseId)}?organizationId=${encodeURIComponent(organizationId)}${delivery.alertId ? `&alertId=${encodeURIComponent(delivery.alertId)}` : ''}` : ''
+    const caseHref = delivery.caseId ? `/cases/${encodeURIComponent(delivery.caseId)}?organizationId=${encodeURIComponent(organizationId)}${delivery.alertId ? `&alertId=${encodeURIComponent(delivery.alertId)}` : ''}` : ''
     const alertHref = delivery.alertId ? `/ti/workbench?alertId=${encodeURIComponent(delivery.alertId)}&organizationId=${encodeURIComponent(organizationId)}` : ''
     const watchlistId = deliveryWatchlistId(delivery)
     const destinationId = deliveryDestinationIds(delivery, destinations)[0]
@@ -3605,7 +3605,7 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, watchlists
                         id: item.id,
                         primary: item.title || compactReference(item.id, 'case') || 'Case',
                         secondary: [item.status || 'status', organizationMemberLabel(item.assignedOwner, members), matchReason ? `Match: ${matchReason}` : undefined].filter(Boolean).join(' · '),
-                        href: `/dwm/cases/${encodeURIComponent(item.id)}?organizationId=${encodeURIComponent(organizationId)}`,
+                        href: `/cases/${encodeURIComponent(item.id)}?organizationId=${encodeURIComponent(organizationId)}`,
                     }
                 })} empty='Cases appear after an alert is opened from exposure monitoring.' rowPrefix='case-record' />
                 <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Visibility' route={`${route}/alert-case-visibility`} rows={visibility} empty='Visibility decisions appear after alerts are reviewed or opened as cases.' />
@@ -4591,7 +4591,7 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
         const destinationId = selectedSubjectDestinationId(subject, bundle)
         const deliveryId = selectedSubjectDeliveryId(subject, bundle)
         return [
-            { label: 'Case', href: `/dwm/cases/${caseId}?organizationId=${organizationId}` },
+            { label: 'Case', href: `/cases/${caseId}?organizationId=${organizationId}` },
             { label: 'Record', href: `#case-record-${caseId}` },
             ...(watchlistId ? [{ label: 'Watchlist', href: `#watchlist-${encodeURIComponent(watchlistId)}` }] : []),
             ...(destinationId ? [{ label: 'Destination', href: `#destination-${encodeURIComponent(destinationId)}` }] : []),

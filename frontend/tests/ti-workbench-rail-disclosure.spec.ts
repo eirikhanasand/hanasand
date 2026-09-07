@@ -55,7 +55,7 @@ test('TI workbench keeps selected-case actions primary and collapses secondary r
     expect(route).toContain('[\'alertId\', \'alert\']')
     expect(route).toContain('[\'watchlistId\', \'watchlist\']')
     expect(route).toContain('[\'organizationId\', \'organization\']')
-    expect(route).toContain('/dwm/cases/')
+    expect(route).toContain('/cases/')
     expect(page).toContain('safeEvidenceExcerpt } from \'@/utils/dwm/display\'')
     expect(page).toContain('function safeWorkbenchDetail(value: string | undefined)')
     expect(page).toContain('safeEvidenceExcerpt(value || \'Safe excerpt is being prepared from this evidence.\')')

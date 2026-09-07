@@ -24,7 +24,7 @@ Hanasand combines threat intelligence, AI development tools, and infrastructure 
 
 Health-check failures and slow responses are grouped by monitor, target and failure reason in `monitoring_issues`. Each has a stable `MON-<number>` reference, occurrence count, first/last seen times and recovery time. Check records link to the issue; recovery closes it, and recurrence reopens the same number. Details are returned by the authenticated `GET /api/automations/:id` endpoint and shown in the monitoring dashboard.
 
-Discord receives `@everyone` and the case number, at most once per issue and destination every 24 hours. PostgreSQL reserves delivery before sending, so restarts and concurrent workers do not reset the limit. Failed or uncertain delivery is recorded in the issue and waits for the same 24-hour window before retrying. Monitoring results remain independent of notification delivery. These records can later be linked to a broader case system.
+Discord receives `@everyone` and the case number, at most once per issue and destination every 24 hours. PostgreSQL reserves delivery before sending, so restarts and concurrent workers do not reset the limit. Failed or uncertain delivery is recorded in the issue and waits for the same 24-hour window before retrying. Monitoring results remain independent of notification delivery. These persisted records appear alongside other cases at `/cases`, with details at `/cases/MON-<number>`. The shared case page is independent of DWM and reports unavailable sources without hiding cases from the remaining sources. Existing `/dwm/cases` links redirect to `/cases`.
 
 ## Development
 

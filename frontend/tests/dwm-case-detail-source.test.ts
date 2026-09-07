@@ -2,8 +2,8 @@ import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const source = readFileSync(new URL('../src/app/dashboard/dwm/cases/[id]/case-detail-client.tsx', import.meta.url), 'utf8')
-const pageSource = readFileSync(new URL('../src/app/dashboard/dwm/cases/[id]/page.tsx', import.meta.url), 'utf8')
+const source = readFileSync(new URL('../src/app/dashboard/cases/[id]/case-detail-client.tsx', import.meta.url), 'utf8')
+const pageSource = readFileSync(new URL('../src/app/dashboard/cases/[id]/page.tsx', import.meta.url), 'utf8')
 const deliveryRouteSource = readFileSync(new URL('../src/app/api/dwm/webhooks/deliver/route.ts', import.meta.url), 'utf8')
 
 test('DWM case detail exposes webhook delivery traceability', () => {

@@ -1,0 +1,1230 @@
+'use client'
+
+import Link from 'next/link'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { ArrowLeft, BellRing, CheckCircle2, Copy, Loader2, RotateCcw, Send, ShieldCheck, UserRound, XCircle } from 'lucide-react'
+import { safeEvidenceExcerpt } from '@/utils/dwm/display'
+
+const DWM_CASE_REPORT_MAX_EVIDENCE = 25
+const DWM_CASE_EVIDENCE_PREVIEW_ROWS = 6
+const DWM_CASE_TIMELINE_PREVIEW_ROWS = 8
+
+export type CaseDetail = {
+    schemaVersion?: string
+    generatedAt?: string
+    access?: { readOnly?: boolean, role?: string, blockerCodes?: string[] }
+    case?: {
+        id: string
+        title?: string
+        status?: string
+        priority?: string
+        organizationId?: string
+        tenantId?: string
+        alertId?: string
+        assignedOwner?: string
+        createdAt?: string
+        updatedAt?: string
+        closedAt?: string
+        lastDecision?: string
+        events?: CaseEvent[]
+        handoffActionReceipts?: unknown[]
+        customerNotifications?: unknown[]
+    }
+    workflowState?: {
+        status?: string
+        assignedOwner?: string
+        lastDecision?: string
+        eventCount?: number
+    }
+    workflowActionPolicy?: {
+        summary?: {
+            enabledActionIds?: string[]
+            blockedActionIds?: string[]
+            blockerCodes?: string[]
+            readOnly?: boolean
+        }
+        actions?: CaseAction[]
+    }
+    alert?: CaseAlert
+    alertContext?: {
+        id?: string
+        reviewState?: string
+        deliveryState?: string
+        assignedOwner?: string
+        workflowNote?: string
+        provenance?: CaseAlert['provenance']
+        workflowEvents?: Array<{ id?: string, at?: string, actor?: string, note?: string, toReviewState?: string, toDeliveryState?: string }>
+    }
+    watchlists?: Array<{
+        id?: string
+        name?: string
+        matchedTerms?: Array<{ id?: string, kind?: string, value?: string }>
+    }>
+    deliveryContext?: {
+        deliveryCount?: number
+        latestDelivery?: DeliveryRow
+        delivered?: boolean
+        retryable?: boolean
+        failed?: DeliveryRow[]
+    }
+    handoffActionReadiness?: { ready?: boolean, blockers?: string[], actions?: unknown[] }
+    handoffActionReceipts?: unknown[]
+    customerNotificationContext?: { count?: number, latestAt?: string, ready?: boolean, blockers?: string[] }
+    deliveries?: DeliveryRow[]
+    evidence?: EvidenceRow[]
+    timeline?: TimelineRow[]
+    nextActions?: Array<{ id?: string, label?: string, detail?: string, route?: string, enabled?: boolean }>
+    nextAllowedActions?: CaseAction[]
+}
+
+export type CaseExport = {
+    schemaVersion?: string
+    summary?: {
+        caseId?: string
+        alertId?: string
+        evidenceCount?: number
+        deliveryCount?: number
+        delivered?: boolean
+        dedupeKey?: string
+        recommendedRoute?: string
+    }
+    evidenceSummary?: EvidenceRow[]
+    timelineSummary?: TimelineRow[]
+    deliveryEvidence?: DeliveryRow[]
+    copyText?: string
+    exportChecksum?: string
+}
+
+type CaseAction = {
+    id: string
+    label?: string
+    method?: string
+    requiresRationale?: boolean
+    enabled?: boolean
+    disabledReason?: string
+}
+
+type CaseEvent = {
+    id?: string
+    at?: string
+    action?: string
+    actor?: string
+    note?: string
+    fromStatus?: string
+    toStatus?: string
+    fromOwner?: string
+    toOwner?: string
+}
+
+type CaseAlert = {
+    id?: string
+    severity?: string
+    reviewState?: string
+    deliveryState?: string
+    matchedTerm?: { kind?: string, value?: string }
+    sourceFamily?: string
+    firstSeenAt?: string
+    lastSeenAt?: string
+    confidence?: number
+    assertionKind?: 'source_claim'
+    observedMatchSummary?: string
+    claimSummary?: string
+    routingContext?: { reason?: string }
+    dedupeKey?: string
+    provenance?: {
+        sourceIds?: string[]
+        captureIds?: string[]
+        contentHashes?: string[]
+    }
+    webhookDelivery?: {
+        dedupeKey?: string
+        endpointHash?: string
+        payloadHash?: string
+    }
+}
+
+type EvidenceRow = {
+    id?: string
+    sourceName?: string
+    sourceFamily?: string
+    observedAt?: string
+    collectedAt?: string
+    contentHash?: string
+    safeExcerpt?: string
+    excerpt?: string
+    redaction?: { redacted?: boolean }
+    provenance?: { sourceId?: string, captureId?: string, contentHash?: string }
+}
+
+type DeliveryRow = {
+    id?: string
+    alertId?: string
+    caseId?: string
+    requestId?: string
+    auditEventId?: string
+    status?: string
+    attemptedAt?: string
+    endpointHash?: string
+    endpointHint?: string
+    webhookDestinationId?: string
+    destinationId?: string
+    payloadHash?: string
+    dedupeKey?: string
+    idempotencyKey?: string
+    dryRun?: boolean
+    httpStatus?: number
+    error?: string
+    errorClass?: string
+    attemptCount?: number | null
+    retryCount?: number | null
+    nextRetryAt?: string | null
+    retryable?: boolean
+    reportValidation?: string
+    reportExportChecksum?: string
+    reportCaseId?: string
+    thirdPartyReport?: boolean
+}
+
+type ReceiverReceipt = {
+    id?: string
+    destinationId?: string
+    deliveryId?: string
+    idempotencyKey?: string
+    payloadHash?: string
+    reportCaseId?: string
+    reportExportChecksum?: string
+    receivedAt?: string
+    persistedAt?: string
+}
+
+type WebhookDestination = {
+    id: string
+    name?: string
+    kind?: string
+    endpointHint?: string
+    status?: string
+}
+
+type TimelineRow = {
+    id?: string
+    timestamp?: string
+    at?: string
+    eventType?: string
+    action?: string
+    actor?: string
+    source?: string
+    rationale?: string
+    note?: string
+    related?: Record<string, unknown>
+    workflow?: {
+        fromStatus?: string
+        toStatus?: string
+        fromOwner?: string
+        toOwner?: string
+    }
+}
+
+type LoadState = {
+    loading: boolean
+    error?: string
+    deliveryError?: string
+    receiverError?: string
+    destinationError?: string
+    detail?: CaseDetail
+    exportPayload?: CaseExport
+    destinations?: WebhookDestination[]
+    receiverReceipts?: ReceiverReceipt[]
+}
+
+const primaryActions = ['review', 'assign', 'escalate', 'suppress', 'false_positive', 'close', 'reopen', 'note']
+
+export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId, initialDetail, initialExportPayload }: {
+    caseId: string
+    tenantId: string
+    organizationId?: string
+    alertId?: string
+    initialDetail?: CaseDetail
+    initialExportPayload?: CaseExport
+}) {
+    const [state, setState] = useState<LoadState>({
+        loading: !initialDetail,
+        detail: initialDetail,
+        exportPayload: initialExportPayload,
+    })
+    const [busy, setBusy] = useState<string | null>(null)
+    const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
+    const [note, setNote] = useState('')
+    const [owner, setOwner] = useState(initialDetail?.case?.assignedOwner || initialDetail?.workflowState?.assignedOwner || '')
+    const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([])
+    const [showAllEvidenceRows, setShowAllEvidenceRows] = useState(false)
+    const [selectedDestinationId, setSelectedDestinationId] = useState('')
+
+    const caseRecord = state.detail?.case
+    const alert = state.detail?.alert
+    const alertContext = state.detail?.alertContext
+    const actions = useMemo(() => {
+        const source = state.detail?.workflowActionPolicy?.actions?.length ? state.detail.workflowActionPolicy.actions : state.detail?.nextAllowedActions || []
+        return primaryActions.map(id => source.find(action => action.id === id) || { id, enabled: false, disabledReason: 'Action is not available for this case.' })
+    }, [state.detail])
+
+    async function load() {
+        setState(previous => ({ ...previous, loading: true, error: undefined }))
+        try {
+            const query = queryString({ tenantId, organizationId, alertId })
+            const [detailResponse, exportResponse] = await Promise.all([
+                fetch(`/api/cases/${encodeURIComponent(caseId)}${query}`, { cache: 'no-store' }),
+                fetch(`/api/cases/${encodeURIComponent(caseId)}/export${queryString({ tenantId, organizationId, alertId, shape: 'full' })}`, { cache: 'no-store' }),
+            ])
+            const detailPayload = await detailResponse.json().catch(() => ({}))
+            const exportPayload = await exportResponse.json().catch(() => ({}))
+            if (!detailResponse.ok) throw new Error(detailPayload.error?.message || detailResponse.statusText)
+            const scopedOrganizationId = resolvedOrganizationId(detailPayload.case, organizationId)
+            const scopedAlertId = resolvedAlertId(detailPayload.case, detailPayload.alertContext, alertId)
+            let deliveryError: string | undefined
+            let receiverError: string | undefined
+            let destinationError: string | undefined
+            let deliveries: DeliveryRow[] = []
+            let destinations: WebhookDestination[] = []
+            let receiverReceipts: ReceiverReceipt[] = []
+            if (scopedOrganizationId && scopedAlertId) {
+                const [deliveryResponse, destinationResponse, receiverResponse] = await Promise.all([
+                    fetch(`/api/dwm/webhooks/deliveries${queryString({ organizationId: scopedOrganizationId, alertId: scopedAlertId, reportCaseId: caseId })}`, { cache: 'no-store' }),
+                    fetch(`/api/organizations/${encodeURIComponent(scopedOrganizationId)}/webhooks`, { cache: 'no-store' }),
+                    fetch(`/api/dwm/webhook-sink${queryString({ orgId: scopedOrganizationId, reportCaseId: caseId })}`, { cache: 'no-store' }),
+                ])
+                const deliveryPayload = await deliveryResponse.json().catch(() => ({}))
+                const destinationPayload = await destinationResponse.json().catch(() => ({}))
+                const receiverPayload = await receiverResponse.json().catch(() => ({}))
+                if (deliveryResponse.ok) {
+                    deliveries = deliveryRowsFromApi(deliveryPayload)
+                        .filter(delivery => delivery.thirdPartyReport === true && delivery.reportCaseId === caseId)
+                }
+                else deliveryError = deliveryPayload.error?.message || deliveryPayload.error || 'Canonical delivery history is unavailable.'
+                if (destinationResponse.ok) destinations = destinationRowsFromApi(destinationPayload)
+                else destinationError = destinationPayload.error?.message || destinationPayload.error || 'Configured destinations are unavailable.'
+                if (receiverResponse.ok) receiverReceipts = receiverReceiptRowsFromApi(receiverPayload)
+                else receiverError = receiverPayload.error?.message || receiverPayload.error || 'Durable receiver history is unavailable.'
+            }
+            const orderedDeliveries = orderCaseDeliveries(deliveries)
+            const detail = {
+                ...detailPayload,
+                deliveries: orderedDeliveries,
+                deliveryContext: deliveryContextFromApi(orderedDeliveries),
+            }
+            const canonicalExport = exportResponse.ok ? { ...exportPayload, deliveryEvidence: orderedDeliveries } : undefined
+            setState({ loading: false, detail, exportPayload: canonicalExport, deliveryError, receiverError, destinationError, destinations, receiverReceipts })
+            const availableIds = (detailPayload.evidence || exportPayload.evidenceSummary || []).map((row: EvidenceRow) => row.id).filter(Boolean).slice(0, DWM_CASE_REPORT_MAX_EVIDENCE) as string[]
+            setSelectedEvidenceIds(previous => previous.filter(id => availableIds.includes(id)))
+            setSelectedDestinationId(previous => destinations.some(destination => destination.id === previous) ? previous : '')
+            const nextOwner = detailPayload.case?.assignedOwner || detailPayload.workflowState?.assignedOwner || ''
+            setOwner(nextOwner)
+        } catch (error) {
+            setState({ loading: false, error: error instanceof Error ? error.message : 'Case detail failed to load.' })
+        }
+    }
+
+    useEffect(() => {
+        void load()
+    }, [caseId, tenantId, organizationId, alertId])
+
+    async function runAction(action: CaseAction) {
+        if (!action.enabled || busy) return
+        const actionId = action.id
+        const rationale = note.trim()
+        if (action.requiresRationale && !rationale) {
+            setMessage({ ok: false, text: 'Add a reason before changing the case.' })
+            return
+        }
+        if (actionId === 'assign' && !owner.trim()) {
+            setMessage({ ok: false, text: 'Set an owner before assigning the case.' })
+            return
+        }
+        setBusy(actionId)
+        setMessage(null)
+        try {
+            const response = await fetch(`/api/cases/${encodeURIComponent(caseId)}`, {
+                method: 'PATCH',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                    tenantId: resolvedTenantId(caseRecord, tenantId),
+                    organizationId: resolvedOrganizationId(caseRecord, organizationId),
+                    alertId: resolvedAlertId(caseRecord, alertContext, alertId),
+                    action: actionId,
+                    note: rationale,
+                    assignedOwner: owner.trim() || undefined,
+                    idempotencyKey: `dashboard-case:${caseId}:${actionId}:${caseRecord?.updatedAt || caseRecord?.createdAt || 'initial'}`,
+                }),
+            })
+            const payload = await response.json().catch(() => ({}))
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            if (!payload.case || typeof payload.case.id !== 'string') throw new Error('No durable case update was returned.')
+            setMessage({ ok: true, text: `${actionLabel(actionId)} recorded.` })
+            await load()
+        } catch (error) {
+            setMessage({ ok: false, text: error instanceof Error ? error.message : 'Case action failed.' })
+        } finally {
+            setBusy(null)
+        }
+    }
+
+    async function notifyCustomer() {
+        if (busy) return
+        if (!note.trim()) {
+            setMessage({ ok: false, text: 'Add a customer-safe note before recording a notification dry run.' })
+            return
+        }
+        setBusy('notify')
+        setMessage(null)
+        try {
+            const response = await fetch(`/api/cases/${encodeURIComponent(caseId)}/customer-notification`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                    tenantId: resolvedTenantId(caseRecord, tenantId),
+                    organizationId: resolvedOrganizationId(caseRecord, organizationId),
+                    deliveryMode: 'dry_run',
+                    note: note.trim(),
+                    idempotencyKey: `dashboard-case-notify:${caseId}:${caseRecord?.updatedAt || caseRecord?.createdAt || 'initial'}`,
+                }),
+            })
+            const payload = await response.json().catch(() => ({}))
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            if (!payload.receipt || typeof payload.receipt.id !== 'string') throw new Error('No durable notification record was returned.')
+            setMessage({ ok: true, text: 'Notification dry run recorded.' })
+            await load()
+        } catch (error) {
+            setMessage({ ok: false, text: error instanceof Error ? error.message : 'Notification dry run failed.' })
+        } finally {
+            setBusy(null)
+        }
+    }
+
+    async function sendWebhook(dryRun: boolean) {
+        const targetAlertId = resolvedAlertId(caseRecord, alertContext, alertId)
+        const retryBlockedReason = !dryRun ? deliveryRetryBlockedReason(latestDelivery) : undefined
+        const retryDeliveryId = !dryRun && latestDelivery?.status === 'failed' && latestDelivery.retryable === true && !retryBlockedReason ? latestDelivery.id : undefined
+        const blockedReason = webhookActionBlockedReason(state.detail, targetAlertId)
+        if (blockedReason) {
+            setMessage({ ok: false, text: blockedReason })
+            return
+        }
+        if (retryBlockedReason) {
+            setMessage({ ok: false, text: retryBlockedReason })
+            return
+        }
+        if (!retryDeliveryId && !selectedDestinationId) {
+            setMessage({ ok: false, text: state.destinationError || 'Select one configured external receiver before delivery.' })
+            return
+        }
+        if (!retryDeliveryId && !selectedEvidenceIds.length) {
+            setMessage({ ok: false, text: 'Select at least one evidence row before creating a third-party report.' })
+            return
+        }
+        setBusy(dryRun ? 'webhook-test' : 'webhook-send')
+        setMessage(null)
+        try {
+            const response = await fetch('/api/dwm/webhooks/deliver', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(retryDeliveryId ? {
+                    organizationId: resolvedOrganizationId(caseRecord, organizationId),
+                    deliveryId: retryDeliveryId,
+                } : {
+                    tenantId: resolvedTenantId(caseRecord, tenantId),
+                    organizationId: resolvedOrganizationId(caseRecord, organizationId),
+                    alertId: targetAlertId,
+                    caseId,
+                    evidenceIds: selectedEvidenceIds,
+                    reportFormat: 'stix',
+                    destinationId: selectedDestinationId,
+                    dryRun,
+                }),
+            })
+            const payload = await response.json().catch(() => ({}))
+            if (!response.ok) throw new Error(payload.error?.message || payload.error || response.statusText)
+            const delivery = Array.isArray(payload.deliveries) ? payload.deliveries[0] as DeliveryRow | undefined : undefined
+            if (!delivery) throw new Error('No durable delivery result was returned.')
+            await load()
+            if (delivery.status === 'failed' || delivery.status === 'skipped') throw new Error(delivery.error || `Report delivery was ${delivery.status}.`)
+            if (dryRun && delivery.status !== 'dry_run') throw new Error(`Expected a dry-run result, received ${delivery.status || 'unknown'}.`)
+            if (!dryRun && delivery.status !== 'delivered') throw new Error(`Report was not delivered; durable status is ${delivery.status || 'unknown'}.`)
+            setMessage({ ok: true, text: dryRun ? 'STIX report dry run recorded.' : 'STIX report delivered to the external receiver.' })
+        } catch (error) {
+            setMessage({ ok: false, text: error instanceof Error ? error.message : 'Webhook delivery failed.' })
+        } finally {
+            setBusy(null)
+        }
+    }
+
+    if (state.loading && !state.detail) {
+        return (
+            <main className='grid min-h-[70vh] place-items-center rounded-lg border border-ui-border bg-ui-canvas text-ui-text'>
+                <div className='flex items-center gap-3 text-sm font-semibold'><Loader2 className='h-4 w-4 animate-spin' />Loading case</div>
+            </main>
+        )
+    }
+
+    if (state.error || !state.detail || !caseRecord) {
+        return (
+            <main className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-5 text-ui-danger'>
+                <Link href={`/cases${queryString({ organizationId })}`} className='inline-flex items-center gap-2 text-xs font-semibold text-ui-danger'><ArrowLeft className='h-4 w-4' />Back to cases</Link>
+                <h1 className='mt-4 text-xl font-semibold'>Case unavailable</h1>
+                <p className='mt-2 max-w-2xl text-sm leading-6 text-ui-danger'>{state.error || 'The case could not be found for this organization.'}</p>
+            </main>
+        )
+    }
+
+    const timeline = state.detail.timeline || state.exportPayload?.timelineSummary || []
+    const evidence = state.detail.evidence || state.exportPayload?.evidenceSummary || []
+    const visibleEvidence = showAllEvidenceRows ? evidence.slice(0, DWM_CASE_REPORT_MAX_EVIDENCE) : evidence.slice(0, DWM_CASE_EVIDENCE_PREVIEW_ROWS)
+    const deliveries = orderCaseDeliveries(state.detail.deliveries || state.exportPayload?.deliveryEvidence || [])
+    const latestDelivery = deliveries[0]
+    const latestReceiverReceipt = (state.receiverReceipts || []).find(receipt =>
+        Boolean(receipt.deliveryId)
+        && receipt.destinationId === (latestDelivery?.webhookDestinationId || latestDelivery?.destinationId)
+        && (
+            receipt.deliveryId === latestDelivery?.id
+            || Boolean(
+                receipt.idempotencyKey
+                && receipt.idempotencyKey === latestDelivery?.idempotencyKey
+                && deliveries.some(delivery => delivery.id === receipt.deliveryId && delivery.status === 'delivered')
+            )
+        )
+    )
+    const latestDeliveryRetryable = latestDelivery?.status === 'failed' && latestDelivery.retryable === true
+    const retryBlockedReason = latestDeliveryRetryable ? deliveryRetryBlockedReason(latestDelivery) : undefined
+    const destinationBlockedReason = !latestDeliveryRetryable && !selectedDestinationId
+        ? state.destinationError || (state.destinations?.length ? 'Select one configured external receiver before delivery.' : 'Webhook delivery needs an active customer destination before it can be tested or sent.')
+        : undefined
+    const readOnly = Boolean(state.detail.access?.readOnly || state.detail.workflowActionPolicy?.summary?.readOnly)
+    const scopedTenantId = resolvedTenantId(caseRecord, tenantId)
+    const scopedOrganizationId = resolvedOrganizationId(caseRecord, organizationId)
+    const scopedAlertId = resolvedAlertId(caseRecord, alertContext, alertId)
+    const deliveryHistoryHref = scopedOrganizationId
+        ? `/organizations${queryString({ organizationId: scopedOrganizationId, caseId: caseRecord.id, alertId: scopedAlertId, focus: 'destinations' })}#delivery-history`
+        : '/organizations?focus=destinations#delivery-history'
+    const destinationHref = scopedOrganizationId
+        ? `/organizations${queryString({ organizationId: scopedOrganizationId, caseId: caseRecord.id, alertId: scopedAlertId, destinationId: latestDelivery?.webhookDestinationId || latestDelivery?.destinationId, focus: 'destinations' })}`
+        : '/organizations?focus=destinations'
+    const actionBlockers = actionUnavailableReasons(actions, readOnly)
+    const webhookBlockedReason = webhookActionBlockedReason(state.detail, scopedAlertId) || retryBlockedReason || destinationBlockedReason
+    const webhookActionDisabled = Boolean(readOnly || busy !== null || webhookBlockedReason)
+    const reportJsonHref = thirdPartyReportHref(caseRecord.id, scopedTenantId, scopedOrganizationId, scopedAlertId, selectedEvidenceIds, 'json')
+    const reportStixHref = thirdPartyReportHref(caseRecord.id, scopedTenantId, scopedOrganizationId, scopedAlertId, selectedEvidenceIds, 'stix')
+    const caseMeta = [
+        compactCaseReference(caseRecord.id, 'Case'),
+        compactCaseReference(scopedOrganizationId, 'Org') || 'Org pending',
+        compactCaseReference(scopedAlertId, 'Alert') || 'Alert pending',
+    ].join(' · ')
+
+    return (
+        <main className='grid min-w-0 gap-3 text-ui-text'>
+            <section className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-canvas'>
+                <div className='grid min-w-0 gap-3 border-b border-ui-border px-4 py-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between'>
+                    <div className='min-w-0 flex-1'>
+                        <Link href={`/cases${queryString({ organizationId })}`} className='inline-flex items-center gap-2 text-[11px] font-semibold uppercase text-ui-primary'><ArrowLeft className='h-3.5 w-3.5' />Cases</Link>
+                        <h1 className='mt-2 min-w-0 wrap-break-word text-xl font-semibold text-ui-text'>{caseRecord.title || caseRecord.id}</h1>
+                        <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{caseMeta}</p>
+                    </div>
+                    <div className='flex flex-wrap gap-2'>
+                        <CasePill label='Status' value={caseRecord.status || 'open'} tone={caseRecord.status === 'closed' ? 'neutral' : 'ready'} />
+                        <CasePill label='Priority' value={caseRecord.priority || alert?.severity || 'medium'} tone={alert?.severity === 'critical' ? 'warn' : 'neutral'} />
+                        <CasePill label='Delivery' value={latestDelivery?.status || (state.detail.deliveryContext?.deliveryCount ? 'attempted' : 'not sent')} tone={latestDelivery?.status === 'delivered' ? 'ready' : latestDelivery?.status === 'failed' ? 'warn' : 'neutral'} />
+                    </div>
+                </div>
+
+                <div className='grid min-w-0 gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_320px]'>
+                    <section className='grid min-w-0 gap-3'>
+                        <div className='grid gap-2 sm:grid-cols-3'>
+                            <Metric label='Evidence' value={`${evidence.length}`} detail={evidence.some(item => item.contentHash || item.provenance?.contentHash) ? 'hashes linked' : 'hashes pending'} />
+                            <Metric label='Last activity' value={caseRecord.updatedAt ? relativeTime(caseRecord.updatedAt) : '—'} detail={`${timeline.length} recorded event${timeline.length === 1 ? '' : 's'}`} />
+                            <Metric label='Delivery' value={latestDelivery?.status || 'not sent'} detail={latestDelivery ? relativeTime(latestDelivery.attemptedAt) : 'no attempt'} />
+                        </div>
+
+                        <section className='grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]'>
+                            <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
+                                <div className='flex items-center justify-between gap-2'>
+                                    <h2 className='text-sm font-semibold text-ui-text'>Evidence</h2>
+                                    <span className='text-xs text-ui-muted'>{evidence.length} rows · {selectedEvidenceIds.length} selected</span>
+                                </div>
+                                <div className='mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ui-border bg-ui-canvas p-2'>
+                                    <p className='text-xs text-ui-muted'><span className='font-semibold text-ui-text'>{selectedEvidenceIds.length}</span> of {Math.min(evidence.length, DWM_CASE_REPORT_MAX_EVIDENCE)} selected for the report</p>
+                                    <div className='flex gap-2'>
+                                        {evidence.length > DWM_CASE_EVIDENCE_PREVIEW_ROWS ? <button type='button' onClick={() => setShowAllEvidenceRows(value => !value)} className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text'>{showAllEvidenceRows ? 'Show fewer' : 'Show all'}</button> : null}
+                                        <button type='button' onClick={() => setSelectedEvidenceIds(evidence.map(row => row.id).filter(Boolean).slice(0, DWM_CASE_REPORT_MAX_EVIDENCE) as string[])} className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text'>Select all</button>
+                                        <button type='button' onClick={() => setSelectedEvidenceIds([])} className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text'>Clear</button>
+                                    </div>
+                                </div>
+                                <div className='rounded-lg border border-ui-border'>
+                                    {evidence.length ? (
+                                        <>
+                                            <div className='grid gap-2 p-2 md:hidden' data-dwm-case-evidence-mobile-list='true'>
+                                                {visibleEvidence.map((row, index) => <EvidenceMobileRow key={row.id || index} row={row} selected={Boolean(row.id && selectedEvidenceIds.includes(row.id))} onToggle={() => row.id && setSelectedEvidenceIds(toggleSelectedEvidence(selectedEvidenceIds, row.id))} />)}
+                                            </div>
+                                            <div className='hidden overflow-x-auto md:block'>
+                                                <table className='w-full min-w-190 text-left text-xs' data-dwm-case-evidence-desktop-table='true'>
+                                                    <thead className='bg-ui-canvas text-ui-muted'>
+                                                        <tr>
+                                                            <th className='px-3 py-2 font-semibold'>Include</th>
+                                                            <th className='px-3 py-2 font-semibold'>Source</th>
+                                                            <th className='px-3 py-2 font-semibold'>Published / collected</th>
+                                                            <th className='px-3 py-2 font-semibold'>Excerpt</th>
+                                                            <th className='px-3 py-2 font-semibold'>Source details</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className='divide-y divide-ui-border bg-ui-panel'>
+                                                        {visibleEvidence.map((row, index) => (
+                                                            <tr key={row.id || index} className='hover:bg-ui-raised'>
+                                                                <td className='px-3 py-2 align-top'><input type='checkbox' aria-label={`Select ${row.sourceName || row.id || 'evidence'} for third-party report`} checked={Boolean(row.id && selectedEvidenceIds.includes(row.id))} disabled={!row.id} onChange={() => row.id && setSelectedEvidenceIds(toggleSelectedEvidence(selectedEvidenceIds, row.id))} /></td>
+                                                                <td className='px-3 py-2 align-top font-semibold text-ui-text'>{row.sourceName || sourceReferenceState(row)}<p className='text-[11px] font-normal text-ui-muted'>{stateLabel(row.sourceFamily)}</p></td>
+                                                                <td className='px-3 py-2 align-top text-ui-muted'>{relativeTime(row.observedAt || row.collectedAt)}</td>
+                                                                <td className='max-w-xl px-3 py-2 align-top text-ui-text'>{safeCaseEvidenceExcerpt(row)}</td>
+                                                                <td className='px-3 py-2 align-top text-[11px] font-semibold text-ui-muted'>{evidenceReferenceState(row)}<p>{evidenceHashState(row)}</p></td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <EmptyLine text='No evidence rows are attached to this case.' />
+                                    )}
+                                </div>
+                            </section>
+
+                            <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
+                                <div className='flex items-center justify-between gap-2'>
+                                    <h2 className='text-sm font-semibold text-ui-text'>Activity</h2>
+                                    <span className='text-xs text-ui-muted'>{timeline.length} events</span>
+                                </div>
+                                <div className='max-h-[420px] overflow-y-auto pr-1'>
+                                    <div className='grid gap-2'>
+                                        {timeline.length ? timeline.slice(0, DWM_CASE_TIMELINE_PREVIEW_ROWS).map((row, index) => (
+                                            <TimelineItem key={row.id || index} row={row} compact />
+                                        )) : <EmptyLine text='No case events have been recorded yet.' />}
+                                    </div>
+                                </div>
+                            </section>
+                        </section>
+                    </section>
+
+                    <aside id='dwm-case-actions' data-dwm-case-action-dock className='order-first grid min-w-0 scroll-mt-24 content-start gap-3 xl:order-none'>
+                        <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
+                            <div className='flex items-center justify-between gap-2'>
+                                <h2 className='text-sm font-semibold text-ui-text'>Analyst actions</h2>
+                                {readOnly ? <span className='rounded-full border border-ui-warning/30 bg-ui-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-ui-warning'>Read only</span> : null}
+                            </div>
+                            <label className='mt-3 block text-[10px] font-semibold uppercase text-ui-muted'>Owner</label>
+                            <input value={owner} onChange={event => setOwner(event.target.value)} placeholder='owner@company.com' className='mt-1 h-10 w-full rounded-lg border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary/35' />
+                            <label className='mt-3 block text-[10px] font-semibold uppercase text-ui-muted'>Reason</label>
+                            <textarea value={note} onChange={event => setNote(event.target.value)} placeholder='Decision rationale, delivery context, or customer note.' className='mt-1 min-h-24 w-full resize-y rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm leading-6 text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary/35' />
+                            <div className='mt-3 grid gap-2 sm:grid-cols-2'>
+                                {actions.map(action => <ActionButton key={action.id} action={action} busy={busy === action.id} disabled={readOnly || busy !== null || !action.enabled} onClick={() => runAction(action)} />)}
+                            </div>
+                            {actionBlockers.length ? (
+                                <div className='mt-3 rounded-lg border border-ui-border bg-ui-canvas p-3' data-dwm-case-action-blockers='true'>
+                                    <p className='text-[10px] font-semibold uppercase text-ui-muted'>Blocked actions</p>
+                                    <ul className='mt-2 grid gap-1 text-xs leading-5 text-ui-muted'>
+                                        {actionBlockers.slice(0, 4).map(item => (
+                                            <li key={item.id} className='flex min-w-0 gap-2'>
+                                                <span className='shrink-0 font-semibold text-ui-text'>{actionLabel(item.id)}:</span>
+                                                <span className='wrap-break-word'>{item.reason}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ) : null}
+                            <button type='button' onClick={notifyCustomer} disabled={readOnly || busy !== null} className='mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
+                                {busy === 'notify' ? <Loader2 className='h-4 w-4 animate-spin' /> : <BellRing className='h-4 w-4' />}Notify dry run
+                            </button>
+                            {message ? <p className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${message.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'}`}>{message.text}</p> : null}
+                        </section>
+
+                        <CollapsiblePanel title='Third-party report delivery' action={state.detail.deliveryContext?.retryable ? 'retryable' : latestDelivery?.status || 'pending'} defaultOpen>
+                            {state.deliveryError ? <p className='mb-3 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-xs text-ui-danger'>{state.deliveryError}</p> : null}
+                            {state.receiverError ? <p className='mb-3 rounded-lg border border-ui-warning/30 bg-ui-warning/10 p-2 text-xs text-ui-warning'>{state.receiverError}</p> : null}
+                            {state.destinationError ? <p className='mb-3 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-xs text-ui-danger'>{state.destinationError}</p> : null}
+                            <label className='mb-3 grid gap-1 text-xs font-semibold text-ui-muted'>
+                                External receiver
+                                <select value={selectedDestinationId} onChange={event => setSelectedDestinationId(event.target.value)} disabled={readOnly || busy !== null || latestDeliveryRetryable} className='h-9 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text disabled:cursor-not-allowed disabled:opacity-60'>
+                                    <option value=''>Select one configured receiver</option>
+                                    {(state.destinations || []).map(destination => (
+                                        <option key={destination.id} value={destination.id}>{destination.name || destination.endpointHint || destination.id}{destination.kind ? ` · ${destination.kind}` : ''}</option>
+                                    ))}
+                                </select>
+                            </label>
+                            {latestDelivery ? (
+                                <div className='grid gap-2 text-xs text-ui-muted'>
+                                    <KeyValue label='Status' value={stateLabel(latestDelivery.status)} />
+                                    <KeyValue label='Attempted' value={relativeTime(latestDelivery.attemptedAt)} />
+                                    <KeyValue label='Endpoint' value={deliveryDestinationState(latestDelivery)} />
+                                    <KeyValue label='Dedupe' value={latestDelivery.dedupeKey ? 'dedupe linked' : 'pending'} />
+                                    <div className='grid gap-2 sm:grid-cols-2'>
+                                        <KeyValue label='Request' value={latestDelivery.requestId || latestDelivery.auditEventId ? 'request linked' : 'pending'} />
+                                        <KeyValue label='Retry' value={latestDelivery.nextRetryAt ? relativeTime(latestDelivery.nextRetryAt) : latestDelivery.errorClass ? stateLabel(latestDelivery.errorClass) : `${latestDelivery.attemptCount ?? latestDelivery.retryCount ?? 0} attempts`} />
+                                    </div>
+                                    <div className='grid gap-2 sm:grid-cols-2'>
+                                        <KeyValue label='Mode' value={latestDelivery.dryRun ? 'Dry run' : latestDelivery.httpStatus ? `HTTP ${latestDelivery.httpStatus}` : 'queued'} />
+                                        <KeyValue label='Case link' value='case linked' />
+                                    </div>
+                                    <KeyValue label='Hanasand receiver receipt' value={latestReceiverReceipt ? `stored ${relativeTime(latestReceiverReceipt.receivedAt || latestReceiverReceipt.persistedAt)}` : 'not recorded'} />
+                                    {latestDelivery.error ? <p className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-ui-danger'>{latestDelivery.error}</p> : null}
+                                </div>
+                            ) : <EmptyLine text='No webhook delivery attempt is attached to this case.' />}
+                            <div className='mt-3 grid gap-2 sm:grid-cols-2'>
+                                <CommandLink href={destinationHref}>Manage destination</CommandLink>
+                                <CommandLink href={deliveryHistoryHref}>Delivery history</CommandLink>
+                            </div>
+                            <div className='mt-3 grid gap-2 sm:grid-cols-2'>
+                                <button type='button' onClick={() => sendWebhook(true)} disabled={webhookActionDisabled} title={webhookBlockedReason || undefined} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
+                                    {busy === 'webhook-test' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RotateCcw className='h-4 w-4' />}Test STIX report
+                                </button>
+                                <button type='button' onClick={() => sendWebhook(false)} disabled={webhookActionDisabled} title={webhookBlockedReason || undefined} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
+                                    {busy === 'webhook-send' ? <Loader2 className='h-4 w-4 animate-spin' /> : latestDeliveryRetryable ? <RotateCcw className='h-4 w-4' /> : <Send className='h-4 w-4' />}{latestDeliveryRetryable ? 'Retry exact report' : 'Send STIX report'}
+                                </button>
+                            </div>
+                            {webhookBlockedReason ? (
+                                <p className='mt-2 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-xs leading-5 text-ui-warning' data-dwm-webhook-action-blocker='true'>{webhookBlockedReason}</p>
+                            ) : null}
+                        </CollapsiblePanel>
+
+                        <CollapsiblePanel title='Case and evidence report' action={selectedEvidenceIds.length ? `${selectedEvidenceIds.length} selected` : 'selection required'}>
+                            <div className='grid gap-2 text-xs text-ui-muted'>
+                                <KeyValue label='Checksum' value={state.exportPayload?.exportChecksum ? 'export checksum linked' : 'not available'} />
+                                <KeyValue label='Dedupe' value={state.exportPayload?.summary?.dedupeKey || alert?.webhookDelivery?.dedupeKey ? 'dedupe linked' : 'pending'} />
+                                <div className='grid gap-2 sm:grid-cols-2'>
+                                    {selectedEvidenceIds.length ? <CommandLink href={reportJsonHref}>Export JSON report</CommandLink> : <span className='inline-flex h-9 items-center rounded-lg border border-ui-border px-3 text-xs font-semibold text-ui-muted opacity-60'>Select evidence for JSON</span>}
+                                    {selectedEvidenceIds.length ? <CommandLink href={reportStixHref}>Export STIX 2.1</CommandLink> : <span className='inline-flex h-9 items-center rounded-lg border border-ui-border px-3 text-xs font-semibold text-ui-muted opacity-60'>Select evidence for STIX</span>}
+                                </div>
+                                <button type='button' onClick={() => copyText(state.exportPayload?.copyText || '')} disabled={!state.exportPayload?.copyText} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
+                                    <Copy className='h-4 w-4' />Copy summary
+                                </button>
+                            </div>
+                        </CollapsiblePanel>
+                    </aside>
+                </div>
+            </section>
+        </main>
+    )
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function DecisionBrief({ detail, exportPayload, latestDelivery, actionDockHref, destinationHref, deliveryHistoryHref }: {
+    detail: CaseDetail
+    exportPayload?: CaseExport
+    latestDelivery?: DeliveryRow
+    actionDockHref: string
+    destinationHref: string
+    deliveryHistoryHref: string
+}) {
+    const evidenceCount = detail.evidence?.length ?? exportPayload?.summary?.evidenceCount ?? 0
+    const deliveryCount = detail.deliveries?.length ?? exportPayload?.summary?.deliveryCount ?? 0
+    const terms = matchedTerms(detail)
+    const blockers = uniqueStrings([
+        ...(detail.access?.blockerCodes ?? []),
+        ...(detail.workflowActionPolicy?.summary?.blockerCodes ?? []),
+        ...(detail.handoffActionReadiness?.blockers ?? []),
+        ...(detail.customerNotificationContext?.blockers ?? []),
+    ])
+    const nextActions = detail.nextActions ?? []
+    const primaryNext = nextActions.find(action => action.enabled !== false) ?? nextActions[0]
+    const deliveryFailed = latestDelivery?.status === 'failed'
+    const deliverySent = latestDelivery?.status === 'delivered' || detail.deliveryContext?.delivered
+    const recommended = blockers.length
+        ? 'Clear action blocker'
+        : !evidenceCount
+            ? 'Attach evidence'
+            : deliveryFailed
+                ? 'Fix destination'
+                : !deliveryCount
+                    ? 'Test delivery'
+                    : deliverySent
+                        ? 'Record decision'
+                        : 'Review delivery'
+    const recommendedDetail = primaryNext?.detail
+        || (blockers.length ? blockers.map(stateLabel).join(', ') : undefined)
+        || (deliveryFailed ? latestDelivery?.error || latestDelivery.errorClass || 'Delivery failed.' : undefined)
+        || (!evidenceCount ? 'No evidence rows are attached to this case.' : undefined)
+        || (deliveryCount ? `${deliveryCount} delivery attempt${deliveryCount === 1 ? '' : 's'} attached.` : 'No delivery attempt is attached yet.')
+    const primaryHref = primaryNext?.route || (deliveryFailed ? destinationHref : !deliveryCount ? actionDockHref : deliveryHistoryHref)
+    const sourceRefs = uniqueStrings([
+        ...(detail.alert?.provenance?.sourceIds ?? []),
+        ...(detail.alertContext?.provenance?.sourceIds ?? []),
+    ])
+    const captureRefs = uniqueStrings([
+        ...(detail.alert?.provenance?.captureIds ?? []),
+        ...(detail.alertContext?.provenance?.captureIds ?? []),
+    ])
+
+    return (
+        <section data-dwm-case-decision-brief className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.58fr)]'>
+            <div className='min-w-0'>
+                <div className='flex flex-wrap items-center gap-2'>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Decision brief</p>
+                    {blockers.length ? <StatusDot state='blocked' /> : <StatusDot state={deliverySent ? 'ready' : 'action'} />}
+                </div>
+                <h2 className='mt-2 wrap-break-word text-base font-semibold text-ui-text'>{primaryNext?.label || recommended}</h2>
+                <p className='mt-1 max-w-3xl wrap-break-word text-sm leading-6 text-ui-muted'>{recommendedDetail}</p>
+                <div className='mt-3 grid gap-2 sm:grid-cols-3'>
+                    <DecisionFact label='Assertion' value='Source claim' />
+                    <DecisionFact label='Sources' value={sourceRefs.length ? `${sourceRefs.length} linked` : 'source pending'} title={sourceRefs.join(', ')} />
+                    <DecisionFact label='Captures' value={captureRefs.length ? `${captureRefs.length} linked` : 'capture pending'} title={captureRefs.join(', ')} />
+                </div>
+                <div className='mt-3 grid max-w-3xl gap-1 text-xs leading-5 text-ui-muted'>
+                    <p className='wrap-break-word'><span className='font-semibold text-ui-text'>Observed fact:</span> {detail.alert?.observedMatchSummary || `${evidenceCount} captured record${evidenceCount === 1 ? '' : 's'} matched ${terms[0] || detail.alert?.matchedTerm?.value || 'the watched term'}; this confirms a source mention, not the underlying incident.`}</p>
+                    <p className='wrap-break-word'><span className='font-semibold text-ui-text'>Source claim:</span> {detail.alert?.claimSummary || 'No source claim summary is available.'}</p>
+                    <p className='wrap-break-word'><span className='font-semibold text-ui-text'>Analyst inference:</span> {detail.alert?.routingContext?.reason || 'Review the linked evidence before drawing an incident conclusion.'}</p>
+                </div>
+            </div>
+            <div className='grid min-w-0 content-start gap-2'>
+                <CommandLink href={primaryHref}>{primaryNext?.label || recommended}</CommandLink>
+                <div className='grid gap-2 sm:grid-cols-2 lg:grid-cols-1'>
+                    <CommandLink href={actionDockHref}>Analyst actions</CommandLink>
+                    <CommandLink href={deliveryHistoryHref}>Delivery history</CommandLink>
+                </div>
+                {blockers.length ? (
+                    <div className='rounded-lg border border-ui-warning/30 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning'>
+                        {blockers.slice(0, 3).map(stateLabel).join(', ')}
+                    </div>
+                ) : null}
+            </div>
+        </section>
+    )
+}
+
+function DecisionFact({ label, value, title }: { label: string, value: string, title?: string }) {
+    return (
+        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-canvas px-3 py-2'>
+            <p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p>
+            <p className='mt-1 truncate text-xs font-semibold text-ui-text' title={title || value}>{value}</p>
+        </div>
+    )
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function WorkflowStrip({ detail, exportPayload }: { detail: CaseDetail, exportPayload?: CaseExport }) {
+    const terms = matchedTerms(detail)
+    const evidenceCount = detail.evidence?.length ?? exportPayload?.summary?.evidenceCount ?? 0
+    const deliveryCount = detail.deliveries?.length ?? exportPayload?.summary?.deliveryCount ?? 0
+    const steps = [
+        { label: 'Watchlist', value: terms[0] || 'term pending', state: terms.length ? 'ready' : 'blocked' },
+        { label: 'Alert', value: compactCaseReference(detail.alert?.id || detail.case?.alertId, 'Alert') || 'Alert pending', state: detail.alert ? 'ready' : 'blocked' },
+        { label: 'Case', value: detail.case?.status || 'open', state: 'ready' },
+        { label: 'Evidence', value: `${evidenceCount} rows`, state: evidenceCount ? 'ready' : 'blocked' },
+        { label: 'Webhook', value: deliveryCount ? `${deliveryCount} attempts` : 'not sent', state: detail.deliveryContext?.delivered ? 'ready' : deliveryCount ? 'action' : 'blocked' },
+        { label: 'Audit', value: `${detail.timeline?.length || 0} events`, state: detail.timeline?.length ? 'ready' : 'action' },
+    ] as Array<{ label: string, value: string, state: 'ready' | 'action' | 'blocked' }>
+    return (
+        <section className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 md:grid-cols-3 xl:grid-cols-6'>
+            {steps.map((step, index) => (
+                <div key={step.label} className='min-h-[104px] rounded-lg border border-ui-border bg-ui-canvas p-3'>
+                    <div className='flex items-center justify-between gap-2'>
+                        <span className='grid h-7 w-7 place-items-center rounded-full border border-ui-border text-xs font-semibold text-ui-text'>{index + 1}</span>
+                        <StatusDot state={step.state} />
+                    </div>
+                    <p className='mt-3 text-[10px] font-semibold uppercase text-ui-muted'>{step.label}</p>
+                    <p className='mt-1 truncate text-sm font-semibold text-ui-text' title={step.value}>{step.value}</p>
+                </div>
+            ))}
+        </section>
+    )
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady, latestDelivery, readOnly }: {
+    caseId: string
+    tenantId: string
+    organizationId?: string
+    alertId?: string
+    exportReady: boolean
+    latestDelivery?: DeliveryRow
+    readOnly: boolean
+}) {
+    const dashboardScope = queryString({ tenantId, organizationId, alert: alertId })
+    const currentCaseHref = `/cases/${encodeURIComponent(caseId)}${queryString({ tenantId, organizationId, alertId, route: 'case_detail' })}`
+    const organizationHref = organizationId
+        ? `/organizations${queryString({ organizationId, caseId, alertId, focus: alertId ? 'cases' : 'watchlists' })}`
+        : '/organizations'
+    const exportHref = `/api/cases/${encodeURIComponent(caseId)}/export${queryString({ tenantId, organizationId, alertId, shape: 'full' })}`
+    const alertHref = alertId ? `/dwm${queryString({ tenantId, organizationId, alert: alertId })}` : undefined
+    const lastDelivery = latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTime(latestDelivery.attemptedAt)}` : 'not sent'
+
+    return (
+        <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
+            <div className='grid gap-3'>
+                <div className='min-w-0'>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Case command</p>
+                    <div className='mt-2 grid gap-2 text-xs sm:grid-cols-4'>
+                        <CommandFact label='Scope' value={compactCaseReference(organizationId, 'Org') || compactCaseReference(tenantId, 'Tenant') || 'Scope pending'} />
+                        <CommandFact label='Alert' value={compactCaseReference(alertId, 'Alert') || 'Pending'} />
+                        <CommandFact label='Export' value={exportReady ? 'ready' : 'pending'} tone={exportReady ? 'ready' : 'warn'} />
+                        <CommandFact label='Delivery' value={lastDelivery} tone={latestDelivery?.status === 'failed' ? 'warn' : 'neutral'} />
+                    </div>
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                    <CommandLink href={`/cases${dashboardScope}`}>Queue</CommandLink>
+                    <CommandLink href={organizationHref}>Organization</CommandLink>
+                    {alertHref ? <CommandLink href={alertHref}>Selected alert</CommandLink> : null}
+                    <CommandLink href={exportHref}>{exportReady ? 'Export case' : 'Check export'}</CommandLink>
+                    {readOnly ? <span className='inline-flex h-9 items-center rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 text-xs font-semibold text-ui-warning'>Read only</span> : null}
+                    <CommandLink href={currentCaseHref}>Current case</CommandLink>
+                </div>
+            </div>
+        </section>
+    )
+}
+
+function CommandFact({ label, value, tone = 'neutral' }: { label: string, value: string, tone?: 'ready' | 'warn' | 'neutral' }) {
+    const toneClass = tone === 'ready' ? 'text-ui-success' : tone === 'warn' ? 'text-ui-warning' : 'text-ui-text'
+    return (
+        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-canvas px-3 py-2'>
+            <p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p>
+            <p className={`mt-1 truncate text-xs font-semibold ${toneClass}`} title={value}>{value}</p>
+        </div>
+    )
+}
+
+function CommandLink({ href, children }: { href: string, children: ReactNode }) {
+    const className = 'inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'
+    if (href.startsWith('/api/')) {
+        return (
+            <a href={href} className={className}>
+                {children}
+            </a>
+        )
+    }
+
+    return (
+        <Link href={href} className={className}>
+            {children}
+        </Link>
+    )
+}
+
+function CollapsiblePanel({ title, action, children, defaultOpen = false }: { title: string, action?: string, children: ReactNode, defaultOpen?: boolean }) {
+    return (
+        <details className='group rounded-lg border border-ui-border bg-ui-panel' open={defaultOpen}>
+            <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 marker:hidden'>
+                <div className='min-w-0'>
+                    <h2 className='text-sm font-semibold text-ui-text'>{title}</h2>
+                    <p className='mt-1 text-xs text-ui-muted group-open:hidden'>Expand to inspect the attached rows.</p>
+                </div>
+                <div className='flex shrink-0 items-center gap-2'>
+                    {action ? <span className='rounded-full border border-ui-border bg-ui-canvas px-2 py-0.5 text-[10px] font-semibold uppercase text-ui-primary'>{action}</span> : null}
+                    <span className='grid h-7 w-7 place-items-center rounded-lg border border-ui-border bg-ui-canvas text-xs font-semibold text-ui-muted group-open:rotate-45'>+</span>
+                </div>
+            </summary>
+            <div className='border-t border-ui-border p-3'>
+                {children}
+            </div>
+        </details>
+    )
+}
+
+function Metric({ label, value, detail }: { label: string, value: string, detail: string }) {
+    return (
+        <div className='rounded-lg border border-ui-border bg-ui-panel p-3'>
+            <p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p>
+            <p className='mt-1 text-xl font-semibold text-ui-text'>{value}</p>
+            <p className='mt-1 truncate text-xs text-ui-muted' title={detail}>{detail}</p>
+        </div>
+    )
+}
+
+function safeCaseEvidenceExcerpt(row: EvidenceRow) {
+    return safeEvidenceExcerpt(row.safeExcerpt || row.excerpt || 'No safe excerpt available.')
+}
+
+function orderCaseDeliveries(rows: DeliveryRow[]) {
+    return [...rows].sort((first, second) => String(second.attemptedAt || '').localeCompare(String(first.attemptedAt || '')))
+}
+
+function deliveryRowsFromApi(payload: Record<string, unknown>): DeliveryRow[] {
+    const rows = Array.isArray(payload.deliveryLedger) ? payload.deliveryLedger : []
+    return rows
+        .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object' && !Array.isArray(row))
+        .map(row => {
+            const response = row.response && typeof row.response === 'object' && !Array.isArray(row.response) ? row.response as Record<string, unknown> : {}
+            const destination = row.redactedDestination && typeof row.redactedDestination === 'object' && !Array.isArray(row.redactedDestination) ? row.redactedDestination as Record<string, unknown> : {}
+            return {
+                id: String(row.deliveryId || row.requestId || ''),
+                requestId: String(row.requestId || row.deliveryId || ''),
+                auditEventId: stringValue(row.auditEventId),
+                alertId: stringValue(row.alertId),
+                organizationId: stringValue(row.orgId),
+                webhookDestinationId: stringValue(row.destinationId),
+                status: stringValue(row.rawStatus) || stringValue(row.status),
+                attemptedAt: stringValue(row.attemptedAt),
+                endpointHash: stringValue(destination.endpointHash),
+                endpointHint: stringValue(destination.endpointHint) || stringValue(row.redactedEndpointLabel),
+                payloadHash: stringValue(row.payloadHash),
+                dedupeKey: stringValue(row.dedupeKey),
+                idempotencyKey: stringValue(row.idempotencyKey),
+                dryRun: row.dryRun === true,
+                httpStatus: typeof row.responseStatus === 'number' ? row.responseStatus : typeof response.httpStatus === 'number' ? response.httpStatus : undefined,
+                error: stringValue(row.error),
+                errorClass: stringValue(row.errorClass),
+                attemptCount: typeof row.attemptCount === 'number' ? row.attemptCount : null,
+                nextRetryAt: stringValue(row.nextRetryAt) || null,
+                retryable: row.retryable === true,
+                reportValidation: stringValue(row.reportValidation),
+                reportExportChecksum: stringValue(row.reportExportChecksum),
+                reportCaseId: stringValue(row.reportCaseId),
+                thirdPartyReport: row.thirdPartyReport === true,
+            }
+        })
+        .filter(row => Boolean(row.id))
+}
+
+function receiverReceiptRowsFromApi(payload: Record<string, unknown>): ReceiverReceipt[] {
+    const rows = Array.isArray(payload.receipts) ? payload.receipts : []
+    return rows
+        .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object' && !Array.isArray(row))
+        .map(row => ({
+            id: stringValue(row.id),
+            destinationId: stringValue(row.destinationId),
+            deliveryId: stringValue(row.deliveryId),
+            idempotencyKey: stringValue(row.idempotencyKey),
+            payloadHash: stringValue(row.payloadHash),
+            reportCaseId: stringValue(row.reportCaseId),
+            reportExportChecksum: stringValue(row.reportExportChecksum),
+            receivedAt: stringValue(row.receivedAt),
+            persistedAt: stringValue(row.persistedAt),
+        }))
+        .filter(row => Boolean(row.id))
+}
+
+function destinationRowsFromApi(payload: Record<string, unknown>): WebhookDestination[] {
+    const rows = Array.isArray(payload.destinations) ? payload.destinations : []
+    return rows
+        .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object' && !Array.isArray(row))
+        .map(row => ({
+            id: String(row.id || ''),
+            name: stringValue(row.name),
+            kind: stringValue(row.kind),
+            endpointHint: stringValue(row.endpointHint),
+            status: stringValue(row.status),
+        }))
+        .filter(row => Boolean(row.id) && row.status === 'active')
+}
+
+function deliveryContextFromApi(deliveries: DeliveryRow[]): NonNullable<CaseDetail['deliveryContext']> {
+    const failed = deliveries.filter(delivery => delivery.status === 'failed')
+    return {
+        deliveryCount: deliveries.length,
+        latestDelivery: deliveries[0],
+        delivered: deliveries.some(delivery => delivery.status === 'delivered'),
+        retryable: failed.some(delivery => delivery.retryable === true),
+        failed,
+    }
+}
+
+function stringValue(value: unknown) {
+    return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function EvidenceMobileRow({ row, selected, onToggle }: { row: EvidenceRow, selected: boolean, onToggle: () => void }) {
+    return (
+        <article className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 text-xs' data-dwm-case-evidence-mobile-row='true'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='flex min-w-0 gap-2'>
+                    <input type='checkbox' aria-label={`Select ${row.sourceName || row.id || 'evidence'} for third-party report`} checked={selected} disabled={!row.id} onChange={onToggle} />
+                    <div className='min-w-0'>
+                        <p className='truncate text-sm font-semibold text-ui-text'>{row.sourceName || sourceReferenceState(row)}</p>
+                        <p className='mt-1 truncate text-ui-muted'>{stateLabel(row.sourceFamily)}</p>
+                    </div>
+                </div>
+                <span className='shrink-0 rounded-md border border-ui-border bg-ui-canvas px-2 py-1 font-semibold text-ui-muted'>{relativeTime(row.observedAt || row.collectedAt)}</span>
+            </div>
+            <p className='wrap-break-word rounded-md bg-ui-canvas px-3 py-2 leading-5 text-ui-text'>{safeCaseEvidenceExcerpt(row)}</p>
+            <div className='grid gap-1 text-[11px] font-semibold text-ui-muted'>
+                <span className='truncate'>Capture: {evidenceReferenceState(row)}</span>
+                <span className='truncate'>Hash: {evidenceHashState(row)}</span>
+            </div>
+        </article>
+    )
+}
+
+function toggleSelectedEvidence(selected: string[], evidenceId: string) {
+    return selected.includes(evidenceId) ? selected.filter(id => id !== evidenceId) : [...selected, evidenceId].slice(0, DWM_CASE_REPORT_MAX_EVIDENCE)
+}
+
+function thirdPartyReportHref(caseId: string, tenantId: string, organizationId: string | undefined, alertId: string | undefined, evidenceIds: string[], format: 'json' | 'stix') {
+    const params = new URLSearchParams({ tenantId, report: 'true', format })
+    if (organizationId) params.set('organizationId', organizationId)
+    if (alertId) params.set('alertId', alertId)
+    for (const evidenceId of evidenceIds) params.append('evidenceId', evidenceId)
+    return `/api/cases/${encodeURIComponent(caseId)}/export?${params.toString()}`
+}
+
+function TimelineItem({ row, compact = false }: { row: TimelineRow, compact?: boolean }) {
+    const when = row.timestamp || row.at
+    if (compact) {
+        return (
+            <div className='rounded-lg border border-ui-border bg-ui-canvas p-3 text-xs'>
+                <div className='flex items-start justify-between gap-3'>
+                    <p className='font-semibold text-ui-text'>{stateLabel(row.action || row.eventType)}</p>
+                    <p className='shrink-0 text-ui-muted'>{relativeTime(when)}</p>
+                </div>
+                <p className='mt-1 wrap-break-word leading-5 text-ui-muted'>{row.rationale || row.note || row.source || 'Case event recorded.'}</p>
+                <p className='mt-2 text-[11px] font-semibold text-ui-muted'>{timelineActorLabel(row.actor)}{row.workflow?.toStatus ? ` · ${stateLabel(row.workflow.toStatus)}` : ''}</p>
+            </div>
+        )
+    }
+
+    return (
+        <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-canvas p-3 text-xs md:grid-cols-[160px_minmax(0,1fr)_180px]'>
+            <div className='text-ui-muted'>{relativeTime(when)}</div>
+            <div className='min-w-0'>
+                <p className='font-semibold text-ui-text'>{stateLabel(row.action || row.eventType)}</p>
+                <p className='mt-1 wrap-break-word leading-5 text-ui-muted'>{row.rationale || row.note || row.source || 'Case event recorded.'}</p>
+            </div>
+            <div className='text-[11px] font-semibold text-ui-muted'>{timelineActorLabel(row.actor)}{row.workflow?.toStatus ? <p>{stateLabel(row.workflow.toStatus)}</p> : null}</div>
+        </div>
+    )
+}
+
+function ActionButton({ action, busy, disabled, onClick }: { action: CaseAction, busy: boolean, disabled: boolean, onClick: () => void }) {
+    const Icon = busy ? Loader2 : action.id === 'reopen' ? RotateCcw : action.id === 'close' ? CheckCircle2 : action.id.includes('false') || action.id === 'suppress' ? XCircle : action.id === 'assign' ? UserRound : ShieldCheck
+    return (
+        <button type='button' onClick={onClick} disabled={disabled} title={action.disabledReason} className='inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-2 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-50'>
+            <Icon className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />{actionLabel(action.id)}
+        </button>
+    )
+}
+
+function CasePill({ label, value, tone }: { label: string, value: string, tone: 'ready' | 'warn' | 'neutral' }) {
+    const toneClass = tone === 'ready' ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : tone === 'warn' ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning' : 'border-ui-border bg-ui-panel text-ui-text'
+    return <div className={`rounded-lg border px-3 py-2 ${toneClass}`}><p className='text-[10px] font-semibold uppercase opacity-80'>{label}</p><p className='text-sm font-semibold'>{stateLabel(value)}</p></div>
+}
+
+function StatusDot({ state }: { state: 'ready' | 'action' | 'blocked' }) {
+    const toneClass = state === 'ready' ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : state === 'action' ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
+    return <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${toneClass}`}>{state}</span>
+}
+
+function KeyValue({ label, value }: { label: string, value: string }) {
+    return <div className='grid gap-1 rounded-lg border border-ui-border bg-ui-canvas p-2'><p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p><p className='wrap-break-word text-xs text-ui-text'>{value}</p></div>
+}
+
+function EmptyLine({ text }: { text: string }) {
+    return <div className='rounded-lg border border-dashed border-ui-border bg-ui-canvas p-4 text-sm text-ui-muted'>{text}</div>
+}
+
+function queryString(params: Record<string, string | undefined>) {
+    const query = new URLSearchParams()
+    for (const [key, value] of Object.entries(params)) if (value) query.set(key, value)
+    const rendered = query.toString()
+    return rendered ? `?${rendered}` : ''
+}
+
+function matchedTerms(detail: CaseDetail) {
+    const terms = detail.watchlists?.flatMap(watchlist => watchlist.matchedTerms?.map(term => term.value).filter(Boolean) || []) || []
+    const matched = detail.alert?.matchedTerm?.value
+    return uniqueStrings([matched, ...terms])
+}
+
+function resolvedTenantId(caseRecord: CaseDetail['case'] | undefined, fallback: string) {
+    return caseRecord?.tenantId || fallback
+}
+
+function resolvedOrganizationId(caseRecord: CaseDetail['case'] | undefined, fallback?: string) {
+    return caseRecord?.organizationId || fallback
+}
+
+function resolvedAlertId(caseRecord: CaseDetail['case'] | undefined, alertContext: CaseDetail['alertContext'] | undefined, fallback?: string) {
+    return caseRecord?.alertId || alertContext?.id || fallback
+}
+
+function uniqueStrings(values: Array<string | undefined>) {
+    return [...new Set(values.map(value => value?.trim()).filter(Boolean) as string[])]
+}
+
+function actionUnavailableReasons(actions: CaseAction[], readOnly: boolean) {
+    if (readOnly) return [{ id: 'access', reason: 'Your current role can inspect this case but cannot change workflow state.' }]
+    return actions
+        .filter(action => !action.enabled)
+        .map(action => ({ id: action.id, reason: action.disabledReason || 'Action is not available for this case.' }))
+}
+
+function relativeTime(value?: string) {
+    if (!value) return 'time pending'
+    const time = new Date(value).getTime()
+    if (!Number.isFinite(time)) return value
+    const diff = Date.now() - time
+    const abs = Math.abs(diff)
+    const units: Array<[number, string]> = [[86_400_000, 'd'], [3_600_000, 'h'], [60_000, 'm']]
+    for (const [size, label] of units) {
+        if (abs >= size) return `${Math.round(diff / size)}${label} ago`
+    }
+    return 'just now'
+}
+
+function stateLabel(value?: string) {
+    return (value || 'pending').replace(/[_-]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
+}
+
+function compactCaseReference(value: string | undefined, label: string) {
+    if (!value) return undefined
+    const cleaned = value.trim()
+    const normalized = cleaned.replace(/^(?:dwm[_:-]+)?(?:case|alert|org|organization|tenant)[_:-]+/i, '')
+    const compact = normalized.length > 18 ? normalized.slice(-14).replace(/^[:_-]+/, '') : normalized
+    return `${label} ${compact || cleaned}`
+}
+
+function evidenceReferenceState(row: EvidenceRow) {
+    if (row.provenance?.captureId || row.id) return 'capture linked'
+    return 'capture pending'
+}
+
+function sourceReferenceState(row: EvidenceRow) {
+    if (row.provenance?.sourceId) return 'source linked'
+    return 'source pending'
+}
+
+function evidenceHashState(row: EvidenceRow) {
+    if (row.contentHash || row.provenance?.contentHash) return 'hash linked'
+    return 'hash pending'
+}
+
+function deliveryDestinationState(row: DeliveryRow) {
+    if (row.endpointHint || row.endpointHash) return 'configured destination'
+    if (row.webhookDestinationId || row.destinationId) return 'saved destination'
+    return 'destination pending'
+}
+
+function deliveryRetryBlockedReason(row?: DeliveryRow) {
+    if (row?.status !== 'failed' || row.retryable !== true || !row.nextRetryAt) return undefined
+    const dueAt = Date.parse(row.nextRetryAt)
+    return Number.isFinite(dueAt) && dueAt > Date.now()
+        ? `Exact report retry is available at ${new Date(dueAt).toLocaleString()}.`
+        : undefined
+}
+
+function webhookActionBlockedReason(detail: CaseDetail | null | undefined, alertId?: string) {
+    if (!alertId) return 'Webhook delivery needs a linked alert before it can be tested or sent.'
+    if (detail?.customerNotificationContext?.ready === false) {
+        const blockers = uniqueStrings(detail.customerNotificationContext.blockers ?? [])
+        return blockers.length
+            ? blockers.map(stateLabel).join(', ')
+            : 'Webhook delivery needs an active customer destination before it can be tested or sent.'
+    }
+    return undefined
+}
+
+function timelineActorLabel(value?: string) {
+    if (!value) return 'system'
+    if (/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(value)) return value
+    if (/^[a-z0-9_-]{16,}$/i.test(value)) return 'system actor'
+    return stateLabel(value)
+}
+
+function actionLabel(value: string) {
+    if (value === 'false_positive') return 'False positive'
+    return stateLabel(value)
+}
+
+async function copyText(value: string) {
+    if (!value) return
+    await navigator.clipboard?.writeText(value).catch(() => undefined)
+}

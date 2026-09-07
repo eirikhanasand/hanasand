@@ -5,7 +5,7 @@ import path from 'node:path'
 const root = process.cwd()
 
 test('DWM case detail keeps row-heavy evidence behind disclosures', async () => {
-    const source = await readFile(path.join(root, 'src/app/dashboard/dwm/cases/[id]/case-detail-client.tsx'), 'utf8')
+    const source = await readFile(path.join(root, 'src/app/dashboard/cases/[id]/case-detail-client.tsx'), 'utf8')
 
     expect(source).toContain('<h2 className=\'text-sm font-semibold text-ui-text\'>Evidence</h2>')
     expect(source).toContain('data-dwm-case-evidence-mobile-list')

@@ -1,10 +1,13 @@
 import { NextRequest } from 'next/server'
 import { proxyTiRequest } from '../../dwm/_tiProxy'
 
+import { GET as proxyBackend } from '../../backend/[...path]/route'
+
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const { id } = await context.params
+    if (/^MON-[1-9]\d*$/.test(id)) return proxyBackend(request, { params: Promise.resolve({ path: ['cases', 'monitoring', id] }) })
     return proxyTiRequest(request, `/v1/cases/${encodeURIComponent(id)}`, { method: 'GET' })
 }
 

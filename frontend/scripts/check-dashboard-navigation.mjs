@@ -22,6 +22,9 @@ assert(operator.some(item => item.href === '/system'))
 assert(!operator.some(item => ['/db', '/logs', '/system/updates'].includes(item.href)))
 assert.equal(all.find(item => item.href === '/dwm/actors')?.label, 'Monitored actors')
 assert(all.some(item => item.href === '/management'))
+assert.deepEqual(all.find(item => item.href === '/cases')?.ancestors, ['Security operations'])
+assert.deepEqual(all.find(item => item.href === '/dwm/actors')?.ancestors, ['Security operations', 'Dark web monitoring'])
+assert.deepEqual(getDashboardNavigation(access)[0].items.slice(0, 3).map(item => item.label), ['Overview', 'Threat Search', 'Cases'])
 
 // Exercise the real component; only Next routing is replaced.
 const build = await Bun.build({ entrypoints: ['sidebar-test-entry'], target: 'browser', plugins: [{ name: 'sidebar-fixture', setup(builder) {

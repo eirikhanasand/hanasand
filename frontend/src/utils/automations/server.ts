@@ -9,7 +9,7 @@ export type InitialAutomationData = {
     error?: string
 }
 
-export async function loadAutomations(): Promise<InitialAutomationData> {
+export async function loadAutomations(selectedId?: string): Promise<InitialAutomationData> {
     const store = await cookies()
     const token = store.get('access_token')?.value
     const id = store.get('id')?.value
@@ -26,7 +26,7 @@ export async function loadAutomations(): Promise<InitialAutomationData> {
         const { automations } = await request<{ automations: AgentAutomation[] }>('')
         if (!automations.length) return { automations }
         try {
-            const detail = await request<NonNullable<InitialAutomationData['detail']>>(`/${encodeURIComponent(automations[0].id)}`)
+            const detail = await request<NonNullable<InitialAutomationData['detail']>>(`/${encodeURIComponent(automations.find(item => item.id === selectedId)?.id || automations[0].id)}`)
             return { automations, detail }
         } catch {
             return { automations, error: 'Unable to load recent checks. Please try again.' }

@@ -1,15 +1,13 @@
 'use client'
 
 import { useId } from 'react'
+import { healthCheckCertificate } from './healthCheckSorting'
 import { Clock3, Info, ShieldCheck, ShieldX } from 'lucide-react'
 import type { AgentAutomation } from '@/utils/automations/client'
 
 export default function CertificateStatus({ automation }: { automation: AgentAutomation }) {
     const id = useId()
-    const socketTls = automation.monitoringType === 'tcp' && /:443$/.test(automation.targetUrl || '')
-    const applies = automation.actionType === 'agent_prompt' && (socketTls || automation.monitoringType !== 'ssh' && automation.monitoringType !== 'tcp' && /^https:/i.test(automation.targetUrl || ''))
-    const status = applies ? automation.certificateStatus === 'not_applicable' ? null : automation.certificateStatus : 'not_applicable'
-    const label = status === 'not_applicable' ? 'N/A' : status === 'valid' ? 'Valid' : status === 'invalid' ? 'Invalid' : status === 'expiring' ? 'Expiring' : 'Pending'
+    const { applies, status, label } = healthCheckCertificate(automation)
     const Icon = status === 'not_applicable' ? Info : status === 'valid' ? ShieldCheck : status ? ShieldX : Clock3
     const color = status === 'valid' ? 'text-ui-success' : status === 'invalid' ? 'text-ui-danger' : status === 'expiring' ? 'text-ui-warning' : 'text-ui-muted'
     const explanation = automation.targetUrl === 'system:metrics' ? 'This check reads a local host snapshot. It makes no TLS connection, so no certificate is needed.' : automation.monitoringType === 'ssh' || automation.monitoringType === 'tcp' && /:22$/.test(automation.targetUrl || '')

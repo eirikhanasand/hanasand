@@ -20,12 +20,10 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
         group('Security operations', [
             link('Overview', '/dashboard'),
             link('Threat Search', '/ti'),
+            link('Cases', '/cases'),
             group('Dark web monitoring', [
-                group('Investigations', [
-                    link('Cases', '/dwm/cases'),
-                    link('Monitored actors', '/dwm/actors'),
-                    link('Actions', '/dwm/actions'),
-                ]),
+                link('Monitored actors', '/dwm/actors'),
+                link('Actions', '/dwm/actions'),
                 link('Watchlists', '/dwm/watchlists'),
                 link('Integrations', '/dwm/delivery'),
             ]),

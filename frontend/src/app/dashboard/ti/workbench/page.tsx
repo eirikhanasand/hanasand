@@ -111,8 +111,8 @@ function workbenchCaseReferenceRows(item: WorkbenchCase) {
 function scopeRefsFromHref(href: string) {
     const refs: Array<{ kind: string, value: string }> = []
     const [path, query = ''] = href.split('?')
-    if (path.includes('/dwm/cases/')) {
-        const caseId = path.split('/dwm/cases/')[1]
+    if (path.includes('/cases/')) {
+        const caseId = path.split('/cases/')[1]
         if (caseId) refs.push({ kind: 'case', value: decodeURIComponent(caseId) })
     }
     const params = new URLSearchParams(query)
@@ -389,7 +389,7 @@ function caseDashboardHref(row: WorkbenchDwmCaseListItem) {
     if (row.alertId) params.set('alertId', row.alertId)
     params.set('route', 'ti_workbench')
     const query = params.toString()
-    return `/dwm/cases/${encodeURIComponent(caseId || 'case')}${query ? `?${query}` : ''}`
+    return `/cases/${encodeURIComponent(caseId || 'case')}${query ? `?${query}` : ''}`
 }
 
 function severityPriority(severity: WorkbenchCase['severity']) {

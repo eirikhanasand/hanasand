@@ -827,7 +827,7 @@ function PublicTiDwmIntake({ handoff, tenantId, organizationId, activeSourceCoun
     const sourceHref = '/ti/sources'
     const orgHref = organizationId ? `/organizations?organizationId=${encodeURIComponent(organizationId)}` : `/organizations?tenantId=${encodeURIComponent(tenantId)}`
     const actionsHref = organizationId ? `/dwm/actions?organizationId=${encodeURIComponent(organizationId)}#dwm-alert-review` : '/dwm/actions#dwm-alert-review'
-    const casesHref = organizationId ? `/dwm/cases?organizationId=${encodeURIComponent(organizationId)}` : '/dwm/cases'
+    const casesHref = organizationId ? `/cases?organizationId=${encodeURIComponent(organizationId)}` : '/cases'
 
     if (!handoff.ok) {
         return (
@@ -2890,7 +2890,7 @@ function caseDetailHref(caseId: string, alertId?: string, organizationId?: strin
     if (alertId) params.set('alertId', alertId)
     if (route) params.set('route', route)
     const query = params.toString()
-    return `/dwm/cases/${encodeURIComponent(caseId)}${query ? `?${query}` : ''}`
+    return `/cases/${encodeURIComponent(caseId)}${query ? `?${query}` : ''}`
 }
 
 function severityClass(severity: string) {

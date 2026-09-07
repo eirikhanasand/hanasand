@@ -34,7 +34,7 @@ const dashboardRouteItems: SearchItem[] = [
     route('Security overview', 'Suspicious login and security event review', '/mill'),
     route('Detection rules', 'Create and import security detection rules', '/mill/rules'),
     route('Security Scanner', 'Run and schedule approved Hanasand scans', '/scanner'),
-    route('DWM cases', 'Dark web monitoring case review', '/dwm/cases'),
+    route('Cases', 'Cases across all services', '/cases'),
     route('DWM watchlists', 'Watched companies, vendors, domains, and brands', '/dwm/watchlists'),
     route('DWM delivery', 'Webhook attempts and customer delivery', '/dwm/delivery'),
     route('DWM actors', 'Actor context and coverage', '/dwm/actors'),
@@ -267,7 +267,7 @@ export function caseItem(value: unknown): SearchItem | null {
     if (!id) return null
     const title = stringValue(row.title) || stringValue(row.company) || stringValue(row.organizationName) || id
     const detail = [stringValue(row.status), stringValue(row.organizationName), stringValue(row.summary)].filter(Boolean).join(' · ')
-    const href = stringValue(row.casePath) || `/dwm/cases/${encodeURIComponent(id)}`
+    const href = stringValue(row.casePath) || `/cases/${encodeURIComponent(id)}`
     return { id: `case:${id}`, title, detail, href }
 }
 

@@ -5,7 +5,7 @@ import { formatClaimSummary } from '../src/utils/dwm/display.ts'
 const source = readFileSync(new URL('../src/app/dashboard/dwm/dwm-analyst-portal.tsx', import.meta.url), 'utf8')
 const pageSource = readFileSync(new URL('../src/app/dashboard/dwm/page.tsx', import.meta.url), 'utf8')
 const workflowSource = readFileSync(new URL('../src/app/dashboard/dwm/dwm-workflow-actions.tsx', import.meta.url), 'utf8')
-const caseDetailSource = readFileSync(new URL('../src/app/dashboard/dwm/cases/[id]/case-detail-client.tsx', import.meta.url), 'utf8')
+const caseDetailSource = readFileSync(new URL('../src/app/dashboard/cases/[id]/case-detail-client.tsx', import.meta.url), 'utf8')
 const workbenchAdapterSource = readFileSync(new URL('../src/app/dashboard/ti/workbench/dwmAlertAdapter.ts', import.meta.url), 'utf8')
 const displaySource = readFileSync(new URL('../src/utils/dwm/display.ts', import.meta.url), 'utf8')
 

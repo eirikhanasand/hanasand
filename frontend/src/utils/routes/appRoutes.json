@@ -1,5 +1,9 @@
 [
   [
+    "/dashboard/cases",
+    "/cases"
+  ],
+  [
     "/dashboard/vulnerabilities",
     "/vulnerabilities"
   ],

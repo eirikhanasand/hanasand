@@ -35,6 +35,6 @@ test('header case results never display a raw organization identifier', () => {
         id: 'case:case-1',
         title: 'Incident',
         detail: 'open · Review required.',
-        href: '/dwm/cases/case-1',
+        href: '/cases/case-1',
     })
 })
