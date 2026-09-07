@@ -11,6 +11,7 @@ test('health columns toggle both directions, preserve alphabetical ties and work
     })
     await page.goto('/dashboard/automation/health')
     const retry = page.getByRole('button', { name: 'Try again' })
+    await expect(retry.or(page.getByRole('button', { name: 'Sort by Name', exact: true }))).toBeVisible({ timeout: 25000 })
     if (await retry.isVisible()) await retry.click()
     const names = page.locator('[data-health-check] > span:first-of-type')
     await expect(names).toHaveText(['Alpha', 'Beta', 'Zulu'])
