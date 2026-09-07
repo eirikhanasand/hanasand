@@ -20,23 +20,25 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
     const sections = [
         group('Security operations', [
             link('Overview', '/dashboard'),
-            link('Threat Search', '/ti'),
-            link('Cases', '/cases'),
-            link('Browser', '/browser'),
-            group('Dark web monitoring', [
-                link('Overview', '/dwm'),
+            group('Investigations', [
+                link('Threat Search', '/ti'),
+                link('Cases', '/cases'),
+                link('Browser', '/browser'),
+                link('Alert actions', '/dwm/actions'),
+            ]),
+            group('Monitoring', [
+                link('Dark web monitoring', '/dwm'),
                 link('Monitored actors', '/dwm/actors'),
-                link('Actions', '/dwm/actions'),
                 link('Watchlists', '/dwm/watchlists'),
+                link('Security findings', '/mill'),
+                link('Detection rules', '/mill/rules'),
                 link('Integrations', '/dwm/delivery'),
             ]),
-            group('Security Monitoring', [
-                link('Overview', '/mill'),
-                link('Detection rules', '/mill/rules'),
+            group('Security tools', [
+                link('Security Scanner', canManageSystem ? '/scanner' : '/solutions/scanner'),
+                link('Exposure Lookup', '/pwned'),
+                link('Endpoint Checks', '/test'),
             ]),
-            link('Security Scanner', canManageSystem ? '/scanner' : '/solutions/scanner'),
-            link('Exposure Lookup', '/pwned'),
-            link('Endpoint Checks', '/test'),
         ]),
         group('Threat intelligence', [
             group('Intelligence', [
