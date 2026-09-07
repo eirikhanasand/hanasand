@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, Braces, FileJson, KeyRound, ShieldCheck } from 'lucide-react'
+import { Braces, FileJson, KeyRound, ShieldCheck } from 'lucide-react'
 import { buildRouteMetadata } from '../seo'
 import { authApiUrl } from '@/utils/auth/authApiUrl'
 import CopyCodeButton from './copyCodeButton'
@@ -52,7 +52,7 @@ if (error) throw new Error(error.error.message)`
                         <h1 className='mt-1 text-2xl font-semibold tracking-normal md:text-3xl'>{contract.info.title}</h1>
                     </div>
                     <div className='flex shrink-0 flex-wrap gap-3'>
-                        <Link href='/register?path=%2Fdevelopers%23api-access' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>Create API key<ArrowRight className='h-4 w-4' /></Link>
+                        <div id='api-key-header-action' />
                         <Link href='/api/openapi/ti' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'><FileJson className='h-4 w-4' />OpenAPI JSON</Link>
                     </div>
                 </div>

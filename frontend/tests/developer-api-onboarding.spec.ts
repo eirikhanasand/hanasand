@@ -51,11 +51,15 @@ test('signed-in customer creates an organization key, runs the shown request, an
 
     await page.goto('/developers#api-access', { waitUntil: 'domcontentloaded' })
     await expect(page.getByRole('heading', { name: 'Organization, API key, first request.' })).toBeVisible()
+    await page.locator('#api-key-header-action').getByRole('button', { name: 'Create organization' }).click()
+    await expect(page.getByLabel('Organization name')).toBeFocused()
+    await expect(page).toHaveURL(/developers#api-access$/)
     await page.getByLabel('Organization name').fill(organization.name)
-    await page.getByRole('button', { name: 'Create organization' }).click()
+    await page.locator('#api-key-header-action').getByRole('button', { name: 'Create organization' }).click()
     await expect(page.getByText('Organization created. Create its API key next.')).toBeVisible()
 
-    await page.getByRole('button', { name: 'Create API key' }).click()
+    await page.locator('#api-key-header-action').getByRole('button', { name: 'Create API key' }).click()
+    await expect(page.locator('#api-key-header-action').getByRole('button')).toHaveCount(0)
     await expect(page.getByText(issuedSecret, { exact: true })).toBeVisible()
     await expect(page.getByText(new RegExp(`X-API-Key: ${issuedSecret}`))).toBeVisible()
     await expect(page.getByText('12 read scopes')).toBeVisible()
@@ -63,7 +67,7 @@ test('signed-in customer creates an organization key, runs the shown request, an
     await page.getByRole('button', { name: 'Revoke key' }).click()
     await page.getByRole('button', { name: 'Confirm revoke' }).click()
     await expect(page.getByText('API key revoked. Calls using it now return invalid_api_key.')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Create API key' })).toBeVisible()
+    await expect(page.locator('#api-access').getByRole('button', { name: 'Create API key' })).toBeVisible()
 
     expect(requests).toEqual(expect.arrayContaining([
         { method: 'POST', path: '/api/organizations' },
@@ -80,7 +84,7 @@ test('signed-out customer gets direct registration and login choices instead of 
     const alertsRow = page.getByRole('row').filter({ has: page.getByText('/alerts', { exact: true }) })
     await expect(alertsRow.getByText('API key', { exact: true })).toBeVisible()
     await expect(alertsRow.getByText('API key or session', { exact: true })).toHaveCount(0)
-    await expect(page.getByRole('link', { name: 'Create account' })).toHaveAttribute('href', '/register?path=%2Fdevelopers%23api-access')
+    await expect(page.locator('#api-access').getByRole('link', { name: 'Create account' })).toHaveAttribute('href', '/register?path=%2Fdevelopers%23api-access')
     await expect(page.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login?path=%2Fdevelopers%23api-access')
     await expect(page.locator('#api-access').getByRole('link', { name: /contact|sales/i })).toHaveCount(0)
 })
