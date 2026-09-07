@@ -1,10 +1,17 @@
 import { expect, mock, test } from 'bun:test'
 import { EventEmitter } from 'node:events'
 import tls from 'node:tls'
+import dns from 'node:dns/promises'
+
+mock.module('node:dns/promises', () => ({ ...dns, lookup: async () => [{ address: '93.184.215.14', family: 4 }] }))
+let connections = 0
 
 let authorized = true
 let expiresAt = new Date(Date.now() + 60 * 86400000).toUTCString()
-mock.module('node:tls', () => ({ ...tls, default: tls, connect: () => {
+mock.module('node:tls', () => ({ ...tls, default: tls, connect: (options: tls.ConnectionOptions) => {
+    connections++
+    expect(options.lookup).toBeFunction()
+    expect(options.servername).toBe('example.test')
     const socket = Object.assign(new EventEmitter(), {
         authorized,
         setTimeout() {},
@@ -36,4 +43,11 @@ test('certificate validity requires trust as well as a future expiry date', asyn
     expect((await checkCertificate(target, 1000)).status).toBe('expiring')
     expiresAt = new Date(Date.now() - 86400000).toUTCString()
     expect((await checkCertificate(target, 1000)).status).toBe('invalid')
+})
+
+test('certificate preflight rejects internal destinations before TLS', async () => {
+    const before = connections
+    await expect(checkCertificate(new URL('https://127.0.0.1'), 100)).rejects.toThrow('public IP')
+    await expect(checkCertificate(new URL('https://[::1]'), 100)).rejects.toThrow('public IP')
+    expect(connections).toBe(before)
 })

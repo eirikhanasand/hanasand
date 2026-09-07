@@ -1,3 +1,5 @@
+import { hostCheckMessage } from './hostCheckMessage.ts'
+import { monitoringLookup, monitoringUrl, publicMonitoringRequest, resolveMonitoringAddresses } from './publicMonitoringRequest.ts'
 import run from '#db'
 import { normalizeJsonRule, evaluateJsonRule, sharedJsonSnapshot, type JsonRule } from './jsonMonitoring.ts'
 import { recordMonitoringOutcome } from './monitoringIssues.ts'
@@ -258,7 +260,7 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
             if (!/^[^:/\s]+(?::\d+)?$/.test(targetUrl)) throw new Error(`${monitoringType.toUpperCase()} checks need a host and optional port.`)
         } else if (!(monitoringType === 'json' && targetUrl === 'system:metrics')) {
             let parsedUrl: URL
-            try { parsedUrl = new URL(targetUrl) } catch { throw new Error('Monitoring URL must be a valid HTTP or HTTPS URL.') }
+            try { parsedUrl = monitoringUrl(targetUrl) } catch { throw new Error('Monitoring URL must be a valid HTTP or HTTPS URL.') }
             if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Monitoring URL must use HTTP or HTTPS.')
         }
     }
@@ -580,7 +582,8 @@ async function runJsonCheck(automation: AutomationRow) {
         const { exceeded, observed } = evaluateJsonRule(snapshot.payload, rule)
         const inverted = automation.upside_down || automation.expected_down
         const failed = inverted ? !exceeded : exceeded
-        const message = `JSON ${failed ? 'threshold exceeded' : 'check passed'}: ${rule.path} = ${observed}; alert ${rule.operator} ${rule.value} (${rule.aggregate}).`
+        const message = (automation.target_url === 'system:metrics' ? hostCheckMessage(rule, observed, failed, inverted) : null)
+            ?? `JSON ${failed ? 'threshold exceeded' : 'check passed'}: ${rule.path} = ${observed}; alert ${rule.operator} ${rule.value} (${rule.aggregate}).`
         if (failed) throw new Error(message)
         return { provider: 'hanasand-monitoring', model: 'json', message, certificate, warning: false }
     } catch (error) {
@@ -589,20 +592,24 @@ async function runJsonCheck(automation: AutomationRow) {
 }
 
 async function runHttpCheck(target: URL, automation: AutomationRow) {
-    const response = await fetch(target, { method: automation.monitoring_type === 'post' ? 'POST' : 'GET', redirect: automation.follow_redirects ? 'follow' : 'manual', headers: automation.user_agent ? { 'user-agent': automation.user_agent } : undefined, signal: AbortSignal.timeout(automation.timeout_seconds * 1000) })
     const checksGitRefs = target.pathname.endsWith('/info/refs') && target.searchParams.get('service') === 'git-upload-pack'
-    const body = checksGitRefs ? await response.text() : ''
-    if (!checksGitRefs) await response.body?.cancel()
+    const response = await publicMonitoringRequest(target, {
+        method: automation.monitoring_type === 'post' ? 'POST' : 'GET', followRedirects: automation.follow_redirects,
+        userAgent: automation.user_agent, timeoutMs: automation.timeout_seconds * 1000, readBody: checksGitRefs,
+    })
+    const body = response.body
     const hasMainRef = !checksGitRefs || body.includes('refs/heads/main')
-    return { up: response.ok && hasMainRef, detail: checksGitRefs ? `returned HTTP ${response.status}${hasMainRef ? ' with refs/heads/main' : ' without refs/heads/main'}` : `returned HTTP ${response.status}` }
+    return { up: response.status >= 200 && response.status < 300 && hasMainRef, detail: checksGitRefs ? `returned HTTP ${response.status}${hasMainRef ? ' with refs/heads/main' : ' without refs/heads/main'}` : `returned HTTP ${response.status}` }
 }
 
 async function runSocketCheck(automation: AutomationRow) {
     const raw = automation.target_url || ''
     const [host, portText] = raw.split(':')
     const port = Number(portText) || (automation.monitoring_type === 'ssh' ? 22 : 80)
+    const signal = AbortSignal.timeout(automation.timeout_seconds * 1000)
+    const addresses = await resolveMonitoringAddresses(host, signal)
     return new Promise<{ up: boolean, detail: string }>((resolve, reject) => {
-        const socket = connectTcp({ host, port, timeout: automation.timeout_seconds * 1000 })
+        const socket = connectTcp({ host, port, lookup: monitoringLookup(addresses), signal })
         let settled = false
         const finish = (value: { up: boolean, detail: string }) => { if (!settled) { settled = true; socket.destroy(); resolve(value) } }
         socket.setTimeout(automation.timeout_seconds * 1000, () => reject(new Error(`Connection timed out after ${automation.timeout_seconds} second${automation.timeout_seconds === 1 ? '' : 's'}.`)))
@@ -614,9 +621,18 @@ async function runSocketCheck(automation: AutomationRow) {
     })
 }
 
-export function checkCertificate(target: URL, timeoutMs: number) {
+export async function checkCertificate(target: URL, timeoutMs: number) {
+    monitoringUrl(target)
+    const signal = AbortSignal.timeout(timeoutMs)
+    const addresses = await resolveMonitoringAddresses(target.hostname, signal)
     return new Promise<{ status: 'valid' | 'expiring' | 'invalid', subject: string | null, issuer: string | null, expiresAt: string | null }>((resolve, reject) => {
-        const socket = connectTls({ host: target.hostname, port: Number(target.port) || 443, servername: target.hostname, rejectUnauthorized: false })
+        const hostname = target.hostname.replace(/^\[|\]$/g, '')
+        // Inspect invalid certificates without sending HTTP data; the content request still enforces TLS trust.
+        const socket = connectTls({ host: hostname, port: Number(target.port) || 443, servername: hostname, lookup: monitoringLookup(addresses), rejectUnauthorized: false })
+        const abort = () => socket.destroy(new Error('Certificate check timed out.'))
+        signal.addEventListener('abort', abort, { once: true })
+        socket.once('close', () => signal.removeEventListener('abort', abort))
+        if (signal.aborted) abort()
         const finish = (value: { status: 'valid' | 'expiring' | 'invalid', subject: string | null, issuer: string | null, expiresAt: string | null }) => { socket.destroy(); resolve(value) }
         socket.setTimeout(timeoutMs, () => { socket.destroy(); reject(new Error(`Certificate check timed out after ${timeoutMs / 1000} second${timeoutMs === 1000 ? '' : 's'}.`)) })
         socket.once('error', error => { socket.destroy(); reject(new Error(`Certificate check failed: ${error.message}`, { cause: error })) })
