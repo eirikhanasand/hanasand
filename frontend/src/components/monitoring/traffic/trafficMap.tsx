@@ -248,9 +248,9 @@ export default function TrafficMap({
     const strongestCountryCount = countryEntries[0]?.count || 1
 
     return (
-        <div className='grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_22rem]'>
+        <div className='grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_22rem]'>
             <section
-                className='flex min-h-168 flex-col rounded-lg border border-ui-border
+                className='flex min-w-0 flex-col rounded-lg border border-ui-border
                     bg-ui-panel shadow-lg'
             >
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border px-5 py-4'>
@@ -291,7 +291,7 @@ export default function TrafficMap({
                     />
                 </div>
 
-                <div className='relative flex-1 overflow-hidden'>
+                <div className='relative overflow-hidden' style={{ aspectRatio: `${MAP_WIDTH} / ${MAP_HEIGHT}` }}>
                     <div className='absolute inset-0 bg-ui-canvas' />
                     <div
                         className='absolute left-4 top-4 z-20 rounded-full border border-ui-border
@@ -325,8 +325,9 @@ export default function TrafficMap({
                         }}
                         onMouseMove={(event) => {
                             if (!dragRef.current) return
-                            const scaleX = dragRef.current.viewBox.width / MAP_WIDTH
-                            const scaleY = dragRef.current.viewBox.height / MAP_HEIGHT
+                            const rect = event.currentTarget.getBoundingClientRect()
+                            const scaleX = dragRef.current.viewBox.width / rect.width
+                            const scaleY = dragRef.current.viewBox.height / rect.height
                             setViewBox(clampViewBox({
                                 ...dragRef.current.viewBox,
                                 x: dragRef.current.viewBox.x - ((event.clientX - dragRef.current.x) * scaleX),
@@ -449,7 +450,7 @@ export default function TrafficMap({
                 </div>
             </section>
 
-            <aside className='flex min-h-168 flex-col gap-4 overflow-auto'>
+            <aside className='flex min-w-0 flex-col gap-4'>
                 <InsightCard
                     title={selectedCountry === 'NO' ? 'Local Focus' : `Country Focus · ${selectedCountry}`}
                     icon={<Search className='h-4 w-4 stroke-ui-primary' />}
