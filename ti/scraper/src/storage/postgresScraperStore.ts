@@ -401,14 +401,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       values.push(cursor.at, cursor.id);
       filters.push(`(occurred_at, id) < ($${values.length - 1}::timestamptz, $${values.length}::text)`);
     }
-    values.push(limit + 1);
+    values.push(limit + 1, legacyOffset(input.cursor));
     const rows = await this.sql.unsafe(`
       SELECT id, organization_id, tenant_id, event_type, object_type, object_id,
              occurred_at, outcome, context, created_at
       FROM threat_intel.organization_workflow_events
       WHERE ${filters.join(' AND ')}
       ORDER BY occurred_at DESC, id DESC
-      LIMIT $${values.length}
+      LIMIT $${values.length - 1} OFFSET $${values.length}
     `, values);
     const pageRows = rows.slice(0, limit);
     const last = pageRows.at(-1) as { id?: string; occurred_at?: string } | undefined;
@@ -2241,7 +2241,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const last = rows.at(-1) as { id?: string, updated_at?: string } | undefined;
     return { records, total, nextCursor: hasNext ? encodeKeysetCursor(last?.updated_at, last?.id) : undefined };
   }
-  async queryWorkflowRecordsPage(input: { recordType: string; tenantId?: string; limit?: number; cursor?: string } ) {
+  async queryWorkflowRecordsPage(input: { recordType: string; tenantId?: string; limit?: number; cursor?: string; offset?: number } ) {
     const table = input.recordType === "alert"
       ? "(SELECT 'alert'::text AS record_type, id, tenant_id, updated_at, record FROM threat_intel.alerts) AS durable_alerts"
       : "threat_intel.workflow_records";
@@ -2255,7 +2255,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const cursorParams = input.tenantId === undefined ? ["$2", "$3"] : ["$3", "$4"];
     const limitParam = input.tenantId === undefined ? (cursor ? "$4" : "$2") : (cursor ? "$5" : "$3");
     const cursorWhere = cursor ? ` AND (updated_at, id) < (${cursorParams[0]}::timestamptz, ${cursorParams[1]}::text)` : "";
-    const rows = await this.sql.unsafe(`SELECT record, id, updated_at FROM ${table} WHERE ${tenantWhere} AND record_type = ${typeParam}${cursorWhere} ORDER BY updated_at DESC, id DESC LIMIT ${limitParam}`, values);
+    values.push(Math.max(0, Math.floor(input.offset ?? 0)));
+    const rows = await this.sql.unsafe(`SELECT record, id, updated_at FROM ${table} WHERE ${tenantWhere} AND record_type = ${typeParam}${cursorWhere} ORDER BY updated_at DESC, id DESC LIMIT ${limitParam} OFFSET $${values.length}`, values);
     const countValues = input.tenantId === undefined ? [input.recordType] : [input.tenantId, input.recordType];
     const countTypeParam = input.tenantId === undefined ? "$1" : "$2";
     const countRows = await this.sql.unsafe(`SELECT count(*)::int AS total FROM ${table} WHERE ${tenantWhere} AND record_type = ${countTypeParam}`, countValues);

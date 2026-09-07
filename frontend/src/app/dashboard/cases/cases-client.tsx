@@ -14,7 +14,7 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
     const [warnings, setWarnings] = useState<string[]>([])
     const [loading, setLoading] = useState(true)
     const [revision, setRevision] = useState(0)
-    const [cursor, setCursor] = useState('')
+    const [page, setPage] = useState(1)
     const [nextCursor, setNextCursor] = useState<string | null>(null)
     const [query, setQuery] = useState('')
     const [status, setStatus] = useState('all')
@@ -22,24 +22,24 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
         const controller = new AbortController()
         setLoading(true)
         const params = new URLSearchParams(organizationId ? { organizationId } : {})
-        if (cursor) params.set('cursor', cursor)
+        params.set('page', String(page))
         fetch(`/api/cases?${params}`, { cache: 'no-store', signal: controller.signal }).then(async response => {
             const payload = await response.json()
             if (!response.ok) throw new Error(typeof payload.error === 'string' ? payload.error : payload.error?.message || 'Cases are unavailable. Please retry.')
             const incoming: CaseRow[] = payload.items || payload.cases || []
-            setRows(current => cursor ? Array.from(new Map([...current, ...incoming].map(row => [row.caseId || row.id, row])).values()) : incoming)
+            setRows(current => page > 1 ? Array.from(new Map([...current, ...incoming].map(row => [row.caseId || row.id, row])).values()) : incoming)
             setNextCursor(payload.nextCursor || null)
             setWarnings(payload.warnings || [])
         }).catch(error => {
             if (!controller.signal.aborted) setWarnings([error.message || 'Cases are unavailable.'])
         }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
         return () => controller.abort()
-    }, [organizationId, revision, cursor])
+    }, [organizationId, revision, page])
     const visible = rows.filter(row => (status === 'all' || row.status === status) && [row.id, row.title, row.summary, row.actor, row.victimName, row.company, row.source, row.assignedOwner, row.organizationId].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase()))
     return <section className='min-w-0 rounded-lg border border-ui-border bg-ui-panel'>
         <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
             <div><h1 className='text-lg font-semibold text-ui-text'>Cases</h1><p className='text-sm text-ui-muted'>Cases across the service, including health monitoring and dark web monitoring.</p></div>
-            <button className='text-sm text-ui-primary' onClick={() => { setCursor(''); setRevision(value => value + 1) }}>Refresh cases</button>
+            <button className='text-sm text-ui-primary' onClick={() => { setPage(1); setRevision(value => value + 1) }}>Refresh cases</button>
         </div>
         <div className='flex flex-wrap gap-3 p-4'>
             <input aria-label='Search cases' placeholder='Search cases' value={query} onChange={event => setQuery(event.target.value)} className='min-w-0 flex-1 rounded border border-ui-border bg-ui-canvas p-2 text-ui-text' />
@@ -55,7 +55,7 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
                     <td className='p-4'>{row.severity || row.priority || '—'} · {row.status}</td><td className='p-4'>{row.assignedOwner || 'Unassigned'}</td><td className='p-4'>{row.updatedAt || row.createdAt ? new Date(row.updatedAt || row.createdAt!).toLocaleString() : '—'}</td>
                 </tr>)}</tbody>
             </table></div>}
-            {nextCursor && <button className='p-4 text-ui-primary' onClick={() => setCursor(nextCursor)}>Load more cases</button>}
+            {nextCursor && <button className='p-4 text-ui-primary' onClick={() => setPage(current => current + 1)}>Load more cases</button>}
         </>}
     </section>
 }

@@ -114,7 +114,7 @@ export type TiAdminOverview = {
     }
     sourcePage: {
         total: number
-        cursor: string
+        page: number
         limit: number
         nextCursor?: string
         previousCursor?: string
@@ -138,14 +138,14 @@ const useProcessCache = process.env.NODE_ENV === 'production'
 type ResourceResult = { resource: string, ok: boolean, records: ApiPayload[], total: number, nextCursor?: string, previousCursor?: string, payload: ApiPayload }
 const sourceInventoryCache = new Map<string, { expiresAt: number, value: ResourceResult, refreshing?: Promise<void> }>()
 
-export async function getTiAdminOverview(tenantId: string | null = 'default', page: { cursor?: string, limit?: number, sourceId?: string, includeSamples?: boolean, includeCandidates?: boolean, query?: string, family?: string, lifecycle?: string, access?: string, health?: string, output?: string, matches?: string, sort?: string, direction?: string } = {}): Promise<TiAdminOverview> {
+export async function getTiAdminOverview(tenantId: string | null = 'default', page: { page?: number, limit?: number, sourceId?: string, includeSamples?: boolean, includeCandidates?: boolean, query?: string, family?: string, lifecycle?: string, access?: string, health?: string, output?: string, matches?: string, sort?: string, direction?: string } = {}): Promise<TiAdminOverview> {
     const base = tiScraperApiBase()
     const sampleFilter = page.sourceId ? { query: page.sourceId } : {}
     const resources = await Promise.all([
         page.includeSamples === false ? emptyResource('captures') : fetchResource(base, '/v1/intel/captures', 'captures', tenantId, { ...sampleFilter, limit: Math.min(page.limit || 50, 50) }),
         page.includeSamples === false ? emptyResource('collection-runs') : fetchResource(base, '/v1/intel/collection-runs', 'collectionRuns', tenantId, { ...sampleFilter, limit: Math.min(page.limit || 50, 50) }),
         fetchResource(base, '/v1/intel/source-operations', 'sources', tenantId, {
-            cursor: page.cursor,
+            page: page.page,
             limit: Math.max(1, Math.min(500, page.limit || 25)),
             sourceId: page.sourceId,
             includeCandidates: Boolean(page.sourceId) || page.includeCandidates === true,
@@ -180,7 +180,7 @@ export async function getTiAdminOverview(tenantId: string | null = 'default', pa
         },
         sourcePage: {
             total: operationsResult.total,
-            cursor: page.cursor || '',
+            page: page.page || 1,
             limit: Math.max(1, Math.min(500, page.limit || 25)),
             nextCursor: operationsResult.nextCursor,
             previousCursor: operationsResult.previousCursor,
@@ -193,8 +193,8 @@ export async function getTiAdminSource(id: string, tenantId: string | null = 'de
     return (await getTiAdminOverview(tenantId, { sourceId: id })).sources[0] || null
 }
 
-export async function getTiCollectionRunsPage(tenantId: string | null = null, page: { cursor?: string, limit?: number } = {}) {
-    const result = await fetchResource(tiScraperApiBase(), '/v1/intel/collection-runs', 'collectionRuns', tenantId, { cursor: page.cursor, limit: Math.max(1, Math.min(100, page.limit || 50)) })
+export async function getTiCollectionRunsPage(tenantId: string | null = null, page: { page?: number, limit?: number } = {}) {
+    const result = await fetchResource(tiScraperApiBase(), '/v1/intel/collection-runs', 'collectionRuns', tenantId, { page: page.page, limit: Math.max(1, Math.min(100, page.limit || 50)) })
     const runs = result.records.map(row => toRun(row, new Map())).filter((row): row is TiAdminRun => Boolean(row))
     return { runs, total: result.total, nextCursor: result.nextCursor, previousCursor: result.previousCursor, available: result.ok }
 }
@@ -235,7 +235,7 @@ export function ageDays(since: string) {
     return Number.isFinite(diff) ? Math.max(1, Math.round(diff / 86400000)) : 0
 }
 
-async function fetchResource(base: string, path: string, key: string, tenantId: string | null, page: { cursor?: string, limit?: number, sourceId?: string, query?: string, family?: string, lifecycle?: string, access?: string, health?: string, output?: string, matches?: string, sort?: string, direction?: string, includeCandidates?: boolean } = {}, skipCache = false): Promise<ResourceResult> {
+async function fetchResource(base: string, path: string, key: string, tenantId: string | null, page: { page?: number, limit?: number, sourceId?: string, query?: string, family?: string, lifecycle?: string, access?: string, health?: string, output?: string, matches?: string, sort?: string, direction?: string, includeCandidates?: boolean } = {}, skipCache = false): Promise<ResourceResult> {
     const resource = path.split('/').at(-1) || key
     const cacheKey = JSON.stringify([resource, base, tenantId, page])
     if (cacheKey && useProcessCache && !skipCache) {
@@ -252,10 +252,10 @@ async function fetchResource(base: string, path: string, key: string, tenantId: 
         const target = new URL(path, base)
         if (tenantId) target.searchParams.set('tenantId', tenantId)
         target.searchParams.set('limit', String(page.limit || 500))
-        if (page.cursor) target.searchParams.set('cursor', page.cursor)
+        target.searchParams.set('page', String(page.page || 1))
         if (page.sourceId) target.searchParams.set('sourceId', page.sourceId)
         if (page.query) target.searchParams.set('q', page.query)
-        for (const key of ['family', 'lifecycle', 'access', 'health', 'output', 'matches', 'sort', 'direction'] as const) if (page[key]) target.searchParams.set(key, page[key] as string)
+        for (const key of ['family', 'lifecycle', 'access', 'health', 'output', 'matches', 'sort', 'direction'] as const) if (page[key]) target.searchParams.set(key === 'direction' ? 'dir' : key, page[key] as string)
         if (page.includeCandidates) target.searchParams.set('includeCandidates', 'true')
         const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
         const response = await fetch(target, {

@@ -1,3 +1,5 @@
+import { pageNumber } from '@/utils/pagination'
+import PageNavigation from '@/components/dashboard/page-navigation'
 import Link from 'next/link'
 import { ExternalLink, Plus, RefreshCcw } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
@@ -8,7 +10,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function TiSourcesPage(props: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
     const params = await props.searchParams
-    const cursor = value(params?.cursor) || ''
+    const page = pageNumber(params?.page)
     const scope = value(params?.scope) === 'default' ? 'default' : 'global'
     const sort = value(params?.sort) || 'source'
     const direction = value(params?.dir) === 'desc' ? 'desc' : 'asc'
@@ -20,10 +22,10 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
     const output = value(params?.output) || ''
     const matches = value(params?.matches) || ''
     const tenantId = scope === 'default' ? 'default' : null
-    const overview = await getTiAdminOverview(tenantId, { cursor, limit: 50, includeSamples: false, includeCandidates: true, query, family, lifecycle, access, health, output, matches, sort, direction })
+    const overview = await getTiAdminOverview(tenantId, { page, limit: 50, includeSamples: false, includeCandidates: true, query, family, lifecycle, access, health, output, matches, sort, direction })
     const unavailable = overview.availability.failedResources.includes('source-operations')
     const rows = overview.sources
-    const filters = { query, family, lifecycle, access, health, output, matches }
+    const filters = { q: query, family, lifecycle, access, health, output, matches }
     const executable = rows.filter(source => source.status === 'active')
 
     return <DashboardPage>
@@ -36,7 +38,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
             <div className='text-sm text-ui-muted'>{overview.sourcePage.total} sources · {overview.sourceTotals.executable} executable</div>
         </DashboardPanel>
 
-        {unavailable ? <Unavailable /> : !overview.sources.length ? <Empty /> : !rows.length ? <NoMatches /> : <>
+        {unavailable ? <Unavailable /> : <>
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
                     <div><h2 className='text-base font-semibold text-ui-text'>Production and available sources</h2><p className='mt-1 text-sm text-ui-muted'>Candidates are shown separately and are not counted as active collection feeds.</p></div>
@@ -57,14 +59,12 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                 <div className='overflow-x-auto'>
                     <div className='min-w-[78rem]'>
                         <div className='grid grid-cols-[1.55fr_0.8fr_0.85fr_0.85fr_0.8fr_0.8fr_1.35fr] gap-3 border-b border-ui-border bg-ui-canvas px-4 py-2 text-[11px] font-semibold uppercase text-ui-muted'><SortHeader label='Source' field='source' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Access' field='access' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Status' field='status' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Last content' field='content' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Useful output' field='useful' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Matches' field='matches' scope={scope} sort={sort} direction={direction} filters={filters} /><span>Actions</span></div>
+                        {!rows.length ? <p className='p-4 text-sm text-ui-muted'>No sources on this page. Change the filters or return to the previous page.</p> : null}
                         {rows.map(source => <SourceRow key={source.id} source={source} scope={scope} />)}
                     </div>
                 </div>
             </DashboardPanel>
-            <nav className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-panel px-4 py-3 text-sm' aria-label='Source inventory pages'>
-                <span className='text-ui-muted'>{overview.sourcePage.total ? `${rows.length} shown · ${overview.sourcePage.total} total` : '0 sources'}</span>
-                <div className='flex gap-2'>{overview.sourcePage.nextCursor ? <Link href={pageHref(scope, sort, direction, overview.sourcePage.nextCursor, { query, family, lifecycle, access, health, output, matches })} className={tab}>Next</Link> : null}</div>
-            </nav>
+            <PageNavigation page={page} total={overview.sourcePage.total} hasNext={page * 50 < overview.sourcePage.total} href={next => pageHref(scope, sort, direction, next, filters)} label='Source inventory pages' />
         </>}
     </DashboardPage>
 }
@@ -91,11 +91,11 @@ function Status({ source }: { source: TiAdminSource }) {
 
 function SortHeader({ label, field, scope, sort, direction, filters }: { label: string, field: string, scope: string, sort: string, direction: string, filters: Record<string, string> }) {
     const nextDirection = sort === field && direction === 'asc' ? 'desc' : 'asc'
-    return <Link href={pageHref(scope, field, nextDirection, '', filters)} className='inline-flex items-center gap-1 whitespace-nowrap hover:text-ui-text' title={`Sort by ${label}`}><span>{label}</span><span className='inline-flex flex-col text-[8px] leading-[7px]'><span className={sort === field && direction === 'asc' ? 'text-ui-primary' : 'text-ui-muted/45'}>▲</span><span className={sort === field && direction === 'desc' ? 'text-ui-primary' : 'text-ui-muted/45'}>▼</span></span></Link>
+    return <Link href={pageHref(scope, field, nextDirection, 1, filters)} className='inline-flex items-center gap-1 whitespace-nowrap hover:text-ui-text' title={`Sort by ${label}`}><span>{label}</span><span className='inline-flex flex-col text-[8px] leading-[7px]'><span className={sort === field && direction === 'asc' ? 'text-ui-primary' : 'text-ui-muted/45'}>▲</span><span className={sort === field && direction === 'desc' ? 'text-ui-primary' : 'text-ui-muted/45'}>▼</span></span></Link>
 }
 
-function pageHref(scope: string, sort: string, direction: string, cursor: string, filters: Record<string, string> = {}) {
-    const params = new URLSearchParams({ scope, sort, dir: direction, cursor: String(cursor) })
+function pageHref(scope: string, sort: string, direction: string, page: number, filters: Record<string, string> = {}) {
+    const params = new URLSearchParams({ scope, sort, dir: direction, page: String(page) })
     for (const [key, item] of Object.entries(filters)) if (item) params.set(key, item)
     return `/ti/sources?${params.toString()}`
 }
@@ -104,8 +104,6 @@ function FilterSelect({ name, value, label, options }: { name: string, value: st
     return <select name={name} defaultValue={value} aria-label={label} className='h-8 rounded-md border border-ui-border bg-ui-canvas px-2 text-xs text-ui-text outline-none'><option value=''>{label}</option>{options.map(option => <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>)}</select>
 }
 
-function Empty() { return <DashboardPanel className='grid min-h-112 place-items-center border-ui-border bg-ui-panel p-8 text-center'><div className='max-w-md'><div className='mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-ui-border bg-ui-canvas text-ui-primary'><Plus /></div><h2 className='mt-5 text-2xl font-semibold text-ui-text'>Add your first intelligence source</h2><p className='mt-2 text-sm leading-6 text-ui-muted'>Connect a public feed, clearweb source, darkweb metadata source, or Telegram feed to begin collection.</p><div className='mt-5 flex justify-center gap-2'><Link href='/ti/sources?available=true' className='rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas'>Add source</Link><Link href='/ti/control' className={tab}>Browse available sources</Link></div></div></DashboardPanel> }
-function NoMatches() { return <DashboardPanel className='grid min-h-80 place-items-center border-ui-border bg-ui-panel p-8 text-center'><div><h2 className='text-xl font-semibold text-ui-text'>No sources match these filters</h2><p className='mt-2 text-sm text-ui-muted'>Clear a filter to return to the full source inventory.</p><Link href='/ti/sources' className='mt-4 inline-flex text-sm font-semibold text-ui-primary underline'>Clear filters</Link></div></DashboardPanel> }
 function Unavailable() { return <DashboardPanel className='grid min-h-80 place-items-center border-ui-warning/40 bg-ui-panel p-8 text-center'><div><RefreshCcw className='mx-auto h-8 w-8 text-ui-warning' /><h2 className='mt-4 text-xl font-semibold text-ui-text'>Source inventory is temporarily unavailable</h2><p className='mt-2 text-sm text-ui-muted'>The source service did not return an inventory. No zero-source result was inferred.</p><Link href='/ti/sources' className='mt-5 inline-flex rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas'>Retry</Link></div></DashboardPanel> }
 function value(input: string | string[] | undefined) { return Array.isArray(input) ? input[0] : input }
 function relative(value: string) { const age = Date.now() - Date.parse(value); if (!Number.isFinite(age)) return 'not recorded'; const minutes = Math.max(0, Math.round(age / 60_000)); return minutes < 60 ? `${minutes}m ago` : minutes < 2_880 ? `${Math.round(minutes / 60)}h ago` : `${Math.round(minutes / 1_440)}d ago` }

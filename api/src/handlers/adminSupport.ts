@@ -65,6 +65,7 @@ type AuditQuery = {
     to?: string
     limit?: string
     cursor?: string
+    page?: string
 }
 
 type AuditEventParams = {
@@ -445,6 +446,10 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
     const to = text(query.to)
     const parsedLimit = Number(query.limit || 200)
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 500) : 200
+    const page = Number(query.page || 1)
+    if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger((page - 1) * limit) || (query.page !== undefined && text(query.cursor))) {
+        return res.status(400).send(supportError('invalid_page', 'Page must be a positive whole number; use page without cursor.'))
+    }
     const cursor = decodeAuditCursor(text(query.cursor))
     if (text(query.cursor) && !cursor) {
         return res.status(400).send(supportError('invalid_audit_cursor', 'Audit cursor is invalid.'))
@@ -546,8 +551,8 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
         LEFT JOIN users target_user ON target_user.id = e.object_id
         LEFT JOIN organizations organization ON organization.id = e.organization_id
         ${where.length ? `WHERE ${where.join('\n          AND ')}` : ''}
-        ORDER BY e.created_at DESC
-        LIMIT ${add(limit + 1)}
+        ORDER BY e.created_at DESC, e.id DESC
+        LIMIT ${add(limit + 1)} OFFSET ${add((page - 1) * limit)}
     `, values)
 
     const pageRows = result.rows.slice(0, limit)
@@ -559,6 +564,8 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
         events,
         pagination: {
             limit,
+            page,
+            nextPage: result.rows.length > limit ? page + 1 : null,
             cursor: text(query.cursor) || null,
             nextCursor,
             previousCursor: null,

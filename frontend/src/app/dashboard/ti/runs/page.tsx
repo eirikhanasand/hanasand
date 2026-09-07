@@ -1,3 +1,5 @@
+import { pageNumber } from '@/utils/pagination'
+import PageNavigation from '@/components/dashboard/page-navigation'
 import Link from 'next/link'
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, Clock3, PlayCircle, Rows3 } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
@@ -11,9 +13,9 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
     // Collection runs are global collector operations, not a customer tenant's
     // watchlist data. The default tenant lane is intentionally empty here.
     const params = await props.searchParams
-    const cursor = value(params?.cursor) || ''
-    const [{ runs, total: runTotal, nextCursor, available }, overview] = await Promise.all([
-        getTiCollectionRunsPage(null, { cursor, limit: 50 }),
+    const page = pageNumber(params?.page)
+    const [{ runs, total: runTotal, available }, overview] = await Promise.all([
+        getTiCollectionRunsPage(null, { page, limit: 50 }),
         getTiAdminOverview(null, { limit: 50, includeSamples: false, includeCandidates: true }),
     ])
     const { sources } = overview
@@ -72,7 +74,7 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
                 </div>
             </details> : null}
 
-            {runs.length ? <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
+            {available && (runs.length > 0 || page > 1) ? <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-panel px-4 py-3'>
                     <div>
                         <h2 className='text-base font-semibold text-ui-text'>Collector activity</h2>
@@ -125,12 +127,7 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
                         })}
                     </div>
                 </div>
-                <nav className='flex items-center justify-between gap-3 border-t border-ui-border bg-ui-panel px-4 py-3 text-sm' aria-label='Collection run pages'>
-                    <span className='text-ui-muted'>{runTotal ? `${runs.length} shown · ${runTotal} total` : '0 runs'}</span>
-                    <div className='flex gap-2'>
-                        {nextCursor ? <Link href={`/ti/runs?cursor=${nextCursor}`} className='rounded-md border border-ui-border px-3 py-1.5 font-semibold text-ui-text hover:bg-ui-raised'>Next</Link> : null}
-                    </div>
-                </nav>
+                <PageNavigation page={page} total={runTotal} hasNext={page * 50 < runTotal} href={next => `/ti/runs?page=${next}`} label='Collection run pages' />
             </DashboardPanel> : <DashboardPanel className='border-ui-border bg-ui-panel p-6'><div className='mx-auto max-w-xl text-center'><div className='mx-auto grid h-12 w-12 place-items-center rounded-full bg-ui-primary/10 text-ui-primary'><PlayCircle className='h-6 w-6' /></div><h2 className='mt-4 text-lg font-semibold text-ui-text'>{runUnavailable ? 'Run history is unavailable' : 'No collection history yet'}</h2><p className='mt-2 text-sm leading-6 text-ui-muted'>{runUnavailable ? 'Retry when the collection service is available.' : sources.length ? 'The collector is configured, but no completed or active run has been recorded for the global source fleet yet.' : 'Add an executable source first. Collection history starts after the first source run.'}</p><div className='mt-4 flex justify-center gap-2'><Link href='/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>Open source inventory <ArrowRight className='h-4 w-4' /></Link></div></div></DashboardPanel>}
 
             <div className='grid gap-4 xl:grid-cols-[1fr_0.9fr]'>
@@ -199,7 +196,7 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
     )
 }
 
-function value(input: string | string[] | undefined) { return Array.isArray(input) ? input[0] : input }
+
 
 function Metric({ title, value, detail, tone }: { title: string, value: string, detail: string, tone: 'ok' | 'warn' | 'hold' }) {
     const icon = tone === 'ok' ? <CheckCircle2 className='h-4 w-4' /> : tone === 'warn' ? <AlertTriangle className='h-4 w-4' /> : <Clock3 className='h-4 w-4' />

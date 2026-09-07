@@ -1,3 +1,4 @@
+import { paginationCursor } from "./pagination.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { sanitizeDwmApiPayload, sanitizeDwmCustomerText } from "../product/dwmCustomerDisplay.ts";
 import { toSafeCaptureDto } from "./captureDtos.ts";
@@ -72,7 +73,7 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
     const input = {
       tenantId: scope.tenantId,
       limit: numberQuery(url.searchParams.get("limit")),
-      cursor: url.searchParams.get("cursor") ?? undefined,
+      cursor: paginationCursor(url.searchParams, Math.max(1, Math.min(500, numberQuery(url.searchParams.get("limit")) ?? 100))),
       sourceId: url.searchParams.get("sourceId")?.trim() || undefined,
       executableOnly: url.searchParams.get("includeCandidates") !== "true",
       query: url.searchParams.get("q")?.trim() || undefined,
@@ -171,8 +172,8 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
     const scope = resolveTenantScope(request, url);
     if (scope.error) return scope.error;
     const query = url.searchParams.get("q")?.trim().toLowerCase();
-    const limit = Math.max(1, Math.min(500, numberQuery(url.searchParams.get("limit")) ?? 100));
-    const rawCursor = url.searchParams.get("cursor");
+    const limit = Math.max(1, Math.min(100, numberQuery(url.searchParams.get("limit")) ?? 100));
+    const rawCursor = paginationCursor(url.searchParams, limit);
     const offset = legacyOffset(rawCursor);
     const cursor = decodeKeysetCursor(rawCursor);
     const sortField = "observedAt";
@@ -198,7 +199,7 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
 
   const [responseKey, memoryMethod] = route;
   const limit = Math.max(1, Math.min(500, numberQuery(url.searchParams.get("limit")) ?? 50));
-  const rawCursor = url.searchParams.get("cursor");
+  const rawCursor = paginationCursor(url.searchParams, limit);
   const offset = legacyOffset(rawCursor);
   const cursor = decodeKeysetCursor(rawCursor);
   const query = url.searchParams.get("q")?.trim().toLowerCase();

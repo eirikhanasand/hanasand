@@ -68,7 +68,7 @@ describe('public TI v1', () => {
         const app = await testApp(async input => {
             const url = new URL(String(input))
             requested.push(url)
-            const offset = url.searchParams.get('cursor') || '0'
+            const offset = url.searchParams.get('cursor') || String((Number(url.searchParams.get('page') || 1) - 1) * Number(url.searchParams.get('limit') || 50))
             return Response.json({ claims: [{ id: `finding-${offset}`, claimType: 'victim_report', subjectType: 'company', subjectId: 'company-1', value: { company: 'Example' }, summary: 'A source reports an incident.', confidence: 0.5, reviewState: 'needs_review', sourceIds: ['source-1'], captureIds: ['capture-1'] }], total: 2, nextCursor: offset === '0' ? '1' : null })
         })
         for (const route of ['/findings', '/claims']) {
@@ -87,7 +87,7 @@ describe('public TI v1', () => {
         const offsets: string[] = []
         const app = await testApp(async input => {
             const url = new URL(String(input))
-            const offset = Number(url.searchParams.get('cursor'))
+            const offset = url.searchParams.has('cursor') ? Number(url.searchParams.get('cursor')) : (Number(url.searchParams.get('page') || 1) - 1) * Number(url.searchParams.get('limit') || 50)
             offsets.push(String(offset))
             const total = url.searchParams.get('q') === 'empty' ? 0 : 5
             return Response.json({ actorProfiles: offset < total ? [{ id: `actor-${offset}`, canonicalName: 'Example', aliases: [], confidence: 0.8, sourceIds: [], captureIds: [] }] : [], total, nextCursor: offset + 2 < total ? String(offset + 2) : null })

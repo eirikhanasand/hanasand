@@ -154,7 +154,8 @@ async function fetchCollection(
     if (!base) throw new Error('TI_SCRAPER_API_BASE is not configured')
     const url = new URL(`${base}/v1/intel/${upstream}`)
     url.searchParams.set('limit', String(query.limit))
-    url.searchParams.set('cursor', String(query.cursor))
+    if (query.cursor % query.limit) url.searchParams.set('cursor', String(query.cursor))
+    else url.searchParams.set('page', String(query.page))
     if (query.q) url.searchParams.set('q', query.q)
     const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
     const response = await fetchImpl(url, {

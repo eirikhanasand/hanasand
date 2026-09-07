@@ -1,3 +1,4 @@
+import { paginationCursor, legacyOffset } from "./pagination.ts";
 import { createHash } from "node:crypto";
 import { nowIso, stableId } from "../utils.ts";
 import { buildOrgAlertCaseActionTimeline, type OrgAlertCaseActionTimelineRow } from "../product/orgAlertCaseActionTimeline.ts";
@@ -116,9 +117,9 @@ export async function listCases(url: URL, options: ApiServerOptions, request?: R
   const access = authorizeCaseAccess({ options, scope, request, url, mode: "read" });
   if (access.error) return access.error;
   const filters = caseFiltersFromUrl(url);
-  const rawCursor = url.searchParams.get("cursor") ?? undefined;
+  const rawCursor = paginationCursor(url.searchParams, Math.max(1, Math.min(200, Number(url.searchParams.get("limit") ?? 50))));
   const page = typeof (options.store as any).queryWorkflowRecordsPage === "function"
-    ? await (options.store as any).queryWorkflowRecordsPage({ recordType: "case", tenantId: scope.tenantId, limit: url.searchParams.get("limit") ?? 50, cursor: decodeKeysetCursor(rawCursor) ? rawCursor : undefined })
+    ? await (options.store as any).queryWorkflowRecordsPage({ recordType: "case", tenantId: scope.tenantId, limit: url.searchParams.get("limit") ?? 50, offset: legacyOffset(rawCursor), cursor: decodeKeysetCursor(rawCursor) ? rawCursor : undefined })
     : undefined;
   const cases = (page?.records ?? (options.store as any).listCases?.() ?? [])
     .filter((row: AnalystCase) => row.tenantId === scope.tenantId)

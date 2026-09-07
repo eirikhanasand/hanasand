@@ -1,3 +1,5 @@
+import { pageNumber } from '@/utils/pagination'
+import PageNavigation from '@/components/dashboard/page-navigation'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { cookies } from 'next/headers'
@@ -27,7 +29,8 @@ type AuditPage = {
 
 export default async function TiAuditPage({ searchParams }: { searchParams?: Promise<AuditSearchParams> }) {
     const params = await searchParams
-    const filters = params || {}
+    const page = pageNumber(params?.page)
+    const filters = { ...params, page: String(page) }
     const audit = await getAuditPage(filters)
     const sortedEvents = audit.events
     const failedEvents = sortedEvents.filter(event => !['ok', 'ready', 'success', 'completed', 'published'].includes(event.result.toLowerCase()))
@@ -46,7 +49,7 @@ export default async function TiAuditPage({ searchParams }: { searchParams?: Pro
                 <Metric title='Events' value={`${sortedEvents.length}`} icon={<ClipboardList className='h-4 w-4' />} />
                 <Metric title='Failures' value={`${failedEvents.length}`} tone={failedEvents.length ? 'bad' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
                 <Metric title='Audit storage' value={audit.available ? 'Available' : 'Unavailable'} tone={audit.available ? 'ok' : 'bad'} icon={<CheckCircle2 className='h-4 w-4' />} />
-                <Metric title='Page' value={`${sortedEvents.length}`} icon={<CheckCircle2 className='h-4 w-4' />} />
+                <Metric title='Page' value={String(page)} icon={<CheckCircle2 className='h-4 w-4' />} />
                 <Metric title='Last action' value={lastEvent ? shortTime(lastEvent.happenedAt) : 'Checking'} icon={<Clock3 className='h-4 w-4' />} />
             </div>
 
@@ -139,14 +142,14 @@ export default async function TiAuditPage({ searchParams }: { searchParams?: Pro
                     </div>
                 </DashboardPanel>
             </div>
-            {audit.nextCursor ? <div className='flex justify-end'><Link className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text hover:bg-ui-raised' href={withCursor(filters, audit.nextCursor)}>Next page</Link></div> : null}
+            {audit.available ? <PageNavigation page={page} hasNext={Boolean(audit.nextCursor)} href={next => withPage(filters, next)} label='Audit pages' /> : null}
         </DashboardPage>
     )
 }
 
 async function getAuditPage(params: AuditSearchParams): Promise<AuditPage> {
     const query = new URLSearchParams({ limit: '50' })
-    for (const key of ['actor', 'action', 'target', 'outcome', 'from', 'to', 'cursor']) {
+    for (const key of ['actor', 'action', 'target', 'outcome', 'from', 'to', 'page']) {
         const value = param(params, key)
         if (value) query.set(key, value)
     }
@@ -177,13 +180,13 @@ function param(params: AuditSearchParams, key: string) {
     return (Array.isArray(value) ? value[0] : value || '').trim()
 }
 
-function withCursor(params: AuditSearchParams, cursor: string) {
+function withPage(params: AuditSearchParams, page: number) {
     const query = new URLSearchParams()
     for (const key of ['actor', 'action', 'target', 'outcome', 'from', 'to']) {
         const value = param(params, key)
         if (value) query.set(key, value)
     }
-    query.set('cursor', cursor)
+    query.set('page', String(page))
     return `/ti/audit?${query.toString()}`
 }
 

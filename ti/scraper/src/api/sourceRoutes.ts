@@ -1,3 +1,4 @@
+import { paginationCursor } from "./pagination.ts";
 import { json, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import type { SourceRecord } from "../types.ts";
@@ -129,6 +130,6 @@ function safeHttpUrl(value: unknown): string | undefined {
 
 function paginated<T>(records: T[], url: URL) {
   const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") ?? url.searchParams.get("recordLimit") ?? 50) || 50));
-  const offset = Math.max(0, Number(url.searchParams.get("cursor") ?? 0) || 0);
+  const offset = Math.max(0, Number(paginationCursor(url.searchParams, limit) ?? 0) || 0);
   return { records: records.slice(offset, offset + limit), nextCursor: offset + limit < records.length ? String(offset + limit) : undefined };
 }

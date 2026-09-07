@@ -16,6 +16,9 @@ test('common API merges persisted cases while preserving access and pagination m
     expect(result).toMatchObject({ total: 61, nextCursor: 'page-2', access: { readOnly: true }, warnings: [] })
     const next = await (await GET(new NextRequest('http://localhost/api/cases?cursor=page-2'))).json()
     expect(next.items.map((item: { id: string }) => item.id)).toEqual(['general'])
+    const numbered = await (await GET(new NextRequest('http://localhost/api/cases?page=2'))).json()
+    expect(numbered.items.map((item: { id: string }) => item.id)).toEqual(['general'])
+
 })
 test('monitoring remains available if intelligence is down, with an explicit partial error', async () => {
     intelligence = async () => { throw new Error('offline') }
