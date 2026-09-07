@@ -59,8 +59,12 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         try { setCookie(NAVIGATION_COOKIE, JSON.stringify({ ...next, id: access.id }), 365); localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* Keep this session usable without storage. */ }
     }
 
+    function isExpanded(key: string) {
+        return preferences.expanded[key] ?? (activePath === key || activePath.startsWith(`${key}/`))
+    }
+
     function toggle(key: string) {
-        save({ ...preferences, expanded: { ...preferences.expanded, [key]: !(preferences.expanded[key] ?? (activePath === key || activePath.startsWith(`${key}/`))) } })
+        save({ ...preferences, expanded: { ...preferences.expanded, [key]: !isExpanded(key) } })
     }
 
     function collapseAll() {
@@ -97,7 +101,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         const path = [...ancestors, item.label]
         const key = path.join('/')
         const containsActive = activePath === key || activePath.startsWith(`${key}/`)
-        const expanded = preferences.expanded[key] ?? containsActive
+        const expanded = isExpanded(key)
         const Icon = sectionIcons[item.label] || FolderKanban
         const controls = `${domId}-${encodeURIComponent(key)}`
         return (
@@ -118,6 +122,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     const favorites = links.filter(item => preferences.pinned.includes(item.href))
         .sort((left, right) => preferences.pinned.indexOf(left.href) - preferences.pinned.indexOf(right.href))
     const search = query.trim().toLocaleLowerCase()
+    const hasExpandedMenu = !search && (sections.some(section => isExpanded(section.label)) || (favorites.length > 0 && isExpanded('Pinned')))
     const matches = search ? links.filter(item => [...item.ancestors, item.label].join(' ').toLocaleLowerCase().includes(search)) : []
 
     return (
@@ -125,7 +130,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
             <div className={`mb-2 flex items-center ${compact ? 'justify-center' : 'justify-between px-2'}`}>
                 {!compact && <h2 className='text-sm font-semibold text-ui-text'>Workspace</h2>}
                 <div className='flex shrink-0 items-center'>
-                    {!compact && <button type='button' onClick={collapseAll} aria-label='Collapse all menus' title='Collapse all menus'
+                    {!compact && hasExpandedMenu && <button type='button' onClick={collapseAll} aria-label='Collapse all menus' title='Collapse all menus'
                         className='grid h-10 w-10 place-items-center rounded-lg text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'>
                         <ChevronsUp aria-hidden='true' className='h-4 w-4' />
                     </button>}
