@@ -56,7 +56,7 @@ export default function TrafficDashboard({
     const [form, setForm] = useState<Partial<BlocklistEntry>>({})
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
     const domains = Array.isArray(topDomains) ? topDomains : []
-    const commonListStyle = 'flex max-h-[62vh] flex-col gap-3 overflow-y-auto rounded-md border border-ui-border bg-ui-panel p-4 text-sm shadow-sm'
+    const commonListStyle = 'flex min-w-0 max-h-[62vh] flex-col gap-3 overflow-y-auto rounded-md border border-ui-border bg-ui-panel p-4 text-sm shadow-sm'
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
         // @ts-expect-error
@@ -120,7 +120,7 @@ export default function TrafficDashboard({
             : 'Route, IP, user-agent, and request evidence appears here as production ingress arrives.'
 
     return (
-        <div className='grid h-full gap-4'>
+        <div className='grid min-w-0 gap-4'>
             <ErrorNotice compact variant='info' message={message as string | null} />
             <AppConfirmDialog
                 open={deletingBlockId !== null}
@@ -247,7 +247,7 @@ export default function TrafficDashboard({
             </details>
 
             <SectionTitle title='Blocklist and recent activity' />
-            <div className='grid h-full gap-4 xl:grid-cols-2'>
+            <div className='grid min-w-0 gap-4 xl:grid-cols-2'>
                 {/* Blocklist */}
                 <div className={commonListStyle}>
                     <div className='flex items-center justify-between gap-3'>
@@ -259,7 +259,7 @@ export default function TrafficDashboard({
                             <Plus className='w-4 h-4' /> Add
                         </button>
                     </div>
-                    <div className='h-full overflow-x-auto'>
+                    <div className='min-w-0 overflow-x-auto'>
                         <table className='w-full min-w-[28rem] text-left text-sm'>
                             <thead>
                                 <tr className='border-b border-ui-border text-xs font-semibold text-ui-muted'>
