@@ -206,7 +206,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                     <h2 className='text-xl font-medium text-ui-text'>Current Status: Hanasand.com</h2>
                     <p className='text-sm text-ui-muted'>Uptime over the past {UPTIME_WINDOW}.</p>
                 </div>
-                <div className='mt-4 divide-y divide-ui-border overflow-hidden rounded-md border border-ui-border bg-[#0d1826]'>
+                <div className='mt-4 divide-y divide-ui-border overflow-hidden rounded-md border border-ui-border bg-ui-panel'>
                     {checks.map((check) => (
                         <div key={`${check.service}-${check.check_name}`} className='grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center'>
                             <div className='min-w-0'>
