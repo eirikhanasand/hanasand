@@ -63,5 +63,7 @@ export async function getTrafficRecords(domain?: string, limit = 12, page = 1) {
         params.set('domain', domain)
     }
 
-    return await requestService<TrafficRecords>('cdn', `traffic/records?${params.toString()}`)
+    return await requestService<TrafficRecords>('cdn', `traffic/records?${params.toString()}`, {
+        signal: AbortSignal.timeout(60000),
+    })
 }
