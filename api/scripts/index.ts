@@ -17,6 +17,7 @@ const bun = process.execPath
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 
 const coreTasks: TestTask[] = [
+    { id: 'audit-pagination', title: 'Numbered audit pages and authorization', command: [bun, 'test', 'tests/audit-pagination.test.ts'] },
     scriptTask('status-feed', 'Status snapshots and monitoring failure', 'check-status-feed.ts'),
     { id: 'vm-console', title: 'VM console access and live status', command: [bun, 'test', 'tests/vm-console.test.ts'] },
     { id: 'logs-cache', title: 'Log snapshot refresh and failures', command: [bun, 'test', 'tests/logs-cache.test.ts'] },

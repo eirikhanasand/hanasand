@@ -408,6 +408,7 @@ const systemEventFilters = new Set([
     'to',
     'limit',
     'cursor',
+    'page',
 ])
 
 export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
