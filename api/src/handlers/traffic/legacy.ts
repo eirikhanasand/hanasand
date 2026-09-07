@@ -314,6 +314,21 @@ export async function warmTrafficStatistics() {
     await loadTrafficRecent()
     await trafficActors('ip', 'user_agent', 'most_common_user_agent')
     await trafficActors('user_agent', 'ip', 'most_common_ip')
+    void warmKnownDomains().catch(error => console.warn('Traffic domain prewarm failed; it will retry', error))
+}
+
+let warmingDomains = false
+async function warmKnownDomains() {
+    if (warmingDomains) return
+    warmingDomains = true
+    try {
+        for (const domain of (await loadTrafficDomains()).domains) {
+            await loadTrafficMetrics(domain)
+            await loadTrafficRecordTotal(domain)
+        }
+    } finally {
+        warmingDomains = false
+    }
 }
 
 async function safeQuery(query: string, params: Array<string | number | boolean | string[] | Date | null> = []) {
