@@ -78,16 +78,16 @@ async function TrafficOverview({ selectedDomain }: { selectedDomain?: string }) 
                     <TrafficLane
                         title='Latest request'
                         icon={<Activity className='h-4 w-4' />}
-                        value={latestRecord ? `${latestRecord.method} ${latestRecord.status}` : 'Listening'}
-                        detail={latestRecord ? `${latestRecord.domain}${latestRecord.path}` : 'Ingress stream is connected; requests stream in as they arrive'}
-                        footer={latestRecord ? shortTime(latestRecord.timestamp) : 'ingress stream active'}
+                        value={latestRecord ? `${latestRecord.method} ${latestRecord.status}` : 'No requests'}
+                        detail={latestRecord ? `${latestRecord.domain}${latestRecord.path}` : undefined}
+                        footer={latestRecord ? shortTime(latestRecord.timestamp) : undefined}
                         tone={latestRecord && latestRecord.status >= 500 ? 'bad' : latestRecord && latestRecord.status >= 400 ? 'watch' : 'ok'}
                     />
                     <TrafficLane
-                        title='Hot route'
+                        title='Busiest route'
                         icon={<Globe2 className='h-4 w-4' />}
-                        value={topPath?.key || 'Route stream'}
-                        detail={topPath ? `${topPath.count} requests in the live traffic sample` : 'Route demand updates as traffic arrives'}
+                        value={topPath?.key || 'No requests'}
+                        detail={topPath ? `${topPath.count} requests` : undefined}
                         footer={selectedDomain || topDomain?.key || 'all domains'}
                         tone='neutral'
                     />
@@ -96,14 +96,14 @@ async function TrafficOverview({ selectedDomain }: { selectedDomain?: string }) 
                         icon={<Clock3 className='h-4 w-4' />}
                         value={formatRequestTime(trafficMetrics)}
                         detail={`${trafficMetrics?.total_requests || 0} tracked requests`}
-                        footer={trafficMetrics?.sampled_at ? `Updated ${shortTime(trafficMetrics.sampled_at)}` : 'rolling metrics'}
+                        footer={trafficMetrics?.sampled_at ? `Updated ${shortTime(trafficMetrics.sampled_at)}` : undefined}
                         tone={trafficMetrics?.avg_request_time && trafficMetrics.avg_request_time > 1000 ? 'watch' : 'ok'}
                     />
                     <TrafficLane
-                        title='Error pressure'
+                        title='Errors'
                         icon={<AlertTriangle className='h-4 w-4' />}
                         value={`${errorRate}%`}
-                        detail={trafficMetrics?.top_error_paths?.[0] ? trafficMetrics.top_error_paths[0].key : 'Error monitor is live; no noisy route now'}
+                        detail={trafficMetrics?.top_error_paths?.[0] ? trafficMetrics.top_error_paths[0].key : undefined}
                         footer='4xx/5xx share'
                         tone={errorRate > 5 ? 'bad' : errorRate > 1 ? 'watch' : 'ok'}
                     />
@@ -144,20 +144,20 @@ function TrafficLane({ title, icon, value, detail, footer, tone }: {
     title: string
     icon: ReactNode
     value: string
-    detail: string
-    footer: string
+    detail?: string
+    footer?: string
     tone: 'neutral' | 'ok' | 'watch' | 'bad'
 }) {
     return (
-        <div className='min-w-0 rounded-lg bg-ui-raised px-3 py-2' title={`${detail} · ${footer}`}>
+        <div className='min-w-0 rounded-lg bg-ui-raised px-3 py-2' title={[detail, footer].filter(Boolean).join(' · ') || undefined}>
             <div className='flex min-w-0 items-center gap-2 text-xs text-ui-muted'>
                 <span className={toneText(tone)}>{icon}</span>
                 <span className='truncate'>{title}</span>
                 <span aria-hidden='true' className={`ml-auto h-1.5 w-1.5 shrink-0 rounded-full ${toneDot(tone)}`} />
             </div>
             <p className='truncate text-sm font-semibold leading-6 text-ui-text'>{value}</p>
-            <p className='truncate text-xs text-ui-muted'>{detail}</p>
-            <span className='sr-only'>{footer}</span>
+            {detail && <p className='truncate text-xs text-ui-muted'>{detail}</p>}
+            {footer && <span className='sr-only'>{footer}</span>}
         </div>
     )
 }
