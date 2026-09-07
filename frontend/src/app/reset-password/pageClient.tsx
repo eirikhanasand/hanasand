@@ -4,6 +4,7 @@ import config from '@/config'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { ArrowLeft, ArrowRight, KeyRound } from 'lucide-react'
 import Link from 'next/link'
+import { passwordMeetsRequirements, passwordRequirementMessage } from '@/utils/auth/password'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
@@ -35,6 +36,8 @@ export default function ResetPasswordPage({ userId }: ResetPasswordPageProps) {
         const formData = new FormData(e.currentTarget)
         const password = String(formData.get('password') || '')
         const confirmPassword = String(formData.get('confirmPassword') || '')
+
+        if (!passwordMeetsRequirements(password)) return setError(passwordRequirementMessage)
 
         if (password !== confirmPassword) {
             return setError('Passwords do not match.')

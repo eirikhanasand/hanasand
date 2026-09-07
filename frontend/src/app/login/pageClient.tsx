@@ -1,4 +1,5 @@
 'use client'
+import { passwordMeetsRequirements, passwordRequirementMessage } from '@/utils/auth/password'
 import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getCookie } from '@/utils/cookies/cookies'
@@ -19,7 +20,7 @@ type LoginPageProps = {
 const authInputClass = 'h-10 rounded-lg border border-ui-border bg-ui-panel px-3.5 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20'
 const authPrimaryButtonClass = 'group inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'
 const authGhostButtonClass = 'inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text disabled:cursor-not-allowed disabled:text-ui-muted/60'
-const passwordRequirementMessage = 'Password must be at least 16 characters and include 2 lowercase letters, 2 uppercase letters, 2 numbers, and 2 symbols.'
+
 
 export default function LoginPage({ path, serverInternal, serverExpired }: LoginPageProps) {
     const router = useRouter()
@@ -31,13 +32,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     const [signupName, setSignupName] = useState('')
     const [signupUsername, setSignupUsername] = useState('')
     const [signupPassword, setSignupPassword] = useState('')
-    const passwordCounts = countPassword(signupPassword)
-    const signupPasswordIsValid =
-        signupPassword.length >= 16
-        && passwordCounts.numbers >= 2
-        && passwordCounts.symbols >= 2
-        && passwordCounts.lowercase >= 2
-        && passwordCounts.uppercase >= 2
+    const signupPasswordIsValid = passwordMeetsRequirements(signupPassword)
     const reservedUsername = reservedUsernames.includes(signupUsername.trim().toLowerCase())
     const canCreateAccount = signupName.trim() && signupUsername.trim() && signupPasswordIsValid && !reservedUsername
 
@@ -330,7 +325,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                             </label>
                             {signupPassword && !signupPasswordIsValid && (
                                 <p className='px-1 text-xs leading-5 text-ui-muted'>
-                                    At least 16 characters, 2 lowercase, 2 uppercase, 2 numbers, 2 symbols.
+                                    {passwordRequirementMessage}
                                 </p>
                             )}
                             <div className='mt-1 flex items-center gap-3'>
@@ -488,30 +483,6 @@ function ResetCodeInput({
             </div>
         </div>
     )
-}
-
-function countPassword(password: string) {
-    let numbers = 0
-    let symbols = 0
-    let lowercase = 0
-    let uppercase = 0
-
-    for (const char of password) {
-        if (!isNaN(Number(char))) {
-            numbers++
-        }
-        if (/[^a-zA-Z0-9]/.test(char)) {
-            symbols++
-        }
-        if (/[a-z]/.test(char)) {
-            lowercase++
-        }
-        if (/[A-Z]/.test(char)) {
-            uppercase++
-        }
-    }
-
-    return { numbers, symbols, lowercase, uppercase }
 }
 
 function safeRedirectPath(path: string | null) {

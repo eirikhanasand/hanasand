@@ -3,6 +3,7 @@ import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getCookie } from '@/utils/cookies/cookies'
 import Link from 'next/link'
+import { passwordMeetsRequirements, passwordRequirementMessage } from '@/utils/auth/password'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { ArrowRight, Building2, CheckCircle2, Mail, ShieldCheck } from 'lucide-react'
@@ -23,7 +24,7 @@ type ManagedSetupResult = {
 const authInputClass = 'h-10 rounded-lg border border-ui-border bg-ui-panel px-3.5 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20'
 const authPrimaryButtonClass = 'group inline-flex h-9 min-w-36 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'
 const authGhostButtonClass = 'inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'
-const passwordRequirementMessage = 'Password must be at least 16 characters and include 2 lowercase letters, 2 uppercase letters, 2 numbers, and 2 symbols.'
+
 
 export default function RegisterPageClient({ path, serverInternal }: RegisterPageProps) {
     const router = useRouter()
@@ -33,19 +34,8 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     const [managedSetupResult, setManagedSetupResult] = useState<ManagedSetupResult | null>(null)
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
-    const passwordCounts = countPassword(password)
-    const passwordIsValid =
-        password.length >= 16
-        && passwordCounts.numbers >= 2
-        && passwordCounts.symbols >= 2
-        && passwordCounts.lowercase >= 2
-        && passwordCounts.uppercase >= 2
+    const passwordIsValid = passwordMeetsRequirements(password)
     const reservedUsername = reservedUsernames.includes(username.trim().toLowerCase())
-    const lengthColor = password.length > 0 ? password.length >= 16 ? 'text-ui-success' : 'text-ui-danger' : ''
-    const numberColor = password.length > 0 ? passwordCounts.numbers >= 2 ? 'text-ui-success' : 'text-ui-danger' : ''
-    const lowerCaseColor = password.length > 0 ? passwordCounts.lowercase >= 2 ? 'text-ui-success' : 'text-ui-danger' : ''
-    const upperCaseColor = password.length > 0 ? passwordCounts.uppercase >= 2 ? 'text-ui-success' : 'text-ui-danger' : ''
-    const specialCharacterColor = password.length > 0 ? passwordCounts.symbols >= 2 ? 'text-ui-success' : 'text-ui-danger' : ''
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const { condition: setupError, setCondition: setSetupError } = useClearStateAfter()
     const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
@@ -55,13 +45,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
         const formData = new FormData(e.currentTarget)
         const id = String(formData.get('username') || '').trim()
         const password = String(formData.get('password') || '')
-        const submittedPasswordCounts = countPassword(password)
-        const submittedPasswordIsValid =
-            password.length >= 16
-            && submittedPasswordCounts.numbers >= 2
-            && submittedPasswordCounts.symbols >= 2
-            && submittedPasswordCounts.lowercase >= 2
-            && submittedPasswordCounts.uppercase >= 2
+        const submittedPasswordIsValid = passwordMeetsRequirements(password)
         const submittedUsernameIsReserved = reservedUsernames.includes(id.toLowerCase())
 
         if (!submittedPasswordIsValid) {
@@ -251,14 +235,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                             />
                         </label>
                         {!passwordIsValid && <div className='rounded-lg border border-ui-border bg-ui-raised p-3 text-xs leading-5 text-ui-muted'>
-                            <p>
-                                Password requires
-                                <span className={`ml-1 font-bold ${lengthColor}`}>at least 16 characters</span>,
-                                <span className={`ml-1 font-bold ${lowerCaseColor}`}>2 lowercase</span>,
-                                <span className={`ml-1 font-bold ${upperCaseColor}`}>2 uppercase</span>,
-                                <span className={`ml-1 font-bold ${numberColor}`}>2 numbers</span>,
-                                <span className={`ml-1 font-bold ${specialCharacterColor}`}>2 symbols</span>.
-                            </p>
+                            <p>{passwordRequirementMessage}</p>
                         </div>}
                         <div className='mt-1 flex items-center gap-3'>
                             <button
@@ -291,27 +268,6 @@ function OnboardingItem({ title, detail }: { title: string, detail: string }) {
             <p className='mt-1 text-sm leading-6 text-ui-muted'>{detail}</p>
         </div>
     )
-}
-
-function countPassword(value: string) {
-    let numbers = 0
-    let symbols = 0
-    let lowercase = 0
-    let uppercase = 0
-
-    for (const char of value) {
-        if (/\d/.test(char)) {
-            numbers++
-        } else if (/[a-z]/.test(char)) {
-            lowercase++
-        } else if (/[A-Z]/.test(char)) {
-            uppercase++
-        } else {
-            symbols++
-        }
-    }
-
-    return { numbers, symbols, lowercase, uppercase }
 }
 
 function safeRedirectPath(path: string | null) {
