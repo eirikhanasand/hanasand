@@ -437,9 +437,9 @@ function AlertReviewPanel({ alerts, busyAction, onOpenCase, organizationId, heal
         <section id='dwm-alert-review' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
             <div className='border-b border-ui-border px-4 py-3'>
                 <h1 className='text-lg font-semibold text-ui-text'>Matched alerts</h1>
-                <p className='mt-1 text-xs leading-5 text-ui-muted'>Real retained matches for this organization. Open a case only from an alert with persisted source evidence.</p>
+                <p className='mt-1 text-xs leading-5 text-ui-muted'>Alerts matching your watchlist.</p>
             </div>
-            {health.state === 'error' ? <div role='alert' className='px-4 py-6 text-sm text-ui-danger'>Alerts could not be loaded. <button type='button' onClick={onRetry} className='ml-2 underline'>Retry</button></div> : health.state !== 'live' ? <p className='px-4 py-8 text-sm text-ui-muted'>Loading matched alerts…</p> : !alerts.length ? <p className='px-4 py-8 text-sm text-ui-muted'>No retained alerts in this organization.</p> : (
+            {health.state === 'error' ? <div role='alert' className='px-4 py-6 text-sm text-ui-danger'>Alerts could not be loaded. <button type='button' onClick={onRetry} className='ml-2 underline'>Retry</button></div> : health.state !== 'live' ? <p className='px-4 py-8 text-sm text-ui-muted'>Loading matched alerts…</p> : !alerts.length ? <p className='px-4 py-8 text-sm text-ui-muted'>No alerts yet.</p> : (
                 <div className='divide-y divide-ui-border'>
                     {alerts.map(alert => {
                         const caseId = alertCaseId(alert)
