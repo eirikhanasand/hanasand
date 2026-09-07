@@ -46,6 +46,7 @@ try {
             HANASAND_DB_MONITOR_USER: '',
             HANASAND_DB_MONITOR_PASSWORD: '',
             HANASAND_DB_MONITOR_STATE: dashboardState,
+            HANASAND_DB_MONITOR_SCREENSHOT: join(root, 'missing.png'),
             HANASAND_STATUS_FEED_MONITOR_STATE: join(root, 'status-feed.json'),
             HANASAND_TI_BACKUP_STATUS: backupStatus,
             HANASAND_TI_BACKUP_MONITOR_STATE: backupState,
