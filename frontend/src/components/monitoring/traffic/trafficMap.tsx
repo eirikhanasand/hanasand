@@ -31,29 +31,32 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { EmptyCopy, InsightCard, SignalGroup, StatCard, ZoomButton } from './liveMapPrimitives'
 import statusClasses from './statusClasses'
 
-import type { TrafficMetrics, TrafficRecord } from '@/utils/monitoring/types'
+import type { TrafficMetrics, TrafficRecord, TrafficRecords } from '@/utils/monitoring/types'
 
 export default function TrafficMap({
     initialMetrics,
     initialRecords,
+    selectedDomain,
+    onSnapshot,
 }: {
     initialMetrics: TrafficMetrics | null
     initialRecords: TrafficRecord[]
+    selectedDomain?: string
+    onSnapshot?: (snapshot: TrafficSnapshotPayload) => void
 }) {
     const [status, setStatus] = useState('Connecting traffic stream')
     const [isConnected, setIsConnected] = useState(false)
     const [isPolling, setIsPolling] = useState(false)
+    const [liveRevision, setLiveRevision] = useState(0)
     const [viewBox, setViewBox] = useState<ViewBox>(INITIAL_VIEWBOX)
     const [pings, setPings] = useState<LivePing[]>([])
-    const [countries, setCountries] = useState<Record<string, TrafficCountryPoint>>(() => ({
-        ...hydrateMetricCountries(initialMetrics),
-        ...hydrateCountries(initialRecords),
-    }))
+    const [countries, setCountries] = useState<Record<string, TrafficCountryPoint>>(() => hydrateCountries(initialRecords))
     const [liveRecords, setLiveRecords] = useState<TrafficRecord[]>(initialRecords)
     const [selectedCountry, setSelectedCountry] = useState<string>('NO')
     const [now, setNow] = useState(() => Date.now())
     const dragRef = useRef<{ x: number, y: number, viewBox: ViewBox } | null>(null)
     const frameRef = useRef<number>(0)
+    const cursorRef = useRef(Math.max(0, ...initialRecords.map(record => Number(record.id) || 0)))
     const recordCountRef = useRef(initialRecords.length)
 
     useEffect(() => {
@@ -68,13 +71,15 @@ export default function TrafficMap({
         const connect = () => {
             if (stopped) return
             setStatus('Connecting traffic stream')
-            es = new EventSource('/api/live-traffic')
+            es = new EventSource('/api/live-traffic?' + new URLSearchParams({ after: String(cursorRef.current), ...(selectedDomain ? { domain: selectedDomain } : {}) }))
 
             const handleBatch = (data: string) => {
                 if (!data || data === 'connected') return
                 try {
                     const batch = JSON.parse(data) as TrafficBatch[]
                     if (Array.isArray(batch) && batch.length) {
+                        if (!Number(initialMetrics?.total_requests)) setLiveRevision(previous => previous + 1)
+                        cursorRef.current = Math.max(cursorRef.current, ...batch.map(item => Number(item.max_id) || 0))
                         applyTrafficBatch(batch, setCountries, setPings)
                         setStatus('Streaming live traffic')
                         setIsConnected(true)
@@ -137,24 +142,18 @@ export default function TrafficMap({
 
         async function pollSnapshot() {
             try {
-                const response = await fetch('/api/live-traffic?mode=snapshot', { cache: 'no-store' })
+                const response = await fetch('/api/live-traffic?' + new URLSearchParams({ mode: 'snapshot', ...(selectedDomain ? { domain: selectedDomain } : {}) }), { cache: 'no-store' })
                 if (!response.ok) throw new Error(`Snapshot returned ${response.status}`)
                 const payload = await response.json() as TrafficSnapshotPayload
                 const records = Array.isArray(payload.records?.result) ? payload.records.result : []
-                if (!stopped && records.length) {
-                    setLiveRecords(records)
-                    applyTrafficBatch(recordsToBatch(records), setCountries, setPings)
-                    setStatus(isConnected ? 'Streaming live traffic' : 'Live traffic feed active')
-                    setIsPolling(!isConnected)
-                } else if (!stopped && recordCountRef.current) {
-                    setStatus(isConnected ? 'Streaming live traffic' : 'Live traffic feed active')
-                    setIsPolling(!isConnected)
-                } else if (!stopped && Number(payload.metrics?.total_requests || initialMetrics?.total_requests || 0)) {
-                    const metricBatch = metricsToBatch(payload.metrics || initialMetrics)
-                    if (metricBatch.length) {
-                        applyTrafficBatch(metricBatch, setCountries, setPings)
+                if (!stopped) {
+                    if (payload.records) {
+                        cursorRef.current = Math.max(cursorRef.current, ...records.map(record => Number(record.id) || 0))
+                        setLiveRecords(records)
+                        setCountries(hydrateCountries(records))
                     }
-                    setStatus(isConnected ? 'Streaming live traffic' : 'Live metrics active')
+                    onSnapshot?.(payload)
+                    setStatus(isConnected ? 'Streaming live traffic' : 'Updated')
                     setIsPolling(!isConnected)
                 }
             } catch {
@@ -175,7 +174,7 @@ export default function TrafficMap({
             stopped = true
             if (timer) clearTimeout(timer)
         }
-    }, [isConnected])
+    }, [isConnected, selectedDomain, onSnapshot, liveRevision])
 
     useEffect(() => {
         function tick() {
@@ -200,7 +199,7 @@ export default function TrafficMap({
     const selectedCoords = selectedCountry ? countryCentroids[selectedCountry] : null
     const selectedCapital = CAPITAL_MARKERS.find((marker) => marker.iso === selectedCountry)
     const totalTrackedRequests = countryEntries.reduce((sum, item) => sum + item.count, 0)
-    const trackedRequestsValue = totalTrackedRequests || Number(initialMetrics?.total_requests || 0)
+    const trackedRequestsValue = Number(initialMetrics?.total_requests || 0)
     const selectedRank = countryEntries.findIndex((entry) => entry.iso === selectedCountry) + 1
     const selectedShare = selectedPoint && totalTrackedRequests
         ? Math.round((selectedPoint.count / totalTrackedRequests) * 100)
@@ -291,7 +290,7 @@ export default function TrafficMap({
                         label='Tracked Requests'
                         value={String(trackedRequestsValue)}
                     />
-                    <StatCard icon={<Zap className='h-4 w-4' />} label='Top Country' value={countryEntries[0]?.iso || 'checking'} />
+                    <StatCard icon={<Zap className='h-4 w-4' />} label='Top Country' value={countryEntries[0]?.iso || 'Unknown'} />
                     <StatCard
                         icon={<Clock3 className='h-4 w-4' />}
                         label='Avg Request Time'
@@ -485,7 +484,7 @@ export default function TrafficMap({
                                 bg-ui-panel px-3 py-2'
                         >
                             <span>Live share</span>
-                            <span className='font-semibold text-ui-text'>{selectedShare ? `${selectedShare}%` : 'metering'}</span>
+                            <span className='font-semibold text-ui-text'>{`${selectedShare}%`}</span>
                         </div>
                         <div
                             className='flex items-center justify-between rounded-lg border border-ui-border
@@ -588,51 +587,6 @@ export default function TrafficMap({
 }
 
 type TrafficSnapshotPayload = {
-    records?: { result?: TrafficRecord[] } | null
+    records?: TrafficRecords | null
     metrics?: TrafficMetrics | null
-}
-
-function recordsToBatch(records: TrafficRecord[]): TrafficBatch[] {
-    const counts = new Map<string, number>()
-    records.slice(0, 80).forEach((record) => {
-        const iso = countryIsoForTrafficRecord(record)
-        counts.set(iso, (counts.get(iso) || 0) + 1)
-    })
-
-    const timestamp = new Date().toISOString()
-    return Array.from(counts, ([iso, count]) => ({ iso, count, timestamp }))
-}
-
-function hydrateMetricCountries(metrics: TrafficMetrics | null): Record<string, TrafficCountryPoint> {
-    const timestamp = Date.now()
-    return metricsToBatch(metrics).reduce<Record<string, TrafficCountryPoint>>((acc, item) => {
-        acc[item.iso] = {
-            iso: item.iso,
-            count: item.count,
-            lastSeen: timestamp,
-        }
-        return acc
-    }, {})
-}
-
-function metricsToBatch(metrics: TrafficMetrics | null | undefined): TrafficBatch[] {
-    const domains = Array.isArray(metrics?.top_domains) ? metrics.top_domains : []
-    const timestamp = new Date().toISOString()
-    return domains
-        .slice(0, 24)
-        .map((entry, index) => ({
-            iso: countryIsoForTrafficRecord({
-                id: index,
-                domain: String(entry.key),
-                path: '/',
-                method: 'GET',
-                referer: '',
-                status: 200,
-                request_time: 0,
-                timestamp,
-                user_agent: 'traffic-metrics',
-            } as TrafficRecord),
-            count: Number(entry.count) || 1,
-            timestamp,
-        }))
 }

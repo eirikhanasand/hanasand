@@ -194,7 +194,7 @@ export default function TrafficDashboard({
                     {IPs.map((ipMetric, i) => (
                         <div key={i} className='flex max-h-[62vh] flex-col gap-2 overflow-y-auto rounded-md border border-ui-border bg-ui-panel p-4 text-sm shadow-sm'>
                             <h2 className='break-all text-sm font-semibold text-ui-text'>{ipMetric.ip}</h2>
-                            <span className='text-xs leading-5 text-ui-muted'>Most common user agent: {ipMetric.most_common_user_agent ?? 'metering'}</span>
+                            <span className='text-xs leading-5 text-ui-muted'>Most common user agent: {ipMetric.most_common_user_agent ?? 'Unknown'}</span>
                             <div className='mt-2'>
                                 <h3 className='text-xs font-semibold text-ui-muted'>Top requested paths</h3>
                                 <ul className='mt-1 grid gap-1 text-xs text-ui-muted'>
@@ -221,7 +221,7 @@ export default function TrafficDashboard({
                     {UAs.map((ua, i) => (
                         <div key={i} className='flex max-h-[62vh] flex-col gap-2 overflow-y-auto rounded-md border border-ui-border bg-ui-panel p-4 text-sm shadow-sm'>
                             <h2 className='break-all text-xs font-semibold leading-5 text-ui-text'>{ua.user_agent}</h2>
-                            <span className='text-xs text-ui-muted'>Most common IP: {ua.most_common_ip ?? 'metering'}</span>
+                            <span className='text-xs text-ui-muted'>Most common IP: {ua.most_common_ip ?? 'Unknown'}</span>
                             <div className='mt-2'>
                                 <h3 className='text-xs font-semibold text-ui-muted'>Top requested paths</h3>
                                 <ul className='mt-1 grid gap-1 text-xs text-ui-muted'>
