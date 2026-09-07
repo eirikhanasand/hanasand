@@ -10,10 +10,11 @@ export type NavigationAccess = {
     isAdmin: boolean
     canManageSystem: boolean
     canManageContent: boolean
+    hasVMs?: boolean
     canReviewIntel?: boolean
 }
 
-export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManageContent, canReviewIntel = isAdmin }: NavigationAccess): NavigationItem[] {
+export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManageContent, canReviewIntel = isAdmin, hasVMs = false }: NavigationAccess): NavigationItem[] {
     const link = (label: string, href: string, visible = true): NavigationItem => ({ label, href, visible })
     const group = (label: string, items: NavigationItem[]): NavigationItem => ({ label, items })
     const sections = [
@@ -63,7 +64,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
         group('Infrastructure', [
             link('Overview', '/system'),
             group('Compute', [
-                link('Virtual Machines', '/vms'),
+                link('Virtual Machines', '/vms', hasVMs),
                 link('Host Updates', '/system/updates', isAdmin),
             ]),
             group('Observability', [

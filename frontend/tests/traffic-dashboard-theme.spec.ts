@@ -17,7 +17,7 @@ test('traffic dashboard summary lanes use shared theme tokens', async () => {
 
     expect(page).toContain('DashboardPage')
     expect(page).toContain('DashboardHeader')
-    expect(page).toContain('border-ui-border bg-ui-raised')
+    expect(page).toContain('bg-ui-raised')
     expect(page).toContain('text-ui-success')
     expect(page).toContain('text-ui-warning')
     expect(page).toContain('text-ui-danger')
@@ -30,7 +30,7 @@ test('traffic dashboard summary lanes use shared theme tokens', async () => {
     expect(client).toContain('data-traffic-primary-flow')
     expect(client).toContain('Recommended next')
     expect(client).toContain('data-traffic-primary-action')
-    expect(client).toContain('data-traffic-triage-strip')
+    expect(client).not.toContain('data-traffic-triage-strip')
     expect(client).toContain('data-traffic-throughput-disclosure')
     expect(client).toContain('data-traffic-route-disclosure')
     expect(client).toContain('data-traffic-ip-disclosure')

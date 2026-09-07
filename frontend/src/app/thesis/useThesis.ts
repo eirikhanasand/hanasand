@@ -15,6 +15,7 @@ export default function useThesis(initial: ThesisDocument, canEdit: boolean) {
     const [conflict, setConflict] = useState(false)
     const [recoveries, setRecoveries] = useState<Recovery[]>([])
     const actions = useRef<{
+        receive(document: ThesisDocument): void
         update(field: 'title' | 'body', value: string, group?: string): void
         undo(): void
         redo(): void
@@ -176,6 +177,7 @@ export default function useThesis(initial: ThesisDocument, canEdit: boolean) {
         const online = () => { void flush() }
 
         actions.current = {
+            receive,
             update(field, value, group) {
                 if (!canEdit || draft[field] === value) return
                 remember(group)
@@ -273,7 +275,10 @@ export default function useThesis(initial: ThesisDocument, canEdit: boolean) {
             window.document.removeEventListener('visibilitychange', hide)
             window.removeEventListener('online', online)
         }
-    }, [initial, canEdit])
+    // Server refreshes must update the document without recreating its local Undo history.
+    }, [canEdit])
+
+    useEffect(() => { actions.current?.receive(initial) }, [initial])
 
     return {
         document, error, conflict, recoveries,

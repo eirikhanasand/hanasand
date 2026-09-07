@@ -58,3 +58,6 @@
 .thesis-document-actions::-webkit-scrollbar { display: none; }
 .thesis-selected-table { outline: 2px solid var(--color-ui-primary); outline-offset: 2px; }
 .thesis-selected-table th, .thesis-selected-table td { background: color-mix(in srgb, var(--color-ui-primary) 15%, var(--color-ui-panel)); }
+
+.thesis-document-actions-wide { grid-column: 1 / -1; width: 100%; max-width: none; flex-wrap: wrap; overflow: visible; padding-inline: 0; }
+.thesis-document-actions-wide > [role=group] { flex-wrap: wrap; min-width: 0; flex-shrink: 1; }

@@ -4,7 +4,7 @@ import { Fragment, useId, useState } from 'react'
 import { ChevronDown, ChevronRight, ClipboardPlus, Download, Pencil, Trash2, X } from 'lucide-react'
 import SheetEditor, { sheetButton, type SheetEditorProps } from './sheetEditor'
 import { tables, writeTable } from './workspace'
-import { activityError, hoursText, initialTimetableYear, isTimetable, isoWeek, timetable, type Activity, type ActivityLog, type Week } from './timetableData'
+import { activityError, expectedHoursText, hoursText, initialTimetableYear, isTimetable, isoWeek, timetable, type Activity, type ActivityLog, type Week } from './timetableData'
 import './timetable.css'
 
 const today = () => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` }
@@ -42,7 +42,6 @@ export default function TimetableSheet({ onActivityLogChange, ...props }: SheetE
     const [message, setMessage] = useState('')
     const [pdfBusy, setPdfBusy] = useState(false)
     const [pdfError, setPdfError] = useState('')
-    const [planDate, setPlanDate] = useState(today())
     function changeWeek(week: Week | undefined, date?: string) {
         if (!canEdit || !model) return
         const table = parsed[target]
@@ -57,7 +56,7 @@ export default function TimetableSheet({ onActivityLogChange, ...props }: SheetE
         const summary = cells.find(row => /^(?:total(?:\s|$)|\d+\s+weeks$)/i.test(row[0].trim()))
         if (summary) summary[0] = `${model.plannedWeeks + (week?.sourceRow !== undefined ? -1 : 1)} weeks`
         props.onChange('body', sheet.body.slice(0, table.start) + writeTable({ ...table.data, cells, heights: [] }) + sheet.body.slice(table.end))
-        setMessage(week?.sourceRow !== undefined ? 'Week removed from the plan. Its logged activities are kept. Use Undo to restore the row.' : 'Week added to the plan.')
+        setMessage('')
     }
     function addWeekNear(row: number, direction: -1 | 1 = 1) {
         if (!model) return 0
@@ -112,15 +111,13 @@ export default function TimetableSheet({ onActivityLogChange, ...props }: SheetE
             return Math.max(0, Math.min(row, model.weeks.length - (week?.activities.length ? 0 : 1)))
         },
         extendRow: direction => addWeekNear(direction < 0 ? 1 : model.weeks.length, direction),
-    } : undefined} titleAside={model && <details className='thesis-hours-progress'><summary aria-label='Hours spent and expected'><strong>{model.totals.at(-1)} / {hoursText(model.expectedHours)} h</strong><span>spent / expected</span></summary><div>12 hours per week before Christmas; 7.5 hours per weekday from January. Before Christmas, each public holiday deducts 2.4 hours. Weeks 51–53 and Norwegian weekday public holidays are excluded. Work logged on days off still counts as spent.</div></details>} actions={<>
+    } : undefined} titleAside={model && <details className='thesis-hours-progress'><summary aria-label='Hours spent and expected'><strong>{model.totals.at(-1)} / {expectedHoursText(model.expectedHours)} h</strong><span>spent / expected</span></summary><div>12 hours per week before Christmas; 7.5 hours per weekday from January. Before Christmas, each public holiday deducts 2.4 hours. Weeks 51–53 and Norwegian weekday public holidays are excluded. Work logged on days off still counts as spent.</div></details>} actions={<>
         {model && <>
             {canEdit && <button type='button' className={sheetButton + ' inline-flex min-w-11 items-center justify-center gap-2'} aria-label='Log activity' title='Log activity' aria-expanded={form !== null && !form.week} onClick={() => { setMessage(''); setForm(form && !form.week ? null : {}) }}><ClipboardPlus size={18} /></button>}
             <button type='button' className={sheetButton + ' inline-flex min-w-11 items-center justify-center gap-2'} aria-label='Export timetable as PDF' title='Export as PDF' disabled={pdfBusy} onClick={exportPdf}><Download size={18} /><span>{pdfBusy ? 'Exporting…' : 'PDF'}</span></button>
         </>}
         {props.actions}
     </>} beforeContent={<div className='thesis-timetable-controls'>
-        {model && <p className='thesis-timetable-hint'>Hours by ISO week · {log.startYear}–{model.weeks.at(-1)?.year || log.startYear}. Select a week to see dated activities.</p>}
-        {canEdit && model && <details className='thesis-plan-week'><summary>Plan a week</summary><form onSubmit={event => { event.preventDefault(); changeWeek(undefined, planDate) }}><label>Date in the week<input type='date' required min='1900-01-01' max='2199-12-31' value={planDate} onChange={event => setPlanDate(event.target.value)} /></label><button type='submit'>Add week</button></form></details>}
         {canEdit && form && !form.week && <section aria-label='Quick activity log' className='thesis-week-detail'><h2>Log activity</h2>{activityForm()}</section>}
         {message && <p role='status'>{message}</p>}
         {pdfError && <p role='alert'>{pdfError}</p>}

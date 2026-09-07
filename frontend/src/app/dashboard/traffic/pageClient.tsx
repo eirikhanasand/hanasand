@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
-import { Activity, Gauge, Plus, ShieldAlert, X, Pencil } from 'lucide-react'
+import { useState } from 'react'
+import { Plus, ShieldAlert, X, Pencil } from 'lucide-react'
 import ErrorNotice from '@/components/error/errorNotice'
 import config from '@/config'
 import getBlocklist from '@/utils/traffic/getBlocklist'
@@ -56,7 +56,7 @@ export default function TrafficDashboard({
     const [form, setForm] = useState<Partial<BlocklistEntry>>({})
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
     const domains = Array.isArray(topDomains) ? topDomains : []
-    const commonListStyle = 'flex max-h-[62vh] flex-col gap-3 overflow-y-auto rounded-md border border-ui-border bg-ui-panel p-4 text-sm shadow-sm'
+    const commonListStyle = 'flex min-w-0 max-h-[62vh] flex-col gap-3 overflow-y-auto rounded-md border border-ui-border bg-ui-panel p-4 text-sm shadow-sm'
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
         // @ts-expect-error
@@ -106,7 +106,6 @@ export default function TrafficDashboard({
     const hottestRoute = metrics[0]
     const busiestIp = IPs[0]
     const busiestUa = UAs[0]
-    const latestLog = logs[0]
     const needsBlocklistReview = blocklist.length === 0 && (busiestIp || busiestUa)
     const primaryTitle = needsBlocklistReview
         ? 'Review access controls'
@@ -120,7 +119,7 @@ export default function TrafficDashboard({
             : 'Route, IP, user-agent, and request evidence appears here as production ingress arrives.'
 
     return (
-        <div className='grid h-full gap-4'>
+        <div className='grid min-w-0 gap-4'>
             <ErrorNotice compact variant='info' message={message as string | null} />
             <AppConfirmDialog
                 open={deletingBlockId !== null}
@@ -144,7 +143,7 @@ export default function TrafficDashboard({
                 </div>
                 <button
                     type='button'
-                    className='inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
+                    className='inline-flex h-9 w-fit self-center items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40'
                     onClick={() => setShowBlockModal(true)}
                     data-traffic-primary-action
                 >
@@ -153,16 +152,10 @@ export default function TrafficDashboard({
                 </button>
             </section>
 
-            <section className='grid gap-3 md:grid-cols-3' data-traffic-triage-strip>
-                <TriageCard icon={<Gauge className='h-4 w-4' />} label='Fastest signal' value={hottestDomain ? `${hottestDomain.name} · ${hottestDomain.tps} TPS` : 'TPS metering'} detail='Open live throughput only when the ingress rate needs inspection.' />
-                <TriageCard icon={<Activity className='h-4 w-4' />} label='Noisiest route' value={hottestRoute?.value || 'Routes metering'} detail={hottestRoute ? `${hottestRoute.hits_total} total hits` : 'Route demand updates as traffic arrives.'} />
-                <TriageCard icon={<ShieldAlert className='h-4 w-4' />} label='Access-control lead' value={busiestIp?.ip || busiestUa?.most_common_ip || 'No lead yet'} detail={latestLog ? `${latestLog.metric}: ${latestLog.value}` : 'Recent request evidence will identify the next rule candidate.'} />
-            </section>
-
             <details className='rounded-lg border border-ui-border bg-ui-panel shadow-sm' data-traffic-throughput-disclosure>
                 <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
                     <span>Live throughput</span>
-                    <span className='text-xs font-medium text-ui-muted'>{domainsSortedByTps.length ? `${domainsSortedByTps.length} domains` : 'Waiting for TPS'}</span>
+                    <span className='min-w-0 break-all text-right text-xs font-medium text-ui-muted'>{hottestDomain ? `${hottestDomain.name} · ${hottestDomain.tps} TPS` : 'Waiting for TPS'}</span>
                 </summary>
                 <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-5'>
                     {domainsSortedByTps.map((domain, id) => <TrafficSpeedometer
@@ -247,7 +240,7 @@ export default function TrafficDashboard({
             </details>
 
             <SectionTitle title='Blocklist and recent activity' />
-            <div className='grid h-full gap-4 xl:grid-cols-2'>
+            <div className='grid min-w-0 gap-4 xl:grid-cols-2'>
                 {/* Blocklist */}
                 <div className={commonListStyle}>
                     <div className='flex items-center justify-between gap-3'>
@@ -259,7 +252,7 @@ export default function TrafficDashboard({
                             <Plus className='w-4 h-4' /> Add
                         </button>
                     </div>
-                    <div className='h-full overflow-x-auto'>
+                    <div className='min-w-0 overflow-x-auto'>
                         <table className='w-full min-w-[28rem] text-left text-sm'>
                             <thead>
                                 <tr className='border-b border-ui-border text-xs font-semibold text-ui-muted'>
@@ -387,19 +380,6 @@ function MetricCard({ title, rows }: { title: string, rows: Array<[string, numbe
             {rows.map(([label, value]) => (
                 <span key={label} className='text-xs text-ui-muted'>{label}: {value}</span>
             ))}
-        </div>
-    )
-}
-
-function TriageCard({ icon, label, value, detail }: { icon: ReactNode, label: string, value: string, detail: string }) {
-    return (
-        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm'>
-            <div className='flex items-center gap-2 text-ui-primary'>
-                {icon}
-                <p className='text-[10px] font-semibold uppercase'>{label}</p>
-            </div>
-            <p className='mt-2 truncate text-sm font-semibold text-ui-text'>{value}</p>
-            <p className='mt-1 line-clamp-2 min-h-10 text-xs leading-5 text-ui-muted'>{detail}</p>
         </div>
     )
 }

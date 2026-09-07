@@ -35,7 +35,23 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         () => initialMode,
     )
     const compact = mode === 'compact'
-    const sections = getDashboardNavigation(access)
+    const [hasVMs, setHasVMs] = useState(false)
+    useEffect(() => {
+        const controller = new AbortController()
+        const refresh = async () => {
+            try {
+                const id = getCookie('impersonating_id') || access.id
+                const response = await fetch(`/api/backend/vms/${encodeURIComponent(id)}`, { cache: 'no-store', signal: controller.signal })
+                if (!response.ok) return
+                const vms = await response.json()
+                if (Array.isArray(vms) && !controller.signal.aborted) setHasVMs(vms.length > 0)
+            } catch { /* Keep the last known navigation if the VM request fails. */ }
+        }
+        void refresh()
+        window.addEventListener('vms-updated', refresh)
+        return () => { controller.abort(); window.removeEventListener('vms-updated', refresh) }
+    }, [access.id, pathname])
+    const sections = getDashboardNavigation({ ...access, hasVMs })
     const links = navigationLinks(sections)
     const route = pathname
     const active = links.filter(item => route === item.href || route.startsWith(`${item.href}/`))
