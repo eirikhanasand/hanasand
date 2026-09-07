@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { publicMonitoringRequest } from './publicMonitoringRequest.ts'
 import run, { withTransaction } from '#db'
 import { certificateTarget, checkCertificate } from './automations.ts'
 import getStats from './refresh/queries/stats.ts'
@@ -47,28 +48,18 @@ async function fetchJson(source: JsonSource) {
     const tls = certificateTarget({ target_url: source.target_url, monitoring_type: 'json' })
     const certificate = tls ? await checkCertificate(tls, source.timeout_seconds * 1000) : { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null }
     if (certificate.status === 'invalid') throw new Error(`TLS certificate validation failed for ${tls!.hostname}.`)
-    const response = await fetch(source.target_url!, { redirect: source.follow_redirects ? 'follow' : 'manual', headers: source.user_agent ? { 'user-agent': source.user_agent } : undefined, signal: AbortSignal.timeout(source.timeout_seconds * 1000) })
-    if (!response.ok) { await response.body?.cancel(); throw new Error(`JSON source returned HTTP ${response.status}.`) }
-    const reader = response.body?.getReader()
-    if (!reader) throw new Error('JSON source returned no body.')
-    let size = 0
-    const chunks: Uint8Array[] = []
-    try {
-        while (true) {
-            const { value, done } = await reader.read()
-            if (done) break
-            size += value.byteLength
-            if (size > 1_048_576) throw new Error('JSON source exceeds the 1 MiB response limit.')
-            chunks.push(value)
-        }
-        return { payload: JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown, certificate }
-    } finally { await reader.cancel().catch(() => {}) }
+    const response = await publicMonitoringRequest(source.target_url!, {
+        followRedirects: source.follow_redirects, userAgent: source.user_agent,
+        timeoutMs: source.timeout_seconds * 1000, readBody: true,
+    })
+    if (response.status < 200 || response.status >= 300) throw new Error(`JSON source returned HTTP ${response.status}.`)
+    return { payload: JSON.parse(response.body) as unknown, certificate }
 }
 
 const pending = new Map<string, Promise<Awaited<ReturnType<typeof fetchJson>>>>()
 
 export async function sharedJsonSnapshot(source: JsonSource) {
-    const key = createHash('sha256').update(JSON.stringify([source.owner_id, source.target_url, source.user_agent, source.follow_redirects, source.timeout_seconds])).digest('hex')
+    const key = createHash('sha256').update(JSON.stringify(['public-network-v1', source.owner_id, source.target_url, source.user_agent, source.follow_redirects, source.timeout_seconds])).digest('hex')
     const existing = pending.get(key)
     if (existing) return existing
     const promise = loadSnapshot(source, key).finally(() => pending.delete(key))
