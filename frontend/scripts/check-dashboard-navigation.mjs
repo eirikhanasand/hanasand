@@ -21,7 +21,10 @@ const operator = navigationLinks(getDashboardNavigation({ ...memberAccess, canMa
 assert(operator.some(item => item.href === '/system'))
 assert(!operator.some(item => ['/db', '/logs', '/system/updates'].includes(item.href)))
 assert.equal(all.find(item => item.href === '/dwm/actors')?.label, 'Monitored actors')
-assert(all.some(item => item.href === '/management'))
+for (const path of ['/management/users', '/management/roles']) {
+    assert.deepEqual(all.find(item => item.href === path)?.ancestors, ['Administration', 'Management'])
+}
+assert(!navigationLinks(getDashboardNavigation(memberAccess)).some(item => item.href.startsWith('/management')))
 assert.deepEqual(all.find(item => item.href === '/cases')?.ancestors, ['Security operations'])
 assert.deepEqual(all.find(item => item.href === '/dwm/actors')?.ancestors, ['Security operations', 'Dark web monitoring'])
 assert.deepEqual(getDashboardNavigation(access)[0].items.slice(0, 3).map(item => item.label), ['Overview', 'Threat Search', 'Cases'])

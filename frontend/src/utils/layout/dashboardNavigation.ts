@@ -94,7 +94,10 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
                 link('Helpdesk', '/helpdesk', isAdmin),
                 link('Mail', '/mail', isAdmin),
             ]),
-            link('Management', '/management', isAdmin),
+            group('Management', [
+                link('Users', '/management/users', isAdmin),
+                link('Roles', '/management/roles', isAdmin),
+            ]),
         ]),
         group('Settings', [
             group('Account & organization', [
