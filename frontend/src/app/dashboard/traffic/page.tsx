@@ -52,42 +52,42 @@ export default async function Page({
                 description='Watch live ingress, hot routes, error pressure, and access controls.'
             />
             <div className='grid gap-4'>
-                <section className='grid gap-3 xl:grid-cols-[1.2fr_1fr_1fr_1fr]'>
-                    <TrafficLane
-                        title='Latest request'
-                        icon={<Activity className='h-4 w-4' />}
-                        value={latestRecord ? `${latestRecord.method} ${latestRecord.status}` : 'Listening'}
-                        detail={latestRecord ? `${latestRecord.domain}${latestRecord.path}` : 'Ingress stream is connected; requests stream in as they arrive'}
-                        footer={latestRecord ? shortTime(latestRecord.timestamp) : 'ingress stream active'}
-                        tone={latestRecord && latestRecord.status >= 500 ? 'bad' : latestRecord && latestRecord.status >= 400 ? 'watch' : 'ok'}
-                    />
-                    <TrafficLane
-                        title='Hot route'
-                        icon={<Globe2 className='h-4 w-4' />}
-                        value={topPath?.key || 'Route stream'}
-                        detail={topPath ? `${topPath.count} requests in the live traffic sample` : 'Route demand updates as traffic arrives'}
-                        footer={selectedDomain || topDomain?.key || 'all domains'}
-                        tone='neutral'
-                    />
-                    <TrafficLane
-                        title='Response time'
-                        icon={<Clock3 className='h-4 w-4' />}
-                        value={trafficMetrics?.avg_request_time ? `${Math.round(trafficMetrics.avg_request_time)}ms` : 'metering'}
-                        detail={`${trafficMetrics?.total_requests || 0} tracked requests`}
-                        footer='rolling metrics'
-                        tone={trafficMetrics?.avg_request_time && trafficMetrics.avg_request_time > 1000 ? 'watch' : 'ok'}
-                    />
-                    <TrafficLane
-                        title='Error pressure'
-                        icon={<AlertTriangle className='h-4 w-4' />}
-                        value={`${errorRate}%`}
-                        detail={trafficMetrics?.top_error_paths?.[0] ? trafficMetrics.top_error_paths[0].key : 'Error monitor is live; no noisy route now'}
-                        footer='4xx/5xx share'
-                        tone={errorRate > 5 ? 'bad' : errorRate > 1 ? 'watch' : 'ok'}
-                    />
-                </section>
-                <DashboardPanel className='p-4'>
+                <DashboardPanel className='grid min-w-0 gap-3 p-3 xl:grid-cols-[minmax(160px,0.9fr)_minmax(0,4fr)] xl:items-center'>
                     <DomainSelector domains={domainOptions} selectedDomain={selectedDomain} />
+                    <section aria-label='Traffic summary' className='grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4'>
+                        <TrafficLane
+                            title='Latest request'
+                            icon={<Activity className='h-4 w-4' />}
+                            value={latestRecord ? `${latestRecord.method} ${latestRecord.status}` : 'Listening'}
+                            detail={latestRecord ? `${latestRecord.domain}${latestRecord.path}` : 'Ingress stream is connected; requests stream in as they arrive'}
+                            footer={latestRecord ? shortTime(latestRecord.timestamp) : 'ingress stream active'}
+                            tone={latestRecord && latestRecord.status >= 500 ? 'bad' : latestRecord && latestRecord.status >= 400 ? 'watch' : 'ok'}
+                        />
+                        <TrafficLane
+                            title='Hot route'
+                            icon={<Globe2 className='h-4 w-4' />}
+                            value={topPath?.key || 'Route stream'}
+                            detail={topPath ? `${topPath.count} requests in the live traffic sample` : 'Route demand updates as traffic arrives'}
+                            footer={selectedDomain || topDomain?.key || 'all domains'}
+                            tone='neutral'
+                        />
+                        <TrafficLane
+                            title='Response time'
+                            icon={<Clock3 className='h-4 w-4' />}
+                            value={trafficMetrics?.avg_request_time ? `${Math.round(trafficMetrics.avg_request_time)}ms` : 'metering'}
+                            detail={`${trafficMetrics?.total_requests || 0} tracked requests`}
+                            footer='rolling metrics'
+                            tone={trafficMetrics?.avg_request_time && trafficMetrics.avg_request_time > 1000 ? 'watch' : 'ok'}
+                        />
+                        <TrafficLane
+                            title='Error pressure'
+                            icon={<AlertTriangle className='h-4 w-4' />}
+                            value={`${errorRate}%`}
+                            detail={trafficMetrics?.top_error_paths?.[0] ? trafficMetrics.top_error_paths[0].key : 'Error monitor is live; no noisy route now'}
+                            footer='4xx/5xx share'
+                            tone={errorRate > 5 ? 'bad' : errorRate > 1 ? 'watch' : 'ok'}
+                        />
+                    </section>
                 </DashboardPanel>
                 <TrafficMap
                     initialMetrics={trafficMetrics}
@@ -146,20 +146,16 @@ function TrafficLane({ title, icon, value, detail, footer, tone }: {
     tone: 'neutral' | 'ok' | 'watch' | 'bad'
 }) {
     return (
-        <DashboardPanel className='overflow-hidden p-0'>
-            <div className='flex items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-4 py-3'>
-                <div className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text'>
-                    <span className={toneText(tone)}>{icon}</span>
-                    <span className='truncate'>{title}</span>
-                </div>
-                <span className={`h-2 w-2 rounded-full ${toneDot(tone)}`} />
+        <div className='min-w-0 rounded-lg bg-ui-raised px-3 py-2' title={`${detail} · ${footer}`}>
+            <div className='flex min-w-0 items-center gap-2 text-xs text-ui-muted'>
+                <span className={toneText(tone)}>{icon}</span>
+                <span className='truncate'>{title}</span>
+                <span aria-hidden='true' className={`ml-auto h-1.5 w-1.5 shrink-0 rounded-full ${toneDot(tone)}`} />
             </div>
-            <div className='p-4'>
-                <p className='line-clamp-1 text-lg font-semibold text-ui-text'>{value}</p>
-                <p className='mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-ui-muted'>{detail}</p>
-                <p className='mt-3 truncate text-xs text-ui-muted'>{footer}</p>
-            </div>
-        </DashboardPanel>
+            <p className='truncate text-sm font-semibold leading-6 text-ui-text'>{value}</p>
+            <p className='truncate text-xs text-ui-muted'>{detail}</p>
+            <span className='sr-only'>{footer}</span>
+        </div>
     )
 }
 

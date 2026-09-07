@@ -99,9 +99,11 @@ export default function TimetableSheet({ onActivityLogChange, ...props }: SheetE
         } catch { setPdfError('The PDF could not be created. Please try again.') }
         finally { setPdfBusy(false) }
     }
+    const displayedCells = model ? [['Week', ...model.categories, 'Total'], ...model.weeks.map(week => [week.key, ...week.values])] : []
     return <SheetEditor {...props} customTable={model ? {
         index: target,
-        cells: [['Week', ...model.categories, 'Total'], ...model.weeks.map(week => [week.key, ...week.values])],
+        cells: displayedCells,
+        copyCells: [...displayedCells, [`${model.plannedWeeks} weeks`, ...model.totals]],
         canRemoveRow: row => row > 0 && model.weeks[row - 1]?.sourceRow !== undefined,
         changeRow: (row, remove) => {
             if (!remove) return addWeekNear(row, row === 0 ? -1 : 1)
