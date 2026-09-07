@@ -70,7 +70,8 @@ export default function registerVmConsole(fastify: FastifyInstance) {
                 if (message.type === 'input' && typeof message.data === 'string') terminal?.write(message.data)
                 else if (message.type === 'resize' && Number.isInteger(message.cols) && Number.isInteger(message.rows)) terminal?.resize(Math.max(20, Math.min(500, message.cols)), Math.max(8, Math.min(200, message.rows)))
                 else fail('Invalid console input.')
-            } catch {
+            } catch (error) {
+                request.log.error({ err: error, vmName: request.params.name }, 'VM console failed')
                 fail('Unable to open the console. Check that the VM and its host are running.')
             }
         })
