@@ -70,8 +70,8 @@ function refreshHistory() {
     if (historyRefresh || Date.now() < historyRetryAt) return
     historyRetryAt = Date.now() + MONITOR_STALE_MS
     historyRefresh = (async () => {
-        await run(`CREATE TABLE IF NOT EXISTS service_status_snapshots (id text PRIMARY KEY, payload jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT NOW())`)
-        const saved = await run(`SELECT payload, updated_at FROM service_status_snapshots WHERE id = 'history'`)
+        await run('CREATE TABLE IF NOT EXISTS service_status_snapshots (id text PRIMARY KEY, payload jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT NOW())')
+        const saved = await run('SELECT payload, updated_at FROM service_status_snapshots WHERE id = \'history\'')
         if (saved.rows[0]) {
             historySnapshot = saved.rows[0].payload
             if (Date.now() - new Date(saved.rows[0].updated_at).getTime() < MONITOR_STALE_MS) return
@@ -79,12 +79,12 @@ function refreshHistory() {
         // History scans never block current checks. A database lock shares one
         // refresh across API instances; the persisted snapshot survives restarts.
         await withTransaction(async query => {
-            const lock = await query("SELECT pg_try_advisory_xact_lock(hashtextextended('service-status-history', 0)) AS acquired")
+            const lock = await query('SELECT pg_try_advisory_xact_lock(hashtextextended(\'service-status-history\', 0)) AS acquired')
             if (!lock.rows[0].acquired) return
-            await query("SET LOCAL statement_timeout = '60s'")
+            await query('SET LOCAL statement_timeout = \'60s\'')
             const payload = await loadStatusPayload(false, query)
             if (!payload.checks.length) throw new Error('No current monitor results; retaining the verified snapshot.')
-            await query(`INSERT INTO service_status_snapshots (id, payload) VALUES ('history', $1::jsonb) ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`, [JSON.stringify(payload)])
+            await query('INSERT INTO service_status_snapshots (id, payload) VALUES (\'history\', $1::jsonb) ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()', [JSON.stringify(payload)])
             historySnapshot = payload
         })
     })().catch(error => {
