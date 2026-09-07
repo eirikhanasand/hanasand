@@ -1,3 +1,4 @@
+import { requireVmAccess } from '#utils/vms/access.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
@@ -18,6 +19,8 @@ export default async function getVmConnection(req: FastifyRequest, res: FastifyR
     if (!vmName) {
         return res.status(400).send({ error: 'VM name is required.' })
     }
+
+    if (!await requireVmAccess(req, res, vmName)) return
 
     try {
         const certificatesResult = await run(`

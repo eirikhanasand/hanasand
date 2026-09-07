@@ -231,8 +231,10 @@ def sample(config, previous):
             'backups': backup, 'backupJob': backup_job}
 
 
-def public_state(state):
-    result = {key: value for key, value in state.items() if key not in ('healthCounters', 'pendingNotifications')}
+def public_state(state, include_host=False):
+    result = {key: value for key, value in state.items() if key not in ('healthCounters', 'pendingNotifications', 'compute', 'sites', 'replicaEligibility')}
+    if include_host:
+        result.update({key: state[key] for key in ('compute', 'sites', 'replicaEligibility') if key in state})
     if time.time() - state.get('sampledAt', 0) > 60:
         result.update(mode='unknown', readOnly=True, stale=True)
     return result
@@ -323,11 +325,11 @@ def run_notifications():
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path.split('?')[0] not in ('/status', '/health'):
+        if self.path.split('?')[0] not in ('/status', '/health', '/public-status'):
             self.send_error(404)
             return
         with LOCK:
-            state = public_state(read_json(STATE, {'mode': 'unknown', 'readOnly': True, 'services': []}))
+            state = public_state(read_json(STATE, {'mode': 'unknown', 'readOnly': True, 'services': []}), include_host=self.path.split('?')[0] != '/public-status')
         body = json.dumps(state).encode()
         self.send_response(200 if state.get('updatedAt') and not state.get('stale') else 503)
         self.send_header('Content-Type', 'application/json')

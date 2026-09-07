@@ -52,8 +52,9 @@ if '--activate' in flags:
             block = re.sub(r'proxy_pass http://(?:localhost|127\.0\.0\.1):8080;', 'proxy_pass http://hanasand_recovery_api;', block)
             if 'include snippets/auth-routes.conf;' not in block:
                 block = block.replace('server_name api.hanasand.com;', 'server_name api.hanasand.com;\n    include snippets/auth-routes.conf;')
+            block = block.replace('proxy_pass http://127.0.0.1:19901/status;', 'proxy_pass http://127.0.0.1:19901/public-status;')
             if 'location = /api/resilience/status' not in block:
-                block = block.replace('server_name api.hanasand.com;', 'server_name api.hanasand.com;\n    location = /api/resilience/status { proxy_pass http://127.0.0.1:19901/status; proxy_connect_timeout 2s; proxy_read_timeout 3s; }')
+                block = block.replace('server_name api.hanasand.com;', 'server_name api.hanasand.com;\n    location = /api/resilience/status { proxy_pass http://127.0.0.1:19901/public-status; proxy_connect_timeout 2s; proxy_read_timeout 3s; }')
             touched.add('api')
         blocks[n] = block
     if touched != {'api','frontend'}: raise SystemExit('Could not identify both public virtual hosts')

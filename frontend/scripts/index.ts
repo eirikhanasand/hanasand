@@ -16,6 +16,7 @@ const tasks: TestTask[] = [
     { id: 'session-details', title: 'Login session device and forwarding details', command: [bun, 'scripts/check-session-details.ts'] },
     { id: 'social-proxy', title: 'Google and Apple callback boundaries', command: [bun, 'scripts/check-social-proxy.ts'] },
     { id: 'health-check-sorting', title: 'Health check column sorting', command: [bun, 'test', 'tests/health-check-sorting.test.ts'] },
+    { id: 'vm-member-access', title: 'Member VM creation and host telemetry permissions', command: [bun, 'scripts/check-vm-member-access.mjs'], requires: 'playwright' },
     { id: 'password-policy', title: 'Password requirements', command: [bun, 'test', 'tests/password-policy.test.ts'] },
     { id: 'timetable', title: 'Dated timetable activity totals and persistence', command: [bun, 'test', 'tests/timetable.test.ts'] },
     { id: 'code-access', title: 'Code access sessions and login limits', command: [bun, 'test', 'tests/code-access.test.ts'] },

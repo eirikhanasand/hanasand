@@ -1,3 +1,5 @@
+import VmPage from '../vms/page'
+import { canViewHostMetrics } from '@/utils/vms/hostAccess'
 import ResiliencePanel from '@/components/system/resilience'
 import { cookies } from 'next/headers'
 import SystemDashboard from './clientPage'
@@ -16,6 +18,8 @@ export default async function page() {
     if (!id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/system%26expired=true')
     }
+
+    if (!await canViewHostMetrics()) return <VmPage />
 
     const [systemTelemetry, dockerTelemetry, vms, vmMetrics] = await Promise.all([
         getSystemMetrics({ id, token }),

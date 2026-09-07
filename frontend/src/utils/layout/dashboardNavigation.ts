@@ -56,9 +56,9 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
             link('Cron Jobs', '/automation/cron'),
         ]),
         group('Infrastructure', [
-            link('Overview', '/system', canManageSystem),
+            link('Overview', '/system'),
             group('Compute', [
-                link('Virtual Machines', '/vms', canManageSystem),
+                link('Virtual Machines', '/vms'),
                 link('Host Updates', '/system/updates', isAdmin),
             ]),
             group('Observability', [

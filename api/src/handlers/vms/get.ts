@@ -1,24 +1,22 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import { loadSQL } from '#utils/loadSQL.ts'
-import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import { vmViewer, requireVmAccess } from '#utils/vms/access.ts'
 
 export default async function getVM(req: FastifyRequest, res: FastifyReply) {
-    const { valid } = await tokenWrapper(req, res)
-    if (!valid) {
-        return res.status(401).send({ error: 'Unauthorized.' })
-    }
-
     const { id, user } = req.params as { id?: string; user?: string }
+    const viewer = id ? await requireVmAccess(req, res, id) : await vmViewer(req, res)
+    if (!viewer) return
+    if (user && !viewer.admin && user !== viewer.id) return res.status(403).send({ error: 'Forbidden.' })
 
     try {
         let result
         if (id) {
             const query = await loadSQL('getVmById.sql')
             result = await run(query, [id])
-        } else if (user) {
+        } else if (user || !viewer.admin) {
             const query = await loadSQL('getVmsByUser.sql')
-            result = await run(query, [user])
+            result = await run(query, [user || viewer.id])
         } else {
             const query = await loadSQL('getFullVmList.sql')
             result = await run(query)

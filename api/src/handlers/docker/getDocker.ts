@@ -1,3 +1,4 @@
+import hasRole from '#utils/auth/hasRole.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { isRuntimeLogSourceAvailable, listRuntimeContainers } from '#utils/docker/engine.ts'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
@@ -7,6 +8,8 @@ export default async function getDocker(this: FastifyInstance, req: FastifyReque
     if (!valid) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
+
+    if (!(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'Host telemetry requires system administrator access.' })
 
     try {
         const cached = JSON.parse(this.docker.toString())

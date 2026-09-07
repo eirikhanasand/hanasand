@@ -7,7 +7,7 @@ const access = { id: 'sidebar-test', isAdmin: true, canManageSystem: true, canMa
 const all = navigationLinks(getDashboardNavigation(access))
 assert.equal(all.length, new Set(all.map(item => item.href)).size)
 const memberAccess = { ...access, isAdmin: false, canManageSystem: false, canManageContent: false }
-assert.deepEqual(getDashboardNavigation(memberAccess).map(item => item.label), ['Security operations', 'Automation', 'Content', 'Settings'])
+assert.deepEqual(getDashboardNavigation(memberAccess).map(item => item.label), ['Security operations', 'Automation', 'Infrastructure', 'Content', 'Settings'])
 for (const permissions of [access, memberAccess]) {
     const automation = getDashboardNavigation(permissions).find(item => item.label === 'Automation')
     assert.deepEqual(automation.items.map(({ label, href, items }) => ({ label, href, items })), [
@@ -20,6 +20,7 @@ const reviewer = navigationLinks(getDashboardNavigation({ ...memberAccess, canRe
 assert.deepEqual(reviewer.filter(item => ['/ti/evaluation', '/ti/timeliness'].includes(item.href)).map(item => item.label), ['Evaluation', 'Timeliness'])
 const operator = navigationLinks(getDashboardNavigation({ ...memberAccess, canManageSystem: true }))
 assert(operator.some(item => item.href === '/system'))
+assert.deepEqual(navigationLinks(getDashboardNavigation(memberAccess)).filter(item => item.ancestors.includes('Infrastructure')).map(item => item.href), ['/system', '/vms'])
 assert(!operator.some(item => ['/db', '/logs', '/system/updates'].includes(item.href)))
 assert.equal(all.find(item => item.href === '/dwm/actors')?.label, 'Monitored actors')
 for (const path of ['/management/users', '/management/roles']) {
