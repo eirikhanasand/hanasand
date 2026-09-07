@@ -213,12 +213,12 @@ describe("dwm product snapshot", () => {
   test("maps internal evidence timing to deterministic customer states", () => {
     const evidence = [{ observedAt: "2026-06-27T08:10:00.000Z", firstSeenAt: "2026-06-27T08:10:00.000Z" }] as any;
     const base = { evidence, generatedAt: "2026-06-27T08:20:00.000Z" };
-    expect(customerStateForEvidence({ ...base, matchTiming: { kind: "new_evidence", currentEvidenceCount: 1, historicalEvidenceCount: 0, lastObservedAt: evidence[0].observedAt } })).toMatchObject({ state: "newly_collected", label: "Newly collected" });
-    expect(customerStateForEvidence({ ...base, matchTiming: { kind: "historical_backfill", currentEvidenceCount: 0, historicalEvidenceCount: 1, lastObservedAt: evidence[0].observedAt } })).toMatchObject({ state: "previously_observed", label: "Previously observed" });
-    expect(customerStateForEvidence({ ...base, matchTiming: { kind: "new_evidence", currentEvidenceCount: 1, historicalEvidenceCount: 1, lastObservedAt: evidence[0].observedAt } })).toMatchObject({ state: "updated", label: "Updated" });
-    expect(customerStateForEvidence({ ...base, staleAfterSeconds: 1, matchTiming: { kind: "new_evidence", currentEvidenceCount: 1, historicalEvidenceCount: 0, lastObservedAt: evidence[0].observedAt } })).toMatchObject({ state: "stale", label: "Stale" });
-    expect(customerStateForEvidence({ ...base, matchTiming: { kind: "unknown", currentEvidenceCount: 0, historicalEvidenceCount: 0 } })).toMatchObject({ state: "unavailable", label: "Unavailable" });
-    expect(customerStateForEvidence({ ...base, blocked: true, matchTiming: { kind: "new_evidence", currentEvidenceCount: 1, historicalEvidenceCount: 0, lastObservedAt: evidence[0].observedAt } })).toMatchObject({ state: "blocked", label: "Blocked" });
+    expect(customerStateForEvidence({ ...base, matchTiming: { kind: "new_evidence", currentEvidenceCount: 1, unknownEvidenceCount: 0, historicalEvidenceCount: 0, lastObservedAt: evidence[0].observedAt } })).toMatchObject({ state: "newly_collected", label: "Newly collected" });
+    expect(customerStateForEvidence({ ...base, matchTiming: { kind: "historical_backfill", currentEvidenceCount: 0, unknownEvidenceCount: 0, historicalEvidenceCount: 1, lastObservedAt: evidence[0].observedAt } })).toMatchObject({ state: "previously_observed", label: "Previously observed" });
+    expect(customerStateForEvidence({ ...base, matchTiming: { kind: "new_evidence", currentEvidenceCount: 1, unknownEvidenceCount: 0, historicalEvidenceCount: 1, lastObservedAt: evidence[0].observedAt } })).toMatchObject({ state: "updated", label: "Updated" });
+    expect(customerStateForEvidence({ ...base, staleAfterSeconds: 1, matchTiming: { kind: "new_evidence", currentEvidenceCount: 1, unknownEvidenceCount: 0, historicalEvidenceCount: 0, lastObservedAt: evidence[0].observedAt } })).toMatchObject({ state: "stale", label: "Stale" });
+    expect(customerStateForEvidence({ ...base, matchTiming: { kind: "unknown", currentEvidenceCount: 0, unknownEvidenceCount: 0, historicalEvidenceCount: 0 } })).toMatchObject({ state: "unavailable", label: "Unavailable" });
+    expect(customerStateForEvidence({ ...base, blocked: true, matchTiming: { kind: "new_evidence", currentEvidenceCount: 1, unknownEvidenceCount: 0, historicalEvidenceCount: 0, lastObservedAt: evidence[0].observedAt } })).toMatchObject({ state: "blocked", label: "Monitoring stopped" });
   });
 
   test("does not attribute an actor from an unannotated capture or source name", () => {

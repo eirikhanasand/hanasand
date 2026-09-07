@@ -45,6 +45,9 @@ export interface DwmOperationsSnapshot {
     status: string;
     trustScore?: number;
     lastCollectedAt?: string;
+    lastSuccessAt?: string;
+    lastAttemptAt?: string;
+    collectionStatus: "succeeded" | "failed" | "degraded" | "not_collected" | "paused";
     approvedMetadataOnly: boolean;
   }>;
   zeroAlertExplanation: {
@@ -110,7 +113,6 @@ export function buildDwmOperationsSnapshot(input: {
     sourceHealth: sources
       .slice()
       .sort((a: any, b: any) => sourceSortScore(b) - sourceSortScore(a))
-      .slice(0, 24)
       .map((source: any) => ({
         sourceId: String(source.id),
         sourceName: String(source.name ?? source.id),
@@ -118,10 +120,23 @@ export function buildDwmOperationsSnapshot(input: {
         status: String(source.status ?? "unknown"),
         trustScore: typeof source.trustScore === "number" ? source.trustScore : undefined,
         lastCollectedAt: source.crawlState?.lastCollectedAt,
+        ...collectionResult(source),
         approvedMetadataOnly: Boolean(source.governance?.metadataOnly || source.metadata?.metadataOnlyApproved)
       })),
     zeroAlertExplanation: explainZeroAlerts({ terms, activeSourceCount, watchlistMatchCount })
   };
+}
+
+function collectionResult(source: SourceRecord): Pick<DwmOperationsSnapshot["sourceHealth"][number], "lastSuccessAt" | "lastAttemptAt" | "collectionStatus"> {
+  const health = source.health;
+  const crawl = source.crawlState;
+  const lastSuccessAt = health?.lastSuccessAt || crawl?.lastCollectedAt;
+  const lastFailureAt = health?.lastFailureAt || crawl?.lastErrorAt;
+  const lastAttemptAt = [lastSuccessAt, lastFailureAt].filter((value): value is string => Boolean(value)).sort().at(-1);
+  const failed = Boolean(lastFailureAt && (!lastSuccessAt || lastFailureAt > lastSuccessAt));
+  const paused = ["paused", "disabled", "blocked", "retired"].includes(source.status);
+  const collectionStatus = paused ? "paused" : failed ? "failed" : !lastSuccessAt ? "not_collected" : health?.status === "degraded" ? "degraded" : "succeeded";
+  return { lastSuccessAt, lastAttemptAt, collectionStatus };
 }
 
 function inTenant(record: { tenantId?: string }, tenantId?: string): boolean {
