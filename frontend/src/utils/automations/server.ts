@@ -4,12 +4,13 @@ import config from '@/config'
 import type { AgentAutomation, AgentAutomationRun, MonitoringIssue } from './client'
 
 export type InitialAutomationData = {
+    canManageSystem?: boolean
     automations: AgentAutomation[]
     detail?: { automation: AgentAutomation, runs: AgentAutomationRun[], issues?: MonitoringIssue[], total: number, nextCursor: string | null }
     error?: string
 }
 
-export async function loadAutomations(selectedId?: string): Promise<InitialAutomationData> {
+export async function loadAutomations(selectedId?: string, scope?: 'personal'): Promise<InitialAutomationData> {
     const store = await cookies()
     const token = store.get('access_token')?.value
     const id = store.get('id')?.value
@@ -23,13 +24,13 @@ export async function loadAutomations(selectedId?: string): Promise<InitialAutom
         return response.json() as Promise<T>
     }
     try {
-        const { automations } = await request<{ automations: AgentAutomation[] }>('')
-        if (!automations.length) return { automations }
+        const { automations, canManageSystem } = await request<{ automations: AgentAutomation[], canManageSystem?: boolean }>(scope ? '?scope=personal' : '')
+        if (!automations.length) return { automations, canManageSystem }
         try {
             const detail = await request<NonNullable<InitialAutomationData['detail']>>(`/${encodeURIComponent(automations.find(item => item.id === selectedId)?.id || automations[0].id)}`)
-            return { automations, detail }
+            return { automations, canManageSystem, detail }
         } catch {
-            return { automations, error: 'Unable to load recent checks. Please try again.' }
+            return { automations, canManageSystem, error: 'Unable to load recent checks. Please try again.' }
         }
     } catch {
         return { automations: [], error: 'Unable to load automations. Please try again.' }

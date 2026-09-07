@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
+import { automationAccessError, automationReadScope } from '#utils/automationAccess.ts'
 import { loadMonitoringIssues } from '#utils/monitoringIssues.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
@@ -21,7 +22,8 @@ export async function getAutomations(req: FastifyRequest, res: FastifyReply) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const includeAll = await canManageAllAutomations(req, res)
+    const canManageSystem = await canManageAllAutomations(req, res)
+    const includeAll = canManageSystem && (req.query as { scope?: string }).scope !== 'personal'
     const result = await run(`
         SELECT a.*, stats.history, stats.uptime,
             ARRAY(SELECT 'HA-' || i.id FROM monitoring_issues i WHERE i.automation_id = a.id ORDER BY i.last_seen_at DESC) AS case_numbers
@@ -32,12 +34,12 @@ export async function getAutomations(req: FastifyRequest, res: FastifyReply) {
                  FROM agent_automation_runs WHERE automation_id = a.id) AS uptime
             FROM (SELECT id, status, warning, started_at FROM agent_automation_runs WHERE automation_id = a.id ORDER BY started_at DESC, id DESC LIMIT 12) item
         ) stats ON true
-        WHERE ($1::BOOLEAN OR owner_id = $2)
+        WHERE ${automationReadScope('a', '$1', '$2')}
           AND status <> 'archived'
         ORDER BY updated_at DESC, created_at DESC
     `, [includeAll, id])
 
-    return res.send({ automations: result.rows.map(row => ({ ...toAutomation(row as AutomationRow), history: row.history, uptime: row.uptime === null ? null : Number(row.uptime) })) })
+    return res.send({ canManageSystem, automations: result.rows.map(row => ({ ...toAutomation(row as AutomationRow), history: row.history, uptime: row.uptime === null ? null : Number(row.uptime) })) })
 }
 
 export async function getAutomation(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
@@ -75,16 +77,14 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
     }
 
     const manageAll = await canManageAllAutomations(req, res)
-    if (input.targetUrl === 'system:metrics' && !manageAll) return res.status(403).send({ error: 'Host telemetry requires system administrator access.' })
+    const accessError = await automationAccessError(input, ownerId, manageAll)
+    if (accessError) return res.status(403).send({ error: accessError })
     if (input.status === 'active' && !manageAll) {
         const limitError = await activeAutomationLimitError(ownerId)
         if (limitError) {
             return res.status(409).send({ error: limitError })
         }
     }
-
-    const scopeError = await organizationScopeError(input.actionType, input.organizationId, ownerId)
-    if (scopeError) return res.status(403).send({ error: scopeError })
 
     const id = crypto.randomUUID()
     const result = await run(`
@@ -166,16 +166,14 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
         return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid automation.' })
     }
 
-    if (input.targetUrl === 'system:metrics' && !manageAll) return res.status(403).send({ error: 'Host telemetry requires system administrator access.' })
+    const accessError = await automationAccessError(input, ownerId, manageAll)
+    if (accessError) return res.status(403).send({ error: accessError })
     if (input.status === 'active' && existing.status !== 'active' && !manageAll) {
         const limitError = await activeAutomationLimitError(existing.owner_id, req.params.id)
         if (limitError) {
             return res.status(409).send({ error: limitError })
         }
     }
-
-    const scopeError = await organizationScopeError(input.actionType, input.organizationId, ownerId, manageAll)
-    if (scopeError) return res.status(403).send({ error: scopeError })
 
     const result = await run(`
         UPDATE agent_automations
@@ -254,7 +252,7 @@ export async function deleteAutomation(req: FastifyRequest<{ Params: { id: strin
                next_run_at = NULL,
                updated_at = NOW()
          WHERE id = $1
-           AND ($2::BOOLEAN OR owner_id = $3)
+           AND ${automationReadScope('agent_automations', '$2', '$3')}
          RETURNING *
     `, [req.params.id, manageAll, ownerId])
 
@@ -297,7 +295,7 @@ async function loadAutomation(id: string, ownerId: string, includeAll = false) {
         SELECT *
         FROM agent_automations
         WHERE id = $1
-          AND ($2::BOOLEAN OR owner_id = $3)
+          AND ${automationReadScope('agent_automations', '$2', '$3')}
           AND status <> 'archived'
     `, [id, includeAll, ownerId])
 
@@ -357,20 +355,4 @@ async function activeAutomationLimitError(ownerId: string, excludeId?: string) {
     }
 
     return null
-}
-
-async function organizationScopeError(actionType: string, organizationId: string | null, userId: string, includeAll = false) {
-    if (actionType !== 'organization_report') return null
-    if (!organizationId) return 'Organization reports need an organization scope.'
-    if (includeAll) {
-        const result = await run('SELECT 1 FROM organizations WHERE id = $1 AND status = \'active\'', [organizationId])
-        return result.rows.length ? null : 'Organization was not found or is not active.'
-    }
-    const result = await run(`
-        SELECT 1
-        FROM organizations o
-        JOIN organization_members member ON member.organization_id = o.id
-        WHERE o.id = $1 AND o.status = 'active' AND member.user_id = $2 AND member.status = 'active'
-    `, [organizationId, userId])
-    return result.rows.length ? null : 'Organization reports require an active organization membership.'
 }

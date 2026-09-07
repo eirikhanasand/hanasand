@@ -147,8 +147,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     return body as T
 }
 
-export function fetchAutomations() {
-    return request<{ automations: AgentAutomation[] }>('/automations')
+export function fetchAutomations(scope?: 'personal') {
+    return request<{ automations: AgentAutomation[], canManageSystem?: boolean }>(`/automations${scope ? '?scope=personal' : ''}`)
 }
 
 export function fetchAutomation(id: string, options: { cursor?: string, from?: string, to?: string } = {}) {
