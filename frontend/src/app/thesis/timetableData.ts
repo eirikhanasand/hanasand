@@ -7,6 +7,7 @@ export type Week = { key: string, year: number, week: number, start: string, end
 export const initialTimetableYear = 2026
 const day = 86400000
 export const hoursText = (hours: number) => String(Math.round(hours * 100) / 100)
+export const expectedHoursText = (hours: number) => hoursText(Math.floor(hours / 10) * 10)
 export function validDate(value: unknown): value is string {
     return typeof value === 'string' && /^(19|20|21)\d{2}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value
 }

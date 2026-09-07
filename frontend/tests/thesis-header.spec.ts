@@ -217,3 +217,45 @@ test('sheet settings and weekly table controls remain usable above overflowing c
     await page.screenshot({ path: '/tmp/thesis-controls-desktop.png' })
     await context.close()
 })
+
+test('timetable header and PDF use rounded targets and concise copy', async({ browser, baseURL }) => {
+    test.skip(process.env.THESIS_HEADER_TEST !== '1', 'Requires the isolated thesis header fixture.')
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    await context.routeWebSocket('**/api/ws/thesis', socket => socket.close())
+    await context.addCookies([{ name: 'id', value: 'eirikhanasand', url: baseURL! }, { name: 'access_token', value: 'isolated-header-owner', url: baseURL! }])
+    const weeks = [...Array.from({ length: 24 }, (_, index) => index + 29), ...Array.from({ length: 22 }, (_, index) => index + 1)]
+    const body = '| Week | Research | Total |\n| --- | --- | --- |\n' + weeks.map(week => '| ' + week + ' | | |').join('\n') + '\n'
+    const metadata = [{ id: 'Timetable', name: 'Timetable', title: '# Timetable', length: body.length }]
+    const current = await (await context.request.get(baseURL + '/api/thesis')).json()
+    await context.request.put(baseURL + '/api/thesis', { headers: { Origin: baseURL! }, data: { ...current, body: '<!-- thesis-workspace:2 ' + encodeURIComponent(JSON.stringify(metadata)) + ' -->\n' + body } })
+    const page = await context.newPage()
+    await page.goto('/thesis?sheet=Timetable')
+    await expect(page.getByLabel('Hours spent and expected')).toContainText('0 / 1050 h')
+    await expect(page.getByText('Plan a week', { exact: true })).toHaveCount(0)
+    await expect(page.getByText(/Hours by ISO week/)).toHaveCount(0)
+    const toolbar = page.getByLabel('Document actions', { exact: true })
+    for (const width of [390, 768, 1440]) {
+        await page.setViewportSize({ width, height: 900 })
+        const title = (await page.getByRole('heading', { name: 'Timetable', exact: true }).boundingBox())!
+        const hours = (await page.getByLabel('Hours spent and expected').boundingBox())!
+        const actions = (await toolbar.boundingBox())!
+        expect(Math.abs(title.y - hours.y)).toBeLessThan(8)
+        expect(actions.y).toBeGreaterThanOrEqual(title.y + title.height)
+        expect(await toolbar.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    }
+    await page.locator('[data-table-cell="0:1:1"]').click()
+    await page.getByRole('button', { name: 'Remove row 2', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Week 29, 2026', exact: true })).toHaveCount(0)
+    await expect(page.getByText(/Week removed from the plan/)).toHaveCount(0)
+    await page.getByRole('button', { name: 'Undo', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Week 29, 2026', exact: true })).toBeVisible()
+    await expect(page.getByLabel('Hours spent and expected')).toContainText('0 / 1050 h')
+    const download = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Export timetable as PDF', exact: true }).click()
+    await (await download).saveAs('/tmp/thesis-layout-report.pdf')
+    await page.screenshot({ path: '/tmp/thesis-layout-desktop.png' })
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.screenshot({ path: '/tmp/thesis-layout-mobile.png' })
+    await context.close()
+})
