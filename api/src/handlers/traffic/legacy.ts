@@ -231,7 +231,7 @@ function loadTrafficRecordTotal(domain: string | null) {
     `, [domain])
 }
 
-export async function getLegacyTrafficLive(_req: FastifyRequest, res: FastifyReply) {
+export async function getLegacyTrafficLive(req: FastifyRequest, res: FastifyReply) {
     res.hijack()
     const raw = res.raw
     raw.writeHead(200, {
@@ -242,7 +242,9 @@ export async function getLegacyTrafficLive(_req: FastifyRequest, res: FastifyRep
     })
 
     let closed = false
-    let lastSeenId = 0
+    const domain = readQueryString(req, 'domain')?.trim() || null
+    const after = Number(readQueryString(req, 'after') || 0)
+    let lastSeenId = Number.isSafeInteger(after) && after > 0 ? after : 0
     const initialWindowStartedAt = new Date(Date.now() - 2 * 60 * 1000)
 
     const send = (event: string, data: unknown) => {
@@ -251,34 +253,41 @@ export async function getLegacyTrafficLive(_req: FastifyRequest, res: FastifyRep
         raw.write(`data: ${JSON.stringify(data)}\n\n`)
     }
 
+    let reading = false
     const sendBatch = async () => {
-        const result = await safeQuery(`
-            WITH recent AS (
-                SELECT id, country_iso, created_at
-                FROM traffic_events
-                WHERE country_iso <> ''
-                  AND id > $1
-                  AND ($1::bigint > 0 OR created_at >= $2)
-                ORDER BY created_at ASC
-                LIMIT 1000
-            )
-            SELECT country_iso AS iso, COUNT(*)::int AS count, MAX(id)::text AS max_id, MAX(created_at)::text AS timestamp
-            FROM recent
-            GROUP BY country_iso
-            ORDER BY count DESC
-            LIMIT 40
-        `, [lastSeenId, initialWindowStartedAt])
+        if (closed || reading) return
+        reading = true
+        try {
+            const result = await safeQuery(`
+                WITH recent AS (
+                    SELECT id, country_iso, created_at
+                    FROM traffic_events
+                    WHERE country_iso <> ''
+                      AND id > $1
+                      AND ($3::text IS NULL OR domain = $3)
+                      AND ($1::bigint > 0 OR created_at >= $2)
+                    ORDER BY id ASC
+                    LIMIT 1000
+                )
+                SELECT country_iso AS iso, COUNT(*)::int AS count, MAX(id)::text AS max_id, MAX(created_at)::text AS timestamp
+                FROM recent
+                GROUP BY country_iso
+                ORDER BY count DESC
+            `, [lastSeenId, initialWindowStartedAt, domain])
 
-        if (result.rows.length) {
-            lastSeenId = Math.max(lastSeenId, ...result.rows.map((row: { max_id: string }) => Number(row.max_id || 0)))
-            send('traffic', result.rows)
-        } else {
-            raw.write(': heartbeat\n\n')
+            if (result.rows.length) {
+                lastSeenId = Math.max(lastSeenId, ...result.rows.map((row: { max_id: string }) => Number(row.max_id || 0)))
+                send('traffic', result.rows)
+            } else {
+                raw.write(': heartbeat\n\n')
+            }
+        } finally {
+            reading = false
         }
     }
 
     send('ready', { status: 'connected' })
-    void sendBatch()
+    void sendBatch().catch(error => send('traffic-error', { message: error instanceof Error ? error.message : 'Traffic stream query failed' }))
 
     const interval = setInterval(() => {
         void sendBatch().catch(error => {
