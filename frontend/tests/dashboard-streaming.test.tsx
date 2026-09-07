@@ -5,6 +5,12 @@ import { createElement } from 'react'
 import { renderToReadableStream } from 'react-dom/server'
 let validation = { valid: true, state: 'valid', roles: [{ id: 'administrator' }] }
 let statusCalls = 0
+let organizationCalls = 0
+let organizationResponse = () => Response.json({ organizations: [] })
+mock.module('@/app/api/organizations/_organizationApiProxy', () => ({ proxyOrganizationApiRequest: async () => {
+    organizationCalls++
+    return organizationResponse()
+} }))
 mock.module('@/utils/proxy/tokenIsValid', () => ({ default: async () => validation }))
 let release: (value: unknown) => void = () => {}
 mock.module('next/headers', () => ({ cookies: async () => ({ get: () => ({ value: 'test' }) }) }))
@@ -59,3 +65,24 @@ for (const role of ['administrator', 'admin']) {
     assert(html.includes('need attention'))
 }
 console.log('Service health is visible only to verified admins; customer dashboards never fetch it.')
+
+assert.equal(organizationCalls, 0, 'Normal dashboard visits must not fetch membership for a hidden notice')
+validation = { valid: true, state: 'valid', roles: [{ id: 'users' }] }
+const deniedParams = { searchParams: Promise.resolve({ notAllowed: 'true', from: '/scanner' }) }
+const emptyNotice = await new Response(await renderToReadableStream(await Page(deniedParams))).text()
+assert(emptyNotice.includes('Create organization'))
+assert(emptyNotice.includes('href="/organizations#org-create-primary"'))
+assert(!emptyNotice.includes('contact your administrator'))
+assert(!emptyNotice.includes('You don’t have access'))
+organizationResponse = () => Response.json({ organizations: [{ id: 'org_example' }] })
+const memberNotice = await new Response(await renderToReadableStream(await Page(deniedParams))).text()
+assert(memberNotice.includes('contact your administrator'))
+assert(!memberNotice.includes('Create organization'))
+for (const response of [() => Response.json({ error: 'Unavailable' }, { status: 503 }), () => Response.json({})]) {
+    organizationResponse = response
+    const unavailableNotice = await new Response(await renderToReadableStream(await Page(deniedParams))).text()
+    assert(unavailableNotice.includes('We couldn’t check your organization access'))
+    assert(!unavailableNotice.includes('contact your administrator'))
+    assert(!unavailableNotice.includes('Create organization'))
+}
+console.log('Restricted-page notices distinguish new accounts, organization members, and unavailable membership lookups.')
