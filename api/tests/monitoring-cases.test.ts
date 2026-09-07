@@ -9,7 +9,7 @@ let sql = ''
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: authorized, id: authorized ? 'owner' : null }) }))
 mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: admin }) }))
 mock.module('../src/utils/db.ts', () => ({ default: async (query: string, params: unknown[]) => { sql = query; values = params; return { rows } } }))
-mock.module('../src/utils/monitoringIssues.ts', () => ({ loadMonitoringIssues: async () => [{ caseNumber: 'MON-3', notifications: [{ messageId: 'receipt' }] }] }))
+mock.module('../src/utils/monitoringIssues.ts', () => ({ loadMonitoringIssues: async () => [{ caseNumber: 'HA-3', notifications: [{ messageId: 'receipt' }] }] }))
 const { getMonitoringCases } = await import('../src/handlers/monitoringCases.ts')
 const app = Fastify()
 app.get('/cases/monitoring', getMonitoringCases)
@@ -33,13 +33,15 @@ test('list preserves owner and organization boundaries; elevated access is check
 })
 test('existing MON references expose persisted lifecycle and notification details', async () => {
     rows = [{ id: '3', monitor_name: 'Inference', summary: 'HTTP 503', kind: 'failure', occurrences: 53, automation_id: 'monitor', resolved_at: null }]
-    let result = await app.inject('/cases/monitoring/MON-3')
-    expect(result.json().case).toMatchObject({ id: 'MON-3', title: 'MON-3 · Inference', status: 'open', occurrences: 53, notifications: [{ messageId: 'receipt' }] })
+    let result = await app.inject('/cases/monitoring/HA-3')
+    expect(result.json().case).toMatchObject({ id: 'HA-3', title: 'HA-3 · Inference', status: 'open', occurrences: 53, notifications: [{ messageId: 'receipt' }] })
     expect(values).toEqual([false, 'owner', null, '3'])
+    const legacy = await app.inject('/cases/monitoring/MON-3')
+    expect(legacy.json().case).toEqual(result.json().case)
     rows[0].resolved_at = '2026-09-07T10:00:00Z'
-    result = await app.inject('/cases/monitoring/MON-3')
+    result = await app.inject('/cases/monitoring/HA-3')
     expect(result.json().case.status).toBe('resolved')
     rows = []
-    expect((await app.inject('/cases/monitoring/MON-3')).statusCode).toBe(404)
-    expect((await app.inject('/cases/monitoring/MON-invalid')).statusCode).toBe(404)
+    expect((await app.inject('/cases/monitoring/HA-3')).statusCode).toBe(404)
+    expect((await app.inject('/cases/monitoring/HA-invalid')).statusCode).toBe(404)
 })

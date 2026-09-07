@@ -7,13 +7,13 @@ test('certificate states are explicit and neutral details open by click and keyb
     }
     const base = { ownerId: 'owner', prompt: 'Check connectivity', status: 'active', actionType: 'agent_prompt', monitoringType: 'tcp', scheduleKind: 'interval', intervalMinutes: 1, lastStatus: 'completed', consecutiveFailures: 0, notifyOn: 'never', history: [], uptime: 100, certificateSubject: null, certificateIssuer: null, certificateExpiresAt: null }
     const rows = [
-        { ...base, id: 'web', name: 'Website TLS', caseNumbers: ['MON-12'], targetUrl: 'example.test:443', certificateStatus: 'valid' },
+        { ...base, id: 'web', name: 'Website TLS', caseNumbers: ['HA-12'], targetUrl: 'example.test:443', certificateStatus: 'valid' },
         { ...base, id: 'ssh', name: 'Git SSH', targetUrl: 'example.test:22', certificateStatus: 'not_applicable' },
         { ...base, id: 'pending', name: 'New HTTPS check', monitoringType: 'fetch', targetUrl: 'https://example.test', certificateStatus: null },
     ]
     await page.route('**/api/backend/automations**', async route => {
         const id = new URL(route.request().url()).pathname.split('/').at(-1)
-        await route.fulfill({ json: id === 'automations' ? { automations: rows } : { automation: rows.find(row => row.id === id) || rows[0], runs: [], total: 0, nextCursor: null, issues: [{ id: '12', caseNumber: 'MON-12', kind: 'failure', summary: 'TLS certificate validation failed.', occurrences: 120, firstSeenAt: '2026-09-01T12:00:00Z', lastSeenAt: '2026-09-05T12:00:00Z', resolvedAt: null, notifications: [] }] } })
+        await route.fulfill({ json: id === 'automations' ? { automations: rows } : { automation: rows.find(row => row.id === id) || rows[0], runs: [], total: 0, nextCursor: null, issues: [{ id: '12', caseNumber: 'HA-12', kind: 'failure', summary: 'TLS certificate validation failed.', occurrences: 120, firstSeenAt: '2026-09-01T12:00:00Z', lastSeenAt: '2026-09-05T12:00:00Z', resolvedAt: null, notifications: [] }] } })
     })
     await page.goto('/dashboard/automation/health')
     const retry = page.getByRole('button', { name: 'Try again' })
@@ -38,19 +38,19 @@ test('certificate states are explicit and neutral details open by click and keyb
     await expect(searchToggle).toHaveText('Cmd J')
     await searchToggle.click()
     await expect(search).toBeFocused()
-    await search.fill('MON-12')
+    await search.fill('HA-12')
     await search.press('Escape')
     await expect(search).toHaveCount(0)
     await expect(searchToggle).toBeFocused()
     await expect(page.getByRole('button', { name: 'Git SSH', exact: true })).toBeVisible()
     await page.keyboard.press('Meta+j')
     await expect(search).toBeFocused()
-    await search.fill('MON-12')
+    await search.fill('HA-12')
     await expect(page.getByRole('button', { name: 'Git SSH', exact: true })).toHaveCount(0)
     await page.getByRole('button', { name: 'Website TLS', exact: true }).click()
-    await expect(page.getByText('MON-12', { exact: true })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'MON-12', exact: true })).toHaveAttribute('href', '/cases/MON-12')
-    await page.locator('summary').filter({ hasText: 'MON-12' }).click({ position: { x: 250, y: 10 } })
+    await expect(page.getByText('HA-12', { exact: true })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'HA-12', exact: true })).toHaveAttribute('href', '/cases/HA-12')
+    await page.locator('summary').filter({ hasText: 'HA-12' }).click({ position: { x: 250, y: 10 } })
     await expect(page.getByText('TLS certificate validation failed.', { exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Health checks', exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Collapse check details' }).click()

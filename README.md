@@ -22,9 +22,9 @@ Hanasand combines threat intelligence, AI development tools, and infrastructure 
 
 ## Monitoring issues
 
-Health-check failures and slow responses are grouped by monitor, target and failure reason in `monitoring_issues`. Each has a stable `MON-<number>` reference, occurrence count, first/last seen times and recovery time. Check records link to the issue; recovery closes it, and recurrence reopens the same number. Details are returned by the authenticated `GET /api/automations/:id` endpoint and shown in the monitoring dashboard.
+Health-check failures and slow responses are grouped by monitor, target and failure reason in `monitoring_issues`. Each has a stable `HA-<number>` reference, occurrence count, first/last seen times and recovery time. Check records link to the issue; recovery closes it, and recurrence reopens the same number. Details are returned by the authenticated `GET /api/automations/:id` endpoint and shown in the monitoring dashboard.
 
-Discord receives `@everyone` and the case number, at most once per issue and destination every 24 hours. PostgreSQL reserves delivery before sending, so restarts and concurrent workers do not reset the limit. Failed or uncertain delivery is recorded in the issue and waits for the same 24-hour window before retrying. Monitoring results remain independent of notification delivery. These persisted records appear alongside other cases at `/cases`, with details at `/cases/MON-<number>`. The shared case page is independent of DWM and reports unavailable sources without hiding cases from the remaining sources. Existing `/dwm/cases` links redirect to `/cases`.
+Discord receives `@everyone` and the case number, at most once per issue and destination every 24 hours. PostgreSQL reserves delivery before sending, so restarts and concurrent workers do not reset the limit. Failed or uncertain delivery is recorded in the issue and waits for the same 24-hour window before retrying. Monitoring results remain independent of notification delivery. These persisted records appear alongside other cases at `/cases`, with details at `/cases/HA-<number>`. The shared case page is independent of DWM and reports unavailable sources without hiding cases from the remaining sources. Existing `/dwm/cases` links redirect to `/cases`; old `MON-` links redirect to the corresponding `HA-` case.
 
 ## Development
 
@@ -61,7 +61,7 @@ Generated projects include source, a README, environment examples, build command
 
 Health checks support JSON fields, comparisons and maximum/minimum/average/first-value aggregation. Dot paths support array wildcards, for example `host.storage.*.usedPercent`. Checks for the same owner, URL and request options share one response per minute, including errors. PostgreSQL locking prevents duplicate fetches across workers. Responses are limited to 1 MiB; obsolete cache entries expire. The administrator-only `system:metrics` source reads the same host payload locally, without storing a session credential.
 
-Storage, RAM, CPU and GPU alert strictly above 80%. Temperature and power alert above `floor(reported hardware limit × 0.9)`; their `margin` is the alert limit minus the reading, so checks alert below zero. Missing limits stay null. Power covers reported CPU/GPU devices, not unmetered wall power. Separate checks keep their own history, case number and 24-hour Discord cooldown. Discord messages contain `@everyone MON-<number>`; accepted message IDs and mention status are recorded for delivery review.
+Storage, RAM, CPU and GPU alert strictly above 80%. Temperature and power alert above `floor(reported hardware limit × 0.9)`; their `margin` is the alert limit minus the reading, so checks alert below zero. Missing limits stay null. Power covers reported CPU/GPU devices, not unmetered wall power. Separate checks keep their own history, case number and 24-hour Discord cooldown. Discord messages contain `@everyone HA-<number>`; accepted message IDs and mention status are recorded for delivery review.
 
 ### AI monitoring
 
