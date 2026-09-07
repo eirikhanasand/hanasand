@@ -86,7 +86,7 @@ export default async function publicTiApi(fastify: FastifyInstance, options: Pub
     })
 
     for (const [route, [upstream, responseKey, project]] of Object.entries({ ...RESOURCE_ROUTES, '/claims': RESOURCE_ROUTES['/findings'] })) {
-        fastify.get(route, async (req: FastifyRequest<{ Querystring: { q?: unknown, limit?: unknown, cursor?: unknown } }>, reply) => {
+        fastify.get(route, async (req: FastifyRequest<{ Querystring: { q?: unknown, limit?: unknown, page?: unknown, cursor?: unknown } }>, reply) => {
             if (!hasAuthenticatedPrincipal(req)) return sendError(reply, req.id, 401, 'authentication_required', 'An API key or authenticated session is required.')
             const organizationId = apiKeyOrganizationId(req)
             if (route === '/alerts' && !organizationId) return sendError(reply, req.id, 403, 'organization_scope_required', 'Tenant-scoped alerts require an organization API key.')
@@ -96,7 +96,14 @@ export default async function publicTiApi(fastify: FastifyInstance, options: Pub
                 const upstreamPayload = await fetchCollection(fetchImpl, upstream, responseKey, query, route === '/alerts' ? organizationId : undefined)
                 return {
                     data: upstreamPayload.records.map(project).filter(item => typeof item.id === 'string'),
-                    pagination: { limit: query.limit, total: upstreamPayload.total, nextCursor: upstreamPayload.nextCursor ?? null },
+                    pagination: {
+                        page: query.page,
+                        limit: query.limit,
+                        total: upstreamPayload.total,
+                        totalPages: Math.ceil(upstreamPayload.total / query.limit),
+                        nextPage: query.cursor + query.limit < upstreamPayload.total ? query.page + 1 : null,
+                        nextCursor: upstreamPayload.nextCursor ?? null,
+                    },
                     meta: { requestId: req.id, ...(organizationId ? { organizationId } : {}) },
                 }
             } catch {
@@ -123,13 +130,17 @@ function normalizeQueryBody(body: { query?: unknown } | undefined) {
     return query.length >= 2 && query.length <= 200 ? query : ''
 }
 
-function parseCollectionQuery(query: { q?: unknown, limit?: unknown, cursor?: unknown }) {
+function parseCollectionQuery(query: { q?: unknown, limit?: unknown, page?: unknown, cursor?: unknown }) {
     const limit = query.limit === undefined ? 50 : Number(query.limit)
-    const cursor = query.cursor === undefined ? 0 : Number(query.cursor)
+    if (query.page !== undefined && query.cursor !== undefined) return { ok: false as const, error: 'Use page without cursor.' }
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) return { ok: false as const, error: 'limit must be an integer from 1 to 100.' }
-    if (!Number.isInteger(cursor) || cursor < 0) return { ok: false as const, error: 'cursor must be a non-negative integer.' }
+    const page = query.page === undefined ? 1 : Number(query.page)
+    if ((query.page !== undefined && (typeof query.page !== 'string' || !/^\d+$/.test(query.page))) || !Number.isSafeInteger(page) || page < 1) return { ok: false as const, error: 'page must be a positive integer.' }
+    // Older clients send a numeric record offset; numbered pages use the same upstream contract.
+    const cursor = query.cursor === undefined ? (page - 1) * limit : Number(query.cursor)
+    if (!Number.isSafeInteger(cursor) || cursor < 0 || !Number.isSafeInteger(cursor + limit)) return { ok: false as const, error: 'The requested page or cursor is out of range.' }
     if (query.q !== undefined && (typeof query.q !== 'string' || query.q.trim().length > 200)) return { ok: false as const, error: 'q must contain at most 200 characters.' }
-    return { ok: true as const, limit, cursor, q: typeof query.q === 'string' ? query.q.trim() : '' }
+    return { ok: true as const, limit, cursor, page: query.cursor === undefined ? page : Math.floor(cursor / limit) + 1, q: typeof query.q === 'string' ? query.q.trim() : '' }
 }
 
 async function fetchCollection(

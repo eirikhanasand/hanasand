@@ -17,7 +17,7 @@ const search = {
     aliases: [], recentActivity: [{ date: '2026-06-12', title: 'Domain mentioned in a public report', detail: 'The report lists the domain among affected websites.', confidence: 0.72, sourceIds: ['source_example'] }],
     targets: [], ttps: [], datasets: [], sources: [{ id: 'source_example', name: 'Harbor Security Bulletin', type: 'vendor_report', provenance: 'Public advisory', url: 'https://reports.example.com/advisories/42' }], notes: ['Review the source report before taking action.'],
 }
-const collection = (item: unknown) => example({ data: [item], pagination: { limit: 50, total: 1, nextCursor: null }, meta: { requestId: 'request_example' } })
+const collection = (item: unknown) => example({ data: [item], pagination: { page: 1, limit: 50, total: 1, totalPages: 1, nextPage: null, nextCursor: null }, meta: { requestId: 'request_example' } })
 
 export const responseExamples: Record<string, ResponseExample> = {
     'GET /share/:id': example(share),

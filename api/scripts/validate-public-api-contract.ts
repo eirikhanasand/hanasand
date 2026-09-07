@@ -18,9 +18,9 @@ assertStatus(await capture('/actors', 'get', anonymous.GET('/actors', { params: 
 
 const firstPage = await capture('/actors', 'get', authenticated.GET('/actors', { params: { query: { limit: 1 } } }))
 assertStatus(firstPage, 200)
-const cursor = (firstPage.data as { pagination?: { nextCursor?: string | null } } | undefined)?.pagination?.nextCursor
-if (!cursor) throw new Error('Authenticated pagination proof requires a second actor page.')
-assertStatus(await capture('/actors', 'get', authenticated.GET('/actors', { params: { query: { limit: 1, cursor } } })), 200)
+const page = (firstPage.data as { pagination?: { nextPage?: number | null } } | undefined)?.pagination?.nextPage
+if (!page) throw new Error('Authenticated pagination proof requires a second actor page.')
+assertStatus(await capture('/actors', 'get', authenticated.GET('/actors', { params: { query: { limit: 1, page } } })), 200)
 assertStatus(await capture('/aliases', 'get', authenticated.GET('/aliases', { params: { query: { limit: 1 } } })), 200)
 assertStatus(await capture('/incidents', 'get', authenticated.GET('/incidents', { params: { query: { limit: 1 } } })), 200)
 assertStatus(await capture('/findings', 'get', authenticated.GET('/findings', { params: { query: { limit: 1 } } })), 200)

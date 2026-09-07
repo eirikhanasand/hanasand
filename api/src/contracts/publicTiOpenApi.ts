@@ -20,7 +20,7 @@ const errorResponses = {
     '503': { $ref: '#/components/responses/Unavailable' },
 }
 
-const paginationParameters = ['Query', 'Limit', 'Cursor'].map(name => ({ $ref: `#/components/parameters/${name}` }))
+const paginationParameters = ['Query', 'Limit', 'Page', 'Cursor'].map(name => ({ $ref: `#/components/parameters/${name}` }))
 
 const resourceDefinitions = {
     '/actors': ['Actor', 'List threat actors', 'listActors'],
@@ -38,7 +38,7 @@ const resourceDefinitions = {
 const schemas: Record<string, Schema> = {
     ErrorDetail: object({ code: string(), message: string(), requestId: string() }, ['code', 'message', 'requestId']),
     ErrorEnvelope: object({ error: ref('ErrorDetail') }, ['error']),
-    Pagination: object({ limit: integer({ minimum: 1, maximum: 100 }), total: integer({ minimum: 0 }), nextCursor: { ...nullableString(), description: 'Pass this as cursor to fetch the next page. Null means there are no more pages.' } }, ['limit', 'total', 'nextCursor']),
+    Pagination: object({ page: integer({ minimum: 1 }), totalPages: integer({ minimum: 0 }), nextPage: { type: ['integer', 'null'], minimum: 1, description: 'Next page number, or null when there are no more pages.' }, limit: integer({ minimum: 1, maximum: 100 }), total: integer({ minimum: 0 }), nextCursor: { ...nullableString(), deprecated: true, description: 'Legacy pagination. Use nextPage instead.' } }, ['page', 'limit', 'total', 'totalPages', 'nextPage', 'nextCursor']),
     Meta: object({ requestId: string(), organizationId: string({ description: 'Organization that owns the API key, when applicable.' }) }, ['requestId']),
     SearchRequest: object({ query: string({ minLength: 2, maxLength: 200, example: 'APT29' }) }, ['query']),
     BatchSearchRequest: object({ queries: { type: 'array', minItems: 1, maxItems: 25, items: string({ minLength: 2, maxLength: 200 }), example: ['APT29', 'CVE-2024-3094'] } }, ['queries']),
@@ -134,7 +134,7 @@ export const publicTiOpenApi = {
     openapi: '3.1.0',
     info: {
         title: 'Hanasand Public Intelligence API',
-        version: '1.0.0',
+        version: '1.1.0',
     },
     servers: [{ url: 'https://api.hanasand.com/api/v1', description: 'Production' }],
     tags: [{ name: 'Search' }, { name: 'Intelligence' }],
@@ -143,7 +143,8 @@ export const publicTiOpenApi = {
         parameters: {
             Query: { name: 'q', in: 'query', description: 'Filter by text, ignoring case.', schema: string({ maxLength: 200 }) },
             Limit: { name: 'limit', in: 'query', description: 'Number of records per page.', schema: integer({ minimum: 1, maximum: 100, default: 50 }) },
-            Cursor: { name: 'cursor', in: 'query', description: 'Pass pagination.nextCursor from the previous response. Omit for the first page.', schema: string({ pattern: '^\\d+$', example: '50' }) },
+            Page: { name: 'page', in: 'query', description: 'Page number, starting at 1. Do not combine with cursor.', schema: integer({ minimum: 1, default: 1, example: 2 }) },
+            Cursor: { name: 'cursor', in: 'query', deprecated: true, description: 'Legacy record offset. Use page for new integrations. Do not combine with page.', schema: string({ pattern: '^\\d+$', example: '50' }) },
         },
         securitySchemes: {
             ApiKey: { type: 'apiKey', in: 'header', name: 'X-API-Key', description: 'Organization API key. Access and rate limits depend on its allowed routes. Batch search allows 1 request/second, 12/minute, 120/hour, and 1,000/day.' },

@@ -27,7 +27,7 @@ export default async function DevelopersPage() {
     }))
     const firstProtected = endpoints.find(endpoint => endpoint.method === 'GET' && endpoint.access !== 'Anonymous') ?? endpoints[0]
     const apiKeyHeader = contract.components?.securitySchemes?.ApiKey?.name ?? 'X-API-Key'
-    const requestExample = `curl "${server}${firstProtected.path}?limit=20" \\\n  -H "${apiKeyHeader}: $HANASAND_API_KEY"`
+    const requestExample = `curl "${server}${firstProtected.path}?page=1&limit=20" \\\n  -H "${apiKeyHeader}: $HANASAND_API_KEY"`
     const typeCommand = 'npx openapi-typescript https://hanasand.com/api/openapi/ti -o src/hanasand-api.d.ts'
     const clientExample = `import createClient from 'openapi-fetch'
 import type { paths } from './hanasand-api'
@@ -38,7 +38,7 @@ const api = createClient<paths>({
 })
 
 const { data, error } = await api.GET('${firstProtected.path}', {
-  params: { query: { limit: 20 } }
+  params: { query: { page: 1, limit: 20 } }
 })
 if (error) throw new Error(error.error.message)`
     const errorRows = Object.entries(contract.components?.responses ?? {}).filter(([name]) => ['BadRequest', 'Unauthorized', 'Forbidden', 'RateLimited', 'InternalError', 'Unavailable'].includes(name))
@@ -61,7 +61,7 @@ if (error) throw new Error(error.error.message)`
             <ApiKeyOnboarding server={server} />
 
             <section className='border-b border-ui-border'>
-                <div className='mx-auto grid max-w-7xl gap-6 px-4 py-9 md:px-8 lg:grid-cols-2'>
+                <div className='mx-auto grid max-w-7xl items-start gap-5 px-4 py-6 md:px-8 lg:grid-cols-2'>
                     <CodeBlock title='Authenticated request' code={requestExample} />
                     <div className='rounded-lg border border-ui-border bg-ui-panel p-5'>
                         <div className='flex items-center gap-2'><KeyRound className='h-5 w-5 text-ui-primary' /><h2 className='text-lg font-semibold'>Authentication</h2></div>
@@ -72,7 +72,7 @@ if (error) throw new Error(error.error.message)`
             </section>
 
             <section id='endpoints' className='scroll-mt-24 border-b border-ui-border bg-ui-panel'>
-                <div className='mx-auto max-w-7xl px-4 py-9 md:px-8'>
+                <div className='mx-auto max-w-7xl px-4 py-6 md:px-8'>
                     <h2 className='text-2xl font-semibold'>Endpoints</h2>
                     <div className='mt-5 overflow-x-auto rounded-lg border border-ui-border'>
                         <table className='w-full min-w-[820px] text-left text-sm'>
@@ -84,28 +84,25 @@ if (error) throw new Error(error.error.message)`
             </section>
 
             <section id='clients' className='scroll-mt-24 border-b border-ui-border'>
-                <div className='mx-auto grid max-w-7xl gap-6 px-4 py-9 md:px-8 lg:grid-cols-2'>
-                    <CodeBlock title='Generate TypeScript types' code={typeCommand} />
+                <div className='mx-auto grid max-w-7xl items-start gap-5 px-4 py-6 md:px-8 lg:grid-cols-2'>
+                    <div className='grid gap-4'><CodeBlock title='Generate TypeScript types' code={typeCommand} /><div><h2 className='text-lg font-semibold'>Pagination</h2><p className='mt-2 text-sm leading-6 text-ui-muted'>Use <code>page=1</code>, <code>page=2</code>, and so on. Set <code>limit</code> to the number of records per page, up to 100 (default 50). Responses include <code>pagination.totalPages</code> and <code>pagination.nextPage</code>. A null next page means you have reached the end.</p></div></div>
                     <CodeBlock title='Typed client' code={clientExample} />
                 </div>
             </section>
 
             <section className='border-b border-ui-border bg-ui-panel'>
-                <div className='mx-auto grid max-w-7xl gap-8 px-4 py-9 md:px-8 lg:grid-cols-2'>
+                <div className='mx-auto grid max-w-7xl items-start gap-6 px-4 py-6 md:px-8 lg:grid-cols-2'>
                     <div><h2 className='text-2xl font-semibold'>Errors</h2><div className='mt-4 grid gap-2'>{errorRows.map(([name, response]) => <div key={name} className='grid grid-cols-[8rem_1fr] gap-3 border-b border-ui-border py-3 text-sm'><code className='font-semibold'>{name}</code><span className='text-ui-muted'>{response.description}</span></div>)}</div></div>
-                    <div><h2 className='text-2xl font-semibold'>Pagination</h2><p className='mt-4 text-sm leading-7 text-ui-muted'>Use <code>limit</code> to choose how many records to fetch, up to 100. To fetch the next page, pass the response’s <code>pagination.nextCursor</code> as <code>cursor</code>. A null cursor means you have reached the end.</p></div>
+                    <div className='flex gap-3'><ShieldCheck className='mt-1 h-5 w-5 shrink-0 text-ui-primary' /><div><h2 className='font-semibold'>Response contents</h2><p className='mt-2 text-sm leading-6 text-ui-muted'>Public responses exclude raw stolen material, restricted locators, customer tenant data, secrets, and internal object references.</p></div></div>
                 </div>
             </section>
 
-            <section>
-                <div className='mx-auto flex max-w-7xl gap-3 px-4 py-9 md:px-8'><ShieldCheck className='mt-1 h-5 w-5 shrink-0 text-ui-primary' /><div><h2 className='font-semibold'>Response contents</h2><p className='mt-2 text-sm leading-6 text-ui-muted'>Public responses exclude raw stolen material, restricted locators, customer tenant data, secrets, and internal object references.</p></div></div>
-            </section>
         </main>
     )
 }
 
 function CodeBlock({ title, code }: { title: string, code: string }) {
-    return <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'><div className='flex items-center justify-between gap-3 border-b border-ui-border/40 px-4 py-3 text-sm font-semibold text-ui-text'><span className='flex items-center gap-2'><Braces className='h-4 w-4 text-ui-primary' />{title}</span><CopyCodeButton value={code} /></div><pre className='overflow-x-auto whitespace-pre-wrap p-5 text-sm leading-7 text-ui-muted'>{code}</pre></div>
+    return <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'><div className='flex items-center justify-between gap-3 border-b border-ui-border/40 px-4 py-3 text-sm font-semibold text-ui-text'><span className='flex items-center gap-2'><Braces className='h-4 w-4 text-ui-primary' />{title}</span><CopyCodeButton value={code} /></div><pre className='overflow-x-auto whitespace-pre-wrap p-4 text-sm leading-6 text-ui-muted'>{code}</pre></div>
 }
 
 function operationAccessLabel(security: OpenApiOperation['security']) {

@@ -143,11 +143,11 @@ export default function ApiKeyOnboarding({ server }: { server: string }) {
 
     const selected = organizations.find(organization => organization.id === organizationId)
     const activeKey = apiKeys.find(apiKey => apiKey.enabled)
-    const firstRequest = `curl "${server}/actors?limit=20" \\\n  -H "X-API-Key: ${secret || '$HANASAND_API_KEY'}"`
+    const firstRequest = `curl "${server}/actors?page=1&limit=20" \\\n  -H "X-API-Key: ${secret || '$HANASAND_API_KEY'}"`
 
     return (
         <section id='api-access' className='scroll-mt-24 border-b border-ui-border bg-ui-canvas'>
-            <div className='mx-auto grid max-w-7xl gap-6 px-4 py-10 md:px-8'>
+            <div className='mx-auto grid max-w-7xl gap-6 px-4 py-6 md:px-8'>
                 <div className='max-w-3xl'>
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Customer onboarding</p>
                     <h2 className='mt-2 text-3xl font-semibold'>Organization, API key, first request.</h2>
