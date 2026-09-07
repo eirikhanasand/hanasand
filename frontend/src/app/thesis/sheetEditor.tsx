@@ -261,12 +261,12 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
     return <div ref={root} className='grid min-w-0 gap-5' onBlurCapture={event => {
         if (!(event.relatedTarget as HTMLElement | null)?.closest('[data-table-cell], [data-table-tools]')) setActive(null)
     }}>
-        {titleAside && <div className='flex justify-end'>{titleAside}</div>}
-        <div className='flex min-w-0 items-start gap-4'>
+        <div className={titleAside ? 'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-3' : 'flex min-w-0 items-start gap-4'}>
             <div className='min-w-0 flex-1'>
                 {canEdit ? <InlineMarkdown text={sheet.title || '# Untitled'} label='Title Markdown' singleLine onChange={value => onChange('title', value, 'title')} /> : <RenderMarkdown text={sheet.title || '# Untitled'} />}
             </div>
-            {(canEdit || actions) && <div data-table-tools className='thesis-document-actions' aria-label='Document actions'>
+            {titleAside && <div>{titleAside}</div>}
+            {(canEdit || actions) && <div data-table-tools className={`thesis-document-actions${titleAside ? ' thesis-document-actions-wide' : ''}`} aria-label='Document actions'>
                 {actions}
                 {canEdit && compact && <button className={sheetButton} aria-label={writing ? 'Hide text editor' : 'Add text'} title={writing ? 'Hide text editor' : 'Add text'} aria-pressed={writing} onClick={() => setWriting(value => !value)}><Pencil size={18} /></button>}
                 {canEdit && showInsertTable && <button className={sheetButton} onMouseDown={event => event.preventDefault()} onClick={insert}>Insert table</button>}

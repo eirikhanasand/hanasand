@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { expectedWeek, norwegianHolidays } from '../src/app/thesis/norwegianCalendar'
-import { activityError, isoWeek, timetable, validActivityLog, weekDates, type ActivityLog } from '../src/app/thesis/timetableData'
+import { activityError, expectedHoursText, isoWeek, timetable, validActivityLog, weekDates, type ActivityLog } from '../src/app/thesis/timetableData'
 import { readSheets, writeSheets, sheetChanges, type TableData } from '../src/app/thesis/workspace'
 const data: TableData = { cells: [['Week', 'Research', 'Development', 'Total'], ...[...Array.from({ length: 25 }, (_, i) => i + 28), ...Array.from({ length: 22 }, (_, i) => i + 1)].map(week => [String(week), '', '', '']), ['Total', '', '', '']], widths: [], heights: [] }
 const activity = { id: 'one', date: '2026-07-06', hours: 1.25, category: 'Research', description: 'Read a paper\nAnd took notes æøå' }
@@ -58,4 +58,10 @@ test('expected hours use planned rows and weekday Norwegian holidays without dou
     const source = { ...data, cells: data.cells.filter((_, row) => row !== 1) }
     assert.equal(timetable(source, { startYear: 2026, activities: [activity] }).expectedHours, model.expectedHours - 12)
     assert.equal(timetable(source, { startYear: 2026, activities: [activity] }).weeks.find(week => week.key === '2026-W28')?.expected, 0)
+})
+
+test('expected total display rounds down to tens without rounding logged hours', () => {
+    assert.equal(expectedHoursText(1051.5), '1050')
+    assert.equal(expectedHoursText(1063.5), '1060')
+    assert.equal(expectedHoursText(0), '0')
 })
