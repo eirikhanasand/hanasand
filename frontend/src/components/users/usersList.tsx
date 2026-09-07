@@ -1,7 +1,7 @@
 'use client'
 
 import { Search, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { reservedUsernames } from '@/utils/auth/reservedUsernames'
 import DashboardUser from './dashboardUser'
 
@@ -9,6 +9,25 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
     const [showReserved, setShowReserved] = useState(false)
     const [searchOpen, setSearchOpen] = useState(false)
     const [search, setSearch] = useState('')
+    const searchButton = useRef<HTMLButtonElement>(null)
+
+    function closeSearch() {
+        setSearch('')
+        setSearchOpen(false)
+        requestAnimationFrame(() => searchButton.current?.focus())
+    }
+
+    useEffect(() => {
+        function onKeyDown(event: KeyboardEvent) {
+            if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'j' || event.repeat || event.altKey || event.shiftKey) return
+            event.preventDefault()
+            if (searchOpen) closeSearch()
+            else setSearchOpen(true)
+        }
+        window.addEventListener('keydown', onKeyDown)
+        return () => window.removeEventListener('keydown', onKeyDown)
+    }, [searchOpen])
+
     const reservedSet = useMemo(() => new Set(reservedUsernames), [])
     const reservedCount = users.filter((user) => reservedSet.has(user.id.toLowerCase())).length
     const visibleUsers = (showReserved
@@ -27,11 +46,18 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
                     <p className='mt-1 text-sm text-ui-muted'>{visibleUsers.length} shown</p>
                 </div>
                 <div className='flex items-center gap-2'>
-                    {searchOpen && (
+                    {searchOpen ? (
                         <div className='flex items-center gap-1 rounded-lg border border-ui-border bg-ui-raised px-2'>
                             <Search className='h-4 w-4 text-ui-muted' />
                             <input
                                 autoFocus
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Escape') {
+                                        event.preventDefault()
+                                        event.stopPropagation()
+                                        closeSearch()
+                                    }
+                                }}
                                 aria-label='Filter users'
                                 className='h-8 w-36 bg-transparent text-sm text-ui-text outline-none placeholder:text-ui-muted'
                                 onChange={(event) => setSearch(event.target.value)}
@@ -42,22 +68,25 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
                                 type='button'
                                 aria-label='Close user search'
                                 title='Close search'
-                                onClick={() => { setSearch(''); setSearchOpen(false) }}
+                                onClick={closeSearch}
                                 className='grid h-6 w-6 place-items-center rounded text-ui-muted hover:bg-ui-panel hover:text-ui-text'
                             >
                                 <X className='h-4 w-4' />
                             </button>
                         </div>
-                    )}
-                    <button
+                    ) : <button
+                        ref={searchButton}
                         type='button'
-                        aria-label='Search users'
-                        title='Search users by name or username'
+                        aria-label='Search users (Cmd J)'
+                        aria-keyshortcuts='Meta+J Control+J'
+                        title='Search users by name or username (Cmd J)'
                         onClick={() => setSearchOpen(true)}
-                        className='grid h-9 w-9 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-text hover:bg-ui-panel'
+                        className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-muted hover:bg-ui-panel hover:text-ui-text'
                     >
                         <Search className='h-4 w-4' />
-                    </button>
+                        <span>Search</span>
+                        <kbd className='rounded-md border border-ui-border bg-ui-panel px-1.5 py-0.5 text-[10px] font-semibold text-ui-muted'>Cmd J</kbd>
+                    </button>}
                     {reservedCount > 0 && (
                         <button
                             type='button'
