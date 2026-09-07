@@ -17,6 +17,11 @@ export default async function ensureMonitoringIssuesSchema() {
         resolved_at TIMESTAMPTZ,
         UNIQUE (automation_id, fingerprint)
     )`)
+    await run(`ALTER TABLE monitoring_issues
+        ADD COLUMN IF NOT EXISTS status_override TEXT CHECK (status_override IN ('open', 'closed')),
+        ADD COLUMN IF NOT EXISTS severity_override TEXT CHECK (severity_override IN ('low', 'medium', 'high', 'critical')),
+        ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        ADD COLUMN IF NOT EXISTS comments JSONB NOT NULL DEFAULT '[]'::jsonb`)
     await run(`CREATE TABLE IF NOT EXISTS monitoring_issue_notifications (
         issue_id BIGINT NOT NULL REFERENCES monitoring_issues(id) ON DELETE CASCADE,
         destination TEXT NOT NULL,

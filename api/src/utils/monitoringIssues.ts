@@ -32,6 +32,8 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
         return id
     })
     if (!issue || automation.notify_on === 'never' || kind === 'warning' && !automation.notify_warnings && automation.notify_on !== 'always') return
+    const preferences = await run('SELECT notifications_enabled FROM monitoring_issues WHERE id = $1', [issue])
+    if (preferences.rows[0]?.notifications_enabled === false) return
     const destinations = new Set(automation.notification_destinations?.length ? automation.notification_destinations : automation.model_name ? [automation.model_name] : [])
     for (const destination of destinations) {
         // Reserve in PostgreSQL before delivery: concurrent workers and restarts cannot send duplicates.
