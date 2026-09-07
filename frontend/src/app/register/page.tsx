@@ -20,6 +20,7 @@ export default async function Page({
 
     return <RegisterPage
         serverInternal={internal}
+        serverError={typeof params.error === 'string' ? params.error : null}
         path={path || null}
     />
 }

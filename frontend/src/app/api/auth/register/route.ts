@@ -6,15 +6,16 @@ import { authApiUrl } from '@/utils/auth/authApiUrl'
 
 export async function POST(req: NextRequest) {
     const { body, redirectPath, wantsRedirect } = await parseAuthBody(req)
-    const name = body?.name?.trim()
-    const id = body?.id?.trim()
+    const name = typeof body?.name === 'string' ? body.name.trim() : ''
+    const id = typeof body?.id === 'string' ? body.id.trim() : ''
     const password = body?.password
+    const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
 
-    if (!name || !id || !password) {
+    if (!name || !id || !password || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         if (wantsRedirect) {
-            return authRedirect(req, '/register', 'Name, username, and password are required.')
+            return authRedirect(req, '/register', 'Name, username, valid email, and password are required.')
         }
-        return NextResponse.json({ error: 'Name, username, and password are required.' }, { status: 400 })
+        return NextResponse.json({ error: 'Name, username, valid email, and password are required.' }, { status: 400 })
     }
     if (reservedUsernames.includes(id.toLowerCase())) {
         if (wantsRedirect) {
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
     const upstream = await fetch(`${authApiUrl()}/user`, {
         method: 'POST',
         headers: { ...clientHeaders(req.headers), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, id, password }),
+        body: JSON.stringify({ name, id, password, email }),
         cache: 'no-store',
     }).catch(() => null)
     if (!upstream) {
@@ -85,6 +86,7 @@ async function parseAuthBody(req: NextRequest) {
                 name: String(form.get('name') || ''),
                 id: String(form.get('username') || form.get('id') || ''),
                 password: String(form.get('password') || ''),
+                email: String(form.get('email') || ''),
             },
             redirectPath: String(form.get('redirectPath') || '/dashboard'),
             wantsRedirect: true,
@@ -92,7 +94,7 @@ async function parseAuthBody(req: NextRequest) {
     }
 
     return {
-        body: await req.json().catch(() => null) as { name?: string, id?: string, password?: string } | null,
+        body: await req.json().catch(() => null) as { name?: string, id?: string, password?: string, email?: string } | null,
         redirectPath: '/dashboard',
         wantsRedirect: false,
     }

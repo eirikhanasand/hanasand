@@ -179,12 +179,14 @@ export async function completePasswordReset(req: FastifyRequest, res: FastifyRep
 
 async function getActiveUser(id: string) {
     const result = await run(`
-        SELECT u.id, u.name, u.active, ma.recovery_email, ma.mail_address
+        SELECT u.id, u.name, u.active, COALESCE(u.email,ma.recovery_email) AS recovery_email, ma.mail_address
         FROM users u
         LEFT JOIN mail_accounts ma ON ma.user_id = u.id
         WHERE u.active IS TRUE
           AND (
               u.id = $1
+              OR lower(COALESCE(u.username,u.id)) = lower($1)
+              OR lower(u.email) = lower($1)
               OR lower(ma.mail_address) = lower($1)
               OR lower(ma.recovery_email) = lower($1)
           )

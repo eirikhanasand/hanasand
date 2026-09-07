@@ -1,11 +1,12 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import bcrypt from 'bcrypt'
-import run from '#db'
+import run, { withTransaction } from '#db'
+import { normalizeEmail, usernameError } from '#utils/auth/accountIdentity.ts'
 import { validatePassword } from '#utils/auth/password.ts'
 import login from '#utils/auth/login.ts'
 import { loadSQL } from '#utils/loadSQL.ts'
 import { ensureMailAccountForUser } from '#utils/mail/accounts.ts'
-import { getReservedUsernameReason, normalizeUsername } from '#utils/auth/reservedUsernames.ts'
+import { normalizeUsername } from '#utils/auth/reservedUsernames.ts'
 import { recordSystemEvent } from '#utils/systemEvent.ts'
 
 type GetUserBodyProps = {
@@ -13,20 +14,22 @@ type GetUserBodyProps = {
     name: string
     password: string
     avatar: string
+    email: string
 }
 
 export default async function postUser(req: FastifyRequest, res: FastifyReply) {
-    const { id, name, password, avatar } = req.body as GetUserBodyProps ?? {}
+    const { id, name, password, avatar, email: submittedEmail } = req.body as GetUserBodyProps ?? {}
     const normalizedId = normalizeUsername(id || '')
+    const email = normalizeEmail(submittedEmail)
     const user = { id: normalizedId, name }
     const ip = req.ip
     const userAgent = String(req.headers['user-agent'] || '')
 
-    if (!id || !name || !password) {
-        return res.status(400).send({ error: 'Missing fields' })
+    if (!id || typeof name !== 'string' || !name.trim() || name.length > 100 || !password || !email) {
+        return res.status(400).send({ error: 'Name, username, valid email, and password are required.' })
     }
 
-    const reservedReason = getReservedUsernameReason(normalizedId)
+    const reservedReason = usernameError(normalizedId)
     if (reservedReason) {
         return res.status(400).send({ error: reservedReason })
     }
@@ -39,15 +42,19 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
     try {
         let assignedRoot = false
         const hashedPassword = await bcrypt.hash(password, 10)
-        const response = await run(
-            `INSERT INTO users (id, name, password, avatar) 
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (id) DO NOTHING`,
-            [normalizedId, name, hashedPassword, avatar || '']
-        )
+        const response = await withTransaction(async query => {
+            await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`email:${email}`])
+            await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`username:${normalizedId}`])
+            return query(
+                `INSERT INTO users (id,name,password,avatar,username,email)
+                VALUES ($1,$2,$3,$4,$1,$5)
+                ON CONFLICT DO NOTHING`,
+                [normalizedId, name.trim(), hashedPassword, avatar || '', email]
+            )
+        })
 
         if (!response.rowCount) {
-            return res.status(400).send({ error: 'The username is taken.' })
+            return res.status(400).send({ error: 'This username or email is already registered. Sign in to the existing account.' })
         }
 
         const userQuery = await loadSQL('assignUserRole.sql')

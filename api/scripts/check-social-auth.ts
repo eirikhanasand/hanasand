@@ -13,6 +13,7 @@ const rows = (items: unknown[] = []) => ({ rows: items, rowCount: items.length }
 let provisioned = 0
 const query = async (sql: string, params: any[] = []) => {
     if (sql.startsWith('SELECT pg_advisory_xact_lock')) return rows()
+    if (sql.startsWith('SELECT id,name,avatar,active,deletion_scheduled_at,email_verified_at') || sql.startsWith('SELECT 1 FROM users')) return rows()
     if (sql.startsWith('INSERT INTO users')) { provisioned++; return rows([{ id: params[0], name: params[1], avatar: '', active: true, deletion_scheduled_at: null }]) }
     if (sql.startsWith('INSERT INTO user_roles')) { assert.ok(sql.includes('\'users\'')); assert.ok(!sql.includes('\'administrators\'')); return rows() }
     if (sql.startsWith('DELETE FROM social_auth_transactions WHERE expires_at')) return rows()

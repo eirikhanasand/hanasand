@@ -46,7 +46,7 @@ async function signed(provider: 'google' | 'apple', changes: Record<string, unkn
 try {
     for (const provider of ['google', 'apple'] as const) {
         token = await signed(provider)
-        assert.deepEqual(await exchangeIdentity(provider, 'test-code', nonce, verifier), { subject: 'immutable-subject', email: 'owner@example.test' })
+        assert.deepEqual(await exchangeIdentity(provider, 'test-code', nonce, verifier), { subject: 'immutable-subject', email: 'owner@example.test', authoritativeEmail: false })
         token = await signed(provider, { nonce: 'wrong' })
         await assert.rejects(exchangeIdentity(provider, 'test-code', nonce, verifier))
         token = await signed(provider, { azp: 'another-client' })

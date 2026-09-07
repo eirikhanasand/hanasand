@@ -159,6 +159,7 @@ type Articles = {
 }
 
 type User = {
+    username?: string
     id: string
     name: string
     avatar: string

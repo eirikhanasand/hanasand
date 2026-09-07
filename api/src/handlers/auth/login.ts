@@ -20,6 +20,8 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
             FROM users u
             LEFT JOIN mail_accounts ma ON ma.user_id = u.id
             WHERE u.id = $1
+               OR lower(COALESCE(u.username,u.id)) = lower($1)
+               OR lower(u.email) = lower($1)
                OR lower(ma.mail_address) = lower($1)
             LIMIT 1
         `
