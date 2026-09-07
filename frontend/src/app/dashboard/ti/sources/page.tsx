@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 export default async function TiSourcesPage(props: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
     const params = await props.searchParams
     const cursor = value(params?.cursor) || ''
-    const scope = value(params?.scope) === 'default' ? 'default' : 'global'
+    const scope = 'global'
     const sort = value(params?.sort) || 'source'
     const direction = value(params?.dir) === 'desc' ? 'desc' : 'asc'
     const query = value(params?.q) || ''
@@ -19,8 +19,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
     const health = value(params?.health) || ''
     const output = value(params?.output) || ''
     const matches = value(params?.matches) || ''
-    const tenantId = scope === 'default' ? 'default' : null
-    const overview = await getTiAdminOverview(tenantId, { cursor, limit: 50, includeSamples: false, includeCandidates: true, query, family, lifecycle, access, health, output, matches, sort, direction })
+    const overview = await getTiAdminOverview(null, { cursor, limit: 50, includeSamples: false, includeCandidates: true, query, family, lifecycle, access, health, output, matches, sort, direction })
     const unavailable = overview.availability.failedResources.includes('source-operations')
     const rows = overview.sources
     const filters = { query, family, lifecycle, access, health, output, matches }
@@ -29,10 +28,6 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
     return <DashboardPage>
         <DashboardHeader eyebrow='Threat intelligence' title='Source inventory' description='The feeds Hanasand can collect, their current health, and the customer value they produce.' actions={executable.length ? <ManualRunButton label='Run active sources' /> : undefined} />
         <DashboardPanel className='flex flex-wrap items-center justify-between gap-3 border-ui-border bg-ui-panel p-4'>
-            <div className='flex gap-2' aria-label='Source inventory scope'>
-                <Link href='/ti/sources?scope=global' className={scope === 'global' ? activeTab : tab}>Global sources</Link>
-                <Link href='/ti/sources?scope=default' className={scope === 'default' ? activeTab : tab}>Default tenant</Link>
-            </div>
             <div className='text-sm text-ui-muted'>{overview.sourcePage.total} sources · {overview.sourceTotals.executable} executable</div>
         </DashboardPanel>
 
@@ -110,4 +105,3 @@ function Unavailable() { return <DashboardPanel className='grid min-h-80 place-i
 function value(input: string | string[] | undefined) { return Array.isArray(input) ? input[0] : input }
 function relative(value: string) { const age = Date.now() - Date.parse(value); if (!Number.isFinite(age)) return 'not recorded'; const minutes = Math.max(0, Math.round(age / 60_000)); return minutes < 60 ? `${minutes}m ago` : minutes < 2_880 ? `${Math.round(minutes / 60)}h ago` : `${Math.round(minutes / 1_440)}d ago` }
 const tab = 'rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:bg-ui-raised'
-const activeTab = 'rounded-md bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas'

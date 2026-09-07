@@ -13,8 +13,9 @@ test('ti source inventory keeps source health primary while summary and coverage
     expect(source).toContain('data-ti-source-capture-coverage')
     expect(source).toContain('ChevronDown')
     expect(source).toContain('group-open:rotate-180')
-    expect(source).toContain('Global sources')
-    expect(source).toContain('Default tenant')
+    expect(source).not.toContain('Global sources')
+    expect(source).not.toContain('Default tenant')
+    expect(source).toContain('getTiAdminOverview(null,')
     expect(source).toContain('configured ·')
     expect(source).toContain('?scope=${scope}')
 

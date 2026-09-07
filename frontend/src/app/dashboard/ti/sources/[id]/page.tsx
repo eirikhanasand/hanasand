@@ -8,16 +8,15 @@ import ManualRunButton from '../../manualRunButton'
 export const dynamic = 'force-dynamic'
 
 export default async function TiSourceDetailPage(props: { params: Promise<{ id: string }>, searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
-    const [params, query] = await Promise.all([props.params, props.searchParams])
-    const scope = query?.scope === 'default' ? 'default' : 'global'
-    const overview = await getTiAdminOverview(scope === 'default' ? 'default' : null, { sourceId: params.id })
+    const params = await props.params
+    const overview = await getTiAdminOverview(null, { sourceId: params.id })
     const source = overview.sources.find(item => item.id === params.id)
     const failed = overview.availability.failedResources
     if (!source && !failed.includes('source-operations')) return notFound()
     if (!source) return (
         <DashboardPage>
             <div role='alert'><h1 className='text-xl font-semibold'>Source unavailable</h1><p className='mt-2 text-sm text-ui-muted'>We couldn’t load this source. Try refreshing the page.</p></div>
-            <Link href={`/ti/sources?scope=${scope}`} className='text-ui-primary'>Back to sources</Link>
+            <Link href='/ti/sources' className='text-ui-primary'>Back to sources</Link>
         </DashboardPage>
     )
 
@@ -43,7 +42,7 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                 <ManualRunButton sourceId={source.id} label='Run now' queries={source.domains.filter(domain => !domain.includes('only'))} />
             </header>
             <div className='flex flex-wrap items-center gap-4 text-sm'>
-                <Link href={`/ti/sources?scope=${scope}`} className='inline-flex items-center gap-2 text-ui-primary'><ArrowLeft className='h-4 w-4' />Sources</Link>
+                <Link href='/ti/sources' className='inline-flex items-center gap-2 text-ui-primary'><ArrowLeft className='h-4 w-4' />Sources</Link>
                 {httpUrl(source.url) && <a href={source.url} target='_blank' rel='noopener noreferrer' className='inline-flex items-center gap-2 text-ui-primary'>Open source<ExternalLink className='h-4 w-4' /></a>}
             </div>
             {!!unavailable.length && <div role='alert' className='rounded-md border border-ui-border p-4 text-sm text-ui-warning'>{unavailable.join(' ')} Refresh to try again.</div>}
