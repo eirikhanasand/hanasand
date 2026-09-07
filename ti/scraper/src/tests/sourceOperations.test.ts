@@ -225,7 +225,7 @@ describe("source operations", () => {
     const payload = await (await handleApiRequest(authenticatedApi("/v1/intel/source-operations?sourceId=src_scale_06100"), options)).json() as any;
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ sourceId: "src_scale_06100", limit: undefined, offset: undefined });
+    expect(calls[0]).toMatchObject({ sourceId: "src_scale_06100", limit: undefined, offset: 0 });
     expect(payload.sources).toHaveLength(1);
     expect(payload.summary).toMatchObject({ sourceCount: 1, retainedSourceCount: 1, inactiveSourceCount: 0, candidateSourceCount: 0, rejectedSourceCount: 0, measurementState: "source_counts_only" });
     expect(payload.summary.observedSourceCount).toBeUndefined();
