@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import run from '#db'
+import { withTransaction } from '#db'
+import { cachedLogQuery } from '../../utils/logs/cache.ts'
 
 type TrafficMetric = 'path' | 'ip' | 'user_agent' | 'domain'
 
@@ -34,6 +35,10 @@ export async function getLegacyTrafficSummary(req: FastifyRequest, res: FastifyR
         })
     }
 
+    return res.send((await loadTrafficSummary(metric)).rows)
+}
+
+async function loadTrafficSummary(metric: TrafficMetric) {
     const column = metricColumns[metric]
     const result = await safeQuery(`
         SELECT
@@ -50,10 +55,14 @@ export async function getLegacyTrafficSummary(req: FastifyRequest, res: FastifyR
         LIMIT 20
     `)
 
-    return res.send(result.rows)
+    return result
 }
 
 export async function getLegacyTrafficRecent(_req: FastifyRequest, res: FastifyReply) {
+    return res.send((await loadTrafficRecent()).rows)
+}
+
+async function loadTrafficRecent() {
     const result = await safeQuery(`
         SELECT
             path AS value,
@@ -69,15 +78,15 @@ export async function getLegacyTrafficRecent(_req: FastifyRequest, res: FastifyR
         LIMIT 40
     `)
 
-    return res.send(result.rows)
+    return result
 }
 
 export async function getLegacyTrafficTps(_req: FastifyRequest, res: FastifyReply) {
     const result = await safeQuery(`
         SELECT
             domain AS name,
-            ROUND((SUM(hits)::numeric / 60.0), 3)::float AS tps
-        FROM traffic_aggregate_events
+            ROUND((COUNT(*)::numeric / 60.0), 3)::float AS tps
+        FROM traffic_events
         WHERE domain <> ''
           AND created_at >= NOW() - INTERVAL '60 seconds'
         GROUP BY domain
@@ -111,12 +120,17 @@ function trafficActors(actor: 'ip' | 'user_agent', related: 'ip' | 'user_agent',
                 GROUP BY ${related} ORDER BY SUM(hits) DESC, ${related} LIMIT 1), '') AS ${relatedLabel},
             COALESCE((SELECT json_agg(json_build_object('path', p.path, 'hits', p.hits) ORDER BY p.hits DESC)
                 FROM (SELECT path, SUM(hits)::bigint AS hits FROM grouped
-                    WHERE grouped.${actor}=leaders.${actor} AND path<>'' GROUP BY path) p), '[]'::json) AS top_paths
+                    WHERE grouped.${actor}=leaders.${actor} AND path<>'' GROUP BY path
+                    ORDER BY hits DESC, path LIMIT 20) p), '[]'::json) AS top_paths
         FROM leaders ORDER BY hits DESC
     `)
 }
 
 export async function getLegacyTrafficDomains(_req: FastifyRequest, res: FastifyReply) {
+    return res.send(await loadTrafficDomains())
+}
+
+async function loadTrafficDomains() {
     const result = await safeQuery(`
         SELECT domain
         FROM traffic_aggregate_events
@@ -126,18 +140,21 @@ export async function getLegacyTrafficDomains(_req: FastifyRequest, res: Fastify
         LIMIT 50
     `)
 
-    return res.send({ domains: result.rows.map((row: { domain: string }) => row.domain) })
+    return { domains: result.rows.map((row: { domain: string }) => row.domain) }
 }
 
 export async function getLegacyTrafficMetrics(req: FastifyRequest, res: FastifyReply) {
-    const domain = readQueryString(req, 'domain') || null
+    return res.send(await loadTrafficMetrics(readQueryString(req, 'domain') || null))
+}
+
+async function loadTrafficMetrics(domain: string | null) {
     const top = (expression: string) => `COALESCE((SELECT json_agg(t) FROM (
         SELECT ${expression} AS key, SUM(hits)::bigint AS count FROM traffic_scope
         WHERE ${expression} <> '' GROUP BY ${expression} ORDER BY count DESC LIMIT 10
     ) t), '[]'::json)`
     const result = await safeQuery(`
         WITH traffic_scope AS MATERIALIZED (
-            SELECT * FROM traffic_aggregate_events WHERE ($1::text IS NULL OR domain=$1)
+            SELECT domain,path,method,status,user_agent,created_at,hits,time_total FROM traffic_aggregate_events WHERE ($1::text IS NULL OR domain=$1)
         )
         SELECT COALESCE(SUM(hits),0)::bigint AS total_requests,
             COALESCE(ROUND(SUM(time_total)/NULLIF(SUM(hits),0)),0) AS avg_request_time,
@@ -162,7 +179,7 @@ export async function getLegacyTrafficMetrics(req: FastifyRequest, res: FastifyR
             ) t), '[]'::json) AS requests_over_time
         FROM traffic_scope
     `, [domain])
-    return res.send({ ...emptyMetrics, ...result.rows[0] })
+    return { ...emptyMetrics, ...result.rows[0], sampled_at: result.sampled_at }
 }
 
 export async function getLegacyTrafficRecords(req: FastifyRequest, res: FastifyReply) {
@@ -189,14 +206,18 @@ export async function getLegacyTrafficRecords(req: FastifyRequest, res: FastifyR
             ORDER BY created_at DESC
             LIMIT $2 OFFSET $3
         `, [domain, limit, offset]),
-        safeQuery(`
-            SELECT COALESCE(SUM(hits), 0)::bigint AS total
-            FROM traffic_aggregate_events
-            WHERE ($1::text IS NULL OR domain = $1)
-        `, [domain]),
+        loadTrafficRecordTotal(domain),
     ])
 
     return res.send({ result: records.rows, total: Number(total.rows[0]?.total || 0) })
+}
+
+function loadTrafficRecordTotal(domain: string | null) {
+    return safeQuery(`
+        SELECT COALESCE(SUM(hits), 0)::bigint AS total
+        FROM traffic_aggregate_events
+        WHERE ($1::text IS NULL OR domain = $1)
+    `, [domain])
 }
 
 export async function getLegacyTrafficLive(_req: FastifyRequest, res: FastifyReply) {
@@ -281,11 +302,38 @@ function isTrafficMetric(value: string): value is TrafficMetric {
     return value === 'path' || value === 'ip' || value === 'user_agent' || value === 'domain'
 }
 
-async function safeQuery(query: string, params: Array<string | number | boolean | string[] | Date | null> = []) {
-    try {
-        return await run(query, params)
-    } catch (error) {
-        throw Object.assign(new Error('Traffic statistics are temporarily unavailable', { cause: error }), { statusCode: 503 })
-    }
+// Expensive refreshes share one queue per API worker, leaving the rest of the
+// connection pool available for login, VM actions, and live request streaming.
+let analyticsQueue: Promise<unknown> = Promise.resolve()
+
+export async function warmTrafficStatistics() {
+    await loadTrafficDomains()
+    await loadTrafficRecordTotal(null)
+    await loadTrafficMetrics(null)
+    await loadTrafficSummary('path')
+    await loadTrafficRecent()
+    await trafficActors('ip', 'user_agent', 'most_common_user_agent')
+    await trafficActors('user_agent', 'ip', 'most_common_ip')
 }
 
+async function safeQuery(query: string, params: Array<string | number | boolean | string[] | Date | null> = []) {
+    const aggregate = query.includes('traffic_aggregate_events')
+    const load = async () => {
+        try {
+            const result = await withTransaction(async execute => {
+                await execute('SET LOCAL work_mem=\'64MB\'')
+                if (aggregate) await execute('SET LOCAL statement_timeout=\'30s\'')
+                return execute(query, params)
+            })
+            return { ...result, sampled_at: new Date().toISOString() }
+        } catch (error) {
+            throw Object.assign(new Error('Traffic statistics are temporarily unavailable', { cause: error }), { statusCode: 503 })
+        }
+    }
+    if (!aggregate) return load()
+    return cachedLogQuery('traffic:' + query.replace(/\s+/g, ' ').trim() + JSON.stringify(params), 30000, () => {
+        const pending = analyticsQueue.then(load, load)
+        analyticsQueue = pending.catch(() => {})
+        return pending
+    })
+}

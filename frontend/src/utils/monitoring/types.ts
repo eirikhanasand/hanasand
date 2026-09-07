@@ -82,6 +82,7 @@ export type TrafficSlowMetric = {
 }
 
 export type TrafficMetrics = {
+    sampled_at?: string
     total_requests: number
     avg_request_time: number
     error_rate: number

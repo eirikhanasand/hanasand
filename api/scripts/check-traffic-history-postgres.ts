@@ -10,8 +10,8 @@ await queryOnce(`CREATE TABLE traffic_events (
  referer text NOT NULL DEFAULT '', request_time_ms int NOT NULL, created_at timestamptz NOT NULL DEFAULT NOW()
 )`)
 await queryOnce(`INSERT INTO traffic_events(domain,path,method,status,ip,user_agent,request_time_ms,created_at)
- SELECT CASE WHEN n%2=0 THEN 'a.test' ELSE 'b.test' END, '/path-'||(n%3), 'GET',
- CASE WHEN n%5=0 THEN 500 ELSE 200 END,'ip-'||(n%2),'agent-'||(n%3),n,
+ SELECT CASE WHEN n%2=0 THEN 'a.test' ELSE 'b.test' END, CASE WHEN n<=60 THEN '/path-'||(n%3) ELSE '/recent-'||n END, 'GET',
+ CASE WHEN n%5=0 THEN 500 ELSE 200 END,'ip-shared','agent-'||(n%3),n,
  NOW() - CASE WHEN n<=30 THEN INTERVAL '8 days' WHEN n<=60 THEN INTERVAL '7 days' - INTERVAL '10 minutes' ELSE INTERVAL '1 hour' END
  FROM generate_series(1,90) n`)
 await ensureTrafficHistorySchema()
@@ -23,7 +23,8 @@ async function totals(table: string) {
 }
 const expected=await totals('traffic_events')
 assert.deepEqual(await totals('traffic_aggregate_events'),expected)
-while (await cacheTrafficHistoryHour()) { /* Backfill the fixture. */ }
+await Promise.all([cacheTrafficHistoryHour(),cacheTrafficHistoryHour()])
+while (await cacheTrafficHistoryHour(24)) { /* Backfill the fixture. */ }
 assert.deepEqual(await totals('traffic_aggregate_events'),expected)
 await Promise.all([cacheTrafficHistoryHour(),cacheTrafficHistoryHour()])
 assert.deepEqual(await totals('traffic_aggregate_events'),expected)
@@ -42,11 +43,22 @@ assert.equal(metrics.top_domains.length,1)
 assert.equal(metrics.top_domains[0].key,'a.test')
 const ips=await call(getLegacyTrafficIps)
 assert.equal(ips.reduce((sum: number,row: any)=>sum+Number(row.hits),0),91)
-for (const row of ips) assert.equal(row.top_paths.reduce((sum: number,p: any)=>sum+Number(p.hits),0),Number(row.hits))
+assert.equal(ips[0].top_paths.length,20)
+for (const row of ips) {
+    assert(row.top_paths.length<=20)
+    for (const path of row.top_paths) {
+        const raw=await queryOnce('SELECT COUNT(*)::int AS hits FROM traffic_events WHERE ip=$1 AND path=$2',[row.ip,path.path])
+        assert.equal(Number(path.hits),raw.rows[0].hits)
+    }
+}
 const agents=await call(getLegacyTrafficUserAgents)
 assert.equal(agents.reduce((sum: number,row: any)=>sum+Number(row.hits),0),91)
 const summary=await call(getLegacyTrafficSummary,{metric:'path'})
-assert.equal(summary.reduce((sum: number,row: any)=>sum+Number(row.hits_total),0),91)
+assert.equal(summary.length,20)
+for (const row of summary) {
+    const raw=await queryOnce('SELECT COUNT(*)::int AS hits FROM traffic_events WHERE path=$1',[row.value])
+    assert.equal(Number(row.hits_total),raw.rows[0].hits)
+}
 const records=await call(getLegacyTrafficRecords,{domain:'a.test',limit:'10'})
 assert.equal(records.total,46)
 assert.equal(records.result.length,10)

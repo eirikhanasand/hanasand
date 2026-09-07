@@ -196,7 +196,7 @@ export default function TrafficDashboard({
                             <h2 className='break-all text-sm font-semibold text-ui-text'>{ipMetric.ip}</h2>
                             <span className='text-xs leading-5 text-ui-muted'>Most common user agent: {ipMetric.most_common_user_agent ?? 'metering'}</span>
                             <div className='mt-2'>
-                                <h3 className='text-xs font-semibold text-ui-muted'>Requested paths</h3>
+                                <h3 className='text-xs font-semibold text-ui-muted'>Top requested paths</h3>
                                 <ul className='mt-1 grid gap-1 text-xs text-ui-muted'>
                                     {(Array.isArray(ipMetric.top_paths) ? ipMetric.top_paths : []).map((path, idx) => (
                                         <li key={idx} className='flex min-w-0 justify-between gap-2'>
@@ -223,7 +223,7 @@ export default function TrafficDashboard({
                             <h2 className='break-all text-xs font-semibold leading-5 text-ui-text'>{ua.user_agent}</h2>
                             <span className='text-xs text-ui-muted'>Most common IP: {ua.most_common_ip ?? 'metering'}</span>
                             <div className='mt-2'>
-                                <h3 className='text-xs font-semibold text-ui-muted'>Requested paths</h3>
+                                <h3 className='text-xs font-semibold text-ui-muted'>Top requested paths</h3>
                                 <ul className='mt-1 grid gap-1 text-xs text-ui-muted'>
                                     {(Array.isArray(ua.top_paths) ? ua.top_paths : []).map((path, idx) => (
                                         <li key={idx} className='flex min-w-0 justify-between gap-2'>

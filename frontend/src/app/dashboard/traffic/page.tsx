@@ -95,7 +95,7 @@ async function TrafficOverview({ selectedDomain }: { selectedDomain?: string }) 
                         icon={<Clock3 className='h-4 w-4' />}
                         value={trafficMetrics?.avg_request_time ? `${Math.round(trafficMetrics.avg_request_time)}ms` : 'metering'}
                         detail={`${trafficMetrics?.total_requests || 0} tracked requests`}
-                        footer='rolling metrics'
+                        footer={trafficMetrics?.sampled_at ? `Updated ${shortTime(trafficMetrics.sampled_at)}` : 'rolling metrics'}
                         tone={trafficMetrics?.avg_request_time && trafficMetrics.avg_request_time > 1000 ? 'watch' : 'ok'}
                     />
                     <TrafficLane

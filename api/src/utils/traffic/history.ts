@@ -32,9 +32,20 @@ export async function ensureTrafficHistorySchema() {
         SELECT domain,path,method,status,ip,user_agent,country_iso,created_at,
                1::bigint,request_time_ms::double precision,created_at,created_at
         FROM traffic_events
+        WHERE created_at >= NOW() - INTERVAL '24 hours'
+        UNION ALL
+        SELECT domain,path,method,status,ip,user_agent,country_iso,created_at,
+               1::bigint,request_time_ms::double precision,created_at,created_at
+        FROM traffic_events
         WHERE created_at >= (SELECT covered_before FROM traffic_history_state)
-           OR (created_at >= date_trunc('hour', NOW() - INTERVAL '7 days')
-               AND created_at < date_trunc('hour', NOW() - INTERVAL '7 days') + INTERVAL '1 hour');
+          AND created_at < NOW() - INTERVAL '24 hours'
+        UNION ALL
+        SELECT domain,path,method,status,ip,user_agent,country_iso,created_at,
+               1::bigint,request_time_ms::double precision,created_at,created_at
+        FROM traffic_events
+        WHERE created_at >= date_trunc('hour', NOW() - INTERVAL '7 days')
+          AND created_at < LEAST(date_trunc('hour', NOW() - INTERVAL '7 days') + INTERVAL '1 hour',
+                                (SELECT covered_before FROM traffic_history_state));
     `)
 }
 

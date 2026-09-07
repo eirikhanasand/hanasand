@@ -1,3 +1,4 @@
+import { warmTrafficStatistics } from './handlers/traffic/legacy.ts'
 import { refreshTrafficHistory } from './utils/traffic/history.ts'
 import { warmLogSnapshots, refreshLogSnapshots } from '#utils/logs/warm.ts'
 import { recoveryRequestAllowed, recoveryState, recoveryReadOnly } from './utils/resilience.ts'
@@ -181,6 +182,7 @@ async function start() {
             fastify.addHook('onClose', async () => { stopLogRefresh() })
         }
         if (!browserWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
+            await warmTrafficStatistics()
             const stopTrafficRefresh = refreshTrafficHistory()
             fastify.addHook('onClose', async () => { stopTrafficRefresh() })
         }
