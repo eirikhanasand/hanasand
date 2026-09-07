@@ -37,7 +37,6 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
             link('Security Scanner', canManageSystem ? '/scanner' : '/solutions/scanner'),
             link('Exposure Lookup', '/pwned'),
             link('Endpoint Checks', '/test'),
-            link('All products and solutions', '/solutions'),
         ]),
         group('Threat intelligence', [
             group('Intelligence', [
