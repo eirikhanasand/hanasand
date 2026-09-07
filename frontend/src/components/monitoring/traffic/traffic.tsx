@@ -1,5 +1,7 @@
 'use client'
 
+import formatRequestTime from '@/utils/monitoring/formatRequestTime'
+
 import { Activity, Clock, AlertTriangle } from 'lucide-react'
 import statusClasses from './statusClasses'
 import RequestsOverTimeChart from './requestsOverTimeChart'
@@ -25,7 +27,6 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
     const m = typeof metrics === 'object' && metrics !== null ? (metrics as TrafficMetrics) : undefined
 
     const totalRequests = Number(m?.total_requests) || 0
-    const avgRequestTime = Number.isFinite(Number(m?.avg_request_time)) ? Math.round(Number(m!.avg_request_time)) : null
     const errorRate = Number.isFinite(Number(m?.error_rate)) ? (Number(m!.error_rate) * 100).toFixed(1) : null
 
     const methods = (m?.top_methods ?? [])
@@ -69,7 +70,7 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
                             },
                             {
                                 title: 'Avg Request Time',
-                                value: avgRequestTime ? `${avgRequestTime}ms` : 'metering',
+                                value: formatRequestTime(m),
                                 accent: 'blue',
                                 outline: 'outline outline-ui-primary/25',
                                 icon: <Clock className='w-5 h-5 stroke-ui-primary' />
