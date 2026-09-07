@@ -68,7 +68,7 @@ export default function Footer() {
         let mounted = true
         const refreshStatus = async() => {
             try {
-                const response = await fetch('/api/status', { cache: 'no-store' })
+                const response = await fetch('/api/status', { cache: 'no-store', signal: AbortSignal.timeout(5000) })
                 if (!response.ok) {
                     if (mounted) setPublicStatus('unknown')
                     return

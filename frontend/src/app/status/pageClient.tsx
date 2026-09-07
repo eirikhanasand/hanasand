@@ -32,10 +32,13 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                 setCurrentStatus(current => retainVerifiedStatus(current, saved))
             }
         } catch { /* Storage is optional, for example in private browsing. */ }
+        let pending = false
         async function refreshStatus() {
+            if (pending) return
+            pending = true
             setIsRefreshing(true)
             try {
-                const response = await fetch('/api/status', { cache: 'no-store' })
+                const response = await fetch('/api/status', { cache: 'no-store', signal: AbortSignal.timeout(5000) })
                 if (response.ok) {
                     const next = await response.json() as ServiceStatus
                     if (!next || !Array.isArray(next.checks) || !Array.isArray(next.history) || !Array.isArray(next.incidents)) throw new Error('Invalid status feed')
@@ -51,6 +54,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
             } catch {
                 setRefreshError(true)
             } finally {
+                pending = false
                 setIsRefreshing(false)
             }
         }
@@ -68,7 +72,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
     const checks = currentStatus.checks
     const incidents = currentStatus.incidents
     const monitoringUnavailable = refreshError || currentStatus.monitoring === 'unavailable' || !currentStatus.checks.every(check => isCurrentPublicCheck(check, now || Date.now()))
-    const overall = monitoringUnavailable && !checks.some(check => check.status === 'down' && isCurrentPublicCheck(check, now || Date.now())) ? 'unknown' : currentStatus.overall
+    const overall = refreshError || monitoringUnavailable && !checks.some(check => check.status === 'down' && isCurrentPublicCheck(check, now || Date.now())) ? 'unknown' : currentStatus.overall
     const headline = overall === 'unknown' ? 'Monitoring unavailable' : overall === 'up'
         ? 'Monitored services operational'
         : overall === 'degraded'
@@ -232,9 +236,9 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                                     <span>{check.latency_ms}ms</span>
                                 </div>
                             </div>
-                            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold ${statusPillClass(check.status)}`}>
+                            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold ${statusPillClass(refreshError || !isCurrentPublicCheck(check, now || Date.now()) ? 'unknown' : check.status)}`}>
                                 {check.status === 'up' ? <CheckCircle className='h-4 w-4' /> : <AlertCircle className='h-4 w-4' />}
-                                {monitoringUnavailable && !isCurrentPublicCheck(check, now || Date.now()) || check.status === 'unknown' ? 'Unverified' : check.status === 'up' ? 'Normal' : check.status}
+                                {refreshError || !isCurrentPublicCheck(check, now || Date.now()) || check.status === 'unknown' ? 'Unverified' : check.status === 'up' ? 'Normal' : check.status}
                             </span>
                         </div>
                     ))}

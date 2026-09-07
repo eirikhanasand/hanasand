@@ -197,7 +197,7 @@ async function loadStatusPayload(summary = false, query = run) {
     const incidentRows = incidentResult.rows as IncidentRow[]
     const incidents = buildIncidents(incidentRows, checks)
     const history = buildHistory(historyResult.rows as HistoryRow[], incidents)
-    const overall = checks.length && checks.every(check => check.status === 'up')
+    const overall = !checks.length ? 'unknown' : checks.length && checks.every(check => check.status === 'up')
         ? 'up'
         : checks.some(check => check.status === 'down')
             ? 'down'
@@ -205,6 +205,7 @@ async function loadStatusPayload(summary = false, query = run) {
 
     return {
         overall,
+        monitoring: checks.length && checks.every(check => check.status !== 'unknown') ? 'live' : 'unavailable',
         generated_at: checks.length ? new Date(Math.max(...checks.map(check => time(check.checked_at)))).toISOString() : '',
         checks,
         history,

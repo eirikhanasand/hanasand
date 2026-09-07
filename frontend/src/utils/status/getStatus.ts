@@ -92,9 +92,9 @@ function normalizeStatus(payload: Partial<ServiceStatus> | null): ServiceStatus 
         : []
 
     return {
-        overall: payload.overall === 'up' || payload.overall === 'degraded' || payload.overall === 'down'
+        overall: payload.overall === 'up' || payload.overall === 'degraded' || payload.overall === 'down' || payload.overall === 'unknown'
             ? payload.overall
-            : checks.some((check) => check.status === 'down') ? 'down' : checks.some((check) => check.status === 'degraded') ? 'degraded' : 'up',
+            : checks.some((check) => check.status === 'down') ? 'down' : checks.some((check) => check.status === 'degraded') ? 'degraded' : checks.length ? 'up' : 'unknown',
         generated_at: payload.generated_at || '',
         monitoring: payload.monitoring,
         last_verified_at: payload.last_verified_at,

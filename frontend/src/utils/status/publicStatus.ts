@@ -181,7 +181,7 @@ function publicStatusMessage(message: string | null) {
 // empty or stale response into a verified snapshot.
 export function isVerifiedStatus(status: ServiceStatus, now = Date.now()) {
     return status.monitoring !== 'unavailable' && status.checks.length === requiredPublicChecks.length
-        && status.checks.every(check => check.status !== 'unknown' && isCurrentPublicCheck(check, now))
+        && requiredPublicChecks.every(required => status.checks.some(check => check.service === publicStatusLabel(required.service) && check.check_name === publicStatusLabel(required.check_name) && ['up', 'degraded', 'down'].includes(check.status) && isCurrentPublicCheck(check, now)))
 }
 
 export function retainVerifiedStatus(next: ServiceStatus, previous?: ServiceStatus): ServiceStatus {
