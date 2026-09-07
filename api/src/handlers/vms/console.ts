@@ -23,6 +23,7 @@ export default function registerVmConsole(fastify: FastifyInstance) {
         let checking = false
         let credentials: { id: string; token: string } | undefined
         let recheck: ReturnType<typeof setInterval> | undefined
+        let heartbeat: ReturnType<typeof setInterval> | undefined
         const send = (value: object) => {
             if (socket.bufferedAmount > 1024 * 1024) { socket.close(1013); terminal?.close(); return }
             if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(value))
@@ -35,7 +36,7 @@ export default function registerVmConsole(fastify: FastifyInstance) {
             socket.close(1008)
             return
         }
-        socket.on('close', () => { clearTimeout(deadline); clearInterval(recheck); terminal?.close() })
+        socket.on('close', () => { clearTimeout(deadline); clearInterval(recheck); clearInterval(heartbeat); terminal?.close() })
         socket.on('error', () => { terminal?.close() })
         socket.on('message', async raw => {
             try {
@@ -57,12 +58,13 @@ export default function registerVmConsole(fastify: FastifyInstance) {
                     request.log.info({ vmName: request.params.name, userId: credentials.id }, 'VM console opened')
                     authenticated = true
                     send({ type: 'ready', username: terminal.username })
+                    // Keep idle terminals alive through the public proxy's 15-second timeout.
+                    heartbeat = setInterval(() => { if (socket.readyState === WebSocket.OPEN) socket.ping() }, 10000)
                     recheck = setInterval(async () => {
                         if (checking || !credentials) return
                         checking = true
                         try {
                             if (recoveryReadOnly() || !await consoleAccess(request.params.name, credentials.id, credentials.token)) fail('Your console access has ended. Sign in again or check your VM access.')
-                            else socket.ping()
                         } catch { fail('Unable to verify console access.') } finally { checking = false }
                     }, 30000)
                     return
