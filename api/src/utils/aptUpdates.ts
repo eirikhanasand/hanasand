@@ -29,14 +29,18 @@ export async function persistHostUpdateStatus(status: Record<string, unknown>, r
         SELECT 'hanasand', $1, $2, COALESCE($3::timestamptz, NOW()), $4::jsonb, $5, $6::jsonb
         WHERE NOT EXISTS (SELECT 1 FROM host_update_events WHERE host = 'hanasand' AND run_id = $1)
     `, [runId, String(status.status || 'unknown'), typeof status.checked_at === 'string' ? status.checked_at : null,
-        JSON.stringify(Array.isArray(status.last_updated_packages) ? status.last_updated_packages : []), typeof status.last_error === 'string' ? status.last_error : null, JSON.stringify(status)])
+        JSON.stringify(installedPackages(status)), typeof status.last_error === 'string' ? status.last_error : null, JSON.stringify(status)])
 }
 
 export async function listHostUpdateHistory() {
     const result = await run(`
-        SELECT run_id, status, occurred_at, packages, error
+        SELECT run_id, status, occurred_at, packages, error, payload
         FROM host_update_events WHERE host = 'hanasand'
         ORDER BY occurred_at DESC LIMIT 30
     `)
-    return result.rows
+    return result.rows.map(({ payload, ...event }) => ({ ...event, packages: installedPackages(payload || {}) }))
+}
+
+function installedPackages(status: Record<string, unknown>): string[] {
+    return Array.isArray(status.installed_packages) ? status.installed_packages.flatMap(item => item && typeof item.package === 'string' ? [item.package] : []) : []
 }
