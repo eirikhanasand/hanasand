@@ -1,6 +1,6 @@
 # Google and Apple sign-in
 
-Existing users connect a provider under **Profile → Account**, while signed in with their current method. Thereafter the login-page provider button signs into that same account. New users use the existing sign-up flow first. Email addresses and display names never select or merge accounts; a unique provider + subject identity does. Existing roles, inactive-account checks and session expiry still apply.
+Anyone can sign up or sign in directly with Google or Apple. First sign-in creates a normal account with only the standard users role; subsequent sign-ins use the same account. Existing users can optionally connect a provider under **Profile → Account** to reuse an existing account. Provisioning is transactional and serialized by provider identity across workers. Email addresses and display names never select or merge accounts; a unique provider + subject identity does. Existing roles, inactive-account checks and session expiry still apply.
 
 Server-only configuration on authentication workers:
 

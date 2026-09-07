@@ -10,7 +10,11 @@ let issued = 0
 let linkedSubject = 'subject-one'
 let exchangeCount = 0
 const rows = (items: unknown[] = []) => ({ rows: items, rowCount: items.length })
-mock.module('#db', () => ({ default: async (sql: string, params: any[] = []) => {
+let provisioned = 0
+const query = async (sql: string, params: any[] = []) => {
+    if (sql.startsWith('SELECT pg_advisory_xact_lock')) return rows()
+    if (sql.startsWith('INSERT INTO users')) { provisioned++; return rows([{ id: params[0], name: params[1], avatar: '', active: true, deletion_scheduled_at: null }]) }
+    if (sql.startsWith('INSERT INTO user_roles')) { assert.ok(sql.includes('\'users\'')); assert.ok(!sql.includes('\'administrators\'')); return rows() }
     if (sql.startsWith('DELETE FROM social_auth_transactions WHERE expires_at')) return rows()
     if (sql.startsWith('INSERT INTO social_auth_transactions')) {
         transactions.set(params[0], { provider: params[1], binding_hash: params[2], nonce: params[3], verifier: params[4], redirect_path: params[5], link_user_id: params[6], expires: Date.now() + 600000 })
@@ -28,12 +32,13 @@ mock.module('#db', () => ({ default: async (sql: string, params: any[] = []) => 
     if (sql.startsWith('SELECT 1 FROM user_social_identities')) return rows(identities.get(`${params[0]}:${params[1]}`) === params[2] ? [{}] : [])
     if (sql.startsWith('SELECT u.id,u.name')) {
         const user = identities.get(`${params[0]}:${params[1]}`)
-        return rows(active && user ? [{ id: user, name: 'Existing account', avatar: '' }] : [])
+        return rows(user ? [{ id: user, name: 'Existing account', avatar: '', active, deletion_scheduled_at: null }] : [])
     }
-    if (sql.startsWith('SELECT r.id')) return rows([{ id: 'existing-role', priority: 42 }])
+    if (sql.startsWith('SELECT r.id')) return rows([{ id: params[0] === 'existing-owner' ? 'existing-role' : 'users', priority: 42 }])
     if (sql.startsWith('UPDATE user_social_identities')) return rows()
     throw new Error(`Unexpected query: ${sql}`)
-} }))
+}
+mock.module('#db', () => ({ default: query, withTransaction: async (work: (run: typeof query) => Promise<unknown>) => work(query) }))
 mock.module('../src/utils/auth/session.ts', () => ({
     validateSession: async ({ token }: { token: string }) => active && token === 'valid' ? { user: { id: 'existing-owner' } } : null,
     issueToken: async ({ id }: { id: string }) => { issued++; return { token: `session-for-${id}`, expires_at: '2030-01-01' } },
@@ -61,13 +66,19 @@ try {
     assert.equal((await start('google', true)).statusCode, 401)
     assert.equal((await start('google', true, 'valid', { 'x-impersonation-token': 'impersonating' })).statusCode, 401)
     const unlinked = await callback(await start())
-    assert.equal(unlinked.statusCode, 403, 'Matching email must not select a local account')
-    assert.equal(issued, 0)
+    assert.equal(unlinked.statusCode, 200, 'New users can sign up directly')
+    assert.notEqual(unlinked.json().id, 'existing-owner', 'Matching email must not claim another account')
+    assert.equal(unlinked.json().roles[0].id, 'users')
+    assert.equal(provisioned, 1)
+    const repeat = await callback(await start())
+    assert.equal(repeat.json().id, unlinked.json().id)
+    assert.equal(provisioned, 1, 'Returning users must reuse their account')
+    linkedSubject = 'link-subject'
     const linking = await start('google', true, 'valid')
     assert.equal((await callback(linking, 'google', { binding: actual.secret() })).statusCode, 400)
     assert.equal((await callback(linking, 'apple')).statusCode, 400)
     assert.equal((await callback(linking)).json().linked, true)
-    assert.equal(issued, 0, 'Linking must not switch browser sessions')
+    assert.equal(issued, 2, 'Linking must not switch browser sessions')
     const beforeReplay = exchangeCount
     assert.equal((await callback(linking)).statusCode, 400)
     assert.equal(exchangeCount, beforeReplay)
@@ -85,8 +96,9 @@ try {
     assert.equal((await callback(expired)).statusCode, 400)
     linkedSubject = 'another-subject'
     assert.equal((await callback(await start('google', true, 'valid'))).statusCode, 409)
-    linkedSubject = 'subject-one'; active = false
+    linkedSubject = 'link-subject'; active = false
     assert.equal((await callback(await start())).statusCode, 403)
-    assert.equal(issued, 1)
+    assert.equal(issued, 3)
+    assert.equal(provisioned, 1, 'Inactive identities cannot create replacement accounts')
 } finally { await app.close() }
 console.log('Social auth: setup status, explicit authenticated linking, impersonation rejection, account isolation, state binding/provider/replay/expiry, cancellation, role inheritance and inactive-user rejection passed.')
