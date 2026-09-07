@@ -86,7 +86,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 message: rebuild.ok ? `Watchlist saved. Matched ${savedAlertCount} alert${savedAlertCount === 1 ? '' : 's'}.` : rebuild.message,
             })
             setLastRoute({
-                label: 'Watchlist match',
+                label: 'Watchlist',
                 watchTerms: countTerms(nextTerms),
                 alertCount: savedAlertCount,
             })
@@ -647,9 +647,9 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const routeQueue = [
         {
             id: 'watchlist',
-            label: 'Watchlist match',
+            label: 'Watchlist',
             state: termCount ? `${termCount} terms` : 'terms needed',
-            detail: termCount ? 'Save the customer terms and rebuild matching alerts from collected evidence.' : 'Enter customer-owned company, domain, supplier, brand, or product terms.',
+            detail: termCount ? 'Save your watchlist and find matching alerts.' : 'Add company names, domains, brands or products to monitor.',
             tone: effectiveTermCount ? 'ok' : 'warn',
             command: termCount ? 'Save and rebuild' : 'Add terms',
             busy: busyAction === 'watchlist',
@@ -660,7 +660,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             id: 'capture',
             label: 'Live capture',
             state: captureCount ? `${captureCount} captures` : latestRunStatus || 'not collected',
-            detail: 'Run bounded public collection and add safe excerpts to the review lane.',
+            detail: 'Check public sources for new information.',
             tone: captureCount ? 'ok' : activeSourceCount ? 'warn' : 'neutral',
             command: 'Run collection',
             busy: busyAction === 'collection',
@@ -717,7 +717,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div className='min-w-0'>
                         <h3 className='text-sm font-semibold text-ui-text'>Commands</h3>
-                        <p className='mt-0.5 text-xs leading-5 text-ui-subtle'>Run watchlist, collection, case, and delivery steps from one queue.</p>
+                        <p className='mt-0.5 text-xs leading-5 text-ui-subtle'>Manage your watchlist, collect updates and send alerts.</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         {organizationId ? (
@@ -725,12 +725,9 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                                 Org watchlists
                             </Link>
                         ) : null}
-                        <Link href='#dwm-alert-review' className='inline-flex min-h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
-                            Matched alerts
-                        </Link>
                     </div>
                 </div>
-                <div className='mt-3 grid min-w-0 gap-2 sm:grid-cols-2 2xl:grid-cols-4'>
+                <div className='mt-3 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3'>
                     {routeQueue.map(action => <RouteQueueCard key={action.id} action={action} />)}
                 </div>
                 <div id='dwm-inline-webhook' data-dwm-inline-webhook className='mt-3 grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end'>
