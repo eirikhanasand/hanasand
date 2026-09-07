@@ -200,7 +200,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
     return (
         <section className='mx-auto grid w-full max-w-6xl gap-6 px-4 pt-12 pb-32 text-ui-text md:px-8 md:pt-16' aria-label='Thesis document'
             onKeyDownCapture={event => {
-                if (!canEdit || event.nativeEvent.isComposing || (event.target as HTMLElement).closest('dialog, .code-workspace, .code-access, .thesis-timetable, .thesis-timetable-controls')) return
+                if (!canEdit || event.nativeEvent.isComposing || (event.target as HTMLElement).closest('dialog, .code-workspace, .code-access, .thesis-timetable input, .thesis-timetable textarea, .thesis-timetable select, .thesis-timetable-controls')) return
                 if (!(event.metaKey || event.ctrlKey) || event.altKey) return
                 const key = event.key.toLowerCase()
                 if (key !== 'z' && key !== 'y') return

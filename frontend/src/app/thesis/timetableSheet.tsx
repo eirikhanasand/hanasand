@@ -130,7 +130,7 @@ export default function TimetableSheet({ onActivityLogChange, ...props }: SheetE
             'data-active': interaction.active?.table === index && interaction.active.row === row && interaction.active.col === col,
             onFocus: () => interaction.onSelect({ table: index, row, col }),
             onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
-                if (event.target !== event.currentTarget || event.metaKey || event.ctrlKey || event.altKey) return
+                if (event.metaKey || event.ctrlKey || event.altKey) return
                 let nextRow = row, nextCol = col
                 if (event.key === 'ArrowUp') nextRow--
                 else if (event.key === 'ArrowDown') nextRow++

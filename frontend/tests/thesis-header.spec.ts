@@ -127,7 +127,7 @@ test('sheet settings and weekly table controls remain usable above overflowing c
     await context.routeWebSocket('**/api/ws/thesis', socket => socket.close())
     await context.addCookies([{ name: 'id', value: 'eirikhanasand', url: baseURL! }, { name: 'access_token', value: 'isolated-header-owner', url: baseURL! }])
     const body = '| Week | Research | Total |\n| --- | --- | --- |\n| 2026-W30 | 2 | 2 |\n| 2026-W31 | | |\n\nKeep these notes.\n\n| Task | Hours |\n| --- | --- |\n| Kept task | 3 |\n'
-    const metadata = [{ id: 'Timetable', name: 'Timetable', title: '# Timetable controls', length: body.length }]
+    const metadata = [{ id: 'Timetable', name: 'Timetable', title: '# Timetable controls', length: body.length, activityLog: { startYear: 2026, activities: [{ id: 'kept-log', date: '2026-07-27', hours: 3, category: 'Research', description: 'Keep this logged work.' }] } }]
     const current = await (await context.request.get(baseURL + '/api/thesis')).json()
     expect((await context.request.put(baseURL + '/api/thesis', { headers: { Origin: baseURL! }, data: { ...current, body: '<!-- thesis-workspace:2 ' + encodeURIComponent(JSON.stringify(metadata)) + ' -->\n' + body } })).ok()).toBe(true)
     const page = await context.newPage()
@@ -139,6 +139,7 @@ test('sheet settings and weekly table controls remain usable above overflowing c
         const css = getComputedStyle(element)
         return [css.height, css.borderRadius, css.borderWidth, css.borderColor, css.fontSize]
     }
+    await expect(page.getByRole('button', { name: 'Insert table', exact: true })).toBeVisible()
     await expect(settings).toBeVisible()
     expect(await settings.evaluate(style)).toEqual(await page.getByRole('button', { name: 'History', exact: true }).evaluate(style))
     for (const width of [320, 768, 1440]) {
@@ -163,16 +164,28 @@ test('sheet settings and weekly table controls remain usable above overflowing c
     await panel.getByLabel('History', { exact: true }).check()
     await page.keyboard.press('Escape')
     const cell = (row: number, col: number) => page.locator(`[data-table-cell="0:${row}:${col}"]`)
-    await cell(1, 1).click()
+    await page.getByRole('button', { name: 'Week 30, 2026', exact: true }).focus()
+    await page.keyboard.press('ArrowRight')
+    await expect(cell(1, 1)).toBeFocused()
     await cell(1, 1).press('ArrowDown')
     await expect(cell(2, 1)).toBeFocused()
     await cell(2, 1).press('ArrowDown')
     await expect(cell(3, 1)).toBeFocused()
     await expect(page.getByRole('button', { name: 'Week 32, 2026', exact: true })).toBeVisible()
-    await page.getByRole('button', { name: 'Add row below 3', exact: true }).click()
+    await page.getByRole('button', { name: 'Add row below 4', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Week 33, 2026', exact: true })).toBeVisible()
-    await page.getByRole('button', { name: 'Remove row 4', exact: true }).click()
+    await page.getByRole('button', { name: 'Remove row 5', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Week 33, 2026', exact: true })).toHaveCount(0)
+    await page.keyboard.press('ControlOrMeta+z')
+    await expect(page.getByRole('button', { name: 'Week 33, 2026', exact: true })).toBeVisible()
+    await page.keyboard.press('ControlOrMeta+Shift+z')
+    await expect(page.getByRole('button', { name: 'Week 33, 2026', exact: true })).toHaveCount(0)
+    await cell(2, 1).click()
+    await page.getByRole('button', { name: 'Remove row 3', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Week 31, 2026', exact: true })).toBeVisible()
+    await expect(cell(2, 1)).toHaveText('3')
+    await expect(page.getByRole('button', { name: 'Remove row 3', exact: true })).toBeDisabled()
+    await page.getByRole('button', { name: 'Undo', exact: true }).click()
     await cell(1, 1).click()
     await page.getByRole('button', { name: 'Select table 1', exact: true }).click()
     await expect(page.locator('[data-sheet-table="0"]')).toHaveClass('thesis-selected-table')
