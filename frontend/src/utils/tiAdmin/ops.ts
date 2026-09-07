@@ -1,6 +1,7 @@
 import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
 
 export type TiAdminSource = {
+    tenantId?: string
     id: string
     name: string
     family: string
@@ -238,7 +239,7 @@ export function ageDays(since: string) {
 async function fetchResource(base: string, path: string, key: string, tenantId: string | null, page: { page?: number, limit?: number, sourceId?: string, query?: string, family?: string, lifecycle?: string, access?: string, health?: string, output?: string, matches?: string, sort?: string, direction?: string, includeCandidates?: boolean } = {}, skipCache = false): Promise<ResourceResult> {
     const resource = path.split('/').at(-1) || key
     const cacheKey = JSON.stringify([resource, base, tenantId, page])
-    if (cacheKey && useProcessCache && !skipCache) {
+    if (resource !== 'source-operations' && cacheKey && useProcessCache && !skipCache) {
         const cached = sourceInventoryCache.get(cacheKey)
         if (cached && cached.expiresAt > Date.now()) return cached.value
         if (cached) {
@@ -259,8 +260,7 @@ async function fetchResource(base: string, path: string, key: string, tenantId: 
         if (page.includeCandidates) target.searchParams.set('includeCandidates', 'true')
         const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
         const response = await fetch(target, {
-            cache: 'force-cache',
-            next: { revalidate: 5 },
+            ...(resource === 'source-operations' ? { cache: 'no-store' as const } : { cache: 'force-cache' as const, next: { revalidate: 5 } }),
             headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined,
             signal: AbortSignal.timeout(TI_ADMIN_FETCH_TIMEOUT_MS),
         })
@@ -276,7 +276,7 @@ async function fetchResource(base: string, path: string, key: string, tenantId: 
             previousCursor: stringValue(payload.previousCursor) || undefined,
             payload,
         }
-        if (cacheKey) sourceInventoryCache.set(cacheKey, { expiresAt: Date.now() + 5_000, value: result })
+        if (resource !== 'source-operations' && cacheKey) sourceInventoryCache.set(cacheKey, { expiresAt: Date.now() + 5_000, value: result })
         return result
     } catch {
         return { resource, ok: false, records: [] as ApiPayload[], total: 0, nextCursor: undefined, previousCursor: undefined, payload: {} as ApiPayload }
@@ -320,6 +320,7 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
 
     return {
         id,
+        tenantId: stringValue(record.tenantId) || undefined,
         name: textValue(record.name, id),
         family: textValue(operations?.family, record.type, 'unknown'),
         type: textValue(record.type, 'unknown'),

@@ -1,17 +1,18 @@
 import { pageNumber } from '@/utils/pagination'
 import PageNavigation from '@/components/dashboard/page-navigation'
 import Link from 'next/link'
-import { ExternalLink, Plus, RefreshCcw } from 'lucide-react'
+import { Plus, RefreshCcw } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
-import { formatTiDate, getTiAdminOverview, type TiAdminSource } from '@/utils/tiAdmin/ops'
+import { getTiAdminOverview } from '@/utils/tiAdmin/ops'
 import ManualRunButton from '../manualRunButton'
+import SourceRow from './sourceRow'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TiSourcesPage(props: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
     const params = await props.searchParams
     const page = pageNumber(params?.page)
-    const scope = value(params?.scope) === 'default' ? 'default' : 'global'
+    const scope = 'global'
     const sort = value(params?.sort) || 'source'
     const direction = value(params?.dir) === 'desc' ? 'desc' : 'asc'
     const query = value(params?.q) || ''
@@ -21,8 +22,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
     const health = value(params?.health) || ''
     const output = value(params?.output) || ''
     const matches = value(params?.matches) || ''
-    const tenantId = scope === 'default' ? 'default' : null
-    const overview = await getTiAdminOverview(tenantId, { page, limit: 50, includeSamples: false, includeCandidates: true, query, family, lifecycle, access, health, output, matches, sort, direction })
+    const overview = await getTiAdminOverview(null, { page, limit: 50, includeSamples: false, includeCandidates: true, query, family, lifecycle, access, health, output, matches, sort, direction })
     const unavailable = overview.availability.failedResources.includes('source-operations')
     const rows = overview.sources
     const filters = { q: query, family, lifecycle, access, health, output, matches }
@@ -31,17 +31,13 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
     return <DashboardPage>
         <DashboardHeader eyebrow='Threat intelligence' title='Source inventory' description='The feeds Hanasand can collect, their current health, and the customer value they produce.' actions={executable.length ? <ManualRunButton label='Run active sources' /> : undefined} />
         <DashboardPanel className='flex flex-wrap items-center justify-between gap-3 border-ui-border bg-ui-panel p-4'>
-            <div className='flex gap-2' aria-label='Source inventory scope'>
-                <Link href='/ti/sources?scope=global' className={scope === 'global' ? activeTab : tab}>Global sources</Link>
-                <Link href='/ti/sources?scope=default' className={scope === 'default' ? activeTab : tab}>Default tenant</Link>
-            </div>
             <div className='text-sm text-ui-muted'>{overview.sourcePage.total} sources · {overview.sourceTotals.executable} executable</div>
         </DashboardPanel>
 
         {unavailable ? <Unavailable /> : <>
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
-                    <div><h2 className='text-base font-semibold text-ui-text'>Production and available sources</h2><p className='mt-1 text-sm text-ui-muted'>Candidates are shown separately and are not counted as active collection feeds.</p></div>
+                    <div><h2 className='text-base font-semibold text-ui-text'>Active and inactive sources</h2><p className='mt-1 text-sm text-ui-muted'>Activate a source to include it in collection, or deactivate it to stop collection.</p></div>
                     <Link href='/ti/sources?scope=global&available=true' className='inline-flex items-center gap-2 rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:bg-ui-raised'><Plus className='h-4 w-4' /> Add source</Link>
                 </div>
                 <form className='flex flex-wrap items-center gap-2 border-b border-ui-border p-3' action='/ti/sources'>
@@ -69,26 +65,6 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
     </DashboardPage>
 }
 
-function SourceRow({ source, scope }: { source: TiAdminSource, scope: string }) {
-    const candidate = source.status !== 'active'
-    const darkweb = /dark|tor|onion/i.test(`${source.family} ${source.accessMethod} ${source.url}`)
-    return <div className='grid grid-cols-[1.55fr_0.8fr_0.85fr_0.85fr_0.8fr_0.8fr_1.35fr] gap-3 border-b border-ui-border px-4 py-3 text-sm last:border-b-0 hover:bg-ui-panel'>
-        <div className='min-w-0'><Link href={`/ti/sources/${source.id}?scope=${scope}`} className='font-semibold text-ui-text hover:text-ui-primary'>{source.name}</Link><p className='mt-1 truncate text-xs text-ui-muted'>{source.family.replaceAll('_', ' ')} · {source.owner}</p>{candidate ? <span className='mt-2 inline-flex rounded-full border border-ui-warning/35 bg-ui-warning/10 px-2 py-0.5 text-[11px] font-semibold text-ui-warning'>Available to activate</span> : null}</div>
-        <div><p className='font-semibold text-ui-text'>{darkweb ? 'Dark web' : source.accessMethod || 'Clearweb'}</p><p className='mt-1 text-xs text-ui-muted'>{source.risk} access</p></div>
-        <Status source={source} />
-        <div><p className='font-semibold text-ui-text'>{relative(source.lastContentAt)}</p><p className='mt-1 text-xs text-ui-muted'>{formatTiDate(source.lastContentAt)}</p></div>
-        <div><p className='font-semibold text-ui-text'>{source.productiveCycleCount} cycles</p><p className='mt-1 text-xs text-ui-muted'>{source.retainedEvidenceCount} captures</p></div>
-        <div><p className='font-semibold text-ui-text'>{source.customerMatchCount}</p><p className='mt-1 text-xs text-ui-muted'>customer matches</p></div>
-        <div className='flex flex-nowrap items-center gap-1.5 whitespace-nowrap'>{!candidate ? <ManualRunButton compact sourceId={source.id} label='Run' queries={source.domains} /> : null}{source.url && !darkweb ? <a href={source.url} target='_blank' rel='noopener noreferrer' className='inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-ui-border px-2 text-xs font-semibold text-ui-text hover:bg-ui-raised'>Open <ExternalLink className='h-3 w-3' /></a> : <Link href='/browser' className='inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-ui-border px-2 text-xs font-semibold text-ui-text hover:bg-ui-raised'>Preview</Link>}<Link href={`/ti/sources/${source.id}?scope=${scope}`} className='inline-flex h-8 shrink-0 items-center rounded-md border border-ui-border px-2 text-xs font-semibold text-ui-text hover:bg-ui-raised'>Details</Link></div>
-    </div>
-}
-
-function Status({ source }: { source: TiAdminSource }) {
-    const stale = source.status === 'active' && source.lastRunAt && Date.now() - Date.parse(source.lastRunAt) > source.cadenceMinutes * 120_000
-    const label = source.status === 'active' ? stale ? 'Stale' : 'Active' : source.status
-    return <div><span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${stale ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning' : source.status === 'active' ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-border text-ui-muted'}`}>{label}</span><p className='mt-1 text-xs text-ui-muted'>{source.healthState}</p></div>
-}
-
 function SortHeader({ label, field, scope, sort, direction, filters }: { label: string, field: string, scope: string, sort: string, direction: string, filters: Record<string, string> }) {
     const nextDirection = sort === field && direction === 'asc' ? 'desc' : 'asc'
     return <Link href={pageHref(scope, field, nextDirection, 1, filters)} className='inline-flex items-center gap-1 whitespace-nowrap hover:text-ui-text' title={`Sort by ${label}`}><span>{label}</span><span className='inline-flex flex-col text-[8px] leading-[7px]'><span className={sort === field && direction === 'asc' ? 'text-ui-primary' : 'text-ui-muted/45'}>▲</span><span className={sort === field && direction === 'desc' ? 'text-ui-primary' : 'text-ui-muted/45'}>▼</span></span></Link>
@@ -101,11 +77,9 @@ function pageHref(scope: string, sort: string, direction: string, page: number, 
 }
 
 function FilterSelect({ name, value, label, options }: { name: string, value: string, label: string, options: string[] }) {
-    return <select name={name} defaultValue={value} aria-label={label} className='h-8 rounded-md border border-ui-border bg-ui-canvas px-2 text-xs text-ui-text outline-none'><option value=''>{label}</option>{options.map(option => <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>)}</select>
+    return <select name={name} defaultValue={value} aria-label={label} className='h-8 rounded-md border border-ui-border bg-ui-canvas px-2 text-xs text-ui-text outline-none'><option value=''>{label}</option>{options.map(option => <option key={option} value={option}>{option === 'candidate' ? 'Inactive' : option.replaceAll('_', ' ')}</option>)}</select>
 }
 
 function Unavailable() { return <DashboardPanel className='grid min-h-80 place-items-center border-ui-warning/40 bg-ui-panel p-8 text-center'><div><RefreshCcw className='mx-auto h-8 w-8 text-ui-warning' /><h2 className='mt-4 text-xl font-semibold text-ui-text'>Source inventory is temporarily unavailable</h2><p className='mt-2 text-sm text-ui-muted'>The source service did not return an inventory. No zero-source result was inferred.</p><Link href='/ti/sources' className='mt-5 inline-flex rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas'>Retry</Link></div></DashboardPanel> }
 function value(input: string | string[] | undefined) { return Array.isArray(input) ? input[0] : input }
-function relative(value: string) { const age = Date.now() - Date.parse(value); if (!Number.isFinite(age)) return 'not recorded'; const minutes = Math.max(0, Math.round(age / 60_000)); return minutes < 60 ? `${minutes}m ago` : minutes < 2_880 ? `${Math.round(minutes / 60)}h ago` : `${Math.round(minutes / 1_440)}d ago` }
 const tab = 'rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:bg-ui-raised'
-const activeTab = 'rounded-md bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas'
