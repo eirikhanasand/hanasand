@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+// @ts-expect-error Bun supplies this module for focused checks.
+import { mock } from 'bun:test'
+import { hasAppSidebar } from '../src/utils/routes/appRoutes'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { renderToReadableStream } from 'react-dom/server'
@@ -39,12 +42,24 @@ try {
     const html = await new Response(await renderToReadableStream(await Page())).text()
     for (const key of keys) assert(html.includes(`data-api-response-example="${key}"`), `Example not rendered: ${key}`)
     assert(html.includes('Fictional example'))
-    assert(html.includes('href="/api/openapi/ti"'))
+    assert(html.includes('href="/api/openapi"'))
     assert(html.includes('Missing or invalid credentials'), 'Resolve OpenAPI response references to descriptions')
     assert(!html.includes('#/components/responses/Unauthorized'))
+    assert(!html.includes('href="/api/openapi" target="_blank"'), 'Browsing the spec must stay in the same tab')
+    mock.module('next/headers', () => ({ cookies: async () => ({ get: () => ({ value: 'docs-test' }) }) }))
+    const { default: Preview } = await import('../src/app/api/openapi/page')
+    const preview = await new Response(await renderToReadableStream(await Preview())).text()
+    assert(preview.includes('aria-label="OpenAPI specification"'))
+    assert(preview.includes('href="/api/openapi/ti" target="_blank" rel="noopener noreferrer"'))
+    assert(preview.includes('Open raw JSON in a new tab'))
+    globalThis.fetch = (async () => new Response('', { status: 503 })) as typeof fetch
+    const unavailable = await new Response(await renderToReadableStream(await Preview())).text()
+    assert(unavailable.includes('role="alert"'))
+    assert(unavailable.includes('temporarily unavailable'))
+    assert(hasAppSidebar('/api/openapi'))
 } finally {
     globalThis.fetch = originalFetch
 }
 const customerLinks = navigationLinks(getDashboardNavigation({ id: 'user_example', isAdmin: false, canManageSystem: false, canManageContent: false }))
-assert(customerLinks.some(link => link.label === 'OpenAPI JSON' && link.href === '/api/openapi/ti'))
+assert(customerLinks.some(link => link.label === 'OpenAPI JSON' && link.href === '/api/openapi'))
 console.log('All 54 endpoints render fictional examples; public examples validate against OpenAPI and customer navigation links the specification.')
