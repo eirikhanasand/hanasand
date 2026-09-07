@@ -36,7 +36,7 @@ export default function SourceRow({ source: initialSource, scope }: { source: Ti
     const darkweb = /dark|tor|onion/i.test(`${source.family} ${source.accessMethod} ${source.url}`)
     return <div className='grid grid-cols-[1.55fr_0.8fr_0.85fr_0.85fr_0.8fr_0.8fr_1.35fr] gap-3 border-b border-ui-border px-4 py-3 text-sm last:border-b-0 hover:bg-ui-panel'>
         <div className='min-w-0'><Link href={`/ti/sources/${source.id}?scope=${scope}`} className='font-semibold text-ui-text hover:text-ui-primary'>{source.name}</Link><p className='mt-1 truncate text-xs text-ui-muted'>{source.family.replaceAll('_', ' ')} · {source.owner}</p></div>
-        <div><p className='font-semibold text-ui-text'>{darkweb ? 'Dark web' : source.accessMethod || 'Clearweb'}</p><p className='mt-1 text-xs text-ui-muted'>{source.risk} access</p></div>
+        <div><p className='font-semibold text-ui-text'>{darkweb ? 'Dark web' : source.accessMethod || 'Clearweb'}</p></div>
         <Status source={source} />
         <div><p className='font-semibold text-ui-text'>{relative(source.lastContentAt)}</p><p className='mt-1 text-xs text-ui-muted'>{formatTiDate(source.lastContentAt)}</p></div>
         <div><p className='font-semibold text-ui-text'>{source.productiveCycleCount} cycles</p><p className='mt-1 text-xs text-ui-muted'>{source.retainedEvidenceCount} captures</p></div>
