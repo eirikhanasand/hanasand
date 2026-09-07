@@ -169,7 +169,7 @@ type PortalProps = {
     view?: DwmView
 }
 
-export type DwmView = 'overview' | 'cases' | 'watchlists' | 'sources' | 'delivery' | 'actors' | 'actions'
+export type DwmView = 'overview' | 'cases' | 'watchlists' | 'sources' | 'delivery' | 'actors' | 'actions' | 'alerts'
 
 export type DwmDataHealth = {
     snapshot: DataHealthItem
@@ -265,7 +265,9 @@ export function DwmAnalystPortal({
     useEffect(() => {
         const controller = new AbortController()
         const params = dwmScopeSearchParams(tenantId, organizationId)
-        if (view === 'cases') {
+        if (view === 'alerts') {
+            void refreshDwmAlerts(params, controller.signal, setAlerts, setDataHealth)
+        } else if (view === 'cases') {
             void refreshCases(params, controller.signal, setCasesState)
             void refreshDwmOperations(params, controller.signal, setOperations, setDataHealth)
             void refreshDwmAlerts(params, controller.signal, setAlerts, setDataHealth)
@@ -407,13 +409,13 @@ export function DwmAnalystPortal({
         )
     }
 
-    if (view === 'actions') {
-        return (
-            <div className='grid gap-3'>
-                {workflowActions}
-                <AlertReviewPanel alerts={alerts} busyAction={busyAction} onOpenCase={openCaseFromAlert} organizationId={organizationId} />
-            </div>
-        )
+    if (view === 'actions') return workflowActions
+
+    if (view === 'alerts') {
+        return <div className='grid gap-3'>
+            {actionMessage && <p role='alert' className={`rounded-lg border p-3 text-sm ${actionMessage.ok ? 'border-ui-border text-ui-text' : 'border-ui-danger text-ui-danger'}`}>{actionMessage.text}</p>}
+            <AlertReviewPanel alerts={alerts} busyAction={busyAction} onOpenCase={openCaseFromAlert} organizationId={organizationId} health={dataHealth.alerts} onRetry={() => setRefreshVersion(version => version + 1)} />
+        </div>
     }
 
     if (view === 'cases') {
@@ -423,19 +425,21 @@ export function DwmAnalystPortal({
     return null
 }
 
-function AlertReviewPanel({ alerts, busyAction, onOpenCase, organizationId }: {
+function AlertReviewPanel({ alerts, busyAction, onOpenCase, organizationId, health, onRetry }: {
     alerts: PortalAlert[]
     busyAction: string | null
     onOpenCase: (alert: PortalAlert) => Promise<void>
     organizationId?: string
+    health: DataHealthItem
+    onRetry: () => void
 }) {
     return (
         <section id='dwm-alert-review' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
             <div className='border-b border-ui-border px-4 py-3'>
-                <h2 className='text-base font-semibold text-ui-text'>Matched alerts</h2>
+                <h1 className='text-lg font-semibold text-ui-text'>Matched alerts</h1>
                 <p className='mt-1 text-xs leading-5 text-ui-muted'>Real retained matches for this organization. Open a case only from an alert with persisted source evidence.</p>
             </div>
-            {!alerts.length ? <p className='px-4 py-8 text-sm text-ui-muted'>No retained alerts in this organization.</p> : (
+            {health.state === 'error' ? <div role='alert' className='px-4 py-6 text-sm text-ui-danger'>Alerts could not be loaded. <button type='button' onClick={onRetry} className='ml-2 underline'>Retry</button></div> : health.state !== 'live' ? <p className='px-4 py-8 text-sm text-ui-muted'>Loading matched alerts…</p> : !alerts.length ? <p className='px-4 py-8 text-sm text-ui-muted'>No retained alerts in this organization.</p> : (
                 <div className='divide-y divide-ui-border'>
                     {alerts.map(alert => {
                         const caseId = alertCaseId(alert)
@@ -448,7 +452,7 @@ function AlertReviewPanel({ alerts, busyAction, onOpenCase, organizationId }: {
                                     <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{stateLabel(alert.severity)} · {stateLabel(alert.sourceFamily)} · {evidenceCount} evidence row{evidenceCount === 1 ? '' : 's'}</p>
                                 </div>
                                 {href ? <Link href={href} className='inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text'>Open case</Link> : (
-                                    <button type='button' onClick={() => void onOpenCase(alert)} disabled={busyAction === `case:${alert.id}`} className='inline-flex min-h-9 items-center justify-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-canvas disabled:cursor-wait disabled:opacity-60'>
+                                    <button type='button' onClick={() => void onOpenCase(alert)} disabled={busyAction === `case:${alert.id}` || !actionReady(alert, 'case_link') || alertCaptureIds(alert).length === 0} className='inline-flex min-h-9 items-center justify-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-canvas disabled:cursor-wait disabled:opacity-60'>
                                         {busyAction === `case:${alert.id}` ? 'Opening…' : 'Open case'}
                                     </button>
                                 )}
@@ -842,7 +846,7 @@ function PublicTiDwmIntake({ handoff, tenantId, organizationId, activeSourceCoun
 }) {
     const sourceHref = '/ti/sources'
     const orgHref = organizationId ? `/organizations?organizationId=${encodeURIComponent(organizationId)}` : `/organizations?tenantId=${encodeURIComponent(tenantId)}`
-    const actionsHref = organizationId ? `/dwm/actions?organizationId=${encodeURIComponent(organizationId)}#dwm-alert-review` : '/dwm/actions#dwm-alert-review'
+    const actionsHref = organizationId ? `/dwm/alerts?organizationId=${encodeURIComponent(organizationId)}` : '/dwm/alerts'
     const casesHref = organizationId ? `/cases?organizationId=${encodeURIComponent(organizationId)}` : '/cases'
 
     if (!handoff.ok) {

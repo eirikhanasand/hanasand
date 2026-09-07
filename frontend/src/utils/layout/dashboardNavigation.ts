@@ -28,6 +28,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
             ]),
             group('Monitoring', [
                 link('Dark web monitoring', '/dwm'),
+                link('Matched alerts', '/dwm/alerts'),
                 link('Monitored actors', '/dwm/actors'),
                 link('Watchlists', '/dwm/watchlists'),
                 link('Security findings', '/mill'),

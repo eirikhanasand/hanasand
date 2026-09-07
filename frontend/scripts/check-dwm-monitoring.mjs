@@ -18,7 +18,8 @@ let failReads = false
 let failCase = true
 let caseBody
 const calls = []
-const css = (await Promise.all((await readdir('.next/static/css')).filter(file => file.endsWith('.css')).map(file => readFile(`.next/static/css/${file}`, 'utf8')))).join('\n')
+const cssDirectory = process.env.DWM_CSS_DIR || '.next/static/css'
+const css = (await Promise.all((await readdir(cssDirectory)).filter(file => file.endsWith('.css')).map(file => readFile(`${cssDirectory}/${file}`, 'utf8')))).join('\n')
 const server = Bun.serve({ port: 0, async fetch(request) {
     const url = new URL(request.url)
     if (url.pathname === '/app.js') return new Response(bundle, { headers: { 'content-type': 'text/javascript' } })
@@ -39,7 +40,7 @@ const server = Bun.serve({ port: 0, async fetch(request) {
 } })
 const build = await Bun.build({ entrypoints: ['monitoring-fixture'], target: 'browser', plugins: [{ name: 'fixture', setup(builder) {
     builder.onResolve({ filter: /^(monitoring-fixture|next\/link|next\/navigation)$/ }, args => ({ path: args.path, namespace: 'fixture' }))
-    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/link' ? 'export default function Link(props){return <a {...props}/>}' : args.path === 'next/navigation' ? 'export const useRouter=()=>({push:href=>{window.caseNavigation=href},refresh:()=>{}});export const useSearchParams=()=>new URLSearchParams(location.search);' : `import {createRoot} from 'react-dom/client';import {DwmAnalystPortal} from './src/app/dashboard/dwm/dwm-analyst-portal';createRoot(document.getElementById('root')).render(<DwmAnalystPortal tenantId="org-one" organizationId="org-one" view={location.pathname.includes('actors')?'actors':'overview'} snapshot={${JSON.stringify({ ...snapshot, watchlist: [], actorOverviews: [] })}} operations={null} alerts={[]} deliveries={[]} dataHealth={${JSON.stringify(health)}}/>);` }))
+    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/link' ? 'export default function Link(props){return <a {...props}/>}' : args.path === 'next/navigation' ? 'export const useRouter=()=>({push:href=>{window.caseNavigation=href},refresh:()=>{}});export const useSearchParams=()=>new URLSearchParams(location.search);' : `import {createRoot} from 'react-dom/client';import {DwmAnalystPortal} from './src/app/dashboard/dwm/dwm-analyst-portal';createRoot(document.getElementById('root')).render(<DwmAnalystPortal tenantId="org-one" organizationId="org-one" view={location.pathname.includes('actors')?'actors':location.pathname.includes('alerts')?'alerts':location.pathname.includes('actions')?'actions':'overview'} snapshot={${JSON.stringify({ ...snapshot, watchlist: [], actorOverviews: [] })}} operations={null} alerts={[]} deliveries={[]} dataHealth={${JSON.stringify(health)}}/>);` }))
 } }] })
 assert(build.success, build.logs.join('\n'))
 bundle = await build.outputs[0].text()
@@ -92,6 +93,31 @@ try {
     failReads = false
     await page.getByRole('alert').filter({ hasText: 'Findings could not be loaded' }).getByRole('button', { name: 'Retry' }).click()
     await page.getByText('2 findings · 1 needing review', { exact: true }).waitFor()
+    await page.goto(`${server.url}dwm/actions`)
+    assert.equal(await page.getByRole('heading', { name: 'Matched alerts', exact: true }).count(), 0)
+    await page.goto(`${server.url}dwm/alerts`)
+    await page.getByRole('heading', { name: 'Matched alerts', exact: true }).waitFor()
+    await page.getByText('Acme', { exact: true }).waitFor()
+    assert.equal(await page.locator('#dwm-workflow-actions').count(), 0)
+    assert(await page.getByRole('button', { name: 'Open case', exact: true }).nth(1).isDisabled())
+    failCase = true
+    await page.getByRole('button', { name: 'Open case', exact: true }).first().click()
+    await page.getByRole('alert').filter({ hasText: 'Case service unavailable' }).waitFor()
+    failCase = false
+    await page.getByRole('button', { name: 'Open case', exact: true }).first().click()
+    await page.waitForFunction(() => window.caseNavigation?.includes('case-one'))
+    assert.equal(caseBody.organizationId, 'org-one')
+    for (const width of [390, 1440]) {
+        await page.setViewportSize({ width, height: 900 })
+        assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Alerts overflow at ${width}`)
+    }
+    failReads = true
+    await page.goto(`${server.url}dwm/alerts`)
+    await page.getByRole('alert').filter({ hasText: 'Alerts could not be loaded' }).waitFor()
+    assert.equal(await page.getByText('No retained alerts in this organization.', { exact: true }).count(), 0)
+    failReads = false
+    await page.getByRole('button', { name: 'Retry', exact: true }).click()
+    await page.getByText('Acme', { exact: true }).waitFor()
     assert.deepEqual(errors, [])
     console.log('DWM browser passed: overview, scoped requests, review filter, retained evidence, case failure/retry, pagination, complete actor links, API failure states and responsive layout.')
 } finally { await browser.close(); server.stop(true) }
