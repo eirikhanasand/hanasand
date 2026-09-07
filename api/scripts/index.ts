@@ -25,6 +25,8 @@ const coreTasks: TestTask[] = [
     scriptTask('database-pool-error', 'Checked-out connection recovery', 'check-database-pool-error.ts'),
     scriptTask('auth-rate-recovery', 'Bounded pre-handler recovery without action replay', 'check-auth-rate-recovery.ts'),
     scriptTask('session-recovery', 'Replica session validation before monitor convergence', 'check-session-recovery.ts'),
+    scriptTask('social-oidc', 'Google and Apple identity verification', 'check-social-oidc.ts'),
+    scriptTask('social-auth', 'Social sign-in account boundaries', 'check-social-auth.ts'),
     scriptTask('auth-service', 'Independent authentication worker', 'check-auth-service.ts'),
     scriptTask('generated-projects', 'Generated API, worker and bot behavior', 'check-generated-projects.ts'),
     scriptTask('generated-website', 'Generated website files and styles', 'check-generated-website.ts'),

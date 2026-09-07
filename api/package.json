@@ -67,6 +67,7 @@
     "fastify-plugin": "^5.1.0",
     "gray-matter": "^4.0.3",
     "ipaddr.js": "2.2.0",
+    "jose": "6.2.2",
     "node-cron": "^4.2.1",
     "nodemailer": "^8.0.5",
     "openapi-fetch": "^0.17.0",

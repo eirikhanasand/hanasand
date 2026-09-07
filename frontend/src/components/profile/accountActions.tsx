@@ -1,5 +1,6 @@
 'use client'
 
+import SocialSignIn from '@/components/login/socialSignIn'
 import { DashboardPanel } from '@/components/dashboard/ui'
 import { removeCookies } from '@/utils/cookies/cookies'
 import { Check, Fingerprint, LogOut, Pencil, Trash2, X } from 'lucide-react'
@@ -179,6 +180,7 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
                     </button>
                 </div>
             </div>
+            <SocialSignIn link />
             {message && <p className='mt-3 text-sm text-ui-danger'>{message}</p>}
             <div className='mt-4 grid gap-2'>
                 {passkeys.map(passkey => (

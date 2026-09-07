@@ -9,7 +9,7 @@ RUN bun install
 
 FROM deps AS auth-runtime
 COPY --chown=bun:bun . .
-RUN DB_PASSWORD=build-test DB_HOST=localhost VM_API_TOKEN=build-test bun run test --only=auth-service,auth-boundary
+RUN DB_PASSWORD=build-test DB_HOST=localhost VM_API_TOKEN=build-test bun run test --only=auth-service,auth-boundary,social-oidc,social-auth
 RUN bun run lint
 ENV NODE_ENV=production AUTH_SERVICE_ONLY=1
 USER bun
