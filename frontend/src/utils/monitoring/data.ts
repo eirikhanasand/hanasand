@@ -47,7 +47,11 @@ export async function getTrafficMetrics(domain?: string) {
         params.set('domain', domain)
     }
 
-    return await requestService<TrafficMetrics>('cdn', `traffic/metrics?${params.toString()}`)
+    // A cold domain snapshot can take longer than a normal cached request.
+    // Its Suspense boundary keeps the page usable while that calculation finishes.
+    return await requestService<TrafficMetrics>('cdn', `traffic/metrics?${params.toString()}`, {
+        signal: AbortSignal.timeout(60000),
+    })
 }
 
 export async function getTrafficRecords(domain?: string, limit = 12, page = 1) {
