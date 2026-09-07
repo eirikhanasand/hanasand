@@ -12,7 +12,9 @@ const checks: Array<{ id: string, name: string, prompt: string, rule: JsonRule }
         id: name.toLowerCase(), name: `Host ${name}`, prompt: `Alert when host ${name} usage exceeds 80%.`,
         rule: { path: `host.${path}`, aggregate: 'max' as const, operator: 'gt' as const, value: 80 },
     })),
-    ...[['temperature', 'temperatures'], ['power', 'power']].map(([name, path]) => ({
+    { id: 'temperature', name: 'Host temperature', prompt: 'Alert when any host temperature sensor exceeds 50°C.',
+        rule: { path: 'host.temperatures.*.value', aggregate: 'max', operator: 'gt', value: 50 } },
+    ...[['power', 'power']].map(([name, path]) => ({
         id: name, name: `Host ${name}`, prompt: `Alert above 90% of each reported hardware ${name} limit, rounded down. Missing limits are unavailable.`,
         rule: { path: `host.${path}.*.margin`, aggregate: 'min' as const, operator: 'lt' as const, value: 0 },
     })),

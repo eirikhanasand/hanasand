@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, PanelRightClose, PanelRightOpen, Check, Clock3, Filter, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, AlertTriangle, PanelRightClose, PanelRightOpen, Check, Clock3, Filter, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import {
     createAutomation,
     deleteAutomation,
@@ -18,6 +18,7 @@ import type { InitialAutomationData } from '@/utils/automations/server'
 import useAutomationHistory from './useAutomationHistory'
 import ErrorNotice from '@/components/error/errorNotice'
 import CertificateStatus from './certificateStatus'
+import { healthCheckStatus, healthCheckTag, sortHealthChecks, type HealthSortKey } from './healthCheckSorting'
 import JsonRuleForm, { defaultJsonRule } from './jsonRuleForm'
 
 const inputClass = 'h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
@@ -47,6 +48,7 @@ const defaultDraft = (): AutomationPayload => ({
 export default function AutomationsClient({ setup, initial }: { setup?: 'dwm', initial: InitialAutomationData }) {
     const [automations, setAutomations] = useState<AgentAutomation[]>(initial.automations)
     const [detailsOpen, setDetailsOpen] = useState(true)
+    const [sort, setSort] = useState<{ key: HealthSortKey, direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' })
     const [caseSearch, setCaseSearch] = useState('')
     const [searchOpen, setSearchOpen] = useState(false)
     const searchInput = useRef<HTMLInputElement>(null)
@@ -198,9 +200,19 @@ export default function AutomationsClient({ setup, initial }: { setup?: 'dwm', i
                             {!editing ? <button type='button' onClick={beginCreate} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90'><Plus className='h-4 w-4' />Create automation</button> : null}
                         </div>
                     </div>
-                    <div className='hidden grid-cols-2 gap-3 border-b border-ui-border px-4 py-2 text-xs text-ui-muted md:grid md:grid-cols-[minmax(9rem,1.3fr)_minmax(7rem,0.8fr)_minmax(6rem,0.7fr)_minmax(8rem,1fr)_minmax(5rem,0.6fr)_minmax(5rem,0.6fr)]'><span>Name</span><span>Status</span><span>Cert</span><span>History</span><span>Uptime</span><span>Tags</span></div>
+                    <div className='flex gap-3 overflow-x-auto border-b border-ui-border px-4 py-2 text-xs text-ui-muted md:grid md:grid-cols-[minmax(9rem,1.3fr)_minmax(7rem,0.8fr)_minmax(6rem,0.7fr)_minmax(8rem,1fr)_minmax(5rem,0.6fr)_minmax(5rem,0.6fr)]'>
+                        {(['name', 'status', 'cert', 'history', 'uptime', 'tags'] as const).map(key => {
+                            const label = key[0].toUpperCase() + key.slice(1)
+                            const active = sort.key === key
+                            const Icon = active ? sort.direction === 'asc' ? ArrowUp : ArrowDown : ArrowUpDown
+                            return <button key={key} type='button' aria-label={`Sort by ${label}`} aria-pressed={active} title={`${label}${key === 'history' ? ' (unhealthy recent checks)' : ''}: sort ${active && sort.direction === 'asc' ? 'descending' : 'ascending'}`} onClick={() => setSort({ key, direction: active && sort.direction === 'asc' ? 'desc' : 'asc' })} className={`inline-flex shrink-0 items-center gap-1 rounded py-1 text-left hover:text-ui-text focus-visible:outline-2 focus-visible:outline-ui-primary ${active ? 'font-semibold text-ui-text' : ''}`}>
+                                {label}<Icon className='h-3 w-3 shrink-0' aria-hidden='true' />
+                            </button>
+                        })}
+                    </div>
+                    <span className='sr-only' role='status'>Sorted by {sort.key}, {sort.direction === 'asc' ? 'ascending' : 'descending'}.</span>
                     <div className='divide-y divide-ui-border'>
-                        {automations.filter(automation => !caseSearch.trim() || [automation.name, ...(automation.caseNumbers || [])].some(value => value.toLowerCase().includes(caseSearch.trim().toLowerCase()))).map(automation => <AutomationRow key={automation.id} automation={automation} selected={selected?.id === automation.id} onClick={() => { setDetailsOpen(true); void select(automation) }} />)}
+                        {sortHealthChecks(automations, sort.key, sort.direction).filter(automation => !caseSearch.trim() || [automation.name, ...(automation.caseNumbers || [])].some(value => value.toLowerCase().includes(caseSearch.trim().toLowerCase()))).map(automation => <AutomationRow key={automation.id} automation={automation} selected={selected?.id === automation.id} onClick={() => { setDetailsOpen(true); void select(automation) }} />)}
                     </div>
                 </section>
 
@@ -250,15 +262,15 @@ function AutomationRow({ automation, selected, onClick }: { automation: AgentAut
     const missingUrl = automation.actionType === 'agent_prompt' && !automation.targetUrl
     const failed = Boolean(automation.consecutiveFailures || automation.lastStatus === 'failed' || missingUrl)
     const warning = automation.lastStatus === 'warning'
-    const state = missingUrl ? 'Missing URL' : failed ? automation.monitoringType === 'json' ? 'Critical' : 'Needs attention' : warning ? 'Warning' : automation.expectedDown || automation.upsideDown ? 'Maintenance' : automation.status === 'active' ? 'Healthy' : 'Paused'
-    return <div className={`relative grid [&>span]:pointer-events-none w-full grid-cols-2 items-center gap-3 border-t border-ui-border px-4 py-3 text-left transition hover:bg-ui-raised md:grid-cols-[minmax(9rem,1.3fr)_minmax(7rem,0.8fr)_minmax(6rem,0.7fr)_minmax(8rem,1fr)_minmax(5rem,0.6fr)_minmax(5rem,0.6fr)] ${selected ? 'bg-ui-primary/5' : ''}`}>
+    const state = healthCheckStatus(automation)
+    return <div data-health-check={automation.id} className={`relative grid [&>span]:pointer-events-none w-full grid-cols-2 items-center gap-3 border-t border-ui-border px-4 py-3 text-left transition hover:bg-ui-raised md:grid-cols-[minmax(9rem,1.3fr)_minmax(7rem,0.8fr)_minmax(6rem,0.7fr)_minmax(8rem,1fr)_minmax(5rem,0.6fr)_minmax(5rem,0.6fr)] ${selected ? 'bg-ui-primary/5' : ''}`}>
         <button type='button' onClick={onClick} aria-label={automation.name} className='absolute inset-0 rounded focus-visible:outline-2 focus-visible:outline-ui-primary' />
         <span className='min-w-0 truncate text-sm font-semibold text-ui-text'>{automation.name}</span>
         <span className={`w-fit rounded-full px-2 py-1 text-xs font-semibold ${failed ? 'bg-ui-danger/10 text-ui-danger' : warning ? 'bg-ui-warning/10 text-ui-warning' : automation.status === 'active' ? 'bg-ui-success/10 text-ui-success' : 'bg-ui-raised text-ui-muted'}`}>{state}</span>
         <CertificateStatus automation={automation} />
         <span className='flex items-center gap-1' aria-label='History'>{historyBars(automation)}</span>
         <span className='text-xs text-ui-muted'>{uptimeLabel(automation)}</span>
-        <span className='text-xs text-ui-muted'>{automation.actionType === 'agent_prompt' ? 'Monitoring' : labelForType(automation.actionType)}</span>
+        <span className='text-xs text-ui-muted'>{healthCheckTag(automation)}</span>
     </div>
 }
 
@@ -298,7 +310,7 @@ function AutomationDetails({ automation, runs, history, historyFrom, historyTo, 
     const missingUrl = automation.actionType === 'agent_prompt' && !automation.targetUrl
     const failed = Boolean(automation.consecutiveFailures || automation.lastStatus === 'failed' || missingUrl)
     const warning = automation.lastStatus === 'warning'
-    const state = missingUrl ? 'Missing URL' : failed ? automation.monitoringType === 'json' ? 'Critical' : 'Needs attention' : warning ? 'Warning' : automation.expectedDown || automation.upsideDown ? 'Maintenance' : automation.status === 'active' ? 'Healthy' : 'Paused'
+    const state = healthCheckStatus(automation)
     const visibleRuns = runs
     const bottom = useRef<HTMLDivElement>(null)
     useEffect(() => {
@@ -364,14 +376,6 @@ function validateDraft(draft: AutomationPayload) {
     }
     if (!draft.prompt.trim()) return { field: 'prompt' as const, message: 'Description is required.' }
     return null
-}
-
-function labelForType(type: AgentAutomation['actionType']) {
-    if (type === 'mail_health_check') return 'Mail health'
-    if (type === 'system_alert') return 'System alert'
-    if (type === 'organization_report') return 'Organization report'
-    if (type === 'echo') return 'Delivery test'
-    return 'Monitoring'
 }
 
 function formatDate(value?: string | null) {

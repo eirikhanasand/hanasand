@@ -30,3 +30,11 @@ for (const [path, name, unit] of [['temperatures', 'Temperature', '°C'], ['powe
         expect(hostCheckMessage({ ...rule, value: 5 }, 12, false)).toBeNull()
     })
 }
+
+test('temperature shows actual hottest reading and the configured Celsius threshold', () => {
+    const rule: JsonRule = { path: 'host.temperatures.*.value', operator: 'gt', aggregate: 'max', value: 50 }
+    expect(hostCheckMessage(rule, 39, false)).toBe('Temperature is normal: 39°C (alert above 50°C).')
+    expect(hostCheckMessage(rule, 51, true)).toBe('Temperature is high: 51°C (alert above 50°C).')
+    expect(hostCheckMessage(rule, 50, false)).toBe('Temperature is normal: 50°C (alert above 50°C).')
+    expect(hostCheckMessage(rule, null, false)).toBeNull()
+})

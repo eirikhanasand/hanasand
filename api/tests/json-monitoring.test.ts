@@ -22,3 +22,10 @@ test('changing threshold observations share one case; source failures remain sep
     expect(fingerprint('JSON threshold exceeded: value = 93')).toBe(fingerprint('JSON threshold exceeded: value = 94'))
     expect(fingerprint('JSON source unavailable')).not.toBe(fingerprint('JSON threshold exceeded: value = 93'))
 })
+
+test('temperature threshold evaluates actual sensor values, including sensors without hardware limits', () => {
+    const temperature = normalizeJsonRule({ path: 'host.temperatures.*.value', aggregate: 'max', operator: 'gt', value: 50 })
+    expect(evaluateJsonRule({ host: { temperatures: [{ value: 30, margin: null }, { value: 50, margin: 34 }] } }, temperature)).toEqual({ exceeded: false, observed: 50 })
+    expect(evaluateJsonRule({ host: { temperatures: [{ value: 50.1, margin: null }, { value: 30, margin: 54 }] } }, temperature)).toEqual({ exceeded: true, observed: 50.1 })
+    expect(() => evaluateJsonRule({ host: { temperatures: [] } }, temperature)).toThrow('unavailable')
+})

@@ -12,6 +12,7 @@ const bun = process.execPath
 
 const tasks: TestTask[] = [
     { id: 'social-proxy', title: 'Google and Apple callback boundaries', command: [bun, 'scripts/check-social-proxy.ts'] },
+    { id: 'health-check-sorting', title: 'Health check column sorting', command: [bun, 'test', 'tests/health-check-sorting.test.ts'] },
     { id: 'password-policy', title: 'Password requirements', command: [bun, 'test', 'tests/password-policy.test.ts'] },
     { id: 'timetable', title: 'Dated timetable activity totals and persistence', command: [bun, 'test', 'tests/timetable.test.ts'] },
     { id: 'code-access', title: 'Code access sessions and login limits', command: [bun, 'test', 'tests/code-access.test.ts'] },
