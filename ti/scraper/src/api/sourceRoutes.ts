@@ -57,7 +57,7 @@ export async function updateSource(request: Request, options: ApiServerOptions, 
 async function sourceAdminAccess(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
   const authentication = await authenticateRequest(request, options);
   if (authentication.error) return authentication.error;
-  if (!authentication.identity!.roles.some((role) => ["owner", "admin", "source_admin", "source_operator"].includes(role))) {
+  if (!authentication.identity!.roles.some((role) => ["system_admin", "administrator", "owner", "admin", "source_admin", "source_operator"].includes(role))) {
     return json({ error: { code: "source_admin_forbidden", message: "Source changes require a source administrator role" } }, 403);
   }
 }
