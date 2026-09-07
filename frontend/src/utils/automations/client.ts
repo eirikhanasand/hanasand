@@ -151,12 +151,12 @@ export function fetchAutomations(scope?: 'personal') {
     return request<{ automations: AgentAutomation[], canManageSystem?: boolean }>(`/automations${scope ? '?scope=personal' : ''}`)
 }
 
-export function fetchAutomation(id: string, options: { cursor?: string, from?: string, to?: string } = {}) {
+export function fetchAutomation(id: string, options: { page?: number, from?: string, to?: string } = {}) {
     const query = new URLSearchParams()
-    if (options.cursor) query.set('cursor', options.cursor)
+    query.set('page', String(options.page || 1))
     if (options.from) query.set('from', new Date(options.from).toISOString())
     if (options.to) query.set('to', new Date(options.to).toISOString())
-    return request<{ automation: AgentAutomation, runs: AgentAutomationRun[], issues?: MonitoringIssue[], total: number, nextCursor: string | null }>(`/automations/${id}?${query}`)
+    return request<{ automation: AgentAutomation, runs: AgentAutomationRun[], issues?: MonitoringIssue[], total: number, nextPage: number | null }>(`/automations/${id}?${query}`)
 }
 
 export function createAutomation(payload: AutomationPayload) {

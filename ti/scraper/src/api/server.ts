@@ -1,3 +1,4 @@
+import { paginationCursor } from "./pagination.ts";
 import { buildDarkwebIndexStatus, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { getOrganizationEntitlementReadiness, getOrganizationEntitlements, upsertOrganizationEntitlements } from "./dwmEntitlementRoutes.ts";
 import { buildDwmSourcePackWorkerReadinessSnapshot, createDwmSourceRequest } from "./dwmSourceRequestRoute.ts";
@@ -73,6 +74,10 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
   if (options.ready === false) return error("service_starting", "Source storage is still loading; retry shortly.", 503);
   const url = new URL(request.url);
   try {
+    if (url.searchParams.has("page")) {
+      try { paginationCursor(url.searchParams, 500); }
+      catch { return error("invalid_page", "Page must be a positive whole number; use page without cursor.", 400); }
+    }
     if (requiresAuthenticatedRequest(url.pathname)) {
       const authentication = await authenticateOperatorRequest(request, options);
       if (authentication.error) return authentication.error;
@@ -140,7 +145,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       if (accessError) return accessError;
       return collectionSchedulerStatus(options, undefined, scope.tenantId, {
         limit: numberQuery(url.searchParams.get("limit")),
-        cursor: numberQuery(url.searchParams.get("cursor"))
+        cursor: Number(paginationCursor(url.searchParams, Math.max(1, Math.min(500, numberQuery(url.searchParams.get("limit")) ?? 100))) ?? 0)
       });
     }
     if (url.pathname === "/v1/ops/collection-scheduler" && request.method === "POST") return updateCollectionSchedulerControl(request, options);
@@ -171,7 +176,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
         organizationId,
         tenantId: scope.tenantId,
         limit: numberQuery(url.searchParams.get("limit")),
-        cursor: url.searchParams.get("cursor") ?? undefined,
+        cursor: paginationCursor(url.searchParams, Math.max(1, Math.min(100, numberQuery(url.searchParams.get("limit")) ?? 50))),
         eventType: url.searchParams.get("eventType")?.trim() || undefined
       }));
     }
@@ -224,7 +229,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       captures: options.store.listCaptures(),
       actorProfiles: options.store.listActorProfiles?.() ?? [],
       limit: numberQuery(url.searchParams.get("limit")) ?? 50,
-      cursor: url.searchParams.get("cursor") ?? undefined,
+      cursor: paginationCursor(url.searchParams, Math.max(1, Math.min(100, numberQuery(url.searchParams.get("limit")) ?? 50))),
     }));
     if ((url.pathname === "/v1/dwm/exposure-queue" || url.pathname === "/api/dwm/exposure-queue") && request.method === "GET") return listExposureQueue(request, url, options);
     if ((url.pathname === "/v1/dwm/exposure-queue/enrich-countries" || url.pathname === "/api/dwm/exposure-queue/enrich-countries") && request.method === "POST") return enrichExposureQueueCountries(request, options);

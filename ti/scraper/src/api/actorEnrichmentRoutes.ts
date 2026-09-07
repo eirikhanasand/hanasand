@@ -1,3 +1,4 @@
+import { paginationCursor } from "./pagination.ts";
 import { actorEnrichmentRun, actorEnrichmentRunSummary, actorProfileTimeline, type ActorEnrichmentRun } from "../product/actorEnrichment.ts";
 import { error, json, readJson } from "./http.ts";
 import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
@@ -54,7 +55,7 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
       .filter((delta) => delta.subjectType === "actor_profile" && delta.subjectId === actorId && inTenantScope(delta, tenantId))
       .sort((left, right) => String(right.observedAt ?? "").localeCompare(String(left.observedAt ?? "")));
     const limit = Math.max(1, Math.min(100, Number(url.searchParams.get("limit") ?? 25)));
-    const rawCursor = url.searchParams.get("cursor");
+    const rawCursor = paginationCursor(url.searchParams, limit);
     const offset = legacyOffset(rawCursor);
     const cursor = decodeKeysetCursor(rawCursor);
     const rows = deltas.slice(offset, offset + limit).map(actorProfileTimeline);
@@ -68,7 +69,7 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
     const latest = runs[0];
     const running = runs.find((run) => run.status === "running");
     const limit = Math.max(1, Math.min(100, Number(url.searchParams.get("limit") ?? 20)));
-    const offset = Math.max(0, Number(url.searchParams.get("cursor") ?? 0));
+    const offset = Math.max(0, Number(paginationCursor(url.searchParams, limit) ?? 0));
     const pageRuns = runs.slice(offset, offset + limit);
     const nextCursor = offset + pageRuns.length < runs.length ? String(offset + pageRuns.length) : undefined;
     const previousCursor = offset > 0 ? String(Math.max(0, offset - limit)) : undefined;
@@ -95,7 +96,7 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
 
   if (request.method === "GET") {
     const limit = Math.max(1, Math.min(100, Number(url.searchParams.get("limit") ?? 25)));
-    const rawCursor = url.searchParams.get("cursor");
+    const rawCursor = paginationCursor(url.searchParams, limit);
     const offset = legacyOffset(rawCursor);
     const cursor = decodeKeysetCursor(rawCursor);
     const paged = typeof store.queryActorEnrichmentRuns === "function"

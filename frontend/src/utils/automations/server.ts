@@ -6,7 +6,7 @@ import type { AgentAutomation, AgentAutomationRun, MonitoringIssue } from './cli
 export type InitialAutomationData = {
     canManageSystem?: boolean
     automations: AgentAutomation[]
-    detail?: { automation: AgentAutomation, runs: AgentAutomationRun[], issues?: MonitoringIssue[], total: number, nextCursor: string | null }
+    detail?: { automation: AgentAutomation, runs: AgentAutomationRun[], issues?: MonitoringIssue[], total: number, nextPage: number | null }
     error?: string
 }
 

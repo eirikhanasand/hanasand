@@ -1,3 +1,4 @@
+import { paginationCursor, legacyOffset } from "./pagination.ts";
 import { captureEvidenceTiming, classifySourceFamily, customerStateForEvidence, matchTimingForEvidence, normalizeWatchlist, withDwmAlertMatchTiming, type DwmMatchTimingBasis, type DwmSourceFamily, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationReadiness, buildDwmAlertRetentionAudit, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts, type RuntimeDwmWatchlist } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
@@ -206,9 +207,9 @@ export async function listDwmAlerts(url: URL, options: ApiServerOptions, request
   if (access.error) return access.error;
   const tenantId = scope.tenantId;
   await ensureExposureQueueDwmAlerts(options, { tenantId, organizationId: scope.organizationId });
-  const rawCursor = url.searchParams.get("cursor") ?? undefined;
+  const rawCursor = paginationCursor(url.searchParams, Math.max(1, Math.min(200, Number(url.searchParams.get("limit") ?? 50))));
   const page = typeof (options.store as any).queryWorkflowRecordsPage === "function"
-    ? await (options.store as any).queryWorkflowRecordsPage({ recordType: "alert", tenantId, limit: url.searchParams.get("limit") ?? 50, cursor: decodeKeysetCursor(rawCursor) ? rawCursor : undefined })
+    ? await (options.store as any).queryWorkflowRecordsPage({ recordType: "alert", tenantId, limit: url.searchParams.get("limit") ?? 50, offset: legacyOffset(rawCursor), cursor: decodeKeysetCursor(rawCursor) ? rawCursor : undefined })
     : undefined;
   const alerts = page?.records ?? (options.store as any).listDwmAlerts?.() ?? [];
   const visibleAlerts = alerts
@@ -459,9 +460,9 @@ export async function listDwmWebhookDeliveries(url: URL, options: ApiServerOptio
   const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
   if (access.error) return access.error;
   const tenantId = scope.tenantId;
-  const rawCursor = url.searchParams.get("cursor") ?? undefined;
+  const rawCursor = paginationCursor(url.searchParams, Math.max(1, Math.min(200, Number(url.searchParams.get("limit") ?? 50))));
   const page = typeof (options.store as any).queryWorkflowRecordsPage === "function"
-    ? await (options.store as any).queryWorkflowRecordsPage({ recordType: "dwm_webhook_delivery", tenantId, limit: url.searchParams.get("limit") ?? 50, cursor: decodeKeysetCursor(rawCursor) ? rawCursor : undefined })
+    ? await (options.store as any).queryWorkflowRecordsPage({ recordType: "dwm_webhook_delivery", tenantId, limit: url.searchParams.get("limit") ?? 50, offset: legacyOffset(rawCursor), cursor: decodeKeysetCursor(rawCursor) ? rawCursor : undefined })
     : undefined;
   const deliveries = page?.records ?? (options.store as any).listDwmWebhookDeliveries?.() ?? [];
   return json({

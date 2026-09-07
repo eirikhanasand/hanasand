@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
             const payload = await result.value.json()
             if (index === 0) metadata = payload
             else monitoringTotal = (payload.items || []).length
-            if (index === 0 || !request.nextUrl.searchParams.has('cursor')) items.push(...(payload.items || payload.cases || []))
+            if (index === 0 || !request.nextUrl.searchParams.has('cursor') && Number(request.nextUrl.searchParams.get('page') || 1) === 1) items.push(...(payload.items || payload.cases || []))
             available++
         } else warnings.push(`${index === 0 ? 'Intelligence' : 'Monitoring'} cases are unavailable. Retry to load them.`)
     }

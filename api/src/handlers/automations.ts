@@ -308,6 +308,8 @@ export async function loadRuns(automationId: string, ownerId: string, includeAll
         if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) throw new RangeError('Invalid history date.')
         return new Date(value).toISOString()
     }
+    const page = Number(options.page || 1)
+    if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger((page - 1) * 50) || (options.page !== undefined && options.cursor)) throw new RangeError('Invalid history page.')
     let cursor: { at: string, id: string } | null = null
     if (options.cursor) {
         try {
@@ -325,12 +327,13 @@ export async function loadRuns(automationId: string, ownerId: string, includeAll
         run(`SELECT COUNT(*)::INT AS total FROM agent_automation_runs WHERE ${where}`, values),
         run(`SELECT *, started_at::text AS cursor_at FROM agent_automation_runs WHERE ${where}
             AND ($6::timestamptz IS NULL OR (started_at, id) < ($6::timestamptz, $7::text))
-            ORDER BY started_at DESC, id DESC LIMIT 51`, [...values, cursor?.at || null, cursor?.id || null]),
+            ORDER BY started_at DESC, id DESC LIMIT 51 OFFSET $8`, [...values, cursor?.at || null, cursor?.id || null, (page - 1) * 50]),
     ])
     const rows = result.rows.slice(0, 50) as (AutomationRunRow & { cursor_at: string })[]
     const last = rows.at(-1)
     return {
         runs: rows.map(toAutomationRun), total: count.rows[0].total,
+        page, nextPage: result.rows.length > 50 ? page + 1 : null,
         nextCursor: result.rows.length > 50 && last ? Buffer.from(JSON.stringify({ at: last.cursor_at, id: last.id })).toString('base64url') : null,
     }
 }
