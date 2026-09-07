@@ -1,6 +1,7 @@
 'use client'
 
 import { AuthSession, fetchSessions, revokeOtherSessions, revokeSession } from '@/utils/auth/sessions'
+import { removeCookies } from '@/utils/cookies/cookies'
 import { sessionDevice } from '@/utils/auth/sessionDevice'
 import { DashboardPanel } from '@/components/dashboard/ui'
 import { Laptop, LogOut, Server, Smartphone } from 'lucide-react'
@@ -34,6 +35,11 @@ export default function SessionsPanel({ isSelf }: { isSelf: boolean }) {
             const success = tokenId === undefined ? await revokeOtherSessions() : await revokeSession(tokenId)
             if (!success) {
                 setError('Unable to log out the selected sessions. Please try again.')
+                return
+            }
+            if (tokenId !== undefined && sessions.some(session => session.token_id === tokenId && session.current)) {
+                removeCookies('name', 'access_token', 'id', 'avatar', 'roles')
+                window.location.assign('/login')
                 return
             }
             await refresh()
