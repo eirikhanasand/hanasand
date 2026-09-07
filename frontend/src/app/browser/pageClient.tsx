@@ -1524,7 +1524,7 @@ function ProviderRunBadge({ provider, result }: { provider: 'virustotal' | 'urlq
         || (provider === 'urlquery' && result?.status === 'clean' ? '0' : '—')
     const description = `${name}: ${text}${provider === 'urlquery' && /^\d+$/.test(text) ? ' alerts' : ''}`
     return (
-        <span title={description} aria-label={description} className={`inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] font-semibold ${clean ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning'}`}>
+        <span role='img' title={description} aria-label={description} className={`inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] font-semibold ${clean ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning'}`}>
             <Image src={`/logos/${provider}.${provider === 'virustotal' ? 'svg' : 'png'}`} alt='' width={16} height={16} unoptimized className='h-4 w-4 shrink-0 object-contain' />
             <span aria-hidden='true'>{text}</span>
         </span>
