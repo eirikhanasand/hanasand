@@ -44,9 +44,9 @@ async function statusPayload(summary: boolean) {
     if (!summary) refreshHistory()
     if (statusCache && expiresAt > Date.now()) return summary ? statusCache : withHistory(statusCache)
     statusInflight ||= loadStatusPayload(true).then(payload => {
-        if (payload.checks.length) statusCache = payload
+        statusCache = payload.checks.length ? payload : { ...(statusCache || historySnapshot || payload), monitoring: 'unavailable' }
         expiresAt = Date.now() + STATUS_CACHE_MS
-        return payload
+        return statusCache
     }).catch(error => {
         console.error('[production-monitor] current status unavailable:', error.message)
         return { ...(statusCache || historySnapshot || { overall: 'unknown', generated_at: '', checks: [], history: [], incidents: [] }), monitoring: 'unavailable' }

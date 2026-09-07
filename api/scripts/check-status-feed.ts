@@ -5,6 +5,7 @@ const now = Date.now()
 const check = { service: 'core', check_name: 'API health', status: 'up', latency_ms: 12, message: null, checked_at: new Date(now).toISOString(), uptime_30d: '100' }
 const snapshot = { overall: 'up', generated_at: check.checked_at, checks: [check], history: [{ service: 'core', check_name: 'API health', date: check.checked_at.slice(0, 10), status: 'up', incident_ids: [] }], incidents: [] }
 let fail = false
+let empty = false
 let persisted = false
 let releaseHistory!: () => void
 const blockedHistory = new Promise<void>(resolve => { releaseHistory = resolve })
@@ -13,7 +14,7 @@ const run = async (sql: string) => {
     if (sql.startsWith('SELECT payload')) return { rows: persisted ? [{ payload: snapshot, updated_at: new Date(now) }] : [] }
     if (sql.includes('90 days')) await blockedHistory
     if (fail) throw new Error('database unavailable')
-    return { rows: [check] }
+    return { rows: empty ? [] : [check] }
 }
 mock.module('../src/utils/db.ts', () => ({ default: run, withTransaction: async () => { await blockedHistory } }))
 const target = process.env.STATUS_HANDLER_FILE || '../src/handlers/status/get.ts'
@@ -43,5 +44,13 @@ assert.equal(failed.monitoring, 'unavailable')
 assert.equal(failed.generated_at, restored.generated_at)
 assert.equal(failed.checks[0].checked_at, restored.checks[0].checked_at)
 assert.deepEqual(failed.history, restored.history)
+fail = false
+empty = true
+setSystemTime(now + 32_000)
+const missing = await restarted({ query: {} } as any, reply as any)
+const repeated = await restarted({ query: {} } as any, reply as any)
+assert.equal(missing.monitoring, 'unavailable')
+assert.equal(repeated.monitoring, 'unavailable')
+assert.equal(repeated.generated_at, restored.generated_at)
 setSystemTime()
 console.log('Current checks bypass blocked history; persisted evidence survives restart and database failure.')
