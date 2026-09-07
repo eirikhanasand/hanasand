@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { withTransaction } from '#db'
+import { queryOnce, withTransaction } from '#db'
 import { cachedLogQuery } from '../../utils/logs/cache.ts'
 
 type TrafficMetric = 'path' | 'ip' | 'user_agent' | 'domain'
@@ -346,11 +346,11 @@ async function safeQuery(query: string, params: Array<string | number | boolean 
     const aggregate = query.includes('traffic_aggregate_events')
     const load = async () => {
         try {
-            const result = await withTransaction(async execute => {
+            const result = aggregate ? await withTransaction(async execute => {
                 await execute('SET LOCAL work_mem=\'64MB\'')
-                if (aggregate) await execute('SET LOCAL statement_timeout=\'30s\'')
+                await execute('SET LOCAL statement_timeout=\'30s\'')
                 return execute(query, params)
-            })
+            }) : await queryOnce(query, params)
             return { ...result, sampled_at: new Date().toISOString() }
         } catch (error) {
             throw Object.assign(new Error('Traffic statistics are temporarily unavailable', { cause: error }), { statusCode: 503 })
