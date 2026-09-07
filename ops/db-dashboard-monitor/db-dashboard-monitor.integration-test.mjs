@@ -28,6 +28,11 @@ try {
     await writeFile(fetchHook, `
         import { appendFile } from 'node:fs/promises'
         globalThis.fetch = async (_url, options) => {
+            if (_url.endsWith('/api/status')) {
+                const at = new Date().toISOString()
+                return Response.json({ monitoring: 'live', last_verified_at: at, history_available: true, history_generated_at: at,
+                    checks: ['API Health', 'Public Website', 'Public Search', 'Processing Backlog', 'Source Collection', 'Browser Workspace', 'Monitoring Workspace', 'Latest Activity'].map(check_name => ({ check_name, status: 'up', checked_at: at })) })
+            }
             await appendFile(process.env.HANASAND_TEST_STATUS_REQUESTS, options.body + '\\n')
             return new Response('{"ok":true}', { status: 201 })
         }
@@ -41,6 +46,7 @@ try {
             HANASAND_DB_MONITOR_USER: '',
             HANASAND_DB_MONITOR_PASSWORD: '',
             HANASAND_DB_MONITOR_STATE: dashboardState,
+            HANASAND_STATUS_FEED_MONITOR_STATE: join(root, 'status-feed.json'),
             HANASAND_TI_BACKUP_STATUS: backupStatus,
             HANASAND_TI_BACKUP_MONITOR_STATE: backupState,
             HANASAND_STATUS_INGEST_BASE_URL: 'https://status.test',
@@ -66,6 +72,7 @@ try {
     )
     assert.equal(JSON.parse(await readFile(backupState, 'utf8')).reason, 'ti_backup_failed')
     assert.equal(JSON.parse(await readFile(dashboardState, 'utf8')).reason, 'missing_credentials')
+    assert.equal(JSON.parse(await readFile(join(root, 'status-feed.json'), 'utf8')).ok, true)
     console.log('Database dashboard monitor integration test passed.')
 } finally {
     await rm(root, { recursive: true, force: true })
