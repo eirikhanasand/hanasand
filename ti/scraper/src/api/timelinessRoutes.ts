@@ -52,7 +52,7 @@ function workbench(request: Request, url: URL, options: ApiServerOptions): Respo
   if (requestedStatus && !STATUSES.has(requestedStatus)) return error("invalid_timeliness_status", "Unsupported timeliness queue status", 400);
   const query = url.searchParams.get("q")?.trim().toLowerCase();
   const limit = Math.floor(Math.min(200, Math.max(1, numberQuery(url.searchParams.get("limit")) ?? 100)));
-  const offset = Math.floor(Math.max(0, numberQuery(paginationCursor(url.searchParams, limit)) ?? 0));
+  const offset = Math.floor(Math.max(0, numberQuery(paginationCursor(url.searchParams, limit) ?? null) ?? 0));
   const filtered = snapshot.items.filter((item) => (!requestedStatus || item.status === requestedStatus)
     && (!query || JSON.stringify([item.actorName, item.title, item.sourceName, item.sourceId, item.incidentId, item.captureId, item.reportReferences, item.timestampAnomalies]).toLowerCase().includes(query)));
   return json({
