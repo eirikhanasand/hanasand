@@ -44,11 +44,11 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                     <input type='hidden' name='scope' value={scope} /><input type='hidden' name='sort' value={sort} /><input type='hidden' name='dir' value={direction} />
                     <input name='q' defaultValue={query} placeholder='Search sources' className='h-8 min-w-48 rounded-md border border-ui-border bg-ui-canvas px-2.5 text-xs text-ui-text outline-none' />
                     <FilterSelect name='family' value={family} label='Family' options={['rss', 'web', 'telegram_public', 'darkweb_metadata']} />
-                    <FilterSelect name='lifecycle' value={lifecycle} label='Lifecycle' options={['active', 'candidate', 'review', 'paused']} />
+                    <FilterSelect name='lifecycle' value={lifecycle} label='Status' options={['active', 'candidate', 'review', 'paused']} />
                     <FilterSelect name='access' value={access} label='Access' options={['public_http', 'public_rss', 'public_telegram', 'tor_metadata']} />
                     <FilterSelect name='health' value={health} label='Health' options={['healthy', 'stale', 'failed', 'not observed']} />
                     <FilterSelect name='output' value={output} label='Useful output' options={['yes', 'no']} />
-                    <FilterSelect name='matches' value={matches} label='Customer matches' options={['yes', 'no']} />
+                    <FilterSelect name='matches' value={matches} label='Matches' options={['yes', 'no']} />
                     <button type='submit' className='h-8 rounded-md bg-ui-primary px-3 text-xs font-semibold text-ui-canvas'>Apply</button>
                     {query || family || lifecycle || access || health || output || matches ? <Link href={`/ti/sources?scope=${scope}`} className='text-xs font-semibold text-ui-primary underline'>Clear</Link> : null}
                 </form>
