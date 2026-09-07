@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { cookies } from 'next/headers'
+import { NextRequest } from 'next/server'
+import { proxyOrganizationApiRequest } from '@/app/api/organizations/_organizationApiProxy'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { Radio } from 'lucide-react'
@@ -31,6 +33,12 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
 
     const params = searchParams ? await searchParams : {}
     const accessDenied = params.notAllowed === 'true'
+    const membership = accessDenied ? await organizationMembership() : null
+    const notice = membership === 'none'
+        ? { title: 'Create an organization', description: 'Create an organization to set up your workspace and manage access.', action: 'Create organization', href: '/organizations#org-create-primary' }
+        : membership === 'member'
+            ? { title: 'You don’t have access to this page.', description: 'If you need access, contact your administrator.', action: 'View organizations', href: '/organizations' }
+            : { title: 'We couldn’t check your organization access.', description: 'Try again, or open your organizations to check your membership.', action: 'View organizations', href: '/organizations' }
 
     return (
         <DashboardPage>
@@ -44,13 +52,13 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
                     <DashboardPanel className='border-ui-warning/40 bg-ui-warning/10 p-4'>
                         <div className='flex flex-wrap items-start justify-between gap-4'>
                             <div>
-                                <h2 className='text-base font-semibold text-ui-text'>You don’t have access to this page.</h2>
+                                <h2 className='text-base font-semibold text-ui-text'>{notice.title}</h2>
                                 <p className='mt-1 max-w-2xl text-sm leading-6 text-ui-muted'>
-                                    If you need access, contact your administrator.
+                                    {notice.description}
                                 </p>
                             </div>
-                            <Link href='/organizations' className='inline-flex h-9 items-center rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
-                                View organizations
+                            <Link href={notice.href} className='inline-flex h-9 items-center rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                                {notice.action}
                             </Link>
                         </div>
                     </DashboardPanel>
@@ -66,6 +74,14 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
             ) : null}
         </DashboardPage>
     )
+}
+
+async function organizationMembership(): Promise<'member' | 'none' | 'unavailable'> {
+    const response = await proxyOrganizationApiRequest(new NextRequest('http://localhost/api/organizations'), '/organizations', { method: 'GET' })
+    if (!response.ok) return 'unavailable'
+    const payload = await response.json() as { organizations?: unknown }
+    if (!Array.isArray(payload.organizations)) return 'unavailable'
+    return payload.organizations.length ? 'member' : 'none'
 }
 
 function firstParam(value: string | string[] | undefined) {
