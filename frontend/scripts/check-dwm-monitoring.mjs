@@ -114,7 +114,7 @@ try {
     failReads = true
     await page.goto(`${server.url}dwm/alerts`)
     await page.getByRole('alert').filter({ hasText: 'Alerts could not be loaded' }).waitFor()
-    assert.equal(await page.getByText('No retained alerts in this organization.', { exact: true }).count(), 0)
+    assert.equal(await page.getByText('No alerts yet.', { exact: true }).count(), 0)
     failReads = false
     await page.getByRole('button', { name: 'Retry', exact: true }).click()
     await page.getByText('Acme', { exact: true }).waitFor()
