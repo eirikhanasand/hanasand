@@ -74,7 +74,7 @@ export default function SessionsPanel({ isSelf }: { isSelf: boolean }) {
                                     <h3 className='text-sm font-semibold text-ui-text'>{device.label}</h3>
                                     <span className='rounded-md bg-ui-success/10 px-1.5 py-0.5 text-[11px] font-semibold text-ui-success'>{session.current ? 'This session' : 'Active'}</span>
                                 </div>
-                                <p className='mt-1 break-words text-xs text-ui-muted'>{session.ip ? `Public IP ${session.ip}` : 'Public IP was not captured for this login'}</p>
+                                <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{session.ip ? `Public IP ${session.ip}` : 'Public IP was not captured for this login'}</p>
                                 <p className='mt-1 text-xs text-ui-muted'>ISP / network: {session.network?.provider || 'Unavailable'}</p>
                                 <p className='mt-1 text-xs text-ui-muted'>Approximate location: {location || 'Unavailable'}</p>
                                 <p className='mt-1 text-xs text-ui-muted'>Signed in {formatDate(session.created_at)} · Last active {formatDate(session.last_seen_at)}</p>
@@ -87,7 +87,7 @@ export default function SessionsPanel({ isSelf }: { isSelf: boolean }) {
                 })}
                 {!loading && !error && !sessions.length && <p className='text-sm text-ui-muted'>No active sessions.</p>}
             </div>
-            <p className='mt-3 text-xs text-ui-muted'>IP locations are approximate and may reflect a VPN or your provider’s network. <a href='https://db-ip.com' target='_blank' rel='noreferrer' className='underline'>IP Geolocation by DB-IP</a></p>
+            <p className='mt-3 text-xs text-ui-muted'>IP locations are approximate and may reflect a VPN or your provider’s network. <a href='https://db-ip.com' target='_blank' rel='noopener noreferrer' className='underline'>IP Geolocation by DB-IP</a></p>
         </DashboardPanel>
     )
 }
