@@ -184,7 +184,14 @@ async function start() {
         if (!browserWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
             await warmTrafficStatistics()
             const stopTrafficRefresh = refreshTrafficHistory()
-            fastify.addHook('onClose', async () => { stopTrafficRefresh() })
+            const snapshotTimer = setInterval(() => {
+                void warmTrafficStatistics().catch(error => fastify.log.warn({ error }, 'Traffic snapshot refresh failed'))
+            }, 30000)
+            snapshotTimer.unref()
+            fastify.addHook('onClose', async () => {
+                stopTrafficRefresh()
+                clearInterval(snapshotTimer)
+            })
         }
         await fastify.listen({ port, host: process.env.LISTEN_HOST || '0.0.0.0' })
         if (browserWorkerOnly || httpWorkerOnly) return
