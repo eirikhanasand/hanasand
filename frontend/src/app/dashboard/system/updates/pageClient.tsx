@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, useId, type ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, CircleAlert, CircleCheck, CircleX, Clock3, RefreshCcw, ShieldCheck } from 'lucide-react'
 import { DashboardPanel } from '@/components/dashboard/ui'
 import { fetchAptUpdates, type AptUpdateStatus, type AptUpdateHistory } from '@/utils/aptUpdates/client'
@@ -41,7 +41,7 @@ export default function AptUpdatesClient() {
             {status?.last_error ? <p className='rounded-lg border border-ui-danger bg-ui-danger/10 p-3 text-sm text-ui-danger'>{status.last_error}</p> : null}
         </DashboardPanel>
         <DashboardPanel className='grid gap-3 p-4'><h2 className='text-base font-semibold'>Pending packages</h2>{pending.length ? <div className='overflow-x-auto'><table className='w-full min-w-[760px] text-left text-sm'><thead className='text-xs text-ui-muted'><tr><th className='pb-2'>Package</th><th className='pb-2'>Version</th><th className='pb-2'>Type</th><th className='pb-2'>Age</th><th className='pb-2'>Installed</th></tr></thead><tbody>{pending.map(item => { const installedAt = item.installed_at || item.first_seen; const ageHours = updateAgeHours(installedAt); const ready = item.security || ageHours >= 72; return <tr key={`${item.package}-${item.version}`} className='border-t border-ui-border'><td className='py-2 font-mono'>{item.package}</td><td className='py-2 font-mono'>{item.version}</td><td className='py-2'>{item.security ? 'Security' : 'Regular'}</td><td className={`py-2 font-semibold ${ready ? 'text-ui-success' : 'text-ui-danger'}`}><span className='inline-flex items-center gap-1.5'>{ready ? <CircleCheck className='h-4 w-4' aria-hidden='true' /> : <CircleX className='h-4 w-4' aria-hidden='true' />}<span>{ready ? 'Ready' : `${ageHours}/72 hours`}</span></span></td><td className='py-2 text-ui-muted'>{new Date(installedAt * 1000).toLocaleString()}</td></tr> })}</tbody></table></div> : <p className='text-sm text-ui-muted'>No pending packages reported.</p>}</DashboardPanel>
-        <DashboardPanel className='grid gap-3 p-4'><h2 className='text-base font-semibold'>History</h2>{history.length ? <div className='grid gap-2'>{history.map(item => <div key={item.run_id} className='grid gap-1 rounded-lg border border-ui-border bg-ui-raised p-3 text-sm md:grid-cols-[180px_24px_minmax(0,1fr)]'><span className='text-ui-muted'>{formatDate(item.occurred_at)}</span><span className='flex items-center'>{historyStatusIcon(item.status)}</span><span>{item.error ? formatUpdateError(item.error) : item.packages?.length ? `Installed: ${item.packages.join(', ')}` : 'No packages installed.'}</span></div>)}</div> : <p className='text-sm text-ui-muted'>No host check-in has been persisted yet.</p>}</DashboardPanel>
+        <DashboardPanel className='grid gap-3 p-4'><h2 className='text-base font-semibold'>History</h2>{history.length ? <div className='grid gap-2'>{history.map(item => <div key={item.run_id} className='grid gap-1 rounded-lg border border-ui-border bg-ui-raised p-3 text-sm md:grid-cols-[180px_24px_minmax(0,1fr)]'><span className='text-ui-muted'>{formatDate(item.occurred_at)}</span><span className='flex items-center'><HistoryStatus item={item} /></span><span>{item.error ? formatUpdateError(item.error) : item.packages?.length ? `Installed: ${item.packages.join(', ')}` : 'No packages installed.'}</span></div>)}</div> : <p className='text-sm text-ui-muted'>No host check-in has been persisted yet.</p>}</DashboardPanel>
     </div>
 }
 
@@ -68,4 +68,20 @@ function historyStatusIcon(status: string) {
     if (normalized === 'ok' || normalized === 'success' || normalized === 'healthy') return <CircleCheck className='h-4 w-4 text-ui-success' aria-label='Healthy' />
     if (normalized === 'pending' || normalized === 'running') return <CircleAlert className='h-4 w-4 text-ui-warning' aria-label='Pending' />
     return <CircleX className='h-4 w-4 text-ui-danger' aria-label='Failed' />
+}
+
+function HistoryStatus({ item }: { item: AptUpdateHistory }) {
+    const id = useId()
+    const [open, setOpen] = useState(false)
+    const status = item.status.toLowerCase()
+    const message = item.error ? formatUpdateError(item.error)
+        : status === 'pending' ? 'Updates were still pending at this check. This does not mean installation failed; regular updates wait 72 hours before installation.'
+            : status === 'running' ? 'The update check was still running.'
+                : ['ok', 'success', 'healthy'].includes(status) ? 'The update check completed successfully. No updates remained pending.'
+                    : status === 'failed' ? 'The update check failed. The host did not report further details.'
+                        : 'The host did not report a recognized update status.'
+    return <span className='relative inline-flex' onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+        <button type='button' aria-label='Update status details' aria-describedby={open ? id : undefined} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onClick={() => setOpen(true)} onKeyDown={event => { if (event.key === 'Escape') { setOpen(false); event.stopPropagation() } }} className='rounded p-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ui-primary'>{historyStatusIcon(item.error ? 'failed' : item.status)}</button>
+        {open ? <span id={id} role='tooltip' className='absolute left-0 top-full z-50 w-64 max-w-[calc(100vw-4rem)] rounded-lg border border-ui-border bg-ui-panel p-3 text-xs font-normal leading-5 text-ui-text shadow-lg'>{message}</span> : null}
+    </span>
 }
