@@ -26,7 +26,7 @@ assert(build.success, build.logs.join('\n'))
 const server = Bun.serve({ port: 0, async fetch(request) {
     const path = new URL(request.url).pathname
     if (path === '/brand.js') return new Response(build.outputs[0], { headers: { 'content-type': 'text/javascript' } })
-    if (path === '/hanasand-logo.png') return new Response(await readFile('public/hanasand-logo.png'), { headers: { 'content-type': 'image/png' } })
+    if (path === '/hanasand-logo-transparent.png') return new Response(await readFile('public/hanasand-logo.png'), { headers: { 'content-type': 'image/png' } })
     return new Response('<!doctype html><div id="root"></div><script type="module" src="/brand.js"></script>', { headers: { 'content-type': 'text/html' } })
 } })
 const browser = await chromium.launch({ headless: true })
@@ -35,7 +35,7 @@ try {
     await page.goto(String(server.url))
     const image = page.locator('img')
     await image.waitFor()
-    assert.equal(await image.getAttribute('src'), '/hanasand-logo.png?v=transparent-1')
+    assert.equal(await image.getAttribute('src'), '/hanasand-logo-transparent.png')
     assert(await image.evaluate(img => img.complete && img.naturalWidth === 1254))
     assert.equal(await image.evaluate(img => img.parentElement.tagName), 'A', 'Logo must have no decorative wrapper')
     assert(!/\b(?:bg-|border|shadow)/.test(await image.getAttribute('class')))
