@@ -38,7 +38,7 @@ export default function TrafficMap({
     initialMetrics: TrafficMetrics | null
     initialRecords: TrafficRecord[]
 }) {
-    const [status, setStatus] = useState(initialRecords.length || Number(initialMetrics?.total_requests || 0) ? 'Live traffic active' : 'Connecting traffic stream')
+    const [status, setStatus] = useState('Connecting traffic stream')
     const [isConnected, setIsConnected] = useState(false)
     const [isPolling, setIsPolling] = useState(false)
     const [viewBox, setViewBox] = useState<ViewBox>(INITIAL_VIEWBOX)
@@ -212,6 +212,7 @@ export default function TrafficMap({
             .slice(0, 6),
         [liveRecords, selectedCountry]
     )
+    const isConnecting = status === 'Connecting traffic stream'
     const isOperational = isConnected || isPolling || liveRecords.length > 0 || Number(initialMetrics?.total_requests || 0) > 0
 
     const mapPaths = useMemo(() => mapData.features.map((feature, index) => {
@@ -261,13 +262,18 @@ export default function TrafficMap({
                         </p>
                     </div>
                     <div
+                        role='status'
+                        aria-live='polite'
+                        data-traffic-stream-status
                         className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium ${
-                            isOperational
-                                ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
-                                : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
+                            isConnecting
+                                ? 'border-ui-border bg-ui-raised text-ui-muted'
+                                : isOperational
+                                    ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
+                                    : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
                         }`}
                     >
-                        <span className={`h-2 w-2 rounded-full ${isOperational ? 'bg-ui-success' : 'bg-ui-danger'}`} />
+                        <span className={`h-2 w-2 rounded-full ${isConnecting ? 'animate-pulse bg-ui-muted' : isOperational ? 'bg-ui-success' : 'bg-ui-danger'}`} />
                         {status}
                     </div>
                 </div>
