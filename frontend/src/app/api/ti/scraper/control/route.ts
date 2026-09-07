@@ -4,9 +4,11 @@ import requireApiSession, { type ApiSessionIdentity } from '@/utils/proxy/requir
 export const dynamic = 'force-dynamic'
 
 type ControlActionBody = {
-    action?: 'run_query' | 'public_channel_status' | 'scheduler_run_now' | 'scheduler_pause' | 'scheduler_resume' | 'request_source' | 'source_candidate_action' | 'create_watchlist' | 'rebuild_alerts'
+    action?: 'source_status' | 'run_query' | 'public_channel_status' | 'scheduler_run_now' | 'scheduler_pause' | 'scheduler_resume' | 'request_source' | 'source_candidate_action' | 'create_watchlist' | 'rebuild_alerts'
     query?: string
     sourceId?: string
+    tenantId?: string
+    status?: 'active' | 'paused'
     candidateId?: string
     sourcePackIds?: string[]
     actions?: string[]
@@ -128,6 +130,13 @@ export async function POST(request: NextRequest) {
     const base = scraperBase()
     if (!base) return unavailable('TI_SCRAPER_API_BASE is not configured.')
 
+    if (body.action === 'source_status') {
+        if (typeof body.sourceId !== 'string' || !body.sourceId.trim() || !['active', 'paused'].includes(body.status || '') || (body.tenantId !== undefined && (typeof body.tenantId !== 'string' || !/^[A-Za-z0-9_.:-]{1,200}$/.test(body.tenantId)))) {
+            return NextResponse.json({ ok: false, error: { message: 'A source and valid status are required.' } }, { status: 400 })
+        }
+        return forward(base, `/v1/sources/${encodeURIComponent(body.sourceId)}`, { status: body.status, ...(body.tenantId ? { tenantId: body.tenantId } : {}) }, identity, 'PATCH')
+    }
+
     const query = body.query?.trim() || 'APT29'
     if (body.action === 'run_query') {
         return forward(base, '/v1/intel/runs', {
@@ -209,9 +218,9 @@ function scraperBase() {
     return process.env.TI_SCRAPER_API_BASE?.replace(/\/$/, '')
 }
 
-async function forward(base: string, path: string, body: unknown, identity: ApiSessionIdentity) {
+async function forward(base: string, path: string, body: unknown, identity: ApiSessionIdentity, method = 'POST') {
     const result = await fetchJson(base, path, {
-        method: 'POST',
+        method,
         headers: { 'content-type': 'application/json', authorization: `Bearer ${identity.token}`, id: identity.id, 'x-actor-id': identity.id },
         body: JSON.stringify(body),
     })

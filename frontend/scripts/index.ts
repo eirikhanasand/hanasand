@@ -11,6 +11,8 @@ type TestTask = {
 const bun = process.execPath
 
 const tasks: TestTask[] = [
+    { id: 'source-status', title: 'Source activation authorization and persistence contract', command: [bun, 'test', 'tests/ti-source-status.test.mjs'] },
+    { id: 'source-activation', title: 'Source activation controls', command: [bun, 'scripts/check-source-activation.mjs'], requires: 'playwright' },
     { id: 'traffic-locations', title: 'Recorded traffic locations', command: [bun, 'tests/traffic-locations.test.ts'] },
     { id: 'traffic-stream-proxy', title: 'Traffic live stream proxy', command: [bun, 'tests/traffic-stream-proxy.test.ts'] },
     { id: 'traffic-streaming', title: 'Traffic independent loading', command: [bun, 'tests/traffic-streaming.test.tsx'] },
