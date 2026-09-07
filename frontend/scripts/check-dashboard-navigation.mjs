@@ -4,7 +4,7 @@ import { chromium } from '@playwright/test'
 import { hasAppSidebar } from '../src/utils/routes/appRoutes.ts'
 import { getDashboardNavigation, navigationLinks } from '../src/utils/layout/dashboardNavigation.ts'
 
-const access = { id: 'sidebar-test', isAdmin: true, canManageSystem: true, canManageContent: true }
+const access = { id: 'sidebar-test', isAdmin: true, canManageSystem: true, canManageContent: true, hasVMs: true }
 const all = navigationLinks(getDashboardNavigation(access))
 assert.equal(all.length, new Set(all.map(item => item.href)).size)
 const memberAccess = { ...access, isAdmin: false, canManageSystem: false, canManageContent: false }
@@ -22,6 +22,7 @@ assert.deepEqual(reviewer.filter(item => ['/ti/evaluation', '/ti/timeliness'].in
 const operator = navigationLinks(getDashboardNavigation({ ...memberAccess, canManageSystem: true }))
 assert(operator.some(item => item.href === '/system'))
 assert.deepEqual(navigationLinks(getDashboardNavigation(memberAccess)).filter(item => item.ancestors.includes('Infrastructure')).map(item => item.href), ['/system', '/vms'])
+assert(!navigationLinks(getDashboardNavigation({ ...memberAccess, hasVMs: false })).some(item => item.href === '/vms'))
 assert(!operator.some(item => ['/db', '/logs', '/system/updates'].includes(item.href)))
 assert.equal(all.find(item => item.href === '/dwm/actors')?.label, 'Monitored actors')
 for (const path of ['/management/users', '/management/roles']) {
@@ -57,6 +58,7 @@ const css = (await Promise.all(cssFiles.filter(file => file.endsWith('.css')).ma
 if (process.env.SIDEBAR_SCREENSHOT) assert(css.length > 0, 'Build the frontend before visual verification')
 const server = Bun.serve({ port: 0, fetch(request) {
     const path = new URL(request.url).pathname
+    if (path.startsWith('/api/backend/vms/')) return Response.json([{ name: 'fixture-vm' }])
     if (path === '/sidebar.js') return new Response(build.outputs[0], { headers: { 'content-type': 'text/javascript' } })
     if (path === '/sidebar.css') return new Response(css, { headers: { 'content-type': 'text/css' } })
     return new Response('<!doctype html><html class="light"><head><link rel="stylesheet" href="/sidebar.css"></head><body style="padding:16px;background:var(--ui-canvas)"><div id="root" style="width:232px"></div><script type="module" src="/sidebar.js"></script></body></html>', { headers: { 'content-type': 'text/html' } })
