@@ -20,6 +20,7 @@ const tasks: TestTask[] = [
     { id: 'table-navigation', title: 'Temporary table edges and formula preservation', command: [bun, 'test', 'tests/table-navigation.test.ts'] },
     { id: 'code-inventory', title: 'Source inventory and dependency hashes', command: [bun, 'test', 'tests/code-inventory.test.mjs'] },
     { id: 'code-review-state', title: 'Code review status and sheet settings', command: [bun, 'test', 'tests/code-review-state.test.ts'] },
+    { id: 'api-response-examples', title: 'API fictional response examples and OpenAPI navigation', command: [bun, 'tests/api-response-examples.test.tsx'] },
     { id: 'organization-initial-render', title: 'Organization layout before hydration', command: [bun, 'tests/organization-initial-render.test.tsx'] },
     { id: 'dashboard-streaming', title: 'Dashboard independent status streaming', command: [bun, 'tests/dashboard-streaming.test.tsx'] },
     { id: 'recovery-boundary', title: 'Recovery request boundaries', command: [bun, 'tests/recovery-boundary.test.ts'] },

@@ -4,6 +4,7 @@ import { Braces, Code2, ExternalLink, LockKeyhole } from 'lucide-react'
 import { authApiUrl } from '@/utils/auth/authApiUrl'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import ApiDocsSearch from './apiDocsSearch'
+import { responseExamples } from './responseExamples'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +27,7 @@ type Contract = {
     info: { title: string, version: string, description?: string }
     servers?: Array<{ url: string, description?: string }>
     paths: Record<string, Partial<Record<'get' | 'post' | 'put' | 'patch' | 'delete', Operation>>>
-    components?: { schemas?: Record<string, Schema> }
+    components?: { schemas?: Record<string, Schema>, responses?: Record<string, ResponseSpec> }
 }
 
 type ApplicationEndpoint = { path: string, method: string, summary: string }
@@ -90,8 +91,9 @@ export default async function ApiDocsPage() {
                 eyebrow='Developer tools'
                 title={contract.info.title}
                 description={contract.info.description || 'Use the production API with documented paths, authentication, request shapes, and response codes.'}
-                actions={<div className='flex items-center gap-2'><ApiDocsSearch /><Link href='/developers' target='_blank' rel='noopener noreferrer' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary'>Public guide <ExternalLink className='h-3.5 w-3.5' /></Link></div>}
             />
+
+            <div className='flex flex-wrap items-center gap-2'><ApiDocsSearch /><Link href='/api/openapi/ti' target='_blank' rel='noopener noreferrer' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary'>OpenAPI JSON <ExternalLink className='h-3.5 w-3.5' /></Link><Link href='/developers' target='_blank' rel='noopener noreferrer' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary'>Public guide <ExternalLink className='h-3.5 w-3.5' /></Link></div>
 
             <DashboardPanel className='grid gap-3 p-4 sm:grid-cols-3'>
                 <Info label='Base URL' value={server} mono />
@@ -101,7 +103,7 @@ export default async function ApiDocsPage() {
 
             <section className='grid gap-3' aria-label='API endpoints'>
                 <div className='flex items-center gap-2'><Code2 className='h-4 w-4 text-ui-primary' /><h2 className='text-base font-semibold text-ui-text'>Endpoints</h2></div>
-                {operations.map(({ path, method, operation }) => <div key={`${method}:${path}`} data-api-search={`${method} ${path} ${operation.summary || operation.operationId || ''}`}><Endpoint path={path} method={method} operation={operation} /></div>)}
+                {operations.map(({ path, method, operation }) => <div key={`${method}:${path}`} data-api-search={`${method} ${path} ${operation.summary || operation.operationId || ''}`}><Endpoint path={path} method={method} operation={operation} components={contract.components} /></div>)}
             </section>
 
             <section className='grid gap-3' aria-label='Application API endpoints'>
@@ -114,9 +116,10 @@ export default async function ApiDocsPage() {
     )
 }
 
-function Endpoint({ path, method, operation }: { path: string, method: string, operation: Operation }) {
+function Endpoint({ path, method, operation, components }: { path: string, method: string, operation: Operation, components?: Contract['components'] }) {
     const requestSchema = operation.requestBody?.content?.['application/json']?.schema
-    const responses = Object.entries(operation.responses || {})
+    const sample = responseExamples[`${method} ${path}`]
+    const responses = Object.entries(operation.responses || (sample ? { [sample.status]: { description: sample.status < 300 ? 'Successful response' : 'Endpoint retired' } } : {}))
     return <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' open={method === 'GET' && path === '/actors'}>
         <summary className='flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-3'>
             <span className={`rounded-md px-2 py-1 text-[11px] font-bold ${method === 'GET' ? 'bg-ui-success/15 text-ui-success' : 'bg-ui-primary/15 text-ui-primary'}`}>{method}</span>
@@ -127,8 +130,17 @@ function Endpoint({ path, method, operation }: { path: string, method: string, o
         <div className='grid gap-4 border-t border-ui-border bg-ui-canvas p-4'>
             {operation.description ? <p className='text-sm leading-6 text-ui-muted'>{operation.description}</p> : null}
             <div className='grid gap-3 md:grid-cols-2'>
-                <div className='rounded-md border border-ui-border bg-ui-panel p-3'><p className='text-[11px] font-semibold uppercase text-ui-muted'>Request</p><p className='mt-2 text-sm text-ui-text'>{requestSchema ? `${operation.requestBody?.required ? 'Required' : 'Optional'} JSON body` : 'No request body'}</p>{requestSchema ? <pre className='mt-2 overflow-x-auto text-xs leading-5 text-ui-muted'>{JSON.stringify(requestSchema, null, 2)}</pre> : null}</div>
-                <div className='rounded-md border border-ui-border bg-ui-panel p-3'><p className='text-[11px] font-semibold uppercase text-ui-muted'>Responses</p><div className='mt-2 grid gap-2'>{responses.map(([status, response]) => <div key={status} className='flex items-start gap-2 text-sm'><code className={`font-semibold ${status.startsWith('2') ? 'text-ui-success' : 'text-ui-warning'}`}>{status}</code><span className='text-ui-muted'>{'$ref' in response ? response.$ref : 'description' in response ? response.description || 'Response' : 'Response'}</span></div>)}</div></div>
+                <div className='min-w-0 rounded-md border border-ui-border bg-ui-panel p-3'><p className='text-[11px] font-semibold uppercase text-ui-muted'>Request</p><p className='mt-2 text-sm text-ui-text'>{requestSchema ? `${operation.requestBody?.required ? 'Required' : 'Optional'} JSON body` : 'No request body'}</p>{requestSchema ? <pre className='mt-2 overflow-x-auto text-xs leading-5 text-ui-muted'>{JSON.stringify(requestSchema, null, 2)}</pre> : null}</div>
+                <div className='min-w-0 rounded-md border border-ui-border bg-ui-panel p-3'><p className='text-[11px] font-semibold uppercase text-ui-muted'>Responses</p><div className='mt-2 grid gap-2'>{responses.map(([status, response]) => {
+                    const resolved = '$ref' in response ? components?.responses?.[response.$ref?.split('/').pop() || ''] : response as ResponseSpec
+                    return <div key={status} className='flex items-start gap-2 text-sm'><code className={`font-semibold ${status.startsWith('2') ? 'text-ui-success' : 'text-ui-warning'}`}>{status}</code><span className='text-ui-muted'>{resolved?.description || 'Response'}</span></div>
+                })}</div>
+                {sample ? <div className='mt-4 border-t border-ui-border pt-3' data-api-response-example={`${method} ${path}`}>
+                    <p className='text-xs font-semibold text-ui-text'>Sample response · HTTP {sample.status}</p>
+                    <p className='mt-1 text-xs text-ui-muted'>Fictional example using selected response fields. Names, addresses, and credentials are illustrative.</p>
+                    <pre className='mt-3 max-h-96 overflow-auto rounded-md bg-ui-canvas p-3 text-xs leading-5 text-ui-text'><code>{JSON.stringify(sample.body, null, 2)}</code></pre>
+                </div> : null}
+                </div>
             </div>
         </div>
     </details>
