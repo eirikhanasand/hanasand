@@ -11,6 +11,7 @@ type TestTask = {
 const bun = process.execPath
 
 const tasks: TestTask[] = [
+    { id: 'password-policy', title: 'Password requirements', command: [bun, 'test', 'tests/password-policy.test.ts'] },
     { id: 'timetable', title: 'Dated timetable activity totals and persistence', command: [bun, 'test', 'tests/timetable.test.ts'] },
     { id: 'code-access', title: 'Code access sessions and login limits', command: [bun, 'test', 'tests/code-access.test.ts'] },
     { id: 'thesis-workspace', title: 'Thesis table text, formulas and persistence', command: [bun, 'test', 'tests/workspace.test.ts'] },
