@@ -114,15 +114,26 @@ function trafficActors(actor: 'ip' | 'user_agent', related: 'ip' | 'user_agent',
         ), leaders AS (
             SELECT ${actor}, SUM(hits)::bigint AS hits FROM grouped
             GROUP BY ${actor} ORDER BY hits DESC LIMIT 20
+        ), relevant AS MATERIALIZED (
+            SELECT grouped.* FROM grouped JOIN leaders USING (${actor})
+        ), related_ranked AS (
+            SELECT ${actor}, ${related},
+                ROW_NUMBER() OVER (PARTITION BY ${actor} ORDER BY SUM(hits) DESC, ${related}) AS rank
+            FROM relevant WHERE ${related}<>'' GROUP BY ${actor}, ${related}
+        ), paths_ranked AS (
+            SELECT ${actor}, path, SUM(hits)::bigint AS hits,
+                ROW_NUMBER() OVER (PARTITION BY ${actor} ORDER BY SUM(hits) DESC, path) AS rank
+            FROM relevant WHERE path<>'' GROUP BY ${actor}, path
+        ), path_lists AS (
+            SELECT ${actor}, json_agg(json_build_object('path',path,'hits',hits) ORDER BY hits DESC,path) AS paths
+            FROM paths_ranked WHERE rank<=20 GROUP BY ${actor}
         )
-        SELECT leaders.*,
-            COALESCE((SELECT ${related} FROM grouped WHERE grouped.${actor}=leaders.${actor} AND ${related}<>''
-                GROUP BY ${related} ORDER BY SUM(hits) DESC, ${related} LIMIT 1), '') AS ${relatedLabel},
-            COALESCE((SELECT json_agg(json_build_object('path', p.path, 'hits', p.hits) ORDER BY p.hits DESC)
-                FROM (SELECT path, SUM(hits)::bigint AS hits FROM grouped
-                    WHERE grouped.${actor}=leaders.${actor} AND path<>'' GROUP BY path
-                    ORDER BY hits DESC, path LIMIT 20) p), '[]'::json) AS top_paths
-        FROM leaders ORDER BY hits DESC
+        SELECT leaders.*, COALESCE(related_ranked.${related}, '') AS ${relatedLabel},
+            COALESCE(path_lists.paths, '[]'::json) AS top_paths
+        FROM leaders
+        LEFT JOIN related_ranked ON related_ranked.${actor}=leaders.${actor} AND related_ranked.rank=1
+        LEFT JOIN path_lists ON path_lists.${actor}=leaders.${actor}
+        ORDER BY leaders.hits DESC
     `)
 }
 
