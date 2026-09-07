@@ -2,6 +2,7 @@
 """Start unused local slots, inheriting the existing app's runtime settings locally."""
 import json
 import os
+from pathlib import Path
 import subprocess
 import socket
 import sys
@@ -11,6 +12,15 @@ assert kind in ('api', 'auth', 'frontend') and len(ports) == 2
 assert all(port.isdecimal() and 1024 < int(port) < 65535 for port in ports)
 original = json.loads(subprocess.check_output(['docker', 'inspect', source]))[0]
 settings = dict(item.split('=', 1) for item in original['Config']['Env'])
+# Keep provider secrets separate from the shared API/frontend environment.
+if kind == 'auth':
+    secret_file = Path('/home/hanasand/resilience/auth-providers.json')
+    if secret_file.exists():
+        secrets = json.loads(secret_file.read_text())
+        allowed = {'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'APPLE_CLIENT_ID', 'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY'}
+        if not isinstance(secrets, dict) or not set(secrets) <= allowed or not all(isinstance(v, str) and v for v in secrets.values()):
+            raise SystemExit('Invalid authentication provider configuration')
+        settings.update(secrets)
 settings.update(NODE_ENV='production', RESILIENCE_SITE='inspur', HANASAND_RELEASE_COMMIT=image.rsplit(':',1)[-1], RESILIENCE_STATE_FILE='/resilience/state.json', DB_HOST='127.0.0.1', DB_PORT='18504', DB_MAX_CONN='8' if kind=='api' else '5', DB_TIMEOUT_MS='2000', LISTEN_HOST='127.0.0.1')
 if kind == 'api': settings.update(API_HTTP_ONLY='1', TI_SCRAPER_API_BASE='http://127.0.0.1:18097')
 if kind == 'auth': settings.update(AUTH_SERVICE_ONLY='1')
