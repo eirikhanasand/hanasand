@@ -33,8 +33,8 @@ export default function AptUpdatesClient() {
                 <Summary icon={<ShieldCheck />} label='Security Updates' value={`${security.length} package${security.length === 1 ? '' : 's'}`} tone={security.length ? 'danger' : 'success'} />
                 <Summary icon={<Clock3 />} label='Updates' value={`${regular.length} package${regular.length === 1 ? '' : 's'}`} tone={regular.length ? 'warning' : 'success'} />
             </div>
-            <div className='grid gap-2 md:grid-cols-2'>
-                <div className='rounded-lg border border-ui-border bg-ui-raised p-3 md:col-span-2'><div className='flex items-center justify-between gap-3'><p className='text-xs font-semibold text-ui-muted'>Last installed</p><p className='text-right text-sm text-ui-muted'>{status?.last_update_at ? formatLastCheck(status.last_update_at) : 'Never'}</p></div>{status?.last_updated_packages?.length ? <p className='mt-2 wrap-break-word text-sm'>{status.last_updated_packages.join(', ')}</p> : null}</div>
+            <div className='grid gap-2 lg:grid-cols-3'>
+                <div className='rounded-lg border border-ui-border bg-ui-raised p-3 min-w-0'><div className='flex flex-wrap items-center justify-between gap-2'><p className='text-xs font-semibold text-ui-muted'>Last installed</p><p className='text-right text-sm text-ui-muted'>{status?.last_update_at ? formatLastCheck(status.last_update_at) : 'Never'}</p></div>{status?.last_updated_packages?.length ? <p className='mt-2 wrap-break-word text-sm'>{status.last_updated_packages.join(', ')}</p> : null}</div>
                 <Detail label='Policy' value='Security updates immediately; other Ubuntu updates after 72 hours.' />
                 <Detail label='Verification' value={status?.policy?.repository_verification || 'Waiting for the host to report its verification policy.'} />
             </div>
