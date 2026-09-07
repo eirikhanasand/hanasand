@@ -10,20 +10,18 @@ describe('production monitor notification transitions', () => {
         const schema = await readFile(path.join(import.meta.dir, '../src/utils/db/ensureSchema.ts'), 'utf8')
         expect(source).toContain('WINDOW status_history_window AS')
         expect(source).not.toContain('WINDOW window AS')
-        expect(source).toContain('const [result, historyResult, incidentResult] = await Promise.all([')
         expect(source).toContain("WHERE status <> 'up'")
         expect(source).not.toContain('FROM service_monitor_results recovered')
         expect(source).toContain('LAG(status) OVER status_history_window')
         expect(schema).toContain('idx_service_monitor_results_non_up')
         expect(source).toContain('const STATUS_CACHE_MS = 15_000')
-        expect(source).toMatch(/Cache-Control.*public, max-age=(?:[0-9]|1[0-5]), stale-while-revalidate=/)
     })
 
-    test('status returns the last truthful payload while refreshing an expired cache', async () => {
-        const source = await readFile(path.join(import.meta.dir, '../src/handlers/status/get.ts'), 'utf8')
-        expect(source).toContain('if (statusCache) {')
-        expect(source).toContain('return Promise.resolve(statusCache.payload)')
-        expect(source).toContain('status refresh failed')
+    test('current status bypasses slow history and retains verified evidence through restart and failure', async () => {
+        const child = Bun.spawn([process.execPath, 'scripts/check-status-feed.ts'], { stdout: 'pipe', stderr: 'pipe' })
+        const [exitCode, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()])
+        expect({ exitCode, stderr: exitCode ? stderr : '' }).toEqual({ exitCode: 0, stderr: '' })
+        expect(stdout).toContain('persisted evidence survives restart and database failure')
     })
 
     test('processing backlog deduplicates current review tasks by their persisted id', async () => {

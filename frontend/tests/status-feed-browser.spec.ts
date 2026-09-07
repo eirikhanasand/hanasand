@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('status feed failures preserve verified evidence without claiming a service outage', async ({ page, baseURL }) => {
+test('status feed failures preserve verified evidence without claiming a service outage', async ({ page }) => {
     test.skip(process.env.STATUS_FEED_TEST !== '1', 'Requires the isolated status feed fixture.')
     const names = [['Core platform', 'API Health'], ['Website', 'Public Website'], ['Threat intelligence', 'Public Search'], ['Threat intelligence', 'Processing Backlog'], ['Threat intelligence', 'Source Collection'], ['Browser sandbox', 'Browser Workspace'], ['Dark web monitoring', 'Monitoring Workspace'], ['Dark web monitoring', 'Latest Activity']]
     const at = new Date().toISOString()
@@ -22,7 +22,7 @@ test('status feed failures preserve verified evidence without claiming a service
     await expect(page.getByRole('heading', { name: 'Monitoring unavailable', exact: true })).toBeVisible()
     await expect(page.getByText('8 monitored checks')).toBeVisible()
     await expect(verified).toBeVisible()
-    await page.request.post(baseURL + '/fixture/unavailable')
+    await page.request.post('http://127.0.0.1:3241/fixture/unavailable')
     await page.reload()
     await expect(page.getByRole('heading', { name: 'Monitoring unavailable', exact: true })).toBeVisible()
     await expect(verified).toBeVisible()
