@@ -64,7 +64,7 @@ export function MonitoringOverview({ snapshot, operations, alerts, dataHealth, o
         <section className={`${panel} p-4`}>
             <div className='flex flex-wrap items-center justify-between gap-2'><h2 className='font-semibold text-ui-text'>Your watchlist</h2><Link className={link} href={scopedHref('/dwm/watchlists')}>Manage watchlist</Link></div>
             <LoadState state={dataHealth.snapshot.state} subject='Watchlist' onRetry={onRefresh} />
-            {dataHealth.snapshot.state === 'live' && (snapshot.watchlist.length ? <ul className='mt-3 flex flex-wrap gap-2'>{snapshot.watchlist.map(term => <li key={`${term.kind}:${term.value}`} className='max-w-full break-words rounded-md bg-ui-raised px-3 py-1 text-sm text-ui-text'>{term.value} <span className='text-ui-muted'>· {label(term.kind)}</span></li>)}</ul> : <p className='mt-2 text-sm text-ui-muted'>Add a company, domain, brand, or other term to start matching findings.</p>)}
+            {dataHealth.snapshot.state === 'live' && (snapshot.watchlist.length ? <ul className='mt-3 flex flex-wrap gap-2'>{snapshot.watchlist.map(term => <li key={`${term.kind}:${term.value}`} className='max-w-full wrap-break-word rounded-md bg-ui-raised px-3 py-1 text-sm text-ui-text'>{term.value} <span className='text-ui-muted'>· {label(term.kind)}</span></li>)}</ul> : <p className='mt-2 text-sm text-ui-muted'>Add a company, domain, brand, or other term to start matching findings.</p>)}
         </section>
         <section className={panel}>
             <header className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
@@ -79,10 +79,10 @@ export function MonitoringOverview({ snapshot, operations, alerts, dataHealth, o
                 const evidence = alert.evidence || []
                 return <article key={alert.id} className='min-w-0 p-4' data-finding-id={alert.id}>
                     <div className='flex flex-wrap items-start justify-between gap-3'>
-                        <div className='min-w-0'><h3 className='break-words font-semibold text-ui-text'>{alert.company || alert.matchedTerm.value}</h3><p className='mt-1 text-xs text-ui-muted'>Matched {alert.matchedTerm.value} · {label(alert.severity)} · {label(alert.reviewState)}</p></div>
+                        <div className='min-w-0'><h3 className='wrap-break-word font-semibold text-ui-text'>{alert.company || alert.matchedTerm.value}</h3><p className='mt-1 text-xs text-ui-muted'>Matched {alert.matchedTerm.value} · {label(alert.severity)} · {label(alert.reviewState)}</p></div>
                         {href ? <Link href={href} className={link}>Open case</Link> : <button className={`${control} disabled:cursor-not-allowed disabled:opacity-50`} disabled={busyAction === `case:${alert.id}` || !canOpenCase(alert)} title={canOpenCase(alert) ? undefined : 'Case creation requires retained source evidence and permission.'} onClick={() => void onOpenCase(alert)}>{busyAction === `case:${alert.id}` ? 'Opening…' : 'Open case'}</button>}
                     </div>
-                    <p className='mt-2 break-words text-sm leading-6 text-ui-text'>{customerAlertSummary(alert)}</p>
+                    <p className='mt-2 wrap-break-word text-sm leading-6 text-ui-text'>{customerAlertSummary(alert)}</p>
                     <p className='mt-2 text-xs text-ui-muted'>{alert.matchTiming?.kind === 'new_evidence' ? 'New observation' : alert.matchTiming?.kind === 'historical_backfill' ? 'Historical match' : 'Observation'} · <Timestamp value={alert.evidenceSummary?.lastObservedAt || alert.lastSeenAt || alert.firstSeenAt} /> · {evidence.length} evidence records</p>
                     <details className='mt-3' open={initialAlertId === alert.id || undefined}>
                         <summary className={`${link} cursor-pointer`}>Investigate finding</summary>
@@ -93,7 +93,7 @@ export function MonitoringOverview({ snapshot, operations, alerts, dataHealth, o
                             <p className='text-sm font-semibold text-ui-text'>{item.sourceName} <span className='font-normal text-ui-muted'>· {label(item.captureMode)}</span></p>
                             <p className='mt-1 text-xs text-ui-muted'>Observed: <Timestamp value={item.observedAt || item.firstSeenAt || item.provenance?.publishedAt} /></p>
                             <p className='mt-1 text-xs text-ui-muted'>Collected: <Timestamp value={item.provenance?.collectedAt} /></p>
-                            <blockquote className='mt-2 break-words text-sm leading-6 text-ui-text'>{safeEvidenceExcerpt(item.excerpt)}</blockquote>
+                            <blockquote className='mt-2 wrap-break-word text-sm leading-6 text-ui-text'>{safeEvidenceExcerpt(item.excerpt)}</blockquote>
                             {item.provenance?.captureId && <p className='mt-2 break-all text-xs text-ui-muted'>Capture: {item.provenance.captureId}</p>}
                             {item.contentHash && <p className='mt-1 break-all font-mono text-xs text-ui-muted'>Hash: {item.contentHash}</p>}
                         </li>)}</ul>
@@ -117,7 +117,7 @@ function SourceCollectionStatus({ operations, state, onRetry }: { operations: Op
         <LoadState state={state} subject='Collection health' onRetry={onRetry} />
         {state === 'live' && !rows.length && <p className='p-4 text-sm text-ui-muted'>No sources are available in this monitoring scope.</p>}
         {state === 'live' && <ul className='divide-y divide-ui-border'>{rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(source => <li key={source.sourceId} className='grid gap-2 p-4 sm:grid-cols-3'>
-            <div className='min-w-0'><p className='break-words text-sm font-semibold text-ui-text'>{source.sourceName}</p><p className='mt-1 text-xs text-ui-muted'>{label(source.family)} · {source.approvedMetadataOnly ? 'Metadata only' : 'Content collection'}</p></div>
+            <div className='min-w-0'><p className='wrap-break-word text-sm font-semibold text-ui-text'>{source.sourceName}</p><p className='mt-1 text-xs text-ui-muted'>{label(source.family)} · {source.approvedMetadataOnly ? 'Metadata only' : 'Content collection'}</p></div>
             <div className='text-sm text-ui-text'>{source.collectionStatus ? statuses[source.collectionStatus] : 'Collection result not recorded'}<p className='mt-1 text-xs text-ui-muted'>Last attempt: <Timestamp value={source.lastAttemptAt} /></p></div>
             <p className='text-xs text-ui-muted'>Last success: <Timestamp value={source.lastSuccessAt || source.lastCollectedAt} /></p>
         </li>)}</ul>}
@@ -136,7 +136,7 @@ export function ActorDirectory({ actors, state, onRetry }: { actors: DwmActorOve
             <div className='p-4'><p className='mb-3 text-sm text-ui-muted'>Profiles linked to available sources and observations. A listed source does not confirm active monitoring.</p><input aria-label='Search actors' placeholder='Search actors or aliases' className={`${control} w-full`} value={query} onChange={event => { setQuery(event.target.value); setPage(0) }} /></div>
             {!rows.length && <p className='p-4 text-sm text-ui-muted'>{actors.length ? 'No actors match this search.' : 'No actor profiles are linked to this monitoring scope yet.'}</p>}
             <ul className='divide-y divide-ui-border'>{rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(actor => <li key={actor.actor} className='flex flex-wrap items-center justify-between gap-3 p-4'>
-                <div className='min-w-0'><Link className={`${link} break-words`} href={`/ti/${encodeURIComponent(actor.actor)}`}>{actor.actor}</Link><p className='mt-1 text-xs text-ui-muted'>{actor.sourceCount} sources · {actor.captureCount} captures · {actor.captureCount ? 'Recorded observations' : 'No captured observations'}</p><p className='mt-1 text-xs text-ui-muted'>Latest observation: <Timestamp value={actor.latestSeenAt} /></p>{actor.sourceFamilies.includes('darkweb_metadata') && <p className='mt-1 text-xs text-ui-muted'>Includes metadata-only sources</p>}</div>
+                <div className='min-w-0'><Link className={`${link} wrap-break-word`} href={`/ti/${encodeURIComponent(actor.actor)}`}>{actor.actor}</Link><p className='mt-1 text-xs text-ui-muted'>{actor.sourceCount} sources · {actor.captureCount} captures · {actor.captureCount ? 'Recorded observations' : 'No captured observations'}</p><p className='mt-1 text-xs text-ui-muted'>Latest observation: <Timestamp value={actor.latestSeenAt} /></p>{actor.sourceFamilies.includes('darkweb_metadata') && <p className='mt-1 text-xs text-ui-muted'>Includes metadata-only sources</p>}</div>
                 <Link className={link} href={`/ti/${encodeURIComponent(actor.actor)}`} aria-label={`Open ${actor.actor} profile`}>Open profile</Link>
             </li>)}</ul>
             <Pages count={rows.length} page={currentPage} setPage={setPage} />
