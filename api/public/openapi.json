@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Hanasand Public Intelligence API",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "servers": [
     {
@@ -193,6 +193,9 @@
             "$ref": "#/components/parameters/Limit"
           },
           {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
             "$ref": "#/components/parameters/Cursor"
           }
         ],
@@ -260,6 +263,9 @@
           },
           {
             "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Page"
           },
           {
             "$ref": "#/components/parameters/Cursor"
@@ -331,6 +337,9 @@
             "$ref": "#/components/parameters/Limit"
           },
           {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
             "$ref": "#/components/parameters/Cursor"
           }
         ],
@@ -398,6 +407,9 @@
           },
           {
             "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Page"
           },
           {
             "$ref": "#/components/parameters/Cursor"
@@ -469,6 +481,9 @@
             "$ref": "#/components/parameters/Limit"
           },
           {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
             "$ref": "#/components/parameters/Cursor"
           }
         ],
@@ -536,6 +551,9 @@
           },
           {
             "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Page"
           },
           {
             "$ref": "#/components/parameters/Cursor"
@@ -607,6 +625,9 @@
             "$ref": "#/components/parameters/Limit"
           },
           {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
             "$ref": "#/components/parameters/Cursor"
           }
         ],
@@ -671,6 +692,9 @@
           },
           {
             "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Page"
           },
           {
             "$ref": "#/components/parameters/Cursor"
@@ -742,6 +766,9 @@
             "$ref": "#/components/parameters/Limit"
           },
           {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
             "$ref": "#/components/parameters/Cursor"
           }
         ],
@@ -809,6 +836,9 @@
           },
           {
             "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Page"
           },
           {
             "$ref": "#/components/parameters/Cursor"
@@ -882,10 +912,22 @@
           "default": 50
         }
       },
+      "Page": {
+        "name": "page",
+        "in": "query",
+        "description": "Page number, starting at 1. Do not combine with cursor.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "example": 2
+        }
+      },
       "Cursor": {
         "name": "cursor",
         "in": "query",
-        "description": "Pass pagination.nextCursor from the previous response. Omit for the first page.",
+        "deprecated": true,
+        "description": "Legacy record offset. Use page for new integrations. Do not combine with page.",
         "schema": {
           "type": "string",
           "pattern": "^\\d+$",
@@ -949,6 +991,22 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "nextPage": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "description": "Next page number, or null when there are no more pages."
+          },
           "limit": {
             "type": "integer",
             "minimum": 1,
@@ -963,12 +1021,16 @@
               "string",
               "null"
             ],
-            "description": "Pass this as cursor to fetch the next page. Null means there are no more pages."
+            "deprecated": true,
+            "description": "Legacy pagination. Use nextPage instead."
           }
         },
         "required": [
+          "page",
           "limit",
           "total",
+          "totalPages",
+          "nextPage",
           "nextCursor"
         ]
       },

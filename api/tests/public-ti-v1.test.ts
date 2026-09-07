@@ -56,6 +56,8 @@ describe('public TI v1', () => {
             if (!path.get) continue
             for (const parameter of path.get.parameters) expect(resolveRef(parameter.$ref)).toHaveProperty('schema')
         }
+        expect(spec.components.parameters.Page.schema).toMatchObject({ type: 'integer', minimum: 1, default: 1 })
+        expect(spec.components.parameters.Cursor.deprecated).toBe(true)
         const cursor = spec.components.parameters.Cursor
         expect(new RegExp(String(cursor.schema.pattern)).test('50')).toBe(true)
         expect(new RegExp(String(cursor.schema.pattern)).test('invalid')).toBe(false)
@@ -74,11 +76,37 @@ describe('public TI v1', () => {
             const first = await app.inject({ method: 'GET', url: `/api/v1${route}?limit=1`, headers: { 'x-api-key': 'valid' } })
             expect(first.statusCode).toBe(200)
             expect(validateResponse('/findings', 'get', 200, first.json())).toBe(true)
-            const second = await app.inject({ method: 'GET', url: `/api/v1${route}?limit=1&cursor=${first.json().pagination.nextCursor}`, headers: { 'x-api-key': 'valid' } })
+            const second = await app.inject({ method: 'GET', url: `/api/v1${route}?limit=1&page=${first.json().pagination.nextPage}`, headers: { 'x-api-key': 'valid' } })
             expect(second.json().data[0].id).toBe('finding-1')
-            expect(second.json().pagination.nextCursor).toBeNull()
+            expect(second.json().pagination).toMatchObject({ page: 2, totalPages: 2, nextPage: null })
         }
         expect(requested.every(url => url.pathname === '/v1/intel/claims')).toBe(true)
+    })
+
+    test('supports direct pages, empty results, legacy offsets, and rejects invalid pages', async () => {
+        const offsets: string[] = []
+        const app = await testApp(async input => {
+            const url = new URL(String(input))
+            const offset = Number(url.searchParams.get('cursor'))
+            offsets.push(String(offset))
+            const total = url.searchParams.get('q') === 'empty' ? 0 : 5
+            return Response.json({ actorProfiles: offset < total ? [{ id: `actor-${offset}`, canonicalName: 'Example', aliases: [], confidence: 0.8, sourceIds: [], captureIds: [] }] : [], total, nextCursor: offset + 2 < total ? String(offset + 2) : null })
+        })
+        const get = (query: string) => app.inject({ method: 'GET', url: `/api/v1/actors?limit=2&${query}`, headers: { 'x-api-key': 'valid' } })
+        expect((await get('page=2')).json().pagination).toMatchObject({ page: 2, total: 5, totalPages: 3, nextPage: 3 })
+        const last = (await get('page=3')).json()
+        expect(last.pagination).toMatchObject({ page: 3, totalPages: 3, nextPage: null })
+        expect(last.data[0].id).toBe('actor-4')
+        expect((await get('page=4')).json()).toMatchObject({ data: [], pagination: { page: 4, nextPage: null } })
+        expect((await get('q=empty')).json()).toMatchObject({ data: [], pagination: { page: 1, totalPages: 0, nextPage: null } })
+        expect((await get('cursor=2')).json().pagination.nextCursor).toBe('4')
+        expect(offsets).toEqual(['2', '4', '6', '0', '2'])
+        for (const query of ['page=0', 'page=-1', 'page=1.5', 'page=abc', 'page=', 'page=1&page=2', 'page=9007199254740991', 'page=1&cursor=0']) {
+            const response = await get(query)
+            expect(response.statusCode).toBe(400)
+            expect(response.json().error.code).toBe('invalid_pagination')
+        }
+        expect(offsets).toHaveLength(5)
     })
 
     test('findings scopes preserve existing keys and rate limits without widening access', () => {
@@ -184,7 +212,7 @@ describe('public TI v1', () => {
         expect(JSON.stringify(body)).not.toMatch(/\.onion|\.i2p/)
     })
 
-    test('protects global collections and returns typed cursor pages without accepting caller tenant scope', async () => {
+    test('protects global collections and returns typed numbered pages without accepting caller tenant scope', async () => {
         let requestedUrl = ''
         let serviceToken = ''
         const previousServiceToken = process.env.TI_SCRAPER_SERVICE_TOKEN
@@ -199,9 +227,9 @@ describe('public TI v1', () => {
             expect(anonymous.statusCode).toBe(401)
             expect(anonymous.json().error.code).toBe('authentication_required')
 
-            const response = await app.inject({ method: 'GET', url: '/api/v1/actors?q=apt&limit=10&cursor=0', headers: { 'x-api-key': 'valid' } })
+            const response = await app.inject({ method: 'GET', url: '/api/v1/actors?q=apt&limit=10&page=1', headers: { 'x-api-key': 'valid' } })
             expect(response.statusCode).toBe(200)
-            expect(response.json()).toEqual({ data: [{ id: 'actor-1', canonicalName: 'APT29', aliases: ['Cozy Bear'], confidence: 0.9, sourceIds: ['src-1'], captureIds: ['cap-1'] }], pagination: { limit: 10, total: 1, nextCursor: null }, meta: { requestId: response.headers['x-request-id'], organizationId: 'org-customer' } })
+            expect(response.json()).toEqual({ data: [{ id: 'actor-1', canonicalName: 'APT29', aliases: ['Cozy Bear'], confidence: 0.9, sourceIds: ['src-1'], captureIds: ['cap-1'] }], pagination: { page: 1, limit: 10, total: 1, totalPages: 1, nextPage: null, nextCursor: null }, meta: { requestId: response.headers['x-request-id'], organizationId: 'org-customer' } })
             expect(requestedUrl).toContain('/v1/intel/actor-profiles?')
             expect(requestedUrl).not.toContain('tenant')
             expect(serviceToken).toBe('service-secret')
@@ -575,10 +603,10 @@ describe('public TI v1', () => {
         expect(protectedCall.error?.error.code).toBe('authentication_required')
 
         const authenticated = createPublicTiClient({ baseUrl: 'http://api.test/api/v1', apiKey: 'valid', fetch: injectedFetch(app) })
-        const page = await authenticated.GET('/actors', { params: { query: { limit: 1, cursor: '0' } } })
+        const page = await authenticated.GET('/actors', { params: { query: { limit: 1, page: 1 } } })
         expect(page.error).toBeUndefined()
         expect(page.data?.data[0]?.canonicalName).toBe('APT29')
-        expect(page.data?.pagination).toEqual({ limit: 1, total: 1, nextCursor: null })
+        expect(page.data?.pagination).toEqual({ page: 1, limit: 1, total: 1, totalPages: 1, nextPage: null, nextCursor: null })
     })
 
     test('normalizes legacy rate-limit responses into the stable error contract', () => {

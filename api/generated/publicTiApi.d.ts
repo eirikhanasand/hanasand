@@ -230,9 +230,16 @@ export interface components {
             error: components["schemas"]["ErrorDetail"];
         };
         Pagination: {
+            page: number;
+            totalPages: number;
+            /** @description Next page number, or null when there are no more pages. */
+            nextPage: number | null;
             limit: number;
             total: number;
-            /** @description Pass this as cursor to fetch the next page. Null means there are no more pages. */
+            /**
+             * @deprecated
+             * @description Legacy pagination. Use nextPage instead.
+             */
             nextCursor: string | null;
         };
         Meta: {
@@ -807,7 +814,12 @@ export interface components {
         Query: string;
         /** @description Number of records per page. */
         Limit: number;
-        /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+        /** @description Page number, starting at 1. Do not combine with cursor. */
+        Page: number;
+        /**
+         * @deprecated
+         * @description Legacy record offset. Use page for new integrations. Do not combine with page.
+         */
         Cursor: string;
     };
     requestBodies: never;
@@ -898,7 +910,12 @@ export interface operations {
                 q?: components["parameters"]["Query"];
                 /** @description Number of records per page. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                /** @description Page number, starting at 1. Do not combine with cursor. */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @deprecated
+                 * @description Legacy record offset. Use page for new integrations. Do not combine with page.
+                 */
                 cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
@@ -933,7 +950,12 @@ export interface operations {
                 q?: components["parameters"]["Query"];
                 /** @description Number of records per page. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                /** @description Page number, starting at 1. Do not combine with cursor. */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @deprecated
+                 * @description Legacy record offset. Use page for new integrations. Do not combine with page.
+                 */
                 cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
@@ -968,7 +990,12 @@ export interface operations {
                 q?: components["parameters"]["Query"];
                 /** @description Number of records per page. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                /** @description Page number, starting at 1. Do not combine with cursor. */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @deprecated
+                 * @description Legacy record offset. Use page for new integrations. Do not combine with page.
+                 */
                 cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
@@ -1003,7 +1030,12 @@ export interface operations {
                 q?: components["parameters"]["Query"];
                 /** @description Number of records per page. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                /** @description Page number, starting at 1. Do not combine with cursor. */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @deprecated
+                 * @description Legacy record offset. Use page for new integrations. Do not combine with page.
+                 */
                 cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
@@ -1038,7 +1070,12 @@ export interface operations {
                 q?: components["parameters"]["Query"];
                 /** @description Number of records per page. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                /** @description Page number, starting at 1. Do not combine with cursor. */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @deprecated
+                 * @description Legacy record offset. Use page for new integrations. Do not combine with page.
+                 */
                 cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
@@ -1073,7 +1110,12 @@ export interface operations {
                 q?: components["parameters"]["Query"];
                 /** @description Number of records per page. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                /** @description Page number, starting at 1. Do not combine with cursor. */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @deprecated
+                 * @description Legacy record offset. Use page for new integrations. Do not combine with page.
+                 */
                 cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
@@ -1108,7 +1150,12 @@ export interface operations {
                 q?: components["parameters"]["Query"];
                 /** @description Number of records per page. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                /** @description Page number, starting at 1. Do not combine with cursor. */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @deprecated
+                 * @description Legacy record offset. Use page for new integrations. Do not combine with page.
+                 */
                 cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
@@ -1143,7 +1190,12 @@ export interface operations {
                 q?: components["parameters"]["Query"];
                 /** @description Number of records per page. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                /** @description Page number, starting at 1. Do not combine with cursor. */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @deprecated
+                 * @description Legacy record offset. Use page for new integrations. Do not combine with page.
+                 */
                 cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
@@ -1178,7 +1230,12 @@ export interface operations {
                 q?: components["parameters"]["Query"];
                 /** @description Number of records per page. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                /** @description Page number, starting at 1. Do not combine with cursor. */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @deprecated
+                 * @description Legacy record offset. Use page for new integrations. Do not combine with page.
+                 */
                 cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
@@ -1213,7 +1270,12 @@ export interface operations {
                 q?: components["parameters"]["Query"];
                 /** @description Number of records per page. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Pass pagination.nextCursor from the previous response. Omit for the first page. */
+                /** @description Page number, starting at 1. Do not combine with cursor. */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @deprecated
+                 * @description Legacy record offset. Use page for new integrations. Do not combine with page.
+                 */
                 cursor?: components["parameters"]["Cursor"];
             };
             header?: never;

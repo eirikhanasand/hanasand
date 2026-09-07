@@ -148,7 +148,7 @@ export default function ApiKeyOnboarding({ server }: { server: string }) {
 
     const selected = organizations.find(organization => organization.id === organizationId)
     const activeKey = apiKeys.find(apiKey => apiKey.enabled)
-    const firstRequest = `curl "${server}/actors?limit=20" \\\n  -H "X-API-Key: ${secret || '$HANASAND_API_KEY'}"`
+    const firstRequest = `curl "${server}/actors?page=1&limit=20" \\\n  -H "X-API-Key: ${secret || '$HANASAND_API_KEY'}"`
 
     const headerActionClass = 'inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:opacity-60'
 
@@ -161,7 +161,7 @@ export default function ApiKeyOnboarding({ server }: { server: string }) {
                     {busy === 'load' ? 'Loading…' : busy ? 'Creating…' : selected ? 'Create API key' : 'Create organization'}<ArrowRight className='h-4 w-4' />
                 </button>
             ) : null, headerAction)}
-            <div className='mx-auto grid max-w-7xl gap-6 px-4 py-10 md:px-8'>
+            <div className='mx-auto grid max-w-7xl gap-6 px-4 py-6 md:px-8'>
                 <div className='max-w-3xl'>
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Customer onboarding</p>
                     <h2 className='mt-2 text-3xl font-semibold'>Organization, API key, first request.</h2>
