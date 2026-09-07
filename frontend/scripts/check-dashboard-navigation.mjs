@@ -1,9 +1,10 @@
 import { strict as assert } from 'node:assert'
 import { readdir, readFile } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
+import { hasAppSidebar } from '../src/utils/routes/appRoutes.ts'
 import { getDashboardNavigation, navigationLinks } from '../src/utils/layout/dashboardNavigation.ts'
 
-const access = { id: 'sidebar-test', isAdmin: true, canManageSystem: true, canManageContent: true }
+const access = { id: 'sidebar-test', isAdmin: true, canManageSystem: true, canManageContent: true, hasVMs: true }
 const all = navigationLinks(getDashboardNavigation(access))
 assert.equal(all.length, new Set(all.map(item => item.href)).size)
 const memberAccess = { ...access, isAdmin: false, canManageSystem: false, canManageContent: false }
@@ -21,6 +22,7 @@ assert.deepEqual(reviewer.filter(item => ['/ti/evaluation', '/ti/timeliness'].in
 const operator = navigationLinks(getDashboardNavigation({ ...memberAccess, canManageSystem: true }))
 assert(operator.some(item => item.href === '/system'))
 assert.deepEqual(navigationLinks(getDashboardNavigation(memberAccess)).filter(item => item.ancestors.includes('Infrastructure')).map(item => item.href), ['/system', '/vms'])
+assert(!navigationLinks(getDashboardNavigation({ ...memberAccess, hasVMs: false })).some(item => item.href === '/vms'))
 assert(!operator.some(item => ['/db', '/logs', '/system/updates'].includes(item.href)))
 assert.equal(all.find(item => item.href === '/dwm/actors')?.label, 'Monitored actors')
 for (const path of ['/management/users', '/management/roles']) {
@@ -30,6 +32,15 @@ assert(!navigationLinks(getDashboardNavigation(memberAccess)).some(item => item.
 assert.deepEqual(all.find(item => item.href === '/cases')?.ancestors, ['Security operations'])
 assert.deepEqual(all.find(item => item.href === '/dwm/actors')?.ancestors, ['Security operations', 'Dark web monitoring'])
 assert.deepEqual(getDashboardNavigation(access)[0].items.slice(0, 3).map(item => item.label), ['Overview', 'Threat Search', 'Cases'])
+
+for (const permissions of [access, memberAccess]) {
+    const links = navigationLinks(getDashboardNavigation(permissions))
+    for (const href of ['/solutions', '/dwm', '/mill', '/ti', '/browser', '/organizations', '/pwned', '/test']) assert(links.some(item => item.href === href), `Missing product destination: ${href}`)
+    assert(links.some(item => item.label === 'Security Scanner' && item.href === (permissions.canManageSystem ? '/scanner' : '/solutions/scanner')))
+    assert(links.some(item => item.href === '/mill' && item.ancestors.includes('Security Monitoring')))
+}
+for (const path of ['/browser', '/browser/report', '/solutions', '/solutions/scanner', '/solutions/mill', '/pwned', '/test']) assert(hasAppSidebar(path), `Product loses the signed-in sidebar: ${path}`)
+assert(!hasAppSidebar('/browser-unrelated'))
 
 // Exercise the real component; only Next routing is replaced.
 const build = await Bun.build({ entrypoints: ['sidebar-test-entry'], target: 'browser', plugins: [{ name: 'sidebar-fixture', setup(builder) {
@@ -47,6 +58,7 @@ const css = (await Promise.all(cssFiles.filter(file => file.endsWith('.css')).ma
 if (process.env.SIDEBAR_SCREENSHOT) assert(css.length > 0, 'Build the frontend before visual verification')
 const server = Bun.serve({ port: 0, fetch(request) {
     const path = new URL(request.url).pathname
+    if (path.startsWith('/api/backend/vms/')) return Response.json([{ name: 'fixture-vm' }])
     if (path === '/sidebar.js') return new Response(build.outputs[0], { headers: { 'content-type': 'text/javascript' } })
     if (path === '/sidebar.css') return new Response(css, { headers: { 'content-type': 'text/css' } })
     return new Response('<!doctype html><html class="light"><head><link rel="stylesheet" href="/sidebar.css"></head><body style="padding:16px;background:var(--ui-canvas)"><div id="root" style="width:232px"></div><script type="module" src="/sidebar.js"></script></body></html>', { headers: { 'content-type': 'text/html' } })
@@ -62,6 +74,13 @@ try {
     const link = (name) => nav.getByRole('link', { name, exact: true })
     await link('Monitored actors').waitFor({ state: 'visible' })
     assert.equal(await link('Monitored actors').getAttribute('aria-current'), 'page')
+    await link('Browser').click()
+    assert.equal(await link('Browser').getAttribute('aria-current'), 'page')
+    await link('All products and solutions').click()
+    assert.equal(await link('All products and solutions').getAttribute('aria-current'), 'page')
+    await page.getByRole('searchbox').fill('Security Monitoring')
+    await link('Overview').click()
+    assert.equal(new URL(page.url()).pathname, '/mill')
     await button('Security operations').click()
     await button('Automation').click()
     await link('Health Checks').click()
