@@ -12,7 +12,7 @@ type WatchlistKind = 'company' | 'domain' | 'vendor' | 'actor' | 'keyword'
 
 const ORG_ACTIVITY_PREVIEW_ROWS = 8
 
-type OrganizationSummary = {
+export type OrganizationSummary = {
     id: string
     tenantId?: string
     name: string
@@ -624,7 +624,7 @@ function firstDomainCandidate(value: string) {
     return match?.[0]
 }
 
-export default function OrganizationWorkspaceClient() {
+export default function OrganizationWorkspaceClient({ initialOrganizations }: { initialOrganizations?: OrganizationSummary[] } = {}) {
     const searchParams = useSearchParams()
     const requestedOrganizationId = searchParams.get('organizationId')?.trim() || ''
     const requestedWatchlistId = searchParams.get('watchlistItemId')?.trim() || searchParams.get('watchlistId')?.trim() || ''
@@ -635,10 +635,10 @@ export default function OrganizationWorkspaceClient() {
     const requestedInviteId = searchParams.get('inviteId')?.trim() || ''
     const requestedMemberId = searchParams.get('memberId')?.trim() || ''
     const requestedFocus = searchParams.get('focus')?.trim() || ''
-    const [organizations, setOrganizations] = useState<OrganizationSummary[]>([])
-    const [selectedId, setSelectedId] = useState('')
+    const [organizations, setOrganizations] = useState<OrganizationSummary[]>(initialOrganizations || [])
+    const [selectedId, setSelectedId] = useState(() => initialOrganizations?.find(item => item.id === requestedOrganizationId)?.id || initialOrganizations?.[0]?.id || '')
     const [bundle, setBundle] = useState<OrgBundle>(initialBundle)
-    const [loading, setLoading] = useState(true)
+    const [loading, setLoading] = useState(initialOrganizations === undefined)
     const [busy, setBusy] = useState('')
     const [error, setError] = useState('')
     const [message, setMessage] = useState('')
@@ -840,8 +840,8 @@ export default function OrganizationWorkspaceClient() {
     }, [selectedId, selectedOrganization?.id])
 
     useEffect(() => {
-        void loadOrganizations()
-    }, [loadOrganizations])
+        if (initialOrganizations === undefined) void loadOrganizations()
+    }, [initialOrganizations, loadOrganizations])
 
     useEffect(() => {
         if (selectedOrganization?.id) {
@@ -1448,7 +1448,7 @@ export default function OrganizationWorkspaceClient() {
                     </div>
                 )}
 
-                <div className={organizations.length === 0 && !loading ? 'grid gap-5' : 'grid gap-5 lg:grid-cols-[21rem_minmax(0,1fr)]'}>
+                <div className={organizations.length === 0 ? 'grid gap-5' : 'grid gap-5 lg:grid-cols-[21rem_minmax(0,1fr)]'}>
                     <aside className='flex min-w-0 flex-col gap-4'>
                         {organizations.length === 0 && createOrganizationPanel}
 
