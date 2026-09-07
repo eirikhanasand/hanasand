@@ -9,7 +9,6 @@ const pathToRoleArray = [
     { path: '/dashboard/load-testing', role: 'system_admin' },
     { path: '/dashboard/mail', role: 'system_admin' },
     { path: '/dashboard/projects', role: 'system_admin' },
-    { path: '/dashboard/shares', role: 'system_admin' },
     { path: '/dashboard/vm', role: 'system_admin' },
     { path: '/dashboard/vms', role: 'system_admin' },
     { path: '/dashboard/db', role: 'system_admin' },

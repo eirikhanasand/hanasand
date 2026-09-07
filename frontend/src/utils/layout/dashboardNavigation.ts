@@ -83,7 +83,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
                 link('Articles', '/content/articles', canManageContent),
                 link('Thoughts', '/content/thoughts', canManageContent),
             ]),
-            link('Shares', '/shares', isAdmin),
+            link('Shares', '/shares'),
         ]),
         group('Administration', [
             group('Workspaces', [
