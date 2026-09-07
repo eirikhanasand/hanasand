@@ -1,3 +1,4 @@
+import hasRole from '#utils/auth/hasRole.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
@@ -6,6 +7,8 @@ export default async function getMetrics(this: FastifyInstance, req: FastifyRequ
     if (!valid) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
+
+    if (!(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'Host telemetry requires system administrator access.' })
 
     try {
         const cached = JSON.parse(this.stats.toString())

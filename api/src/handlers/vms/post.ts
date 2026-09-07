@@ -24,6 +24,7 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
 
     const internal = hasInternalToken(req)
     let actorId: string | null = null
+    let canAssignOwner = internal
     if (!internal) {
         const { valid, id } = await tokenWrapper(req, res)
         if (!valid || !id) {
@@ -31,6 +32,7 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
         }
 
         const { valid: validRole } = await hasRole(req, res, 'system_admin')
+        canAssignOwner = validRole
         actorId = id
         owner = validRole ? owner || id : id
         created_by = validRole ? created_by || id : id
@@ -40,8 +42,10 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
         return res.status(400).send({ error: 'Missing required fields' })
     }
 
+    if (!canAssignOwner && !/^[a-z][a-z0-9-]{0,61}[a-z0-9]$/.test(name)) return res.status(400).send({ error: 'Use 2–63 lowercase letters, numbers or hyphens, starting with a letter.' })
+
     try {
-        await run(`
+        if (canAssignOwner) await run(`
             DELETE FROM vms
             WHERE name = $1
               AND owner = 'ownerless'
@@ -69,6 +73,8 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
             created_by: string
             access_users: string[]
         } | undefined
+
+        if (existing && !canAssignOwner) return res.status(409).send({ error: 'VM already exists.' })
 
         if (existing) {
             const nextOwner = owner === 'ownerless' ? existing.owner : owner
@@ -106,7 +112,7 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
             return res.status(201).send(result.rows[0])
         }
 
-        await run(`
+        if (canAssignOwner) await run(`
             UPDATE vms
             SET name = $1
             WHERE LOWER(name) = LOWER($1)
@@ -114,7 +120,7 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
               AND NOT EXISTS (SELECT 1 FROM vms WHERE name = $1)
         `, [name])
 
-        const query = await loadSQL('insertVM.sql')
+        const query = canAssignOwner ? await loadSQL('insertVM.sql') : 'INSERT INTO vms (name, owner, created_by, access_users) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO NOTHING RETURNING *'
         const result = await run(query, [name, owner, created_by, JSON.stringify(access_users ?? [])])
         if (!result.rows.length) {
             return res.status(409).send({ error: 'VM already exists' })

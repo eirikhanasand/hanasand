@@ -1,3 +1,4 @@
+import { requireVmAccess } from '#utils/vms/access.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
@@ -8,6 +9,8 @@ export default async function getVMDetails(req: FastifyRequest, res: FastifyRepl
     if (!valid) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
+
+    if (!await requireVmAccess(req, res, name)) return
 
     try {
         const result = await run('SELECT * FROM vm_details WHERE name = $1;', [name])
