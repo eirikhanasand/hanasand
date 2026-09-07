@@ -2,10 +2,8 @@ import Certificates from '@/components/profile/certificates'
 import AccountActions from '@/components/profile/accountActions'
 import SessionsPanel from '@/components/profile/sessions'
 import SupportTickets from '@/components/profile/supportTickets'
-import DashboardSidebar from '@/components/dashboard/dashboardSidebar'
-import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
+import { DashboardPanel, DashboardPage } from '@/components/dashboard/ui'
 import getCertificates from '@/utils/certificates/getCertificates'
-import parseCookie from '@/utils/cookies/parseCookie'
 import fetchUser from '@/utils/users/fetchUser'
 import Link from 'next/link'
 import { cookies } from 'next/headers'
@@ -17,13 +15,6 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const name = Cookies.get('name')?.value
     const userId = Cookies.get('id')?.value
     const token = Cookies.get('access_token')?.value
-    const rolesCookie = Cookies.get('roles')?.value
-    const roles = parseCookie<Array<Role | string>>(rolesCookie, [])
-    const roleIds = roles.map((role) => typeof role === 'string' ? role : role.id || '')
-    const hasRole = (roleId: string) => roleIds.includes(roleId)
-    const isAdmin = hasRole('administrator') || hasRole('admin')
-    const canManageSystem = isAdmin || hasRole('system_admin')
-    const canManageContent = isAdmin || hasRole('content_admin')
     const isSelf = profileId === userId
 
     if (!userId || !token) {
@@ -60,38 +51,28 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
         )
     }
 
-    const certificates = await getCertificates(userId, token, userId)
-    const displayName = name || profileId
+    const profile = await fetchUser(profileId)
+    const displayName = profile?.name || (isSelf ? name : null) || profileId
+    const certificates = isSelf ? await getCertificates(userId, token, userId) : null
 
     return (
-        <div className='h-full min-h-0 overflow-hidden bg-ui-canvas px-2 pb-2 text-ui-text'>
-            <div className='grid h-full min-h-0 gap-2 overflow-hidden lg:grid-cols-[auto_minmax(0,1fr)]'>
-                <DashboardSidebar
-                    id={userId}
-                    isAdmin={isAdmin}
-                    canManageSystem={canManageSystem}
-                    canManageContent={canManageContent}
-                />
-                <div className='min-h-0 min-w-0 overflow-auto'>
-                    <DashboardPage>
-                        <DashboardHeader
-                            eyebrow='Profile'
-                            title='Account profile'
-                            description={`Signed in as @${displayName}. Manage account access, active devices, and API certificates.`}
-                        />
-                        <div className='grid gap-3 xl:grid-cols-2'>
-                            <div className='grid gap-3'>
-                                <SessionsPanel isSelf={isSelf} />
-                                <Certificates certificates={certificates} />
-                                {isSelf ? <SupportTickets /> : null}
-                            </div>
-                            <div className='grid content-start gap-3'>
-                                <AccountActions isSelf={isSelf} />
-                            </div>
-                        </div>
-                    </DashboardPage>
+        <DashboardPage>
+            <DashboardPanel className='p-4'>
+                <h1 className='wrap-break-word text-xl font-semibold text-ui-text'>{displayName}</h1>
+                <p className='mt-1 text-sm text-ui-muted'>@{profileId}</p>
+                {profile?.active === false && <p className='mt-2 text-sm text-ui-muted'>Inactive account</p>}
+                {!profile && !isSelf && <p role='status' className='mt-2 text-sm text-ui-muted'>Profile details are unavailable. Please try again.</p>}
+            </DashboardPanel>
+            {isSelf && <div className='grid gap-3 xl:grid-cols-2'>
+                <div className='grid gap-3'>
+                    <SessionsPanel isSelf />
+                    <Certificates certificates={certificates} />
+                    <SupportTickets />
                 </div>
-            </div>
-        </div>
+                <div className='grid content-start gap-3'>
+                    <AccountActions isSelf />
+                </div>
+            </div>}
+        </DashboardPage>
     )
 }

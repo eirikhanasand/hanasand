@@ -79,7 +79,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
 
     async function handleClick() {
         if (!keys['shift']) {
-            router.push(`/profile/${user.id}`)
+            router.push(`/profile/${encodeURIComponent(user.id)}`)
         }
 
         if (keys['shift']) {

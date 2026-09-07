@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { Radio } from 'lucide-react'
 import getStatus from '@/utils/status/getStatus'
+import tokenIsValid from '@/utils/proxy/tokenIsValid'
 import { toPublicServiceStatus } from '@/utils/status/publicStatus'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import DwmOverviewPanel from './dwmOverviewPanel'
@@ -17,11 +18,16 @@ export const metadata: Metadata = {
 }
 
 export default async function Page({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
-    const token = (await cookies()).get('access_token')?.value
+    const sessionCookies = await cookies()
+    const token = sessionCookies.get('access_token')?.value
+    const id = sessionCookies.get('id')?.value
 
     if (!token) {
         redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
+
+    const session = id ? await tokenIsValid(token, id) : null
+    const isAdmin = session?.valid === true && session.roles?.some(role => role.id === 'administrator' || role.id === 'admin') === true
 
     const params = searchParams ? await searchParams : {}
     const deniedPathValue = params.from
@@ -56,9 +62,11 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
 
             <DwmOverviewPanel organizationId={firstParam(params.organizationId) || firstParam(params.orgId)} />
 
-            <Suspense fallback={<div role='status'><DashboardPanel className='p-4'>Checking service health…</DashboardPanel></div>}>
-                <ServiceHealth />
-            </Suspense>
+            {isAdmin ? (
+                <Suspense fallback={<div role='status'><DashboardPanel className='p-4'>Checking service health…</DashboardPanel></div>}>
+                    <ServiceHealth />
+                </Suspense>
+            ) : null}
         </DashboardPage>
     )
 }

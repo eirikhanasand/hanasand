@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
+import { socialAccount } from '#utils/auth/socialAccounts.ts'
 import { issueToken, validateSession } from '#utils/auth/session.ts'
 import { authorizationUrl, digest, exchangeIdentity, isSocialProvider, providerConfig, redirectPath, secret, socialProviders } from '#utils/auth/socialOidc.ts'
 
@@ -62,11 +63,8 @@ export async function postSocialCallback(req: FastifyRequest, res: FastifyReply)
             }
             return res.send({ linked: true, redirectPath: `/profile/${encodeURIComponent(transaction.link_user_id)}?social=linked` })
         }
-        // Only an explicitly connected immutable provider subject can select a local account.
-        const found = await run(`SELECT u.id,u.name,u.avatar FROM user_social_identities s JOIN users u ON u.id=s.user_id
-            WHERE s.provider=$1 AND s.subject=$2 AND u.active IS TRUE AND u.deletion_scheduled_at IS NULL`, [provider, identity.subject])
-        const user = found.rows[0]
-        if (!user) return res.code(403).send({ error: 'Sign in with your existing method first, then connect Google or Apple in Profile → Account. New here? Create an account first.' })
+        const user = await socialAccount(provider, identity)
+        if (!user) return res.code(403).send({ error: 'This account is inactive or scheduled for deletion.' })
         const session = await issueToken({ id: user.id, ip: req.ip, userAgent: String(req.headers['user-agent'] || '') })
         if (!session) return res.code(503).send({ error: 'Unable to create a session. Please try again.' })
         const roles = await run('SELECT r.id,r.name,r.description,r.priority FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=$1 ORDER BY r.priority,r.id', [user.id])
