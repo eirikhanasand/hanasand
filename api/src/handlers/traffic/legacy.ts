@@ -38,12 +38,12 @@ export async function getLegacyTrafficSummary(req: FastifyRequest, res: FastifyR
     const result = await safeQuery(`
         SELECT
             ${column} AS value,
-            COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 hour')::int AS hits_hour,
-            COUNT(*) FILTER (WHERE created_at >= date_trunc('day', NOW()))::int AS hits_today,
-            COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS hits_last_week,
-            COUNT(*) FILTER (WHERE created_at >= date_trunc('month', NOW()))::int AS hits_this_month,
-            COUNT(*)::int AS hits_total
-        FROM traffic_events
+            SUM(hits) FILTER (WHERE created_at >= NOW() - INTERVAL '1 hour')::int AS hits_hour,
+            SUM(hits) FILTER (WHERE created_at >= date_trunc('day', NOW()))::int AS hits_today,
+            SUM(hits) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS hits_last_week,
+            SUM(hits) FILTER (WHERE created_at >= date_trunc('month', NOW()))::int AS hits_this_month,
+            SUM(hits)::int AS hits_total
+        FROM traffic_aggregate_events
         WHERE ${column} <> ''
         GROUP BY ${column}
         ORDER BY hits_today DESC, hits_last_week DESC, hits_total DESC
@@ -59,10 +59,10 @@ export async function getLegacyTrafficRecent(_req: FastifyRequest, res: FastifyR
             path AS value,
             path,
             'path' AS metric,
-            COUNT(*)::int AS hits,
-            MAX(created_at)::text AS last_seen,
-            MIN(created_at)::text AS created_at
-        FROM traffic_events
+            SUM(hits)::int AS hits,
+            MAX(last_seen)::text AS last_seen,
+            MIN(first_seen)::text AS created_at
+        FROM traffic_aggregate_events
         WHERE path <> ''
         GROUP BY path
         ORDER BY last_seen DESC
@@ -76,8 +76,8 @@ export async function getLegacyTrafficTps(_req: FastifyRequest, res: FastifyRepl
     const result = await safeQuery(`
         SELECT
             domain AS name,
-            ROUND((COUNT(*)::numeric / 60.0), 3)::float AS tps
-        FROM traffic_events
+            ROUND((SUM(hits)::numeric / 60.0), 3)::float AS tps
+        FROM traffic_aggregate_events
         WHERE domain <> ''
           AND created_at >= NOW() - INTERVAL '60 seconds'
         GROUP BY domain
@@ -89,148 +89,80 @@ export async function getLegacyTrafficTps(_req: FastifyRequest, res: FastifyRepl
 }
 
 export async function getLegacyTrafficIps(_req: FastifyRequest, res: FastifyReply) {
-    const result = await safeQuery(`
-        WITH ranked_paths AS (
-            SELECT ip, path, COUNT(*)::int AS hits
-            FROM traffic_events
-            WHERE ip <> '' AND path <> ''
-            GROUP BY ip, path
-        ),
-        ranked_agents AS (
-            SELECT DISTINCT ON (ip) ip, user_agent AS most_common_user_agent
-            FROM (
-                SELECT ip, user_agent, COUNT(*) AS hits
-                FROM traffic_events
-                WHERE ip <> '' AND user_agent <> ''
-                GROUP BY ip, user_agent
-            ) agents
-            ORDER BY ip, hits DESC
-        )
-        SELECT
-            events.ip,
-            COUNT(*)::int AS hits,
-            COALESCE(ranked_agents.most_common_user_agent, '') AS most_common_user_agent,
-            COALESCE(
-                json_agg(json_build_object('path', ranked_paths.path, 'hits', ranked_paths.hits) ORDER BY ranked_paths.hits DESC)
-                    FILTER (WHERE ranked_paths.path IS NOT NULL),
-                '[]'::json
-            ) AS top_paths
-        FROM traffic_events events
-        LEFT JOIN ranked_paths ON ranked_paths.ip = events.ip
-        LEFT JOIN ranked_agents ON ranked_agents.ip = events.ip
-        WHERE events.ip <> ''
-        GROUP BY events.ip, ranked_agents.most_common_user_agent
-        ORDER BY hits DESC
-        LIMIT 20
-    `)
-
-    return res.send(result.rows)
+    return res.send((await trafficActors('ip', 'user_agent', 'most_common_user_agent')).rows)
 }
 
 export async function getLegacyTrafficUserAgents(_req: FastifyRequest, res: FastifyReply) {
-    const result = await safeQuery(`
-        WITH ranked_paths AS (
-            SELECT user_agent, path, COUNT(*)::int AS hits
-            FROM traffic_events
-            WHERE user_agent <> '' AND path <> ''
-            GROUP BY user_agent, path
-        ),
-        ranked_ips AS (
-            SELECT DISTINCT ON (user_agent) user_agent, ip AS most_common_ip
-            FROM (
-                SELECT user_agent, ip, COUNT(*) AS hits
-                FROM traffic_events
-                WHERE user_agent <> '' AND ip <> ''
-                GROUP BY user_agent, ip
-            ) ips
-            ORDER BY user_agent, hits DESC
-        )
-        SELECT
-            events.user_agent,
-            COUNT(*)::int AS hits,
-            COALESCE(ranked_ips.most_common_ip, '') AS most_common_ip,
-            COALESCE(
-                json_agg(json_build_object('path', ranked_paths.path, 'hits', ranked_paths.hits) ORDER BY ranked_paths.hits DESC)
-                    FILTER (WHERE ranked_paths.path IS NOT NULL),
-                '[]'::json
-            ) AS top_paths
-        FROM traffic_events events
-        LEFT JOIN ranked_paths ON ranked_paths.user_agent = events.user_agent
-        LEFT JOIN ranked_ips ON ranked_ips.user_agent = events.user_agent
-        WHERE events.user_agent <> ''
-        GROUP BY events.user_agent, ranked_ips.most_common_ip
-        ORDER BY hits DESC
-        LIMIT 20
-    `)
+    return res.send((await trafficActors('user_agent', 'ip', 'most_common_ip')).rows)
+}
 
-    return res.send(result.rows)
+function trafficActors(actor: 'ip' | 'user_agent', related: 'ip' | 'user_agent', relatedLabel: string) {
+    return safeQuery(`
+        WITH grouped AS MATERIALIZED (
+            SELECT ${actor}, ${related}, path, SUM(hits)::bigint AS hits
+            FROM traffic_aggregate_events WHERE ${actor} <> ''
+            GROUP BY ${actor}, ${related}, path
+        ), leaders AS (
+            SELECT ${actor}, SUM(hits)::bigint AS hits FROM grouped
+            GROUP BY ${actor} ORDER BY hits DESC LIMIT 20
+        )
+        SELECT leaders.*,
+            COALESCE((SELECT ${related} FROM grouped WHERE grouped.${actor}=leaders.${actor} AND ${related}<>''
+                GROUP BY ${related} ORDER BY SUM(hits) DESC, ${related} LIMIT 1), '') AS ${relatedLabel},
+            COALESCE((SELECT json_agg(json_build_object('path', p.path, 'hits', p.hits) ORDER BY p.hits DESC)
+                FROM (SELECT path, SUM(hits)::bigint AS hits FROM grouped
+                    WHERE grouped.${actor}=leaders.${actor} AND path<>'' GROUP BY path) p), '[]'::json) AS top_paths
+        FROM leaders ORDER BY hits DESC
+    `)
 }
 
 export async function getLegacyTrafficDomains(_req: FastifyRequest, res: FastifyReply) {
     const result = await safeQuery(`
         SELECT domain
-        FROM traffic_events
+        FROM traffic_aggregate_events
         WHERE domain <> ''
         GROUP BY domain
-        ORDER BY MAX(created_at) DESC, COUNT(*) DESC
+        ORDER BY MAX(last_seen) DESC, SUM(hits) DESC
         LIMIT 50
     `)
 
     return res.send({ domains: result.rows.map((row: { domain: string }) => row.domain) })
 }
 
-export async function getLegacyTrafficMetrics(_req: FastifyRequest, res: FastifyReply) {
-    const [summary, methods, statusCodes, domains, browsers, paths, slowPaths, errorPaths, overTime] = await Promise.all([
-        safeQuery(`
-            SELECT
-                COUNT(*)::int AS total_requests,
-                COALESCE(ROUND(AVG(request_time_ms))::int, 0) AS avg_request_time,
-                COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE status >= 500) / NULLIF(COUNT(*), 0), 2)::float, 0) AS error_rate
-            FROM traffic_events
-        `),
-        topCountQuery('method'),
-        topCountQuery('status::text'),
-        topCountQuery('domain'),
-        topCountQuery('user_agent'),
-        topCountQuery('path'),
-        safeQuery(`
-            SELECT path AS key, COALESCE(ROUND(AVG(request_time_ms))::int, 0) AS avg_time
-            FROM traffic_events
-            WHERE path <> ''
-            GROUP BY path
-            ORDER BY avg_time DESC
-            LIMIT 10
-        `),
-        safeQuery(`
-            SELECT path AS key, COUNT(*)::int AS count
-            FROM traffic_events
-            WHERE status >= 500 AND path <> ''
-            GROUP BY path
-            ORDER BY count DESC
-            LIMIT 10
-        `),
-        safeQuery(`
-            SELECT date_trunc('hour', created_at)::text AS key, COUNT(*)::int AS count
-            FROM traffic_events
-            WHERE created_at >= NOW() - INTERVAL '24 hours'
-            GROUP BY date_trunc('hour', created_at)
-            ORDER BY key ASC
-        `),
-    ])
-
-    return res.send({
-        ...emptyMetrics,
-        ...(summary.rows[0] || {}),
-        top_methods: methods.rows,
-        top_status_codes: statusCodes.rows,
-        top_domains: domains.rows,
-        top_os: [],
-        top_browsers: browsers.rows,
-        requests_over_time: overTime.rows,
-        top_error_paths: errorPaths.rows,
-        top_slow_paths: slowPaths.rows,
-        top_paths: paths.rows,
-    })
+export async function getLegacyTrafficMetrics(req: FastifyRequest, res: FastifyReply) {
+    const domain = readQueryString(req, 'domain') || null
+    const top = (expression: string) => `COALESCE((SELECT json_agg(t) FROM (
+        SELECT ${expression} AS key, SUM(hits)::bigint AS count FROM traffic_scope
+        WHERE ${expression} <> '' GROUP BY ${expression} ORDER BY count DESC LIMIT 10
+    ) t), '[]'::json)`
+    const result = await safeQuery(`
+        WITH traffic_scope AS MATERIALIZED (
+            SELECT * FROM traffic_aggregate_events WHERE ($1::text IS NULL OR domain=$1)
+        )
+        SELECT COALESCE(SUM(hits),0)::bigint AS total_requests,
+            COALESCE(ROUND(SUM(time_total)/NULLIF(SUM(hits),0)),0) AS avg_request_time,
+            COALESCE(1.0 * SUM(hits) FILTER (WHERE status>=400)/NULLIF(SUM(hits),0),0)::float AS error_rate,
+            ${top('method')} AS top_methods,
+            ${top('status::text')} AS top_status_codes,
+            ${top('domain')} AS top_domains,
+            ${top('user_agent')} AS top_browsers,
+            ${top('path')} AS top_paths,
+            COALESCE((SELECT json_agg(t) FROM (
+                SELECT path AS key, ROUND(SUM(time_total)/NULLIF(SUM(hits),0)) AS avg_time
+                FROM traffic_scope WHERE path<>'' GROUP BY path ORDER BY avg_time DESC LIMIT 10
+            ) t), '[]'::json) AS top_slow_paths,
+            COALESCE((SELECT json_agg(t) FROM (
+                SELECT path AS key,SUM(hits)::bigint AS count FROM traffic_scope
+                WHERE path<>'' AND status>=400 GROUP BY path ORDER BY count DESC LIMIT 10
+            ) t), '[]'::json) AS top_error_paths,
+            COALESCE((SELECT json_agg(t) FROM (
+                SELECT date_trunc('hour',created_at)::text AS key,SUM(hits)::bigint AS count
+                FROM traffic_scope WHERE created_at>=NOW()-INTERVAL '24 hours'
+                GROUP BY date_trunc('hour',created_at) ORDER BY key
+            ) t), '[]'::json) AS requests_over_time
+        FROM traffic_scope
+    `, [domain])
+    return res.send({ ...emptyMetrics, ...result.rows[0] })
 }
 
 export async function getLegacyTrafficRecords(req: FastifyRequest, res: FastifyReply) {
@@ -258,8 +190,8 @@ export async function getLegacyTrafficRecords(req: FastifyRequest, res: FastifyR
             LIMIT $2 OFFSET $3
         `, [domain, limit, offset]),
         safeQuery(`
-            SELECT COUNT(*)::int AS total
-            FROM traffic_events
+            SELECT COALESCE(SUM(hits), 0)::bigint AS total
+            FROM traffic_aggregate_events
             WHERE ($1::text IS NULL OR domain = $1)
         `, [domain]),
     ])
@@ -352,18 +284,8 @@ function isTrafficMetric(value: string): value is TrafficMetric {
 async function safeQuery(query: string, params: Array<string | number | boolean | string[] | Date | null> = []) {
     try {
         return await run(query, params)
-    } catch {
-        return { rows: [] }
+    } catch (error) {
+        throw Object.assign(new Error('Traffic statistics are temporarily unavailable', { cause: error }), { statusCode: 503 })
     }
 }
 
-function topCountQuery(expression: string) {
-    return safeQuery(`
-        SELECT ${expression} AS key, COUNT(*)::int AS count
-        FROM traffic_events
-        WHERE ${expression} <> ''
-        GROUP BY ${expression}
-        ORDER BY count DESC
-        LIMIT 10
-    `)
-}

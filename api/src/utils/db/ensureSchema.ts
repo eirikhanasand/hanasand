@@ -1,4 +1,5 @@
 import run from '#db'
+import { ensureTrafficHistorySchema } from '../traffic/history.ts'
 import ensureAccountIdentitySchema from './accountIdentitySchema.ts'
 import ensureSocialAuthSchema from './socialAuthSchema.ts'
 import ensureMonitoringIssuesSchema from './monitoringIssuesSchema.ts'
@@ -585,6 +586,7 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_traffic_events_domain_created_at ON traffic_events(domain, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_traffic_events_path_created_at ON traffic_events(path, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_traffic_events_country_created_at ON traffic_events(country_iso, created_at DESC)')
+    await ensureTrafficHistorySchema()
     await run(`
         CREATE TABLE IF NOT EXISTS desktop_agent_presence (
             owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

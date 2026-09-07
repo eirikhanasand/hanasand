@@ -1,3 +1,4 @@
+import { refreshTrafficHistory } from './utils/traffic/history.ts'
 import { warmLogSnapshots, refreshLogSnapshots } from '#utils/logs/warm.ts'
 import { recoveryRequestAllowed, recoveryState, recoveryReadOnly } from './utils/resilience.ts'
 import { queryOnce, closeDatabase } from './utils/db.ts'
@@ -178,6 +179,10 @@ async function start() {
             await warmLogSnapshots()
             const stopLogRefresh = refreshLogSnapshots()
             fastify.addHook('onClose', async () => { stopLogRefresh() })
+        }
+        if (!browserWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
+            const stopTrafficRefresh = refreshTrafficHistory()
+            fastify.addHook('onClose', async () => { stopTrafficRefresh() })
         }
         await fastify.listen({ port, host: process.env.LISTEN_HOST || '0.0.0.0' })
         if (browserWorkerOnly || httpWorkerOnly) return

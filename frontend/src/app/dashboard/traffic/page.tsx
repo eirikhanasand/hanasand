@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Suspense, type ReactNode } from 'react'
 import DomainSelector from '@/components/monitoring/traffic/domainSelector'
 import TrafficMap from '@/components/monitoring/traffic/trafficMap'
 import TrafficDashboard from '@/components/monitoring/traffic/traffic'
@@ -24,17 +24,42 @@ export default async function Page({
     const params = await searchParams
     const selectedDomain = typeof params.domain === 'string' ? params.domain : undefined
 
-    const [domains, metrics, records, legacyMetrics, legacyBlocklist, legacyLogs, topDomains, topUAs, topIPs] = await Promise.all([
-        getTrafficDomains(),
-        getTrafficMetrics(selectedDomain),
-        getTrafficRecords(selectedDomain, 250, 1),
-        getMetrics(),
-        getBlocklist(),
-        getLogs(),
-        getDomains(),
-        getUAs(),
-        getIPs(),
+    return (
+        <DashboardPage>
+            <DashboardHeader eyebrow='Operations' title='Traffic monitoring' description='Watch live ingress, hot routes, error pressure, and access controls.' />
+            <div className='grid gap-4'>
+                <Suspense key={selectedDomain || 'all'} fallback={<DashboardPanel className='p-4'><p role='status'>Loading traffic statistics…</p></DashboardPanel>}>
+                    <TrafficOverview selectedDomain={selectedDomain} />
+                </Suspense>
+                <DashboardPanel className='p-4'>
+                    <div className='mb-4'>
+                        <h2 className='text-lg font-semibold text-ui-text'>Request operations</h2>
+                        <p className='mt-1 text-sm text-ui-muted'>Route demand, user agents, IP activity, and access controls for production operations.</p>
+                    </div>
+                    <Suspense fallback={<p role='status'>Loading request operations…</p>}>
+                        <RequestOperations />
+                    </Suspense>
+                </DashboardPanel>
+            </div>
+        </DashboardPage>
+    )
+}
+
+async function RequestOperations() {
+    const [metrics, blocklist, logs, topDomains, topUAs, topIPs] = await Promise.all([
+        getMetrics(), getBlocklist(), getLogs(), getDomains(), getUAs(), getIPs(),
     ])
+    return <RequestOperationsDashboard metrics={metrics} blocklist={blocklist} logs={logs} topDomains={topDomains} topUAs={topUAs} topIPs={topIPs} />
+}
+
+async function TrafficOverview({ selectedDomain }: { selectedDomain?: string }) {
+    const [domains, metrics, records] = await Promise.all([
+        getTrafficDomains(), getTrafficMetrics(selectedDomain), getTrafficRecords(selectedDomain, 200, 1),
+    ])
+
+    if (!isTrafficDomains(domains) || !isTrafficMetrics(metrics) || !isTrafficRecords(records)) {
+        return <DashboardPanel className='p-4'><p role='alert'>Traffic statistics are temporarily unavailable. Refresh to try again.</p></DashboardPanel>
+    }
 
     const domainOptions = isTrafficDomains(domains) ? domains.domains : []
     const trafficMetrics = isTrafficMetrics(metrics) ? metrics : null
@@ -45,77 +70,54 @@ export default async function Page({
     const errorRate = Number.isFinite(Number(trafficMetrics?.error_rate)) ? Math.round(Number(trafficMetrics?.error_rate) * 1000) / 10 : 0
 
     return (
-        <DashboardPage>
-            <DashboardHeader
-                eyebrow='Operations'
-                title='Traffic monitoring'
-                description='Watch live ingress, hot routes, error pressure, and access controls.'
-            />
-            <div className='grid gap-4'>
-                <DashboardPanel className='grid min-w-0 gap-3 p-3 xl:grid-cols-[minmax(160px,0.9fr)_minmax(0,4fr)] xl:items-center'>
-                    <DomainSelector domains={domainOptions} selectedDomain={selectedDomain} />
-                    <section aria-label='Traffic summary' className='grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4'>
-                        <TrafficLane
-                            title='Latest request'
-                            icon={<Activity className='h-4 w-4' />}
-                            value={latestRecord ? `${latestRecord.method} ${latestRecord.status}` : 'Listening'}
-                            detail={latestRecord ? `${latestRecord.domain}${latestRecord.path}` : 'Ingress stream is connected; requests stream in as they arrive'}
-                            footer={latestRecord ? shortTime(latestRecord.timestamp) : 'ingress stream active'}
-                            tone={latestRecord && latestRecord.status >= 500 ? 'bad' : latestRecord && latestRecord.status >= 400 ? 'watch' : 'ok'}
-                        />
-                        <TrafficLane
-                            title='Hot route'
-                            icon={<Globe2 className='h-4 w-4' />}
-                            value={topPath?.key || 'Route stream'}
-                            detail={topPath ? `${topPath.count} requests in the live traffic sample` : 'Route demand updates as traffic arrives'}
-                            footer={selectedDomain || topDomain?.key || 'all domains'}
-                            tone='neutral'
-                        />
-                        <TrafficLane
-                            title='Response time'
-                            icon={<Clock3 className='h-4 w-4' />}
-                            value={trafficMetrics?.avg_request_time ? `${Math.round(trafficMetrics.avg_request_time)}ms` : 'metering'}
-                            detail={`${trafficMetrics?.total_requests || 0} tracked requests`}
-                            footer='rolling metrics'
-                            tone={trafficMetrics?.avg_request_time && trafficMetrics.avg_request_time > 1000 ? 'watch' : 'ok'}
-                        />
-                        <TrafficLane
-                            title='Error pressure'
-                            icon={<AlertTriangle className='h-4 w-4' />}
-                            value={`${errorRate}%`}
-                            detail={trafficMetrics?.top_error_paths?.[0] ? trafficMetrics.top_error_paths[0].key : 'Error monitor is live; no noisy route now'}
-                            footer='4xx/5xx share'
-                            tone={errorRate > 5 ? 'bad' : errorRate > 1 ? 'watch' : 'ok'}
-                        />
-                    </section>
-                </DashboardPanel>
-                <TrafficMap
-                    initialMetrics={trafficMetrics}
-                    initialRecords={trafficRecords?.result || []}
-                />
-                <TrafficDashboard
-                    metrics={metrics}
-                    records={records}
-                    selectedDomain={selectedDomain}
-                />
-                <DashboardPanel className='p-4'>
-                    <div className='mb-4'>
-                        <h2 className='text-lg font-semibold text-ui-text'>Request operations</h2>
-                        <p className='mt-1 text-sm text-ui-muted'>
-                            Route demand, user agents, IP activity, and access controls for production operations.
-                        </p>
-                    </div>
-                    <RequestOperationsDashboard
-                        metrics={legacyMetrics}
-                        blocklist={legacyBlocklist}
-                        logs={legacyLogs}
-                        topDomains={topDomains}
-                        topUAs={topUAs}
-                        topIPs={topIPs}
+        <>
+            <DashboardPanel className='grid min-w-0 gap-3 p-3 xl:grid-cols-[minmax(160px,0.9fr)_minmax(0,4fr)] xl:items-center'>
+                <DomainSelector domains={domainOptions} selectedDomain={selectedDomain} />
+                <section aria-label='Traffic summary' className='grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4'>
+                    <TrafficLane
+                        title='Latest request'
+                        icon={<Activity className='h-4 w-4' />}
+                        value={latestRecord ? `${latestRecord.method} ${latestRecord.status}` : 'Listening'}
+                        detail={latestRecord ? `${latestRecord.domain}${latestRecord.path}` : 'Ingress stream is connected; requests stream in as they arrive'}
+                        footer={latestRecord ? shortTime(latestRecord.timestamp) : 'ingress stream active'}
+                        tone={latestRecord && latestRecord.status >= 500 ? 'bad' : latestRecord && latestRecord.status >= 400 ? 'watch' : 'ok'}
                     />
-                </DashboardPanel>
-            </div>
-        </DashboardPage>
+                    <TrafficLane
+                        title='Hot route'
+                        icon={<Globe2 className='h-4 w-4' />}
+                        value={topPath?.key || 'Route stream'}
+                        detail={topPath ? `${topPath.count} requests in the live traffic sample` : 'Route demand updates as traffic arrives'}
+                        footer={selectedDomain || topDomain?.key || 'all domains'}
+                        tone='neutral'
+                    />
+                    <TrafficLane
+                        title='Response time'
+                        icon={<Clock3 className='h-4 w-4' />}
+                        value={trafficMetrics?.avg_request_time ? `${Math.round(trafficMetrics.avg_request_time)}ms` : 'metering'}
+                        detail={`${trafficMetrics?.total_requests || 0} tracked requests`}
+                        footer='rolling metrics'
+                        tone={trafficMetrics?.avg_request_time && trafficMetrics.avg_request_time > 1000 ? 'watch' : 'ok'}
+                    />
+                    <TrafficLane
+                        title='Error pressure'
+                        icon={<AlertTriangle className='h-4 w-4' />}
+                        value={`${errorRate}%`}
+                        detail={trafficMetrics?.top_error_paths?.[0] ? trafficMetrics.top_error_paths[0].key : 'Error monitor is live; no noisy route now'}
+                        footer='4xx/5xx share'
+                        tone={errorRate > 5 ? 'bad' : errorRate > 1 ? 'watch' : 'ok'}
+                    />
+                </section>
+            </DashboardPanel>
+            <TrafficMap
+                initialMetrics={trafficMetrics}
+                initialRecords={trafficRecords?.result || []}
+            />
+            <TrafficDashboard
+                metrics={metrics}
+                records={records}
+                selectedDomain={selectedDomain}
+            />
+        </>
     )
 }
 
