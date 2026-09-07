@@ -21,9 +21,9 @@ export default async function OpenApiPage() {
                 <Link href='/api' className='text-xs font-semibold text-ui-primary hover:underline'>API docs</Link>
                 <h1 className='mt-1 text-xl font-semibold'>OpenAPI JSON</h1>
             </div>
-            <a href='/api/openapi/ti' target='_blank' rel='noopener noreferrer' aria-label='Open raw JSON in a new tab' title='Open raw JSON in a new tab' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary'>
+            <Link prefetch={false} href='/api/openapi/ti' target='_blank' rel='noopener noreferrer' aria-label='Open raw JSON in a new tab' title='Open raw JSON in a new tab' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary'>
                 Raw JSON <ArrowUpRight className='h-4 w-4' aria-hidden='true' />
-            </a>
+            </Link>
         </header>
         <DashboardPanel className='min-w-0 overflow-hidden'>
             {document ? <pre className='overflow-x-auto p-4 text-xs leading-6 text-ui-text' aria-label='OpenAPI specification'><code>{JSON.stringify(document, null, 2)}</code></pre> : <p role='alert' className='p-4 text-sm text-ui-danger'>The OpenAPI document is temporarily unavailable. Reload this page to try again.</p>}

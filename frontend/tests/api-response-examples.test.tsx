@@ -50,7 +50,9 @@ try {
     const { default: Preview } = await import('../src/app/api/openapi/page')
     const preview = await new Response(await renderToReadableStream(await Preview())).text()
     assert(preview.includes('aria-label="OpenAPI specification"'))
-    assert(preview.includes('href="/api/openapi/ti" target="_blank" rel="noopener noreferrer"'))
+    const rawLink = preview.match(/<a[^>]*href="\/api\/openapi\/ti"[^>]*>/)?.[0] || ''
+    assert(rawLink.includes('target="_blank"'))
+    assert(rawLink.includes('rel="noopener noreferrer"'))
     assert(preview.includes('Open raw JSON in a new tab'))
     globalThis.fetch = (async () => new Response('', { status: 503 })) as typeof fetch
     const unavailable = await new Response(await renderToReadableStream(await Preview())).text()
