@@ -1,5 +1,6 @@
 'use client'
 import { passwordMeetsRequirements, passwordRequirementMessage } from '@/utils/auth/password'
+import SocialSignIn from '@/components/login/socialSignIn'
 import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getCookie } from '@/utils/cookies/cookies'
@@ -15,6 +16,7 @@ type LoginPageProps = {
     path: string | null
     serverInternal: boolean
     serverExpired: boolean
+    socialError?: string
 }
 
 const authInputClass = 'h-10 rounded-lg border border-ui-border bg-ui-panel px-3.5 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20'
@@ -22,7 +24,7 @@ const authPrimaryButtonClass = 'group inline-flex h-9 items-center justify-cente
 const authGhostButtonClass = 'inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text disabled:cursor-not-allowed disabled:text-ui-muted/60'
 
 
-export default function LoginPage({ path, serverInternal, serverExpired }: LoginPageProps) {
+export default function LoginPage({ path, serverInternal, serverExpired, socialError }: LoginPageProps) {
     const router = useRouter()
     const [mode, setMode] = useState<'login' | 'signup' | 'request-reset' | 'verify-reset'>('login')
     const [resetUserId, setResetUserId] = useState('')
@@ -172,11 +174,11 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     useEffect(() => {
         const token = getCookie('access_token')
         const id = getCookie('id')
-        if (token && id && !serverInternal && !serverExpired) {
+        if (token && id && !serverInternal && !serverExpired && !socialError) {
             router.push(redirectPath)
         }
         setHydrated(true)
-    }, [redirectPath, router, serverExpired, serverInternal])
+    }, [redirectPath, router, serverExpired, serverInternal, socialError])
 
     return (
         <section className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>
@@ -252,6 +254,8 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 </div>
                             </form>
                             <div className='grid gap-2 border-t border-ui-border pt-3'>
+                                {socialError && <p role='alert' className='text-sm text-ui-danger'>{socialError}</p>}
+                                <SocialSignIn redirectPath={redirectPath} />
                                 <button
                                     type='button'
                                     onClick={handlePasskeyLogin}

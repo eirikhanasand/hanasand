@@ -19,7 +19,8 @@ export default async function Page({
     const expired = readBooleanParam(params.expired)
     const path = (Array.isArray(params.path) ? params.path[0] : params.path) || null
 
-    return <LoginPage serverInternal={internal} path={path} serverExpired={expired} />
+    const socialError = typeof params.socialError === 'string' ? params.socialError.slice(0, 400) : undefined
+    return <LoginPage serverInternal={internal} path={path} serverExpired={expired} socialError={socialError} />
 }
 
 function readBooleanParam(value: string | string[] | undefined) {

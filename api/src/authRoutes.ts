@@ -10,6 +10,7 @@ import {
     postPasskeyRegisterVerify,
 } from './handlers/auth/passkeys.ts'
 import { getSsoStart, postSsoCallback } from './handlers/auth/sso.ts'
+import { getSocialProviders, getSocialConnections, postSocialStart, postSocialCallback } from './handlers/auth/social.ts'
 import logoutHandler from './handlers/auth/logout.ts'
 import tokenHandler from './handlers/auth/token.ts'
 import { completePasswordReset, requestPasswordReset, verifyPasswordResetCode } from './handlers/auth/passwordReset.ts'
@@ -17,6 +18,10 @@ import { getSessions, revokeSession, revokeSessions } from './handlers/auth/sess
 
 // Shared by the API and the independently deployed authentication workers.
 export default async function authRoutes(fastify: FastifyInstance) {
+    fastify.get('/auth/social/providers', getSocialProviders)
+    fastify.get('/auth/social/connections', getSocialConnections)
+    fastify.post('/auth/social/:provider/start', postSocialStart)
+    fastify.post('/auth/social/:provider/callback', postSocialCallback)
     // Auth handlers
     fastify.get('/auth/logout/:id', logoutHandler)
     fastify.get('/auth/token/:id', tokenHandler)

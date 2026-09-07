@@ -1,10 +1,12 @@
 import run from '#db'
+import ensureSocialAuthSchema from './socialAuthSchema.ts'
 import ensureMonitoringIssuesSchema from './monitoringIssuesSchema.ts'
 import ensureThesisSchema from './thesisSchema.ts'
 import { reservedUsernames } from '#utils/auth/reservedUsernames.ts'
 
 export default async function ensureSchema() {
     await ensureThesisSchema()
+    await ensureSocialAuthSchema()
     const ownerUserIds = (process.env.HANASAND_OWNER_USER_IDS || 'eirikhanasand').split(',').map(id => id.trim().toLowerCase()).filter(Boolean)
     const obsoleteProbeUserNames = [
         'Browser Proof',
