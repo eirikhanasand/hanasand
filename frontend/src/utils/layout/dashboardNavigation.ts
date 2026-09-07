@@ -54,11 +54,8 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
             ]),
         ]),
         group('Automation', [
-            group('Monitoring', [
-                link('Health Checks', '/automation/health'),
-                link('Execution Monitoring', '/automation/monitoring'),
-            ]),
-            group('Scheduling', [link('Cron Jobs', '/automation/cron')]),
+            link('Health Checks', '/automation/health'),
+            link('Cron Jobs', '/automation/cron'),
         ]),
         group('Infrastructure', [
             link('Overview', '/system', canManageSystem),

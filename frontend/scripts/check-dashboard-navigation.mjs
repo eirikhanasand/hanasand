@@ -8,6 +8,13 @@ const all = navigationLinks(getDashboardNavigation(access))
 assert.equal(all.length, new Set(all.map(item => item.href)).size)
 const memberAccess = { ...access, isAdmin: false, canManageSystem: false, canManageContent: false }
 assert.deepEqual(getDashboardNavigation(memberAccess).map(item => item.label), ['Security operations', 'Automation', 'Settings'])
+for (const permissions of [access, memberAccess]) {
+    const automation = getDashboardNavigation(permissions).find(item => item.label === 'Automation')
+    assert.deepEqual(automation.items.map(({ label, href, items }) => ({ label, href, items })), [
+        { label: 'Health Checks', href: '/automation/health', items: undefined },
+        { label: 'Cron Jobs', href: '/automation/cron', items: undefined },
+    ])
+}
 const reviewer = navigationLinks(getDashboardNavigation({ ...memberAccess, canReviewIntel: true }))
 assert.deepEqual(reviewer.filter(item => ['/ti/evaluation', '/ti/timeliness'].includes(item.href)).map(item => item.label), ['Evaluation', 'Timeliness'])
 const operator = navigationLinks(getDashboardNavigation({ ...memberAccess, canManageSystem: true }))
@@ -48,6 +55,16 @@ try {
     await link('Monitored actors').waitFor({ state: 'visible' })
     assert.equal(await link('Monitored actors').getAttribute('aria-current'), 'page')
     await button('Security operations').click()
+    await button('Automation').click()
+    await link('Health Checks').click()
+    assert.equal(await link('Health Checks').getAttribute('aria-current'), 'page')
+    await link('Cron Jobs').click()
+    assert.equal(await link('Cron Jobs').getAttribute('aria-current'), 'page')
+    await page.reload()
+    await link('Cron Jobs').waitFor({ state: 'visible' })
+    assert.equal(await button('Monitoring').count(), 0)
+    assert.equal(await button('Scheduling').count(), 0)
+    assert.equal(await link('Execution Monitoring').count(), 0)
     assert.equal(await link('Monitored actors').isVisible(), false)
     await button('Infrastructure').click()
     await button('Compute').click()
