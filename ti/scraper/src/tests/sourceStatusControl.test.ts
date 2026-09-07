@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { buildSourceOperationsSnapshot } from '../api/sourceOperations.ts';
 import { updateSource } from '../api/sourceRoutes.ts';
 import { evaluateSourceForCollection } from '../policy/collectionPolicy.ts';
 import type { ApiServerOptions } from '../api/serverTypes.ts';
@@ -25,4 +26,17 @@ test('administrator source activation persists and deactivation stops collection
   source = { ...source, risk: 'medium' };
   expect((await updateSource(request('active'), options, source.id)).status).toBe(400);
   expect(source.status).toBe('paused');
+});
+
+
+test('operator inventory bypasses cached lifecycle status after source changes', async () => {
+  let reads = 0;
+  const store = { querySourceOperationalPage: async (input: { _skipCache?: boolean }) => {
+    expect(input._skipCache).toBe(true);
+    reads += 1;
+    return { sources: [], total: 0 };
+  } };
+  await buildSourceOperationsSnapshot(store, { limit: 50 });
+  await buildSourceOperationsSnapshot(store, { limit: 50 });
+  expect(reads).toBe(2);
 });

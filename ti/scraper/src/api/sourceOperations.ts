@@ -12,6 +12,8 @@ export async function buildSourceOperationsSnapshot(store: any, input: { tenantI
   const generatedAt = input.generatedAt ?? nowIso();
   if (typeof store?.querySourceOperationalPage === "function") {
     const result = await store.querySourceOperationalPage({
+      // Operator status reads must reflect completed activation and deactivation writes.
+      _skipCache: true,
       tenantId: input.tenantId,
       generatedAt,
       limit: input.limit,
