@@ -3,14 +3,15 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, RotateCcw, Send, ShieldCheck, SlidersHorizontal, UserRound, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock3, Copy, FolderOpen, Loader2, MessageSquareText, Play, RotateCcw, Send, ShieldCheck, SlidersHorizontal, UserRound, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmAlertAnalystAction, DwmProductSnapshot } from '@/utils/dwm/product'
 import { customerAlertSummary, safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
 import { dwmNextOperatorAction, type DwmNextOperatorActionKind } from '@/utils/dwm/nextOperatorAction'
 import type { PublicTiHandoffDecodeResult } from '@/utils/ti/actorWorkbench'
 import { DwmWorkflowActions } from './dwm-workflow-actions'
+import { ActorDirectory, MonitoringOverview } from './monitoring-overview'
 
-type PortalAlert = DwmAlert & {
+export type PortalAlert = DwmAlert & {
     deliveryState?: string
     workflowNote?: string
     assignedOwner?: string
@@ -62,7 +63,7 @@ type PortalAlert = DwmAlert & {
     }>
 }
 
-type OperationsSnapshot = {
+export type OperationsSnapshot = {
     counts: {
         sourceCount: number
         activeSourceCount: number
@@ -93,6 +94,9 @@ type OperationsSnapshot = {
         family: string
         status: string
         lastCollectedAt?: string
+        lastSuccessAt?: string
+        lastAttemptAt?: string
+        collectionStatus?: 'succeeded' | 'failed' | 'degraded' | 'not_collected' | 'paused'
         approvedMetadataOnly: boolean
     }>
     zeroAlertExplanation: {
@@ -165,9 +169,9 @@ type PortalProps = {
     view?: DwmView
 }
 
-export type DwmView = 'cases' | 'watchlists' | 'sources' | 'delivery' | 'actors' | 'actions'
+export type DwmView = 'overview' | 'cases' | 'watchlists' | 'sources' | 'delivery' | 'actors' | 'actions'
 
-type DwmDataHealth = {
+export type DwmDataHealth = {
     snapshot: DataHealthItem
     operations: DataHealthItem
     alerts: DataHealthItem
@@ -203,7 +207,8 @@ export function DwmAnalystPortal({
     const [snapshot, setSnapshot] = useState(initialSnapshot)
     const [operations, setOperations] = useState(initialOperations)
     const [alerts, setAlerts] = useState(initialAlerts)
-    const [, setDataHealth] = useState(initialDataHealth)
+    const [dataHealth, setDataHealth] = useState(initialDataHealth)
+    const [actionMessage, setActionMessage] = useState<{ ok: boolean, text: string } | null>(null)
     const [casesState, setCasesState] = useState<CasesState>(() => ({ status: view === 'cases' ? 'loading' : 'ready', rows: [] }))
     const [selectedId, setSelectedId] = useState(initialAlertId && alerts.some(alert => alert.id === initialAlertId) ? initialAlertId : alerts[0]?.id ?? '')
     const [busyAction, setBusyAction] = useState<string | null>(null)
@@ -312,12 +317,14 @@ export function DwmAnalystPortal({
 
     async function runAction(key: string, action: () => Promise<string>) {
         setBusyAction(key)
+        setActionMessage(null)
         try {
-            await action()
+            setActionMessage({ ok: true, text: await action() })
             setRefreshVersion(version => version + 1)
             router.refresh()
         } catch (error) {
             console.error('DWM action failed', error)
+            setActionMessage({ ok: false, text: error instanceof Error ? error.message : 'The action failed. Try again.' })
         } finally {
             setBusyAction(null)
         }
@@ -383,10 +390,18 @@ export function DwmAnalystPortal({
         )
     }
 
+    if (view === 'overview') {
+        return <MonitoringOverview snapshot={snapshot} operations={operations} alerts={alerts} dataHealth={dataHealth}
+            organizationId={organizationId} initialAlertId={initialAlertId} busyAction={busyAction} actionMessage={actionMessage}
+            onRefresh={() => setRefreshVersion(version => version + 1)} onOpenCase={openCaseFromAlert}
+            canOpenCase={alert => actionReady(alert, 'case_link') && alertCaptureIds(alert).length > 0}
+            caseHref={alert => { const id = alertCaseId(alert); return id ? caseDetailHref(id, alert.id, alertOrganizationId(alert, organizationId), 'alert_queue') : undefined }} />
+    }
+
     if (view === 'actors') {
         return (
-            <DwmPanelPage title='Monitored actors' meta={`${snapshot.actorOverviews.length} actors in monitoring context`}>
-                <ActorPanel snapshot={snapshot} />
+            <DwmPanelPage title='Monitored actors' meta={dataHealth.snapshot.state === 'live' ? `${snapshot.actorOverviews.length} actor profiles` : dataHealth.snapshot.state === 'error' ? 'Actor profiles unavailable' : 'Loading actor profiles…'}>
+                <ActorDirectory actors={snapshot.actorOverviews} state={dataHealth.snapshot.state} onRetry={() => setRefreshVersion(version => version + 1)} />
             </DwmPanelPage>
         )
     }
@@ -2371,42 +2386,6 @@ const queueFilters: Array<{ id: QueueFilter, label: string }> = [
     { id: 'all', label: 'All' },
 ]
 
-function ActorPanel({ snapshot }: { snapshot: DwmProductSnapshot }) {
-    return (
-        <section className='rounded-lg border border-ui-border bg-ui-panel'>
-            <div className='flex items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
-                <div>
-                    <h3 className='text-sm font-semibold text-ui-text'>Actor context</h3>
-                    <p className='mt-0.5 text-xs text-ui-muted'>Actor, sources, latest sighting, and watch state.</p>
-                </div>
-                <Fingerprint className='h-4 w-4 text-ui-primary' />
-            </div>
-            <div className='grid gap-2 p-3'>
-                {snapshot.actorOverviews.slice(0, 4).map(actor => (
-                    <div key={actor.actor} className='rounded-lg border border-ui-border bg-ui-raised p-3'>
-                        <div className='flex items-center justify-between gap-3'>
-                            <span className='text-sm font-semibold text-ui-text'>{actor.actor}</span>
-                            <span className='rounded-full bg-ui-primary/10 px-2 py-0.5 text-[11px] font-semibold text-ui-primary'>{evidenceStrengthLabel(actor.confidence)}</span>
-                        </div>
-                        <div className='mt-3 grid grid-cols-3 gap-2 text-[11px]'>
-                            <QueueCell label='sources' value={`${actor.sourceCount}`} />
-                            <QueueCell label='captures' value={`${actor.captureCount}`} />
-                            <QueueCell label='latest' value={relativeTimeLabel(actor.latestSeenAt)} />
-                        </div>
-                        <div className='mt-2 flex flex-wrap gap-2'>
-                            <span className='rounded-full bg-ui-panel px-2 py-0.5 text-[11px] font-semibold text-ui-muted'>{stateLabel(actor.watchState)}</span>
-                            {actor.sourceFamilies.slice(0, 2).map(family => (
-                                <span key={family} className='rounded-full bg-ui-panel px-2 py-0.5 text-[11px] font-semibold text-ui-muted'>{stateLabel(family)}</span>
-                            ))}
-                        </div>
-                    </div>
-                ))}
-                {!snapshot.actorOverviews.length && <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>Actor profiles are checking metadata. Linked profiles stream here as evidence attaches to known actors.</p>}
-            </div>
-        </section>
-    )
-}
-
 function CaseMetric({ label, value, detail, tone = 'neutral' }: { label: string, value: string, detail: string, tone?: 'neutral' | 'warn' | 'bad' }) {
     const toneClass = tone === 'bad'
         ? 'text-ui-danger'
@@ -2418,15 +2397,6 @@ function CaseMetric({ label, value, detail, tone = 'neutral' }: { label: string,
             <p className='text-xs font-semibold uppercase text-ui-muted'>{label}</p>
             <p className={`mt-2 text-xl font-semibold ${toneClass}`}>{value}</p>
             <p className='mt-1 text-xs font-semibold text-ui-muted'>{detail}</p>
-        </div>
-    )
-}
-
-function QueueCell({ label, value, tone = 'neutral' }: { label: string, value: string, tone?: 'neutral' | 'bad' }) {
-    return (
-        <div className='border-l border-ui-border py-1 pl-2'>
-            <p className='text-[9px] font-semibold uppercase text-ui-muted'>{label}</p>
-            <p className={`mt-0.5 truncate font-semibold ${tone === 'bad' ? 'text-ui-danger' : 'text-ui-muted'}`} title={value}>{value}</p>
         </div>
     )
 }
