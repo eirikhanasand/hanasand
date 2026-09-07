@@ -54,3 +54,31 @@ test('verified system admins retain the system dashboard and private recovery me
     expect(data.compute.memoryTotalBytes).toBe(123)
     expect(data.sites.inspur.compute.diskFreeBytes).toBe(456)
 })
+
+
+test('empty accounts only see Infrastructure Overview until their first VM is created', async ({ context, page, baseURL }) => {
+    test.skip(!process.env.VM_FIXTURE_API, 'Requires the VM fixture API')
+    await context.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
+    await context.addCookies(Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', roles: '[]' }).map(([name, value]) => ({ name, value, url: baseURL! })))
+    const rows: Array<{ name: string, owner: string, status: string, access_users: string[] }> = []
+    await page.route('**/api/backend/vms/**', route => route.fulfill({ json: rows }))
+    await page.route('**/api/vm', async route => {
+        rows.push({ name: 'first-machine', owner: 'dashboard-render-proof-user', status: 'running', access_users: [] })
+        await route.fulfill({ status: 201, json: rows[0] })
+    })
+    await page.goto('/system')
+    const nav = page.getByRole('navigation', { name: 'Main navigation' })
+    await expect(page.getByText('0 managed targets', { exact: true })).toBeVisible()
+    await expect(nav.locator('a[href="/system"]')).toBeVisible()
+    await expect(nav.getByRole('button', { name: 'Compute', exact: true })).toHaveCount(0)
+    await expect(nav.locator('a[href="/vms"]')).toHaveCount(0)
+    await page.getByLabel('VM name', { exact: true }).fill('first-machine')
+    await page.getByRole('button', { name: 'Create VM', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'first-machine', exact: true })).toBeVisible()
+    await nav.getByRole('button', { name: 'Compute', exact: true }).click()
+    await expect(nav.locator('a[href="/vms"]')).toBeVisible()
+    rows.length = 0
+    await page.evaluate(() => window.dispatchEvent(new Event('vms-updated')))
+    await expect(nav.getByRole('button', { name: 'Compute', exact: true })).toHaveCount(0)
+    await expect(nav.locator('a[href="/system"]')).toBeVisible()
+})

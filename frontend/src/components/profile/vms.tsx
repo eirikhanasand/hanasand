@@ -34,6 +34,7 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
         if (id) {
             const updatedVMs = await getVMs(impersonatingId || id, undefined, id)
             setVms(updatedVMs)
+            window.dispatchEvent(new Event('vms-updated'))
         } else {
             return router.push('/login?path=/profile')
         }
