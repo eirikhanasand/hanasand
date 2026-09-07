@@ -24,6 +24,7 @@ for (const [path, name, unit] of [['temperatures', 'Temperature', '°C'], ['powe
         const rule: JsonRule = { path: `host.${path}.*.margin`, operator: 'lt', aggregate: 'min', value: 0 }
         expect(hostCheckMessage(rule, 12, false)).toBe(`${name} is normal: 12${unit} below the alert limit.`)
         expect(hostCheckMessage(rule, -2.5, true)).toBe(`${name} is high: 2.5${unit} above the alert limit.`)
+        expect(hostCheckMessage(rule, -0.001, true)).toContain(`0.001${unit} above`)
         expect(hostCheckMessage(rule, 0, false)).toBe(`${name} is normal: at the alert limit.`)
         expect(hostCheckMessage(rule, null, false)).toBeNull()
         expect(hostCheckMessage({ ...rule, value: 5 }, 12, false)).toBeNull()
