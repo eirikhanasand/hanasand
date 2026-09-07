@@ -139,9 +139,17 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   static async create(options: PostgresScraperStoreOptions = {}): Promise<PostgresScraperStore> {
     const databaseUrl = options.databaseUrl ?? Bun.env.TI_DATABASE_URL;
-    if (!databaseUrl) throw new Error("TI_DATABASE_URL is required for PostgreSQL storage");
+    if (!databaseUrl && !Bun.env.PGHOST) throw new Error("TI_DATABASE_URL or PGHOST is required for PostgreSQL storage");
     // ponytail: avoid pipelined result decoding in the production Bun SQL driver.
-    const sql = new SQL(databaseUrl, { prepare: false, ...(options.readOnly ? { max: 3 } : {}) });
+    const sqlOptions = { prepare: false, ...(options.readOnly ? { max: 3 } : {}) };
+    const sql = databaseUrl ? new SQL(databaseUrl, sqlOptions) : new SQL({
+      ...sqlOptions,
+      hostname: Bun.env.PGHOST,
+      port: Number(Bun.env.PGPORT || 5432),
+      username: Bun.env.PGUSER,
+      password: Bun.env.PGPASSWORD,
+      database: Bun.env.PGDATABASE
+    });
     const runMaintenanceMigrations = options.runMaintenanceMigrations !== false;
     const migrations = DEFAULT_MIGRATIONS.filter((migration) => runMaintenanceMigrations || !MAINTENANCE_MIGRATION_VERSIONS.has(migration.version)).map((migration, index) => ({
       ...migration,
