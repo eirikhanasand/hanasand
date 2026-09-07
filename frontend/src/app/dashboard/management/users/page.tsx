@@ -1,5 +1,4 @@
 import Users from '@/components/users/users'
-import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import getRoles from '@/utils/roles/getRoles'
@@ -42,14 +41,6 @@ export default async function Page() {
                 <AdminMetric icon={<UserRound className='h-4 w-4' />} label='Reserved' value={String(reservedCount)} detail='Reserved accounts' tone={reservedCount ? 'neutral' : 'ok'} />
                 <AdminMetric icon={<Radio className='h-4 w-4' />} label='Admin controls' value='Connected' detail={`Last refreshed ${formatRefreshTime(refreshedAt)}`} tone='ok' />
             </section>
-            <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                <div className='grid divide-y divide-ui-border md:grid-cols-4 md:divide-x md:divide-y-0'>
-                    <AdminAction href='/helpdesk' label='Support access' value='audit trail' />
-                    <AdminAction href='/system/rates' label='API tokens' value='scoped keys' />
-                    <AdminAction href='/content' label='Content management' value='articles and thoughts' />
-                    <AdminAction href='/ti/audit' label='Audit log' value='admin activity' />
-                </div>
-            </DashboardPanel>
             <Users roles={roles} initialUsers={users} />
         </DashboardPage>
     )
@@ -84,14 +75,5 @@ function AdminMetric({ icon, label, value, detail, tone }: { icon: ReactNode, la
             </div>
             <p className='mt-2 line-clamp-2 text-sm leading-5 text-ui-muted'>{detail}</p>
         </DashboardPanel>
-    )
-}
-
-function AdminAction({ href, label, value }: { href: string, label: string, value: string }) {
-    return (
-        <Link href={href} className='grid gap-1 bg-ui-panel px-4 py-3 transition hover:bg-ui-raised'>
-            <span className='text-sm font-semibold text-ui-text'>{label}</span>
-            <span className='text-xs font-medium text-ui-muted'>{value}</span>
-        </Link>
     )
 }

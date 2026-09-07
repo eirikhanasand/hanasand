@@ -1,3 +1,4 @@
+import { clientHeaders } from '@/utils/auth/clientHeaders'
 import { NextRequest, NextResponse } from 'next/server'
 import { reservedUsernames } from '@/utils/auth/reservedUsernames'
 import { setAuthCookies } from '../_authCookies'
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     const upstream = await fetch(`${authApiUrl()}/user`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...clientHeaders(req.headers), 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, id, password }),
         cache: 'no-store',
     }).catch(() => null)
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Account created, but the session could not be created.' }, { status: 502 })
     }
 
-    const loginData = await createLoginSession(data.id, password)
+    const loginData = data.token ? data : await createLoginSession(req, data.id, password)
     if (!loginData?.token || !loginData?.id || !loginData?.name) {
         if (wantsRedirect) {
             return authRedirect(req, '/register', 'Account created, but the session could not be created.')
@@ -105,10 +106,10 @@ function parseJson(text: string) {
     }
 }
 
-async function createLoginSession(id: string, password: string) {
+async function createLoginSession(req: NextRequest, id: string, password: string) {
     const upstream = await fetch(`${authApiUrl()}/auth/login/${encodeURIComponent(id)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...clientHeaders(req.headers), 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
         cache: 'no-store',
     }).catch(() => null)

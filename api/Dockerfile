@@ -7,8 +7,15 @@ WORKDIR /app
 COPY package.json bun.lock* bunfig.toml ./
 RUN bun install
 
+FROM deps AS session-geo
+COPY scripts/download-session-geo.ts scripts/download-session-geo.ts
+ARG SESSION_GEOIP_MONTH
+RUN SESSION_GEOIP_MONTH=$SESSION_GEOIP_MONTH bun scripts/download-session-geo.ts
+
 FROM deps AS auth-runtime
 COPY --chown=bun:bun . .
+COPY --from=session-geo /app/geoip /app/geoip
+RUN bun scripts/check-session-network.ts
 RUN DB_PASSWORD=build-test DB_HOST=localhost VM_API_TOKEN=build-test bun run test --only=auth-service,auth-boundary,social-oidc,social-auth
 RUN bun run lint
 ENV NODE_ENV=production AUTH_SERVICE_ONLY=1
@@ -31,6 +38,7 @@ ENV NODE_ENV=production
 COPY default.vcl /etc/varnish/default.vcl
 COPY --from=deps /app/node_modules /app/node_modules
 COPY . .
+COPY --from=session-geo /app/geoip /app/geoip
 
 # Build-time tests import the runtime constants module, but Docker builds do
 # not receive the compose env_file. Keep placeholders scoped to this check so

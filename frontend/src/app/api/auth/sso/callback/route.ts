@@ -1,3 +1,4 @@
+import { clientHeaders } from '@/utils/auth/clientHeaders'
 import { NextRequest, NextResponse } from 'next/server'
 import { authApiUrl } from '@/utils/auth/authApiUrl'
 import { setAuthCookies } from '../../_authCookies'
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
 
     const upstream = await fetch(`${authApiUrl().replace(/\/$/, '')}/auth/sso/callback`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...clientHeaders(req.headers), 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, state }),
         cache: 'no-store',
     }).catch(() => null)

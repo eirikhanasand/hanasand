@@ -28,6 +28,7 @@ swift build --package-path "$ROOT_DIR" -c release
 
 cp "$BUILD_DIR/Hanasand" "$APP_DIR/Contents/MacOS/Hanasand"
 chmod +x "$APP_DIR/Contents/MacOS/Hanasand"
+cp -R "$BUILD_DIR/Hanasand_Hanasand.bundle" "$APP_DIR/Contents/Resources/"
 if [[ -f "$ICON_FILE" ]]; then
   cp "$ICON_FILE" "$APP_DIR/Contents/Resources/Hanasand.icns"
 fi

@@ -11,6 +11,7 @@ type TestTask = {
 const bun = process.execPath
 
 const tasks: TestTask[] = [
+    { id: 'session-details', title: 'Login session device and forwarding details', command: [bun, 'scripts/check-session-details.ts'] },
     { id: 'social-proxy', title: 'Google and Apple callback boundaries', command: [bun, 'scripts/check-social-proxy.ts'] },
     { id: 'health-check-sorting', title: 'Health check column sorting', command: [bun, 'test', 'tests/health-check-sorting.test.ts'] },
     { id: 'password-policy', title: 'Password requirements', command: [bun, 'test', 'tests/password-policy.test.ts'] },
@@ -20,6 +21,7 @@ const tasks: TestTask[] = [
     { id: 'table-navigation', title: 'Temporary table edges and formula preservation', command: [bun, 'test', 'tests/table-navigation.test.ts'] },
     { id: 'code-inventory', title: 'Source inventory and dependency hashes', command: [bun, 'test', 'tests/code-inventory.test.mjs'] },
     { id: 'code-review-state', title: 'Code review status and sheet settings', command: [bun, 'test', 'tests/code-review-state.test.ts'] },
+    { id: 'api-response-examples', title: 'API fictional response examples and OpenAPI navigation', command: [bun, 'tests/api-response-examples.test.tsx'] },
     { id: 'organization-initial-render', title: 'Organization layout before hydration', command: [bun, 'tests/organization-initial-render.test.tsx'] },
     { id: 'dashboard-streaming', title: 'Dashboard independent status streaming', command: [bun, 'tests/dashboard-streaming.test.tsx'] },
     { id: 'recovery-boundary', title: 'Recovery request boundaries', command: [bun, 'tests/recovery-boundary.test.ts'] },

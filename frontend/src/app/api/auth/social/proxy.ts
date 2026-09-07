@@ -1,3 +1,4 @@
+import { clientHeaders } from '@/utils/auth/clientHeaders'
 import { randomBytes } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { authApiUrl } from '@/utils/auth/authApiUrl'
@@ -30,7 +31,7 @@ export async function start(req: NextRequest, provider: string) {
     const token = req.cookies.get('access_token')?.value
     const id = req.cookies.get('id')?.value
     const response = await upstream(`${provider}/start`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', ...(link && token ? { Authorization: `Bearer ${token}` } : {}), ...(link && id ? { id } : {}) },
+        method: 'POST', headers: { ...clientHeaders(req.headers), 'Content-Type': 'application/json', ...(link && token ? { Authorization: `Bearer ${token}` } : {}), ...(link && id ? { id } : {}) },
         body: JSON.stringify({ binding, link, redirectPath: req.nextUrl.searchParams.get('redirectPath') }),
     })
     const data = await response?.json().catch(() => null)
@@ -50,7 +51,7 @@ export async function callback(req: NextRequest, provider: string) {
         fields = req.method === 'POST' ? await req.formData() : req.nextUrl.searchParams
     } catch { return failure('Invalid sign-in response.') }
     const response = await upstream(`${provider}/callback`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { ...clientHeaders(req.headers), 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: fields.get('code'), state: fields.get('state'), binding: req.cookies.get(cookieName(provider))?.value, cancelled: Boolean(fields.get('error')) }),
     })
     const data = await response?.json().catch(() => null)

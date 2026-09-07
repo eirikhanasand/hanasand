@@ -105,7 +105,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
                 link('Organizations', '/organizations'),
             ]),
             group('Billing', [link('Subscription', '/subscription')]),
-            group('Developer resources', [link('API Docs', '/api')]),
+            group('Developer resources', [link('API Docs', '/api'), link('OpenAPI JSON', '/api/openapi/ti')]),
         ]),
     ]
     const permitted = (items: NavigationItem[]): NavigationItem[] => items

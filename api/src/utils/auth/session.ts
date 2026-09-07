@@ -160,7 +160,7 @@ export async function revokeAllTokens({ userId, revokedBy, exceptToken }: { user
     return result.rowCount ?? 0
 }
 
-export async function listSessions(userId: string) {
+export async function listSessions(userId: string, currentToken?: string) {
     const result = await run(`
         SELECT
             token_id,
@@ -169,11 +169,17 @@ export async function listSessions(userId: string) {
             user_agent,
             created_at,
             timestamp AS last_seen_at,
-            revoked_at
+            revoked_at,
+            token = $2 AS current
         FROM tokens
         WHERE id = $1
-        ORDER BY revoked_at NULLS FIRST, timestamp DESC
-    `, [userId])
+          AND revoked_at IS NULL
+          AND timestamp >= NOW() - CASE
+              WHEN user_agent LIKE 'Hanasand Desktop/%' THEN INTERVAL '30 days'
+              ELSE INTERVAL '24 hours'
+          END
+        ORDER BY timestamp DESC
+    `, [userId, currentToken ?? null])
 
     return result.rows
 }

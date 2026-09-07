@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
+import { sessionNetwork } from '#utils/auth/sessionNetwork.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { listSessions, revokeAllTokens, revokeToken } from '#utils/auth/session.ts'
 
@@ -15,12 +16,12 @@ export async function getSessions(req: FastifyRequest, res: FastifyReply) {
         return res.status(auth.impersonating ? 403 : 401).send({ error: auth.error || 'Unauthorized.' })
     }
 
-    const sessions = await listSessions(auth.id)
-    return res.send({
-        sessions: sessions.map(session => ({
+    const sessions = await listSessions(auth.id, bearerToken(req))
+    return res.header('Cache-Control', 'no-store').send({
+        sessions: await Promise.all(sessions.map(async session => ({
             ...session,
-            current: session.revoked_at === null && bearerToken(req) === undefined ? false : undefined,
-        })),
+            ...await sessionNetwork(session.ip),
+        }))),
     })
 }
 

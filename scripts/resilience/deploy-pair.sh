@@ -14,8 +14,8 @@ case "${1:-}" in
  '')
   case "$kind" in
    frontend) git archive "$release" | docker build -f frontend/Dockerfile -t "$image" -;;
-   api) docker build --target app-runtime --build-context database_schema=./db -t "$image" api;;
-   auth) docker build --target auth-runtime -t "$image" api;;
+   api) docker build --build-arg SESSION_GEOIP_MONTH="$(date -u +%Y-%m)" --target app-runtime --build-context database_schema=./db -t "$image" api;;
+   auth) docker build --build-arg SESSION_GEOIP_MONTH="$(date -u +%Y-%m)" --target auth-runtime -t "$image" api;;
   esac;;
  *) exit 2;;
 esac

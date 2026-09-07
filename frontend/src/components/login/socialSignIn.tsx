@@ -18,7 +18,7 @@ export default function SocialSignIn({ link = false, redirectPath = '/dashboard'
         async function load() {
             try {
                 const response = await fetch('/api/auth/social/providers', { cache: 'no-store' })
-                if (!response.ok) throw new Error('Unable to load Google and Apple sign-in.')
+                if (!response.ok) throw new Error('Unable to load sign-in options.')
                 const data = await response.json()
                 if (active) setProviders(data.providers)
                 if (link) {
@@ -34,9 +34,9 @@ export default function SocialSignIn({ link = false, redirectPath = '/dashboard'
         return () => { active = false }
     }, [link])
     return <div className={link ? 'mt-4 border-t border-ui-border pt-4' : ''}>
-        {link && <><h3 className='text-sm font-semibold text-ui-text'>Connected sign-in accounts</h3><p className='mb-3 mt-1 text-xs text-ui-muted'>Connect Google or Apple to sign in to this account with the same permissions.</p></>}
-        <div className='grid gap-2 sm:grid-cols-2'>
-            {(['google', 'apple'] as const).map(provider => {
+        {link && <><h3 className='text-sm font-semibold text-ui-text'>Connected sign-in accounts</h3><p className='mb-3 mt-1 text-xs text-ui-muted'>Connect Google to sign in to this account with the same permissions.</p></>}
+        <div className='grid gap-2'>
+            {(['google'] as const).map(provider => {
                 const ready = providers.find(item => item.provider === provider)?.configured
                 const connected = connections.find(item => item.provider === provider)
                 const label = `${link ? 'Connect' : 'Continue with'} ${names[provider]}`
