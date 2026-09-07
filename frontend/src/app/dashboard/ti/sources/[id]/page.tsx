@@ -79,13 +79,13 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                 <h2 className='font-semibold text-ui-text'>Recent evidence</h2>
                 <div className='mt-3 grid gap-3'>
                     {captures.map(capture => <article key={capture.id} className='min-w-0 rounded-md border border-ui-border p-4'>
-                        <h3 className='break-words font-medium text-ui-text'>{capture.title}</h3>
-                        <p className='mt-2 whitespace-pre-wrap break-words text-sm text-ui-muted'>{capture.normalizedEvidence?.excerpt || capture.resultSummary}</p>
+                        <h3 className='wrap-break-word font-medium text-ui-text'>{capture.title}</h3>
+                        <p className='mt-2 whitespace-pre-wrap wrap-break-word text-sm text-ui-muted'>{capture.normalizedEvidence?.excerpt || capture.resultSummary}</p>
                         <p className='mt-3 text-xs text-ui-muted'>Published {formatTiDate(capture.publishedAt)} · Captured {formatTiDate(capture.capturedAt)}</p>
                         {httpUrl(capture.pageUrl) && <a href={capture.pageUrl} target='_blank' rel='noopener noreferrer' className='mt-3 inline-flex items-center gap-2 text-sm text-ui-primary'>Open original<ExternalLink className='h-4 w-4' /></a>}
                         {(capture.normalizedEvidence?.text || capture.screenshotLabel !== 'not captured') && <details className='mt-3 text-sm'>
                             <summary className='cursor-pointer text-ui-primary'>Details</summary>
-                            {capture.normalizedEvidence?.text && <p className='mt-2 whitespace-pre-wrap break-words text-ui-muted'>{capture.normalizedEvidence.text}</p>}
+                            {capture.normalizedEvidence?.text && <p className='mt-2 whitespace-pre-wrap wrap-break-word text-ui-muted'>{capture.normalizedEvidence.text}</p>}
                             {capture.screenshotLabel !== 'not captured' && <p className='mt-2 break-all text-ui-muted'>Screenshot: {capture.screenshotLabel} · {formatTiDate(capture.screenshotTakenAt)}</p>}
                         </details>}
                     </article>)}
@@ -97,7 +97,7 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
 }
 
 function Stat({ label, value }: { label: string, value: string }) {
-    return <div><dt className='text-sm text-ui-muted'>{label}</dt><dd className='mt-1 break-words font-medium text-ui-text'>{value}</dd></div>
+    return <div><dt className='text-sm text-ui-muted'>{label}</dt><dd className='mt-1 wrap-break-word font-medium text-ui-text'>{value}</dd></div>
 }
 
 function label(value: string) {
