@@ -398,7 +398,8 @@ services:
   postgres:
     image: postgres:15
     container_name: hanasand_database
-    mem_limit: 2g
+    mem_limit: 8g
+    memswap_limit: 8g
     cpus: "8.0"
     restart: always
     environment:
