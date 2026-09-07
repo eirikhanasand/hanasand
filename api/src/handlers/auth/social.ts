@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
+import { AccountIdentityError } from '#utils/auth/accountIdentity.ts'
 import { socialAccount } from '#utils/auth/socialAccounts.ts'
 import { issueToken, validateSession } from '#utils/auth/session.ts'
 import { authorizationUrl, digest, exchangeIdentity, isSocialProvider, providerConfig, redirectPath, secret, socialProviders } from '#utils/auth/socialOidc.ts'
@@ -70,7 +71,8 @@ export async function postSocialCallback(req: FastifyRequest, res: FastifyReply)
         const roles = await run('SELECT r.id,r.name,r.description,r.priority FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=$1 ORDER BY r.priority,r.id', [user.id])
         await run('UPDATE user_social_identities SET last_used_at=NOW() WHERE provider=$1 AND subject=$2', [provider, identity.subject])
         return res.send({ ...user, avatar: user.avatar || '', roles: roles.rows, token: session.token, expires_at: session.expires_at, redirectPath: transaction.redirect_path })
-    } catch {
+    } catch (error) {
+        if (error instanceof AccountIdentityError) return res.code(409).send({ error: error.message })
         // Never log authorization codes, provider tokens, secrets, or token response bodies.
         req.log.warn({ provider }, 'Social sign-in validation failed')
         return res.code(502).send({ error: 'Unable to verify sign-in with the provider. Please try again.' })

@@ -5,7 +5,8 @@ const base = process.env.SOCIAL_TEST_URL || 'http://127.0.0.1:3491'
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1100, height: 950 } })
 try {
-    await page.goto(`${base}/login?path=%2Fthesis`, { waitUntil: 'networkidle' })
+    await page.route('**/api/auth/social/providers', route => route.fulfill({ json: { providers: [{ provider: 'google', configured: false }, { provider: 'apple', configured: false }] } }))
+    await page.goto(`${base}/login?path=%2Fthesis`, { waitUntil: 'domcontentloaded' })
     await page.getByRole('button', { name: 'Continue with Google', exact: true }).waitFor()
     assert.equal(await page.getByRole('button', { name: 'Continue with Google', exact: true }).isDisabled(), true)
     assert.equal(await page.getByRole('button', { name: 'Continue with Apple', exact: true }).count(), 0)
@@ -15,14 +16,14 @@ try {
     await page.getByRole('link', { name: 'Continue with SSO', exact: true }).waitFor()
     await page.screenshot({ path: '/tmp/social-login-desktop.png', fullPage: true })
     await page.route('**/api/auth/social/providers', route => route.fulfill({ json: { providers: [{ provider: 'google', configured: true }, { provider: 'apple', configured: true }] } }))
-    await page.reload({ waitUntil: 'networkidle' })
+    await page.reload({ waitUntil: 'domcontentloaded' })
     for (const provider of ['Google']) {
         const link = page.getByRole('link', { name: `Continue with ${provider}`, exact: true })
         await link.waitFor()
         assert.equal(await link.getAttribute('href'), `/api/auth/social/${provider.toLowerCase()}/start?redirectPath=%2Fthesis`)
     }
     assert.equal(await page.getByRole('link', { name: 'Continue with Apple', exact: true }).count(), 0)
-    await page.goto(`${base}/login?socialError=Sign-in%20was%20cancelled.`, { waitUntil: 'networkidle' })
+    await page.goto(`${base}/login?socialError=Sign-in%20was%20cancelled.`, { waitUntil: 'domcontentloaded' })
     await page.getByRole('alert').filter({ hasText: 'Sign-in was cancelled.' }).waitFor()
     await page.setViewportSize({ width: 390, height: 844 })
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)

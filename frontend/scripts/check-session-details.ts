@@ -30,7 +30,7 @@ try {
         calls = 0
         const response = await action(new NextRequest('https://hanasand.com/api/auth/login', {
             method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': agent, 'x-real-ip': '8.8.8.8', 'x-forwarded-for': 'spoofed' },
-            body: JSON.stringify({ id: 'session-test', name: 'Session test', password: 'Test-only-password1!' }),
+            body: JSON.stringify({ id: 'session-test', name: 'Session test', email: 'session-test@example.test', password: 'Test-only-password1!' }),
         }))
         assert.equal(response.status, 200)
         assert.equal(calls, 1, 'Sign-up must reuse the issued session')

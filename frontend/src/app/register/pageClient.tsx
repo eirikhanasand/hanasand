@@ -14,6 +14,7 @@ import { submitContactRequest } from '@/utils/contact/submitContactRequest'
 type RegisterPageProps = {
     path: string | null
     serverInternal: boolean
+    serverError: string | null
 }
 
 type ManagedSetupResult = {
@@ -26,7 +27,7 @@ const authPrimaryButtonClass = 'group inline-flex h-9 min-w-36 items-center just
 const authGhostButtonClass = 'inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'
 
 
-export default function RegisterPageClient({ path, serverInternal }: RegisterPageProps) {
+export default function RegisterPageClient({ path, serverInternal, serverError }: RegisterPageProps) {
     const router = useRouter()
     const [hydrated, setHydrated] = useState(false)
     const [busy, setBusy] = useState(false)
@@ -36,7 +37,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     const [password, setPassword] = useState('')
     const passwordIsValid = passwordMeetsRequirements(password)
     const reservedUsername = reservedUsernames.includes(username.trim().toLowerCase())
-    const { condition: error, setCondition: setError } = useClearStateAfter()
+    const { condition: error, setCondition: setError } = useClearStateAfter({ initialState: serverError })
     const { condition: setupError, setCondition: setSetupError } = useClearStateAfter()
     const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
     const redirectPath = safeRedirectPath(path)
@@ -220,6 +221,10 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                 autoComplete='name'
                                 required
                             />
+                        </label>
+                        <label className='grid gap-1.5' htmlFor='register-email'>
+                            <span className='text-xs font-semibold text-ui-muted'>Email</span>
+                            <input id='register-email' type='email' name='email' autoComplete='email' className={authInputClass} placeholder='you@example.com' maxLength={254} required />
                         </label>
                         <label className='grid gap-1.5' htmlFor='register-password'>
                             <span className='text-xs font-semibold text-ui-muted'>Password</span>

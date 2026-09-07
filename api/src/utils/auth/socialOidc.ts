@@ -63,5 +63,5 @@ export async function exchangeIdentity(provider: SocialProvider, code: string, n
         || (payload.azp !== undefined && payload.azp !== config.clientId)
         || (Array.isArray(payload.aud) && payload.aud.length > 1 && payload.azp !== config.clientId)) throw new Error('Invalid identity token')
     const email = (payload.email_verified === true || payload.email_verified === 'true') && typeof payload.email === 'string' ? payload.email.slice(0, 320) : null
-    return { subject: payload.sub, email, ...(typeof payload.name === 'string' ? { name: payload.name.slice(0, 100) } : {}) }
+    return { subject: payload.sub, email, authoritativeEmail: Boolean(email && provider === 'google' && (email.toLowerCase().endsWith('@gmail.com') || typeof payload.hd === 'string')), ...(typeof payload.name === 'string' ? { name: payload.name.slice(0, 100) } : {}) }
 }

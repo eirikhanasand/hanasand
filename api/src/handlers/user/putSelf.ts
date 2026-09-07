@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import bcrypt from 'bcrypt'
-import run from '#db'
+import run, { withTransaction } from '#db'
+import { AccountIdentityError, usernameError } from '#utils/auth/accountIdentity.ts'
 import { validatePassword } from '#utils/auth/password.ts'
 import login from '#utils/auth/login.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
@@ -11,19 +12,29 @@ type GetUserBodyProps = {
     name: string
     password: string
     avatar: string
+    username: string
 }
 
 export default async function putSelf(req: FastifyRequest, res: FastifyReply) {
-    const { valid } = await tokenWrapper(req, res)
-    if (!valid) {
+    const auth = await tokenWrapper(req, res)
+    if (!auth.valid || auth.impersonating || auth.authenticatedId !== auth.id) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const { name, password, avatar } = req.body as GetUserBodyProps ?? {}
+    const { name, password, avatar, username: requestedUsername } = req.body as GetUserBodyProps ?? {}
     const ip = req.ip
-    const id = req.headers['id']
+    const id = auth.id
     if (!id || Array.isArray(id)) {
         return res.status(400).send({ error: 'No user provided.' })
+    }
+
+    const username = typeof requestedUsername === 'string' ? requestedUsername.trim().toLowerCase() : undefined
+    if (requestedUsername !== undefined && (!username || usernameError(username))) {
+        const current = await run('SELECT COALESCE(username,id) AS username FROM users WHERE id=$1', [id])
+        if (!username || current.rows[0]?.username !== username) return res.status(400).send({ error: usernameError(username || '') || 'Invalid username.' })
+    }
+    if (name !== undefined && (typeof name !== 'string' || !name.trim() || name.length > 100)) {
+        return res.status(400).send({ error: 'Enter a display name of 1–100 characters.' })
     }
 
     if (password) {
@@ -71,7 +82,13 @@ export default async function putSelf(req: FastifyRequest, res: FastifyReply) {
 
         if (name !== undefined) {
             fieldsToUpdate.push(`name = $${idx}`)
-            values.push(name)
+            values.push(name.trim())
+            idx++
+        }
+
+        if (username !== undefined) {
+            fieldsToUpdate.push(`username = $${idx}`)
+            values.push(username)
             idx++
         }
 
@@ -86,9 +103,16 @@ export default async function putSelf(req: FastifyRequest, res: FastifyReply) {
         }
 
         values.push(id)
-        const query = `UPDATE users SET ${fieldsToUpdate.join(', ')} WHERE id = $${idx} RETURNING *`
+        const query = `UPDATE users SET ${fieldsToUpdate.join(', ')} WHERE id = $${idx} RETURNING id,name,COALESCE(username,id) AS username,avatar`
 
-        const response = await run(query, values)
+        const response = await withTransaction(async execute => {
+            if (username !== undefined) {
+                await execute('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`username:${username}`])
+                const taken = await execute('SELECT 1 FROM users WHERE id<>$2 AND (lower(COALESCE(username,id))=$1 OR lower(id)=$1)', [username, id])
+                if (taken.rows.length) throw new AccountIdentityError('This username is already taken.')
+            }
+            return execute(query, values)
+        })
         if (!response.rowCount) {
             return res.status(404).send({ error: 'User not found.' })
         }
@@ -103,9 +127,10 @@ export default async function putSelf(req: FastifyRequest, res: FastifyReply) {
             expires_at: session?.expires_at ?? null
         })
     } catch (err) {
+        if (err instanceof AccountIdentityError) return res.status(409).send({ error: err.message })
         const error = err as unknown as Error & { code?: string }
         if (error.code === '23505') {
-            return res.status(409).send({ error: 'Duplicate value conflict' })
+            return res.status(409).send({ error: 'This username is already taken.' })
         }
 
         return res.status(500).send({ error: error.message })

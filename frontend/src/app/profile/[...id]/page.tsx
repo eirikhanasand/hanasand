@@ -1,3 +1,5 @@
+import ProfileIdentity from '@/components/profile/profileIdentity'
+import { redirect } from 'next/navigation'
 import Certificates from '@/components/profile/certificates'
 import AccountActions from '@/components/profile/accountActions'
 import SessionsPanel from '@/components/profile/sessions'
@@ -15,10 +17,13 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const name = Cookies.get('name')?.value
     const userId = Cookies.get('id')?.value
     const token = Cookies.get('access_token')?.value
-    const isSelf = profileId === userId
+    const profile = await fetchUser(profileId)
+    const username = profile?.username || profile?.id || profileId
+    const isSelf = Boolean(profile && profile.id === userId)
+    if (profile && profileId !== username) redirect(`/profile/${encodeURIComponent(username)}`)
 
     if (!userId || !token) {
-        const publicUser = await fetchUser(profileId)
+        const publicUser = profile
         const isInactive = publicUser?.active === false
         const displayName = isInactive ? profileId : publicUser?.name || profileId
 
@@ -29,7 +34,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                     <div className='mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
                         <div className='min-w-0'>
                             <h1 className='wrap-break-word text-3xl font-semibold text-ui-text'>{displayName}</h1>
-                            <p className='mt-1 text-sm text-ui-muted'>@{profileId}</p>
+                            <p className='mt-1 text-sm text-ui-muted'>@{username}</p>
                         </div>
                         <span className={`w-fit rounded-lg border px-3 py-1.5 text-xs font-semibold ${isInactive ? 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning' : 'border-ui-success/40 bg-ui-success/10 text-ui-success'}`}>
                             {isInactive ? 'Reserved' : 'Active'}
@@ -51,7 +56,6 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
         )
     }
 
-    const profile = await fetchUser(profileId)
     const displayName = profile?.name || (isSelf ? name : null) || profileId
     const certificates = isSelf ? await getCertificates(userId, token, userId) : null
 
@@ -59,7 +63,8 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
         <DashboardPage>
             <DashboardPanel className='p-4'>
                 <h1 className='wrap-break-word text-xl font-semibold text-ui-text'>{displayName}</h1>
-                <p className='mt-1 text-sm text-ui-muted'>@{profileId}</p>
+                <p className='mt-1 text-sm text-ui-muted'>@{username}</p>
+                {isSelf && <ProfileIdentity displayName={displayName} username={username} />}
                 {profile?.active === false && <p className='mt-2 text-sm text-ui-muted'>Inactive account</p>}
                 {!profile && !isSelf && <p role='status' className='mt-2 text-sm text-ui-muted'>Profile details are unavailable. Please try again.</p>}
             </DashboardPanel>
