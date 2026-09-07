@@ -31,7 +31,7 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
         {error && <div role='alert' className='text-ui-danger'>{error} <button className='underline' onClick={() => setRevision(value => value + 1)}>Retry</button></div>}
         {!item && !error && <p>Loading case…</p>}
         {item && <>
-            <p className='whitespace-pre-wrap break-words'>{item.summary}</p>
+            <p className='whitespace-pre-wrap wrap-break-word'>{item.summary}</p>
             <dl className='grid grid-cols-2 gap-3 text-sm'><dt>Status</dt><dd>{item.status}</dd><dt>Severity</dt><dd>{item.severity}</dd><dt>Occurrences</dt><dd>{item.occurrences}</dd><dt>First seen</dt><dd>{date(item.createdAt)}</dd><dt>Last seen</dt><dd>{date(item.updatedAt)}</dd><dt>Recovered</dt><dd>{date(item.resolvedAt)}</dd></dl>
             <p className='text-sm text-ui-muted'>This case closes when the health check recovers and reopens if the same issue returns.</p>
             <Link className='text-sm text-ui-primary underline' href={`/automation/health?monitor=${encodeURIComponent(item.automationId)}`}>View health check</Link>
