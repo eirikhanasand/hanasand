@@ -32,8 +32,8 @@ export function RecoveryBanner() {
     return <div role='status' className='border-b border-amber-500/40 bg-amber-500/10 px-5 py-3 text-sm'>
         {state.mode === 'unknown' || state.stale ? 'Service status is reconnecting. Some actions may be temporarily unavailable.'
             : state.readOnly ? 'Recovery mode: existing records remain available where replication is healthy. Changes and new processing are paused.'
-                : 'A backup service is handling requests while the preferred service recovers.'}
-        {state.services.some(service => service.id === 'intelligence' && service.activeInstance && service.activeInstance !== 'inspur-ti-1') && <span> Intelligence is being served in read-only mode.</span>}
+                : 'Running on a backup server.'}
+        {state.services.some(service => service.id === 'intelligence' && service.activeInstance && service.activeInstance !== 'inspur-ti-1') && <span> Threat intelligence is read-only.</span>}
         {unavailable.length > 0 && <span> Currently unavailable: {unavailable.join(', ')}.</span>}
     </div>
 }
