@@ -292,46 +292,41 @@ function parseFrameBuffer(buffer: Buffer) {
     return lines
 }
 
-function parseLogLine(line: string, container: RuntimeContainer): RuntimeLogEntry | null {
-    const trimmed = line.trim()
-    if (!trimmed) return null
+function splitLogTimestamp(line: string) {
+    const match = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})|\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)? UTC)(?:\s+|$)/)
+    if (!match || Number.isNaN(Date.parse(match[1]))) return { message: line, timestamp: undefined }
+    return { message: line.slice(match[0].length).trim(), timestamp: match[1] }
+}
+
+export function parseLogLine(line: string, container: RuntimeContainer): RuntimeLogEntry | null {
+    // Docker also prefixes blank output lines. Do not turn those timestamps into
+    // messages with a new poll-time timestamp that sorts above real log output.
+    const outer = splitLogTimestamp(line.trim())
+    let message = outer.message
+    let createdAt = outer.timestamp
+    if (!message) return null
 
     try {
-        const parsed = JSON.parse(trimmed) as Record<string, unknown>
-        const structuredMessage = typeof parsed.log === 'string'
-            ? parsed.log.trim()
-            : typeof parsed.message === 'string'
-                ? parsed.message.trim()
-                : typeof parsed.msg === 'string'
-                    ? parsed.msg.trim()
-                    : ''
-        const structuredTimestamp = typeof parsed.time === 'string'
-            ? parsed.time
-            : typeof parsed.timestamp === 'string'
-                ? parsed.timestamp
-                : null
-
-        if (structuredMessage) {
-            return {
-                id: `${container.id}:${structuredTimestamp || 'json'}:${structuredMessage.slice(0, 32)}`,
-                container_id: container.id,
-                service: container.name,
-                image: container.image,
-                level: detectLevel(structuredMessage),
-                message: structuredMessage,
-                created_at: structuredTimestamp || new Date().toISOString(),
-                source: 'runtime',
+        const parsed = JSON.parse(message) as Record<string, unknown>
+        if (parsed && typeof parsed === 'object') {
+            const structuredMessage = [parsed.log, parsed.message, parsed.msg].find(value => typeof value === 'string')
+            const timestamp = typeof parsed.time === 'string' ? parsed.time : typeof parsed.timestamp === 'string' ? parsed.timestamp : undefined
+            if (typeof structuredMessage === 'string') {
+                message = structuredMessage.trim()
+                if (!createdAt && timestamp && !Number.isNaN(Date.parse(timestamp))) createdAt = timestamp
             }
         }
     } catch {
-        // Non-JSON container logs fall through to text parsing.
+        // Plain-text container output remains readable as-is.
     }
 
-    const match = trimmed.match(/^(\d{4}-\d{2}-\d{2}T[^\s]+)\s+(.*)$/)
-    const createdAt = match?.[1] || new Date().toISOString()
-    const message = (match?.[2] || trimmed).trim()
-
+    // Applications such as PostgreSQL add their own timestamp after Docker's.
+    // Show the event time once in the row header, retaining the actual message.
+    const inner = splitLogTimestamp(message)
+    message = inner.message
+    createdAt ||= inner.timestamp
     if (!message) return null
+    createdAt ||= new Date().toISOString()
 
     return {
         id: `${container.id}:${createdAt}:${message.slice(0, 32)}`,
