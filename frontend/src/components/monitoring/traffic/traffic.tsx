@@ -63,7 +63,7 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
                         {([
                             {
                                 title: 'Total Requests',
-                                value: totalRequests || 'metering',
+                                value: totalRequests,
                                 accent: 'amber',
                                 outline: 'outline outline-ui-warning/20',
                                 icon: <Activity className='w-5 h-5 stroke-ui-warning' />

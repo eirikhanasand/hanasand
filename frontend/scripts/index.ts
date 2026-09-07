@@ -11,6 +11,7 @@ type TestTask = {
 const bun = process.execPath
 
 const tasks: TestTask[] = [
+    { id: 'traffic-locations', title: 'Recorded traffic locations', command: [bun, 'tests/traffic-locations.test.ts'] },
     { id: 'traffic-stream-proxy', title: 'Traffic live stream proxy', command: [bun, 'tests/traffic-stream-proxy.test.ts'] },
     { id: 'traffic-streaming', title: 'Traffic independent loading', command: [bun, 'tests/traffic-streaming.test.tsx'] },
     { id: 'browser-workspace', title: 'Browser workspace interaction and layout', command: [bun, 'scripts/check-browser-workspace.mjs'], requires: 'playwright' },
