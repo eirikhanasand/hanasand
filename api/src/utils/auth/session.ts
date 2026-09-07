@@ -73,46 +73,28 @@ export async function issueToken({ id, ip, userAgent = '' }: { id: string, ip: s
 
 export async function validateSession({ id, token }: { id?: string, token: string }) {
     const tokenResult = await run(`
-        SELECT token_id, id, token, ip, user_agent, created_at, timestamp, pg_is_in_recovery() AS database_read_only
-        FROM tokens
-        WHERE ($1::text IS NULL OR id = $1)
-          AND token = $2
-          AND revoked_at IS NULL
+        SELECT t.token_id, t.id, t.token, t.ip, t.user_agent, t.created_at, t.timestamp,
+            pg_is_in_recovery() AS database_read_only,
+            json_build_object('id', u.id, 'name', u.name, 'avatar', u.avatar,
+                'active', u.active, 'deletion_scheduled_at', u.deletion_scheduled_at) AS session_user,
+            COALESCE((SELECT json_agg(role ORDER BY role.priority, role.id) FROM (
+                SELECT r.id, r.name, r.description, r.priority
+                FROM roles r JOIN user_roles ur ON ur.role_id = r.id
+                WHERE ur.user_id = t.id
+            ) role), '[]'::json) AS session_roles
+        FROM tokens t JOIN users u ON u.id = t.id
+        WHERE ($1::text IS NULL OR t.id = $1)
+          AND t.token = $2 AND t.revoked_at IS NULL
+          AND u.active IS TRUE AND u.deletion_scheduled_at IS NULL
         LIMIT 1
     `, [id ?? null, token])
 
-    if (!tokenResult.rows.length) {
-        return null
-    }
+    const row = tokenResult.rows[0] as (SessionRow & { session_user: SessionUser, session_roles: SessionRole[] }) | undefined
+    if (!row || !isSessionFresh(row)) return null
 
-    const session = tokenResult.rows[0] as SessionRow
-    if (!isSessionFresh(session)) {
-        return null
-    }
-
+    const { session_user: user, session_roles: roles, ...session } = row
     const userId = session.id
     const ttlHours = sessionTTLHours(session.user_agent)
-
-    const userResult = await run(`
-        SELECT id, name, avatar, active, deletion_scheduled_at
-        FROM users
-        WHERE id = $1
-          AND active IS TRUE
-          AND deletion_scheduled_at IS NULL
-        LIMIT 1
-    `, [userId])
-
-    if (!userResult.rows.length) {
-        return null
-    }
-
-    const roleResult = await run(`
-        SELECT r.id, r.name, r.description, r.priority
-        FROM roles r
-        JOIN user_roles ur ON ur.role_id = r.id
-        WHERE ur.user_id = $1
-        ORDER BY r.priority ASC, r.id ASC
-    `, [userId])
 
     const readOnly = recoveryReadOnly() || session.database_read_only === true
     if (!readOnly) await run(`
@@ -123,8 +105,8 @@ export async function validateSession({ id, token }: { id?: string, token: strin
     `, [userId, token])
 
     return {
-        user: userResult.rows[0] as SessionUser,
-        roles: roleResult.rows as SessionRole[],
+        user,
+        roles,
         session,
         refreshed: {
             token,
