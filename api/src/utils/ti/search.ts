@@ -178,7 +178,7 @@ async function fetchCanonicalScraperSearch(scraperBase: string, query: string, o
         if (entityType) target.searchParams.set('entityType', entityType)
         target.searchParams.set('limit', '50')
         if (options.cachedOnly) target.searchParams.set('cached', 'true')
-        const response = await fetch(target, { headers, signal: AbortSignal.timeout(options.cachedOnly ? 350 : 12_000) })
+        const response = await fetch(target, { headers, signal: AbortSignal.timeout(12_000) })
         if (!response.ok) return null
         const result = await response.json() as TiSearchResponse
         if (result.query.trim().toLowerCase() !== query.toLowerCase() || !Array.isArray(result.sources) || !Array.isArray(result.recentActivity)) return null
