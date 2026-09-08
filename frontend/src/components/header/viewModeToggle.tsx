@@ -31,7 +31,7 @@ export default function ViewModeToggle({ initialMode = 'normal' }: { initialMode
             onClick={toggleMode}
             aria-label={label}
             title={label}
-            className='group grid h-10 w-10 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'
+            className='group hidden lg:grid h-10 w-10 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'
         >
             {mode === 'normal'
                 ? <PanelLeftClose className='h-4.5 w-4.5' />

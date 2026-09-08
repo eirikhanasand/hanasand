@@ -9,6 +9,7 @@ import Header from '@/components/header/header'
 import DetachedBoxHost from '@/components/box/detachedBoxHost'
 import { RecoveryBanner } from '@/components/system/resilience'
 import RouteFrame from '@/components/layout/routeFrame'
+import MobileNavigation from '@/components/layout/mobileNavigation'
 export { default as metadata } from './metadata'
 export { default as viewport } from './metadata'
 
@@ -39,13 +40,15 @@ export default async function layout({ children }: { children: ReactNode }) {
         <html lang='en' className={theme}>
             <body className='h-full w-full max-h-screen max-w-screen overflow-hidden'>
                 <div className='site-atmosphere' />
-                <Header token={token} path={path} initialMode={initialMode} />
-                <DetachedBoxHost />
-                <RouteFrame serverPath={path} token={token}
-                    sidebar={id && token ? <DashboardSidebar initialPreferences={initialPreferences} initialMode={initialMode} id={id} isAdmin={isAdmin} canManageSystem={canManageSystem} canManageContent={canManageContent} canReviewIntel={canReviewIntel} /> : null}
-                    banner={<><RecoveryBanner />{impersonatingId ? <ImpersonationBanner id={impersonatingId} name={impersonatingName} /> : null}</>}>
-                    {children}
-                </RouteFrame>
+                <MobileNavigation enabled={Boolean(id && token)}>
+                    <Header token={token} path={path} initialMode={initialMode} />
+                    <DetachedBoxHost />
+                    <RouteFrame serverPath={path} token={token}
+                        sidebar={id && token ? <DashboardSidebar initialPreferences={initialPreferences} initialMode={initialMode} id={id} isAdmin={isAdmin} canManageSystem={canManageSystem} canManageContent={canManageContent} canReviewIntel={canReviewIntel} /> : null}
+                        banner={<><RecoveryBanner />{impersonatingId ? <ImpersonationBanner id={impersonatingId} name={impersonatingName} /> : null}</>}>
+                        {children}
+                    </RouteFrame>
+                </MobileNavigation>
             </body>
         </html>
     )

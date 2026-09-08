@@ -8,8 +8,10 @@ import Link from 'next/link'
 import Dashboard from '@/components/dashboard/dashboard'
 import ShareIcon from './shareIcon'
 import isSharePath from '@/utils/routes/isSharePath'
+import { useMobileNavigation } from '@/components/layout/mobileNavigation'
 
 export default function Menu() {
+    const mobile = useMobileNavigation()
     const [open, setOpen] = useState(false)
     const [token, setToken] = useState<boolean>(false)
     const path = usePathname()
@@ -26,6 +28,14 @@ export default function Menu() {
         const cookieToken = getCookie('access_token')
         setToken(Boolean(cookieToken))
     }, [])
+
+    if (mobile.enabled) {
+        return <button type='button' onClick={mobile.toggle} aria-label={mobile.open ? 'Close navigation' : 'Open navigation'}
+            aria-expanded={mobile.open} aria-controls='mobile-navigation'
+            className='grid h-11 w-11 place-items-center rounded-lg text-ui-muted hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-ui-primary lg:hidden'>
+            {mobile.open ? <X /> : <MenuIcon />}
+        </button>
+    }
 
     if (!open) {
         return (

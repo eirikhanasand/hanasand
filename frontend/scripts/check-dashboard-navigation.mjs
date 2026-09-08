@@ -131,7 +131,7 @@ try {
     await page.reload()
     await button('Pinned').waitFor()
     await page.waitForFunction(() => document.querySelector('nav') && !document.querySelector('nav [aria-expanded="true"]'))
-    assert.equal(await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).count(), 1, 'Collapse all must keep the sidebar open')
+    assert(await page.getByRole('searchbox', { name: 'Search navigation' }).isVisible(), 'Collapse all must keep the navigation expanded')
     assert.equal(await collapseAll.count(), 0, 'Keep collapse all hidden after reloading collapsed preferences')
     await button('Pinned').click()
     assert(await collapseAll.isVisible(), 'An expanded pinned menu makes collapse all actionable')

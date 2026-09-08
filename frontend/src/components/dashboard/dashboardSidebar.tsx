@@ -34,7 +34,16 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         () => getDashboardViewMode(),
         () => initialMode,
     )
-    const compact = mode === 'compact'
+    const desktop = useSyncExternalStore(
+        (onChange) => {
+            const media = window.matchMedia('(min-width: 1024px)')
+            media.addEventListener('change', onChange)
+            return () => media.removeEventListener('change', onChange)
+        },
+        () => window.matchMedia('(min-width: 1024px)').matches,
+        () => true,
+    )
+    const compact = desktop && mode === 'compact'
     const [hasVMs, setHasVMs] = useState(false)
     useEffect(() => {
         const controller = new AbortController()
@@ -151,7 +160,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                         <ChevronsUp aria-hidden='true' className='h-4 w-4' />
                     </button>}
                     <button type='button' onClick={() => setDashboardViewMode(compact ? 'normal' : 'compact')} aria-label={compact ? 'Expand sidebar' : 'Collapse sidebar'} title={compact ? 'Expand sidebar' : 'Collapse sidebar'}
-                        className='grid h-10 w-10 place-items-center rounded-lg text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'>
+                        className='hidden h-10 w-10 place-items-center rounded-lg text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary lg:grid'>
                         {compact ? <PanelLeftOpen className='h-4 w-4' /> : <PanelLeftClose className='h-4 w-4' />}
                     </button>
                 </div>
@@ -179,6 +188,11 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                     {favorites.length > 0 && renderGroup({ label: 'Pinned', items: favorites })}
                     {sections.map(section => renderGroup(section))}
                 </>}
+            </nav>
+            <nav aria-label='Workspace shortcuts' className='mt-2 grid gap-1 border-t border-ui-border pt-2 lg:hidden'>
+                {[['Workspace', '/s'], ['Workspace assistant', '/ai'], ['Status', '/status']].map(([label, href]) => (
+                    <Link key={href} href={href} className='rounded-md px-2 py-2 text-sm text-ui-muted hover:bg-ui-canvas hover:text-ui-text'>{label}</Link>
+                ))}
             </nav>
         </aside>
     )
