@@ -12,7 +12,7 @@ const { recordMonitoringOutcome, loadMonitoringIssues } = await import('../src/u
 
 test('preserves delivered content and counts, excludes failures, and imports legacy IDs once', async () => {
     await query('CREATE TABLE agent_automations (id text PRIMARY KEY); CREATE TABLE agent_automation_runs(id text PRIMARY KEY)')
-    await query(`CREATE TABLE IF NOT EXISTS vms(name text PRIMARY KEY, owner text, created_by text, access_users text[], deleted_at timestamptz)`);
+    await query(`CREATE TABLE IF NOT EXISTS vms(name text PRIMARY KEY, owner text, created_by text, access_users jsonb, deleted_at timestamptz)`);
     await schema()
     await query("INSERT INTO agent_automations VALUES ('monitor',NULL)")
     const automation = { id: 'monitor', name: 'Health check', monitoring_type: 'fetch', target_url: 'https://example.com', notify_on: 'failure', notification_destinations: ['destination'] } as any

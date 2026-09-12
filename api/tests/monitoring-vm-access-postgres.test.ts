@@ -15,13 +15,13 @@ app.get('/cases/:id', getMonitoringCases)
 app.patch('/cases/:id', updateMonitoringCase)
 
 test('host cases follow current VM access without granting monitor administration', async () => {
-    await query(`CREATE TABLE vms(name text PRIMARY KEY, owner text, created_by text, access_users text[], deleted_at timestamptz);
+    await query(`CREATE TABLE vms(name text PRIMARY KEY, owner text, created_by text, access_users jsonb, deleted_at timestamptz);
         CREATE TABLE organizations(id text, status text);
         CREATE TABLE organization_members(organization_id text, user_id text, status text);
         CREATE TABLE agent_automations(id text PRIMARY KEY, name text, owner_id text, organization_id text, action_type text, target_url text, model_name text, notification_destinations text[], monitoring_type text, timeout_seconds int, retry_count int, follow_redirects boolean, expected_down boolean, upside_down boolean);
         CREATE TABLE agent_automation_runs(id text PRIMARY KEY, automation_id text);`)
     await schema()
-    await query(`INSERT INTO vms VALUES ('cashflow','sindre','creator',ARRAY['eiriktest'],NULL);
+    await query(`INSERT INTO vms VALUES ('cashflow','sindre','creator','["eiriktest"]',NULL);
         INSERT INTO agent_automations(id,name,owner_id,action_type,target_url,model_name) VALUES
             ('tls','TLS','admin','agent_prompt','pengeflyt.com:443','discord-webhook-file:monitoring'),
             ('other','Other host','admin','agent_prompt','other.example:443',NULL);
@@ -38,7 +38,7 @@ test('host cases follow current VM access without granting monitor administratio
     viewer = 'unrelated'
     expect(await list()).toEqual([])
     viewer = 'eiriktest'
-    await query("UPDATE vms SET access_users='{}'")
+    await query("UPDATE vms SET access_users='[]'")
     expect((await app.inject('/cases/HA-1')).statusCode).toBe(404)
     viewer = 'sindre'
     await query('UPDATE vms SET deleted_at=NOW()')

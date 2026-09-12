@@ -23,7 +23,7 @@ test('database aggregation, concurrent delivery, rolling cooldown, recovery and 
     await query(`CREATE TABLE IF NOT EXISTS agent_automations (id text PRIMARY KEY, status text, last_status text, last_run_at timestamptz, updated_at timestamptz, last_error text, last_completed_at timestamptz, next_run_at timestamptz, schedule_kind text, consecutive_failures int DEFAULT 0, action_type text, paused_reason text, run_count int DEFAULT 0, certificate_status text, certificate_subject text, certificate_issuer text, certificate_expires_at timestamptz)`)
     await query("ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS target_url text DEFAULT 'http://127.0.0.1:9'")
     await query("ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS monitoring_type text DEFAULT 'fetch'")
-    await query(`CREATE TABLE IF NOT EXISTS vms(name text PRIMARY KEY, owner text, created_by text, access_users text[], deleted_at timestamptz)`);
+    await query(`CREATE TABLE IF NOT EXISTS vms(name text PRIMARY KEY, owner text, created_by text, access_users jsonb, deleted_at timestamptz)`);
     await schema()
     await query("INSERT INTO agent_automations(id,status,action_type,schedule_kind) VALUES ('issues','active','agent_prompt','interval'), ('other-issues','active','agent_prompt','interval')")
     const monitor = { id: 'issues', owner_id: 'owner', action_type: 'agent_prompt', monitoring_type: 'fetch', target_url: 'http://127.0.0.1:9', timeout_seconds: 1, retry_count: 0, notify_on: 'failure', interval_minutes: 1, schedule_kind: 'interval', notification_destinations: ['test-discord', 'test-discord'] } as AutomationRow
