@@ -31,6 +31,11 @@ test("readiness stays responsive and expires during a blocked serving runtime, t
     expect((await fetch(url)).status).toBe(200);
     await control("block");
     await Bun.sleep(400);
+    // A brief pause must not be mistaken for an unavailable service.
+    expect((await fetch(url)).status).toBe(200);
+    await Bun.sleep(1200);
+    await control("stall");
+    await Bun.sleep(5500);
     const started = performance.now();
     const stalled = await fetch(url);
     expect(stalled.status).toBe(503);
@@ -40,10 +45,10 @@ test("readiness stays responsive and expires during a blocked serving runtime, t
     await Bun.sleep(1200);
     expect((await fetch(url)).status).toBe(200);
     await control("delay");
-    await Bun.sleep(500);
+    await Bun.sleep(5500);
     expect((await fetch(url)).status).toBe(503);
-    await Bun.sleep(250);
-    // Delivery of a 700ms-old successful sample cannot renew the lease.
+    await Bun.sleep(750);
+    // Delivery of a six-second-old successful sample cannot renew the lease.
     expect((await fetch(url)).status).toBe(503);
   } finally { child.kill(); await child.exited; }
-}, 10_000);
+}, 20_000);

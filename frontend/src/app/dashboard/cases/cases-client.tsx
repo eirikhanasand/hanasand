@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 export type CaseRow = {
@@ -39,7 +40,9 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
     return <section className='min-w-0 rounded-lg border border-ui-border bg-ui-panel'>
         <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
             <div><h1 className='text-lg font-semibold text-ui-text'>Cases</h1><p className='text-sm text-ui-muted'>Cases across the service, including health monitoring and dark web monitoring.</p></div>
-            <button className='text-sm text-ui-primary' onClick={() => { setPage(1); setRevision(value => value + 1) }}>Refresh cases</button>
+            <button type='button' aria-label='Refresh cases' title='Refresh cases' className='inline-flex h-8 w-8 items-center justify-center rounded text-ui-primary hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary' onClick={() => { setPage(1); setRevision(value => value + 1) }}>
+                <RefreshCw className='h-4 w-4' aria-hidden='true' />
+            </button>
         </div>
         <div className='flex flex-wrap gap-3 p-4'>
             <input aria-label='Search cases' placeholder='Search cases' value={query} onChange={event => setQuery(event.target.value)} className='min-w-0 flex-1 rounded border border-ui-border bg-ui-canvas p-2 text-ui-text' />
