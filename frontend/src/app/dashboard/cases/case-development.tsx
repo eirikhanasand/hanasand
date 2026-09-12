@@ -73,8 +73,8 @@ export function CaseDevelopment({ caseId, organizationId }: { caseId: string, or
         {!loading && !error && !entries.length && <p className='text-sm text-ui-muted'>No related changes received yet.</p>}
         <ul className='grid gap-2'>{entries.map(entry => <li key={`${entry.repository_id}:${entry.kind}:${entry.external_id}`} className='flex min-w-0 gap-3 rounded-lg border border-ui-border p-3'>
             {entry.kind === 'commit' ? <GitCommitHorizontal className='mt-1 h-4 w-4 shrink-0' /> : <GitPullRequest className='mt-1 h-4 w-4 shrink-0' />}
-            <div className='min-w-0'><a href={entry.url} target='_blank' rel='noopener noreferrer' className='break-words font-medium text-ui-primary'>{entry.kind === 'commit' ? entry.external_id.slice(0, 8) : `#${entry.external_id}`} · {entry.title}</a>
-                <p className='break-words text-xs text-ui-muted'>{entry.provider} · {entry.repository_url.replace(/^https:\/\//, '')} · {entry.state} · {entry.author} · {new Date(entry.updated_at).toLocaleString()}</p>
+            <div className='min-w-0'><a href={entry.url} target='_blank' rel='noopener noreferrer' className='wrap-break-word font-medium text-ui-primary'>{entry.kind === 'commit' ? entry.external_id.slice(0, 8) : `#${entry.external_id}`} · {entry.title}</a>
+                <p className='wrap-break-word text-xs text-ui-muted'>{entry.provider} · {entry.repository_url.replace(/^https:\/\//, '')} · {entry.state} · {entry.author} · {new Date(entry.updated_at).toLocaleString()}</p>
                 {entry.branch && <p className='break-all text-xs text-ui-muted'>{entry.branch.replace(/^refs\/heads\//, '')}</p>}</div>
         </li>)}</ul>
         {hasMore && <button type='button' className={control} disabled={loading} onClick={loadMore}>Load more changes</button>}
