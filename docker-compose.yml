@@ -320,6 +320,7 @@ services:
       dockerfile: ./ti/scraper/Dockerfile
     environment:
       SCRAPER_PORT: 8097
+      SCRAPER_HEALTH_PORT: 8098
       SCRAPER_ENV: production
       SCRAPER_MEMORY_TARGET_MB: 8192
       SCRAPER_MEMORY_CEILING_MB: 20480
@@ -378,8 +379,9 @@ services:
       - "host.docker.internal:host-gateway"
     expose:
       - "8097"
+      - "8098"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8097/v1/health"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8098/v1/health"]
       start_period: 90s
       interval: 5s
       retries: 5

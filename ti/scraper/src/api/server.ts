@@ -1,3 +1,4 @@
+import { startReadinessWorker } from "./readiness.ts";
 import { paginationCursor } from "./pagination.ts";
 import { buildDarkwebIndexStatus, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { getOrganizationEntitlementReadiness, getOrganizationEntitlements, upsertOrganizationEntitlements } from "./dwmEntitlementRoutes.ts";
@@ -52,7 +53,14 @@ export function startApiServer(options: ApiServerOptions): ApiServerHandle {
     catch (error) { if ((error as { code?: string }).code !== "EADDRINUSE") throw error; }
   }
   if (!server) throw new Error("Failed to allocate a loopback test server port");
-  return { server, port: server.port ?? options.port ?? 8097, stop: () => server.stop(true) };
+  const readinessPort = Number(options.readinessPort ?? Bun.env.SCRAPER_HEALTH_PORT ?? 0);
+  const readiness = readinessPort > 0 ? startReadinessWorker({
+    port: readinessPort,
+    hostname: Bun.env.SCRAPER_HOST || "0.0.0.0",
+    sample: () => handleApiRequest(new Request("http://localhost/v1/health"), options)
+  }) : undefined;
+  void readiness?.ready.catch((error) => console.error("TI readiness listener failed", error));
+  return { server, port: server.port ?? options.port ?? 8097, stop: async () => { server!.stop(true); await readiness?.stop(); } };
 }
 async function handleDurableApiRequest(request: Request, options: ApiServerOptions): Promise<Response> {
   const response = await handleApiRequest(request, options);
@@ -430,7 +438,16 @@ function runtimeCapacitySnapshot(options: ApiServerOptions) {
   };
 }
 
+const runtimeResources = new WeakMap<ApiServerOptions, { at: number; value: ReturnType<typeof collectRuntimeResourceSnapshot> }>();
 function runtimeResourceSnapshot(options: ApiServerOptions) {
+  const now = performance.now();
+  const cached = runtimeResources.get(options);
+  if (cached && now - cached.at < 1_000) return cached.value;
+  const value = collectRuntimeResourceSnapshot(options);
+  runtimeResources.set(options, { at: now, value });
+  return value;
+}
+function collectRuntimeResourceSnapshot(options: ApiServerOptions) {
   const resources = buildResourceSnapshot({
     config: options.config,
     queueItems: options.frontier.size(),
