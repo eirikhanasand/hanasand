@@ -16,7 +16,7 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
 
     try {
         const query = `
-            SELECT u.id, u.name, u.password, u.avatar, u.active, u.deletion_scheduled_at
+            SELECT u.id, u.name, u.password, u.account_type, u.avatar, u.active, u.deletion_scheduled_at
             FROM users u
             LEFT JOIN mail_accounts ma ON ma.user_id = u.id
             WHERE u.id = $1
@@ -32,6 +32,7 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
         }
 
         const user = result.rows[0]
+        if (user.account_type === 'service') return res.status(403).send({ error: 'Service accounts use API keys.' })
         const userId = user.id
         if (user.active === false) {
             await recordLoginEvent(userId, ip, userAgent, 'deactivated')

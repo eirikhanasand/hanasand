@@ -1,11 +1,12 @@
 'use client'
 
 import useClearStateAfter from '@/hooks/useClearStateAfter'
-import useKeyPress from '@/hooks/keyPressed'
+import DeleteAccountButton from './deleteAccountButton'
+import AccountDate from './accountDate'
 import deleteUser from '@/utils/users/deleteUser'
 import { startImpersonating } from '@/utils/impersonation/client'
 import setUserActive from '@/utils/users/setUserActive'
-import { Ban, CheckCircle2, Crown, Pencil, Trash2, X } from 'lucide-react'
+import { Ban, CheckCircle2, Crown, Pencil, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import ErrorNotice from '../error/errorNotice'
@@ -15,7 +16,6 @@ import Tooltip from '../tooltip/tooltip'
 export default function DashboardUser({ user, roles }: { user: UserWithRole, roles: Role[] }) {
     const { condition: deleted, setCondition: setDeleted } = useClearStateAfter()
     const [displayRoles, setDisplayRoles] = useState(false)
-    const keys = useKeyPress('shift')
     const router = useRouter()
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const [impersonationPending, setImpersonationPending] = useState(false)
@@ -77,30 +77,23 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
         }
     }
 
-    async function handleClick() {
-        if (!keys['shift']) {
-            router.push(`/profile/${encodeURIComponent(user.id)}`)
-        }
-
-        if (keys['shift']) {
-            const result = await deleteUser(user.id)
-            if (result.status === 200) {
-                setDeleted(true)
-            } else {
-                setError(result.message)
-            }
-        }
+    async function handleDelete() {
+        const result = await deleteUser(user.id)
+        if (result.status !== 200) throw new Error(result.message)
+        setDeleted(true)
+        router.refresh()
     }
 
     const reasonLength = impersonationReason.trim().replace(/\s+/g, ' ').length
 
     return (
         <div className='group relative h-10 min-h-10 max-h-10'>
-            <div onClick={handleClick} className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px] items-center gap-3 rounded-lg py-2 ${keys['shift'] ? 'hover:bg-ui-danger/10 hover:outline hover:outline-ui-danger/30' : 'hover:bg-ui-raised'} cursor-pointer hover:scale-[1.005]`}>
+            <div onClick={() => router.push(`/profile/${encodeURIComponent(user.id)}`)} className={'grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px_100px_240px] items-center gap-3 rounded-lg py-2 hover:bg-ui-raised cursor-pointer hover:scale-[1.005]'}>
                 <h1 className={`min-w-0 truncate ${user.active === false ? 'text-ui-muted line-through' : ''}`} key={user.id}>{user.name}</h1>
                 <span className={`min-w-0 truncate text-sm text-ui-muted ${user.active === false ? 'line-through' : ''}`}>{user.id}</span>
-                {keys['shift'] && <Trash2 className='hidden h-5 w-5 stroke-ui-danger group-hover:block' />}
-                {!keys['shift'] && <div className='group flex items-center gap-2'>
+                <span className='text-xs text-ui-muted'><AccountDate value={user.created_at} /></span>
+                <span className='text-xs text-ui-muted'><AccountDate value={user.last_login_at} empty='Never recorded' /></span>
+                <div className='group flex items-center gap-2'>
                     <div className='pointer-events-none grid h-7 w-7 place-items-center opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100'>
                         <Tooltip content={`${user.active === false ? 'Activate' : 'Deactivate'} ${user.id}`}>
                             <button
@@ -144,7 +137,8 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                             </button>
                         </Tooltip>
                     </div>
-                </div>}
+                    <DeleteAccountButton name={user.id} onDelete={handleDelete} />
+                </div>
             </div>
             {impersonationPromptOpen ? (
                 <form

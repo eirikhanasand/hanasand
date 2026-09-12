@@ -1,3 +1,4 @@
+// @ts-expect-error Bun provides this module when running tests.
 import { beforeEach, expect, mock, test } from 'bun:test'
 import { NextRequest, NextResponse } from 'next/server'
 

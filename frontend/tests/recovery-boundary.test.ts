@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+// @ts-expect-error Bun provides this module when running tests.
 import { mock } from 'bun:test'
 import { NextRequest } from 'next/server'
 let readOnly = true

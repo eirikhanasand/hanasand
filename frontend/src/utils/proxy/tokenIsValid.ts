@@ -1,3 +1,4 @@
+import config from '@/config'
 import fetchWithRetry from '@/utils/fetchWithRetry'
 import { authApiUrl } from '@/utils/auth/authApiUrl'
 
@@ -9,6 +10,7 @@ export type TokenValidationResult = {
     name?: string
     avatar?: string
     expires_at?: string
+    servicePages?: string[]
 }
 
 const TOKEN_VALIDATION_CACHE_MS = 5_000
@@ -16,6 +18,8 @@ const validationCache = new Map<string, { expiresAt: number; result: TokenValida
 const validationRequests = new Map<string, Promise<TokenValidationResult>>()
 
 export default async function tokenIsValid(token: string, id: string): Promise<TokenValidationResult> {
+    // Service keys use their own live endpoint permissions, never a human session.
+    if (token.startsWith('hsk_')) return validateServiceToken(token, id)
     const key = `${id}:${token}`
     const cached = validationCache.get(key)
     if (cached && cached.expiresAt > Date.now()) return cached.result
@@ -75,4 +79,16 @@ export function tokenValidationState(status: number): TokenValidationResult['sta
     if (status === 401 || status === 403) return 'invalid'
     if (status >= 500) return 'unavailable'
     return 'unavailable'
+}
+
+async function validateServiceToken(token: string, id: string): Promise<TokenValidationResult> {
+    try {
+        const response = await fetch(`${config.url.api}/service-accounts/self`, {
+            headers: { 'X-API-Key': token }, cache: 'no-store', signal: AbortSignal.timeout(5000),
+        })
+        if (!response.ok) return { valid: false, state: tokenValidationState(response.status) }
+        const data = await response.json()
+        if (data.id !== id || !Array.isArray(data.pages)) return { valid: false, state: 'invalid' }
+        return { valid: true, state: 'valid', name: data.name, roles: [], servicePages: data.pages }
+    } catch { return { valid: false, state: 'unavailable' } }
 }

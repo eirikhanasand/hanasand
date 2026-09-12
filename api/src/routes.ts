@@ -1,3 +1,4 @@
+import { getServiceAccounts, postServiceAccount, deleteServiceAccount, serviceAccountSelf } from './handlers/serviceAccounts.ts'
 import authRoutes from './authRoutes.ts'
 import { getMonitoringCases, updateMonitoringCase } from './handlers/monitoringCases.ts'
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
@@ -259,6 +260,10 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
 
     // User handlers
     fastify.get('/users', getUsers)
+    fastify.get('/service-accounts/self', serviceAccountSelf)
+    fastify.get('/service-accounts', getServiceAccounts)
+    fastify.post('/service-accounts', postServiceAccount)
+    fastify.delete('/service-accounts/:id', deleteServiceAccount)
     fastify.get('/user/:id', getUser)
     fastify.get('/user/full/:id', authorizedUserHandler)
     fastify.post('/user', postUser)

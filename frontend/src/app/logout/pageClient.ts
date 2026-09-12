@@ -11,6 +11,11 @@ export default function LogoutPageClient({ path }: { path?: string }) {
     useEffect(() => {
         (async () => {
             const id = getCookie('id')
+            try {
+                for (const key of Object.keys(sessionStorage)) {
+                    if (key.startsWith('account-delete-confirmation:')) sessionStorage.removeItem(key)
+                }
+            } catch { /* Storage may be disabled; keep asking for confirmation. */ }
             removeCookies('name', 'access_token', 'id', 'avatar', 'roles')
             const searchParams = new URLSearchParams(window.location.search)
             const queryString = searchParams.toString()

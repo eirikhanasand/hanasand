@@ -3,6 +3,8 @@ SELECT
     u.name, 
     u.avatar,
     u.active,
+    u.created_at,
+    u.last_login_at,
     u.deactivated_at,
     u.deactivated_by,
     r.id AS highest_role_id,
@@ -31,4 +33,5 @@ LEFT JOIN LATERAL (
     WHERE organization_members.user_id = u.id
       AND organization_members.status = 'active'
 ) org ON TRUE
+WHERE u.account_type = 'user' AND u.deletion_scheduled_at IS NULL
 ORDER BY u.name ASC, u.id ASC;

@@ -1,3 +1,4 @@
+// @ts-expect-error Bun provides this module when running tests.
 import { expect, test } from 'bun:test'
 import { sanitizeTiResultForPublicPage } from '../src/app/ti/publicResult'
 import type { TiSearchResponse } from '../src/utils/ti/search'

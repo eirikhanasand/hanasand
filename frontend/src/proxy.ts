@@ -67,6 +67,13 @@ export async function proxy(req: NextRequest) {
                 return loginRedirect(req, pathWithSearch, { expired: Boolean(token), clearAuth: true })
             }
 
+            if (auth.servicePages) {
+                if (!['GET', 'HEAD'].includes(req.method) || !auth.servicePages.includes(canonicalPath)) {
+                    return NextResponse.json({ error: 'This service account cannot access this page or action.' }, { status: 403, headers: { 'Cache-Control': 'no-store' } })
+                }
+                return response
+            }
+
             if (auth.token) {
                 refreshedAuth = {
                     ...(refreshedAuth ?? {}),

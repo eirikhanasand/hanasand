@@ -63,6 +63,7 @@ const API_KEY_TIER_PRESETS: Record<ApiKeyTierPreset, ApiKeyTierDefinition> = {
 
 type ApiKeyRow = {
     id: string
+    account_type?: string
     owner_id: string | null
     organization_id: string | null
     name: string
@@ -336,14 +337,15 @@ export async function validateApiKey(secret: string, query: typeof run = run) {
     }
 
     const result = await query(`
-        SELECT k.id, k.owner_id, k.organization_id, k.name, k.tier, k.description, k.enabled, k.key_prefix, k.secret_hash, k.expires_at, k.last_used_at, k.created_at, k.updated_at
+        SELECT k.id, k.owner_id, k.organization_id, k.name, k.tier, k.description, k.enabled, k.key_prefix, k.secret_hash, k.expires_at, k.last_used_at, k.created_at, k.updated_at, owner.account_type
         FROM api_keys k
+        LEFT JOIN users owner ON owner.id = k.owner_id
         LEFT JOIN organizations o ON o.id = k.organization_id
         WHERE k.key_prefix = $1
           AND k.enabled IS TRUE
           AND (k.expires_at IS NULL OR k.expires_at > NOW())
           AND (
-              (k.organization_id IS NULL AND k.owner_id IS NOT NULL)
+              (k.organization_id IS NULL AND owner.active IS TRUE AND owner.deletion_scheduled_at IS NULL)
               OR (
                   k.organization_id IS NOT NULL
                   AND o.status = 'active'
@@ -393,6 +395,7 @@ export async function validateApiKey(secret: string, query: typeof run = run) {
     return {
         apiKey: toApiKeySummary(apiKey, scopes),
         ownerId: apiKey.owner_id,
+        serviceAccount: apiKey.account_type === 'service',
         organizationId: apiKey.organization_id,
         roles: rolesResult.rows as ApiKeyRoleRow[],
     }

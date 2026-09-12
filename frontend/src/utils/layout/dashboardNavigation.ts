@@ -105,6 +105,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
             group('Management', [
                 link('Users', '/management/users', isAdmin),
                 link('Roles', '/management/roles', isAdmin),
+                link('Service accounts', '/management/service-accounts', isAdmin),
             ]),
         ]),
         group('Settings', [

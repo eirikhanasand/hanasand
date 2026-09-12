@@ -1,6 +1,8 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { loadSQL } from '#utils/loadSQL.ts'
 import run from '#db'
+import { serviceAccountEndpoints } from './serviceAccountScopes.ts'
+import { matchApiKeyScope } from './apiKeys.ts'
 
 type Valid = {
     valid: boolean
@@ -19,6 +21,12 @@ type Valid = {
  * if an error occured while checking the roles.
  */
 export default async function hasRole(req: FastifyRequest, res: FastifyReply, role: string): Promise<Valid> {
+    const service = (req as FastifyRequest & { apiKeyAuth?: { serviceAccount?: boolean, apiKey: { scopes: ApiKeyScopeRule[] } } }).apiKeyAuth
+    if (service?.serviceAccount) {
+        const route = req.routeOptions?.url || req.url.split('?')[0]
+        return { valid: Boolean(matchApiKeyScope(service.apiKey.scopes, req.method, route)
+            && serviceAccountEndpoints.some(endpoint => endpoint.method === req.method && endpoint.route === route && endpoint.role === role)) }
+    }
     const apiKeyOwnerId = (req as FastifyRequest & {
         apiKeyAuth?: {
             ownerId: string

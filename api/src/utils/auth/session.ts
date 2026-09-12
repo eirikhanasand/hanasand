@@ -48,6 +48,8 @@ function isSessionFresh(session: SessionRow) {
 }
 
 export async function issueToken({ id, ip, userAgent = '' }: { id: string, ip: string, userAgent?: string }) {
+    const account = await run('SELECT account_type FROM users WHERE id = $1', [id])
+    if (account.rows[0]?.account_type === 'service') return null
     const token = `${randomUUID().replaceAll('-', '')}${randomUUID().replaceAll('-', '')}`
     const ttlHours = sessionTTLHours(userAgent)
 
@@ -64,6 +66,8 @@ export async function issueToken({ id, ip, userAgent = '' }: { id: string, ip: s
         INSERT INTO login_events (user_id, token_id, ip, user_agent, status)
         VALUES ($1, $2, $3, $4, 'success')
     `, [id, loginResult.rows[0].token_id, ip, userAgent])
+
+    await run('UPDATE users SET last_login_at = NOW() WHERE id = $1', [id])
 
     return {
         token,
@@ -85,7 +89,7 @@ export async function validateSession({ id, token }: { id?: string, token: strin
         FROM tokens t JOIN users u ON u.id = t.id
         WHERE ($1::text IS NULL OR t.id = $1)
           AND t.token = $2 AND t.revoked_at IS NULL
-          AND u.active IS TRUE AND u.deletion_scheduled_at IS NULL
+          AND u.active IS TRUE AND u.deletion_scheduled_at IS NULL AND u.account_type = 'user'
         LIMIT 1
     `, [id ?? null, token])
 

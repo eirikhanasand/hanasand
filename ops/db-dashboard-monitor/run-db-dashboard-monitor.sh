@@ -27,6 +27,13 @@ if [[ ! -f "$APP_DIR/db-dashboard-monitor.mjs" ]]; then
   APP_DIR="$SCRIPT_DIR"
 fi
 
+SERVICE_ACCOUNT_ENV="${HANASAND_SERVICE_ACCOUNT_ENV:-/home/hanasand/monitor-state/service-accounts.env}"
+if [[ -f "$SERVICE_ACCOUNT_ENV" ]]; then
+  set -a
+  source "$SERVICE_ACCOUNT_ENV"
+  set +a
+fi
+
 cd "$APP_DIR"
 {
   flock -n 9 || {

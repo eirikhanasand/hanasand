@@ -1,5 +1,6 @@
 import run from '#db'
 import { ensureTrafficHistorySchema } from '../traffic/history.ts'
+import ensureServiceAccountsSchema from './serviceAccountsSchema.ts'
 import ensureAccountIdentitySchema from './accountIdentitySchema.ts'
 import ensureSocialAuthSchema from './socialAuthSchema.ts'
 import ensureMonitoringIssuesSchema from './monitoringIssuesSchema.ts'
@@ -8,6 +9,7 @@ import { reservedUsernames } from '#utils/auth/reservedUsernames.ts'
 
 export default async function ensureSchema() {
     await ensureAccountIdentitySchema()
+    await ensureServiceAccountsSchema()
     await ensureThesisSchema()
     await ensureSocialAuthSchema()
     const ownerUserIds = (process.env.HANASAND_OWNER_USER_IDS || 'eirikhanasand').split(',').map(id => id.trim().toLowerCase()).filter(Boolean)

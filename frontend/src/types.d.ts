@@ -159,6 +159,8 @@ type Articles = {
 }
 
 type User = {
+    created_at?: string | null
+    last_login_at?: string | null
     username?: string
     id: string
     name: string

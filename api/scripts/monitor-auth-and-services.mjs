@@ -7,7 +7,7 @@ const dbPort = Number(process.env.DB_PORT || 5432)
 const dbName = process.env.DB || 'hanasand'
 const dbUser = process.env.DB_USER || 'hanasand'
 const dbPassword = process.env.DB_PASSWORD
-const runId = `monitor_${Date.now()}`
+const serviceKey = process.env.MONITOR_SERVICE_ACCOUNT_KEY
 const password = process.env.MONITOR_PASSWORD || `Mm22!!${crypto.randomUUID().replaceAll('-', '').slice(0, 18)}Aa`
 const { Pool } = pg
 
@@ -67,54 +67,11 @@ async function runCheck(service, checkName, fn) {
     }
 }
 
-async function cleanup(token = '') {
-    await fetch(`${apiBase}/user/self`, {
-        method: 'DELETE',
-        headers: token ? { Authorization: `Bearer ${token}`, id: runId } : {},
-        body: JSON.stringify({ id: runId }),
-    }).catch(() => {})
-    await pool.query('DELETE FROM tokens WHERE id = $1', [runId]).catch(() => {})
-    await pool.query('DELETE FROM login_events WHERE user_id = $1', [runId]).catch(() => {})
-    await pool.query('DELETE FROM users WHERE id = $1', [runId]).catch(() => {})
-}
-
 async function main() {
-    let token = ''
-    await cleanup()
-
-    await runCheck('auth', 'User creation', async () => {
-        const { response, body, latency } = await request('/user', {
-            method: 'POST',
-            body: JSON.stringify({ id: runId, name: 'Monitor User', password }),
-        })
-        if (response.status !== 201 || !body?.token) {
-            throw new Error(`Unexpected signup response ${response.status}`)
-        }
-        token = body.token
-        return latency
-    })
-
-    await runCheck('auth', 'Login', async () => {
-        const { response, body, latency } = await request(`/auth/login/${runId}`, {
-            method: 'POST',
-            body: JSON.stringify({ password }),
-        })
-        if (response.status !== 200 || !body?.token) {
-            throw new Error(`Unexpected login response ${response.status}`)
-        }
-        token = body.token
-        return latency
-    })
-
-    await runCheck('auth', 'Delete account', async () => {
-        const { response, latency } = await request('/user/self', {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${token}`, id: runId },
-            body: JSON.stringify({ id: runId }),
-        })
-        if (response.status !== 200) {
-            throw new Error(`Unexpected delete response ${response.status}`)
-        }
+    await runCheck('auth', 'Service account authentication', async () => {
+        if (!serviceKey) throw new Error('MONITOR_SERVICE_ACCOUNT_KEY is required.')
+        const { response, body, latency } = await request('/service-accounts/self', { headers: { 'X-API-Key': serviceKey } })
+        if (response.status !== 200 || !body?.id) throw new Error(`Unexpected service account response ${response.status}`)
         return latency
     })
 
@@ -135,7 +92,6 @@ async function main() {
         })
     }
 
-    await cleanup(token)
 }
 
 main()

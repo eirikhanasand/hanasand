@@ -68,39 +68,17 @@ function object(value: unknown): Record<string, unknown> | null {
     return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
 }
 
-function hasToken(body: unknown): body is { token: string } {
-    return Boolean(body && typeof body === 'object' && 'token' in body && typeof (body as { token?: unknown }).token === 'string')
-}
-
 function remainingMonitorTimeout(deadline: number) {
     return Math.max(1, deadline - Date.now())
 }
 
 export default async function runSyntheticMonitor() {
-    const runId = `monitor_${Date.now()}`
-    const password = `Mm22!!${crypto.randomUUID().replaceAll('-', '').slice(0, 18)}Aa`
-    let token = ''
-
-    await check('auth', 'User creation', async () => {
-        const { response, body } = await fetchJson('/user', {
-            method: 'POST',
-            body: JSON.stringify({ id: runId, name: 'Monitor User', email: `${runId}@monitor.invalid`, password }),
-        })
-        if (response.status !== 201 || !hasToken(body)) {
-            throw new Error(`Unexpected signup response ${response.status}`)
-        }
-        token = body.token
-    })
-
-    await check('auth', 'Login', async () => {
-        const { response, body } = await fetchJson(`/auth/login/${runId}`, {
-            method: 'POST',
-            body: JSON.stringify({ password }),
-        })
-        if (response.status !== 200 || !hasToken(body)) {
-            throw new Error(`Unexpected login response ${response.status}`)
-        }
-        token = body.token
+    const password = `Mm1!${crypto.randomUUID()}`
+    await check('auth', 'Service account authentication', async () => {
+        const secret = process.env.MONITOR_SERVICE_ACCOUNT_KEY
+        if (!secret) throw new Error('MONITOR_SERVICE_ACCOUNT_KEY is not configured.')
+        const { response, body } = await fetchJson('/service-accounts/self', { headers: { 'X-API-Key': secret } })
+        if (response.status !== 200 || typeof object(body)?.id !== 'string') throw new Error(`Unexpected service account response ${response.status}`)
     })
 
     await Promise.all([
@@ -250,11 +228,9 @@ export default async function runSyntheticMonitor() {
             return 'The browser investigation workspace rendered successfully.'
         }),
         check('dark-web-monitoring', 'Monitoring workspace', async () => {
-            const { response, body } = await fetchPage('/dwm', {
-                Cookie: `id=${encodeURIComponent(runId)}; access_token=${encodeURIComponent(token)}`,
-            })
+            const { response, body } = await fetchPage('/dwm')
             if (response.status !== 200 || !body.includes('Dark web monitoring')) throw new Error(`Unexpected monitoring workspace response ${response.status}`)
-            return 'The authenticated dark-web monitoring workspace rendered successfully.'
+            return 'The dark-web monitoring page rendered successfully.'
         }),
         check('dark-web-monitoring', 'Latest activity', async () => {
             const deadline = Date.now() + MONITOR_REQUEST_TIMEOUT_MS
@@ -446,18 +422,4 @@ export default async function runSyntheticMonitor() {
         }),
     ])
 
-    await check('auth', 'Delete account', async () => {
-        const { response } = await fetchJson('/user/self', {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${token}`, id: runId },
-            body: JSON.stringify({ id: runId }),
-        })
-        if (response.status !== 200) {
-            throw new Error(`Unexpected delete response ${response.status}`)
-        }
-    })
-
-    await run('DELETE FROM tokens WHERE id = $1', [runId]).catch(() => {})
-    await run('DELETE FROM login_events WHERE user_id = $1', [runId]).catch(() => {})
-    await run('DELETE FROM users WHERE id = $1', [runId]).catch(() => {})
 }

@@ -59,7 +59,7 @@ function withHistory(current: object) {
     const snapshot = historySnapshot
     const received = (current as { checks: MonitorRow[] }).checks
     const retained = snapshot?.checks.filter(old => !received.some(check => check.service === old.service && check.check_name === old.check_name)) || []
-    const checks = [...received, ...retained].map(check => ({
+    const checks = [...received, ...retained].filter(isCurrentCheck).map(check => ({
         ...check,
         uptime_30d: snapshot?.checks.find(row => row.service === check.service && row.check_name === check.check_name)?.uptime_30d || 'unverified',
     }))
@@ -192,7 +192,7 @@ async function loadStatusPayload(summary = false, query = run) {
     for (const task of tasks) results.push(await task())
     const [result, historyResult, incidentResult] = results
 
-    const rawChecks = result.rows as MonitorRow[]
+    const rawChecks = (result.rows as MonitorRow[]).filter(isCurrentCheck)
     const checks = rawChecks.map(row => toPublicMonitorRow(row))
     const incidentRows = incidentResult.rows as IncidentRow[]
     const incidents = buildIncidents(incidentRows, checks)
@@ -333,4 +333,8 @@ function slug(value: string) {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '')
+}
+
+function isCurrentCheck(check: { service: string, check_name: string }) {
+    return !(check.service === 'auth' && ['User creation', 'Login', 'Delete account'].includes(check.check_name))
 }

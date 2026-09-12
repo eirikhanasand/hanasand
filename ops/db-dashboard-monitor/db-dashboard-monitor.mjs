@@ -6,9 +6,9 @@ import { dirname } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
 const baseUrl = trimSlash(process.env.HANASAND_DB_MONITOR_BASE_URL || 'https://hanasand.com')
-const dashboardPath = process.env.HANASAND_DB_MONITOR_PATH || '/dashboard/db'
-const username = process.env.HANASAND_DB_MONITOR_USER || ''
-const password = process.env.HANASAND_DB_MONITOR_PASSWORD || ''
+const dashboardPath = (process.env.HANASAND_DB_MONITOR_PATH || '/db').replace(/^\/dashboard(?=\/)/, '')
+const serviceKey = process.env.HANASAND_DB_MONITOR_SERVICE_ACCOUNT_KEY || ''
+const apiBaseUrl = trimSlash(process.env.HANASAND_DB_MONITOR_API_BASE_URL || 'https://api.hanasand.com/api')
 const discordWebhookUrl = process.env.DISCORD_WEBHOOK_URL || ''
 const discordMention = process.env.HANASAND_DB_MONITOR_DISCORD_MENTION || '@here'
 const statePath = process.env.HANASAND_DB_MONITOR_STATE || '/home/hanasand/monitor-state/db-dashboard-monitor.json'
@@ -26,6 +26,7 @@ const backupMaxAgeHours = Math.max(Number(process.env.HANASAND_TI_BACKUP_MAX_AGE
 const statusIngestBaseUrl = trimSlash(process.env.HANASAND_STATUS_INGEST_BASE_URL || 'https://api.hanasand.com')
 const statusIngestToken = process.env.HANASAND_STATUS_INGEST_TOKEN || ''
 const now = new Date()
+let serviceAccountId = ''
 
 async function loadPlaywright() {
     try {
@@ -59,11 +60,11 @@ await handleResult(await checkStatusFeed(`${baseUrl}/api/status`), {
 
 await monitorThreatIntelBackup()
 
-if (!username || !password) {
+if (!serviceKey) {
     await handleResult({
         ok: false,
         reason: 'missing_credentials',
-        detail: 'HANASAND_DB_MONITOR_USER and HANASAND_DB_MONITOR_PASSWORD are required.',
+        detail: 'HANASAND_DB_MONITOR_SERVICE_ACCOUNT_KEY is required.',
         latencyMs: 0,
         metrics: {},
     })
@@ -83,13 +84,16 @@ try {
     const page = await context.newPage()
     page.setDefaultTimeout(timeoutMs)
 
-    await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded', timeout: timeoutMs })
-    await page.getByRole('heading', { name: 'Hanasand' }).waitFor({ state: 'visible', timeout: timeoutMs })
-    await page.getByLabel('Username', { exact: true }).fill(username)
-    await page.getByLabel('Password', { exact: true }).fill(password)
-    await Promise.all([
-        page.waitForURL(/\/dashboard(?:\/.*)?$/, { waitUntil: 'domcontentloaded', timeout: timeoutMs }),
-        page.getByRole('button', { name: 'Log in' }).click(),
+    const identityResponse = await fetch(`${apiBaseUrl}/service-accounts/self`, {
+        headers: { 'X-API-Key': serviceKey }, signal: AbortSignal.timeout(timeoutMs),
+    })
+    if (!identityResponse.ok) throw new MonitorFailure('service_account_auth_failed', `Service account authentication returned ${identityResponse.status}.`, {})
+    const identity = await identityResponse.json()
+    if (typeof identity.id !== 'string' || !identity.pages?.includes('/db')) throw new MonitorFailure('service_account_scope_missing', 'The service account needs GET /api/service-accounts/self and GET /api/db.', {})
+    serviceAccountId = identity.id
+    await context.addCookies([
+        { name: 'id', value: identity.id, url: baseUrl, httpOnly: true, secure: true, sameSite: 'Strict' },
+        { name: 'access_token', value: serviceKey, url: baseUrl, httpOnly: true, secure: true, sameSite: 'Strict' },
     ])
 
     await page.goto(`${baseUrl}${dashboardPath}`, { waitUntil: 'domcontentloaded', timeout: timeoutMs })
@@ -142,7 +146,7 @@ export function evaluateDashboardText(text) {
     const unavailableMatch = fullText.match(unavailablePattern)
     const metrics = {
         clusters: parseIntegerMetric(lines, 'Clusters'),
-        databases: parseIntegerMetric(lines, 'Databases'),
+        databases: parseIntegerMetric(lines, 'DBs') ?? parseIntegerMetric(lines, 'Databases'),
         storageBytes: parseStorageMetric(lines, 'Storage'),
         activeQueries: parseIntegerMetric(lines, 'Active queries'),
         longRunning: parseIntegerMetric(lines, 'Long-running'),
@@ -301,7 +305,7 @@ async function handleResult(result, options = {}) {
         checkedAt: now.toISOString(),
         baseUrl,
         dashboardPath,
-        username,
+        serviceAccountId,
         failureScreenshotPath: result.ok ? undefined : failureScreenshotPath,
         failureScreenshotUrl: result.failureScreenshotUrl,
         lastAlertAt: previous.lastAlertAt || null,
@@ -484,7 +488,7 @@ function resultFields(result) {
         { name: 'Storage', value: metrics.storageBytes ? formatBytes(metrics.storageBytes) : 'unknown', inline: true },
         ...(metrics.backupStatus ? [{ name: 'TI backup', value: `${metrics.backupStatus}${metrics.backupFinishedAt ? ` · ${metrics.backupFinishedAt}` : ''}`, inline: true }] : []),
         { name: 'Latency', value: `${result.latencyMs}ms`, inline: true },
-        { name: 'Monitor user', value: username || 'not configured', inline: true },
+        { name: 'Service account', value: serviceAccountId || 'Database UI monitor', inline: true },
     ]
 }
 
@@ -511,7 +515,7 @@ function failureImpact(reason) {
 
 function operatorAction(reason) {
     if (String(reason || '').startsWith('ti_backup_')) return 'Open LATEST-STATUS and the threat-intelligence backup log, repair the failure, then rerun the backup.'
-    if (reason === 'missing_credentials') return 'Restore HANASAND_DB_MONITOR_USER and HANASAND_DB_MONITOR_PASSWORD, then run the monitor once.'
+    if (reason === 'missing_credentials') return 'Restore HANASAND_DB_MONITOR_SERVICE_ACCOUNT_KEY, then run the monitor once.'
     if (reason === 'db_dashboard_unavailable') return 'Check API auth, PostgreSQL telemetry views, and the dashboard screenshot.'
     if (reason === 'db_dashboard_missing_clusters' || reason === 'db_dashboard_missing_databases' || reason === 'db_dashboard_missing_storage') return 'Check the database telemetry collector and dashboard API response.'
     if (reason === 'db_dashboard_missing_query_state') return 'Check the query telemetry block and dashboard render.'
