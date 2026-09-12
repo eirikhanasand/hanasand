@@ -585,8 +585,8 @@ type VMDetails = {
     device_eth0_name: string
     device_eth0_network: string
     device_eth0_type: string
-    ephemeral: string
-    stateful: string
+    ephemeral: string | boolean
+    stateful: string | boolean
     description: string
     profiles: string[]
 }
