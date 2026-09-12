@@ -19,7 +19,7 @@ export default function VMMetrics({ boxStyle, boxTitleStyle, metrics }: VMMetric
                 <div>
                     {Date.now() - new Date(latest.created_at).getTime() > 180_000 && <p className='mb-3 text-sm text-ui-muted'>Metrics have not updated recently.</p>}
                     <Field title='Power' value={latest.power_state} />
-                    <Field title='CPU' value={`${formatNumber(latest.cpu_usage_percent)}% across ${latest.cpu_cores ?? "—"} cores`} />
+                    <Field title='CPU' value={`${formatNumber(latest.cpu_usage_percent)}% across ${latest.cpu_cores ?? '—'} cores`} />
                     <Field title='Memory' value={`${formatMb(latest.ram_used_mb)} / ${formatMb(latest.ram_total_mb)}`} />
                     <Field title='Disk' value={`${formatMb(latest.disk_used_mb)} / ${formatMb(latest.disk_total_mb)}`} />
                     <Field title='Network' value={`${formatNumber(latest.net_in_kbps)} kbps in · ${formatNumber(latest.net_out_kbps)} kbps out`} />
