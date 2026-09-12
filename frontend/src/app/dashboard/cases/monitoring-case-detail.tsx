@@ -76,7 +76,7 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
             const response = await fetch(`${endpoint}&eventsPage=${(item.eventPage || 0) + 1}&eventsAt=${encodeURIComponent(item.eventSnapshot || new Date().toISOString())}`, { cache: 'no-store' })
             if (!response.ok) throw new Error('Could not load more events. Try again.')
             const next = (await response.json()).case as MonitoringCase
-            setItem(current => current && ({ ...current, events: [...new Map([...(current.events || []), ...(next.events || [])].map(event => [event.id, event])).values()], eventPage: next.eventPage, eventTotal: next.eventTotal }))
+            setItem(current => current?.id === item.id ? ({ ...current, events: [...new Map([...(current.events || []), ...(next.events || [])].map(event => [event.id, event])).values()], eventPage: next.eventPage, eventTotal: next.eventTotal }) : current)
         } catch (error) { setError(error instanceof Error ? error.message : 'Could not load events.') }
         finally { setLoadingEvents(false) }
     }
@@ -93,7 +93,7 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                     <select aria-label='Severity' className={headerControl} value={item.severity} disabled={busy} onChange={event => void save({ severity: event.target.value })}>{['low', 'medium', 'high', 'critical'].map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select>
                     {['closed', 'resolved'].includes(item.status) ? <button className={headerControl} disabled={busy} onClick={() => void save({ status: 'open' })}>Reopen case</button> : <>
                         <button className={headerControl} disabled={busy} onClick={() => void save({ status: item.status === 'in_progress' ? 'open' : 'in_progress' })}>{item.status === 'in_progress' ? 'Set as open' : 'Start progress'}</button>
-                        <button className={headerControl} disabled={busy} onClick={() => setResolving(true)}>Resolve case</button>
+                        <button className={headerControl} disabled={busy} onClick={() => { setTab('details'); setResolving(true) }}>Resolve case</button>
                     </>}
                     {item.resolution?.id && ['ai', 'automation'].includes(item.resolution.type) && !item.resolution.confirmedAt && ['resolved', 'closed'].includes(item.status) && <button className={headerControl} disabled={busy} onClick={() => void save({ confirmResolutionId: item.resolution!.id })}>Confirm resolution</button>}
                 </div>}
