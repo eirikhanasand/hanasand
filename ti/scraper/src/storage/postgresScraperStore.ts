@@ -323,7 +323,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   databaseHealthSnapshot(): DatabaseHealth {
-    if (!this.databaseHealthRefresh && Date.now() - this.databaseHealthCheckedAt >= 30_000) {
+    // Recheck a lost database connection promptly after failover; never serve a cached success instead.
+    const refreshIntervalMs = this.lastDatabaseHealth?.databaseAvailable === false ? 1_000 : 30_000;
+    if (!this.databaseHealthRefresh && Date.now() - this.databaseHealthCheckedAt >= refreshIntervalMs) {
       this.databaseHealthRefresh = this.databaseHealth()
         .then(() => undefined)
         .finally(() => { this.databaseHealthRefresh = undefined; });

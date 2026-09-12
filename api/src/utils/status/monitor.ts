@@ -84,7 +84,7 @@ export default async function runSyntheticMonitor() {
     await check('auth', 'User creation', async () => {
         const { response, body } = await fetchJson('/user', {
             method: 'POST',
-            body: JSON.stringify({ id: runId, name: 'Monitor User', password }),
+            body: JSON.stringify({ id: runId, name: 'Monitor User', email: `${runId}@monitor.invalid`, password }),
         })
         if (response.status !== 201 || !hasToken(body)) {
             throw new Error(`Unexpected signup response ${response.status}`)
@@ -324,7 +324,7 @@ export default async function runSyntheticMonitor() {
                    WHERE record_type = 'dwm_watchlist'
                      AND record->>'orgSharedWatchlist' = 'true'
                      AND record->>'status' = 'active') AS runtime_organizations
-            `), fetchJson('/v1/health', { signal: AbortSignal.timeout(350) }, scraperBase)])
+            `), fetchJson('/v1/health', {}, scraperBase)])
             const row = result.rows[0] as { configured_organizations?: number; runtime_organizations?: number } | undefined
             const configured = Number(row?.configured_organizations ?? 0)
             const runtime = Number(row?.runtime_organizations ?? 0)
@@ -365,6 +365,12 @@ export default async function runSyntheticMonitor() {
                       AND record->>'status' = 'failed'
                       AND COALESCE((record->>'consecutiveFailureCount')::int, 0) > 0
                       AND NULLIF(record->>'nextEligibleAt', '')::timestamptz < NOW()
+                      AND NOT EXISTS (
+                        SELECT 1 FROM threat_intel.sources parent
+                        WHERE parent.id = workflow_records.record->>'parentSourceId'
+                          AND parent.tenant_id IS NOT DISTINCT FROM workflow_records.tenant_id
+                          AND parent.record->>'status' = 'retired'
+                      )
                   ) AS overdue_discovery,
                   (SELECT count(*)::int FROM threat_intel.workflow_records
                     WHERE record_type = 'evaluation_benchmark'
@@ -411,7 +417,7 @@ export default async function runSyntheticMonitor() {
             const unreviewedSources = Number(counts.unreviewed_sources ?? 0)
             const recentDeliveryFailures = Number(counts.recent_delivery_failures ?? 0)
             const message = `${staleReviews} stale reviews (oldest ${oldestReviewAgeMinutes} minutes), ${overdueDiscovery} overdue discovery jobs, ${stalledEvaluations} stalled evaluations, ${unreviewedSources} captured sources without automatic review, ${recentDeliveryFailures} recent delivery failures.`
-            // ponytail: automatic review is intentionally paused in production; its old
+            // Automatic review is intentionally paused in production; its old
             // queue is an operator backlog, not a runtime outage or a reason to restart it.
             if (overdueDiscovery >= 10 || stalledEvaluations >= 2 || recentDeliveryFailures >= 10) {
                 return { status: 'down', message }
