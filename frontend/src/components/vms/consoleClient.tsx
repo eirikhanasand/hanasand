@@ -24,6 +24,23 @@ export default function VmConsole({ name }: { name: string }) {
             const fit = new FitAddon()
             terminal.loadAddon(fit)
             terminal.open(container.current)
+            // Safari needs a real textarea selection before opening its native Copy menu.
+            const selection = terminal.onSelectionChange(() => {
+                const textarea = terminal.textarea
+                if (!textarea) return
+                textarea.value = terminal.getSelection()
+                textarea.setSelectionRange(0, textarea.value.length)
+            })
+            terminal.attachCustomKeyEventHandler(event => {
+                const copy = event.key.toLowerCase() === 'c' && !event.altKey && (event.metaKey || (event.ctrlKey && event.shiftKey))
+                if (!copy || !terminal.hasSelection()) return true
+                if (event.type === 'keydown') {
+                    event.preventDefault()
+                    // Use the native copy event, which xterm fills with the selected text.
+                    if (!document.execCommand('copy')) setStatus('Could not copy. Use the terminal’s right-click menu to try again.')
+                }
+                return false
+            })
             let ready = false
             let failed = false
             const sendSize = () => {
@@ -36,7 +53,7 @@ export default function VmConsole({ name }: { name: string }) {
             const input = terminal.onData(data => {
                 if (ready && socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'input', data }))
             })
-            disposeTerminal = () => { observer.disconnect(); input.dispose(); terminal.dispose() }
+            disposeTerminal = () => { observer.disconnect(); input.dispose(); selection.dispose(); terminal.dispose() }
             socket = new WebSocket(`${config.url.api_wss}/vm/${encodeURIComponent(name)}/console`)
             socket.onopen = () => {
                 socket?.send(JSON.stringify({ type: 'auth', id: getCookie('id'), token: decodeURIComponent(getCookie('access_token') || '') }))

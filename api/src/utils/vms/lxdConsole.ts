@@ -1,35 +1,31 @@
 import { StringDecoder } from 'node:string_decoder'
-import { createHash } from 'node:crypto'
 import WebSocket from 'ws'
 import config from '#constants'
 import { lxdRequest } from './lxd.ts'
 
-export function consoleUsername(id: string) {
-    const readable = id.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 16) || 'user'
-    return `hs-${readable}-${createHash('sha256').update(id).digest('hex').slice(0, 10)}`
+export function consoleUsername(name: string) {
+    // Match the account used by the VM SSH gateway; never derive it from the website user.
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(name) || ['root', 'nobody'].includes(name)) throw new Error('Invalid VM login account.')
+    return name
 }
 
-const loginScript = `set -eu
+export const consoleLoginScript = `set -eu
 name="$1"
-marker="$2"
-if getent passwd "$name" >/dev/null; then
-    test "$(getent passwd "$name" | cut -d: -f5)" = "$marker" || exit 1
-    test "$(id -u "$name")" -ge 1000 || exit 1
-else
-    useradd --create-home --shell /bin/bash --comment "$marker" -- "$name"
-fi
+getent passwd "$name" >/dev/null || { echo "VM login account is missing." >&2; exit 1; }
+uid="$(id -u "$name")"
+test "$uid" -ge 1000 && test "$uid" -lt 65534 || exit 1
 exec runuser --login "$name"`
 
 type ExecOperation = { metadata: { fds: Record<string, string> }; id: string }
 
-export async function openLxdConsole(name: string, userId: string, onOutput: (data: string) => void, onExit: () => void) {
+export async function openLxdConsole(name: string, onOutput: (data: string) => void, onExit: () => void) {
     const state = await lxdRequest<{ status: string }>(`/1.0/instances/${encodeURIComponent(name)}/state`)
     if (state.metadata.status !== 'Running') throw new Error('Start this VM before opening its console.')
-    const username = consoleUsername(userId)
+    const username = consoleUsername(name)
     const result = await lxdRequest<ExecOperation>(`/1.0/instances/${encodeURIComponent(name)}/exec`, {
         method: 'POST',
         body: {
-            command: ['/bin/sh', '-c', loginScript, 'hanasand-console', username, `Hanasand-${createHash('sha256').update(userId).digest('hex')}`],
+            command: ['/bin/sh', '-c', consoleLoginScript, 'hanasand-console', username],
             interactive: true,
             'wait-for-websocket': true,
             environment: { TERM: 'xterm-256color', COLORTERM: 'truecolor' },

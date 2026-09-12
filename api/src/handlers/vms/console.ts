@@ -52,7 +52,7 @@ export default function registerVmConsole(fastify: FastifyInstance) {
                     clearTimeout(deadline)
                     const openingDeadline = setTimeout(() => fail('The VM host is unavailable. Try again later.'), 30000)
                     try {
-                        terminal = await openLxdConsole(request.params.name, credentials.id, data => send({ type: 'output', data }), () => { send({ type: 'closed' }); socket.close() })
+                        terminal = await openLxdConsole(request.params.name, data => send({ type: 'output', data }), () => { send({ type: 'closed' }); socket.close() })
                     } finally { clearTimeout(openingDeadline) }
                     if (socket.readyState !== WebSocket.OPEN) { terminal.close(); return }
                     request.log.info({ vmName: request.params.name, userId: credentials.id }, 'VM console opened')
