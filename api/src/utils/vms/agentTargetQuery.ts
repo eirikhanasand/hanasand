@@ -14,6 +14,6 @@ export const agentTargetSelect = `
         COALESCE(d.limits_memory, '') AS limits_memory,
         COALESCE(d.device_eth0_ipv4_address, '') AS device_eth0_ipv4_address,
         COALESCE(d.last_checked::text, '') AS last_checked
-    FROM vms v
+    FROM (SELECT * FROM vms WHERE deleted_at IS NULL) v
     LEFT JOIN vm_details d ON d.name = v.name
 `

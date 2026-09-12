@@ -15,9 +15,9 @@ mock.module('../src/utils/logs/recordLog.ts', () => ({ default: async () => {} }
 mock.module('../src/utils/systemEvent.ts', () => ({ recordSystemEvent: async () => {} }))
 mock.module('../src/utils/docker/engine.ts', () => ({ isRuntimeLogSourceAvailable: () => false, listRuntimeContainers: async () => [] }))
 mock.module('../src/utils/loadSQL.ts', () => ({ loadSQL: async (file: string) => readFile(new URL(`../src/queries/${file}`, import.meta.url), 'utf8') }))
-mock.module('../src/utils/db.ts', () => ({ default: async (sql: string, params: unknown[] = []) => {
+mock.module('../src/utils/db.ts', () => ({ withDatabaseAdvisoryLock: async (_key: string, work: () => Promise<unknown>) => work(), default: async (sql: string, params: unknown[] = []) => {
     queries.push({ sql, params })
-    if (/SELECT name, owner, created_by, access_users FROM vms|SELECT name, owner, created_by, access_users\s+FROM vms/.test(sql)) return { rows: existing ? [existing] : [] }
+    if (/SELECT name, owner, created_by, access_users, deleted_at FROM vms|SELECT name, owner, created_by, access_users, deleted_at\s+FROM vms/.test(sql)) return { rows: existing ? [existing] : [] }
     return { rows: /INSERT INTO vms/.test(sql) ? [{ name: params[0], owner: params[1] }] : [] }
 } }))
 const { default: getVM } = await import('../src/handlers/vms/get.ts')
@@ -67,5 +67,16 @@ test('member creation provisions their VM and cannot take over an existing name'
     existing = { name: 'private', owner: 'victim', created_by: 'victim', access_users: [] }; queries.length = 0; provisioned = ''
     expect((await app.inject({ method: 'POST', url: '/vm', headers: { id: 'member' }, payload: { name: 'private' } })).statusCode).toBe(409)
     expect(queries.every(q => !/UPDATE|DELETE|INSERT/.test(q.sql))).toBe(true)
+    expect(provisioned).toBe('')
+})
+
+test('pending deletion blocks connection and creation even for administrators', async () => {
+    existing = { name: 'private', owner: 'owner', created_by: 'owner', access_users: [], deleted_at: new Date().toISOString() }
+    for (const id of ['owner', 'admin']) {
+        expect((await app.inject({ url: '/vm/private/connection', headers: { id } })).statusCode).toBe(409)
+        expect((await app.inject({ url: '/vm/private/details', headers: { id } })).statusCode).toBe(409)
+    }
+    provisioned = ''
+    expect((await app.inject({ method: 'POST', url: '/vm', headers: { id: 'admin' }, payload: { name: 'private', owner: 'owner', created_by: 'owner' } })).statusCode).toBe(409)
     expect(provisioned).toBe('')
 })

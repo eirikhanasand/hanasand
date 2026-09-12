@@ -1,6 +1,6 @@
 import config from '#constants'
 
-type Vm = { name: string; status?: string; last_checked?: string | Date | null }
+type Vm = { name: string; deleted_at?: string | Date | null; status?: string; last_checked?: string | Date | null }
 type State = { status: string }
 const checks = new Map<string, { expires: number; result: Promise<State> }>()
 
@@ -24,6 +24,7 @@ async function probe(name: string): Promise<State> {
 }
 
 export async function withLiveVmStatus<T extends Vm>(vm: T, check: (name: string) => Promise<State> = probe) {
+    if (vm.deleted_at) return { ...vm, status: 'PENDING_DELETION', status_reason: 'Scheduled for deletion. Restore the VM to use it again.', status_checked_at: new Date().toISOString() }
     const status_checked_at = new Date().toISOString()
     try {
         const state = await check(vm.name)

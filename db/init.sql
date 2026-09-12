@@ -510,6 +510,10 @@ CREATE TABLE IF NOT EXISTS user_certificates (
 );
 
 CREATE TABLE IF NOT EXISTS vms (
+    deleted_at TIMESTAMPTZ,
+    delete_after TIMESTAMPTZ,
+    deletion_restore JSONB,
+    deletion_error TEXT,
     name TEXT PRIMARY KEY,
     owner TEXT NOT NULL,
     created_by TEXT NOT NULL,

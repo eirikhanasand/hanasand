@@ -1,6 +1,8 @@
-import { expect, test } from 'bun:test'
+import { expect, test, mock } from 'bun:test'
 import config from '../src/constants.ts'
-import { applyAlwaysRunning } from '../src/utils/vms/ensureAlwaysRunning.ts'
+let deleted = false
+mock.module('../src/utils/db.ts', () => ({ default: async () => ({ rows: deleted ? [{ name: 'keepalive-test' }] : [] }), withDatabaseAdvisoryLock: async (_key: string, work: () => Promise<unknown>) => work() }))
+const { applyAlwaysRunning } = await import('../src/utils/vms/ensureAlwaysRunning.ts')
 import { setLxdRequestForTest, setVmDetailsWriterForTest } from '../src/utils/vms/lxd.ts'
 
 test('keepalive applies boot and idle policies, starts a stopped instance, and can be disabled', async () => {
@@ -25,5 +27,8 @@ test('keepalive applies boot and idle policies, starts a stopped instance, and c
         expect(settings['boot.autostart']).toBe('false')
         expect(settings['user.hanasand.always_running']).toBe('false')
         await expect(applyAlwaysRunning({ ...vm, primary_host: 'wrong-host' }, true)).rejects.toThrow('primary host')
+        deleted = true
+        await expect(applyAlwaysRunning(vm, true)).rejects.toThrow('scheduled for deletion')
+        expect(starts).toBe(1)
     } finally { restore(); restoreWriter() }
 })

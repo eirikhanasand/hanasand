@@ -1,5 +1,6 @@
 'use client'
 
+import VMRow from '@/components/profile/vm'
 import { RefreshCcw } from 'lucide-react'
 import smallDate from '@/utils/date/smallDate'
 import VMDetails from '@/components/vms/vmDetails'
@@ -57,6 +58,8 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
             setMetrics(metricsResponse)
         }
     }
+
+    if (vm.deleted_at) return <VMRow vm={vm} update={() => void handleRefresh()} />
 
     return (
         <div className='grid gap-3'>

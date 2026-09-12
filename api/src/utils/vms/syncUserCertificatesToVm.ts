@@ -24,6 +24,8 @@ export default async function syncUserCertificatesToVm({ vmName, userIds }: Sync
         return { ok: true, received: 0, added: 0, total: 0, certificates: [] as string[] }
     }
 
+    if ((await run('SELECT name FROM vms WHERE name = $1 AND deleted_at IS NOT NULL', [vmName])).rows.length) throw new Error('This VM is scheduled for deletion.')
+
     const result = await run(`
         SELECT DISTINCT c.public_key
         FROM certificates c

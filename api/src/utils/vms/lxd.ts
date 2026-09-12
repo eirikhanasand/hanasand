@@ -117,6 +117,7 @@ export async function setLocalLxdInstanceState(name: string, action: 'start' | '
     }
 
     const instance = await getLocalLxdInstance(name)
+    if (action === 'start' && instance.config?.['user.hanasand.delete_after']) throw new Error('This VM is scheduled for deletion. Restore it before starting.')
     const current = (instance.status || '').toLowerCase()
     if (options.tolerateAlready && ((action === 'start' && current === 'running') || (action === 'stop' && current === 'stopped'))) {
         return refreshLocalLxdDetails(name)
