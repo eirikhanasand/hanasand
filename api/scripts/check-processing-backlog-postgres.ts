@@ -4,7 +4,7 @@ import { withTransaction, closeDatabase } from '../src/utils/db.ts'
 
 // All writes are connection-local temporary fixtures, never application tables.
 const source = await readFile(process.argv[2] || new URL('../src/utils/status/monitor.ts', import.meta.url), 'utf8')
-const sql = source.split("check('threat-intelligence', 'Processing backlog'")[1].split('await run(`')[1].split('`)')[0]
+const sql = source.split('check(\'threat-intelligence\', \'Processing backlog\'')[1].split('await run(`')[1].split('`)')[0]
     .replaceAll('threat_intel.', 'pg_temp.').replaceAll('public.dwm_webhook_deliveries', 'pg_temp.dwm_webhook_deliveries')
 try {
     await withTransaction(async query => {
@@ -23,7 +23,7 @@ try {
             ['old', 'queued', 240, 'v3'], ['missing-version', 'queued', 300, null],
             [null, 'queued', 200, 'v4'], [null, 'running', 120, 'v4'],
         ] as const) {
-            await query(`INSERT INTO workflow_records VALUES ('analyst_metadata_review_task', $1, NULL, NOW()-$2::int*INTERVAL '1 minute', $3::jsonb)`,
+            await query('INSERT INTO workflow_records VALUES (\'analyst_metadata_review_task\', $1, NULL, NOW()-$2::int*INTERVAL \'1 minute\', $3::jsonb)',
                 [String(id) + minutes, minutes, JSON.stringify({ id, state, promptVersion: version ? 'ti.automatic_intelligence_review.prompt.' + version : null, recordKind: 'automatic_intelligence_review_task' })])
         }
         for (const [id, tenant, captureTenant, approved] of [
