@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import IncidentReport from './incidentReport'
 import { isVerifiedStatus, retainVerifiedStatus, isCurrentPublicCheck } from '@/utils/status/publicStatus'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import type { ServiceIncident, ServiceStatus } from '@/utils/status/getStatus'
@@ -78,7 +79,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
         : overall === 'degraded'
             ? 'Some systems degraded'
             : 'Service interruption'
-    const incident = incidentId ? incidents.find(item => item.id === incidentId) : null
+    const incident = incidentId ? incidents.find(item => item.id === incidentId || item.aliases?.includes(incidentId)) : null
     const incidentsSection = (
         <section className='rounded-md border border-ui-border bg-ui-panel p-4'>
             <h2 className='text-xl font-semibold text-ui-text'>Recent incidents</h2>
@@ -107,35 +108,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
             <main className='mx-auto grid max-w-5xl gap-6 pb-8'>
                 <Link href='/status/incidents' className='text-sm font-semibold text-ui-primary'>Incident history</Link>
                 {incident ? (
-                    <article className='grid gap-5 rounded-md border border-ui-border bg-ui-panel p-5'>
-                        <div className='flex flex-wrap items-start justify-between gap-3'>
-                            <div>
-                                <p className='text-sm font-semibold uppercase text-ui-primary'>{incident.service}</p>
-                                <h1 className='mt-1 text-3xl font-semibold text-ui-text'>{incident.title}</h1>
-                                <p className='mt-2 text-sm text-ui-muted'>{incident.check_name}</p>
-                            </div>
-                            <span className='flex flex-wrap gap-2'>
-                                <IncidentTag label={incident.impact} tone='warn' />
-                                <IncidentTag label={incident.status === 'resolved' ? 'Resolved' : 'Investigating'} tone={incident.status === 'resolved' ? 'ok' : 'warn'} />
-                            </span>
-                        </div>
-                        <StatusText title='What happened' value={incident.summary} />
-                        <StatusText title='Why it happened' value={incident.cause} />
-                        <section>
-                            <h2 className='text-lg font-semibold text-ui-text'>Timeline</h2>
-                            <div className='mt-3 divide-y divide-ui-border'>
-                                {incident.updates.map((update, index) => (
-                                    <div key={`${update.at}-${index}`} className='grid gap-1 py-3 first:pt-0 last:pb-0'>
-                                        <div className='flex flex-wrap items-center justify-between gap-2'>
-                                            <p className='font-semibold text-ui-text'>{update.status}</p>
-                                            <time className='text-sm text-ui-muted'>{formatDateTime(update.at)}</time>
-                                        </div>
-                                        <p className='text-sm text-ui-muted'>{update.message}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </section>
-                    </article>
+                    <IncidentReport key={incident.id} incident={incident} />
                 ) : (
                     <section className='rounded-md border border-ui-border bg-ui-panel p-5'>
                         <h1 className='text-2xl font-semibold text-ui-text'>Incident not found</h1>
@@ -269,15 +242,6 @@ function ReliabilityNote({ title, detail }: { title: string, detail: string }) {
             <h3 className='font-semibold text-ui-text'>{title}</h3>
             <p className='mt-1 leading-6 text-ui-muted'>{detail}</p>
         </div>
-    )
-}
-
-function StatusText({ title, value }: { title: string, value: string }) {
-    return (
-        <section>
-            <h2 className='text-lg font-semibold text-ui-text'>{title}</h2>
-            <p className='mt-2 text-sm leading-6 text-ui-muted'>{value}</p>
-        </section>
     )
 }
 

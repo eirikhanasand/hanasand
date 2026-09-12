@@ -20,6 +20,7 @@ export type ServiceHistoryDay = {
 
 export type ServiceIncident = {
     id: string
+    aliases?: string[]
     service: string
     check_name: string
     title: string
@@ -29,7 +30,7 @@ export type ServiceIncident = {
     resolved_at: string | null
     summary: string
     cause: string
-    updates: Array<{ at: string, status: string, message: string }>
+    updates: Array<{ at: string, status: string, message: string, evidence?: string }>
 }
 
 export type ServiceStatus = {
@@ -130,6 +131,7 @@ function normalizeIncidents(value: unknown): ServiceIncident[] {
         const item = row as Partial<ServiceIncident>
         return [{
             id: item.id || '',
+            aliases: Array.isArray(item.aliases) ? item.aliases.filter(alias => typeof alias === 'string') : [],
             service: item.service || '',
             check_name: item.check_name || '',
             title: item.title || '',
@@ -138,11 +140,12 @@ function normalizeIncidents(value: unknown): ServiceIncident[] {
             started_at: item.started_at || '',
             resolved_at: item.resolved_at || null,
             summary: item.summary || '',
-            cause: item.cause || item.summary || '',
+            cause: item.cause && item.cause !== item.summary ? item.cause : 'No confirmed root cause was recorded.',
             updates: Array.isArray(item.updates) ? item.updates.map(update => ({
                 at: String(update.at || item.started_at || ''),
                 status: String(update.status || ''),
                 message: String(update.message || item.summary || ''),
+                evidence: typeof update.evidence === 'string' ? update.evidence : undefined,
             })) : [],
         }]
     }).filter(incident => incident.id)

@@ -55,6 +55,7 @@ export function toPublicServiceStatus(status: ServiceStatus, nowMs = Date.now())
             updates: incident.updates.map(update => ({
                 ...update,
                 message: publicStatusMessage(update.message) || update.message,
+                evidence: update.evidence ? publicStatusMessage(update.evidence) || update.evidence : undefined,
             })),
         })),
     }

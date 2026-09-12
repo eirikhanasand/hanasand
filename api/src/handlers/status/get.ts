@@ -22,6 +22,11 @@ type IncidentRow = {
     service: string
     check_name: string
     status: 'degraded' | 'down'
+    previous_status?: string
+    previous_checked_at?: string | Date
+    next_status?: string
+    next_checked_at?: string | Date
+    next_message?: string | null
     message: string | null
     checked_at: string | Date
 }
@@ -71,7 +76,7 @@ function refreshHistory() {
     historyRetryAt = Date.now() + MONITOR_STALE_MS
     historyRefresh = (async () => {
         await run('CREATE TABLE IF NOT EXISTS service_status_snapshots (id text PRIMARY KEY, payload jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT NOW())')
-        const saved = await run('SELECT payload, updated_at FROM service_status_snapshots WHERE id = \'history\'')
+        const saved = await run('SELECT payload, updated_at FROM service_status_snapshots WHERE id = \'history-v2\'')
         if (saved.rows[0]) {
             historySnapshot = saved.rows[0].payload
             if (Date.now() - new Date(saved.rows[0].updated_at).getTime() < MONITOR_STALE_MS) return
@@ -84,7 +89,7 @@ function refreshHistory() {
             await query('SET LOCAL statement_timeout = \'60s\'')
             const payload = await loadStatusPayload(false, query)
             if (!payload.checks.length) throw new Error('No current monitor results; retaining the verified snapshot.')
-            await query('INSERT INTO service_status_snapshots (id, payload) VALUES (\'history\', $1::jsonb) ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()', [JSON.stringify(payload)])
+            await query('INSERT INTO service_status_snapshots (id, payload) VALUES (\'history-v2\', $1::jsonb) ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()', [JSON.stringify(payload)])
             historySnapshot = payload
         })
     })().catch(error => {
@@ -164,15 +169,17 @@ async function loadStatusPayload(summary = false, query = run) {
                 LAG(status) OVER status_history_window AS previous_status,
                 LAG(checked_at) OVER status_history_window AS previous_checked_at,
                 LEAD(status) OVER status_history_window AS next_status,
-                LEAD(checked_at) OVER status_history_window AS next_checked_at
+                LEAD(checked_at) OVER status_history_window AS next_checked_at,
+                LEAD(message) OVER status_history_window AS next_message
             FROM service_monitor_results
             WHERE checked_at >= NOW() - INTERVAL '90 days'
               AND NOT (service = 'core' AND check_name = 'API index')
             WINDOW status_history_window AS (PARTITION BY service, check_name ORDER BY checked_at)
         )
-        SELECT service, check_name, status, message, checked_at
+        SELECT service, check_name, status, message, checked_at,
+            previous_status, previous_checked_at, next_status, next_checked_at, next_message
         FROM sequenced
-        WHERE status <> 'up'
+        WHERE status IN ('down', 'degraded')
           AND (
             previous_status IS NULL
             OR previous_status = 'up'
@@ -195,7 +202,7 @@ async function loadStatusPayload(summary = false, query = run) {
     const rawChecks = (result.rows as MonitorRow[]).filter(isCurrentCheck)
     const checks = rawChecks.map(row => toPublicMonitorRow(row))
     const incidentRows = incidentResult.rows as IncidentRow[]
-    const incidents = buildIncidents(incidentRows, checks)
+    const incidents = buildIncidents(incidentRows)
     const history = buildHistory(historyResult.rows as HistoryRow[], incidents)
     const overall = !checks.length ? 'unknown' : checks.length && checks.every(check => check.status === 'up')
         ? 'up'
@@ -273,48 +280,54 @@ function datesBetween(startedAt: string, endedAt: string) {
     return dates
 }
 
-function buildIncidents(rows: IncidentRow[], checks: MonitorRow[]) {
-    const latestByCheck = new Map(checks.map(check => [`${check.service}\n${check.check_name}`, check]))
+export function buildIncidents(rows: IncidentRow[]) {
     const groups: IncidentRow[][] = []
     const maxGapMs = 15 * 60 * 1000
-
     for (const row of rows) {
-        const previous = groups[groups.length - 1]?.at(-1)
-        const sameCheck = previous && previous.service === row.service && previous.check_name === row.check_name
-        const closeEnough = previous && time(row.checked_at) - time(previous.checked_at) <= maxGapMs
-        if (sameCheck && closeEnough) {
-            groups[groups.length - 1].push(row)
-        } else {
-            groups.push([row])
-        }
+        const previous = groups.at(-1)?.at(-1)
+        // Rows are compacted, so continuity comes from the preceding raw sample,
+        // not the distance between the retained first and last observations.
+        const continuous = previous && previous.service === row.service && previous.check_name === row.check_name
+            && previous.next_status !== 'up' && row.previous_status !== 'up'
+            && time(row.checked_at) - time(row.previous_checked_at || previous.checked_at) <= maxGapMs
+        if (continuous) groups.at(-1)!.push(row)
+        else groups.push([row])
     }
-
-    return groups.map((group) => {
+    return groups.map(group => {
         const first = group[0]
-        const last = group[group.length - 1]
-        const latest = latestByCheck.get(`${first.service}\n${first.check_name}`)
-        const resolved = latest?.status === 'up' || time(latest?.checked_at) > time(last.checked_at)
-        const status = group.some(row => row.status === 'down') ? 'down' as const : 'degraded' as const
-        const message = first.message || last.message || `${first.check_name} reported ${status}.`
+        const last = group.at(-1)!
+        const resolvedAt = last.next_status === 'up' && last.next_checked_at ? iso(last.next_checked_at) : null
+        const outage = group.some(row => row.status === 'down')
+        const summary = first.check_name.toLowerCase() === 'latest activity'
+            ? 'Recent monitoring activity was delayed. The activity feed was not up to date.'
+            : `${first.check_name} ${outage ? 'did not pass its availability check' : 'was operating outside its normal check limits'}.`
+        const updates = group.filter((row, index) => index === 0 || index === group.length - 1
+            || row.status !== group[index - 1].status || row.message !== group[index - 1].message).map((row, index) => ({
+            at: iso(row.checked_at),
+            status: index === 0 ? 'investigating' : 'monitoring',
+            message: index === 0 ? 'Automated monitoring detected a problem with this component.'
+                : row.status === 'down' ? 'The availability check was still failing.'
+                    : 'The check was reporting degraded service. Recovery had not yet been confirmed.',
+            evidence: row.message || 'No additional check details were recorded.',
+        }))
+        if (resolvedAt) updates.push({
+            at: resolvedAt, status: 'resolved',
+            message: 'A successful check confirmed recovery. This is the first recorded healthy result after the incident; no repair details were recorded.',
+            evidence: last.next_message || 'The component passed its health check.',
+        })
         const startedAt = iso(first.checked_at)
-        const resolvedAt = latest?.checked_at ? iso(latest.checked_at) : iso(last.checked_at)
-
         return {
             id: slug(`${first.service}-${first.check_name}-${startedAt}`),
-            service: first.service,
-            check_name: first.check_name,
-            title: `${first.check_name} ${status === 'down' ? 'interruption' : 'instability'}`,
-            impact: status === 'down' ? 'Outage' : 'Instability',
-            status: resolved ? 'resolved' as const : 'investigating' as const,
-            started_at: startedAt,
-            resolved_at: resolved ? resolvedAt : null,
-            summary: message,
-            cause: message,
-            updates: [
-                { at: startedAt, status: 'investigating', message },
-                ...(group.length > 1 ? [{ at: iso(last.checked_at), status: 'monitoring', message: last.message || message }] : []),
-                ...(resolved ? [{ at: resolvedAt, status: 'resolved', message: `${first.check_name} returned to normal.` }] : []),
-            ],
+            aliases: group.filter((row, index) => index > 0 && time(row.checked_at) - time(group[index - 1].checked_at) > maxGapMs)
+                .map(row => slug(`${row.service}-${row.check_name}-${iso(row.checked_at)}`)),
+            service: first.service, check_name: first.check_name,
+            title: `${first.check_name} ${outage ? 'interruption' : 'instability'}`,
+            impact: outage ? 'Outage' : 'Instability',
+            status: resolvedAt ? 'resolved' as const : 'investigating' as const,
+            started_at: startedAt, resolved_at: resolvedAt,
+            summary,
+            cause: 'No confirmed root cause was recorded. The monitoring results below describe the symptoms, not a verified explanation.',
+            updates: updates.reverse(),
         }
     }).sort((left, right) => time(right.started_at) - time(left.started_at))
 }
