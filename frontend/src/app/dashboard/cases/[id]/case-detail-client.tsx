@@ -1,5 +1,7 @@
 'use client'
 
+import { CaseDevelopment } from '../case-development'
+
 import Link from 'next/link'
 import type { CaseResolution } from '../cases-client'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -541,6 +543,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
                 <div className='grid min-w-0 gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_320px]'>
                     <section className='grid min-w-0 gap-3'>
+                        <CaseDevelopment caseId={caseId} organizationId={scopedOrganizationId} />
                         <div className='grid gap-2 sm:grid-cols-3'>
                             <Metric label='Evidence' value={`${evidence.length}`} detail={evidence.some(item => item.contentHash || item.provenance?.contentHash) ? 'hashes linked' : 'hashes pending'} />
                             <Metric label='Last activity' value={caseRecord.updatedAt ? relativeTime(caseRecord.updatedAt) : '—'} detail={`${timeline.length} recorded event${timeline.length === 1 ? '' : 's'}`} />

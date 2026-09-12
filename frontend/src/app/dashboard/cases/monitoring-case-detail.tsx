@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { CaseDevelopment } from './case-development'
 import { useEffect, useState } from 'react'
 import type { CaseRow } from './cases-client'
 
@@ -112,6 +113,7 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                 <p className='text-sm text-ui-muted'>Uses the health check’s configured destinations and delivery rules.</p>
                 <details><summary className='cursor-pointer text-sm font-medium'>Delivery history ({item.notifications.length})</summary><div className='mt-3 grid gap-3'>{item.notifications.length ? item.notifications.map((notification, index) => <div className='rounded-lg bg-ui-canvas p-3 text-sm' key={index}>{notification.error ? <p className='text-ui-danger'>{notification.error}</p> : <p>{notification.deliveredAt ? `Delivered ${date(notification.deliveredAt)}` : 'Delivery pending'}</p>}{notification.messageId && <p className='mt-1 wrap-break-word text-ui-muted'>Message: {notification.messageId}</p>}</div>) : <p className='text-sm text-ui-muted'>No notifications recorded.</p>}</div></details>
             </section>
+            <CaseDevelopment caseId={caseId} organizationId={item.organizationId || organizationId} />
             <section aria-labelledby='case-history' className='grid gap-4 border-b border-ui-border p-5 sm:p-6'>
                 <h2 id='case-history' className='text-lg font-semibold'>Case history</h2>
                 <p className='text-sm text-ui-muted'>Older cases may have gaps because earlier changes were not recorded.</p>

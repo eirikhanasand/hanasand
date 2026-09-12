@@ -1,3 +1,4 @@
+import { caseRepositoryWebhooks, getCaseDevelopment, getCaseRepositories, postCaseRepository, deleteCaseRepository } from './handlers/caseDevelopment.ts'
 import { getServiceAccounts, postServiceAccount, deleteServiceAccount, serviceAccountSelf } from './handlers/serviceAccounts.ts'
 import authRoutes from './authRoutes.ts'
 import { getMonitoringCases, updateMonitoringCase } from './handlers/monitoringCases.ts'
@@ -229,6 +230,11 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/app/download/:name', downloadNamedAppUpdate)
 
     await fastify.register(authRoutes)
+    await fastify.register(caseRepositoryWebhooks)
+    fastify.get('/cases/development', getCaseDevelopment)
+    fastify.get('/cases/repositories', getCaseRepositories)
+    fastify.post('/cases/repositories', postCaseRepository)
+    fastify.delete('/cases/repositories/:id', deleteCaseRepository)
 
     // Impersonation
     fastify.get('/impersonation', getImpersonationCurrent)

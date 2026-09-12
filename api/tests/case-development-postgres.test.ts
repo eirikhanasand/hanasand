@@ -1,0 +1,56 @@
+import { expect, mock, test } from 'bun:test'
+import { createHmac } from 'node:crypto'
+import Fastify from 'fastify'
+if (process.env.DB_HOST !== 'case-development-test-db') throw Error('Requires isolated case-development-test-db')
+mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async (req: any) => ({ valid: req.headers['x-test-user'] !== 'anonymous', id: req.headers['x-test-user'] || 'owner' }) }))
+const { queryOnce: query } = await import('../src/utils/db.ts')
+const { default: schema } = await import('../src/utils/db/caseDevelopmentSchema.ts')
+const handlers = await import('../src/handlers/caseDevelopment.ts')
+const app = Fastify()
+app.register(handlers.caseRepositoryWebhooks)
+app.get('/cases/development', handlers.getCaseDevelopment)
+app.get('/cases/repositories', handlers.getCaseRepositories)
+app.post('/cases/repositories', handlers.postCaseRepository)
+app.delete('/cases/repositories/:id', handlers.deleteCaseRepository)
+
+test('durable signed events, idempotency, stale updates, ownership and organization access', async () => {
+    await query('CREATE TABLE organizations(id text, status text); CREATE TABLE organization_members(organization_id text, user_id text, status text, role text)')
+    await query("INSERT INTO organizations VALUES ('org','active'); INSERT INTO organization_members VALUES ('org','owner','active','admin'),('org','member','active','member')")
+    await schema(); await schema()
+    const create = await app.inject({ method: 'POST', url: '/cases/repositories', payload: { provider: 'forgejo', repositoryUrl: 'https://git.example.com/team/app' } })
+    expect(create.statusCode).toBe(201)
+    const connection = create.json()
+    const stored = await query('SELECT secret_encrypted FROM case_repositories WHERE id=$1', [connection.id])
+    expect(stored.rows[0].secret_encrypted).not.toContain(connection.secret)
+    const repo = { html_url: 'https://git.example.com/team/app' }
+    const send = (payload: unknown, event = 'push', secret = connection.secret) => {
+        const raw = JSON.stringify(payload, null, 2)
+        return app.inject({ method: 'POST', url: `/cases/repository-events/${connection.id}`, payload: raw, headers: { 'content-type': 'application/json', 'x-forgejo-event': event, 'x-forgejo-signature': createHmac('sha256', secret).update(raw).digest('hex') } })
+    }
+    const push = { repository: repo, ref: 'refs/heads/main', commits: [{ id: 'a'.repeat(40), message: 'Repair HA-1 and HA-10', timestamp: '2026-09-12T12:00:00Z', author: { name: 'Engineer' } }] }
+    expect((await send(push, 'push', 'wrong')).statusCode).toBe(401)
+    expect((await send(push)).statusCode).toBe(200)
+    expect((await send(push)).statusCode).toBe(200)
+    const get = (user = 'owner', suffix = '') => app.inject({ url: `/cases/development?caseId=HA-1${suffix}`, headers: { 'x-test-user': user } })
+    expect((await get()).json().items).toHaveLength(1)
+    expect((await get('other')).json().items).toHaveLength(0)
+    expect((await get('anonymous')).statusCode).toBe(401)
+    expect((await app.inject('/cases/development?caseId=HA-100')).json().items).toHaveLength(0)
+    expect((await app.inject('/cases/repositories')).json().items[0].secret_encrypted).toBeUndefined()
+    const pr = { number: 7, title: 'Fix HA-1', state: 'open', updated_at: '2026-09-12T12:01:00Z', user: { login: 'Engineer' } }
+    expect((await send({ repository: repo, pull_request: pr }, 'pull_request')).statusCode).toBe(200)
+    expect((await send({ repository: repo, pull_request: { ...pr, state: 'closed', merged: true, updated_at: '2026-09-12T12:02:00Z' } }, 'pull_request')).statusCode).toBe(200)
+    await send({ repository: repo, pull_request: pr }, 'pull_request')
+    expect((await get()).json().items[0].state).toBe('merged')
+    await send({ repository: repo, pull_request: { ...pr, title: 'No case reference', updated_at: '2026-09-12T12:03:00Z' } }, 'pull_request')
+    expect((await get()).json().items).toHaveLength(1)
+    expect((await app.inject({ method: 'DELETE', url: `/cases/repositories/${connection.id}`, headers: { 'x-test-user': 'other' } })).statusCode).toBe(404)
+    expect((await get('other', '&organizationId=org')).statusCode).toBe(403)
+    expect((await app.inject({ method: 'POST', url: '/cases/repositories?organizationId=org', headers: { 'x-test-user': 'member' }, payload: { provider: 'github', repositoryUrl: 'https://github.com/team/app' } })).statusCode).toBe(403)
+    await query('UPDATE case_repositories SET organization_id=$2 WHERE id=$1', [connection.id, 'org'])
+    expect((await get('member', '&organizationId=org')).json().items).toHaveLength(1)
+    await query("UPDATE organization_members SET status='removed' WHERE user_id='member'")
+    expect((await get('member', '&organizationId=org')).statusCode).toBe(403)
+    expect((await app.inject({ method: 'DELETE', url: `/cases/repositories/${connection.id}?organizationId=org` })).statusCode).toBe(200)
+    expect((await query('SELECT * FROM case_development')).rows).toHaveLength(0)
+})

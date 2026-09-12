@@ -1,3 +1,4 @@
+import ensureCaseDevelopmentSchema from './caseDevelopmentSchema.ts'
 import run from '#db'
 import { ensureTrafficHistorySchema } from '../traffic/history.ts'
 import ensureServiceAccountsSchema from './serviceAccountsSchema.ts'
@@ -791,6 +792,7 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_agent_automation_runs_automation_started ON agent_automation_runs(automation_id, started_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_agent_automation_runs_owner_started ON agent_automation_runs(owner_id, started_at DESC)')
     await ensureMonitoringIssuesSchema()
+    await ensureCaseDevelopmentSchema()
     await run(`
         CREATE TABLE IF NOT EXISTS ai_deployments (
             id TEXT PRIMARY KEY,
