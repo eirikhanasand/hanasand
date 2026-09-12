@@ -255,7 +255,7 @@ async function discoverFeedProofs(input: {
   maxFeeds: number;
 }) {
   const response = await abortable(input.fetcher(input.reference.referenceUrl, {
-    headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.8" },
+    headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, application/json, text/html;q=0.8" },
     signal: input.signal
   }), input.signal);
   const pageUrl = safePublicReference(response.url || input.reference.referenceUrl);
@@ -395,7 +395,7 @@ async function relatedPublisherFeedProofs(html: string, pageUrl: string, fetcher
   for (const url of relatedSecurityPageUrls(html, pageUrl).slice(0, maxFeeds)) {
     try {
       const response = await abortable(fetcher(url, {
-        headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.8" },
+        headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, application/json, text/html;q=0.8" },
         signal
       }), signal);
       if (!response.ok) continue;

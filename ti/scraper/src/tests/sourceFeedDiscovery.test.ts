@@ -25,6 +25,26 @@ const generatedAt = "2026-07-23T12:00:00.000Z";
 const nextYear = "2027-07-23T12:00:00.000Z";
 
 describe("scheduled public feed discovery", () => {
+  test("recovers a failed JSON publisher request without treating the API as an RSS feed", async () => {
+    const store = new InMemoryScraperStore();
+    const url = "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=40&cveId=CVE-2026-6973";
+    usefulCapture(store, "nvd-parent", undefined, "nvd-run", [url]);
+    const id = stableId("source-feed-discovery-plan", "https://services.nvd.nist.gov/");
+    store.savePlan({ id, requestId: "req_source_feed_discovery", publisherKey: "https://services.nvd.nist.gov/", referenceUrl: url, parentSourceId: "nvd-parent", status: "failed", consecutiveFailureCount: 12, tasks: [] } as any);
+    let requests = 0;
+    const result = await runSourceFeedDiscoveryCycle({ store, sourceFeedDiscoveryFetch: async (_url, init) => {
+      requests++;
+      const acceptsJson = new Headers(init?.headers).get("accept")?.includes("application/json");
+      return response(JSON.stringify({ vulnerabilities: [], totalResults: 0 }), url, "application/json", acceptsJson ? 200 : 406);
+    } }, generatedAt);
+    expect(requests).toBe(1);
+    expect(result.failedPublisherCount).toBe(0);
+    expect(result.noFeedPublisherCount).toBe(1);
+    expect(store.getPlan(id)?.status).toBe("completed");
+    expect((store.getPlan(id) as any)?.consecutiveFailureCount).toBe(0);
+    expect(result.importedSourceCount).toBe(0);
+  });
+
   test("retries persisted public discovery after capture bodies leave the startup snapshot", async () => {
     const store = new InMemoryScraperStore();
     usefulCapture(store, "retry-parent", undefined, "retry-run", ["https://retry.example/feed"]);
