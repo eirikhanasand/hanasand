@@ -91,7 +91,7 @@ try {
 console.log('status deploy proof ledger contract ok')
 
 async function statusPayload() {
-    const response = await statusGet(new Request("http://localhost/api/status"))
+    const response = await statusGet(new Request('http://localhost/api/status'))
     return await response.json() as {
         overall: string
         checks: unknown[]
