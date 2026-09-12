@@ -130,9 +130,12 @@ export async function setLocalLxdInstanceState(name: string, action: 'start' | '
     return refreshLocalLxdDetails(name)
 }
 
-export async function refreshLocalLxdDetails(name: string) {
+export async function refreshLocalLxdDetails(name: string, requireState = false) {
     const instance = await getLocalLxdInstance(name)
-    const state = await lxdRequest<LxdState>(`/1.0/instances/${encodeURIComponent(name)}/state`).then(response => response.metadata).catch(() => null)
+    const state = await lxdRequest<LxdState>(`/1.0/instances/${encodeURIComponent(name)}/state`).then(response => response.metadata).catch(error => {
+        if (requireState) throw error
+        return null
+    })
     const details = mapDetails(instance, state)
     await upsertVmDetails(details)
     return details

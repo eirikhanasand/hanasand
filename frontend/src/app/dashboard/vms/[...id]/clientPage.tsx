@@ -1,6 +1,7 @@
 'use client'
 
 import VMRow from '@/components/profile/vm'
+import ErrorNotice from '@/components/error/errorNotice'
 import { RefreshCcw } from 'lucide-react'
 import smallDate from '@/utils/date/smallDate'
 import VMDetails from '@/components/vms/vmDetails'
@@ -28,6 +29,8 @@ type VMClientProps = {
 export default function VMClient({ vm: serverVM, details: serverDetails, metrics: serverMetrics, connection: serverConnection }: VMClientProps) {
     const [vm, setVM] = useState<VM>(serverVM)
     const [details, setDetails] = useState(serverDetails)
+    const [refreshing, setRefreshing] = useState(false)
+    const [refreshError, setRefreshError] = useState<string | null>(null)
     const { metrics, error: metricsError, refresh: refreshMetrics } = useVMMetrics(serverVM.name, serverMetrics)
     const { connection, error: connectionError, refresh: refreshConnection } = useVMConnection(serverVM.name, serverConnection)
     const router = useRouter()
@@ -35,25 +38,29 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
     const boxTitleStyle = 'text-base font-medium text-ui-text'
 
     async function handleRefresh() {
-        refreshConnection()
-        refreshMetrics()
+        if (refreshing) return
         const token = getCookie('access_token')
         const id = getCookie('id')
         if (!id || !token) {
-            return router.push(`/logout?path=/login%3Fpath%3D/vms/${id}%26expired=true`)
+            return router.push(`/login?path=${encodeURIComponent(`/vms/${serverVM.name}`)}`)
         }
-
-        const vmResponse = await getVM(serverVM.name)
-        if (Array.isArray(vmResponse) && vmResponse.length) {
-            setVM(vmResponse[0])
+        setRefreshing(true)
+        setRefreshError(null)
+        try {
+            const freshDetails = await getVMDetails(serverVM.name, token, id, true)
+            if (!freshDetails || !freshDetails.last_checked) throw new Error('The VM host did not return updated details. Please try again.')
+            // Use the refreshed snapshot in every card; retain ownership and host settings.
+            setDetails(freshDetails)
+            setVM(current => ({ ...current, ...freshDetails }))
+            refreshConnection()
+            refreshMetrics()
+            const vmResponse = await getVM(serverVM.name)
+            if (Array.isArray(vmResponse) && vmResponse.length) setVM({ ...vmResponse[0], ...freshDetails })
+        } catch (error) {
+            setRefreshError(error instanceof Error ? error.message : 'Unable to refresh VM details. Please try again.')
+        } finally {
+            setRefreshing(false)
         }
-
-
-        const detailsResponse = await getVMDetails(serverVM.name, token, id)
-        if (detailsResponse) {
-            setDetails(detailsResponse)
-        }
-
     }
 
     if (vm.deleted_at) return <VMRow vm={vm} update={() => void handleRefresh()} />
@@ -67,13 +74,17 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
                 </div>
                 <button
                     type='button'
+                    aria-label='Refresh VM details'
+                    aria-busy={refreshing}
+                    disabled={refreshing}
                     className='group flex h-9 items-center justify-between gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-ui-muted transition hover:border-ui-primary hover:bg-ui-raised hover:text-ui-text'
                     onClick={handleRefresh}
                 >
-                    <span className='text-sm'>Last checked {smallDate(vm.last_checked)}</span>
-                    <RefreshCcw className='h-4 w-4 text-ui-primary' />
+                    <span className='text-sm'>{refreshing ? 'Refreshing…' : `Last checked ${smallDate(vm.last_checked)}`}</span>
+                    <RefreshCcw className={`h-4 w-4 text-ui-primary ${refreshing ? 'animate-spin' : ''}`} />
                 </button>
             </div>
+            {refreshError && <ErrorNotice message={refreshError} actionLabel='Retry' onAction={() => void handleRefresh()} />}
             <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
                 <VMOverview boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} details={details} />
                 <VMHardware boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} />
