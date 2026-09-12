@@ -79,9 +79,13 @@ def transition_embed(previous, current, services, drill=False):
     title = f"{'[TEST] ' if drill else ''}{'Failback' if restored else 'Failover'}: {current['name']}"
     description = (f"{previous.get('activeInstance') or 'unavailable'} → {current.get('activeInstance') or 'unavailable'}. "
                    f"{message}")
+    observer = current.get('observedFromSite')
+    if observer:
+        description += f' Routing observation from {observer}; remote reachability does not establish a host outage.'
+    checks = [f"{i['id']}: {i['lastProxyCheck']['check_status']} ({i['lastProxyCheck']['check_duration']} ms)" for i in current['instances'] if not i.get('healthy') and i.get('lastProxyCheck')]
     return {'title': title, 'description': description, 'color': 0x00CC66 if restored else 0xFF0000,
             'fields': [{'name': 'Active endpoint', 'value': current.get('activeEndpoint') or 'None'},
-                       {'name': 'Still affected', 'value': ', '.join(remaining) or 'All monitored services are back to normal.'}],
+                       {'name': 'Still affected', 'value': ', '.join(remaining) or 'All monitored services are back to normal.'}] + ([{'name': 'Observed health checks', 'value': '\n'.join(checks)[:1024]}] if checks else []),
             'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
 
 
@@ -126,10 +130,13 @@ def sample(config, previous):
         peer = {}
     peer_instances = {instance['id']: instance for service in peer.get('services', []) for instance in service.get('instances', [])}
     proxy_status = {}
+    proxy_checks = {}
     for stats_url in config.get('statsUrls', [config.get('statsUrl')]):
         if not stats_url: continue
         try:
             rows = csv.DictReader(io.StringIO(request(stats_url).decode().lstrip('# ')))
+            rows = list(rows)
+            proxy_checks = {row['svname']: {key: row.get(key, '') for key in ('status', 'check_status', 'check_code', 'check_duration')} for row in rows if row.get('svname') not in ('BACKEND', 'FRONTEND')}
             proxy_status = {row['svname']: row['status'].startswith('UP') for row in rows if row.get('svname') not in ('BACKEND', 'FRONTEND')}
             break
         except (OSError, ValueError, urllib.error.URLError):
@@ -161,7 +168,11 @@ def sample(config, previous):
         count = old['count'] + 1 if old['observed'] == healthy else 1
         stable = healthy if count >= (config.get('rise', 6) if healthy else config.get('fall', 3)) else old['healthy']
         counters[key] = {'healthy': stable, 'count': count, 'observed': healthy}
-    services = [choose_service({**service, 'instances': [{**i, 'endpoint': peer_instances.get(i['id'], {}).get('endpoint', i['endpoint'])} if i['health'].startswith('peer:') else i for i in service['instances']]}, {key: value['healthy'] for key, value in counters.items()}) for service in config['services']]
+    services = [choose_service({**service, 'observedFromSite': config['site'], 'instances': [{**i, 'endpoint': peer_instances.get(i['id'], {}).get('endpoint', i['endpoint'])} if i['health'].startswith('peer:') else i for i in service['instances']]}, {key: value['healthy'] for key, value in counters.items()}) for service in config['services']]
+    for service in services:
+        for instance in service['instances']:
+            if instance['id'] in proxy_checks:
+                instance['lastProxyCheck'] = proxy_checks[instance['id']]
     database = database_status(config)
     database_service = next((service for service in services if service['id'] == 'database'), None)
     read_only = bool(database_service and database_service.get('activeInstance') != 'inspur-db-primary')

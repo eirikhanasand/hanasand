@@ -55,3 +55,33 @@ The database switching drills exposed an unhandled error on a checked-out Postgr
 Recovery alert reads skip projection-repair writes and page through the canonical alerts table. First pages fetch one extra row to expose a continuation cursor. A scoped live fixture checks a real replicated alert and a specific timeline event rather than accepting an empty response.
 
 Reference behavior: [PostgreSQL standby and replication](https://www.postgresql.org/docs/15/warm-standby.html), [PostgreSQL base backups](https://www.postgresql.org/docs/15/app-pgbasebackup.html), [HAProxy supported releases](https://www.haproxy.org/).
+
+## Isolated cross-site transports (12 September 2026)
+
+The legacy SSH connection remains in place for physical database replication and
+existing consumers. Interactive database reads, intelligence queries, web traffic,
+and monitor exchange use four independent SSH connections. This prevents bulk
+replication or one connection's retransmission stalls from blocking all service
+probes together. All forwarding listeners remain loopback-only, using the existing
+restricted key and host-key verification.
+
+Migration: run `isolated-tunnels.py authorize` as the existing OVH tunnel user,
+then `isolated-tunnels.py start` on Inspur. Verify the new listeners before running
+`isolated-tunnels.py configure --root SITE_ROOT` at each site and gracefully
+reloading the proxies. The helper retains the previous configuration; it never
+stops the legacy replication tunnel. Source service ports and the stable database
+proxy endpoint stay unchanged. New query forwarders use 28503/28502/28506,
+intelligence 28097/29097, web 29300/29080/29090, and monitoring 29911.
+
+HAProxy now has an explicit five-second health-response timeout. Previously its
+two-second check interval implicitly bounded the response, which produced
+simultaneous cross-site Layer7 timeouts. Three consecutive failures still remove
+a server, and fifteen successful checks are required before failback. A slower
+failure response budget trades several seconds of detection time for tolerance of
+measured cross-site response variation; it does not make a failed response healthy.
+
+Alerts retain red failover and green failback, identify the observing site, and
+include proxy check status/duration. A route unavailable from OVH does not establish
+that the same service is down on Inspur. `check-routing-behavior.py` exercises a
+three-second healthy response, sustained HTTP failure, and recovery using an
+isolated HAProxy instance; it does not stop production services.

@@ -63,3 +63,34 @@ assert not ({'compute', 'sites', 'replicaEligibility'} & public.keys())
 assert public['mode'] == 'normal' and private['compute']['memoryTotalBytes'] == 123
 
 assert monitor.public_state(private, include_host=True)['compute'] == private['compute']
+
+# Transport isolation keeps the existing physical replication connection and local priority.
+isolated_spec = importlib.util.spec_from_file_location('isolated_tunnels', root / 'isolated-tunnels.py')
+isolated = importlib.util.module_from_spec(isolated_spec)
+isolated_spec.loader.exec_module(isolated)
+fixture = {'site': 'inspur', 'peerStatusUrl': 'http://127.0.0.1:19911/status', 'services': [
+    {'id': 'database', 'instances': [
+        {'id': 'primary', 'site': 'inspur', 'address': '127.0.0.1:8503', 'health': 'postgres://127.0.0.1:8503'},
+        {'id': 'local', 'site': 'inspur', 'address': '127.0.0.1:18502'},
+        {'id': 'remote', 'site': 'ovhcloud', 'address': '127.0.0.1:18506', 'health': 'postgres://127.0.0.1:18506'}]}]}
+migrated = isolated.migrate(fixture)
+assert migrated['services'][0]['instances'][:2] == fixture['services'][0]['instances'][:2]
+assert migrated['services'][0]['instances'][2]['address'] == '127.0.0.1:28506'
+assert migrated['services'][0]['instances'][2]['health'] == 'postgres://127.0.0.1:28506'
+assert fixture['services'][0]['instances'][2]['address'] == '127.0.0.1:18506'
+assert isolated.migrate(migrated) == migrated
+assert migrated['peerStatusUrl'] == 'http://127.0.0.1:29911/status'
+remote_fixture = {'site': 'ovhcloud', 'services': [{'id': 'intelligence', 'instances': [
+    {'id': 'primary', 'site': 'inspur', 'address': '127.0.0.1:18097', 'health': 'peer:inspur-ti-1'},
+    {'id': 'local', 'site': 'ovhcloud', 'address': '127.0.0.1:19097'}]}]}
+remote_migrated = isolated.migrate(remote_fixture)
+assert remote_migrated['services'][0]['instances'][0]['address'] == '127.0.0.1:28097'
+assert remote_migrated['services'][0]['instances'][0]['health'] == 'peer:inspur-ti-1'
+assert remote_migrated['services'][0]['instances'][1] == remote_fixture['services'][0]['instances'][1]
+assert len(isolated.GROUPS) == 4
+for forwards in isolated.GROUPS.values():
+    assert all(value.startswith('127.0.0.1:') and ':127.0.0.1:' in value for value in forwards[1::2])
+observed = monitor.transition_embed(primary, {**remote, 'observedFromSite': 'ovhcloud'}, [remote])
+assert 'Routing observation from ovhcloud' in observed['description']
+assert observed['color'] == 0xFF0000
+print('Isolated transport migration, idempotence, local preference and observer context checks passed.')
