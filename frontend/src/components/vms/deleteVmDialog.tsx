@@ -14,11 +14,11 @@ export default function DeleteVmDialog({ name, busy, error, onCancel, onConfirm 
         element?.showModal()
         return () => element?.close()
     }, [])
-    return <dialog ref={dialog} aria-labelledby={titleId} aria-describedby={descriptionId} onCancel={event => { event.preventDefault(); if (!busy) onCancel() }} className='m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border border-ui-border bg-ui-panel p-5 text-ui-text shadow-xl backdrop:bg-black/60'>
+    return <dialog ref={dialog} aria-labelledby={titleId} aria-describedby={descriptionId} onCancel={event => { event.preventDefault(); if (!busy) onCancel() }} className='m-auto w-[calc(100%_-_2rem)] max-w-md rounded-xl border border-ui-border bg-ui-panel p-5 text-ui-text shadow-xl backdrop:bg-black/60'>
         <form onSubmit={event => { event.preventDefault(); if (!busy && confirmation === name) onConfirm(confirmation) }}>
             <h2 id={titleId} className='text-lg font-semibold'>Delete {name}?</h2>
             <p id={descriptionId} className='mt-2 text-sm text-ui-muted'>The VM will stop and all access will be blocked. You can restore it for 30 days. After that, the VM and its disk will be permanently deleted.</p>
-            <label className='mt-4 grid gap-2 text-sm'>Type <strong>{name}</strong> to confirm
+            <label className='mt-4 grid gap-2 text-sm'><span>Type <strong>{name}</strong> to confirm</span>
                 <input autoFocus autoComplete='off' spellCheck={false} value={confirmation} disabled={busy} onChange={event => setConfirmation(event.target.value)} className='rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-ui-text focus:outline-2 focus:outline-ui-primary' />
             </label>
             {error && <p role='alert' className='mt-3 text-sm text-ui-danger'>{error}</p>}
