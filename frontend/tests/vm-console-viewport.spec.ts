@@ -45,3 +45,45 @@ test('console bounds scrollback, follows output and preserves its connection in 
     await expect.poll(() => terminal.evaluate(el => el.getBoundingClientRect().height)).toBe(originalHeight)
     expect(connections).toBe(1)
 })
+
+
+test('restart progress keeps existing output and reconnects after a transport interruption', async ({ page }) => {
+    await page.context().addCookies([
+        { name: 'id', value: 'dashboard-render-proof-user', url: 'http://127.0.0.1:3272' },
+        { name: 'access_token', value: 'local-dashboard-render-proof-token', url: 'http://127.0.0.1:3272' },
+    ])
+    await page.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
+    let connection: import('@playwright/test').WebSocketRoute | undefined
+    let connections = 0
+    await page.routeWebSocket('**/vm/cashflow/console', socket => {
+        connection = socket
+        connections++
+        socket.onMessage(message => {
+            if (JSON.parse(String(message)).type === 'auth') socket.send(JSON.stringify({ type: 'ready', username: 'fixture' }))
+        })
+    })
+    await page.goto('/vms/cashflow/console')
+    await expect(page.getByRole('status')).toContainText('Connected')
+    const send = (message: object) => connection?.send(JSON.stringify(message))
+    send({ type: 'output', data: 'output before reboot\r\n' })
+    send({ type: 'status', message: 'VM is restarting…' })
+    send({ type: 'boot-output', data: 'Restarting system\nStarting services\n' })
+    await expect(page.getByRole('status')).toContainText('restarting')
+    await expect(page.getByLabel('VM restart log')).toContainText('Starting services')
+    await expect(page.locator('.xterm-rows')).toContainText('output before reboot')
+    send({ type: 'ready', username: 'fixture' })
+    send({ type: 'output', data: 'new shell ready\r\n' })
+    await expect(page.getByRole('status')).toContainText('Connected')
+    await expect(page.locator('.xterm-rows')).toContainText('new shell ready')
+    expect(connections).toBe(1)
+    connection?.close({ code: 1012, reason: 'Server restart' })
+    await expect.poll(() => connections).toBe(2)
+    await expect(page.getByRole('status')).toContainText('Connected')
+    await expect(page.locator('.xterm-rows')).toContainText('output before reboot')
+    await expect(page.getByLabel('VM restart log')).toContainText('Starting services')
+    send({ type: 'error', message: 'Your console access has ended.' })
+    connection?.close({ code: 1008 })
+    await expect(page.getByRole('status')).toContainText('access has ended')
+    await page.waitForTimeout(2200)
+    expect(connections).toBe(2)
+})

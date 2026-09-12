@@ -4,7 +4,7 @@ import run from '#db'
 import { validateSession } from '#utils/auth/session.ts'
 import { loadSQL } from '#utils/loadSQL.ts'
 import { recoveryReadOnly } from '#utils/resilience.ts'
-import { openLxdConsole } from '#utils/vms/lxdConsole.ts'
+import { startConsoleSession } from '#utils/vms/consoleSession.ts'
 
 export async function consoleAccess(name: string, id: string, token: string) {
     const session = await validateSession({ id, token })
@@ -17,7 +17,7 @@ export async function consoleAccess(name: string, id: string, token: string) {
 
 export default function registerVmConsole(fastify: FastifyInstance) {
     fastify.get<{ Params: { name: string } }>('/api/ws/vm/:name/console', { websocket: true }, (socket, request) => {
-        let terminal: Awaited<ReturnType<typeof openLxdConsole>> | undefined
+        let terminal: ReturnType<typeof startConsoleSession> | undefined
         let authenticated = false
         let starting = false
         let checking = false
@@ -50,14 +50,9 @@ export default function registerVmConsole(fastify: FastifyInstance) {
                     if (!await consoleAccess(request.params.name, credentials.id, credentials.token)) return fail('You do not have access to this VM.')
                     if (socket.readyState !== WebSocket.OPEN) return
                     clearTimeout(deadline)
-                    const openingDeadline = setTimeout(() => fail('The VM host is unavailable. Try again later.'), 30000)
-                    try {
-                        terminal = await openLxdConsole(request.params.name, data => send({ type: 'output', data }), () => { send({ type: 'closed' }); socket.close() })
-                    } finally { clearTimeout(openingDeadline) }
-                    if (socket.readyState !== WebSocket.OPEN) { terminal.close(); return }
-                    request.log.info({ vmName: request.params.name, userId: credentials.id }, 'VM console opened')
                     authenticated = true
-                    send({ type: 'ready', username: terminal.username })
+                    terminal = startConsoleSession(request.params.name, send)
+                    request.log.info({ vmName: request.params.name, userId: credentials.id }, 'VM console opened')
                     // Keep idle terminals alive through the public proxy's 15-second timeout.
                     heartbeat = setInterval(() => { if (socket.readyState === WebSocket.OPEN) socket.ping() }, 10000)
                     recheck = setInterval(async () => {

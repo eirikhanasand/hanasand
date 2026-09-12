@@ -46,7 +46,7 @@ type LxdResponse<T> = {
     operation?: string
 }
 
-type LxdRequestOptions = { method?: string, body?: unknown }
+type LxdRequestOptions = { method?: string, body?: unknown, timeout?: number }
 type LxdRequest = <T>(path: string, options?: LxdRequestOptions) => Promise<LxdResponse<T>>
 type VmDetails = ReturnType<typeof mapDetails>
 type VmDetailsWriter = (details: VmDetails) => Promise<void>
@@ -379,7 +379,7 @@ async function defaultLxdRequest<T>(path: string, options: LxdRequestOptions = {
     return response
 }
 
-function requestJson<T>(path: string, options: { method?: string, body?: unknown } = {}) {
+function requestJson<T>(path: string, options: LxdRequestOptions = {}) {
     return new Promise<T>((resolve, reject) => {
         const body = options.body ? JSON.stringify(options.body) : undefined
         const request = http.request({
@@ -390,7 +390,7 @@ function requestJson<T>(path: string, options: { method?: string, body?: unknown
                 Accept: 'application/json',
                 ...(body ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } : {}),
             },
-            timeout: 125000,
+            timeout: options.timeout ?? 125000,
         }, response => {
             let data = ''
             response.setEncoding('utf8')
