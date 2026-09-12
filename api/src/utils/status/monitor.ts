@@ -1,6 +1,6 @@
 import run from '#db'
 import crypto from 'crypto'
-import { activityCountDrop, activityFreshnessMinutes, latencyStatus, type MonitorStatus, watchlistProcessingStatus } from './monitorPolicy.ts'
+import { activityCountDrop, activityFreshnessMinutes, activityCollectorHealthy, latencyStatus, type MonitorStatus, watchlistProcessingStatus } from './monitorPolicy.ts'
 import { recordMonitorResult } from './record.ts'
 
 const apiBase = process.env.MONITOR_API_BASE || `http://127.0.0.1:${Number(process.env.PORT) || 8081}/api`
@@ -254,29 +254,6 @@ export default async function runSyntheticMonitor() {
             if (response.status !== 200 || !['live', 'stale'].includes(String(queue?.status)) || !Array.isArray(queue?.items) || !queue.items.length || total < 1) {
                 throw new Error(`Latest customer activity is unavailable or empty (${response.status})`)
             }
-            const ageMinutes = activityFreshnessMinutes(freshness ?? {})
-            const maxAgeMinutes = Number(freshness?.maxLiveAgeMinutes)
-            if (ageMinutes === undefined || !Number.isFinite(ageMinutes) || !Number.isFinite(maxAgeMinutes) || ageMinutes > maxAgeMinutes) {
-                const scheduler = await fetchJson('/v1/ops/collection-scheduler?tenantId=default&limit=1', {
-                    headers: { 'x-hanasand-service-token': serviceToken },
-                }, scraperBase)
-                const schedulerBody = object(scheduler.body)
-                const schedulerState = object(schedulerBody?.scheduler)
-                const sourceHealth = object(schedulerBody?.sourceHealth)
-                const blockers = Array.isArray(schedulerBody?.operationalBlockers) ? schedulerBody.operationalBlockers : []
-                const collectorHealthy = scheduler.response.status === 200
-                    && schedulerState?.enabled === true
-                    && schedulerState?.running === false
-                    && Number(sourceHealth?.healthy ?? 0) > 0
-                    && !blockers.some((blocker: any) => blocker?.severity === 'blocker')
-                if (collectorHealthy) {
-                    return `Collector healthy; no new customer claims within the freshness window (${Number.isFinite(ageMinutes) ? ageMinutes : 'unknown'} minutes).`
-                }
-                return {
-                    status: 'degraded',
-                    message: `Latest customer activity is stale (${Number.isFinite(ageMinutes) ? ageMinutes : 'unknown'} minutes).`,
-                }
-            }
             const prior = await run(`
                 SELECT status, message
                 FROM service_monitor_results
@@ -286,7 +263,19 @@ export default async function runSyntheticMonitor() {
             `)
             const drop = activityCountDrop(total, prior.rows[0])
             if (drop) return drop
-            return `Latest customer activity returned ${total} retained records; newest successful collection check is ${ageMinutes} minutes old.`
+            const ageMinutes = activityFreshnessMinutes(freshness ?? {})
+            const maxAgeMinutes = Number(freshness?.maxLiveAgeMinutes)
+            if (ageMinutes === undefined || !Number.isFinite(ageMinutes) || !Number.isFinite(maxAgeMinutes) || ageMinutes > maxAgeMinutes) {
+                const collector = await fetchJson('/v1/health', {}, scraperBase, remainingMonitorTimeout(deadline))
+                if (collector.response.status === 200 && activityCollectorHealthy(object(collector.body) ?? {}, freshness ?? {})) {
+                    return `Latest activity returned ${total} retained records. Sources were checked successfully; no new activity.`
+                }
+                return {
+                    status: 'degraded',
+                    message: `Latest customer activity is stale (${Number.isFinite(ageMinutes) ? ageMinutes : 'unknown'} minutes).`,
+                }
+            }
+            return `Latest customer activity returned ${total} retained records; newest activity is ${ageMinutes} minutes old.`
         }, { degraded: 3_000, down: 10_000 }),
         check('dark-web-monitoring', 'Watchlist processing', async () => {
             const [result, scraper] = await Promise.all([run(`
@@ -308,12 +297,30 @@ export default async function runSyntheticMonitor() {
         }),
         check('threat-intelligence', 'Processing backlog', async () => {
             const result = await run(`
-                WITH latest_review_tasks AS (
-                  SELECT DISTINCT ON (record->>'id') record->>'state' AS state, record->>'promptVersion' AS prompt_version, updated_at
+                WITH pending_review_ids AS (
+                  SELECT DISTINCT record->>'id' AS review_id
                   FROM threat_intel.workflow_records
                   WHERE record_type = 'analyst_metadata_review_task'
                     AND record->>'recordKind' = 'automatic_intelligence_review_task'
-                  ORDER BY record->>'id', updated_at DESC
+                    AND record->>'state' IN ('queued', 'running', 'retrying')
+                    AND record->>'promptVersion' NOT IN (
+                      'ti.automatic_intelligence_review.prompt.v1',
+                      'ti.automatic_intelligence_review.prompt.v2',
+                      'ti.automatic_intelligence_review.prompt.v3'
+                    )
+                ), latest_review_tasks AS (
+                  SELECT latest.*
+                  FROM pending_review_ids pending
+                  CROSS JOIN LATERAL (
+                    SELECT record->>'state' AS state, record->>'promptVersion' AS prompt_version, updated_at
+                    FROM threat_intel.workflow_records
+                    WHERE record_type = 'analyst_metadata_review_task'
+                      AND record->>'recordKind' = 'automatic_intelligence_review_task'
+                      AND ((record->>'id') = pending.review_id
+                        OR ((record->>'id') IS NULL AND pending.review_id IS NULL))
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                  ) latest
                 )
                 SELECT
                   (SELECT count(*)::int FROM latest_review_tasks
@@ -363,12 +370,13 @@ export default async function runSyntheticMonitor() {
                         OR source.record->'metadata'->'sourceFeedDiscovery' IS NOT NULL
                       )
                       AND COALESCE(source.record->'metadata'->'automaticSourceReview'->>'state', '') <> 'approved'
-                      AND EXISTS (
-                        SELECT 1
-                        FROM threat_intel.captures capture
-                        WHERE capture.source_id = source.id
-                          AND (capture.tenant_id = source.tenant_id OR (capture.tenant_id IS NULL AND source.tenant_id IS NULL))
-                      )
+                      AND CASE WHEN source.tenant_id IS NULL THEN EXISTS (
+                        SELECT 1 FROM threat_intel.captures capture
+                        WHERE capture.tenant_id IS NULL AND capture.source_id = source.id
+                      ) ELSE EXISTS (
+                        SELECT 1 FROM threat_intel.captures capture
+                        WHERE capture.tenant_id = source.tenant_id AND capture.source_id = source.id
+                      ) END
                   ) AS unreviewed_sources,
                   (
                     SELECT count(*)::int

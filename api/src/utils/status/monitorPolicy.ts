@@ -74,3 +74,31 @@ export function activityCountDrop(
         message: `${total} retained records; ${previous?.status === 'down' ? 'confirmed' : 'possible'} drop from ${baseline}.`,
     }
 }
+
+// Quiet sources are healthy only when both collection and a source behind the
+// activity feed have succeeded recently. New claims are not a service heartbeat.
+export function activityCollectorHealthy(health: Record<string, unknown>, freshness: Record<string, unknown>, now = Date.now()): boolean {
+    const record = (value: unknown): Record<string, unknown> =>
+        value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+    const storage = record(health.storage)
+    const collection = record(health.collection)
+    const checkAge = freshness.collectionCheckAgeMinutes
+    const maxAge = freshness.maxLiveAgeMinutes
+    if (health.ok !== true || storage.databaseAvailable !== true || storage.lastWriteError
+        || Number(storage.pendingWrites ?? 0) >= 1_000
+        || typeof checkAge !== 'number' || !Number.isFinite(checkAge) || checkAge < 0
+        || typeof maxAge !== 'number' || !Number.isFinite(maxAge) || maxAge <= 0 || checkAge > maxAge) return false
+    return ['public', 'restrictedMetadata'].every(name => {
+        const loop = record(collection[name])
+        if (name === 'restrictedMetadata' && loop.enabled === false) return true
+        const lastSuccess = Date.parse(String(loop.lastSuccessAt ?? ''))
+        const interval = Number(loop.intervalSeconds)
+        const result = record(loop.latestResult)
+        return loop.enabled === true && Number.isFinite(lastSuccess) && lastSuccess <= now
+            && Number.isFinite(interval) && interval > 0
+            && now - lastSuccess <= Math.max(60_000, interval * 3_000)
+            && Number(loop.consecutiveErrorCount ?? 0) === 0
+            && Number(loop.failedSourceCount ?? 0) === 0
+            && result.status !== 'failed'
+    })
+}
