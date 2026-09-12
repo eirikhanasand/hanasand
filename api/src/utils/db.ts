@@ -42,12 +42,12 @@ export async function closeDatabase() {
     await pool.end()
 }
 
-export default async function run(query: string, params?: SQLParamType) {
+export default async function run(query: string, params?: SQLParamType, name?: string) {
     // Authentication must fail promptly; replaying an ambiguous write can duplicate it.
-    if ((process.env.AUTH_SERVICE_ONLY === '1' || process.env.API_HTTP_ONLY === '1')) return queryOnce(query, params)
+    if ((process.env.AUTH_SERVICE_ONLY === '1' || process.env.API_HTTP_ONLY === '1')) return queryOnce(query, params, name)
     while (true) {
         try {
-            return await queryOnce(query, params)
+            return await queryOnce(query, params, name)
         } catch (error) {
             if (!isTransientDatabaseError(error)) {
                 throw error
@@ -60,11 +60,13 @@ export default async function run(query: string, params?: SQLParamType) {
     }
 }
 
-export async function queryOnce(query: string, params?: SQLParamType) {
+export async function queryOnce(query: string, params?: SQLParamType, name?: string) {
     const client = await pool.connect()
     let failure: Error | undefined
     try {
-        return await client.query(query, params ?? [])
+        return name
+            ? await client.query({ name, text: query, values: params ?? [] })
+            : await client.query(query, params ?? [])
     } catch (error) {
         failure = error as Error
         throw error
@@ -86,7 +88,9 @@ export async function withDatabaseAdvisoryLock<T>(key: string, work: () => Promi
 
 export async function withTransaction<T>(work: (query: typeof queryOnce) => Promise<T>) {
     const client = await pool.connect()
-    const query = ((sql: string, params?: SQLParamType) => client.query(sql, params ?? [])) as typeof queryOnce
+    const query = ((sql: string, params?: SQLParamType, name?: string) => name
+        ? client.query({ name, text: sql, values: params ?? [] })
+        : client.query(sql, params ?? [])) as typeof queryOnce
     try {
         await client.query('BEGIN')
         const result = await work(query)

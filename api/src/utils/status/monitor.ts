@@ -392,7 +392,7 @@ export default async function runSyntheticMonitor() {
                           AND recovered.updated_at > failed.updated_at
                       )
                   ) AS recent_delivery_failures
-            `)
+            `, [], 'processing-backlog-v1')
             const counts = result.rows[0] || {}
             const staleReviews = Number(counts.stale_reviews ?? 0)
             const oldestReviewAgeMinutes = Number(counts.oldest_review_age_minutes ?? 0)
