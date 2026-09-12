@@ -3,6 +3,7 @@ import { hostCheckMessage } from './hostCheckMessage.ts'
 import { monitoringLookup, monitoringUrl, publicMonitoringRequest, resolveMonitoringAddresses } from './publicMonitoringRequest.ts'
 import run from '#db'
 import { normalizeJsonRule, evaluateJsonRule, sharedJsonSnapshot, type JsonRule } from './jsonMonitoring.ts'
+import { monitoringCheckDetails } from './monitoringCaseEvents.ts'
 import { recordMonitoringOutcome } from './monitoringIssues.ts'
 import { connect as connectTcp } from 'node:net'
 import { connect as connectTls } from 'node:tls'
@@ -383,9 +384,9 @@ export async function executeAutomation(automation: AutomationRow) {
     const runId = crypto.randomUUID()
     const startedAt = Date.now()
     await run(`
-        INSERT INTO agent_automation_runs (id, automation_id, owner_id, status)
-        VALUES ($1, $2, $3, 'running')
-    `, [runId, automation.id, automation.owner_id])
+        INSERT INTO agent_automation_runs (id, automation_id, owner_id, status, check_details)
+        VALUES ($1, $2, $3, 'running', $4::jsonb)
+    `, [runId, automation.id, automation.owner_id, JSON.stringify(monitoringCheckDetails(automation))])
 
     try {
         await checkScheduledAutomationAccess({ actionType: automation.action_type, targetUrl: automation.target_url, organizationId: automation.organization_id, modelName: automation.model_name, notificationDestinations: automation.notification_destinations }, automation.owner_id)

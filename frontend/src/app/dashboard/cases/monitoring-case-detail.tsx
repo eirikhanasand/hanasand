@@ -1,12 +1,14 @@
 'use client'
 
 import Link from 'next/link'
+import { CaseEvents, CheckFields, type CaseEvent, type CheckDetails } from './case-events'
 import Markdown from 'react-markdown'
 import { CaseDevelopment } from './case-development'
 import { useEffect, useState } from 'react'
 import type { CaseRow } from './cases-client'
 
 export type MonitoringCase = CaseRow & {
+    events?: CaseEvent[], eventTotal?: number, eventPage?: number, eventSnapshot?: string, currentCheck?: CheckDetails,
     lastSeenAt?: string, occurrences: number, automationId: string, resolvedAt?: string, notificationsEnabled: boolean,
     history: Array<{ id: string, actor: string, at: string, action: string, note?: string, fromStatus?: string, toStatus?: string, fromSeverity?: string, toSeverity?: string, notificationsEnabled?: boolean }>,
     comments: Array<{ id: string, author: string, body: string, createdAt: string }>,
@@ -19,6 +21,8 @@ const headerControl = `${control} inline-flex h-10 min-w-28 items-center justify
 const date = (value?: string) => value ? new Date(value).toLocaleString() : '—'
 
 export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: string, organizationId?: string }) {
+    const [tab, setTab] = useState('details')
+    const [loadingEvents, setLoadingEvents] = useState(false)
     const [item, setItem] = useState<MonitoringCase | null>(null)
     const [error, setError] = useState('')
     const [revision, setRevision] = useState(0)
@@ -32,6 +36,7 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
     useEffect(() => {
         const controller = new AbortController()
         setItem(null)
+        setTab('details')
         setComment('')
         setError('')
         fetch(endpoint, { cache: 'no-store', signal: controller.signal }).then(async response => {
@@ -64,6 +69,17 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
             setBusy(false)
         }
     }
+    async function moreEvents() {
+        if (!item || loadingEvents) return
+        setLoadingEvents(true)
+        try {
+            const response = await fetch(`${endpoint}&eventsPage=${(item.eventPage || 0) + 1}&eventsAt=${encodeURIComponent(item.eventSnapshot || new Date().toISOString())}`, { cache: 'no-store' })
+            if (!response.ok) throw new Error('Could not load more events. Try again.')
+            const next = (await response.json()).case as MonitoringCase
+            setItem(current => current && ({ ...current, events: [...new Map([...(current.events || []), ...(next.events || [])].map(event => [event.id, event])).values()], eventPage: next.eventPage, eventTotal: next.eventTotal }))
+        } catch (error) { setError(error instanceof Error ? error.message : 'Could not load events.') }
+        finally { setLoadingEvents(false) }
+    }
     return <article className='min-w-0 overflow-hidden rounded-xl border border-ui-border bg-ui-panel text-ui-text'>
         <div aria-hidden='true' className='h-1.5' style={{ backgroundColor: severityColor[item?.severity ?? ''] ?? 'transparent' }} />
         <header className='grid gap-3 border-b border-ui-border px-5 py-4 sm:px-6'>
@@ -87,69 +103,77 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
         </header>
         {!item && !error && <p className='p-6'>Loading case…</p>}
         {item && <>
-            {resolving && <form className='grid gap-3 border-b border-ui-border p-5' onSubmit={event => { event.preventDefault(); if (comment.trim()) void save({ status: 'resolved', comment, ...(aiAssisted ? { resolutionMethod: 'ai' } : {}) }) }}>
-                <label htmlFor='resolution-comment' className='font-medium'>Resolution comment (required)</label>
-                <textarea id='resolution-comment' className={`${control} min-h-24`} required maxLength={5000} value={comment} onChange={event => setComment(event.target.value)} placeholder='What was fixed, and how did you verify it?' />
-                <label className='flex items-center gap-2 text-sm'><input type='checkbox' checked={aiAssisted} onChange={event => setAiAssisted(event.target.checked)} />Resolved by AI — requires human confirmation</label>
-                <div className='flex gap-2'><button className={control} disabled={busy || !comment.trim()}>Resolve with comment</button><button type='button' className={control} disabled={busy} onClick={() => setResolving(false)}>Cancel</button></div>
-            </form>}
-            {item.resolution && <section className='grid gap-2 border-b border-ui-border p-5' aria-label='Resolution review'>
-                <h2 className='font-semibold'>{item.resolution.type === 'ai' ? 'Resolved by AI' : item.resolution.type === 'automation' ? 'Recovered automatically' : item.resolution.type === 'unknown' ? 'Resolver not recorded' : 'Resolved by a person'}</h2>
-                <p className='text-sm'>{item.resolution.actor || 'Identity unavailable'} · {date(item.resolution.at)}</p>
-                <p className='whitespace-pre-wrap text-sm'>{item.resolution.note}</p>
-                {item.resolution.confirmedAt ? <p className='text-sm text-ui-success'>Confirmed by {item.resolution.confirmedBy} · {date(item.resolution.confirmedAt)}</p> : ['ai', 'automation'].includes(item.resolution.type) && <p className='text-sm text-ui-muted'>Awaiting human confirmation.</p>}
-            </section>}
-            <section aria-labelledby='case-summary' className='min-w-0 grid gap-3 border-b border-ui-border p-5 sm:p-6'>
-                <h2 id='case-summary' className='text-lg font-semibold'>Summary</h2>
-                <p className='whitespace-pre-wrap [overflow-wrap:anywhere] leading-7'>{item.summary}</p>
-            </section>
-            <section aria-labelledby='case-technical' className='grid gap-4 border-b border-ui-border p-5 sm:p-6'>
-                <div className='flex flex-wrap items-center justify-between gap-3'><h2 id='case-technical' className='text-lg font-semibold'>Technical details</h2><Link className='text-sm text-ui-primary underline' href={`/automation/health?monitor=${encodeURIComponent(item.automationId)}`}>View health check</Link></div>
-                <dl className='grid gap-4 sm:grid-cols-2 xl:grid-cols-4'>{[['First seen', date(item.createdAt)], ['Last seen', date(item.lastSeenAt || item.updatedAt)], ['Recovered', item.resolvedAt ? date(item.resolvedAt) : 'Not recovered'], ['Occurrences', item.occurrences.toLocaleString()]].map(([label, value]) => <div key={label} className='min-w-0 rounded-lg bg-ui-canvas p-4'><dt className='text-sm text-ui-muted'>{label}</dt><dd className='mt-2 wrap-break-word text-sm font-medium'>{value}</dd></div>)}</dl>
-                <p className='text-sm text-ui-muted'>Health checks update recovery automatically. A manual case status stays in effect until you change it; closing a case does not mark the health check as recovered.</p>
-            </section>
-            <details key={`notifications-${caseId}`} className='border-b border-ui-border p-5 sm:p-6'>
-                <summary className='cursor-pointer text-lg font-semibold'>Notification settings ({item.notifications.filter(notification => notification.deliveredAt).length})</summary>
-                <div className='mt-4 grid gap-4'>
-                    <label className='flex items-center gap-3 text-sm'><input type='checkbox' className='h-4 w-4' checked={item.notificationsEnabled} disabled={busy} onChange={event => void save({ notificationsEnabled: event.target.checked })} />Enable notifications for this case</label>
-                    <p className='text-sm text-ui-muted'>Uses the health check’s configured destinations and delivery rules.</p>
-                    <h3 className='text-sm font-medium'>Delivery history</h3>
-                    {item.notifications.length ? item.notifications.map((notification, index) => <article className='grid gap-2 rounded-lg bg-ui-canvas p-3 text-sm' key={notification.messageId || index}>
-                        <p>{notification.deliveredAt ? `Delivered ${date(notification.deliveredAt)}` : 'Delivery pending'}</p>
-                        {notification.error && <p className='text-ui-danger'>{notification.error}</p>}
-                        {notification.message ? <div className='grid gap-3 [overflow-wrap:anywhere]'>
-                            {notification.message.content && <NotificationText text={notification.message.content} />}
-                            {notification.message.embeds?.map((embed, embedIndex) => <div key={embedIndex} className='grid gap-2 border-l-2 border-ui-border pl-3'>
-                                {embed.title && <p className='font-semibold'>{notificationText(embed.title)}</p>}
-                                {embed.description && <NotificationText text={embed.description} />}
-                                {embed.fields?.length ? <dl className='grid gap-2 sm:grid-cols-2'>{embed.fields.map((field, fieldIndex) => <div key={fieldIndex}><dt className='text-ui-muted'>{field.name}</dt><dd><NotificationText text={field.value} /></dd></div>)}</dl> : null}
-                            </div>)}
-                        </div> : notification.deliveredAt && <p className='text-ui-muted'>Original message content is unavailable.</p>}
-                        {notification.messageId && <p className='wrap-break-word text-xs text-ui-muted'>Message ID: {notification.messageId}</p>}
-                    </article>) : <p className='text-sm text-ui-muted'>No notifications sent.</p>}
-                </div>
-            </details>
-            <CaseDevelopment caseId={caseId} organizationId={item.organizationId || organizationId} />
-            <section aria-labelledby='case-history' className='grid gap-4 border-b border-ui-border p-5 sm:p-6'>
-                <h2 id='case-history' className='text-lg font-semibold'>Case history</h2>
-                <p className='text-sm text-ui-muted'>Older cases may have gaps because earlier changes were not recorded.</p>
-                <ol className='grid gap-3'>{item.history?.map(event => <li key={event.id} className='rounded-lg border border-ui-border p-4'>
-                    <p className='text-sm font-medium'>{event.action.replaceAll('_', ' ')} · {event.actor} · {date(event.at)}</p>
-                    {event.fromStatus !== event.toStatus && <p className='mt-1 text-sm'>{event.fromStatus?.replaceAll('_', ' ')} → {event.toStatus?.replaceAll('_', ' ')}</p>}
-                    {event.fromSeverity !== event.toSeverity && <p className='mt-1 text-sm'>Severity: {event.fromSeverity} → {event.toSeverity}</p>}
-                    {event.action === 'notifications_changed' && <p className='mt-1 text-sm'>Notifications {event.notificationsEnabled ? 'enabled' : 'disabled'}</p>}
-                    {event.note && <p className='mt-2 whitespace-pre-wrap [overflow-wrap:anywhere] text-sm'>{event.note}</p>}
-                </li>)}</ol>
-            </section>
-            <section aria-labelledby='case-comments' className='grid gap-4 p-5 sm:p-6'>
-                <h2 id='case-comments' className='text-lg font-semibold'>Comments</h2>
-                {item.comments?.length ? item.comments.map(entry => <article className='rounded-lg border border-ui-border p-4' key={entry.id}><p className='wrap-break-word text-sm text-ui-muted'>{entry.author} · {date(entry.createdAt)}</p><p className='mt-2 whitespace-pre-wrap [overflow-wrap:anywhere]'>{entry.body}</p></article>) : <p className='text-sm text-ui-muted'>No comments yet.</p>}
-                <form className='grid gap-3' onSubmit={event => { event.preventDefault(); if (comment.trim() && !busy) void save({ comment }) }}>
-                    <label htmlFor='case-comment' className='text-sm font-medium'>Add a comment</label>
-                    <textarea id='case-comment' className={`${control} min-h-28 w-full`} value={comment} onChange={event => setComment(event.target.value)} maxLength={5000} disabled={busy} placeholder='Share an update or investigation notes…' required />
-                    <button type='submit' className={`${control} justify-self-start`} disabled={busy || !comment.trim()}>Post comment</button>
-                </form>
-            </section>
+            <div role='tablist' aria-label='Case views' className='flex gap-3 border-b border-ui-border px-5 py-3'>
+                {['details', 'events'].map(value => <button key={value} id={`case-tab-${value}`} role='tab' aria-selected={tab === value} aria-controls={`case-panel-${value}`} tabIndex={tab === value ? 0 : -1} onKeyDown={event => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) { event.preventDefault(); const next = event.key === 'Home' ? 'details' : event.key === 'End' ? 'events' : value === 'details' ? 'events' : 'details'; setTab(next); document.getElementById(`case-tab-${next}`)?.focus() } }} className={`${control} ${tab === value ? 'font-semibold text-ui-primary' : ''}`} onClick={() => setTab(value)}>{value === 'details' ? 'Details' : `Events (${item.eventTotal ?? item.occurrences})`}</button>)}
+            </div>
+            <div id='case-panel-events' role='tabpanel' aria-labelledby='case-tab-events' hidden={tab !== 'events'}><CaseEvents events={item.events || []} total={item.eventTotal || 0} occurrences={item.occurrences} loading={loadingEvents} onMore={() => void moreEvents()} /></div>
+            <div id='case-panel-details' role='tabpanel' aria-labelledby='case-tab-details' hidden={tab !== 'details'}>
+                {resolving && <form className='grid gap-3 border-b border-ui-border p-5' onSubmit={event => { event.preventDefault(); if (comment.trim()) void save({ status: 'resolved', comment, ...(aiAssisted ? { resolutionMethod: 'ai' } : {}) }) }}>
+                    <label htmlFor='resolution-comment' className='font-medium'>Resolution comment (required)</label>
+                    <textarea id='resolution-comment' className={`${control} min-h-24`} required maxLength={5000} value={comment} onChange={event => setComment(event.target.value)} placeholder='What was fixed, and how did you verify it?' />
+                    <label className='flex items-center gap-2 text-sm'><input type='checkbox' checked={aiAssisted} onChange={event => setAiAssisted(event.target.checked)} />Resolved by AI — requires human confirmation</label>
+                    <div className='flex gap-2'><button className={control} disabled={busy || !comment.trim()}>Resolve with comment</button><button type='button' className={control} disabled={busy} onClick={() => setResolving(false)}>Cancel</button></div>
+                </form>}
+                {item.resolution && <section className='grid gap-2 border-b border-ui-border p-5' aria-label='Resolution review'>
+                    <h2 className='font-semibold'>{item.resolution.type === 'ai' ? 'Resolved by AI' : item.resolution.type === 'automation' ? 'Recovered automatically' : item.resolution.type === 'unknown' ? 'Resolver not recorded' : 'Resolved by a person'}</h2>
+                    <p className='text-sm'>{item.resolution.actor || 'Identity unavailable'} · {date(item.resolution.at)}</p>
+                    <p className='whitespace-pre-wrap text-sm'>{item.resolution.note}</p>
+                    {item.resolution.confirmedAt ? <p className='text-sm text-ui-success'>Confirmed by {item.resolution.confirmedBy} · {date(item.resolution.confirmedAt)}</p> : ['ai', 'automation'].includes(item.resolution.type) && <p className='text-sm text-ui-muted'>Awaiting human confirmation.</p>}
+                </section>}
+                <section aria-labelledby='case-summary' className='min-w-0 grid gap-3 border-b border-ui-border p-5 sm:p-6'>
+                    <h2 id='case-summary' className='text-lg font-semibold'>Summary</h2>
+                    <p className='whitespace-pre-wrap [overflow-wrap:anywhere] leading-7'>{item.summary}</p>
+                </section>
+                <section aria-labelledby='case-technical' className='grid gap-4 border-b border-ui-border p-5 sm:p-6'>
+                    <div className='flex flex-wrap items-center justify-between gap-3'><h2 id='case-technical' className='text-lg font-semibold'>Technical details</h2><Link className='text-sm text-ui-primary underline' href={`/automation/health?monitor=${encodeURIComponent(item.automationId)}`}>View health check</Link></div>
+                    {item.events?.[0]?.details ? <><p className='text-sm text-ui-muted'>Configuration captured for the latest occurrence.</p><CheckFields details={item.events[0].details} /></> : item.currentCheck && <><p className='text-sm text-ui-muted'>Current check configuration. Older runs did not capture their configuration.</p><CheckFields details={item.currentCheck} /></>}
+                    {item.events?.[0] && <div className='grid gap-2'><h3 className='font-medium'>Latest recorded result</h3><p className='whitespace-pre-wrap [overflow-wrap:anywhere]'>{item.events[0].message}</p><p className='text-sm text-ui-muted'>Duration: {item.events[0].durationMs == null ? 'Not recorded' : `${item.events[0].durationMs.toLocaleString()} ms`}</p></div>}
+                    <dl className='grid gap-4 sm:grid-cols-2 xl:grid-cols-4'>{[['First seen', date(item.createdAt)], ['Last seen', date(item.lastSeenAt || item.updatedAt)], ['Recovered', item.resolvedAt ? date(item.resolvedAt) : 'Not recovered'], ['Occurrences', item.occurrences.toLocaleString()]].map(([label, value]) => <div key={label} className='min-w-0 rounded-lg bg-ui-canvas p-4'><dt className='text-sm text-ui-muted'>{label}</dt><dd className='mt-2 wrap-break-word text-sm font-medium'>{value}</dd></div>)}</dl>
+                    <p className='text-sm text-ui-muted'>Health checks update recovery automatically. A manual case status stays in effect until you change it; closing a case does not mark the health check as recovered.</p>
+                </section>
+                <details key={`notifications-${caseId}`} className='border-b border-ui-border p-5 sm:p-6'>
+                    <summary className='cursor-pointer text-lg font-semibold'>Notification settings ({item.notifications.filter(notification => notification.deliveredAt).length})</summary>
+                    <div className='mt-4 grid gap-4'>
+                        <label className='flex items-center gap-3 text-sm'><input type='checkbox' className='h-4 w-4' checked={item.notificationsEnabled} disabled={busy} onChange={event => void save({ notificationsEnabled: event.target.checked })} />Enable notifications for this case</label>
+                        <p className='text-sm text-ui-muted'>Uses the health check’s configured destinations and delivery rules.</p>
+                        <h3 className='text-sm font-medium'>Delivery history</h3>
+                        {item.notifications.length ? item.notifications.map((notification, index) => <article className='grid gap-2 rounded-lg bg-ui-canvas p-3 text-sm' key={notification.messageId || index}>
+                            <p>{notification.deliveredAt ? `Delivered ${date(notification.deliveredAt)}` : 'Delivery pending'}</p>
+                            {notification.error && <p className='text-ui-danger'>{notification.error}</p>}
+                            {notification.message ? <div className='grid gap-3 [overflow-wrap:anywhere]'>
+                                {notification.message.content && <NotificationText text={notification.message.content} />}
+                                {notification.message.embeds?.map((embed, embedIndex) => <div key={embedIndex} className='grid gap-2 border-l-2 border-ui-border pl-3'>
+                                    {embed.title && <p className='font-semibold'>{notificationText(embed.title)}</p>}
+                                    {embed.description && <NotificationText text={embed.description} />}
+                                    {embed.fields?.length ? <dl className='grid gap-2 sm:grid-cols-2'>{embed.fields.map((field, fieldIndex) => <div key={fieldIndex}><dt className='text-ui-muted'>{field.name}</dt><dd><NotificationText text={field.value} /></dd></div>)}</dl> : null}
+                                </div>)}
+                            </div> : notification.deliveredAt && <p className='text-ui-muted'>Original message content is unavailable.</p>}
+                            {notification.messageId && <p className='wrap-break-word text-xs text-ui-muted'>Message ID: {notification.messageId}</p>}
+                        </article>) : <p className='text-sm text-ui-muted'>No notifications sent.</p>}
+                    </div>
+                </details>
+                <CaseDevelopment caseId={caseId} organizationId={item.organizationId || organizationId} />
+                <section aria-labelledby='case-history' className='grid gap-4 border-b border-ui-border p-5 sm:p-6'>
+                    <h2 id='case-history' className='text-lg font-semibold'>Case history</h2>
+                    <p className='text-sm text-ui-muted'>Older cases may have gaps because earlier changes were not recorded.</p>
+                    <ol className='grid gap-3'>{item.history?.map(event => <li key={event.id} className='rounded-lg border border-ui-border p-4'>
+                        <p className='text-sm font-medium'>{event.action.replaceAll('_', ' ')} · {event.actor} · {date(event.at)}</p>
+                        {event.fromStatus !== event.toStatus && <p className='mt-1 text-sm'>{event.fromStatus?.replaceAll('_', ' ')} → {event.toStatus?.replaceAll('_', ' ')}</p>}
+                        {event.fromSeverity !== event.toSeverity && <p className='mt-1 text-sm'>Severity: {event.fromSeverity} → {event.toSeverity}</p>}
+                        {event.action === 'notifications_changed' && <p className='mt-1 text-sm'>Notifications {event.notificationsEnabled ? 'enabled' : 'disabled'}</p>}
+                        {event.note && <p className='mt-2 whitespace-pre-wrap [overflow-wrap:anywhere] text-sm'>{event.note}</p>}
+                    </li>)}</ol>
+                </section>
+                <section aria-labelledby='case-comments' className='grid gap-4 p-5 sm:p-6'>
+                    <h2 id='case-comments' className='text-lg font-semibold'>Comments</h2>
+                    {item.comments?.length ? item.comments.map(entry => <article className='rounded-lg border border-ui-border p-4' key={entry.id}><p className='wrap-break-word text-sm text-ui-muted'>{entry.author} · {date(entry.createdAt)}</p><p className='mt-2 whitespace-pre-wrap [overflow-wrap:anywhere]'>{entry.body}</p></article>) : <p className='text-sm text-ui-muted'>No comments yet.</p>}
+                    <form className='grid gap-3' onSubmit={event => { event.preventDefault(); if (comment.trim() && !busy) void save({ comment }) }}>
+                        <label htmlFor='case-comment' className='text-sm font-medium'>Add a comment</label>
+                        <textarea id='case-comment' className={`${control} min-h-28 w-full`} value={comment} onChange={event => setComment(event.target.value)} maxLength={5000} disabled={busy} placeholder='Share an update or investigation notes…' required />
+                        <button type='submit' className={`${control} justify-self-start`} disabled={busy || !comment.trim()}>Post comment</button>
+                    </form>
+                </section>
+            </div>
         </>}
     </article>
 }

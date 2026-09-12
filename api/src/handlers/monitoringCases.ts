@@ -4,18 +4,24 @@ import { automationReadScope } from '#utils/automationAccess.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { monitoringCaseHistory, monitoringCaseResolution } from '#utils/monitoringCaseWorkflow.ts'
+import { loadMonitoringCaseEvents, monitoringCheckDetails } from '#utils/monitoringCaseEvents.ts'
+import type { AutomationRow } from '#utils/automations.ts'
 import { loadMonitoringIssues } from '#utils/monitoringIssues.ts'
 
 // Monitoring owns the lifecycle; expose its persisted issues through the shared case surface.
-export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: string }, Querystring: { organizationId?: string, tenantId?: string } }>, res: FastifyReply) {
+export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: string }, Querystring: { organizationId?: string, tenantId?: string, eventsPage?: string, eventsAt?: string } }>, res: FastifyReply) {
     const { valid, id } = await tokenWrapper(req, res)
     if (!valid || !id) return res.status(401).send({ error: 'Unauthorized.' })
     const includeAll = (await hasRole(req, res, 'system_admin')).valid
     const caseId = req.params.id?.replace(/^MON-/, 'HA-')
     if (caseId && !/^HA-[1-9]\d*$/.test(caseId)) return res.status(404).send({ error: 'Case not found.' })
+    const snapshot = req.query.eventsAt || new Date().toISOString()
+    if (!Number.isFinite(Date.parse(snapshot))) return res.status(400).send({ error: 'Invalid events timestamp.' })
+    const page = Number(req.query.eventsPage || 0)
+    if (!Number.isSafeInteger(page) || page < 0 || page > 100000) return res.status(400).send({ error: 'Invalid events page.' })
     const organizationId = req.query.organizationId || null
     if (req.query.tenantId && req.query.tenantId !== (organizationId || id)) return res.status(403).send({ error: 'Invalid case scope.' })
-    const result = await run(`SELECT i.*, a.name AS monitor_name, a.owner_id, a.organization_id
+    const result = await run(`SELECT i.*, a.name AS monitor_name, a.owner_id, a.organization_id, a.target_url, a.monitoring_type, a.timeout_seconds, a.retry_count, a.follow_redirects, a.expected_down, a.upside_down
         FROM monitoring_issues i JOIN agent_automations a ON a.id = i.automation_id
         WHERE ${automationReadScope('a', '$1', '$2')}
           AND ($3::text IS NULL OR a.organization_id = $3)
@@ -34,7 +40,8 @@ export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: st
     if (!caseId) return res.send({ items })
     if (!items.length) return res.status(404).send({ error: 'Case not found.' })
     const issues = await loadMonitoringIssues(items[0].automationId)
-    return res.send({ case: { ...items[0], notifications: issues.find(issue => issue.caseNumber === caseId)?.notifications || [] } })
+    const events = await loadMonitoringCaseEvents(caseId.slice(3), page, snapshot)
+    return res.send({ case: { ...items[0], ...events, currentCheck: monitoringCheckDetails(result.rows[0] as AutomationRow), notifications: issues.find(issue => issue.caseNumber === caseId)?.notifications || [] } })
 }
 
 export async function updateMonitoringCase(req: FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string, tenantId?: string }, Body: { status?: string, severity?: string, notificationsEnabled?: boolean, comment?: string, resolutionMethod?: string, confirmResolutionId?: string } }>, res: FastifyReply) {
