@@ -135,7 +135,6 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                     <summary className='cursor-pointer text-lg font-semibold'>Notification settings ({item.notifications.filter(notification => notification.deliveredAt).length})</summary>
                     <div className='mt-4 grid gap-4'>
                         <label className='flex items-center gap-3 text-sm'><input type='checkbox' className='h-4 w-4' checked={item.notificationsEnabled} disabled={busy} onChange={event => void save({ notificationsEnabled: event.target.checked })} />Enable notifications for this case</label>
-                        <p className='text-sm text-ui-muted'>Uses the health check’s configured destinations and delivery rules.</p>
                         <h3 className='text-sm font-medium'>Delivery history</h3>
                         {item.notifications.length ? item.notifications.map((notification, index) => <article className='grid gap-2 rounded-lg bg-ui-canvas p-3 text-sm' key={notification.messageId || index}>
                             <p>{notification.deliveredAt ? `Delivered ${date(notification.deliveredAt)}` : 'Delivery pending'}</p>
