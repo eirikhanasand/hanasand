@@ -63,7 +63,8 @@ export default function PendingDeletionPage({
                 setCookieWithExpiresAt('avatar', data.avatar ?? '', data.expires_at)
                 setCookieWithExpiresAt('access_token', data.token, data.expires_at)
                 setCookieWithExpiresAt('roles', JSON.stringify(data.roles ?? []), data.expires_at)
-                setResetToken(data.resetToken)
+                if (data.resetToken) setResetToken(data.resetToken)
+                else router.push('/dashboard')
                 return
             }
             router.push('/login')

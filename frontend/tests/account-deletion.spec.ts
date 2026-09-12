@@ -57,3 +57,10 @@ test('invalid links show an error without claiming the account was restored', as
     await expect(page.getByText('This account can no longer be restored from this link.')).toBeVisible()
     await expect(page.getByLabel('New password', { exact: true })).toHaveCount(0)
 })
+
+test('recovery remains usable while older API replicas finish a rolling deployment', async ({ page }) => {
+    await page.route('**/api/user/restore', route => route.fulfill({ json: { id: 'recovery-user', name: 'Recovery User', token: 'session', expires_at: '2030-01-01T00:00:00Z', roles: [] } }))
+    await page.goto('http://account-deletion.test/#restoreToken=email-secret')
+    await page.getByRole('button', { name: 'Restore', exact: true }).click()
+    await expect(page).toHaveURL('http://account-deletion.test/dashboard')
+})
