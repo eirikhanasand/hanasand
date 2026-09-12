@@ -10,7 +10,7 @@ describe('production monitor notification transitions', () => {
         const schema = await readFile(path.join(import.meta.dir, '../src/utils/db/ensureSchema.ts'), 'utf8')
         expect(source).toContain('WINDOW status_history_window AS')
         expect(source).not.toContain('WINDOW window AS')
-        expect(source).toContain("WHERE status <> 'up'")
+        expect(source).toContain("WHERE status IN ('down', 'degraded')")
         expect(source).not.toContain('FROM service_monitor_results recovered')
         expect(source).toContain('LAG(status) OVER status_history_window')
         expect(schema).toContain('idx_service_monitor_results_non_up')

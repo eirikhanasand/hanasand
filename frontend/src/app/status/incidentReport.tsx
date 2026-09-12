@@ -4,7 +4,7 @@ import { useState } from 'react'
 import type { ServiceIncident } from '@/utils/status/getStatus'
 
 const PAGE_SIZE = 25
-const timestamp = (at: string) => new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(at)) + ' UTC'
+const timestamp = (at: string) => !Number.isFinite(Date.parse(at)) ? 'Not recorded' : new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(at)) + ' UTC'
 const labels: Record<string, string> = { investigating: 'Issue detected', monitoring: 'Service update', resolved: 'Recovery confirmed' }
 
 export default function IncidentReport({ incident }: { incident: ServiceIncident }) {
