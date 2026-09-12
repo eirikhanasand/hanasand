@@ -1,3 +1,7 @@
+// Response latency and runtime failure detection are separate budgets. Match the
+// router's existing five-second check timeout, not the sub-20ms response target.
+export const RUNTIME_HEARTBEAT_TIMEOUT_MS = 5_000;
+
 export function startReadinessWorker(options: {
   port: number;
   hostname: string;

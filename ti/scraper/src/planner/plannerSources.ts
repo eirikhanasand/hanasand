@@ -8,7 +8,14 @@ export function allowedSource(source) {
 }
 
 export function rankedSources(sources, terms, at) {
-  return [...sources].sort((a, b) => Number(Boolean(sourceAvailableAt(a, at))) - Number(Boolean(sourceAvailableAt(b, at))) || sourceScore(b, terms, at) - sourceScore(a, terms, at) || a.id.localeCompare(b.id));
+  const normalizedTerms = terms.map((term) => term.toLowerCase());
+  // Metadata may be large. Compute scores once, not on every sort comparison.
+  return sources.map((source) => ({
+    source,
+    waiting: Number(Boolean(sourceAvailableAt(source, at))),
+    score: sourceScore(source, normalizedTerms, at)
+  })).sort((a, b) => a.waiting - b.waiting || b.score - a.score || a.source.id.localeCompare(b.source.id))
+    .map(({ source }) => source);
 }
 
 export function sourceAvailableAt(source, at) {
@@ -38,7 +45,7 @@ export function novelty(source) {
 
 function sourceScore(source, terms, at) {
   const text = `${source.name} ${source.url} ${(source.tags ?? []).join(" ")} ${JSON.stringify(source.metadata ?? {})}`.toLowerCase();
-  return clampScore(source.trustScore * 0.45 + sourceFreshness(source, at) * 0.3 + novelty(source) * 0.15 + (terms.some((t) => text.includes(t.toLowerCase())) ? 0.2 : 0) + (source.type === "api" ? 0.08 : source.type === "rss" ? 0.06 : source.type === "telegram_public" ? 0.04 : 0));
+  return clampScore(source.trustScore * 0.45 + sourceFreshness(source, at) * 0.3 + novelty(source) * 0.15 + (terms.some((t) => text.includes(t)) ? 0.2 : 0) + (source.type === "api" ? 0.08 : source.type === "rss" ? 0.06 : source.type === "telegram_public" ? 0.04 : 0));
 }
 
 function normalized(value) {
