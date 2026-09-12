@@ -144,3 +144,6 @@ ti/scraper/.tmp
 **/dist
 **/.env.*
 **/*secret*
+
+# Exclude dependency contents even when source-file patterns re-include their parents.
+**/node_modules/**
