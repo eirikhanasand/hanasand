@@ -79,7 +79,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "041_query_path_indexes", path: fileURLToPath(new URL("../../migrations/041_query_path_indexes.sql", import.meta.url)) },
   { version: "042_organization_workflow_events", path: fileURLToPath(new URL("../../migrations/042_organization_workflow_events.sql", import.meta.url)) },
   { version: "043_skip_duplicate_capture_rows", path: fileURLToPath(new URL("../../migrations/043_skip_duplicate_capture_rows.sql", import.meta.url)) },
-  { version: "044_exposure_query_statistics", path: fileURLToPath(new URL("../../migrations/044_exposure_query_statistics.sql", import.meta.url)) }
+  { version: "044_exposure_query_statistics", path: fileURLToPath(new URL("../../migrations/044_exposure_query_statistics.sql", import.meta.url)) },
+  { version: "046_processing_backlog_indexes", path: fileURLToPath(new URL("../../migrations/046_processing_backlog_indexes.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 const MAINTENANCE_MIGRATION_VERSIONS = new Set(["037_remove_parser_fallback_artifacts"]);
