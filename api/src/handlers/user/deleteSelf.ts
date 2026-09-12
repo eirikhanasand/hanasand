@@ -3,23 +3,28 @@ import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { revokeAllTokens } from '#utils/auth/session.ts'
 import { createAccountRestoreToken } from '#utils/auth/accountDeletion.ts'
+import { accountDeletionMail, deletionRequestLocation } from '#utils/auth/accountDeletionMail.ts'
+import { sendSystemMail } from '#utils/mail/system.ts'
+import { addressForUser } from '#utils/mail/helpers.ts'
 import { recordSystemEvent, userHasAdministrativeRole } from '#utils/systemEvent.ts'
 
-type PendingDeletionUser = User & { deletion_scheduled_at: string }
+type PendingDeletionUser = User & { deletion_scheduled_at: string, deletion_requested_at: string }
 
 export default async function deleteSelf(req: FastifyRequest, res: FastifyReply) {
-    const { valid } = await tokenWrapper(req, res)
-    if (!valid) {
+    const auth = await tokenWrapper(req, res)
+    if (!auth.valid || auth.impersonating || auth.authenticatedId !== auth.id) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const id = req.headers['id']
+    const id = auth.id
     if (!id || Array.isArray(id)) {
         return res.status(400).send({ error: 'No user provided.' })
     }
 
     try {
         const restore = createAccountRestoreToken()
+        const emailRestore = createAccountRestoreToken()
+        const location = await deletionRequestLocation(req.ip)
         const outcome = await withTransaction(async query => {
             await query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [id])
             await query(`
@@ -42,15 +47,36 @@ export default async function deleteSelf(req: FastifyRequest, res: FastifyReply)
                 UPDATE users
                 SET deletion_requested_at = NOW(),
                     deletion_scheduled_at = NOW() + INTERVAL '30 days',
-                    deletion_restore_token_hash = $2
+                    deletion_restore_token_hash = $2,
+                    deletion_email_token_hash = $3
                 WHERE id = $1
+                  AND active IS TRUE
+                  AND deletion_scheduled_at IS NULL
                   AND COALESCE(reserved, FALSE) IS FALSE
                 RETURNING id, name, avatar, active, deletion_requested_at, deletion_scheduled_at
-            `, [id, restore.hash])
+            `, [id, restore.hash, emailRestore.hash])
             const user = userResult.rows[0] as PendingDeletionUser | undefined
             if (!user) return { blocker: null, user: null }
 
             await revokeAllTokens({ userId: id, revokedBy: id }, query)
+            const address = await query(`
+                SELECT COALESCE(NULLIF(u.email, ''), NULLIF(ma.recovery_email, ''), NULLIF(ma.mail_address, '')) AS email
+                FROM users u LEFT JOIN mail_accounts ma ON ma.user_id = u.id WHERE u.id = $1
+            `, [id])
+            try {
+                await sendSystemMail({
+                    to: address.rows[0]?.email || addressForUser(id),
+                    ...accountDeletionMail({
+                        id, deletionScheduledAt: user.deletion_scheduled_at,
+                        requestedAt: user.deletion_requested_at, restoreToken: emailRestore.token,
+                        ip: req.ip, userAgent: String(req.headers['user-agent'] || ''),
+                        country: location.network?.country, city: location.network?.city,
+                    }),
+                })
+            } catch {
+                // Keep access and deletion state unchanged if the email cannot be sent.
+                throw new DeletionEmailError()
+            }
             return { blocker: null, user }
         })
 
@@ -97,6 +123,10 @@ export default async function deleteSelf(req: FastifyRequest, res: FastifyReply)
             user: outcome.user,
         })
     } catch (error) {
+        if (error instanceof DeletionEmailError) {
+            req.log.error('Account deletion email could not be sent')
+            return res.status(503).send({ error: 'We couldn’t send your confirmation email. Your account has not been scheduled for deletion. Please try again.' })
+        }
         console.error(`Database error: ${JSON.stringify(error)}`)
         return res.status(500).send({ error: 'Internal Server Error' })
     }
@@ -140,3 +170,5 @@ export async function accountDeletionOrganizationBlocker(userId: string, query: 
     if (!row || typeof row.id !== 'string' || typeof row.name !== 'string') return null
     return { id: row.id, name: row.name, activeApiKey: row.active_api_key === true }
 }
+
+class DeletionEmailError extends Error {}

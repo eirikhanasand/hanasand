@@ -23,7 +23,8 @@ export default async function deleteUser(req: FastifyRequest, res: FastifyReply)
             UPDATE users
             SET deletion_requested_at = NOW(),
                 deletion_scheduled_at = NOW() + INTERVAL '30 days',
-                deletion_restore_token_hash = NULL
+                deletion_restore_token_hash = NULL,
+                deletion_email_token_hash = NULL
             WHERE id = $1
               AND COALESCE(reserved, FALSE) IS FALSE
             RETURNING id, name, avatar, active, deletion_requested_at, deletion_scheduled_at

@@ -10,25 +10,27 @@ import { useEffect, useState } from 'react'
 
 type ResetPasswordPageProps = {
     userId: string
+    initialResetToken?: string
+    restored?: boolean
 }
 
 const authInputClass = 'h-10 rounded-lg border border-ui-border bg-ui-raised px-3.5 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/15'
 const authPrimaryButtonClass = 'group flex h-10 w-full items-center justify-between rounded-lg bg-ui-text px-3.5 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'
 const authSecondaryLinkClass = 'flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-muted transition hover:border-ui-primary hover:text-ui-text'
 
-export default function ResetPasswordPage({ userId }: ResetPasswordPageProps) {
+export default function ResetPasswordPage({ userId, initialResetToken = '', restored = false }: ResetPasswordPageProps) {
     const router = useRouter()
     const [busy, setBusy] = useState(false)
     const [done, setDone] = useState(false)
-    const [resetToken, setResetToken] = useState('')
-    const [tokenLoaded, setTokenLoaded] = useState(false)
+    const [resetToken, setResetToken] = useState(initialResetToken)
+    const [tokenLoaded, setTokenLoaded] = useState(Boolean(initialResetToken))
     const { condition: error, setCondition: setError } = useClearStateAfter()
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-        setResetToken(params.get('token') || '')
+        setResetToken(initialResetToken || params.get('token') || '')
         setTokenLoaded(true)
-    }, [])
+    }, [initialResetToken])
 
     async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
         e.preventDefault()
@@ -71,16 +73,16 @@ export default function ResetPasswordPage({ userId }: ResetPasswordPageProps) {
             <div className='grid w-full max-w-98 gap-4'>
                 <div className='grid justify-items-center gap-2 pb-2 text-center'>
                     <h1 className='text-[40px] font-semibold leading-none tracking-normal text-ui-text'>Hanasand</h1>
-                    <p className='text-sm font-medium text-ui-muted'>Update your console password.</p>
+                    <p className='text-sm font-medium text-ui-muted'>{restored ? 'Your account has been restored.' : 'Update your password.'}</p>
                 </div>
 
                 <div className='grid w-full gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-md md:p-5'>
                     <div className='grid gap-1 px-1'>
                         <div className='flex items-center justify-center gap-2 text-ui-text'>
                             <KeyRound className='h-4 w-4 text-ui-primary' />
-                            <h2 className='text-base font-medium tracking-normal'>New password</h2>
+                            <h2 className='text-base font-medium tracking-normal'>{restored ? 'Wasn’t you? Change your password.' : 'New password'}</h2>
                         </div>
-                        <p className='text-center text-xs leading-5 text-ui-muted'>Choose a new password for your Hanasand account.</p>
+                        <p className='text-center text-xs leading-5 text-ui-muted'>{restored ? 'If you didn’t request deletion, choose a new password. This will sign you out on all devices.' : 'Choose a new password for your Hanasand account.'}</p>
                     </div>
 
                     <ErrorNotice compact message={error as string | null} />
@@ -100,6 +102,8 @@ export default function ResetPasswordPage({ userId }: ResetPasswordPageProps) {
                             <input
                                 type='password'
                                 name='password'
+                                aria-label='New password'
+                                autoComplete='new-password'
                                 placeholder='New password'
                                 className={authInputClass}
                                 required
@@ -107,6 +111,8 @@ export default function ResetPasswordPage({ userId }: ResetPasswordPageProps) {
                             <input
                                 type='password'
                                 name='confirmPassword'
+                                aria-label='Confirm password'
+                                autoComplete='new-password'
                                 placeholder='Confirm password'
                                 className={authInputClass}
                                 required
@@ -121,6 +127,7 @@ export default function ResetPasswordPage({ userId }: ResetPasswordPageProps) {
                             </button>
                         </form>
                     )}
+                    {restored && !done ? <Link href='/dashboard' className={authSecondaryLinkClass}>Continue to dashboard</Link> : null}
                 </div>
             </div>
         </section>
