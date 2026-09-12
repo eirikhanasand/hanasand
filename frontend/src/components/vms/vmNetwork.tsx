@@ -34,7 +34,8 @@ export default function VMNetwork({ boxStyle, boxTitleStyle, vm, details }: VMDe
     )
 }
 
-function formatFlag(value: string) {
+function formatFlag(value: string | boolean) {
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No'
     if (!value) {
         return 'Not reported'
     }

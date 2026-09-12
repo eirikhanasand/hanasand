@@ -14,6 +14,7 @@ import formatDescription from '@/utils/vms/formatDescription'
 import formatStatus from '@/utils/vms/formatStatus'
 import { useRouter } from 'next/navigation'
 import RestartButtons from '../vms/restartButtons'
+import { vmActionStyle } from '../vms/actionStyle'
 
 export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
     const router = useRouter()
@@ -100,13 +101,13 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                     </div>
                     <div className='grid min-w-0 gap-2 justify-self-start sm:justify-self-end'>
                         <div className='flex flex-wrap items-center gap-2 sm:justify-end'>
-                            {!deleted && <Link href={`/vms/${encodeURIComponent(name)}/console`} aria-label={`Open ${name} console`} title='Open console' className='inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ui-border text-ui-primary hover:bg-ui-canvas'>
+                            {!deleted && <Link href={`/vms/${encodeURIComponent(name)}/console`} aria-label={`Open ${name} console`} title='Open console' className={`${vmActionStyle} w-9 text-ui-primary`}>
                                 <TerminalSquare className='h-4 w-4' />
                             </Link>}
                             {!deleted && <button
                                 type='button'
                                 onClick={openDetails}
-                                className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised'
+                                className={`${vmActionStyle} px-3 text-ui-primary`}
                                 data-vm-primary-action
                             >
                                 Open details
@@ -118,17 +119,17 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                             <p>{expired ? 'Recovery period ended. Permanent deletion is pending.' : `Restore before ${new Date(vm.delete_after!).toLocaleString()}.`}</p>
                             <p className='mt-1 text-ui-muted'>{vm.deletion_error ? 'Dashboard access is blocked. The host is retrying the shutdown.' : 'The VM is disabled while scheduled for deletion.'}</p>
                             {vm.deletion_error && <p role='alert' className='mt-2 text-ui-danger'>The host operation failed: {vm.deletion_error}</p>}
-                            <button type='button' disabled={busy || expired} onClick={() => void handleRestore()} className='mt-3 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 font-semibold disabled:opacity-50'>{busy ? 'Restoring…' : 'Restore VM'}</button>
+                            <button type='button' disabled={busy || expired} onClick={() => void handleRestore()} className={`${vmActionStyle} mt-3 px-3 text-ui-primary`}>{busy ? 'Restoring…' : 'Restore VM'}</button>
                         </div>}
-                        {!deleted && <details className='rounded-md border border-ui-border bg-ui-panel' data-vm-danger-actions>
-                            <summary className='cursor-pointer list-none px-3 py-2 text-xs font-semibold text-ui-muted transition hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
+                        {!deleted && <details data-vm-danger-actions>
+                            <summary className={`${vmActionStyle} w-full cursor-pointer list-none px-3 text-ui-primary [&::-webkit-details-marker]:hidden`}>
                                 Danger actions
                             </summary>
-                            <div className='border-t border-ui-border p-2'>
+                            <div className='pt-2'>
                                 <button
                                     type='button'
                                     onClick={() => { setDeleteError(''); setConfirmingDelete(true) }}
-                                    className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger transition hover:bg-ui-danger/15'
+                                    className={`${vmActionStyle} px-3 text-ui-danger`}
                                 >
                                     <Trash2 className='h-4 w-4' />
                                     Delete VM

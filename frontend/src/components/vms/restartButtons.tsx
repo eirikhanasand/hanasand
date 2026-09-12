@@ -6,6 +6,7 @@ import { Play, RefreshCcw, StopCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ErrorNotice from '../error/errorNotice'
+import { vmActionStyle } from './actionStyle'
 
 export default function RestartButtons({ vm, forceVisible = false }: { vm: VM, forceVisible?: boolean }) {
     const router = useRouter()
@@ -70,14 +71,14 @@ export default function RestartButtons({ vm, forceVisible = false }: { vm: VM, f
 
     return (
         <div onClick={handleClick} className={`${forceVisible ? 'flex' : 'flex'} min-w-0 flex-col items-end gap-2 rounded-md`}>
-            <div className='flex h-9 items-center justify-end gap-1'>
-                {!isRunning && <button type='button' aria-label={`Start ${vm.name}`} onClick={handleStart} disabled={disabled} className='grid h-9 w-9 place-items-center rounded-md text-ui-success transition hover:bg-ui-success disabled:cursor-wait disabled:opacity-50 dark:text-ui-success dark:hover:bg-ui-success/10'>
+            <div className='flex h-9 items-center justify-end gap-2'>
+                {!isRunning && <button type='button' aria-label={`Start ${vm.name}`} title='Start VM' onClick={handleStart} disabled={disabled} className={`${vmActionStyle} w-9 text-ui-success`}>
                     <Play className='w-4 h-4' />
                 </button>}
-                {isRunning && <button type='button' aria-label={`Restart ${vm.name}`} onClick={handleRestart} disabled={disabled} className='grid h-9 w-9 place-items-center rounded-md text-ui-primary transition hover:bg-ui-primary disabled:cursor-wait disabled:opacity-50 dark:text-ui-primary dark:hover:bg-ui-primary/10'>
+                {isRunning && <button type='button' aria-label={`Restart ${vm.name}`} title='Restart VM' onClick={handleRestart} disabled={disabled} className={`${vmActionStyle} w-9 text-ui-primary`}>
                     <RefreshCcw className='w-4 h-4' />
                 </button>}
-                {isRunning && <button type='button' aria-label={`Stop ${vm.name}`} onClick={handleStop} disabled={disabled} className='grid h-9 w-9 place-items-center rounded-md text-ui-danger transition hover:bg-ui-danger disabled:cursor-wait disabled:opacity-50 dark:text-ui-danger dark:hover:bg-ui-danger/10'>
+                {isRunning && <button type='button' aria-label={`Stop ${vm.name}`} title='Stop VM' onClick={handleStop} disabled={disabled} className={`${vmActionStyle} w-9 text-ui-danger`}>
                     <StopCircle className='w-4 h-4' />
                 </button>}
             </div>
