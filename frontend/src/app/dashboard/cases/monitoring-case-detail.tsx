@@ -60,9 +60,11 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
     return <article className='min-w-0 overflow-hidden rounded-xl border border-ui-border bg-ui-panel text-ui-text'>
         <div aria-hidden='true' className='h-1.5' style={{ backgroundColor: severityColor[item?.severity ?? ''] ?? 'transparent' }} />
         <header className='grid gap-3 border-b border-ui-border px-5 py-4 sm:px-6'>
-            <Link className='w-fit text-sm text-ui-primary' href={`/cases${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`}>← Cases</Link>
             <div className='flex flex-wrap items-center gap-3'>
-                <h1 className='min-w-0 flex-1 basis-full wrap-break-word text-xl font-semibold leading-10 lg:basis-0'>{item?.title || caseId}</h1>
+                <div className='flex min-w-0 flex-1 items-center gap-4'>
+                    <h1 className='min-w-0 wrap-break-word text-xl font-semibold leading-10'>{item?.title || caseId}</h1>
+                    <Link className='inline-flex h-10 shrink-0 items-center whitespace-nowrap text-sm text-ui-primary' href={`/cases${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`}>← Cases</Link>
+                </div>
                 {item && <div className='flex max-w-full flex-wrap items-center gap-2'>
                     <span className={`inline-flex h-10 min-w-28 items-center justify-center rounded-lg border px-3 text-sm font-medium capitalize ${item.status === 'open' ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning' : 'border-ui-success/30 bg-ui-success/10 text-ui-success'}`}>{item.status}</span>
                     <select aria-label='Severity' className={headerControl} value={item.severity} disabled={busy} onChange={event => void save({ severity: event.target.value })}>{['low', 'medium', 'high', 'critical'].map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select>
