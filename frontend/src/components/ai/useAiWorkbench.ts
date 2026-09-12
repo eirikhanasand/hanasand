@@ -522,7 +522,7 @@ export default function useAiWorkbench({
         const userId = getCookie('id') || 'default'
 
         return await new Promise<{ ok: boolean, output: string }>((resolve) => {
-            const ws = createWorkbenchSocket(`${config.url.cdn_wss}/share/${share.alias}/shell/${userId}/${session}`)
+            const ws = createWorkbenchSocket(`${config.url.api_wss}/share/${share.alias}/shell/${userId}/${session}`)
             const chunks: string[] = []
             let settled = false
             let inactivityTimer: number | null = null

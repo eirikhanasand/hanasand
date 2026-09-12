@@ -78,7 +78,7 @@ export default function useTerminal({ share, active }: TerminalProps) {
             terminalSessionRef.current = session
             const userCookie = getCookie('id')
             const terminalUser = userCookie || 'default'
-            const ws = new WebSocket(`${config.url.cdn_wss}/share/${shareAlias}/shell/${terminalUser}/${session}`)
+            const ws = new WebSocket(`${config.url.api_wss}/share/${shareAlias}/shell/${terminalUser}/${session}`)
             wsRef.current = ws
 
             ws.onopen = () => {

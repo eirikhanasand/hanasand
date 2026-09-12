@@ -18,7 +18,7 @@ export async function sendViaShareVm({
     body: string
 }): Promise<ToolResponse> {
     const normalized = normalizeRequestHeaders(headers)
-    const result = await fetch(`${config.url.cdn}/share/request/${shareAlias}`, {
+    const result = await fetch(`${config.url.api}/share/request/${shareAlias}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

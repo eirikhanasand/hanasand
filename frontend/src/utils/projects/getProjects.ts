@@ -11,7 +11,7 @@ export default async function getProjects({ id, token }: GetProjectProps): Promi
     const normalizedToken = decodeURIComponent(token)
 
     try {
-        const response = await fetch(`${config.url.cdn}/projects/user/${id}`, {
+        const response = await fetch(`${config.url.api}/projects/user/${id}`, {
             headers: {
                 'Authorization': `Bearer ${normalizedToken}`,
                 id

@@ -12,7 +12,7 @@ export async function getTree({ id, token, userId }: GetTreeProps): Promise<Tree
     const timeout = setTimeout(() => controller.abort(), Math.max(config.abortTimeout, 10000))
 
     try {
-        const response = await fetch(`${config.url.cdn}/share/tree/${id}`, {
+        const response = await fetch(`${config.url.api}/share/tree/${id}`, {
             headers: getShareHeaders(token, userId),
             cache: 'no-store',
             signal: controller.signal

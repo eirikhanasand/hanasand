@@ -11,12 +11,12 @@ export async function handleMessage(
 ) {
     try {
         const msg = JSON.parse(rawMessage.toString())
-        if (msg.type !== 'edit') {
+        if (msg.type !== 'edit' || typeof msg.content !== 'string') {
             return
         }
 
         broadcastUpdate(id, socket, msg.content, clients)
-        queueSave(id, msg.content)
+        queueSave(id, socket, msg.content)
     } catch (error) {
         console.error(`Invalid WebSocket message: ${error}`)
     }
@@ -42,10 +42,9 @@ function broadcastUpdate(id: string, sender: WS, content: string, Clients: Map<s
     }
 }
 
-function queueSave(id: string, content: string) {
+function queueSave(id: string, socket: WS, content: string) {
     if (pendingUpdates.has(id)) {
         const entry = pendingUpdates.get(id)!
-        entry.content = content
         clearTimeout(entry.timer)
     }
 
@@ -53,15 +52,17 @@ function queueSave(id: string, content: string) {
         const entry = pendingUpdates.get(id)
         if (!entry) return
         try {
-            await run(
-                'UPDATE share SET content = $1, timestamp = NOW() WHERE id = $2',
+            const result = await run(
+                'UPDATE share SET content = $1, timestamp = NOW(), updated_at = NOW() WHERE id = $2 RETURNING id',
                 [entry.content, id]
             )
-            console.log(`Saved share ${id} to DB`)
+            if (!result.rows.length) throw new Error('Share no longer exists')
+            if (socket.readyState === WS.OPEN) socket.send(JSON.stringify({ type: 'ack', content: entry.content }))
         } catch (error) {
             console.error(`Failed to save share ${id}: ${error}`)
+            if (socket.readyState === WS.OPEN) socket.send(JSON.stringify({ type: 'error', error: 'Unable to save your changes. Please retry.' }))
         } finally {
-            pendingUpdates.delete(id)
+            if (pendingUpdates.get(id) === entry) pendingUpdates.delete(id)
         }
     }, 1000)
 

@@ -49,8 +49,6 @@ export default function isPublicProductPath(path: string | null | undefined) {
         || pathname.startsWith('/article/')
         || pathname === '/articles'
         || pathname.startsWith('/articles/')
-        || pathname === '/s'
-        || pathname.startsWith('/s/')
         || pathname === '/test'
         || pathname.startsWith('/test/')
         || pathname === '/eirik'

@@ -55,7 +55,7 @@ export default function ClientPage({
     const [remoteNotice, setRemoteNotice] = useState<string | null>(null)
     const [conflict, setConflict] = useState<ShareConflict | null>(null)
     const [clickedWord, setClickedWord] = useState<string | null>(null)
-    const [editingContent, setEditingContent] = useState<string>('')
+    const [editingContent, setEditingContent] = useState<string>(serverShare?.content || '')
     const [displayLineNumbers, setDisplayLineNumbers] = useState(true)
     const [syntaxHighlighting, setSyntaxHighlighting] = useState(true)
     const [box, setBox] = useState(false)
@@ -74,6 +74,7 @@ export default function ClientPage({
     const [hydrated, setHydrated] = useState(false)
     const [explorerPanelRequest, setExplorerPanelRequest] = useState<{ panel: 'files' | 'search'; nonce: number } | null>(null)
     const hasCreatedWorkspace = useRef(false)
+    const [createAttempt, setCreateAttempt] = useState(0)
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const maxWidth = 'max-w-full'
     const runtimeCapability = useMemo(() => getShareRuntimeCapability({
@@ -175,7 +176,7 @@ export default function ClientPage({
         }
 
         void createWorkspace()
-    }, [autoCreate, chatOpen, editingContent, id, replaceUrlOnCreate, setError])
+    }, [autoCreate, createAttempt, id, replaceUrlOnCreate, setError])
 
     return (
         <div className='flex w-full h-full max-w-[100vw] min-w-0 overflow-hidden gap-1 p-1 md:gap-2 md:p-2'>
@@ -194,7 +195,7 @@ export default function ClientPage({
                     panelRequest={explorerPanelRequest}
                 />
             </div>
-            <div className={`flex-1 flex flex-col min-h-full min-w-0 w-full gap-2 overflow-hidden text-ui-text ${maxWidth}`}>
+            <div className={`flex-1 flex flex-col min-h-0 min-w-0 w-full gap-2 overflow-hidden text-ui-text ${maxWidth}`}>
                 <div className='flex min-h-10 items-center justify-between gap-2 rounded-xl border border-ui-border bg-ui-panel px-2 py-1.5 shadow-lg backdrop-blur-md'>
                     <div className='min-w-0 flex flex-1 items-center gap-2'>
                         {chatOpen ? (
@@ -357,7 +358,15 @@ export default function ClientPage({
             />
             <DisplayError
                 error={error}
-                onRetry={() => window.location.reload()}
+                onRetry={() => {
+                    if (!workspaceCreated) {
+                        hasCreatedWorkspace.current = false
+                        setError(null)
+                        setCreateAttempt(attempt => attempt + 1)
+                    } else {
+                        setEditorPatch({ value: editingContent, nonce: Date.now() })
+                    }
+                }}
                 onDismiss={() => setError(null)}
             />
         </div>

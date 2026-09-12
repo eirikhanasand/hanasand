@@ -111,7 +111,7 @@ export function useShareCodeSocket({
             return
         }
 
-        const ws = new WebSocket(`${config.url.cdn_wss}/share/${shareId}`)
+        const ws = new WebSocket(`${config.url.api_wss}/share/${shareId}`)
         wsRef.current = ws
 
         ws.onopen = () => {
@@ -135,7 +135,7 @@ export function useShareCodeSocket({
                     content: pendingEditRef.current,
                 }))
                 pendingEditRef.current = null
-                onSaveStateChange?.('saved')
+                onSaveStateChange?.('saving')
             }
         }
 
@@ -186,7 +186,13 @@ export function useShareCodeSocket({
                     })
                 }
 
-                if (message.type === 'ack') {
+                if (message.type === 'error') {
+                    onSaveStateChange?.('queued')
+                    setError(message.error || 'Unable to save your changes. Please retry.')
+                }
+
+                if (message.type === 'ack' && message.content === latestContentRef.current) {
+                    setError(null)
                     onSaveStateChange?.('saved')
                 }
             } catch (error) {

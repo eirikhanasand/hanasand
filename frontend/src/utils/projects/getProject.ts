@@ -17,7 +17,7 @@ export default async function getProject({ alias, token, userId }: GetProjectPro
     const timeout = setTimeout(() => controller.abort(), Math.max(config.abortTimeout, 10000))
 
     try {
-        const response = await fetch(`${config.url.cdn}/project/${alias}`, {
+        const response = await fetch(`${config.url.api}/project/${alias}`, {
             headers: getShareHeaders(token, userId),
             signal: controller.signal,
         })

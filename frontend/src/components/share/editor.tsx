@@ -148,7 +148,7 @@ export default function Editor({
     }, [codeRef, editingContent, searchParams])
 
     return (
-        <main aria-label='Code editor' className='relative h-full w-full overflow-hidden rounded-lg border border-ui-border'>
+        <main aria-label='Code editor' className='relative min-h-0 flex-1 w-full overflow-hidden rounded-lg border border-ui-border bg-ui-canvas'>
             {editingContent.trim().length <= 0 && (
                 <EmptyEditorState
                     displayLineNumbers={displayLineNumbers}

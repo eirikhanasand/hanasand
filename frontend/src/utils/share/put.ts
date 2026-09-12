@@ -8,7 +8,7 @@ export async function updateShare(id: string, updates: Updates): Promise<Share |
     const userId = getCookie('id') || ''
 
     try {
-        const response = await fetch(`${config.url.cdn}/share/${id}`, {
+        const response = await fetch(`${config.url.api}/share/${id}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',

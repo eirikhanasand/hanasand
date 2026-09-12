@@ -5,7 +5,7 @@ export async function lockShare(share: Share, id: string, token: string): Promis
     const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
-        const response = await fetch(`${config.url.cdn}/share/lock/${share.id}`, {
+        const response = await fetch(`${config.url.api}/share/lock/${share.id}`, {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,

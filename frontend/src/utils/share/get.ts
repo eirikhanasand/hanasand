@@ -12,7 +12,7 @@ export async function getShare({ id, token, userId }: GetShareProps): Promise<Sh
     const timeout = setTimeout(() => controller.abort(), Math.max(config.abortTimeout, 10000))
 
     try {
-        const response = await fetch(`${config.url.cdn}/share/${id}`, {
+        const response = await fetch(`${config.url.api}/share/${id}`, {
             headers: getShareHeaders(token, userId),
             cache: 'no-store',
             signal: controller.signal

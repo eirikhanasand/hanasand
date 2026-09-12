@@ -33,7 +33,7 @@ export default async function postShare({
     )
 
     try {
-        const response = await fetch(`${config.url.cdn}/share`, {
+        const response = await fetch(`${config.url.api}/share`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
