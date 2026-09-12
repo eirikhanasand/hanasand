@@ -25,6 +25,28 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
     const verified = useRef<ServiceStatus | undefined>(isVerifiedStatus(serviceStatus) ? serviceStatus : undefined)
 
     useEffect(() => {
+        if (mode === 'incident') {
+            const initial = serviceStatus.incidents.find(item => item.id === incidentId || item.aliases?.includes(incidentId || ''))
+            if (initial?.status === 'resolved') return
+            let pending = false
+            const controller = new AbortController()
+            async function refreshIncident() {
+                if (pending || document.hidden) return
+                pending = true
+                try {
+                    const response = await fetch(`/api/status?incident=${encodeURIComponent(incidentId || '')}`, { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]) })
+                    if (!response.ok) return
+                    const next = await response.json() as ServiceStatus
+                    if (!Array.isArray(next.incidents) || !next.incidents.length) return
+                    setCurrentStatus(next)
+                    if (next.incidents[0].status === 'resolved') window.clearInterval(refresh)
+                } catch { /* Keep the last incident report when a refresh fails. */ }
+                finally { pending = false }
+            }
+            const refresh = window.setInterval(refreshIncident, 30_000)
+            if (!initial) void refreshIncident()
+            return () => { controller.abort(); window.clearInterval(refresh) }
+        }
         setNow(Date.now())
         try {
             const saved = JSON.parse(localStorage.getItem('hanasand-verified-status') || 'null') as ServiceStatus | null
@@ -68,7 +90,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
             window.clearInterval(clock)
             window.clearInterval(refresh)
         }
-    }, [])
+    }, [mode, incidentId, serviceStatus])
 
     const checks = currentStatus.checks
     const incidents = currentStatus.incidents
@@ -80,6 +102,22 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
             ? 'Some systems degraded'
             : 'Service interruption'
     const incident = incidentId ? incidents.find(item => item.id === incidentId || item.aliases?.includes(incidentId)) : null
+    if (mode === 'incident') {
+        return (
+            <main className='mx-auto grid max-w-5xl gap-6 pb-8'>
+                <Link href='/status/incidents' className='text-sm font-semibold text-ui-primary'>Incident history</Link>
+                {incident ? (
+                    <IncidentReport key={incident.id} incident={incident} />
+                ) : (
+                    <section className='rounded-md border border-ui-border bg-ui-panel p-5'>
+                        <h1 className='text-2xl font-semibold text-ui-text'>Incident not found</h1>
+                        <p className='mt-2 text-sm text-ui-muted'>This incident is not available in the current {UPTIME_WINDOW} status history.</p>
+                    </section>
+                )}
+            </main>
+        )
+    }
+
     const incidentsSection = (
         <section className='rounded-md border border-ui-border bg-ui-panel p-4'>
             <h2 className='text-xl font-semibold text-ui-text'>Recent incidents</h2>
@@ -103,21 +141,6 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
         </section>
     )
 
-    if (mode === 'incident') {
-        return (
-            <main className='mx-auto grid max-w-5xl gap-6 pb-8'>
-                <Link href='/status/incidents' className='text-sm font-semibold text-ui-primary'>Incident history</Link>
-                {incident ? (
-                    <IncidentReport key={incident.id} incident={incident} />
-                ) : (
-                    <section className='rounded-md border border-ui-border bg-ui-panel p-5'>
-                        <h1 className='text-2xl font-semibold text-ui-text'>Incident not found</h1>
-                        <p className='mt-2 text-sm text-ui-muted'>This incident is not available in the current {UPTIME_WINDOW} status history.</p>
-                    </section>
-                )}
-            </main>
-        )
-    }
 
     if (mode === 'incidents') {
         return (

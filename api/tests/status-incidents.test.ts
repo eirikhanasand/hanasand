@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { buildIncidents } from '../src/handlers/status/get.ts'
+import { buildIncidents, selectStatusIncident } from '../src/handlers/status/get.ts'
 
 const base = { service: 'dark-web-monitoring', check_name: 'Latest activity', status: 'down' as const, message: 'Latest customer activity is stale (147 minutes).' }
 test('reports recorded recovery, not the current check time, with newest evidence first', () => {
@@ -30,4 +30,16 @@ test('a healthy result separates incidents even within fifteen minutes', () => {
     expect(incidents).toHaveLength(2)
     expect(incidents[0].status).toBe('investigating')
     expect(incidents[1].status).toBe('resolved')
+})
+
+test('incident detail excludes unrelated history and preserves alias links and evidence', () => {
+    const selected = { id: 'incident', aliases: ['old-link'], updates: [{ at: '2026-09-11', evidence: 'Original evidence' }] }
+    const source = { checks: [{ message: 'not needed' }], history: [{ incident_ids: ['unrelated'] }], incidents: [selected, ...Array.from({ length: 10000 }, (_, index) => ({ id: `other-${index}`, updates: [{ evidence: 'x'.repeat(1000) }] }))], history_available: true }
+    const detail = selectStatusIncident(source, 'old-link')
+    expect(detail.incidents).toEqual([selected])
+    expect(detail.history).toEqual([])
+    expect(detail.checks).toEqual([])
+    expect(JSON.stringify(detail).length).toBeLessThan(1000)
+    expect(selectStatusIncident(source, 'missing').incidents).toEqual([])
+    expect(source.incidents).toHaveLength(10001)
 })

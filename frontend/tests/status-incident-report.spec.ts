@@ -2,12 +2,12 @@ import { expect, test } from '@playwright/test'
 
 test('incident report separates evidence and shows newest updates in bounded pages', async ({ page }) => {
     const started = '2026-07-24T22:14:01.048Z'
-    const id = 'dark-web-monitoring-latest-activity-2026-07-24t22-14-01-048z'
+    const id = 'fixture-incident-report'
     const at = new Date().toISOString()
     const names = [['core', 'API health'], ['website', 'Public website'], ['threat-intelligence', 'Public search'], ['threat-intelligence', 'Processing backlog'], ['threat-intelligence', 'Source collection'], ['browser-sandbox', 'Browser workspace'], ['dark-web-monitoring', 'Monitoring workspace'], ['dark-web-monitoring', 'Latest activity']]
     const updates = Array.from({ length: 1001 }, (_, index) => ({ at: new Date(Date.parse(started) + index * 60000).toISOString(), status: index === 1000 ? 'resolved' : 'monitoring', message: `Update ${index}`, evidence: `Recorded evidence ${index}` }))
     const payload = { overall: 'up', monitoring: 'live', generated_at: at, checks: names.map(([service, check_name]) => ({ service, check_name, status: 'up', checked_at: at, latency_ms: 10, uptime_30d: '99.9' })), history: [], incidents: [{ id, service: 'dark-web-monitoring', check_name: 'Latest activity', title: 'Latest activity interruption', impact: 'Outage', status: 'resolved', started_at: started, resolved_at: updates.at(-1)!.at, summary: 'Recent monitoring activity was delayed.', cause: 'No confirmed root cause was recorded.', updates }] }
-    await page.route('**/api/status', route => route.fulfill({ json: payload }))
+    await page.route('**/api/status?incident=*', route => route.fulfill({ json: payload }))
     await page.goto(`/status/incidents/${id}`)
     const report = page.getByRole('article')
     await expect(report.getByRole('heading', { name: 'Impact', exact: true })).toBeVisible()

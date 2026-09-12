@@ -14,7 +14,7 @@ export const metadata: Metadata = buildRouteMetadata({
 
 export default async function page({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const serviceStatus = await getPublicStatus()
+    const serviceStatus = await getPublicStatus({ incidentId: id })
 
     return (
         <div className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas px-4 py-6 text-ui-text md:px-8'>

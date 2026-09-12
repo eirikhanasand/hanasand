@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { ServiceIncident } from '@/utils/status/getStatus'
 
 const PAGE_SIZE = 25
@@ -9,7 +9,7 @@ const labels: Record<string, string> = { investigating: 'Issue detected', monito
 
 export default function IncidentReport({ incident }: { incident: ServiceIncident }) {
     const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-    const updates = [...incident.updates].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+    const updates = useMemo(() => [...incident.updates].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)), [incident.updates])
     const resolved = incident.status === 'resolved'
     const cause = incident.cause && incident.cause.trim() !== incident.summary.trim()
         ? incident.cause : 'No confirmed root cause was recorded. Monitoring observations alone do not establish why the incident happened.'

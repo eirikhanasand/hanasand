@@ -40,9 +40,27 @@ let historyRefresh: Promise<void> | null = null
 let historyRetryAt = 0
 let historySnapshot: Awaited<ReturnType<typeof loadStatusPayload>> | null = null
 
-export default async function getStatus(req: FastifyRequest<{ Querystring: { summary?: string } }>, res: FastifyReply) {
+export default async function getStatus(req: FastifyRequest<{ Querystring: { summary?: string, incident?: string } }>, res: FastifyReply) {
     res.header('Cache-Control', 'no-store')
-    return res.send(await statusPayload(req.query?.summary === 'true'))
+    const payload = await statusPayload(!req.query?.incident && req.query?.summary === 'true')
+    if (!req.query?.incident) return res.send(payload)
+    const selected = selectStatusIncident(payload as ReturnType<typeof withHistory>, req.query.incident)
+    if (selected.history_available) return res.send(selected)
+    // On a fresh replica, read only this report from the persisted snapshot;
+    // do not wait for the background 90-day history rebuild.
+    const saved = await run(`
+        SELECT payload->>'generated_at' AS generated_at,
+            (SELECT COALESCE(jsonb_agg(incident), '[]'::jsonb)
+             FROM jsonb_array_elements(payload->'incidents') incident
+             WHERE incident->>'id' = $1 OR incident->'aliases' ? $1) AS incidents
+        FROM service_status_snapshots WHERE id = 'history-v2'
+    `, [req.query.incident])
+    if (!saved.rows.length) return res.status(503).send({ error: 'Incident history is temporarily unavailable.' })
+    return res.send({ ...selected, ...saved.rows[0], history_available: true })
+}
+
+export function selectStatusIncident<T extends { checks: unknown[], history: unknown[], incidents: { id: string, aliases?: string[] }[] }>(payload: T, id: string) {
+    return { ...payload, checks: [], history: [], incidents: payload.incidents.filter(incident => incident.id === id || incident.aliases?.includes(id)) }
 }
 
 async function statusPayload(summary: boolean) {
