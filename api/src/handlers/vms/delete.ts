@@ -1,42 +1,24 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import run from '#db'
-import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import { vmViewer } from '#utils/vms/access.ts'
 import { recordSystemEvent } from '#utils/systemEvent.ts'
+import { restoreVm, scheduleVmDeletion } from '#utils/vms/deletion.ts'
 
-export default async function deleteVM(req: FastifyRequest, res: FastifyReply) {
-    const { valid, id: userId } = await tokenWrapper(req, res)
-    const { valid: validRole } = await hasRole(req, res, 'system_admin')
-    if (!valid || !validRole) {
-        return res.status(401).send({ error: 'Unauthorized.' })
-    }
+export default async function deleteVM(req: FastifyRequest, res: FastifyReply) { return changeDeletion(req, res, false) }
+export async function restoreVM(req: FastifyRequest, res: FastifyReply) { return changeDeletion(req, res, true) }
 
+async function changeDeletion(req: FastifyRequest, res: FastifyReply, restore: boolean) {
+    const viewer = await vmViewer(req, res)
+    if (!viewer) return
+    if (!viewer.admin) return res.status(403).send({ error: 'Only an administrator can delete or restore VMs.' })
     const { id } = req.params as { id: string }
-    if (!id) {
-        return res.status(400).send({ error: 'Missing VM id parameter' })
-    }
-
+    if (!id) return res.status(400).send({ error: 'Missing VM name.' })
     try {
-        const result = await run(
-            'DELETE FROM vms WHERE name = $1 RETURNING *',
-            [id]
-        )
-
-        if (result.rows.length === 0) {
-            return res.status(404).send({ error: 'VM not found' })
-        }
-
-        await recordSystemEvent(req, {
-            actionType: 'vm.deleted',
-            actorId: userId || null,
-            targetType: 'vm',
-            targetId: id,
-            context: { vm: result.rows[0] },
-        })
-
-        return res.send({ message: 'VM deleted successfully', vm: result.rows[0] })
+        const vm = restore ? await restoreVm(id) : await scheduleVmDeletion(id, (req.body as { confirmation?: string } | undefined)?.confirmation)
+        await recordSystemEvent(req, { actionType: restore ? 'vm.restored' : 'vm.deletion_scheduled', actorId: viewer.id, targetType: 'vm', targetId: id, context: { deleteAfter: vm.delete_after } })
+        return res.send({ message: restore ? 'VM restored.' : 'VM stopped. You can restore it for 30 days.', vm })
     } catch (error) {
-        console.log(error)
-        return res.status(500).send({ error: 'Internal server error' })
+        req.log.error({ err: error, id }, 'Unable to change VM deletion state.')
+        const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 503
+        return res.status(status).send({ error: error instanceof Error ? error.message : 'Unable to update the VM. Try again.' })
     }
 }

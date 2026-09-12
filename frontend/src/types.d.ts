@@ -439,6 +439,9 @@ type DockerTelemetryResponse = {
 }
 
 type VM = {
+    deleted_at?: string | null
+    delete_after?: string | null
+    deletion_error?: string | null
     name: string
     owner: string
     created_by: string

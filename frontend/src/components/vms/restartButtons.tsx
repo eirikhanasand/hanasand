@@ -15,7 +15,7 @@ export default function RestartButtons({ vm, forceVisible = false }: { vm: VM, f
     const status = (vm.status || '').toLowerCase()
     const isRunning = status === 'running' || status === 'frozen'
     const canManage = Boolean(vm.name)
-    const disabled = loading || !hydrated
+    const disabled = loading || !hydrated || Boolean(vm.deleted_at)
 
     useEffect(() => {
         setHydrated(true)

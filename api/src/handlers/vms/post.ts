@@ -1,3 +1,4 @@
+import { vmLifecycleLock } from '#utils/vms/lifecycleLock.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import { loadSQL } from '#utils/loadSQL.ts'
@@ -45,9 +46,11 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     if (!canAssignOwner && !/^[a-z][a-z0-9-]{0,61}[a-z0-9]$/.test(name)) return res.status(400).send({ error: 'Use 2–63 lowercase letters, numbers or hyphens, starting with a letter.' })
 
     try {
-        if (canAssignOwner) await run(`
+        return await vmLifecycleLock(name, async () => {
+            if (canAssignOwner) await run(`
             DELETE FROM vms
             WHERE name = $1
+              AND deleted_at IS NULL
               AND owner = 'ownerless'
               AND EXISTS (
                   SELECT 1
@@ -58,8 +61,8 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
               )
         `, [name])
 
-        const existingResult = await run(`
-            SELECT name, owner, created_by, access_users
+            const existingResult = await run(`
+            SELECT name, owner, created_by, access_users, deleted_at
             FROM vms
             WHERE LOWER(name) = LOWER($1)
             ORDER BY
@@ -67,21 +70,24 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
                 CASE WHEN name = $1 THEN 0 ELSE 1 END
             LIMIT 1
         `, [name])
-        const existing = existingResult.rows[0] as {
-            name: string
-            owner: string
-            created_by: string
-            access_users: string[]
-        } | undefined
+            const existing = existingResult.rows[0] as {
+                name: string
+                owner: string
+                created_by: string
+                access_users: string[]
+                deleted_at?: string | null
+            } | undefined
 
-        if (existing && !canAssignOwner) return res.status(409).send({ error: 'VM already exists.' })
+            if (existing?.deleted_at) return res.status(409).send({ error: 'This VM is scheduled for deletion. Restore it before making changes.' })
 
-        if (existing) {
-            const nextOwner = owner === 'ownerless' ? existing.owner : owner
-            const nextCreatedBy = created_by === 'unknown' ? existing.created_by : created_by
-            const nextAccessUsers = (access_users ?? []).length ? access_users : existing.access_users
+            if (existing && !canAssignOwner) return res.status(409).send({ error: 'VM already exists.' })
 
-            const result = await run(`
+            if (existing) {
+                const nextOwner = owner === 'ownerless' ? existing.owner : owner
+                const nextCreatedBy = created_by === 'unknown' ? existing.created_by : created_by
+                const nextAccessUsers = (access_users ?? []).length ? access_users : existing.access_users
+
+                const result = await run(`
                 UPDATE vms
                 SET name = $1,
                     owner = $2,
@@ -92,27 +98,27 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
                 RETURNING *
             `, [name, nextOwner, nextCreatedBy, JSON.stringify(nextAccessUsers ?? []), existing.name, config.vm_host_id])
 
-            await provisionIfLocal(name, req, body.provision_local !== false)
+                await provisionIfLocal(name, req, body.provision_local !== false)
 
-            await recordSystemEvent(req, {
-                actionType: 'vm.access.updated',
-                actorId,
-                targetType: 'vm',
-                targetId: name,
-                context: {
-                    owner: nextOwner,
-                    creator: nextCreatedBy,
-                    accessUsers: nextAccessUsers ?? [],
-                    previousOwner: existing.owner,
-                    previousCreator: existing.created_by,
-                    previousAccessUsers: existing.access_users ?? [],
-                },
-            })
+                await recordSystemEvent(req, {
+                    actionType: 'vm.access.updated',
+                    actorId,
+                    targetType: 'vm',
+                    targetId: name,
+                    context: {
+                        owner: nextOwner,
+                        creator: nextCreatedBy,
+                        accessUsers: nextAccessUsers ?? [],
+                        previousOwner: existing.owner,
+                        previousCreator: existing.created_by,
+                        previousAccessUsers: existing.access_users ?? [],
+                    },
+                })
 
-            return res.status(201).send(result.rows[0])
-        }
+                return res.status(201).send(result.rows[0])
+            }
 
-        if (canAssignOwner) await run(`
+            if (canAssignOwner) await run(`
             UPDATE vms
             SET name = $1
             WHERE LOWER(name) = LOWER($1)
@@ -120,36 +126,37 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
               AND NOT EXISTS (SELECT 1 FROM vms WHERE name = $1)
         `, [name])
 
-        const query = canAssignOwner ? await loadSQL('insertVM.sql') : 'INSERT INTO vms (name, owner, created_by, access_users) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO NOTHING RETURNING *'
-        const result = await run(query, [name, owner, created_by, JSON.stringify(access_users ?? [])])
-        if (!result.rows.length) {
-            return res.status(409).send({ error: 'VM already exists' })
-        }
+            const query = canAssignOwner ? await loadSQL('insertVM.sql') : 'INSERT INTO vms (name, owner, created_by, access_users) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO NOTHING RETURNING *'
+            const result = await run(query, [name, owner, created_by, JSON.stringify(access_users ?? [])])
+            if (!result.rows.length) {
+                return res.status(409).send({ error: 'VM already exists' })
+            }
 
-        await run('UPDATE vms SET primary_host = $2 WHERE name = $1', [name, config.vm_host_id])
-        await provisionIfLocal(name, req, body.provision_local !== false)
+            await run('UPDATE vms SET primary_host = $2 WHERE name = $1', [name, config.vm_host_id])
+            await provisionIfLocal(name, req, body.provision_local !== false)
 
-        await syncUserCertificatesToVm({
-            vmName: name,
-            userIds: [owner, created_by, ...(access_users ?? [])]
-        }).catch((error) => {
-            req.log.warn({ err: error, vmName: name }, 'Unable to synchronize user certificates to the VM after creation.')
-            void recordVmProvisioningError(name, error, 'certificate_sync')
+            await syncUserCertificatesToVm({
+                vmName: name,
+                userIds: [owner, created_by, ...(access_users ?? [])]
+            }).catch((error) => {
+                req.log.warn({ err: error, vmName: name }, 'Unable to synchronize user certificates to the VM after creation.')
+                void recordVmProvisioningError(name, error, 'certificate_sync')
+            })
+
+            await recordSystemEvent(req, {
+                actionType: 'vm.created',
+                actorId,
+                targetType: 'vm',
+                targetId: name,
+                context: {
+                    owner,
+                    creator: created_by,
+                    accessUsers: access_users ?? [],
+                },
+            })
+
+            return res.status(201).send(result.rows[0])
         })
-
-        await recordSystemEvent(req, {
-            actionType: 'vm.created',
-            actorId,
-            targetType: 'vm',
-            targetId: name,
-            context: {
-                owner,
-                creator: created_by,
-                accessUsers: access_users ?? [],
-            },
-        })
-
-        return res.status(201).send(result.rows[0])
     } catch (error) {
         req.log.error({ err: error, vmName: name }, 'Unable to create or provision VM.')
         void recordVmProvisioningError(name || 'unknown', error, 'create_or_provision')

@@ -13,7 +13,7 @@ export default async function deleteVMs(req: FastifyRequest, res: FastifyReply) 
     }
 
     try {
-        const result = await run('DELETE FROM vms WHERE name = ANY($1) RETURNING *', [vms])
+        const result = await run('DELETE FROM vms WHERE name = ANY($1) AND deleted_at IS NULL RETURNING *', [vms])
         return res.status(200).send(result.rows)
     } catch (error) {
         console.log(error)

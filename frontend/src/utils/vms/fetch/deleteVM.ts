@@ -4,7 +4,7 @@ import config from '@/config'
 import fetchWithRetry from '@/utils/fetchWithRetry'
 import { getCookie } from '../../cookies/cookies'
 
-export default async function deleteVM(vmId: string): Promise<{ status: number, message: string }> {
+export default async function deleteVM(vmId: string, confirmation: string): Promise<{ status: number, message: string }> {
     try {
         const token = getCookie('access_token')
         const id = getCookie('id')
@@ -15,20 +15,20 @@ export default async function deleteVM(vmId: string): Promise<{ status: number, 
             }
         }
 
-        const response = await fetchWithRetry(`${config.url.api}/vm/${vmId}`, {
+        const response = await fetchWithRetry(`${config.url.api}/vm/${encodeURIComponent(vmId)}`, {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}`, id },
+            headers: { 'Authorization': `Bearer ${token}`, id, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ confirmation }),
             timeoutMs: config.abortTimeout,
             retries: 2,
         })
 
-        if (!response.ok) {
-            throw new Error(await response.text())
-        }
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) return { status: response.status, message: payload.error || 'Unable to stop the VM. Try again.' }
 
         return {
             status: response.status,
-            message: `Deleted VM ${vmId}.`
+            message: 'VM stopped. You can restore it for 30 days.'
         }
     } catch (error) {
         console.log(error)

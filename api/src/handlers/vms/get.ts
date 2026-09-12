@@ -6,7 +6,7 @@ import { vmViewer, requireVmAccess } from '#utils/vms/access.ts'
 
 export default async function getVM(req: FastifyRequest, res: FastifyReply) {
     const { id, user } = req.params as { id?: string; user?: string }
-    const viewer = id ? await requireVmAccess(req, res, id) : await vmViewer(req, res)
+    const viewer = id ? await requireVmAccess(req, res, id, true) : await vmViewer(req, res)
     if (!viewer) return
     if (user && !viewer.admin && user !== viewer.id) return res.status(403).send({ error: 'Forbidden.' })
 

@@ -139,6 +139,12 @@ fi
 if [ -z "${LXC_BIN}" ] || ! "${LXC_BIN}" info "$user" >/dev/null 2>&1; then
     exit 1
 fi
+# Pending deletion must never wake a VM or open an SSH session.
+deletion_deadline=$("${LXC_BIN}" config get "$user" user.hanasand.delete_after) || exit 1
+if [ -n "$deletion_deadline" ]; then
+    echo "This VM is scheduled for deletion. Restore it in the dashboard first." >&2
+    exit 1
+fi
 wait_ready() {
     for _ in $(seq 1 90); do
         "${LXC_BIN}" exec "$1" -- true >/dev/null 2>&1 && return 0
@@ -179,6 +185,12 @@ if [[ ! "$vm" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$ ]]; then
 fi
 if [ -z "${LXC_BIN}" ] || ! "${LXC_BIN}" info "$vm" >/dev/null 2>&1; then
     echo "VM '$vm' not found." >&2
+    exit 1
+fi
+# Pending deletion must never wake a VM or open an SSH session.
+deletion_deadline=$("${LXC_BIN}" config get "$vm" user.hanasand.delete_after) || exit 1
+if [ -n "$deletion_deadline" ]; then
+    echo "This VM is scheduled for deletion. Restore it in the dashboard first." >&2
     exit 1
 fi
 wait_ready() {

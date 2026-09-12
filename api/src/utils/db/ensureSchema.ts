@@ -215,6 +215,7 @@ export default async function ensureSchema() {
     await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS failover_enabled BOOLEAN NOT NULL DEFAULT FALSE')
     await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS primary_host TEXT NOT NULL DEFAULT $$ovhcloud$$')
     await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS failover_host TEXT')
+    await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ, ADD COLUMN IF NOT EXISTS delete_after TIMESTAMPTZ, ADD COLUMN IF NOT EXISTS deletion_restore JSONB, ADD COLUMN IF NOT EXISTS deletion_error TEXT')
     if ((process.env.VM_HOST_ID || '') === 'inspur') {
         await run(`
             UPDATE vms v

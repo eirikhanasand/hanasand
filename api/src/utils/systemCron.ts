@@ -284,6 +284,16 @@ const apiBackgroundJobDefinitions: Array<{
         controls: [],
     },
     {
+        id: 'api-vm-deletion',
+        name: 'Deleted VM retention',
+        description: 'Keeps deleted VMs stopped and removes their disks after the 30-day recovery period.',
+        category: 'Other/System',
+        schedule: 'Every minute',
+        cadenceSeconds: API_CRON_CADENCE_SECONDS,
+        source: 'api/src/utils/vms/deletion.ts',
+        controls: [],
+    },
+    {
         id: 'api-vm-ensure-running',
         name: 'VM keepalive enforcement',
         description: 'Keeps configured always-running VM and agent targets alive.',

@@ -1,3 +1,4 @@
+import { vmLifecycleLock } from '#utils/vms/lifecycleLock.ts'
 import config from '#constants'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
@@ -25,71 +26,75 @@ export default async function vmAction(req: FastifyRequest, res: FastifyReply) {
     }
 
     try {
-        const vm = await loadManageableVm(id)
-        if (!vm) {
-            return res.status(404).send({ error: `Virtual machine ${id} was not found.` })
-        }
+        return await vmLifecycleLock(id, async () => {
+            const vm = await loadManageableVm(id)
+            if (!vm) {
+                return res.status(404).send({ error: `Virtual machine ${id} was not found.` })
+            }
 
-        if (!validRole && !canUserManageVm(vm, userId)) {
-            return res.status(403).send({ error: 'You do not have access to manage this virtual machine.' })
-        }
+            if (!validRole && !canUserManageVm(vm, userId)) {
+                return res.status(403).send({ error: 'You do not have access to manage this virtual machine.' })
+            }
 
-        if (vm.primary_host === config.vm_host_id && await canUseLocalLxd()) {
-            const details = await setLocalLxdInstanceState(vm.name, action as 'start' | 'stop' | 'restart', { tolerateAlready: true })
-            await recordSystemEvent(req, {
-                actionType: `vm.${action}`,
-                actorId: userId,
-                targetType: 'vm',
-                targetId: vm.name,
-                context: { status: details.status, execution: 'local_lxd' },
+            if (vm.deleted_at) return res.status(409).send({ error: 'This VM is scheduled for deletion. Restore it before starting.' })
+
+            if (vm.primary_host === config.vm_host_id && await canUseLocalLxd()) {
+                const details = await setLocalLxdInstanceState(vm.name, action as 'start' | 'stop' | 'restart', { tolerateAlready: true })
+                await recordSystemEvent(req, {
+                    actionType: `vm.${action}`,
+                    actorId: userId,
+                    targetType: 'vm',
+                    targetId: vm.name,
+                    context: { status: details.status, execution: 'local_lxd' },
+                })
+                return res.send({
+                    ok: true,
+                    name: vm.name,
+                    action,
+                    status: details.status,
+                    message: `VM ${vm.name} ${action} command completed.`,
+                })
+            }
+
+            const internalRes = await fetch(`${config.internal_api}/vm/${encodeURIComponent(id)}/${action}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${encodeURIComponent(config.vm_api_token || '')}`,
+                    'User-Agent': 'hanasand_internal',
+                },
             })
-            return res.send({
-                ok: true,
-                name: vm.name,
-                action,
-                status: details.status,
-                message: `VM ${vm.name} ${action} command completed.`,
-            })
-        }
 
-        const internalRes = await fetch(`${config.internal_api}/vm/${encodeURIComponent(id)}/${action}`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${encodeURIComponent(config.vm_api_token || '')}`,
-                'User-Agent': 'hanasand_internal',
-            },
-        })
+            const text = await internalRes.text()
+            const payload = parseInternalPayload(text)
 
-        const text = await internalRes.text()
-        const payload = parseInternalPayload(text)
+            if (!internalRes.ok) {
+                return res.status(internalRes.status).send({
+                    error: describeVmActionError(payload, action, id),
+                    details: payload,
+                })
+            }
 
-        if (!internalRes.ok) {
-            return res.status(internalRes.status).send({
-                error: describeVmActionError(payload, action, id),
-                details: payload,
-            })
-        }
-
-        const nextStatus = action === 'stop' ? 'stopped' : 'running'
-        await run(`
+            const nextStatus = action === 'stop' ? 'stopped' : 'running'
+            await run(`
             UPDATE vm_details
             SET status = $2,
                 volatile_last_state_power = UPPER($2),
                 last_checked = NOW()
             WHERE name = $1
         `, [id, nextStatus]).catch((error) => {
-            req.log.warn({ err: error, id, action }, 'Unable to update cached VM status after action.')
-        })
+                req.log.warn({ err: error, id, action }, 'Unable to update cached VM status after action.')
+            })
 
-        await recordSystemEvent(req, {
-            actionType: `vm.${action}`,
-            actorId: userId,
-            targetType: 'vm',
-            targetId: id,
-            context: { status: nextStatus, execution: 'internal_vm_api' },
-        })
+            await recordSystemEvent(req, {
+                actionType: `vm.${action}`,
+                actorId: userId,
+                targetType: 'vm',
+                targetId: id,
+                context: { status: nextStatus, execution: 'internal_vm_api' },
+            })
 
-        return res.send(payload)
+            return res.send(payload)
+        })
     } catch (error) {
         req.log.error(error)
         return res.status(500).send({ error: 'Unable to contact internal VM API.' })
@@ -98,7 +103,7 @@ export default async function vmAction(req: FastifyRequest, res: FastifyReply) {
 
 async function loadManageableVm(id: string) {
     const result = await run(`
-        SELECT name, owner, created_by, access_users, primary_host
+        SELECT name, owner, created_by, access_users, primary_host, deleted_at
         FROM vms
         WHERE LOWER(name) = LOWER($1)
         LIMIT 1
@@ -110,6 +115,7 @@ async function loadManageableVm(id: string) {
         created_by: string
         access_users: string[] | null
         primary_host: string
+        deleted_at: string | null
     } | undefined
 }
 

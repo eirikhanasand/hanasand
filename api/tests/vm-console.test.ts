@@ -13,9 +13,10 @@ test('VM status comes from a live check, never the saved running state', async (
 
 let valid = true
 let admin = false
+let deleted = false
 mock.module('../src/utils/auth/session.ts', () => ({ validateSession: async ({ id }: { id: string }) => valid ? { user: { id } } : null }))
 mock.module('../src/utils/loadSQL.ts', () => ({ loadSQL: async () => 'role-query' }))
-mock.module('../src/utils/db.ts', () => ({ default: async (sql: string) => ({ rows: sql === 'role-query' ? [{ has_role: admin }] : [{ owner: 'owner', created_by: 'creator', access_users: ['member'] }] }) }))
+mock.module('../src/utils/db.ts', () => ({ default: async (sql: string) => ({ rows: sql === 'role-query' ? [{ has_role: admin }] : [{ owner: 'owner', created_by: 'creator', access_users: ['member'], deleted_at: deleted ? new Date() : null }] }) }))
 mock.module('../src/utils/resilience.ts', () => ({ recoveryReadOnly: () => false }))
 mock.module('../src/utils/vms/lxd.ts', () => ({ lxdRequest: async () => { throw new Error('Unexpected host access') } }))
 const { consoleAccess } = await import('../src/handlers/vms/console.ts')
@@ -54,4 +55,12 @@ test('login requires an existing non-system account and never creates a user', a
             expect(output).toBe(allowed ? '--login cashflow' : '')
         }
     } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+test('pending deletion denies console access even to administrators', async () => {
+    deleted = true
+    admin = true
+    expect(await consoleAccess('cashflow', 'admin', 'test')).toBe(false)
+    expect(await consoleAccess('cashflow', 'owner', 'test')).toBe(false)
+    deleted = false
 })

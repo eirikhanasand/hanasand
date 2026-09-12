@@ -48,7 +48,7 @@ import getUserCertificates from './handlers/certificates/getUserCertificates.ts'
 import getVM from './handlers/vms/get.ts'
 import postVM from './handlers/vms/post.ts'
 import getAccessibleVMs from './handlers/vms/getAccessibleVMs.ts'
-import deleteVM from './handlers/vms/delete.ts'
+import deleteVM, { restoreVM } from './handlers/vms/delete.ts'
 import getVMMetrics from './handlers/vms/metrics/get.ts'
 import postVMMetrics from './handlers/vms/metrics/post.ts'
 import putVMMetrics from './handlers/vms/metrics/put.ts'
@@ -442,6 +442,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/vm/details', postVMDetails)
     fastify.post('/vms/shutdown', shutdownVMs)
     fastify.post('/vms/stop', stopVms)
+    fastify.post('/vm/:id/restore', restoreVM)
     fastify.delete('/vm/:id', deleteVM)
     fastify.delete('/vms', deleteVMs)
 
