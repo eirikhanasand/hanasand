@@ -66,7 +66,8 @@ probes together. All forwarding listeners remain loopback-only, using the existi
 restricted key and host-key verification.
 
 Migration: run `isolated-tunnels.py authorize` as the existing OVH tunnel user,
-then `isolated-tunnels.py start` on Inspur. Verify the new listeners before running
+build `Dockerfile.tunnel` with a revision tag, then run
+`isolated-tunnels.py start --image REVISION_IMAGE` on Inspur. Verify the new listeners before running
 `isolated-tunnels.py configure --root SITE_ROOT` at each site and gracefully
 reloading the proxies. The helper retains the previous configuration; it never
 stops the legacy replication tunnel. Source service ports and the stable database

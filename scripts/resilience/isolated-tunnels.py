@@ -63,8 +63,8 @@ def authorize():
     temporary.replace(path)
 
 
-def start():
-    image = subprocess.check_output(['docker', 'inspect', '-f', '{{.Image}}', 'hanasand-resilience-tunnel'], text=True).strip()
+def start(image):
+    subprocess.run(["docker", "image", "inspect", image], check=True, stdout=subprocess.DEVNULL)
     for group, forwards in GROUPS.items():
         name = 'hanasand-resilience-tunnel-' + group
         existing = subprocess.run(['docker', 'inspect', '-f', '{{.State.Running}}', name], capture_output=True, text=True)
@@ -86,11 +86,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['authorize', 'start', 'configure'])
     parser.add_argument('--root', type=pathlib.Path)
+    parser.add_argument('--image')
     args = parser.parse_args()
     if args.action == 'authorize':
         authorize()
     elif args.action == 'start':
-        start()
+        if not args.image:
+            parser.error('--image must identify the built tunnel image')
+        start(args.image)
     else:
         if not args.root:
             parser.error('--root is required for configure')
