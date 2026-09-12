@@ -4,9 +4,10 @@ type VMAccessProps = {
     boxStyle: string
     boxTitleStyle: string
     connection: VMConnectionDetails | null
+    error?: string
 }
 
-export default function VMAccess({ boxStyle, boxTitleStyle, connection }: VMAccessProps) {
+export default function VMAccess({ boxStyle, boxTitleStyle, connection, error }: VMAccessProps) {
     return (
         <div className={boxStyle}>
             <h1 className={boxTitleStyle}>Access</h1>
@@ -34,8 +35,8 @@ export default function VMAccess({ boxStyle, boxTitleStyle, connection }: VMAcce
                     compact
                     variant='info'
                     className='mt-3'
-                    title='Access details reconnecting'
-                    message='Refresh the VM to reload SSH user, host, and certificate information.'
+                    title={error ? 'Access details unavailable' : 'Access details reconnecting'}
+                    message={error || 'Reloading SSH user, host, and certificate information automatically…'}
                 />
             )}
         </div>

@@ -4,6 +4,7 @@ import { RefreshCcw } from 'lucide-react'
 import smallDate from '@/utils/date/smallDate'
 import VMDetails from '@/components/vms/vmDetails'
 import VMAccess from '@/components/vms/vmAccess'
+import useVMConnection from '@/components/vms/useVMConnection'
 import VMHardware from '@/components/vms/vmHardware'
 import VMNetwork from '@/components/vms/vmNetwork'
 import VMOverview from '@/components/vms/vmOverview'
@@ -27,12 +28,13 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
     const [vm, setVM] = useState<VM>(serverVM)
     const [details, setDetails] = useState(serverDetails)
     const [metrics, setMetrics] = useState(serverMetrics)
-    const [connection] = useState(serverConnection)
+    const { connection, error: connectionError, refresh: refreshConnection } = useVMConnection(serverVM.name, serverConnection)
     const router = useRouter()
     const boxStyle = 'w-full rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'
     const boxTitleStyle = 'text-base font-medium text-ui-text'
 
     async function handleRefresh() {
+        refreshConnection()
         const token = getCookie('access_token')
         const id = getCookie('id')
         if (!id || !token) {
@@ -80,7 +82,7 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
             </div>
             <div className='grid gap-3'>
                 <VMHostOptions boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} onUpdate={setVM} />
-                <VMAccess boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} connection={connection} />
+                <VMAccess boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} connection={connection} error={connectionError} />
             </div>
             <div className='grid gap-3'>
                 <VMMetrics boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} metrics={metrics} />
