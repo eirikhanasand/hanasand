@@ -32,3 +32,8 @@ export const commercialAccessPlans = [
         features: ['Clearweb browsing', 'Safe darkweb previews', 'Evidence capture', 'Run history'],
     },
 ] as const
+
+export const containerAccessPlans = [
+    { id: 'always_running', name: 'Always running', priceNok: 49, summary: 'Keep this container running, with automatic restarts and protection from idle shutdown.' },
+    { id: 'failover', name: 'Failover', priceNok: 99, summary: 'Keep a copy on the other host and switch hosts with a verified container transfer.' },
+] as const
