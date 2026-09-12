@@ -63,6 +63,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     return (
         <DashboardPage>
             <VMClient
+                key={id}
                 vm={vm}
                 details={details}
                 metrics={metrics}
