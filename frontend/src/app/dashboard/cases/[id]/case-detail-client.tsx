@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import type { CaseResolution } from '../cases-client'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft, BellRing, CheckCircle2, Copy, Loader2, RotateCcw, Send, ShieldCheck, UserRound, XCircle } from 'lucide-react'
 import { safeEvidenceExcerpt } from '@/utils/dwm/display'
@@ -15,6 +16,7 @@ export type CaseDetail = {
     access?: { readOnly?: boolean, role?: string, blockerCodes?: string[] }
     case?: {
         id: string
+        resolution?: CaseResolution
         title?: string
         status?: string
         priority?: string
@@ -236,7 +238,7 @@ type LoadState = {
     receiverReceipts?: ReceiverReceipt[]
 }
 
-const primaryActions = ['review', 'assign', 'escalate', 'suppress', 'false_positive', 'close', 'reopen', 'note']
+const primaryActions = ['confirm_resolution', 'start_progress', 'review', 'assign', 'escalate', 'suppress', 'false_positive', 'close', 'reopen', 'note']
 
 export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId, initialDetail, initialExportPayload }: {
     caseId: string
@@ -254,6 +256,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     const [busy, setBusy] = useState<string | null>(null)
     const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
     const [note, setNote] = useState('')
+    const [aiResolution, setAiResolution] = useState(false)
     const [owner, setOwner] = useState(initialDetail?.case?.assignedOwner || initialDetail?.workflowState?.assignedOwner || '')
     const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([])
     const [showAllEvidenceRows, setShowAllEvidenceRows] = useState(false)
@@ -350,6 +353,8 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                     organizationId: resolvedOrganizationId(caseRecord, organizationId),
                     alertId: resolvedAlertId(caseRecord, alertContext, alertId),
                     action: actionId,
+                    ...(actionId === 'confirm_resolution' ? { confirmResolutionId: caseRecord?.resolution?.id } : {}),
+                    ...(actionId === 'close' && aiResolution ? { resolutionMethod: 'ai' } : {}),
                     note: rationale,
                     assignedOwner: owner.trim() || undefined,
                     idempotencyKey: `dashboard-case:${caseId}:${actionId}:${caseRecord?.updatedAt || caseRecord?.createdAt || 'initial'}`,
@@ -359,6 +364,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
             if (!payload.case || typeof payload.case.id !== 'string') throw new Error('No durable case update was returned.')
             setMessage({ ok: true, text: `${actionLabel(actionId)} recorded.` })
+            setAiResolution(false)
             await load()
         } catch (error) {
             setMessage({ ok: false, text: error instanceof Error ? error.message : 'Case action failed.' })
@@ -617,6 +623,8 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                             <label className='mt-3 block text-[10px] font-semibold uppercase text-ui-muted'>Owner</label>
                             <input value={owner} onChange={event => setOwner(event.target.value)} placeholder='owner@company.com' className='mt-1 h-10 w-full rounded-lg border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary/35' />
                             <label className='mt-3 block text-[10px] font-semibold uppercase text-ui-muted'>Reason</label>
+                            {caseRecord?.resolution && <p className='mb-3 text-sm text-ui-muted'>{caseRecord.resolution.type === 'ai' ? 'AI resolved' : `Resolved by ${caseRecord.resolution.actor || 'unknown actor'}`} · {caseRecord.resolution.confirmedAt ? `Human confirmed by ${caseRecord.resolution.confirmedBy} at ${new Date(caseRecord.resolution.confirmedAt).toLocaleString()}` : ['ai', 'automation'].includes(caseRecord.resolution.type) ? 'Awaiting human confirmation' : 'Resolution recorded'}</p>}
+                            <label className='mb-2 flex items-center gap-2 text-sm'><input type='checkbox' checked={aiResolution} onChange={event => setAiResolution(event.target.checked)} />AI resolution (when closing) — requires human confirmation</label>
                             <textarea value={note} onChange={event => setNote(event.target.value)} placeholder='Decision rationale, delivery context, or customer note.' className='mt-1 min-h-24 w-full resize-y rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm leading-6 text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary/35' />
                             <div className='mt-3 grid gap-2 sm:grid-cols-2'>
                                 {actions.map(action => <ActionButton key={action.id} action={action} busy={busy === action.id} disabled={readOnly || busy !== null || !action.enabled} onClick={() => runAction(action)} />)}
@@ -1215,11 +1223,12 @@ function webhookActionBlockedReason(detail: CaseDetail | null | undefined, alert
 function timelineActorLabel(value?: string) {
     if (!value) return 'system'
     if (/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(value)) return value
-    if (/^[a-z0-9_-]{16,}$/i.test(value)) return 'system actor'
-    return stateLabel(value)
+    return value
 }
 
 function actionLabel(value: string) {
+    if (value === 'confirm_resolution') return 'Confirm resolution'
+    if (value === 'start_progress') return 'Start progress'
     if (value === 'false_positive') return 'False positive'
     return stateLabel(value)
 }

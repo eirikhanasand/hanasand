@@ -22,6 +22,21 @@ export default async function ensureMonitoringIssuesSchema() {
         ADD COLUMN IF NOT EXISTS severity_override TEXT CHECK (severity_override IN ('low', 'medium', 'high', 'critical')),
         ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
         ADD COLUMN IF NOT EXISTS comments JSONB NOT NULL DEFAULT '[]'::jsonb`)
+    await run(`ALTER TABLE monitoring_issues
+        ADD COLUMN IF NOT EXISTS history JSONB NOT NULL DEFAULT '[]'::jsonb,
+        ADD COLUMN IF NOT EXISTS resolution JSONB`)
+    await run(`DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'monitoring_issues'::regclass
+            AND conname = 'monitoring_issues_status_override_check' AND pg_get_constraintdef(oid) NOT LIKE '%in_progress%') THEN
+            ALTER TABLE monitoring_issues DROP CONSTRAINT monitoring_issues_status_override_check;
+            ALTER TABLE monitoring_issues ADD CONSTRAINT monitoring_issues_status_override_check CHECK (status_override IN ('open', 'in_progress', 'resolved', 'closed'));
+        END IF;
+    END $$`)
+    // Preserve known automatic recoveries; never invent the identity of a legacy manual resolver.
+    await run(`UPDATE monitoring_issues SET resolution = jsonb_build_object(
+        'id', 'legacy-recovery-' || id, 'type', 'automation', 'actor', 'Health monitoring', 'at', resolved_at,
+        'note', 'Recovered according to the stored health-check timestamp. The original recovery comment was not recorded.')
+        WHERE resolution IS NULL AND resolved_at IS NOT NULL AND status_override IS NULL`)
     await run(`CREATE TABLE IF NOT EXISTS monitoring_issue_notifications (
         issue_id BIGINT NOT NULL REFERENCES monitoring_issues(id) ON DELETE CASCADE,
         destination TEXT NOT NULL,

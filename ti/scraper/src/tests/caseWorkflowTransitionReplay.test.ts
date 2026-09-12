@@ -155,3 +155,29 @@ function fixtureRuntime() {
   });
   return { store, options: { store, frontier: new FocusedFrontier() } };
 }
+
+test("AI resolution requires rationale and a validated human can confirm only that exact resolution", async () => {
+  const { options } = fixtureRuntime();
+  expect((await patchCase(options, { action: "close", resolutionMethod: "ai" })).status).toBe(400);
+  expect((await patchCase(options, { action: "start_progress" })).status).toBe(200);
+  const closed = await (await patchCase(options, { action: "close", resolutionMethod: "ai", note: "AI fixed the cause and checks passed." })).json() as any;
+  expect(closed.case.resolution.type).toBe("ai");
+  const detail = await (await handleApiRequest(new Request("http://localhost/v1/cases/case_acme?organizationId=org_acme", { headers: { "x-user-email": "owner@acme.com" } }), options)).json() as any;
+  expect(detail.workflowActionPolicy.actions.find((action: any) => action.id === "confirm_resolution").enabled).toBe(true);
+  const reviewOptions = { ...options, authApiBase: "http://auth.test/api/", authFetch: async () => Response.json({ id: "owner@acme.com", roles: [] }) };
+  const confirm = (id: string, service = false) => handleApiRequest(new Request("http://localhost/v1/cases/case_acme", {
+    method: "PATCH", headers: { id: "owner@acme.com", authorization: "Bearer test-session", ...(service ? { "x-hanasand-service-token": "machine" } : {}) },
+    body: JSON.stringify({ organizationId: "org_acme", action: "confirm_resolution", confirmResolutionId: id })
+  }), reviewOptions);
+  expect((await confirm(closed.case.resolution.id, true)).status).toBe(403);
+  expect((await confirm("stale")).status).toBe(409);
+  const confirmed = await confirm(closed.case.resolution.id);
+  expect(confirmed.status).toBe(200);
+  expect((await confirmed.json() as any).case.resolution.confirmedBy).toBe("owner@acme.com");
+  expect((await confirm(closed.case.resolution.id)).status).toBe(409);
+  const reopened = await (await patchCase(options, { action: "reopen" })).json() as any;
+  expect(reopened.case.resolution).toBeUndefined();
+  const openDetail = await (await handleApiRequest(new Request("http://localhost/v1/cases/case_acme?organizationId=org_acme", { headers: { "x-user-email": "owner@acme.com" } }), options)).json() as any;
+  expect(openDetail.workflowActionPolicy.actions.find((action: any) => action.id === "confirm_resolution").enabled).toBe(false);
+  expect((await confirm(closed.case.resolution.id)).status).toBe(409);
+});

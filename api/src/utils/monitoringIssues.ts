@@ -19,15 +19,22 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
         const check = (await query('SELECT issue_id FROM agent_automation_runs WHERE id = $1 FOR UPDATE', [runId])).rows[0]
         if (!check) throw new Error('Monitoring run was not found.')
         if (kind !== 'failure') {
-            await query('UPDATE monitoring_issues SET resolved_at = NOW() WHERE automation_id = $1 AND resolved_at IS NULL AND ($2::text IS NULL OR kind = \'failure\')', [automation.id, kind])
+            await query(`UPDATE monitoring_issues SET resolved_at = NOW(),
+                history = history || jsonb_build_array(jsonb_build_object('id', $3::text, 'at', NOW(), 'actor', 'Health monitoring', 'actorType', 'automation', 'action', 'recovered', 'note', $4::text, 'runId', $3::text)),
+                comments = comments || jsonb_build_array(jsonb_build_object('id', $3::text, 'createdAt', NOW(), 'author', 'Health monitoring', 'body', $4::text)),
+                resolution = CASE WHEN status_override IS NULL THEN jsonb_build_object('id', $3::text, 'at', NOW(), 'actor', 'Health monitoring', 'type', 'automation', 'note', $4::text) ELSE resolution END
+                WHERE automation_id = $1 AND resolved_at IS NULL AND ($2::text IS NULL OR kind = 'failure')`, [automation.id, kind, runId, redactSecretBearingText(message)])
             if (!kind) return null
         }
         if (check.issue_id) return check.issue_id as string
         const result = await query(`INSERT INTO monitoring_issues (automation_id, fingerprint, kind, summary)
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (automation_id, fingerprint) DO UPDATE
-            SET occurrences = monitoring_issues.occurrences + 1, last_seen_at = NOW(), resolved_at = NULL, summary = EXCLUDED.summary
-            RETURNING id`, [automation.id, monitoringIssueFingerprint(automation, kind, message), kind, redactSecretBearingText(message)])
+            SET occurrences = monitoring_issues.occurrences + 1, last_seen_at = NOW(), resolved_at = NULL, summary = EXCLUDED.summary,
+                history = monitoring_issues.history || CASE WHEN monitoring_issues.resolved_at IS NOT NULL THEN jsonb_build_array(jsonb_build_object(
+                    'id', $5::text, 'at', NOW(), 'actor', 'Health monitoring', 'actorType', 'automation', 'action', 'recurred', 'note', EXCLUDED.summary, 'runId', $5::text)) ELSE '[]'::jsonb END,
+                resolution = CASE WHEN monitoring_issues.status_override IS NULL THEN NULL ELSE monitoring_issues.resolution END
+            RETURNING id`, [automation.id, monitoringIssueFingerprint(automation, kind, message), kind, redactSecretBearingText(message), runId])
         const id = result.rows[0].id as string
         await query('UPDATE agent_automation_runs SET issue_id = $2 WHERE id = $1', [runId, id])
         return id
@@ -82,7 +89,7 @@ export async function backfillMonitoringIssues() {
                 const kind = check.status === 'failed' ? 'failure' : 'warning'
                 const message = redactSecretBearingText(check.error || check.result || 'Monitoring check failed.')
                 const key = monitoringIssueFingerprint(automation, kind, message)
-                const group = groups.get(key) || { ids: [], kind, message, first: check.started_at, last: check.started_at }
+                const group = groups.get(key) || { ids: [] as string[], kind, message, first: check.started_at, last: check.started_at }
                 group.ids.push(check.id)
                 group.message = message
                 group.last = check.started_at
@@ -101,7 +108,7 @@ export async function backfillMonitoringIssues() {
             await query(`UPDATE monitoring_issues i SET resolved_at = (
                 SELECT MIN(r.started_at) FROM agent_automation_runs r WHERE r.automation_id = i.automation_id
                 AND r.status = 'completed' AND (i.kind = 'failure' OR NOT r.warning) AND r.started_at > i.last_seen_at)
-                WHERE i.automation_id = $1`, [automation.id])
+                WHERE i.automation_id = $1 AND i.history = '[]'::jsonb`, [automation.id])
         })
     }
 }

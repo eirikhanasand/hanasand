@@ -58,7 +58,7 @@ test('case mutations require authentication, valid input and the same owner scop
     }
     expect(sql).toBe('')
     expect((await patch({ status: 'closed' }, '?tenantId=other')).statusCode).toBe(403)
-    expect((await patch({ status: 'closed' })).statusCode).toBe(404)
+    expect((await patch({ status: 'closed', comment: 'Verified recovered' })).statusCode).toBe(404)
     expect(sql).toContain('a.owner_id = $2')
     expect(sql).toContain('a.organization_id = $3')
 })
@@ -72,4 +72,41 @@ test('updates preserve recovery timestamps and append comments with authenticate
     expect((await patch({ status: 'open' })).statusCode).toBe(200)
     expect(values[4]).toBe('open')
     expect(values[7]).toBe('[]')
+})
+
+test('resolution requires a comment and records its method and authenticated resolver', async () => {
+    for (const status of ['closed', 'resolved']) {
+        expect((await patch({ status })).statusCode).toBe(400)
+        expect((await patch({ status, comment: '   ' })).statusCode).toBe(400)
+    }
+    rows = [{ id: '3' }]
+    expect((await patch({ status: 'resolved', resolutionMethod: 'ai', comment: 'AI fixed the query; health checks passed.' })).statusCode).toBe(200)
+    expect(JSON.parse(values[9] as string)).toMatchObject({ type: 'ai', actor: 'owner', note: 'AI fixed the query; health checks passed.' })
+    expect(JSON.parse(values[8] as string)).toMatchObject({ actor: 'owner', actorType: 'human' })
+    expect((await patch({ status: 'in_progress' })).statusCode).toBe(200)
+    expect(sql).toContain("WHEN $5::text IN ('open', 'in_progress') THEN NULL")
+    expect(sql).toContain("'fromStatus'")
+    expect((await patch({ resolutionMethod: 'human' })).statusCode).toBe(400)
+})
+test('confirmation is conditional on the exact unresolved review and cannot be combined with a resolution', async () => {
+    expect((await patch({ confirmResolutionId: 'r1', status: 'closed', comment: 'Review' })).statusCode).toBe(400)
+    expect((await patch({ confirmResolutionId: 'r1' })).statusCode).toBe(409)
+    rows = [{ id: '3' }]
+    expect((await patch({ confirmResolutionId: 'r1' })).statusCode).toBe(200)
+    expect(values[10]).toBe('r1')
+    expect(sql).toContain("i.resolution->>'id' = $11")
+    expect(sql).toContain("i.resolution->>'confirmedAt' IS NULL")
+    expect(sql).toContain("IN ('resolved', 'closed')")
+})
+
+test('legacy recovery is attributed to monitoring and unknown manual resolvers are never invented', async () => {
+    rows = [{ id: '3', first_seen_at: '2026-09-01T00:00:00Z', resolved_at: '2026-09-02T00:00:00Z', automation_id: 'monitor', comments: [] }]
+    let item = (await app.inject('/cases/monitoring/HA-3')).json().case
+    expect(item.resolution.type).toBe('automation')
+    expect(item.history.at(-1)).toMatchObject({ actor: 'Health monitoring', action: 'recovered' })
+    rows[0].status_override = 'closed'
+    rows[0].comments = [{ id: 'old-comment', author: 'Codex (AI)', body: 'Verified recovery', createdAt: '2026-09-03T00:00:00Z' }]
+    item = (await app.inject('/cases/monitoring/HA-3')).json().case
+    expect(item.resolution.type).toBe('unknown')
+    expect(item.history.at(-1)).toMatchObject({ actor: 'Codex (AI)', note: 'Verified recovery' })
 })

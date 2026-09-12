@@ -1,3 +1,4 @@
+import { authenticateRequest } from "./requestAuthentication.ts";
 import { paginationCursor, legacyOffset } from "./pagination.ts";
 import { createHash } from "node:crypto";
 import { nowIso, stableId } from "../utils.ts";
@@ -14,7 +15,7 @@ import type { OrganizationMember } from "./organizationRoutes.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { decodeKeysetCursor } from "./pagination.ts";
 
-type CaseStatus = "open" | "escalated" | "suppressed" | "false_positive" | "closed";
+type CaseStatus = "in_progress" | "open" | "escalated" | "suppressed" | "false_positive" | "closed";
 type CasePriority = "critical" | "high" | "medium" | "low";
 type CaseAccessMode = "read" | "mutate";
 
@@ -89,7 +90,10 @@ type CaseHandoffActionReceipt = {
   };
 };
 
+type CaseResolution = { id: string; type: "human" | "ai" | "automation" | "unknown"; actor?: string; at?: string; note?: string; confirmedBy?: string; confirmedAt?: string };
+
 type AnalystCase = {
+  resolution?: CaseResolution;
   id: string;
   tenantId: string;
   organizationId?: string;
@@ -571,7 +575,7 @@ export async function recordCaseHandoffAction(request: Request, options: ApiServ
 }
 
 export async function updateCase(request: Request, options: ApiServerOptions, caseId: string | undefined): Promise<Response> {
-  const existing = findCase(options, caseId);
+  let existing = findCase(options, caseId);
   if (!existing) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
   const body = await readJson<any>(request);
   const scope = resolveOrganizationScope({ body, request }, options);
@@ -580,6 +584,26 @@ export async function updateCase(request: Request, options: ApiServerOptions, ca
   if (access.error) return access.error;
   if (existing.tenantId !== scope.tenantId || !caseMatchesOrganizationScope(existing, scope.organizationId)) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
 
+  if (body.action === "confirm_resolution") {
+    if (request.headers.has("x-hanasand-service-token")) return json({ error: { code: "human_review_required", message: "Human confirmation requires a signed-in user." } }, 403);
+    const auth = await authenticateRequest(request, options);
+    if (auth.error) return auth.error;
+    // Re-read after session validation so a concurrent reopen/resolution invalidates this review.
+    existing = findCase(options, caseId);
+    if (!existing || existing.tenantId !== scope.tenantId || !caseMatchesOrganizationScope(existing, scope.organizationId)) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
+    if (existing.status !== "closed" || !existing.resolution || !["ai", "automation"].includes(existing.resolution.type)
+      || existing.resolution.confirmedAt || body.confirmResolutionId !== existing.resolution.id) {
+      return json({ error: { code: "resolution_changed", message: "Resolution changed or was already confirmed. Refresh the case." } }, 409);
+    }
+    const at = nowIso();
+    const event = caseEvent({ caseId: existing.id, tenantId: existing.tenantId, organizationId: existing.organizationId, generatedAt: at,
+      actor: auth.identity!.id, action: "confirm_resolution", fromStatus: existing.status, toStatus: existing.status, note: "Resolution reviewed and confirmed by a human." });
+    const saved = (options.store as any).saveCase({ ...existing, updatedAt: at, resolution: { ...existing.resolution, confirmedBy: auth.identity!.id, confirmedAt: at }, workflowEvents: [...(existing.workflowEvents ?? []), event] });
+    return json({ case: saved, event });
+  }
+  if (body.resolutionMethod !== undefined && (body.resolutionMethod !== "ai" || normalizeAction(body.action, body.status) !== "close")) {
+    return json({ error: { code: "invalid_resolution_method", message: "AI resolution applies only when closing a case." } }, 400);
+  }
   const generatedAt = nowIso();
   const actor = caseAuditActor(request, body);
   const action = normalizeAction(body.action, body.status);
@@ -633,6 +657,9 @@ export async function updateCase(request: Request, options: ApiServerOptions, ca
   const caseRecord: AnalystCase = {
     ...existing,
     status: nextStatus,
+    resolution: nextStatus === "closed" && existing.status !== "closed"
+      ? { id: event.id, type: body.resolutionMethod === "ai" ? "ai" : request.headers.has("x-hanasand-service-token") ? "automation" : request.headers.get("authorization")?.startsWith("Bearer ") && request.headers.get("id") ? "human" : "unknown", actor, at: generatedAt, note }
+      : nextStatus !== "closed" ? undefined : existing.resolution,
     assignedOwner,
     updatedAt: generatedAt,
     closedAt: nextStatus === "closed" ? generatedAt : nextStatus === "open" ? undefined : existing.closedAt,
@@ -988,6 +1015,7 @@ function buildCaseExport(caseRecord: AnalystCase, options: ApiServerOptions, org
     caseId: caseRecord.id,
     title: caseRecord.title,
     status: caseRecord.status,
+    resolution: caseRecord.resolution,
     priority: caseRecord.priority,
     assignedOwner: caseRecord.assignedOwner,
     organizationId: caseRecord.organizationId,
@@ -1279,6 +1307,7 @@ function caseListItem(caseRecord: AnalystCase, options: ApiServerOptions, access
     title: caseRecord.title,
     summary: caseRecord.summary,
     status: caseRecord.status,
+    resolution: caseRecord.resolution,
     priority: caseRecord.priority,
     severity: alert?.severity ?? caseRecord.priority,
     assignedOwner: caseRecord.assignedOwner,
@@ -1516,6 +1545,8 @@ function caseWorkflowActionPolicy(caseRecord: AnalystCase, alert: any, deliverie
   const readOnly = access?.readOnly === true;
   const delivered = deliveries.some((delivery: any) => delivery.status === "delivered");
   const specs = [
+    { id: "start_progress", label: "Start progress", method: "PATCH", requiresRationale: false, requiredFields: ["organizationId", "action"], enabledWhen: () => caseRecord.status === "open" },
+    { id: "confirm_resolution", label: "Confirm resolution", method: "PATCH", requiresRationale: false, requiredFields: ["confirmResolutionId"], enabledWhen: () => caseRecord.status === "closed" && !!caseRecord.resolution && ["ai", "automation"].includes(caseRecord.resolution.type) && !caseRecord.resolution.confirmedAt },
     { id: "note", label: "Add note", method: "PATCH", requiresRationale: true, requiredFields: ["organizationId", "action", "note", "idempotencyKey"], enabledWhen: () => true },
     { id: "review", label: "Review", method: "PATCH", requiresRationale: true, requiredFields: ["organizationId", "action", "note", "idempotencyKey"], enabledWhen: () => !["closed", "suppressed", "false_positive"].includes(caseRecord.status) },
     { id: "assign", label: "Assign owner", method: "PATCH", requiresRationale: false, requiredFields: ["organizationId", "action", "assignedOwner", "idempotencyKey"], enabledWhen: () => caseRecord.status !== "closed" && caseRecord.status !== "false_positive" },
@@ -1580,7 +1611,8 @@ function caseWorkflowActionPolicy(caseRecord: AnalystCase, alert: any, deliverie
 }
 
 function caseWorkflowActionStatusBlockers(status: CaseStatus, actionId: string) {
-  if (status === "closed") return actionId === "reopen" ? [] : ["case_closed"];
+  if (["start_progress", "confirm_resolution"].includes(actionId)) return ["not_applicable_for_status"];
+  if (status === "closed") return ["reopen", "confirm_resolution"].includes(actionId) ? [] : ["case_closed"];
   if (status === "suppressed") return actionId === "reopen" || actionId === "note" ? [] : ["invalid_case_transition"];
   if (status === "false_positive") return actionId === "reopen" || actionId === "note" ? [] : ["invalid_case_transition"];
   if (actionId === "reopen") return ["not_applicable_for_status"];
@@ -3499,7 +3531,8 @@ function normalizeAction(value: unknown, status: unknown): string {
 
 function statusForAction(action: string, status: unknown, current: CaseStatus): CaseStatus {
   const explicit = String(status ?? "").trim();
-  if (["open", "escalated", "suppressed", "false_positive", "closed"].includes(explicit)) return explicit as CaseStatus;
+  if (["open", "in_progress", "escalated", "suppressed", "false_positive", "closed"].includes(explicit)) return explicit as CaseStatus;
+  if (action === "start_progress") return "in_progress";
   if (action === "escalate") return "escalated";
   if (action === "suppress") return "suppressed";
   if (action === "false_positive") return "false_positive";
@@ -3509,7 +3542,7 @@ function statusForAction(action: string, status: unknown, current: CaseStatus): 
 }
 
 function unsupportedCaseAction(action: string): Response | undefined {
-  if (["note", "review", "assign", "escalate", "suppress", "false_positive", "close", "reopen"].includes(action)) return undefined;
+  if (["start_progress", "note", "review", "assign", "escalate", "suppress", "false_positive", "close", "reopen"].includes(action)) return undefined;
   return json({
     error: {
       code: "unsupported_case_action",
@@ -3560,7 +3593,7 @@ function normalizeNote(value: unknown): string | undefined {
 }
 
 function sortCaseQueue(a: AnalystCase, b: AnalystCase): number {
-  const statusWeight: Record<CaseStatus, number> = { escalated: 5, open: 4, suppressed: 2, false_positive: 1, closed: 0 };
+  const statusWeight: Record<CaseStatus, number> = { escalated: 5, in_progress: 4.5, open: 4, suppressed: 2, false_positive: 1, closed: 0 };
   const priorityWeight: Record<CasePriority, number> = { critical: 4, high: 3, medium: 2, low: 1 };
   return (statusWeight[b.status] - statusWeight[a.status])
     || (priorityWeight[b.priority] - priorityWeight[a.priority])
