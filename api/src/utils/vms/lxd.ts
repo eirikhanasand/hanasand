@@ -21,6 +21,7 @@ type LxdInstance = {
 type LxdState = {
     status?: string
     network?: Record<string, {
+        hwaddr?: string
         addresses?: Array<{ family?: string, address?: string, scope?: string }>
     }>
 }
@@ -241,9 +242,16 @@ function sleep(ms: number) {
 function mapDetails(instance: LxdInstance, state: LxdState | null) {
     const configValues = instance.config || {}
     const eth0 = instance.expanded_devices?.eth0 || instance.devices?.eth0 || {}
-    const ipv4 = Object.values(state?.network || {})
-        .flatMap(network => network.addresses || [])
-        .find(address => address.family === 'inet' && address.scope !== 'link')?.address || ''
+    // VM guests may rename eth0 (for example to enp5s0). Match the attached
+    // NIC by name, MAC or its configured IP, never the first guest bridge.
+    const mac = configValues['volatile.eth0.hwaddr']?.toLowerCase()
+    const primaryNetwork = Object.entries(state?.network || {}).find(([name, network]) =>
+        name === (eth0.name || 'eth0')
+        || Boolean(mac && network.hwaddr?.toLowerCase() === mac)
+        || Boolean(eth0['ipv4.address'] && network.addresses?.some(address => address.address === eth0['ipv4.address']))
+    )
+    const ipv4 = primaryNetwork?.[1].addresses
+        ?.find(address => address.family === 'inet' && address.scope !== 'link' && address.scope !== 'local')?.address || ''
     const now = new Date().toISOString()
 
     return {
@@ -272,7 +280,7 @@ function mapDetails(instance: LxdInstance, state: LxdState | null) {
         volatile_uuid_generation: configValues['volatile.uuid.generation'] || '',
         volatile_vsock_id: configValues['volatile.vsock_id'] || '',
         device_eth0_ipv4_address: ipv4,
-        device_eth0_name: eth0.name || 'eth0',
+        device_eth0_name: primaryNetwork?.[0] || eth0.name || 'eth0',
         device_eth0_network: eth0.network || '',
         device_eth0_type: eth0.type || 'nic',
         ephemeral: Boolean(instance.ephemeral),
