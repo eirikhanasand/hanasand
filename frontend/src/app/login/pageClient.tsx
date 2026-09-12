@@ -1,11 +1,12 @@
 'use client'
 import { passwordMeetsRequirements, passwordRequirementMessage } from '@/utils/auth/password'
+import VerificationCodeInput from '@/components/login/verificationCodeInput'
 import SocialSignIn from '@/components/login/socialSignIn'
 import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getCookie } from '@/utils/cookies/cookies'
 import { useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import config from '@/config'
 import { ArrowRight, Fingerprint, KeyRound } from 'lucide-react'
 import { reservedUsernames } from '@/utils/auth/reservedUsernames'
@@ -28,13 +29,15 @@ const authGhostButtonClass = 'inline-flex h-9 items-center rounded-lg px-3 text-
 
 export default function LoginPage({ path, serverInternal, serverExpired, socialError, initialMode = 'login', serverError }: LoginPageProps) {
     const router = useRouter()
-    const [mode, setMode] = useState<'login' | 'signup' | 'request-reset' | 'verify-reset'>(initialMode)
+    const [mode, setMode] = useState<'login' | 'signup' | 'verify-signup' | 'request-reset' | 'verify-reset'>(initialMode)
     const [resetUserId, setResetUserId] = useState('')
     const [resetCode, setResetCode] = useState('')
     const [busy, setBusy] = useState(false)
     const [hydrated, setHydrated] = useState(false)
     const [signupName, setSignupName] = useState('')
     const [signupUsername, setSignupUsername] = useState('')
+    const [signupChallenge, setSignupChallenge] = useState('')
+    const [signupCode, setSignupCode] = useState('')
     const [signupEmail, setSignupEmail] = useState('')
     const [signupPassword, setSignupPassword] = useState('')
     const signupPasswordIsValid = passwordMeetsRequirements(signupPassword)
@@ -45,18 +48,41 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
         setBusy(true)
     }
 
-    function handleSignup(e: React.SyntheticEvent<HTMLFormElement>) {
+    async function submitSignup(code = '', resend = false) {
+        if (busy) return
         setError(null)
-        if (!signupPasswordIsValid) {
-            e.preventDefault()
-            return setError(passwordRequirementMessage)
+        if (!signupPasswordIsValid || reservedUsername) {
+            setError(reservedUsername ? 'This username is reserved.' : passwordRequirementMessage)
+            return
         }
-        if (reservedUsername) {
-            e.preventDefault()
-            return setError('This username is reserved.')
-        }
-
         setBusy(true)
+        try {
+            const response = await fetch('/api/auth/register', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: signupUsername, name: signupName, email: signupEmail, password: signupPassword,
+                    ...(!resend && signupChallenge ? { challengeId: signupChallenge, code } : {}) }),
+            })
+            const data = await response.json()
+            if (!response.ok) {
+                if (data.accountCreated) setMode('login')
+                throw new Error(data.error || 'Unable to create account.')
+            }
+            if (data.verificationRequired) {
+                setSignupChallenge(data.challengeId)
+                setSignupCode('')
+                setMode('verify-signup')
+                return
+            }
+            window.location.assign(redirectPath)
+        } catch (error) {
+            setSignupCode('')
+            setError(error instanceof Error ? error.message : 'Unable to create account. Please try again.')
+        } finally { setBusy(false) }
+    }
+
+    function handleSignup(e: React.SyntheticEvent<HTMLFormElement>) {
+        e.preventDefault()
+        void submitSignup('', true)
     }
 
     async function handleResetRequest(e: React.SyntheticEvent<HTMLFormElement>) {
@@ -362,6 +388,16 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                         </form>
                     )}
 
+                    {mode === 'verify-signup' && <div className='grid gap-4'>
+                        <h2 className='text-xl font-semibold'>Check your email</h2>
+                        <p className='text-sm text-ui-muted'>Enter the six-digit code sent to {signupEmail}. It expires in 10 minutes. Your account will be created after verification.</p>
+                        <VerificationCodeInput value={signupCode} setValue={setSignupCode} disabled={busy} onComplete={code => submitSignup(code)} />
+                        <div className='flex flex-wrap gap-2'>
+                            <button type='button' disabled={busy} className={authGhostButtonClass} onClick={() => void submitSignup('', true)}>Resend code</button>
+                            <button type='button' disabled={busy} className={authGhostButtonClass} onClick={() => { setSignupChallenge(''); setSignupCode(''); changeMode('signup') }}>Edit signup details</button>
+                        </div>
+                    </div>}
+
                     {mode === 'request-reset' && (
                         <form className='flex w-full flex-col gap-2 self-center' onSubmit={handleResetRequest} method='post'>
                             <label className='grid gap-1.5' htmlFor='login-reset-username'>
@@ -394,7 +430,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
 
                     {mode === 'verify-reset' && (
                         <form className='flex w-full flex-col gap-2 self-center' onSubmit={handleResetVerify} method='post'>
-                            <ResetCodeInput
+                            <VerificationCodeInput label='Reset code'
                                 value={resetCode}
                                 setValue={setResetCode}
                                 disabled={busy}
@@ -413,89 +449,6 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                 </div>
             </div>
         </section>
-    )
-}
-
-function ResetCodeInput({
-    value,
-    setValue,
-    disabled,
-    onComplete,
-}: {
-    value: string
-    setValue: (value: string) => void
-    disabled: boolean
-    onComplete: (code: string) => void | Promise<void>
-}) {
-    const inputsRef = useRef<Array<HTMLInputElement | null>>([])
-    const submittedCodeRef = useRef('')
-    const code = value.padEnd(6, ' ').slice(0, 6).split('')
-
-    useEffect(() => {
-        if (value.length < 6) {
-            submittedCodeRef.current = ''
-            return
-        }
-        if (disabled || submittedCodeRef.current === value) {
-            return
-        }
-
-        submittedCodeRef.current = value
-        void onComplete(value)
-    }, [disabled, onComplete, value])
-
-    function updateCode(nextValue: string, focusIndex?: number) {
-        const normalized = nextValue.replace(/\D/g, '').slice(0, 6)
-        setValue(normalized)
-        if (focusIndex !== undefined) {
-            requestAnimationFrame(() => inputsRef.current[Math.min(focusIndex, 5)]?.focus())
-        }
-    }
-
-    return (
-        <div className='grid gap-2'>
-            <div className='grid grid-cols-6 gap-1.5'>
-                {code.map((digit, index) => (
-                    <input
-                        key={index}
-                        ref={(element) => { inputsRef.current[index] = element }}
-                        type='text'
-                        inputMode='numeric'
-                        autoComplete={index === 0 ? 'one-time-code' : 'off'}
-                        aria-label={`Reset code digit ${index + 1}`}
-                        value={digit.trim()}
-                        disabled={disabled}
-                        onChange={(event) => {
-                            const digits = event.target.value.replace(/\D/g, '')
-                            if (digits.length > 1) {
-                                updateCode(`${value.slice(0, index)}${digits}${value.slice(index + digits.length)}`, index + digits.length)
-                                return
-                            }
-                            updateCode(`${value.slice(0, index)}${digits}${value.slice(index + 1)}`, digits ? index + 1 : index)
-                        }}
-                        onPaste={(event) => {
-                            event.preventDefault()
-                            updateCode(event.clipboardData.getData('text'), 5)
-                        }}
-                        onKeyDown={(event) => {
-                            if (event.key === 'Backspace' && !value[index] && index > 0) {
-                                event.preventDefault()
-                                updateCode(`${value.slice(0, index - 1)}${value.slice(index)}`, index - 1)
-                            }
-                            if (event.key === 'ArrowLeft' && index > 0) {
-                                event.preventDefault()
-                                inputsRef.current[index - 1]?.focus()
-                            }
-                            if (event.key === 'ArrowRight' && index < 5) {
-                                event.preventDefault()
-                                inputsRef.current[index + 1]?.focus()
-                            }
-                        }}
-                        className='h-11 rounded-lg border border-ui-border bg-ui-panel text-center text-base font-semibold text-ui-text outline-none transition focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20 disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted'
-                    />
-                ))}
-            </div>
-        </div>
     )
 }
 

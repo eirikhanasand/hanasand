@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 test.skip(process.env.PASSWORD_POLICY_TEST !== '1', 'Requires a local frontend.')
 test('signup and reset accept one of each character type and reject missing types', async({ page }) => {
-    await page.route('**/api/auth/register', route => route.fulfill({ contentType: 'text/html', body: 'Registration submitted' }))
+    await page.route('**/api/auth/register', route => route.fulfill({ status: 202, json: { verificationRequired: true, challengeId: 'policy-test' } }))
     await page.goto('/login')
     await page.getByRole('button', { name: 'Sign up', exact: true }).click()
     const form = page.locator('form[action="/api/auth/register"]')
@@ -17,7 +17,7 @@ test('signup and reset accept one of each character type and reject missing type
     await form.getByLabel('Password', { exact: true }).fill('Abcdefghijklmn1!')
     await expect(form.getByRole('button', { name: 'Create account', exact: true })).toBeEnabled()
     await form.getByRole('button', { name: 'Create account', exact: true }).click()
-    await expect(page.getByText('Registration submitted', { exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Check your email', exact: true })).toBeVisible()
     await page.goto('/register')
     const signup = page.locator('form[action="/api/auth/register"]')
     await signup.locator('[name=username]').fill('policytest')
@@ -25,7 +25,7 @@ test('signup and reset accept one of each character type and reject missing type
     await signup.getByLabel('Email', { exact: true }).fill('policy@example.test')
     await signup.locator('[name=password]').fill('Abcdefghijklmn1!')
     await signup.getByRole('button', { name: 'Create account', exact: true }).click()
-    await expect(page.getByText('Registration submitted', { exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Check your email', exact: true })).toBeVisible()
     let resetSubmitted = false
     await page.route('**/auth/password-reset/complete', route => { resetSubmitted = true; return route.fulfill({ json: { ok: true } }) })
     await page.goto('/reset-password?id=policytest#token=test-only-token')

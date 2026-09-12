@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import bcrypt from 'bcrypt'
+import { consumeSignupCode, ensureSignupVerification, requestSignupCode, signupBinding } from '#utils/auth/signupVerification.ts'
 import run, { withTransaction } from '#db'
 import { normalizeEmail, usernameError } from '#utils/auth/accountIdentity.ts'
 import { validatePassword } from '#utils/auth/password.ts'
@@ -15,10 +16,12 @@ type GetUserBodyProps = {
     password: string
     avatar: string
     email: string
+    challengeId?: string
+    code?: string
 }
 
 export default async function postUser(req: FastifyRequest, res: FastifyReply) {
-    const { id, name, password, avatar, email: submittedEmail } = req.body as GetUserBodyProps ?? {}
+    const { id, name, password, avatar, email: submittedEmail, challengeId, code } = req.body as GetUserBodyProps ?? {}
     const normalizedId = normalizeUsername(id || '')
     const email = normalizeEmail(submittedEmail)
     const user = { id: normalizedId, name }
@@ -40,18 +43,29 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
     }
 
     try {
+        const binding = signupBinding([normalizedId, name.trim(), email, password, avatar || ''])
+        await ensureSignupVerification()
+        if (!challengeId) {
+            const existing = await run('SELECT id FROM users WHERE id = $1 OR email = $2 LIMIT 1', [normalizedId, email])
+            if (existing.rows.length) return res.status(409).send({ error: 'This username or email is already registered. Sign in to the existing account.' })
+            const { status, ...response } = await requestSignupCode(email, ip, binding)
+            return res.status(status).send(response)
+        }
         let assignedRoot = false
         const hashedPassword = await bcrypt.hash(password, 10)
         const response = await withTransaction(async query => {
+            if (!await consumeSignupCode(query, String(challengeId), String(code || ''), binding)) return null
             await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`email:${email}`])
             await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`username:${normalizedId}`])
             return query(
-                `INSERT INTO users (id,name,password,avatar,username,email)
-                VALUES ($1,$2,$3,$4,$1,$5)
+                `INSERT INTO users (id,name,password,avatar,username,email,email_verified_at)
+                VALUES ($1,$2,$3,$4,$1,$5,NOW())
                 ON CONFLICT DO NOTHING`,
                 [normalizedId, name.trim(), hashedPassword, avatar || '', email]
             )
         })
+
+        if (!response) return res.status(400).send({ error: 'The code is incorrect or expired. Try again or request a new code.' })
 
         if (!response.rowCount) {
             return res.status(400).send({ error: 'This username or email is already registered. Sign in to the existing account.' })

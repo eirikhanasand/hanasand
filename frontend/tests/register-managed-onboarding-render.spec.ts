@@ -1,12 +1,24 @@
 import { expect, test } from '@playwright/test'
 
 test('legacy signup links open one signup form with required email', async ({ page }) => {
+    let requests = 0
     await page.route('**/api/auth/register', async route => {
-        const fields = new URLSearchParams(route.request().postData() || '')
-        expect(fields.get('email')).toBe('signup@example.test')
-        expect(fields.get('redirectPath')).toBe('/developers#api-access')
-        await route.fulfill({ contentType: 'text/html', body: 'Signup submitted once' })
+        requests++
+        const fields = route.request().postDataJSON()
+        expect(fields.email).toBe('signup@example.test')
+        if (requests === 1 || requests === 3) {
+            expect(fields.code).toBeUndefined()
+            await route.fulfill({ status: 202, json: { verificationRequired: true, challengeId: `challenge-${requests}` } })
+        } else if (requests === 2) {
+            expect(fields.code).toBe('111111')
+            await route.fulfill({ status: 400, json: { error: 'The code is incorrect or expired.' } })
+        } else {
+            expect(fields.code).toBe('123456')
+            expect(fields.challengeId).toBe('challenge-3')
+            await route.fulfill({ json: { id: 'signup-example' } })
+        }
     })
+    await page.route('**/developers', route => route.fulfill({ contentType: 'text/html', body: 'Signed in' }))
     await page.goto('/register?path=%2Fdevelopers%23api-access')
     await expect(page).toHaveURL(/\/login\?mode=signup/)
     await expect(page.getByText('Enterprise onboarding', { exact: true })).toHaveCount(0)
@@ -19,7 +31,16 @@ test('legacy signup links open one signup form with required email', async ({ pa
     await expect(form.getByLabel('Email', { exact: true })).toHaveAttribute('required', '')
     await form.getByLabel('Email', { exact: true }).fill('signup@example.test')
     await form.getByRole('button', { name: 'Create account', exact: true }).click()
-    await expect(page.getByText('Signup submitted once')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible()
+    const firstDigit = page.getByRole('textbox', { name: 'Verification code digit 1', exact: true })
+    await expect(page.getByRole('textbox', { name: /Verification code digit/ })).toHaveCount(6)
+    await firstDigit.fill('111111')
+    await expect(page.getByText('The code is incorrect or expired.', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Resend code' }).click()
+    await expect.poll(() => requests).toBe(3)
+    await firstDigit.fill('123456')
+    await expect(page).toHaveURL(/\/developers#api-access$/)
+    expect(requests).toBe(4)
 })
 
 test('signup errors remain on the single form with the intended destination', async ({ page }) => {

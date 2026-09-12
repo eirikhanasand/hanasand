@@ -43,3 +43,23 @@ test('invalid signup returns to signup; an account without a session goes to log
         assert.equal(login.searchParams.get('error'), 'Your account was created. Please log in to continue.')
     } finally { globalThis.fetch = original }
 })
+
+
+test('pending email verification never creates auth cookies and forwards the challenge on confirmation', async () => {
+    const original = globalThis.fetch
+    let received: Record<string, string> = {}
+    globalThis.fetch = async (_url, options) => {
+        received = JSON.parse(String(options?.body))
+        return Response.json({ verificationRequired: true, challengeId: 'test-challenge' }, { status: 202 })
+    }
+    try {
+        const response = await POST(new NextRequest('https://hanasand.com/api/auth/register', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ id: 'signup-example', name: 'Signup Example', email: 'signup@example.test', password: 'Test-password-12345!', challengeId: 'test-challenge', code: '123456' }),
+        }))
+        assert.equal(response.status, 202)
+        assert.equal(response.headers.get('set-cookie'), null)
+        assert.equal(received.challengeId, 'test-challenge')
+        assert.equal(received.code, '123456')
+    } finally { globalThis.fetch = original }
+})

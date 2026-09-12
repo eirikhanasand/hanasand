@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const upstream = await fetch(`${authApiUrl()}/user`, {
         method: 'POST',
         headers: { ...clientHeaders(req.headers), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, id, password, email }),
+        body: JSON.stringify({ name, id, password, email, challengeId: body?.challengeId, code: body?.code }),
         cache: 'no-store',
     }).catch(() => null)
     if (!upstream) {
@@ -45,11 +45,14 @@ export async function POST(req: NextRequest) {
         }
         return NextResponse.json(data || { error: responseText || 'Unable to create account.' }, { status: upstream.status })
     }
+    if (upstream.status === 202 && data?.verificationRequired) {
+        return NextResponse.json(data, { status: 202 })
+    }
     if (!data?.id || !data?.name) {
         if (wantsRedirect) {
             return authRedirect(redirectPath, '/login', 'Your account was created. Please log in to continue.')
         }
-        return NextResponse.json({ error: 'Account created, but the session could not be created.' }, { status: 502 })
+        return NextResponse.json({ accountCreated: true, error: 'Your account was created. Please log in to continue.' }, { status: 502 })
     }
 
     const loginData = data.token ? data : await createLoginSession(req, data.id, password)
@@ -57,7 +60,7 @@ export async function POST(req: NextRequest) {
         if (wantsRedirect) {
             return authRedirect(redirectPath, '/login', 'Your account was created. Please log in to continue.')
         }
-        return NextResponse.json({ error: 'Account created, but the session could not be created.' }, { status: 502 })
+        return NextResponse.json({ accountCreated: true, error: 'Your account was created. Please log in to continue.' }, { status: 502 })
     }
 
     if (wantsRedirect) {
@@ -87,6 +90,8 @@ async function parseAuthBody(req: NextRequest) {
                 id: String(form.get('username') || form.get('id') || ''),
                 password: String(form.get('password') || ''),
                 email: String(form.get('email') || ''),
+                challengeId: String(form.get('challengeId') || ''),
+                code: String(form.get('code') || ''),
             },
             redirectPath: String(form.get('redirectPath') || '/dashboard'),
             wantsRedirect: true,
@@ -94,7 +99,7 @@ async function parseAuthBody(req: NextRequest) {
     }
 
     return {
-        body: await req.json().catch(() => null) as { name?: string, id?: string, password?: string, email?: string } | null,
+        body: await req.json().catch(() => null) as { name?: string, id?: string, password?: string, email?: string, challengeId?: string, code?: string } | null,
         redirectPath: '/dashboard',
         wantsRedirect: false,
     }
