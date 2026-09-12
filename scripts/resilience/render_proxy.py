@@ -24,6 +24,10 @@ def render(config):
             if not instance.get('address'):
                 continue
             suffix = ' backup' if index else ''
+            if instance.get('checkPort'):
+                check_port = int(instance['checkPort'])
+                if not 1 <= check_port <= 65535: raise ValueError('Invalid health check port')
+                suffix += f' port {check_port}'
             if instance['id'] in config.get('maintenanceInstances', []): suffix += ' disabled'
             if tcp:
                 suffix += ' on-marked-down shutdown-sessions'

@@ -212,3 +212,28 @@ describe("health route", () => {
     }
   });
 });
+
+test("the API publishes its current startup and storage readiness to the independent listener", async () => {
+  const reservation = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
+  const readinessPort = reservation.port!;
+  reservation.stop(true);
+  const store = new InMemoryScraperStore();
+  let databaseAvailable = true;
+  (store as any).databaseHealthSnapshot = () => ({ ok: databaseAvailable, databaseAvailable });
+  const options = { port: 0, readinessPort, store, frontier: new FocusedFrontier(), ready: false };
+  const server = startApiServer(options);
+  const url = `http://127.0.0.1:${readinessPort}/v1/health`;
+  try {
+    let response: Response | undefined;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      try { response = await fetch(url); break; } catch { await Bun.sleep(10); }
+    }
+    expect(response?.status).toBe(503);
+    options.ready = true;
+    await Bun.sleep(100);
+    expect((await fetch(url)).status).toBe(200);
+    databaseAvailable = false;
+    await Bun.sleep(100);
+    expect((await fetch(url)).status).toBe(503);
+  } finally { await server.stop(); }
+});

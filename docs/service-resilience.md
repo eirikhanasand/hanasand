@@ -86,3 +86,11 @@ include proxy check status/duration. A route unavailable from OVH does not estab
 that the same service is down on Inspur. `check-routing-behavior.py` exercises a
 three-second healthy response, sustained HTTP failure, and recovery using an
 isolated HAProxy instance; it does not stop production services.
+
+### Collector readiness latency
+
+The primary collector uses `SCRAPER_HEALTH_PORT=8098` for an independent worker listening at `/v1/health`; requests still go to port 8097. Set `checkPort: 8098` only for this instance in the primary site's existing resilience configuration and update its `health` URL to the same private address on 8098. Do not regenerate live configuration or change remote tunnel ports. Query replicas retain their existing checks unless explicitly enabled separately.
+
+The runtime publishes health every 50 ms. The worker refuses success once the sample is 250 ms old, including time spent producing or delivering it. Startup, database errors and write backlogs retain their existing 503 semantics. A blocked serving event loop therefore yields a fast 503 instead of a delayed cached 200. Resource diagnostics are sampled at most once per second; storage readiness is still sampled on every heartbeat using the existing database probe policy. This bounds the readiness heartbeat's staleness, not the underlying database probe interval. An absent/dead readiness worker also fails the routing check.
+
+The under-20 ms response target is measured on the primary host, including the local HTTP connection. WAN round trips and full intelligence queries have separate latency budgets. Drain the collector before rebuilding it, verify both readiness and an actual query, then enable the new check port and restore routing. Preserve the two local routing instances and their existing fall/rise thresholds.

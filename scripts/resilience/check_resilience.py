@@ -95,3 +95,12 @@ assert observed['description'] == monitor.transition_embed(primary, remote, [rem
 assert 'outage' not in observed['description'].lower()
 assert observed['color'] == 0xFF0000
 print('Isolated transport migration, idempotence, local preference and plain alert wording checks passed.')
+
+from render_proxy import render
+readiness_config = {'services': [{'id': 'intelligence', 'listenPort': 18097, 'checkPath': '/v1/health', 'instances': [
+    {'id': 'inspur-ti-1', 'address': '172.20.0.6:8097', 'checkPort': 8098},
+    {'id': 'inspur-ti-2', 'address': '127.0.0.1:18102'}]}]}
+rendered = render(readiness_config)
+assert 'server inspur-ti-1 172.20.0.6:8097 check port 8098' in rendered
+assert 'server inspur-ti-2 127.0.0.1:18102 check backup' in rendered
+print('Independent readiness port preserves serving ports and backup routing.')
