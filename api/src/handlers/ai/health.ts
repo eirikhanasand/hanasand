@@ -5,7 +5,8 @@ export function connectedModels() {
     return listGptClients('gpt').filter(client => Date.now() - Date.parse(client.lastSeen || '') < 120_000)
 }
 
-export async function getModelHealth(_req: FastifyRequest, res: FastifyReply) {
+export async function getModelHealth(req: FastifyRequest, res: FastifyReply) {
+    if (await forwardWorkerHealth(req, res, 'models')) return
     const clients = connectedModels()
     return res.header('Cache-Control', 'no-store').status(clients.length ? 200 : 503).send({
         ok: clients.length > 0, connectedModels: clients.length,
@@ -40,7 +41,31 @@ export async function checkInference(): Promise<InferenceHealth> {
     return pending
 }
 
-export async function getInferenceHealth(_req: FastifyRequest, res: FastifyReply) {
+export async function getInferenceHealth(req: FastifyRequest, res: FastifyReply) {
+    if (await forwardWorkerHealth(req, res, 'inference')) return
     const result = await checkInference()
     return res.header('Cache-Control', 'no-store').status(result.ok ? 200 : 503).send(result)
+}
+
+// HTTP replicas do not own model sockets. Ask the worker that performs inference.
+async function forwardWorkerHealth(req: FastifyRequest, res: FastifyReply, check: 'models' | 'inference') {
+    const base = process.env.AI_HEALTH_WORKER_BASE?.trim()
+    if (!base) return false
+    res.header('Cache-Control', 'no-store')
+    try {
+        if (req.headers['x-ai-health-forwarded']) throw new Error('Health forwarding loop')
+        const response = await fetch(`${base.replace(/\/$/, '')}/api/ai/health/${check}`, {
+            headers: { 'x-ai-health-forwarded': '1' },
+            signal: AbortSignal.timeout(20_000),
+            redirect: 'error',
+        })
+        const result = await response.json()
+        if (![200, 503].includes(response.status) || typeof result?.ok !== 'boolean'
+            || !Number.isInteger(result.connectedModels) || result.connectedModels < 0
+            || (response.status === 200) !== result.ok) throw new Error('Invalid worker health response')
+        res.status(response.status).send(result)
+    } catch {
+        res.status(503).send({ ok: false, connectedModels: 0, checkedAt: new Date().toISOString(), error: 'The inference worker health check is unavailable.' })
+    }
+    return true
 }
