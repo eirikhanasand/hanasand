@@ -53,7 +53,7 @@ function queueSave(id: string, socket: WS, content: string) {
         if (!entry) return
         try {
             const result = await run(
-                'UPDATE share SET content = $1, timestamp = NOW(), updated_at = NOW() WHERE id = $2 RETURNING id',
+                'UPDATE share SET content = $1, updated_at = NOW() WHERE id = $2 RETURNING id',
                 [entry.content, id]
             )
             if (!result.rows.length) throw new Error('Share no longer exists')

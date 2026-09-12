@@ -7,6 +7,8 @@ let missing = false
 let saved = ''
 mock.module('../src/plugins/ws', () => ({ pendingUpdates }))
 mock.module('../src/utils/db.ts', () => ({ default: async (_sql: string, values: string[]) => {
+    expect(_sql).toContain('updated_at = NOW()')
+    expect(_sql).not.toMatch(/\btimestamp\b/)
     if (fail) throw new Error('database unavailable')
     saved = values[0]
     return { rows: missing ? [] : [{ id: values[1] }] }
