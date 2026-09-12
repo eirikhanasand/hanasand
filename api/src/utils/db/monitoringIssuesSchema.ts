@@ -1,6 +1,12 @@
 import run from '#db'
 
 export default async function ensureMonitoringIssuesSchema() {
+    await run(`CREATE TABLE IF NOT EXISTS monitoring_case_vms (
+        automation_id TEXT NOT NULL REFERENCES agent_automations(id) ON DELETE CASCADE,
+        vm_name TEXT NOT NULL REFERENCES vms(name) ON UPDATE CASCADE ON DELETE CASCADE,
+        target_url TEXT NOT NULL,
+        PRIMARY KEY (automation_id, vm_name)
+    )`)
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS json_rule JSONB')
     await run(`CREATE TABLE IF NOT EXISTS monitoring_json_snapshots (
         id TEXT PRIMARY KEY, payload JSONB, error TEXT, sampled_at TIMESTAMPTZ NOT NULL, expires_at TIMESTAMPTZ NOT NULL

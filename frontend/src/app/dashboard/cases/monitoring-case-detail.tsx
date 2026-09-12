@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import type { CaseRow } from './cases-client'
 
 export type MonitoringCase = CaseRow & {
+    canManage?: boolean,
     events?: CaseEvent[], eventTotal?: number, eventPage?: number, eventSnapshot?: string, currentCheck?: CheckDetails,
     lastSeenAt?: string, occurrences: number, automationId: string, resolvedAt?: string, notificationsEnabled: boolean,
     history: Array<{ id: string, actor: string, at: string, action: string, note?: string, fromStatus?: string, toStatus?: string, fromSeverity?: string, toSeverity?: string, notificationsEnabled?: boolean }>,
@@ -47,6 +48,7 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
         return () => controller.abort()
     }, [endpoint, revision])
     async function save(change: Record<string, unknown>) {
+        if (item?.canManage === false) return
         setBusy(true)
         setError('')
         setNotice('')
@@ -90,12 +92,12 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                 </div>
                 {item && <div className='flex max-w-full flex-wrap items-center gap-2'>
                     <span className={`inline-flex h-10 min-w-28 items-center justify-center rounded-lg border px-3 text-sm font-medium capitalize ${item.status === 'open' ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning' : 'border-ui-success/30 bg-ui-success/10 text-ui-success'}`}>{item.status.replaceAll('_', ' ')}</span>
-                    <select aria-label='Severity' className={headerControl} value={item.severity} disabled={busy} onChange={event => void save({ severity: event.target.value })}>{['low', 'medium', 'high', 'critical'].map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select>
-                    {['closed', 'resolved'].includes(item.status) ? <button className={headerControl} disabled={busy} onClick={() => void save({ status: 'open' })}>Reopen case</button> : <>
-                        <button className={headerControl} disabled={busy} onClick={() => void save({ status: item.status === 'in_progress' ? 'open' : 'in_progress' })}>{item.status === 'in_progress' ? 'Set as open' : 'Start progress'}</button>
-                        <button className={headerControl} disabled={busy} onClick={() => { setTab('details'); setResolving(true) }}>Resolve case</button>
+                    <select aria-label='Severity' className={headerControl} value={item.severity} disabled={busy || item.canManage === false} onChange={event => void save({ severity: event.target.value })}>{['low', 'medium', 'high', 'critical'].map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select>
+                    {['closed', 'resolved'].includes(item.status) ? <button className={headerControl} disabled={busy || item.canManage === false} onClick={() => void save({ status: 'open' })}>Reopen case</button> : <>
+                        <button className={headerControl} disabled={busy || item.canManage === false} onClick={() => void save({ status: item.status === 'in_progress' ? 'open' : 'in_progress' })}>{item.status === 'in_progress' ? 'Set as open' : 'Start progress'}</button>
+                        <button className={headerControl} disabled={busy || item.canManage === false} onClick={() => { setTab('details'); setResolving(true) }}>Resolve case</button>
                     </>}
-                    {item.resolution?.id && ['ai', 'automation'].includes(item.resolution.type) && !item.resolution.confirmedAt && ['resolved', 'closed'].includes(item.status) && <button className={headerControl} disabled={busy} onClick={() => void save({ confirmResolutionId: item.resolution!.id })}>Confirm resolution</button>}
+                    {item.resolution?.id && ['ai', 'automation'].includes(item.resolution.type) && !item.resolution.confirmedAt && ['resolved', 'closed'].includes(item.status) && <button className={headerControl} disabled={busy || item.canManage === false} onClick={() => void save({ confirmResolutionId: item.resolution!.id })}>Confirm resolution</button>}
                 </div>}
             </div>
             <p role='status' className='sr-only'>{busy ? 'Saving…' : notice}</p>
@@ -112,7 +114,7 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                     <label htmlFor='resolution-comment' className='font-medium'>Resolution comment (required)</label>
                     <textarea id='resolution-comment' className={`${control} min-h-24`} required maxLength={5000} value={comment} onChange={event => setComment(event.target.value)} placeholder='What was fixed, and how did you verify it?' />
                     <label className='flex items-center gap-2 text-sm'><input type='checkbox' checked={aiAssisted} onChange={event => setAiAssisted(event.target.checked)} />Resolved by AI — requires human confirmation</label>
-                    <div className='flex gap-2'><button className={control} disabled={busy || !comment.trim()}>Resolve with comment</button><button type='button' className={control} disabled={busy} onClick={() => setResolving(false)}>Cancel</button></div>
+                    <div className='flex gap-2'><button className={control} disabled={busy || item.canManage === false || !comment.trim()}>Resolve with comment</button><button type='button' className={control} disabled={busy || item.canManage === false} onClick={() => setResolving(false)}>Cancel</button></div>
                 </form>}
                 {item.resolution && <section className='grid gap-2 border-b border-ui-border p-5' aria-label='Resolution review'>
                     <h2 className='font-semibold'>{item.resolution.type === 'ai' ? 'Resolved by AI' : item.resolution.type === 'automation' ? 'Recovered automatically' : item.resolution.type === 'unknown' ? 'Resolver not recorded' : 'Resolved by a person'}</h2>
@@ -134,7 +136,7 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                 <details key={`notifications-${caseId}`} className='border-b border-ui-border p-5 sm:p-6'>
                     <summary className='cursor-pointer text-lg font-semibold'>Notification settings ({item.notifications.filter(notification => notification.deliveredAt).length})</summary>
                     <div className='mt-4 grid gap-4'>
-                        <label className='flex items-center gap-3 text-sm'><input type='checkbox' className='h-4 w-4' checked={item.notificationsEnabled} disabled={busy} onChange={event => void save({ notificationsEnabled: event.target.checked })} />Enable notifications for this case</label>
+                        <label className='flex items-center gap-3 text-sm'><input type='checkbox' className='h-4 w-4' checked={item.notificationsEnabled} disabled={busy || item.canManage === false} onChange={event => void save({ notificationsEnabled: event.target.checked })} />Enable notifications for this case</label>
                         <h3 className='text-sm font-medium'>Delivery history</h3>
                         {item.notifications.length ? item.notifications.map((notification, index) => <article className='grid gap-2 rounded-lg bg-ui-canvas p-3 text-sm' key={notification.messageId || index}>
                             <p>{notification.deliveredAt ? `Delivered ${date(notification.deliveredAt)}` : 'Delivery pending'}</p>
@@ -168,8 +170,8 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                     {item.comments?.length ? item.comments.map(entry => <article className='rounded-lg border border-ui-border p-4' key={entry.id}><p className='wrap-break-word text-sm text-ui-muted'>{entry.author} · {date(entry.createdAt)}</p><p className='mt-2 whitespace-pre-wrap [overflow-wrap:anywhere]'>{entry.body}</p></article>) : <p className='text-sm text-ui-muted'>No comments yet.</p>}
                     <form className='grid gap-3' onSubmit={event => { event.preventDefault(); if (comment.trim() && !busy) void save({ comment }) }}>
                         <label htmlFor='case-comment' className='text-sm font-medium'>Add a comment</label>
-                        <textarea id='case-comment' className={`${control} min-h-28 w-full`} value={comment} onChange={event => setComment(event.target.value)} maxLength={5000} disabled={busy} placeholder='Share an update or investigation notes…' required />
-                        <button type='submit' className={`${control} justify-self-start`} disabled={busy || !comment.trim()}>Post comment</button>
+                        <textarea id='case-comment' className={`${control} min-h-28 w-full`} value={comment} onChange={event => setComment(event.target.value)} maxLength={5000} disabled={busy || item.canManage === false} placeholder='Share an update or investigation notes…' required />
+                        <button type='submit' className={`${control} justify-self-start`} disabled={busy || item.canManage === false || !comment.trim()}>Post comment</button>
                     </form>
                 </section>
             </div>

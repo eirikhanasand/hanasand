@@ -12,11 +12,11 @@ const server = Bun.serve({port: 0, fetch(request) {
     return new Response('<html><body><div id="root"></div><script type="module" src="/app.js"></script></body></html>', {headers:{'content-type':'text/html'}})
 }})
 const build = await Bun.build({entrypoints:['incident-fixture'], target:'browser', plugins:[{name:'fixture',setup(builder) {
-    builder.onResolve({filter:/^(incident-fixture|next\/link)$/}, args=>({path:args.path,namespace:'fixture'}))
-    builder.onLoad({filter:/.*/,namespace:'fixture'},args=>({loader:'tsx',resolveDir:process.cwd(),contents:args.path==='next/link' ? 'export default function Link(props){return <a {...props}/>}' : `
-        import {createRoot} from 'react-dom/client'; import StatusDashboard from './src/app/status/pageClient';
+    builder.onResolve({filter:/^(incident-fixture|next\/link|next\/image|next\/navigation|@\/config)$/}, args=>({path:args.path,namespace:'fixture'}))
+    builder.onLoad({filter:/.*/,namespace:'fixture'},args=>({loader:'tsx',resolveDir:process.cwd(),contents:args.path==='next/navigation' ? 'export const usePathname=()=>"/status/incidents/report"' : args.path==='next/image' ? 'export default function Image({priority,...props}){return <img {...props}/>}' : args.path==='@/config' ? 'export default {version: "fixture"}' : args.path==='next/link' ? 'export default function Link(props){return <a {...props}/>}' : `
+        import {createRoot} from 'react-dom/client'; import StatusDashboard from './src/app/status/pageClient'; import Footer from './src/components/footer/footer';
         const payload=${JSON.stringify(payload(false))}; if(location.search) payload.incidents[0].status='investigating';
-        createRoot(document.getElementById('root')).render(<StatusDashboard serviceStatus={payload} mode='incident' incidentId='report'/>);
+        createRoot(document.getElementById('root')).render(<><StatusDashboard serviceStatus={payload} mode='incident' incidentId='report'/><Footer/></>);
     `}))
 }}]})
 assert(build.success,build.logs.join('\n')); bundle=await build.outputs[0].text()
@@ -27,20 +27,21 @@ try {
     await page.addInitScript(()=>{ window.storageAccesses=0; Storage.prototype.getItem=()=>{window.storageAccesses++;return null};Storage.prototype.setItem=()=>{window.storageAccesses++} })
     await page.goto(server.url.toString())
     await page.getByRole('article').waitFor()
-    assert.equal(await page.locator('li').count(),25)
-    assert.match(await page.locator('li').first().innerText(),/Update 1000/)
+    assert.equal(await page.getByRole('article').locator('li').count(),25)
+    assert.match(await page.getByRole('article').locator('li').first().innerText(),/Update 1000/)
     await page.getByRole('button',{name:/Show older updates/}).click()
-    assert.equal(await page.locator('li').count(),50)
+    assert.equal(await page.getByRole('article').locator('li').count(),50)
     await page.clock.runFor(61_000)
-    assert.deepEqual(requests,[],'Resolved incidents must not reload the full status feed')
+    assert(requests.length > 0 && requests.every(query => query === '?summary=true'), 'The footer must only request the small health summary')
+    requests = []
     assert.equal(await page.evaluate(()=>window.storageAccesses),0)
     await page.goto(server.url.toString()+'?active')
     await page.getByRole('article').waitFor()
     await page.clock.runFor(30_100)
     await page.getByText('Resolved',{exact:true}).waitFor()
-    assert.deepEqual(requests,['?incident=report'])
+    assert.deepEqual(requests.filter(query => query !== '?summary=true'),['?incident=report'])
     await page.clock.runFor(61_000)
-    assert.equal(requests.length,1,'Polling stops after recovery')
+    assert.equal(requests.filter(query => query !== '?summary=true').length,1,'Polling stops after recovery')
     assert.equal(await page.evaluate(()=>window.storageAccesses),0)
     console.log('Passed: bounded timeline, no dashboard/storage work, scoped active refresh, polling stops on resolution.')
 } finally {await browser.close();server.stop(true)}

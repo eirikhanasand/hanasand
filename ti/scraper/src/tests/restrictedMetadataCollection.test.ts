@@ -578,6 +578,32 @@ describe("restricted metadata collection", () => {
     });
   });
 
+  test("retries a fresh task after an exhausted source backoff and preserves failure backoff", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_recovery", type: "tor_metadata", url: `http://${"d".repeat(56)}.onion/`, accessMethod: "approved_proxy", status: "active", risk: "restricted", legalNotes: "Approved metadata-only collection.", governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-07-22T09:00:00.000Z", approvedBy: "reviewer" }, metadata: { actorName: "Recovery" }, crawlState: { retryCount: 14, backoffUntil: "2026-07-22T10:00:00.000Z" } }));
+    let calls = 0;
+    let available = false;
+    const boundary = new TorMetadataHttpBoundary({ proxyUrl: "http://onion-tor:8118", fetcher: async () => {
+      calls++;
+      return new Response(available ? "<title>Notices</title><div class='post-title'>Contoso Manufacturing</div>" : "<title>No listings</title>", { headers: { "content-type": "text/html" } });
+    } });
+    expect((await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-22T09:59:00.000Z" })).sourceCount).toBe(0);
+    expect(calls).toBe(0);
+    expect((await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-22T10:00:00.000Z" })).failedSourceCount).toBe(1);
+    expect(calls).toBe(1);
+    expect(store.getSource("src_recovery")?.crawlState).toMatchObject({ retryCount: 15, backoffUntil: "2026-07-23T10:00:00.000Z" });
+    available = true;
+    expect((await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-22T10:01:00.000Z" })).sourceCount).toBe(0);
+    expect((await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-23T10:00:00.000Z" })).completedSourceCount).toBe(1);
+    expect(calls).toBe(2);
+    expect(store.getSource("src_recovery")?.crawlState?.retryCount).toBe(0);
+    const recovered = store.getSource("src_recovery")!;
+    store.saveSource({ ...recovered, crawlState: { retryCount: 14, lastError: "retry budget exhausted", backoffUntil: "2026-07-25T10:00:00.000Z" } });
+    expect((await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-23T10:01:00.000Z" })).completedSourceCount).toBe(1);
+    expect(calls).toBe(3);
+    expect(store.getSource("src_recovery")?.crawlState?.retryCount).toBe(0);
+  });
+
   test("backs off reachable pages that yield no useful victim metadata", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "src_gateway_only", type: "tor_metadata", url: `http://${"d".repeat(56)}.onion/`, accessMethod: "approved_proxy", status: "active", risk: "restricted", legalNotes: "Approved metadata-only reachability review.", governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-07-22T09:00:00.000Z", approvedBy: "reviewer" }, metadata: { actorName: "Gateway" } }));
