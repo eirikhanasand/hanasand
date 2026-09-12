@@ -91,6 +91,7 @@ assert len(isolated.GROUPS) == 4
 for forwards in isolated.GROUPS.values():
     assert all(value.startswith('127.0.0.1:') and ':127.0.0.1:' in value for value in forwards[1::2])
 observed = monitor.transition_embed(primary, {**remote, 'observedFromSite': 'ovhcloud'}, [remote])
-assert 'Routing observation from ovhcloud' in observed['description']
+assert observed['description'] == monitor.transition_embed(primary, remote, [remote])['description']
+assert 'outage' not in observed['description'].lower()
 assert observed['color'] == 0xFF0000
-print('Isolated transport migration, idempotence, local preference and observer context checks passed.')
+print('Isolated transport migration, idempotence, local preference and plain alert wording checks passed.')

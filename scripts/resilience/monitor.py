@@ -79,9 +79,6 @@ def transition_embed(previous, current, services, drill=False):
     title = f"{'[TEST] ' if drill else ''}{'Failback' if restored else 'Failover'}: {current['name']}"
     description = (f"{previous.get('activeInstance') or 'unavailable'} → {current.get('activeInstance') or 'unavailable'}. "
                    f"{message}")
-    observer = current.get('observedFromSite')
-    if observer:
-        description += f' Routing observation from {observer}; remote reachability does not establish a host outage.'
     checks = [f"{i['id']}: {i['lastProxyCheck']['check_status']} ({i['lastProxyCheck']['check_duration']} ms)" for i in current['instances'] if not i.get('healthy') and i.get('lastProxyCheck')]
     return {'title': title, 'description': description, 'color': 0x00CC66 if restored else 0xFF0000,
             'fields': [{'name': 'Active endpoint', 'value': current.get('activeEndpoint') or 'None'},
