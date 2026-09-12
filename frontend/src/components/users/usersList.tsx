@@ -35,7 +35,7 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
         : users.filter((user) => !reservedSet.has(user.id.toLowerCase())))
         .filter((user) => {
             const query = search.trim().toLowerCase()
-            return !query || user.name.toLowerCase().includes(query) || user.id.toLowerCase().includes(query)
+            return !query || user.name.toLowerCase().includes(query) || user.id.toLowerCase().includes(query) || (user.username || '').toLowerCase().includes(query)
         })
 
     return (

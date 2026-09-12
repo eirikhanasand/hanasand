@@ -1,5 +1,6 @@
 SELECT 
-    u.id, 
+    u.id,
+    COALESCE(u.username, u.id) AS username,
     u.name, 
     u.avatar,
     u.active,
