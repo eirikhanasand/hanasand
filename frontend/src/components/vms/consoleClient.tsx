@@ -2,11 +2,24 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { RefreshCw } from 'lucide-react'
+import { Maximize2, Minimize2, RefreshCw } from 'lucide-react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 
 export default function VmConsole({ name }: { name: string }) {
+    const panel = useRef<HTMLElement>(null)
+    const [fullscreen, setFullscreen] = useState(false)
+    useEffect(() => {
+        const changed = () => setFullscreen(document.fullscreenElement === panel.current)
+        document.addEventListener('fullscreenchange', changed)
+        return () => document.removeEventListener('fullscreenchange', changed)
+    }, [])
+    async function toggleFullscreen() {
+        try {
+            if (document.fullscreenElement === panel.current) await document.exitFullscreen()
+            else await panel.current?.requestFullscreen()
+        } catch { setStatus('Fullscreen is unavailable in this browser.') }
+    }
     const container = useRef<HTMLDivElement>(null)
     const [attempt, setAttempt] = useState(0)
     const [status, setStatus] = useState('Connecting…')
@@ -41,19 +54,33 @@ export default function VmConsole({ name }: { name: string }) {
                 }
                 return false
             })
+            let followOutput = true
+            let pendingWrites = 0
+            const scroll = terminal.onScroll(position => {
+                if (!pendingWrites) followOutput = position >= terminal.buffer.active.baseY
+            })
+            const stopFollowing = (event: WheelEvent) => {
+                if (event.deltaY < 0) followOutput = false
+            }
+            const host = container.current
+            host.addEventListener('wheel', stopFollowing, { passive: true })
             let ready = false
             let failed = false
             const sendSize = () => {
                 if (disposed) return
+                const following = followOutput
                 fit.fit()
+                if (following) terminal.scrollToBottom()
                 if (ready && socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }))
             }
             const observer = new ResizeObserver(sendSize)
             observer.observe(container.current)
             const input = terminal.onData(data => {
+                followOutput = true
+                terminal.scrollToBottom()
                 if (ready && socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'input', data }))
             })
-            disposeTerminal = () => { observer.disconnect(); input.dispose(); selection.dispose(); terminal.dispose() }
+            disposeTerminal = () => { observer.disconnect(); host.removeEventListener('wheel', stopFollowing); input.dispose(); selection.dispose(); scroll.dispose(); terminal.dispose() }
             socket = new WebSocket(`${config.url.api_wss}/vm/${encodeURIComponent(name)}/console`)
             socket.onopen = () => {
                 socket?.send(JSON.stringify({ type: 'auth', id: getCookie('id'), token: decodeURIComponent(getCookie('access_token') || '') }))
@@ -63,7 +90,13 @@ export default function VmConsole({ name }: { name: string }) {
                 if (disposed) return
                 try {
                     const message = JSON.parse(event.data)
-                    if (message.type === 'output') terminal.write(message.data)
+                    if (message.type === 'output') {
+                        pendingWrites++
+                        terminal.write(message.data, () => {
+                            if (!disposed && followOutput) terminal.scrollToBottom()
+                            pendingWrites--
+                        })
+                    }
                     else if (message.type === 'ready') {
                         ready = true
                         setUsername(message.username)
@@ -82,14 +115,15 @@ export default function VmConsole({ name }: { name: string }) {
         return () => { disposed = true; socket?.close(); disposeTerminal?.() }
     }, [name, attempt])
 
-    return <section className='flex min-h-[65vh] flex-col gap-3 rounded-xl border border-ui-border bg-ui-panel p-4'>
+    return <section ref={panel} className='flex h-[calc(100dvh-7rem)] min-h-0 flex-col gap-3 overflow-hidden rounded-xl border border-ui-border bg-ui-panel p-4 [&:fullscreen]:h-dvh [&:fullscreen]:w-screen [&:fullscreen]:rounded-none'>
         <header className='flex flex-wrap items-center justify-between gap-3'>
             <div><h1 className='text-lg font-semibold'>{name} console</h1><p role='status' className='text-sm text-ui-muted'>{status}{username ? ` · ${username}` : ''}</p></div>
             <div className='flex items-center gap-3'>
+                <button type='button' onClick={() => void toggleFullscreen()} aria-label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'} title={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'} aria-pressed={fullscreen} className='rounded-lg border border-ui-border p-2'>{fullscreen ? <Minimize2 className='h-4 w-4' /> : <Maximize2 className='h-4 w-4' />}</button>
                 <Link href='/system' className='text-sm text-ui-primary'>Back to overview</Link>
                 <button type='button' onClick={() => setAttempt(value => value + 1)} className='flex items-center gap-2 rounded-lg border border-ui-border px-3 py-2 text-sm'><RefreshCw className='h-4 w-4' />Reconnect</button>
             </div>
         </header>
-        <div ref={container} aria-label={`${name} terminal`} className='min-h-96 min-w-0 flex-1 overflow-hidden rounded-lg bg-[#08111f] p-2' />
+        <div ref={container} aria-label={`${name} terminal`} className='min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg bg-[#08111f] p-2' />
     </section>
 }
