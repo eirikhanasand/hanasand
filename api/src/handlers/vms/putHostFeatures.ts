@@ -3,6 +3,7 @@ import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import sanitize from '#utils/sanitize.ts'
+import { applyAlwaysRunning } from '#utils/vms/ensureAlwaysRunning.ts'
 import { recordSystemEvent } from '#utils/systemEvent.ts'
 
 type FeatureBody = {
@@ -78,6 +79,10 @@ export default async function putVmHostFeatures(req: FastifyRequest, res: Fastif
             ? normalizeOptionalHost(body.failover_host)
             : vm.failover_host
 
+        if (alwaysEnabled !== vm.always_running_enabled || alwaysPremium !== vm.always_running_premium) {
+            await applyAlwaysRunning({ name: vm.name, primary_host: primaryHost }, alwaysEnabled && alwaysPremium)
+        }
+
         const result = await run(`
             UPDATE vms
             SET always_running_premium = $2,
@@ -126,7 +131,7 @@ function resolveEnabled({
     feature: string
 }) {
     if (typeof requested !== 'boolean') {
-        return current
+        return premium && current
     }
 
     if (requested && !premium) {

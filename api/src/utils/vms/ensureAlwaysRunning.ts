@@ -1,37 +1,40 @@
 import config from '#constants'
 import run from '#db'
+import { getLocalLxdInstance, lxdRequest, setLocalLxdInstanceState } from './lxd.ts'
 
-type AlwaysRunningRow = {
-    name: string
+type AlwaysRunningVm = { name: string, primary_host: string }
+
+/** Apply the policy to the real instance before acknowledging a toggle. */
+export async function applyAlwaysRunning(vm: AlwaysRunningVm, enabled: boolean) {
+    if (vm.primary_host.toLowerCase() !== config.vm_host_id.toLowerCase()) {
+        throw new Error('The container must be managed by its primary host.')
+    }
+    const instance = await getLocalLxdInstance(vm.name)
+    const value = String(enabled)
+    if (instance.config?.['user.hanasand.always_running'] !== value || instance.config?.['boot.autostart'] !== value) {
+        const operation = await lxdRequest(`/1.0/instances/${encodeURIComponent(vm.name)}`, {
+            method: 'PATCH',
+            body: { config: { ...instance.config, 'user.hanasand.always_running': value, 'boot.autostart': value } },
+        })
+        if (operation.operation) await lxdRequest(operation.operation + '/wait?timeout=90')
+    }
+    // Read the actual state; the dashboard's cached status may be stale.
+    if (enabled) await setLocalLxdInstanceState(vm.name, 'start', { tolerateAlready: true })
 }
 
 export default async function ensureAlwaysRunningVms() {
-    if (!config.internal_api || !config.vm_api_token) {
-        return
-    }
-
     const result = await run(`
-        SELECT v.name
-        FROM vms v
-        LEFT JOIN vm_details d ON LOWER(d.name) = LOWER(v.name)
-        WHERE v.always_running_enabled IS TRUE
-          AND LOWER(v.primary_host) = LOWER($1)
-          AND LOWER(COALESCE(d.status, 'unknown')) IN ('stopped', 'unknown', 'error')
+        SELECT name, primary_host FROM vms
+        WHERE always_running_enabled IS TRUE AND always_running_premium IS TRUE
+          AND LOWER(primary_host) = LOWER($1)
     `, [config.vm_host_id])
-
-    await Promise.all(result.rows.map(row => startVm(row as AlwaysRunningRow)))
-}
-
-async function startVm(vm: AlwaysRunningRow) {
-    const response = await fetch(`${config.internal_api}/vm/${encodeURIComponent(vm.name)}/start`, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${encodeURIComponent(config.vm_api_token || '')}`,
-            'User-Agent': 'hanasand_internal',
-        },
-    })
-
-    if (!response.ok) {
-        throw new Error(`Unable to keep ${vm.name} running: ${response.status}`)
+    const failures: string[] = []
+    for (const vm of result.rows) {
+        try {
+            await applyAlwaysRunning(vm as AlwaysRunningVm, true)
+        } catch (error) {
+            failures.push(`${vm.name}: ${error instanceof Error ? error.message : String(error)}`)
+        }
     }
+    if (failures.length) throw new Error(`Always-running checks failed: ${failures.join('; ')}`)
 }
