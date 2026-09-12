@@ -18,8 +18,8 @@ export function monitoringCheckDetails(automation: AutomationRow) {
 
 export async function loadMonitoringCaseEvents(issueId: string, page: number, snapshot = new Date().toISOString()) {
     const result = await run(`SELECT id, started_at, completed_at, duration_ms, status, warning, error, result, check_details
-        FROM agent_automation_runs WHERE issue_id = $1 AND started_at <= $3::timestamptz ORDER BY started_at DESC, id DESC LIMIT 50 OFFSET $2`, [issueId, page * 50, snapshot])
-    const count = await run('SELECT count(*)::int AS total FROM agent_automation_runs WHERE issue_id = $1 AND started_at <= $2::timestamptz', [issueId, snapshot])
+        FROM agent_automation_runs WHERE issue_id = $1 AND started_at <= $3::timestamptz AND (completed_at IS NULL OR completed_at <= $3::timestamptz) ORDER BY started_at DESC, id DESC LIMIT 50 OFFSET $2`, [issueId, page * 50, snapshot])
+    const count = await run('SELECT count(*)::int AS total FROM agent_automation_runs WHERE issue_id = $1 AND started_at <= $2::timestamptz AND (completed_at IS NULL OR completed_at <= $2::timestamptz)', [issueId, snapshot])
     return { events: result.rows.map(row => ({ id: row.id, startedAt: row.started_at, completedAt: row.completed_at,
         durationMs: row.duration_ms, outcome: row.status === 'failed' ? 'failure' : row.warning ? 'warning' : row.status,
         message: redactSecretBearingText(row.error || row.result || ''), details: row.check_details })),
