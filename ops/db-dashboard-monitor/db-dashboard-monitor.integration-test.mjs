@@ -44,7 +44,7 @@ try {
             ...process.env,
             NODE_OPTIONS: `--import=${pathToFileURL(fetchHook).href}`,
             HANASAND_DB_MONITOR_USER: '',
-            HANASAND_DB_MONITOR_PASSWORD: '',
+            HANASAND_DB_MONITOR_SERVICE_ACCOUNT_KEY: '',
             HANASAND_DB_MONITOR_STATE: dashboardState,
             HANASAND_DB_MONITOR_SCREENSHOT: join(root, 'missing.png'),
             HANASAND_STATUS_FEED_MONITOR_STATE: join(root, 'status-feed.json'),

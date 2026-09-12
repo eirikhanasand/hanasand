@@ -8,7 +8,7 @@ const dbName = process.env.DB || 'hanasand'
 const dbUser = process.env.DB_USER || 'hanasand'
 const dbPassword = process.env.DB_PASSWORD
 const serviceKey = process.env.MONITOR_SERVICE_ACCOUNT_KEY
-const password = process.env.MONITOR_PASSWORD || `Mm22!!${crypto.randomUUID().replaceAll('-', '').slice(0, 18)}Aa`
+const passwordProbe = crypto.randomBytes(32).toString('base64url')
 const { Pool } = pg
 
 if (!dbPassword) {
@@ -79,7 +79,7 @@ async function main() {
         ['core', 'API index', '/'],
         ['content', 'Articles', '/articles'],
         ['content', 'Thoughts', '/thoughts'],
-        ['security', 'Password check', '/pwned', { method: 'POST', body: JSON.stringify({ password }) }],
+        ['security', 'Password check', '/pwned', { method: 'POST', body: JSON.stringify({ password: passwordProbe }) }],
     ]
 
     for (const [service, checkName, path, options] of publicChecks) {

@@ -73,7 +73,7 @@ function remainingMonitorTimeout(deadline: number) {
 }
 
 export default async function runSyntheticMonitor() {
-    const password = `Mm1!${crypto.randomUUID()}`
+    const passwordProbe = crypto.randomBytes(32).toString('base64url')
     await check('auth', 'Service account authentication', async () => {
         const secret = process.env.MONITOR_SERVICE_ACCOUNT_KEY
         if (!secret) throw new Error('MONITOR_SERVICE_ACCOUNT_KEY is not configured.')
@@ -416,7 +416,7 @@ export default async function runSyntheticMonitor() {
         check('security', 'Password check', async () => {
             const { response } = await fetchJson('/pwned', {
                 method: 'POST',
-                body: JSON.stringify({ password }),
+                body: JSON.stringify({ password: passwordProbe }),
             })
             if (response.status >= 500) throw new Error(`Unexpected pwned response ${response.status}`)
         }),

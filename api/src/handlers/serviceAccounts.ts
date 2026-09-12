@@ -1,4 +1,5 @@
-import { randomUUID } from 'crypto'
+import { randomBytes, randomUUID } from 'crypto'
+import bcrypt from 'bcrypt'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
@@ -49,9 +50,10 @@ export async function postServiceAccount(req: FastifyRequest, res: FastifyReply)
     const name = body.name.trim()
     const scopes = body.scopes.map((scope, index) => ({ ...scope, id: `scope_${index}`, enabled: true,
         limits: { perSecond: 5, perMinute: 60, perHour: 1000, perDay: 10000 } }))
+    const unusablePasswordHash = await bcrypt.hash(randomBytes(32).toString('base64url'), 12)
     const created = await withTransaction(async query => {
         const id = `svc_${randomUUID()}`
-        await query('INSERT INTO users (id, name, password, avatar, account_type) VALUES ($1, $2, $3, \'\', \'service\')', [id, name, `!service:${randomUUID()}`])
+        await query('INSERT INTO users (id, name, password, avatar, account_type) VALUES ($1, $2, $3, \'\', \'service\')', [id, name, unusablePasswordHash])
         return createApiKey({ ownerId: id, name, tier: 'custom', scopes }, query)
     })
     await recordSystemEvent(req, { actionType: 'service_account.created', actorId, targetType: 'service_account', targetId: created.apiKey.ownerId!, context: { scopes: body.scopes } })
